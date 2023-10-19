@@ -14,22 +14,20 @@
 
 <hr />
 
-@if (noFolders)
-{
-    <label class="col-form-label">Folders</label>
-}
-else
-{
-    <div class="d-flex justify-content-end">
+<div class="d-flex justify-content-between">
+    <label class="col-form-label">Connected folders</label>
+
+    @*@if (noFolders)
+    {
         <button type="button" class="col-auto btn btn-link p-0" onclick="addFolders()">
             <i class="fa-solid fa-plus"></i> Add folder(s)
         </button>
-    </div>
-}
-
-<div id="foldersSelect" class="selectpicker @(noFolders ? "" : "d-none")">
-    <select class="selectpicker" asp-for="SelectedFolders" asp-items="@Model.AvailableFolders" data-live-search="true" data-width="100%" title="Choose folders to add" multiple></select>
+    }*@
 </div>
+
+@*<div id="foldersSelect" class="selectpicker @(noFolders ? "" : "d-none")">
+    <select class="selectpicker" asp-for="SelectedFolders" asp-items="@Model.AvailableFolders" data-live-search="true" data-width="100%" title="Choose folders to add" multiple></select>
+</div>*@
 
 @if (!noFolders)
 {
@@ -63,11 +61,11 @@ else
                                         Edit
                                     </a>
                                 </li>
-                                <li>
+                                @*<li>
                                     <a id='exclude_@folder.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
                                         Exclude from chat
                                     </a>
-                                </li>
+                                </li>*@
                             </ul>
                         </div>
                     </td>
@@ -87,14 +85,14 @@ else
 
 
 <script>
-    function addFolders() {
-        $("#foldersSelect").removeClass("d-none");
-    }
+    //function addFolders() {
+    //    $("#foldersSelect").removeClass("d-none");
+    //}
 
-    $('[id^=exclude_]').on('click', function () {
-        var folderId = this.id.substring("exclude_".length, this.id.length);
+    //$('[id^=exclude_]').on('click', function () {
+    //    var folderId = this.id.substring("exclude_".length, this.id.length);
 
-        $(`#row_folder_${folderId}`).remove();
-        $(`#chat_folder_${folderId}`).val('@Guid.Empty');
-    });
+    //    $(`#row_folder_${folderId}`).remove();
+    //    $(`#chat_folder_${folderId}`).val('@Guid.Empty');
+    //});
 </script>

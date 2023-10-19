@@ -16,7 +16,7 @@
 <div class="container">
     <div class="row w-100 justify-content-center">
         <div class="d-flex justify-content-between my-3 p-0">
-            <h5 class="text-break">Edit @Model.Type.GetDisplayName() '@Model.Name'</h5>
+            <h5 class="text-break">Edit telegram @Model.Type.GetDisplayName() '@Model.Name'</h5>
 
             <a href="javascript:removeChat();">
                 <i class='fas fa-trash-alt'></i> Remove
@@ -32,8 +32,8 @@
                     <input id="messages-settings" class="form-check-input" type="checkbox" asp-for="EnableMessages">
                 </div>
 
-                <label class="offset-2 col-2 col-form-label" asp-for="Connector"></label>
-                <label class="col-2 col-form-label">@Model.Connector</label>
+                <label class="offset-2 col-2 col-form-label">@Model.Type.GetDisplayName().CapitalizeFirstChar() creator</label>
+                <label class="col-2 col-form-label">@Model.Author</label>
             </div>
 
             <div class="row">

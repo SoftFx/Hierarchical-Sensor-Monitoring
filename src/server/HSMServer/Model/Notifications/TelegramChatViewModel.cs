@@ -8,7 +8,7 @@ namespace HSMServer.Model.Notifications
     {
         public string Name { get; }
 
-        public string Connector { get; }
+        public string Author { get; }
 
         public ConnectedChatType Type { get; }
 
@@ -37,7 +37,7 @@ namespace HSMServer.Model.Notifications
             Id = chat.Id;
             Name = chat.Name;
             Type = chat.Type;
-            Connector = chat.Author;
+            Author = chat.Author;
             AuthorizationTime = chat.AuthorizationTime;
 
             Description = chat.Description;
