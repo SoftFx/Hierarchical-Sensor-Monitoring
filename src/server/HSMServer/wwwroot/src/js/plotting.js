@@ -149,7 +149,7 @@ function convertToGraphData(graphData, sensorInfo, graphName) {
         case 1:
             return new IntegerPlot(escapedData, sensorInfo.units);
         case 2:
-            return new DoublePlot(escapedData, sensorInfo.units);
+            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units);
         case 4:
             return new BarPLot(escapedData, graphName, sensorInfo.units);
         case 5:

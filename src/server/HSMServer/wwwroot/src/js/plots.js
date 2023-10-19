@@ -140,6 +140,10 @@ class ErrorColorPlot extends Plot{
     }
     mode = "markers+lines";
 
+    constructor(data, unitType) {
+        super(data, unitType);
+    }
+    
     markerColorCompareFunc(value){
         if (this.checkTtl(value))
             return Colors.TtlGrey
@@ -230,7 +234,7 @@ export class BoolPlot extends Plot {
 export class IntegerPlot extends ErrorColorPlot {
     constructor(data, unitType = undefined) {
         super(data, unitType);
-
+        
         this.type = 'scatter';
         this.mode = 'lines+markers';
         this.line.shape = 'hv';
@@ -263,7 +267,7 @@ export class IntegerPlot extends ErrorColorPlot {
 export class DoublePlot extends ErrorColorPlot {
     constructor(data, name, field = 'value', unitType = undefined) {
         super(data, unitType);
-
+        console.log(this)
         this.type = 'scatter';
         this.name = name;
         this.marker = {
