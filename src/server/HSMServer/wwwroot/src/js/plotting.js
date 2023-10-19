@@ -64,6 +64,7 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
     graphData.graph.self = $(`#${graphElementId}`)[0];
 
     let plot = convertToGraphData(data, sensorInfo, graphName);
+
     let zoomData = getPreviousZoomData(graphElementId);
 
     let config = {
@@ -85,11 +86,13 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
         if (zoomData === undefined || zoomData === null)
             layout = plot.getLayout()
         else
-            layout = createLayoutFromZoomData(zoomData, plot.getLayout());
+        {
+            let plotLayout = plot.getLayout()
+            layout = createLayoutFromZoomData(zoomData, plotLayout);
+        }
     }
 
     Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
-
     if (plot.name !== serviceAlivePlotName)
         config.modeBarButtonsToAdd.forEach(x => {
             if(x.name === "Show/Hide service alive plot")
@@ -123,14 +126,8 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
 function createLayoutFromZoomData(zoomData, layout) {
     let processedData = Object.values(JSON.parse(zoomData));
 
-    layout.xaxis = {
-        range: [processedData[0], processedData[1]]
-    };
-
-    layout.yaxis = {
-        range: [processedData[2], processedData[3]]
-    };
-
+    layout.xaxis.range = [processedData[0], processedData[1]];
+    layout.yaxis.range = [processedData[2], processedData[3]];
     layout.autosize = true;
 
     return layout;
