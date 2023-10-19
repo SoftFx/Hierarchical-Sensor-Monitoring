@@ -53,7 +53,12 @@ window.initializeTree = function () {
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
 
         if (searchRefresh) {
-            $('#jstree').jstree('open_all').show();
+            $(this).jstree(true).get_json('#', { flat: true }).forEach((node) => {
+                if (node.state.loaded === true)
+                    $(this).jstree('open_node', node.id);
+            })
+            
+            $(this).show();
             $('#jstreeSpinner').addClass('d-none');
             searchRefresh = false;
         }
@@ -62,23 +67,29 @@ window.initializeTree = function () {
     });
 
     $("#search_tree").on('click', function () {
-        search();
+        search($('#search_input').val());
     });
     
     $('#search_input').on('keyup', function (e){
         if (e.keyCode == 13){
-            search(); 
+            search($(this).val()); 
         }
-    })
+    }).on('input', function(){
+       if ($(this).val() === ''){
+           $('#search_field').val($(this).val());
+           $('#jstree').jstree(true).refresh(true);
+       } 
+    });
 
-    function search(){
-        $('#search_field').val($('#search_input').val()).change(function (){
-            $('#jstree').jstree(true).refresh(true);
-        })
+    function search(value){
+        if (value === '')
+            return;
+        
+        $('#search_field').val(value);
+        $('#jstree').hide().jstree(true).refresh(true);
 
         searchRefresh = true;
         $('#jstreeSpinner').removeClass('d-none')
-        $('#jstree').hide();
     }
 
     initializeActivateNodeTree();
