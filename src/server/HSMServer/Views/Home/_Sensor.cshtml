@@ -356,50 +356,10 @@
                     return;
 
                 if ((response.originalSize < 5 * 1024 * 1024 && response.extension === 'csv') || // 5MB
-                    (response.originalSize < 1024 * 1024 && response.extension === 'txt')) { // 1MB
-                    $.ajax({
-                        type: 'POST',
-                        url: `${viewFileAction}?Selected=${encodedId}`,
-                        cache: false,
-                        contentType: "application/json",
-                        success: function (file) {
-                            let dataSet = [];
-                            if (response.extension === 'csv') {
-                                file.split('\n').forEach(el => {
-                                    let splitted = el.split(',');
-                                    let isEmpty = splitted.some(x => x !== '');
-
-                                    if (isEmpty) {
-                                        dataSet.push(splitted)
-                                    }
-                                });
-
-                                let columns = [];
-
-                                dataSet[0].forEach(el => {
-                                    columns.push({ "title": el })
-                                });
-
-                                $('#preview').removeClass('d-none container');
-                                $('#preview-content').html('<table class="display w-100" id="example"></table>');
-
-                                $('#example').dataTable({
-                                    "data": dataSet.splice(1),
-                                    "columns": columns,
-                                    "lengthMenu": [[5, 20, 50, 100], [5, 20, 50, 100]],
-                                    "pageLength": 20
-                                });
-                            }
-                            else if (response.extension === 'txt') {
-                                $('#preview').removeClass('d-none container');
-                                $('#preview-content').addClass('w-100 mw-100 text-break').html(file);
-                            }
-                        }
-                    })
-                }
-                else {
+                    (response.originalSize < 1024 * 1024 && response.extension === 'txt')) // 1MB
+                    previewFile(viewFileAction, encodedId, response.extension);
+                else
                     $('#bigFilePreview').removeClass('d-none');
-                }
 
                 loadFiles();
                 previousReceivedTime = response.time;
