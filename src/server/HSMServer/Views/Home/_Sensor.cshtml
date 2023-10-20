@@ -152,10 +152,6 @@
                         {
                             <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId">Bars count:</label>
                             <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000">
-                            //TODO: change to question mark and add this to tooltip
-                            <span class="text-secondary" style="max-width: 5rem">
-                                If number of values is greater than <span>100</span>, then data will be aggregated into <span>100</span> sensor values and will be shown in Graph
-                            </span>
                         }
 
                         <button onclick="searchHistory('@sensorId')" type="button" class="btn btn-secondary">
