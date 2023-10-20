@@ -123,12 +123,10 @@
                     file.split('\n').forEach( el => {
                         let splitted = el.split(',');
                         
-                        let isEmpty = splitted.every(x => {
-                            return x !== '';
-                        })
+                        let isEmpty = splitted.some(x => x !== '')
                         
                         if (isEmpty) {
-                            dataSet.push(el.split(','))
+                            dataSet.push(splitted)
                         }
                     })
                     
