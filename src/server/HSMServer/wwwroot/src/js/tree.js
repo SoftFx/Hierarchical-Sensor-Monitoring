@@ -5,6 +5,7 @@ window.currentSelectedNodeId = "";
 
 window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
+    var searchRefresh = false;
     
     if (window.localStorage.jstree) {
         let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
@@ -25,7 +26,10 @@ window.initializeTree = function () {
                     return getNode;
                 },
                 data: function (node) {
-                    return { 'id' : node.id };
+                    return { 
+                        'id' : node.id,
+                        'searchParameter': $('#search_field').val()
+                    }
                 }
             }
         },
@@ -47,9 +51,46 @@ window.initializeTree = function () {
     }).on('refresh.jstree', function (e, data){
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+
+        if (searchRefresh) {
+            $(this).jstree(true).get_json('#', { flat: true }).forEach((node) => {
+                if (node.state.loaded === true)
+                    $(this).jstree('open_node', node.id);
+            })
+            
+            $(this).show();
+            $('#jstreeSpinner').addClass('d-none');
+            searchRefresh = false;
+        }
     }).on('open_node.jstree', function (e, data){
         collapseButton.reset();
     });
+
+    $("#search_tree").on('click', function () {
+        search($('#search_input').val());
+    });
+    
+    $('#search_input').on('keyup', function (e){
+        if (e.keyCode == 13){
+            search($(this).val()); 
+        }
+    }).on('input', function(){
+       if ($(this).val() === ''){
+           $('#search_field').val($(this).val());
+           $('#jstree').jstree(true).refresh(true);
+       } 
+    });
+
+    function search(value){
+        if (value === '')
+            return;
+        
+        $('#search_field').val(value);
+        $('#jstree').hide().jstree(true).refresh(true);
+
+        searchRefresh = true;
+        $('#jstreeSpinner').removeClass('d-none')
+    }
 
     initializeActivateNodeTree();
 }

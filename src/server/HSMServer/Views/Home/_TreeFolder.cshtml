@@ -16,7 +16,7 @@
 <li id='@data.Id' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     @Html.Raw(data.Name.GetShortNodeName())
 
-    @if (!Model.IsEmpty && showIcons)
+    @if (!Model.AllDataIsEmpty && showIcons)
     {
         @if (Model.IsGrafanaEnabled)
         {

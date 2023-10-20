@@ -29,5 +29,12 @@ namespace HSMCommon.Collections
             lock (_lock)
                 base.Clear();
         }
+
+        public void Remove(params T[] items)
+        {
+            lock (_lock)
+                foreach (var item in items)
+                    base.Remove(item);
+        }
     }
 }
