@@ -244,7 +244,7 @@ export class BoolPlot extends Plot {
 export class IntegerPlot extends ErrorColorPlot {
     constructor(data, unitType = undefined) {
         super(data, unitType);
-        
+
         this.type = 'scatter';
         this.mode = 'lines+markers';
         this.line.shape = 'hv';
