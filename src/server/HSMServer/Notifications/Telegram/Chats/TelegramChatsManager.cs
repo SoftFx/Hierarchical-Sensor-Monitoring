@@ -154,9 +154,12 @@ namespace HSMServer.Notifications
         private async Task ChatsMigration()
         {
             var chatsToResave = new Dictionary<Guid, TelegramChat>(1 << 4);
+            var chatDublicates = new Dictionary<ChatId, (Guid rightId, HashSet<Guid> dublicates)>(1 << 2);
+
             var folderChats = new Dictionary<Guid, HashSet<Guid>>(1 << 4);
             var productNamesToFolderId = new Dictionary<string, Guid>(1 << 4);
             var usersToResave = new List<User>(1 << 4);
+
             var sensorsToResave = new List<SensorUpdate>(1 << 5); // sensors and nodes without folder should have empty chats in alerts
             var nodesToResave = new List<ProductUpdate>(1 << 5); // sensors and nodes without folder should have empty chats in alerts
 
@@ -176,21 +179,28 @@ namespace HSMServer.Notifications
                             {
                                 var id = oldChat.Id;
 
-                                if (!chatsToResave.ContainsKey(id))
+                                if (!chatDublicates.TryGetValue(oldChat.ChatId, out var value))
                                 {
-                                    var chat = new TelegramChat()
+                                    chatDublicates[oldChat.ChatId] = (id, new HashSet<Guid>());
+
+                                    if (!chatsToResave.ContainsKey(id))
                                     {
-                                        Id = id,
-                                        ChatId = oldChat.ChatId,
-                                        Type = ConnectedChatType.TelegramGroup,
-                                        Name = oldChat.Name,
-                                        AuthorizationTime = oldChat.AuthorizationTime,
-                                    };
+                                        var chat = new TelegramChat()
+                                        {
+                                            Id = id,
+                                            ChatId = oldChat.ChatId,
+                                            Type = ConnectedChatType.TelegramGroup,
+                                            Name = oldChat.Name,
+                                            AuthorizationTime = oldChat.AuthorizationTime,
+                                        };
 
-                                    chatsToResave.Add(id, chat);
+                                        chatsToResave.Add(id, chat);
+                                    }
+
+                                    folderChats[folder.Id].Add(id);
                                 }
-
-                                folderChats[folder.Id].Add(id);
+                                else if (value.rightId != id)
+                                    chatDublicates[oldChat.ChatId].dublicates.Add(id);
                             }
                     }
                 }
@@ -204,19 +214,26 @@ namespace HSMServer.Notifications
                         {
                             var id = oldChat.Id;
 
-                            if (!chatsToResave.ContainsKey(id))
+                            if (!chatDublicates.TryGetValue(oldChat.ChatId, out var value))
                             {
-                                var chat = new TelegramChat()
-                                {
-                                    Id = id,
-                                    ChatId = oldChat.ChatId,
-                                    Type = ConnectedChatType.TelegramPrivate,
-                                    Name = oldChat.Name,
-                                    AuthorizationTime = oldChat.AuthorizationTime,
-                                };
+                                chatDublicates[oldChat.ChatId] = (id, new HashSet<Guid>());
 
-                                chatsToResave.Add(id, chat);
+                                if (!chatsToResave.ContainsKey(id))
+                                {
+                                    var chat = new TelegramChat()
+                                    {
+                                        Id = id,
+                                        ChatId = oldChat.ChatId,
+                                        Type = ConnectedChatType.TelegramPrivate,
+                                        Name = oldChat.Name,
+                                        AuthorizationTime = oldChat.AuthorizationTime,
+                                    };
+
+                                    chatsToResave.Add(id, chat);
+                                }
                             }
+                            else if (value.rightId != id)
+                                chatDublicates[oldChat.ChatId].dublicates.Add(id);
                         }
 
                     user.Notifications = new(new());
@@ -238,15 +255,40 @@ namespace HSMServer.Notifications
 
                         foreach (var policy in sensorPolicies)
                             foreach (var (chatId, _) in policy.Destination.Chats)
-                                folderChats[folderId].Add(chatId);
+                                if (chatsToResave.ContainsKey(chatId))
+                                    folderChats[folderId].Add(chatId);
+
+
+                        bool needTtlUpdate = TryUpdateDestination(sensor.Policies.TimeToLive, chatDublicates, out var ttlUpdate);
+
+                        bool needPoliciesUpdate = false;
+                        var policiesUpdate = new List<PolicyUpdate>(1 << 3);
+                        foreach (var policy in sensor.Policies)
+                        {
+                            needPoliciesUpdate |= TryUpdateDestination(policy, chatDublicates, out var policyUpdate);
+                            policiesUpdate.Add(policyUpdate);
+                        }
+
+                        if (needPoliciesUpdate || needTtlUpdate)
+                        {
+                            var update = new SensorUpdate()
+                            {
+                                Id = sensor.Id,
+                                Policies = needPoliciesUpdate ? policiesUpdate : null,
+                                TTLPolicy = needTtlUpdate ? ttlUpdate : null,
+                                Initiator = InitiatorInfo.AsSystemForce(),
+                            };
+
+                            sensorsToResave.Add(update);
+                        }
                     }
                     else
                     {
                         var update = new SensorUpdate()
                         {
                             Id = sensor.Id,
-                            Policies = sensor.Policies.Select(BuildUpdateWithEmptyDestination).ToList(),
-                            TTLPolicy = BuildUpdateWithEmptyDestination(sensor.Policies.TimeToLive),
+                            Policies = sensor.Policies.Select(p => BuildPolicyUpdate(p)).ToList(),
+                            TTLPolicy = BuildPolicyUpdate(sensor.Policies.TimeToLive),
                             Initiator = InitiatorInfo.AsSystemForce(),
                         };
 
@@ -257,14 +299,32 @@ namespace HSMServer.Notifications
                 foreach (var product in _cache.GetAllNodes())
                 {
                     if (productNamesToFolderId.TryGetValue(product.RootProductName, out var folderId))
-                        foreach (var (chatId, _) in product.Policies.TimeToLive.Destination.Chats)
-                            folderChats[folderId].Add(chatId);
+                    {
+                        var ttl = product.Policies.TimeToLive;
+
+                        foreach (var (chatId, _) in ttl.Destination.Chats)
+                            if (chatsToResave.ContainsKey(chatId))
+                                folderChats[folderId].Add(chatId);
+
+
+                        if (TryUpdateDestination(ttl, chatDublicates, out var ttlUpdate))
+                        {
+                            var update = new ProductUpdate()
+                            {
+                                Id = product.Id,
+                                TTLPolicy = ttlUpdate,
+                                Initiator = InitiatorInfo.AsSystemForce(),
+                            };
+
+                            nodesToResave.Add(update);
+                        }
+                    }
                     else
                     {
                         var update = new ProductUpdate()
                         {
                             Id = product.Id,
-                            TTLPolicy = BuildUpdateWithEmptyDestination(product.Policies.TimeToLive),
+                            TTLPolicy = BuildPolicyUpdate(product.Policies.TimeToLive),
                             Initiator = InitiatorInfo.AsSystemForce(),
                         };
 
@@ -314,7 +374,32 @@ namespace HSMServer.Notifications
                 _cache.RemoveSensor(sensorId);
         }
 
-        private PolicyUpdate BuildUpdateWithEmptyDestination(Policy policy) =>
+        private static bool TryUpdateDestination(Policy policy, Dictionary<ChatId, (Guid rightId, HashSet<Guid> dublicates)> chatDublicates, out PolicyUpdate update)
+        {
+            var allChats = policy.Destination.AllChats;
+            var chats = policy.Destination.Chats;
+
+            var destinationChats = new Dictionary<Guid, string>(chats);
+
+            if (allChats)
+                destinationChats.Clear();
+            else if (chats.Count > 0)
+            {
+                foreach (var (_, (id, dublicates)) in chatDublicates)
+                    foreach (var dublicate in dublicates)
+                        if (chats.TryGetValue(dublicate, out var chatName))
+                        {
+                            destinationChats.Remove(dublicate);
+                            destinationChats.Add(id, chatName);
+                        }
+            }
+
+            update = BuildPolicyUpdate(policy, new(destinationChats, allChats));
+
+            return !destinationChats.Keys.SequenceEqual(chats.Keys);
+        }
+
+        private static PolicyUpdate BuildPolicyUpdate(Policy policy, PolicyDestinationUpdate destination = null) =>
             new()
             {
                 Id = policy.Id,
@@ -324,7 +409,7 @@ namespace HSMServer.Notifications
                 Template = policy.Template,
                 Icon = policy.Icon,
                 IsDisabled = policy.IsDisabled,
-                Destination = new(),
+                Destination = destination ?? new(),
                 Initiator = InitiatorInfo.AsSystemForce(),
             };
     }

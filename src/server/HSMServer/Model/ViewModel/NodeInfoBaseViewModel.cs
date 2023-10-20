@@ -9,7 +9,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model.ViewModel
 {
-    public class NodeInfoBaseViewModel
+    public abstract class NodeInfoBaseViewModel
     {
         public ConcurrentDictionary<string, int> AlertIcons { get; }
 

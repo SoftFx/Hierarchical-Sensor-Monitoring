@@ -15,7 +15,6 @@ namespace HSMServer.Model.Folders.ViewModels
         public Guid Id { get; }
 
 
-
         // public constructor without parameters for action Home/UpdateFolderInfo
         public FolderInfoViewModel() : base() { }
 
