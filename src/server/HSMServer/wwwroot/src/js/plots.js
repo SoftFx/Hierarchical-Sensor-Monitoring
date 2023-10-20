@@ -301,13 +301,22 @@ export class DoublePlot extends ErrorColorPlot {
             else
                 this.y.push(i[customField])
 
-            this.addCustomData(i, null, customField);
+            this.addCustomData(i, checkNotCompressedCount, customField);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
         }
 
         if (customField !== 'value') {
             this.hovertemplate = `%{customdata} <extra>${this.name}</extra>`
+        }
+
+        function checkNotCompressedCount(value){
+            if (customField === 'count' && value.isCompressed === undefined)
+            {
+                return `${value[customField]} <br> This is compressed value`;
+            }
+
+            return value[customField];
         }
     }
 }

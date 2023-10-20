@@ -51,4 +51,27 @@ namespace HSMServer.Core.Model
 
         protected override bool IsEqual(BaseValue value) => false;
     }
+    
+    public sealed record NotCompressedValue<T> : BarBaseValue<T> where T : INumber<T>
+    {
+        public bool IsCompressed { get; set; } = false;
+
+
+        public NotCompressedValue(BarBaseValue<T> value)
+        {
+            Count = value.Count;
+            Max = value.Max;
+            Min = value.Min;
+            Mean = value.Mean;
+            AggregatedValuesCount = value.AggregatedValuesCount;
+            OpenTime = value.OpenTime;
+            CloseTime = value.CloseTime;
+            IsTimeout = value.IsTimeout;
+            Comment = value.Comment;
+            LastValue = value.LastValue;
+            Percentiles = value.Percentiles;
+            Status = value.Status;
+            Time = value.Time;
+        }
+    };
 }

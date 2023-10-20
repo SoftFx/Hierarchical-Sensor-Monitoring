@@ -47,7 +47,7 @@ namespace HSMServer.Model.History
 
                 if (summary.CloseTime + (value.CloseTime - value.OpenTime) > nextBarTime)
                 {
-                    result.Add(Convert(summary));
+                    result.Add(Convert(summary, summary.Count != value.Count));
 
                     summary = new(value.OpenTime, value.CloseTime, DefaultMax, DefaultMin);
                     ProcessItem(value, summary);
@@ -59,7 +59,7 @@ namespace HSMServer.Model.History
                     ProcessItem(value, summary);
             }
 
-            result.Add(Convert(summary));
+            result.Add(Convert(summary, (values[^1] as BarBaseValue).Count != summary.Count));
 
             return result;
         }
@@ -117,11 +117,11 @@ namespace HSMServer.Model.History
             _percentilesList.Clear();
         }
 
-        private BarBaseValue<T> Convert(SummaryBarItem<T> summary)
+        private BarBaseValue<T> Convert(SummaryBarItem<T> summary, bool isCompressed = true)
         {
             AddValueFromLists(summary);
 
-            var result = GetBarValue(summary);
+            var result = !isCompressed ? new NotCompressedValue<T>(GetBarValue(summary)) : GetBarValue(summary);
 
             ClearLists();
 
