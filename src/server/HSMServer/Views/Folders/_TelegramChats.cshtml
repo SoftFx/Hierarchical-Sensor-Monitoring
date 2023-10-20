@@ -1,4 +1,5 @@
-﻿@using HSMServer.Extensions
+﻿@using HSMCommon.Extensions
+@using HSMServer.Extensions
 @using HSMServer.Notifications
 @using HSMServer.Controllers
 @using HSMServer.Constants
@@ -11,7 +12,7 @@
 
 @if (Model is not null)
 {
-    @await Html.PartialAsync("~/Views/Notifications/_NewTelegramGroupHelpModal.cshtml", Model.FolderId)
+    @await Html.PartialAsync("~/Views/Notifications/_NewTelegramChatHelpModal.cshtml", Model.FolderId)
 
     <div class="my-2" align="right">
         <a href="javascript:showAddTelegramGroupHelpModal();" class="btn btn-link p-0">
@@ -54,18 +55,11 @@
                 {
                     <tr id="row_chat_@chat.Id">
                         <td class="text-break">
-                            @if (chat.Type == ConnectedChatType.TelegramPrivate)
-                            {
-                                <span>@chat.Name</span>
-                            }
-                            else
-                            {
-                                <a target="_blank" asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenTelegramGroup)" asp-route-chatId="@chat.ChatId">
-                                    @chat.Name
-                                </a>
-                            }
+                            <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chat.Id">
+                                @chat.Name
+                            </a>
                         </td>
-                        <td class="text-center">@(chat.Type == ConnectedChatType.TelegramPrivate ? "Direct" : "Group")</td>
+                        <td class="text-center">@chat.Type.GetDisplayName()</td>
                         <td class="text-break text-center">
                             @if (chat.SendMessages)
                             {
@@ -80,15 +74,30 @@
                                 </button>
                                 <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
                                     <li>
+                                        <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;"
+                                           asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chat.Id">
+                                            View/Edit
+                                        </a>
+                                    </li>
+                                    <li>
                                         <a id='remove_@chat.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                            Remove
+                                            Remove from folder
                                         </a>
                                     </li>
                                     <li>
                                         <a id="sendMessage_@chat.Id" name="@chat.ChatId" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
                                             Send test message
-                                        </a'>
+                                        </a>
                                     </li>
+                                    @if (chat.Type == ConnectedChatType.TelegramGroup)
+                                    {
+                                        <li>
+                                            <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;" target="_blank"
+                                               asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenTelegramGroup)" asp-route-chatId="@chat.ChatId">
+                                                Go to chat
+                                            </a>
+                                        </li>
+                                    }
                                 </ul>
                             </div>
                         </td>
