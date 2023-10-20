@@ -83,5 +83,9 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             Data = data;
         }
+
+
+        internal bool IsNameContainsPattern(string pattern) =>
+            Data.Name.Contains(pattern, StringComparison.OrdinalIgnoreCase)
     }
 }

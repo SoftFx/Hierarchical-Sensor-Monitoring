@@ -1,3 +1,4 @@
+using HSMCommon.Collections;
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
@@ -7,7 +8,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using HSMCommon.Collections;
 
 namespace HSMServer.Model.TreeViewModels;
 
@@ -62,12 +62,8 @@ public sealed class VisibleTreeViewModel
         }
 
         foreach (var folder in folders.Values)
-        {
-            var viewEmptyFolder = _user.IsFolderAvailable(folder.Id) && _user.TreeFilter.ByVisibility.Empty.Value;
-
-            if (!folder.IsEmpty || viewEmptyFolder)
+            if (!folder.IsEmpty || IsVisibleEmptyFolder(folder.Id))
                 folderTree.Add(folder);
-        }
 
         folderTree.AddRange(tree);
 
@@ -85,7 +81,6 @@ public sealed class VisibleTreeViewModel
         var folderTree = new List<BaseShallowModel>(1 << 4);
         var tree = new List<BaseShallowModel>(1 << 4);
 
-
         foreach (var product in products)
         {
             var node = FilterNodes(product, searchParameter, out var toRender);
@@ -102,10 +97,7 @@ public sealed class VisibleTreeViewModel
             }
         }
 
-        folderTree.AddRange(folders.Values.Where(x =>
-            (x.Data.Name.Contains(searchParameter) || !x.IsEmpty) &&
-            _user.IsFolderAvailable(x.Id) && _user.TreeFilter.ByVisibility.Empty.Value));
-
+        folderTree.AddRange(folders.Values.Where(x => (x.IsNameContainsPattern(searchParameter) || !x.IsEmpty) && IsVisibleEmptyFolder(x.Id)));
         folderTree.AddRange(tree);
 
         return folderTree;
@@ -131,27 +123,23 @@ public sealed class VisibleTreeViewModel
         toRender = false;
         _allTree.TryAdd(product.Id, node);
 
-        foreach (var nodeModel in product.Nodes.Values.GetOrdered(_user))
+        foreach (var nodeModel in GetSubNodes(product))
         {
-            var subNode = FilterNodes(nodeModel, searchParameter, out var currentNodeToRender);
+            var subNode = node.AddChild(FilterNodes(nodeModel, searchParameter, out var currentNodeToRender));
 
-            node.AddChild(subNode);
-
-            if (subNode.Data.Name.Contains(searchParameter, StringComparison.OrdinalIgnoreCase) || currentNodeToRender)
+            if (subNode.IsNameContainsPattern(searchParameter) || currentNodeToRender)
             {
-                AddOpenedNode(subNode.Id);
                 toRender = true;
+                AddOpenedNode(subNode.Id);
                 node.ToRenderNode(subNode.Id);
             }
         }
 
-        foreach (var sensorModel in product.Sensors.Values.GetOrdered(_user))
+        foreach (var sensorModel in GetSubSensors(product))
         {
-            var sensor = new SensorShallowModel(sensorModel, _user);
+            var sensor = node.AddChild(new SensorShallowModel(sensorModel, _user), _user);
 
-            node.AddChild(sensor, _user);
-
-            if (sensor.Data.Name.Contains(searchParameter, StringComparison.OrdinalIgnoreCase))
+            if (sensor.IsNameContainsPattern(searchParameter))
             {
                 toRender = true;
                 node.ToRenderNode(sensor.Id);
@@ -169,21 +157,17 @@ public sealed class VisibleTreeViewModel
 
         var toRender = _openedNodes.Contains(product.Id) || depth > 0;
 
-        foreach (var nodeModel in product.Nodes.Values.GetOrdered(_user))
+        foreach (var nodeModel in GetSubNodes(product))
         {
-            var subNode = FilterNodes(nodeModel, --depth);
-
-            node.AddChild(subNode);
+            var subNode = node.AddChild(FilterNodes(nodeModel, --depth));
 
             if (toRender)
                 node.ToRenderNode(subNode.Id);
         }
 
-        foreach (var sensorModel in product.Sensors.Values.GetOrdered(_user))
+        foreach (var sensorModel in GetSubSensors(product))
         {
-            var sensor = new SensorShallowModel(sensorModel, _user);
-
-            node.AddChild(sensor, _user);
+            var sensor = node.AddChild(new SensorShallowModel(sensorModel, _user), _user);
 
             if (toRender)
                 node.ToRenderNode(sensor.Id);
@@ -192,6 +176,13 @@ public sealed class VisibleTreeViewModel
         return node;
     }
 
+
+    private IOrderedEnumerable<SensorNodeViewModel> GetSubSensors(ProductNodeViewModel product) => product.Sensors.Values.GetOrdered(_user);
+
+    private IOrderedEnumerable<ProductNodeViewModel> GetSubNodes(ProductNodeViewModel product) => product.Nodes.Values.GetOrdered(_user);
+
+
+    private bool IsVisibleEmptyFolder(Guid folderId) => _user.IsFolderAvailable(folderId) && _user.TreeFilter.ByVisibility.Empty.Value;
 
     private bool IsVisibleNode(NodeShallowModel node) => node.VisibleSubtreeSensorsCount > 0 || _user.IsEmptyProductVisible(node.Data);
 
