@@ -26,7 +26,9 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
 
 
-        public bool IsEmpty => Products.All(n => n.Data.IsEmpty);
+        public bool AllDataIsEmpty => Products.All(n => n.Data.IsEmpty);
+
+        public bool IsEmpty => Products.Count == 0;
 
 
         public FolderShallowModel(FolderModel data, User user) : base(data)

@@ -140,10 +140,8 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult RefreshTree(string searchParameter)
-        {
-            return PartialView("_Tree", !string.IsNullOrEmpty(searchParameter) ? CurrentUser.Tree.GetUserTree(searchParameter) : CurrentUser.Tree.GetUserTree());
-        }
+        public IActionResult RefreshTree(string searchParameter) =>
+            PartialView("_Tree", CurrentUser.Tree.GetUserTree(searchParameter));
 
         [HttpGet]
         public IActionResult ApplyFilter(UserFilterViewModel viewModel)
