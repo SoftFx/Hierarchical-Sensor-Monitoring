@@ -84,7 +84,10 @@ window.initializeTree = function () {
     function search(value){
         if (value === '')
             return;
-        
+
+        clearTimeout(refreshTreeTimeoutId)
+        clearTimeout(updateSelectedNodeDataTimeoutId)
+
         $('#search_field').val(value);
         $('#jstree').hide().jstree(true).refresh(true);
 
