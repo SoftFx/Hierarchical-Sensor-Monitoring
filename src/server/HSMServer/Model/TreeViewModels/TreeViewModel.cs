@@ -105,6 +105,9 @@ namespace HSMServer.Model.TreeViewModel
             if (sensor is null)
                 return sensorId;
 
+            if (sensor.Path.Contains(".computer"))
+                return sensorId;
+            
             var name = isStatusService ? "Service status" : "Service alive";
 
             var splittedPath = sensor.FullPath.Split('/');

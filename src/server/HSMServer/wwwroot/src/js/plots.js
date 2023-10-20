@@ -45,8 +45,12 @@ export class Plot {
     line = {
         color: Colors.defaultTrace
     }
+    
+    #customYaxisName = undefined;
 
-    constructor(data) {}
+    constructor(data, customYaxisName = undefined) {
+        this.#customYaxisName = customYaxisName;
+    }
 
     setUpData(data) {}
 
@@ -55,8 +59,44 @@ export class Plot {
     }
 
     getLayout() {
+        if (this.#customYaxisName !== undefined) {
+            return {
+                autosize: true,
+                xaxis: {
+                    title: {
+                        text: 'Time',
+                        font: {
+                            family: 'Courier New, monospace',
+                            size: 18,
+                            color: '#7f7f7f'
+                        }
+                    },
+                },
+                yaxis: {
+                    title: {
+                        text: this.#customYaxisName,
+                        font: {
+                            family: 'Courier New, monospace',
+                            size: 18,
+                            color: '#7f7f7f'
+                        }
+                    },
+                }
+            }
+        }
+        
         return {
-            autosize: true
+            autosize: true,
+            xaxis: {
+                title: {
+                    text: 'Time',
+                    font: {
+                        family: 'Courier New, monospace',
+                        size: 18,
+                        color: '#7f7f7f'
+                    }
+                },
+            }
         }
     }
 
@@ -67,12 +107,26 @@ export class Plot {
     checkError(value) {
         return value.status === SensorsStatus.Error
     }
+    
+    checkNaN(value) {
+        return value === "NaN";
+    }
 
     addCustomData(value, compareFunc = null, customField = 'value') {
         if (this.checkTtl(value))
+        {
             this.customdata.push(value.comment);
-        else
-            this.customdata.push(compareFunc === null ? value[customField] : compareFunc(value));
+            return;
+        }
+
+        let customValue = compareFunc === null ? value[customField] : compareFunc(value);
+        if (this.checkError(value))
+        {
+            this.customdata.push(customValue + '<br>' + value.comment);
+            return;
+        }
+        
+        this.customdata.push(customValue);
     }
 
     markerColorCompareFunc(value) {
@@ -96,6 +150,10 @@ class ErrorColorPlot extends Plot{
     }
     mode = "markers+lines";
 
+    constructor(data, unitType) {
+        super(data, unitType);
+    }
+    
     markerColorCompareFunc(value){
         if (this.checkTtl(value))
             return Colors.TtlGrey
@@ -118,8 +176,8 @@ class ErrorColorPlot extends Plot{
 }
 
 export class BoolPlot extends Plot {
-    constructor(data) {
-        super();
+    constructor(data, unitType = undefined) {
+        super(data, unitType);
         this.type = 'scatter';
         this.mode = 'markers';
         this.marker = {
@@ -137,8 +195,12 @@ export class BoolPlot extends Plot {
     setUpData(data) {
         for (let i of data) {
             this.x.push(i.time)
-
-            this.y.push(i.value === true ? 1 : 0)
+            
+            if (this.checkNaN(i.value))
+                this.y.push(0)
+            else
+                this.y.push(i.value === true ? 1 : 0)
+            
             this.addCustomData(i, this.customDataCompareFunc)
             this.marker.color.push(this.markerColorCompareFunc(i));
             this.marker.size.push(this.getMarkerSize(i))
@@ -160,6 +222,7 @@ export class BoolPlot extends Plot {
 
     getLayout() {
         return {
+            ...super.getLayout(),
             autosize: true,
             yaxis: {
                 tickmode: 'auto',
@@ -179,8 +242,8 @@ export class BoolPlot extends Plot {
 }
 
 export class IntegerPlot extends ErrorColorPlot {
-    constructor(data) {
-        super();
+    constructor(data, unitType = undefined) {
+        super(data, unitType);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
@@ -200,7 +263,10 @@ export class IntegerPlot extends ErrorColorPlot {
     setUpData(data) {
         for (let i of data) {
             this.x.push(i.time)
-            this.y.push(i.value)
+            if (this.checkNaN(i.value))
+                this.y.push(0)
+            else 
+                this.y.push(i.value)
             this.addCustomData(i);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
@@ -209,8 +275,8 @@ export class IntegerPlot extends ErrorColorPlot {
 }
 
 export class DoublePlot extends ErrorColorPlot {
-    constructor(data, name, field = 'value') {
-        super();
+    constructor(data, name, field = 'value', unitType = undefined) {
+        super(data, unitType);
 
         this.type = 'scatter';
         this.name = name;
@@ -229,9 +295,13 @@ export class DoublePlot extends ErrorColorPlot {
     setUpData(data, customField = 'value') {
         for (let i of data) {
             this.x.push(i.time)
-            this.y.push(i[customField])
+            
+            if (this.checkNaN(i[customField]))
+                this.y.push(0)
+            else
+                this.y.push(i[customField])
 
-            this.addCustomData(i, null, customField);
+            this.addCustomData(i, checkNotCompressedCount, customField);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
         }
@@ -239,12 +309,21 @@ export class DoublePlot extends ErrorColorPlot {
         if (customField !== 'value') {
             this.hovertemplate = `%{customdata} <extra>${this.name}</extra>`
         }
+
+        function checkNotCompressedCount(value){
+            if (customField === 'count' && value.isCompressed === undefined)
+            {
+                return `${value[customField]} <br> This is compressed value`;
+            }
+
+            return value[customField];
+        }
     }
 }
 
 export class BarPLot extends Plot {
-    constructor(data, name) {
-        super();
+    constructor(data, name, unitType = undefined) {
+        super(data, unitType);
 
         this.type = 'box';
         this.name = 'bar';
@@ -282,8 +361,8 @@ export class BarPLot extends Plot {
 }
 
 export class TimeSpanPlot extends ErrorColorPlot {
-    constructor(data) {
-        super();
+    constructor(data, unitType = undefined) {
+        super(data, unitType);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
@@ -328,6 +407,9 @@ export class TimeSpanPlot extends ErrorColorPlot {
     }
 
     getTimeSpanValue(value) {
+        if (this.checkNaN(value.value))
+            return new TimeSpan.TimeSpan(0,0,0,0,0);
+        
         let time = value.value.split(':');
         let temp = time[0].split('.')
         let days, hours, minutes, seconds;
@@ -364,12 +446,13 @@ export class TimeSpanPlot extends ErrorColorPlot {
         const MAX_TIME_POINTS = 10
 
         let maxVal = Math.max(...this.y)
-        let step = Math.max(maxVal / MAX_TIME_POINTS, 1)
+        let minVal = Math.min(...this.y)
+        let step = Math.max((maxVal - minVal) / Math.min(MAX_TIME_POINTS, this.y.length), 1)
 
         let tVals = []
         let tValsCustomData = []
 
-        let cur = 0
+        let cur = minVal;
         while (cur <= maxVal) {
             tVals.push(cur);
             tValsCustomData.push(this.getTimeSpanAsText(new TimeSpan.TimeSpan(cur)))
@@ -377,6 +460,7 @@ export class TimeSpanPlot extends ErrorColorPlot {
         }
 
         return {
+            ...super.getLayout(),
             yaxis: {
                 ticktext: tValsCustomData,
                 tickvals: tVals,
@@ -473,6 +557,7 @@ export class EnumPlot extends Plot {
 
     getLayout() {
         return {
+            ...super.getLayout(),
             yaxis: {
                 visible: false,
             },

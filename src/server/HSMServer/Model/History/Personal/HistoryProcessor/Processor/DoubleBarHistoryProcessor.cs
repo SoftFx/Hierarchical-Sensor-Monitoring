@@ -18,8 +18,8 @@ namespace HSMServer.Model.History
             _format = new NumberFormatInfo { NumberDecimalSeparator = "." };
         }
 
-        protected override DoubleBarValue GetBarValue(SummaryBarItem<double> summary) =>
-          new()
+        protected override BarBaseValue<double> GetBarValue(SummaryBarItem<double> summary) =>
+          new DoubleBarValue()
           {
               Count = summary.Count,
               OpenTime = summary.OpenTime.ToUniversalTime(),
