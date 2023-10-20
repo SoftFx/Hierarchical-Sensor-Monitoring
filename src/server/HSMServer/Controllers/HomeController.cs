@@ -451,7 +451,7 @@ namespace HSMServer.Controllers
 
             var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
 
-            if (value is null)
+            if (value?.Value is null)
                 return _emptyResult;
 
             var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
@@ -466,7 +466,7 @@ namespace HSMServer.Controllers
 
             var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
 
-            if (value is null)
+            if (value?.Value is null)
                 return _emptyResult;
 
             var fileContentsStream = new MemoryStream(value.Value);
