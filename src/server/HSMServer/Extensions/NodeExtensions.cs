@@ -22,16 +22,16 @@ namespace HSMServer.Extensions
         {
             node.TryGetChats(out var folderChats);
 
-            return GetAvailableChats(folderChats, chatsManager);
+            return GetAvailableChats(folderChats, chatsManager).ToDictionary(k => k.Id, v => v.Name);
         }
 
-        internal static Dictionary<Guid, string> GetAvailableChats(this HashSet<Guid> folderChats, ITelegramChatsManager chatsManager)
+        internal static List<TelegramChat> GetAvailableChats(this HashSet<Guid> folderChats, ITelegramChatsManager chatsManager)
         {
-            var availableChats = new Dictionary<Guid, string>(1 << 3);
+            var availableChats = new List<TelegramChat>(1 << 3);
 
             foreach (var chat in chatsManager.GetValues())
                 if (folderChats.Contains(chat.Id))
-                    availableChats.Add(chat.Id, chat.Name);
+                    availableChats.Add(chat);
 
             return availableChats;
         }

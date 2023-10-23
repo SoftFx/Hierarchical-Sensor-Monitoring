@@ -46,9 +46,11 @@ namespace HSMServer.Notifications
             TelegramBot.SendMessages();
         }
 
-        internal void RecalculateState()
+        internal Task RecalculateState()
         {
             _telegramChatsManager.TokenManager.RemoveOldTokens();
+
+            return TelegramBot.ChatNamesSynchronization();
         }
 
         private void ConnectFoldersAndChats()
@@ -59,6 +61,7 @@ namespace HSMServer.Notifications
             _folderManager.RemoveFolderFromChats += _telegramChatsManager.RemoveFolderFromChats;
             _folderManager.AddFolderToChats += _telegramChatsManager.AddFolderToChats;
             _folderManager.Removed += _telegramChatsManager.RemoveFolderHandler;
+            _folderManager.GetChatName += _telegramChatsManager.GetChatName;
 
             foreach (var folder in _folderManager.GetValues())
                 foreach (var chatId in folder.TelegramChats)

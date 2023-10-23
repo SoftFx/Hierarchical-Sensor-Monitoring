@@ -34,6 +34,8 @@ namespace HSMServer.Model.Folders
 
         public event Action<JournalRecordModel> ChangesHandler;
 
+        public event Func<Guid, string> GetChatName;
+
 
         public FolderModel(FolderEntity entity)
         {
@@ -88,7 +90,7 @@ namespace HSMServer.Model.Folders
                 SelfDestroy = UpdateSetting(SelfDestroy, new TimeIntervalViewModel(update.SelfDestroy, PredefinedIntervals.ForSelfDestory), update.Initiator, "Remove sensor after inactivity");
 
             if (update.TelegramChats is not null)
-                TelegramChats = UpdateProperty(TelegramChats ?? new(), update.TelegramChats, update.Initiator); // TODO: remove nulldable operation after telegram chats migration
+                TelegramChats = UpdateChats(TelegramChats, update.TelegramChats, update.Initiator);
         }
 
         private TimeIntervalViewModel UpdateSetting(TimeIntervalViewModel currentValue, TimeIntervalViewModel newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(currentValue))] string propName = "", NoneValues none = NoneValues.Never)
@@ -126,6 +128,27 @@ namespace HSMServer.Model.Folders
                 });
 
             return newValue ?? oldValue;
+        }
+
+        private HashSet<Guid> UpdateChats(HashSet<Guid> oldValue, HashSet<Guid> newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
+        {
+            var oldChats = oldValue?.Select(id => GetChatName(id)).OrderBy(n => n).ToList() ?? new(); // TODO: remove nulldable operation after telegram chats migration
+            var newChats = newValue?.Select(id => GetChatName(id)).OrderBy(n => n).ToList();
+
+            if (newValue is not null && !newChats.SequenceEqual(oldChats))
+            {
+                ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
+                {
+                    Enviroment = "Folder chats update",
+                    OldValue = string.Join(", ", oldChats),
+                    NewValue = string.Join(", ", newChats),
+
+                    PropertyName = propName,
+                    Path = Name,
+                });
+            }
+
+            return newValue;
         }
 
 

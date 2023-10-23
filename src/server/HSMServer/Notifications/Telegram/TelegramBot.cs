@@ -56,11 +56,18 @@ namespace HSMServer.Notifications
             await StopBot();
         }
 
-        internal async Task<string> GetChatLink(long chatId)
+        internal async Task<(string link, string error)> TryGetChatLink(long chatId)
         {
-            var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _tokenSource.Token);
+            try
+            {
+                var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _tokenSource.Token);
 
-            return link.InviteLink;
+                return (link.InviteLink, null);
+            }
+            catch (Exception ex)
+            {
+                return (null, ex.Message);
+            }
         }
 
         internal void SendTestMessage(ChatId chatId, string message)
@@ -189,17 +196,7 @@ namespace HSMServer.Notifications
             }
         }
 
-        //remove after telegram settings migration
-        //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
-        //    _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
-
-        private void SendMessage(ChatId chat, string message)
-        {
-            if (!string.IsNullOrEmpty(message))
-                _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
-        }
-
-        private async Task ChatNamesSynchronization()
+        internal async Task ChatNamesSynchronization()
         {
             foreach (var chat in _chatsManager.GetValues())
             {
@@ -220,6 +217,15 @@ namespace HSMServer.Notifications
                     _logger.Error($"Telegram chat name '{chat.Name}' updating is failed - {ex}");
                 }
             }
+        }
+
+        //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
+        //    _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
+
+        private void SendMessage(ChatId chat, string message)
+        {
+            if (!string.IsNullOrEmpty(message))
+                _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
         }
     }
 }

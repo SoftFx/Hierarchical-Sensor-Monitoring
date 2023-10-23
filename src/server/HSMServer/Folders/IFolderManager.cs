@@ -17,6 +17,8 @@ namespace HSMServer.Folders
 
         event Action<Guid, List<Guid>> AddFolderToChats;
 
+        event Func<Guid, string> GetChatName;
+
 
         Task<bool> TryAdd(FolderAdd folderAdd, out FolderModel folder);
 

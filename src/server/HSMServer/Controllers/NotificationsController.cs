@@ -81,8 +81,12 @@ namespace HSMServer.Controllers
         public string GetGroupInvitation(Guid folderId) => ChatsManager.GetGroupInvitation(folderId, CurrentUser);
 
         [HttpGet]
-        public async Task<RedirectResult> OpenTelegramGroup(long chatId) =>
-            Redirect(await _telegramBot.GetChatLink(chatId));
+        public async Task<IActionResult> OpenTelegramGroup(long chatId)
+        {
+            (var link, var error) = await _telegramBot.TryGetChatLink(chatId);
+
+            return Json(new { link, error });
+        }
 
         [HttpGet]
         public void SendTestTelegramMessage(long chatId)

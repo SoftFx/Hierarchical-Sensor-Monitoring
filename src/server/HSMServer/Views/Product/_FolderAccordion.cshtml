@@ -45,30 +45,28 @@
                 {
                     @if (Model.TelegramChats.Count > 0)
                     {
-                        var availableChats = Model.TelegramChats.GetAvailableChats(TelegramChatsManager);
+                        var availableChats = Model.TelegramChats.GetAvailableChats(TelegramChatsManager).OrderBy(ch => ch.Type == ConnectedChatType.TelegramPrivate).ThenBy(ch => ch.Name).ToList();
 
                         <div>
                             <b>Telegram chats:</b>
 
                             @if (user.IsFolderManager(Model.Id.Value))
                             {
-                                var chats = availableChats.Select(ch => (id: ch.Key, name: ch.Value)).OrderBy(ch => ch.name).ToList();
-
-                                @for (int i = 0; i < chats.Count; ++i)
+                                @for (int i = 0; i < availableChats.Count; ++i)
                                 {
                                     @if (i > 0)
                                     {
                                         <span>, </span>
                                     }
 
-                                    <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chats[i].id">
-                                        @chats[i].name
+                                    <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@availableChats[i].Id">
+                                        @availableChats[i].Name
                                     </a>
                                 }
                             }
                             else
                             {
-                                @string.Join(", ", availableChats.Values)
+                                @string.Join(", ", availableChats.Select(ch => ch.Name))
                             }
                         </div>
                     }
