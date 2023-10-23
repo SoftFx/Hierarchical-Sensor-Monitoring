@@ -293,6 +293,7 @@ export class DoublePlot extends ErrorColorPlot {
     }
 
     setUpData(data, customField = 'value') {
+        let name = this.name;
         for (let i of data) {
             this.x.push(i.time)
             
@@ -307,14 +308,15 @@ export class DoublePlot extends ErrorColorPlot {
         }
 
         if (customField !== 'value') {
-            this.hovertemplate = `%{customdata} <extra>${this.name}</extra>`
+            this.hovertemplate = `%{customdata} <extra></extra>`
         }
 
         function checkNotCompressedCount(value){
             if (customField === 'count' && value.isCompressed === undefined)
-            {
-                return `${value[customField]} <br>This is compressed value`;
-            }
+                return `${name}=${value[customField]} (aggregated value)`;
+            
+            if (customField === 'min' || customField === 'max' || customField === 'mean')
+                return `${name}=${value[customField]}`;
 
             return value[customField];
         }
