@@ -1,4 +1,5 @@
 ﻿using HSMServer.Notifications;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,9 +23,9 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        public override Task StartAsync(CancellationToken cancellationToken) => _center.Start();
+        public override Task StartAsync(CancellationToken token) => _center.Start().ContinueWith(_ => base.StartAsync(token)).Unwrap();
 
-        public override Task StopAsync(CancellationToken token) => _center.DisposeAsync().AsTask();
+        public override Task StopAsync(CancellationToken token) => _center.DisposeAsync().AsTask().ContinueWith(_ => base.StopAsync(token)).Unwrap();
 
 
         protected override Task ServiceAction()
