@@ -46,9 +46,11 @@ namespace HSMServer.Notifications
             TelegramBot.SendMessages();
         }
 
-        internal void RecalculateState()
+        internal Task RecalculateState()
         {
             _telegramChatsManager.TokenManager.RemoveOldTokens();
+
+            return TelegramBot.ChatNamesSynchronization();
         }
 
         private void ConnectFoldersAndChats()

@@ -196,17 +196,7 @@ namespace HSMServer.Notifications
             }
         }
 
-        //remove after telegram settings migration
-        //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
-        //    _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
-
-        private void SendMessage(ChatId chat, string message)
-        {
-            if (!string.IsNullOrEmpty(message))
-                _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
-        }
-
-        private async Task ChatNamesSynchronization()
+        internal async Task ChatNamesSynchronization()
         {
             foreach (var chat in _chatsManager.GetValues())
             {
@@ -227,6 +217,15 @@ namespace HSMServer.Notifications
                     _logger.Error($"Telegram chat name '{chat.Name}' updating is failed - {ex}");
                 }
             }
+        }
+
+        //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
+        //    _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
+
+        private void SendMessage(ChatId chat, string message)
+        {
+            if (!string.IsNullOrEmpty(message))
+                _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
         }
     }
 }
