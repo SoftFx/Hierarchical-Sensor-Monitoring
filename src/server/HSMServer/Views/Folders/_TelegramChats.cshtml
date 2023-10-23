@@ -92,8 +92,7 @@
                                     @if (chat.Type == ConnectedChatType.TelegramGroup)
                                     {
                                         <li>
-                                            <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;" target="_blank"
-                                               asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenTelegramGroup)" asp-route-chatId="@chat.ChatId">
+                                            <a id="openChat_@chat.Id" name="@chat.ChatId" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
                                                 Go to chat
                                             </a>
                                         </li>
@@ -163,6 +162,24 @@
 
         $.ajax({
             url: `@Url.Action(nameof(NotificationsController.SendTestTelegramMessage), ViewConstants.NotificationsController)?chatId=${chatId}`
+        });
+    });
+
+    $('[id^=openChat_]').on('click', function () {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        let chatId = this.name;
+
+        $.ajax({
+            url: `@Url.Action(nameof(NotificationsController.OpenTelegramGroup), ViewConstants.NotificationsController)?chatId=${chatId}`
+        }).done(function (data) {
+            if (data.error != null) {
+                showToast(`Error opening chat. ${data.error}`);
+            }
+            else {
+                window.open(data.link, "_blank");
+            }
         });
     });
 </script>

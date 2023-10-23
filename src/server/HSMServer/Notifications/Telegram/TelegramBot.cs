@@ -56,11 +56,18 @@ namespace HSMServer.Notifications
             await StopBot();
         }
 
-        internal async Task<string> GetChatLink(long chatId)
+        internal async Task<(string link, string error)> TryGetChatLink(long chatId)
         {
-            var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _tokenSource.Token);
+            try
+            {
+                var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _tokenSource.Token);
 
-            return link.InviteLink;
+                return (link.InviteLink, null);
+            }
+            catch (Exception ex)
+            {
+                return (null, ex.Message);
+            }
         }
 
         internal void SendTestMessage(ChatId chatId, string message)
