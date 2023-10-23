@@ -1,6 +1,9 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Constants;
+using HSMServer.Filters.FolderRoleFilters;
+using HSMServer.Filters.TelegramRoleFilters;
 using HSMServer.Folders;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Notifications;
 using HSMServer.Notifications;
@@ -16,30 +19,34 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class NotificationsController : BaseController
     {
-        private readonly ITelegramChatsManager _chatsManager;
         private readonly IFolderManager _folderManager;
         private readonly TelegramBot _telegramBot;
+
+        internal ITelegramChatsManager ChatsManager { get; }
 
 
         public NotificationsController(ITelegramChatsManager chatsManager, NotificationsCenter notifications,
             IFolderManager folderManager, IUserManager userManager) : base(userManager)
         {
-            _chatsManager = chatsManager;
+            ChatsManager = chatsManager;
             _folderManager = folderManager;
             _telegramBot = notifications.TelegramBot;
         }
 
 
         [HttpGet]
-        public IActionResult EditChat(Guid id) => _chatsManager.TryGetValue(id, out var chat)
+        [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
+        public IActionResult EditChat(Guid id) => ChatsManager.TryGetValue(id, out var chat)
             ? View(new TelegramChatViewModel(chat, BuildChatFolders(chat)))
             : _emptyResult;
 
+        [HttpPost]
+        [TelegramRoleFilterByEditModel(nameof(updateModel), ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> EditChat(TelegramChatViewModel updateModel)
         {
-            if (await _chatsManager.TryUpdate(updateModel.ToUpdate()))
+            if (await ChatsManager.TryUpdate(updateModel.ToUpdate()))
             {
-                var updatedChat = _chatsManager[updateModel.Id];
+                var updatedChat = ChatsManager[updateModel.Id];
                 var removedFolders = updatedChat.Folders.Except(updateModel.Folders.Folders).ToList();
 
                 foreach (var folderId in updateModel.Folders.SelectedFolders)
@@ -56,22 +63,28 @@ namespace HSMServer.Controllers
                     }
             }
 
-            return _chatsManager.TryGetValue(updateModel.Id, out var chat)
+            return ChatsManager.TryGetValue(updateModel.Id, out var chat)
                 ? View(new TelegramChatViewModel(chat, BuildChatFolders(chat)))
                 : RedirectToAction(nameof(ProductController.Index), ViewConstants.ProductController);
         }
 
-        public async Task RemoveChat(Guid id) => await _chatsManager.TryRemove(new(id));
-
-        public RedirectResult OpenInvitationLink(Guid folderId) =>
-            Redirect(_chatsManager.GetInvitationLink(folderId, CurrentUser));
+        [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
+        public async Task RemoveChat(Guid id) => await ChatsManager.TryRemove(new(id));
 
         [HttpGet]
-        public string GetGroupInvitation(Guid folderId) => _chatsManager.GetGroupInvitation(folderId, CurrentUser);
+        [FolderRoleFilterByFolderId(nameof(folderId), ProductRoleEnum.ProductManager)]
+        public RedirectResult OpenInvitationLink(Guid folderId) =>
+            Redirect(ChatsManager.GetInvitationLink(folderId, CurrentUser));
 
+        [HttpGet]
+        [FolderRoleFilterByFolderId(nameof(folderId), ProductRoleEnum.ProductManager)]
+        public string GetGroupInvitation(Guid folderId) => ChatsManager.GetGroupInvitation(folderId, CurrentUser);
+
+        [HttpGet]
         public async Task<RedirectResult> OpenTelegramGroup(long chatId) =>
             Redirect(await _telegramBot.GetChatLink(chatId));
 
+        [HttpGet]
         public void SendTestTelegramMessage(long chatId)
         {
             var testMessage = $"Test message for {CurrentUser.Name}.";
