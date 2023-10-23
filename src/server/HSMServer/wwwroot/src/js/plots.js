@@ -313,7 +313,7 @@ export class DoublePlot extends ErrorColorPlot {
         function checkNotCompressedCount(value){
             if (customField === 'count' && value.isCompressed === undefined)
             {
-                return `${value[customField]} <br> This is compressed value`;
+                return `${value[customField]} <br>This is compressed value`;
             }
 
             return value[customField];
