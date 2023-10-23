@@ -13,10 +13,11 @@ namespace HSMServer.Filters
     [AttributeUsage(AttributeTargets.Method)]
     public abstract class UserRoleFilterBase : Attribute, IActionFilter
     {
-        private readonly List<ProductRoleEnum> _roles;
         private readonly RedirectToActionResult _redirectToHomeIndex = new(ViewConstants.IndexAction, ViewConstants.HomeController, null);
 
         private readonly string _argumentName;
+
+        protected readonly List<ProductRoleEnum> _roles;
 
 
         public UserRoleFilterBase(string argumentName, params ProductRoleEnum[] parameters)
@@ -29,31 +30,38 @@ namespace HSMServer.Filters
         public void OnActionExecuting(ActionExecutingContext context)
         {
             var user = context.HttpContext.User as User;
-            if (user?.IsAdmin ?? false) //Admins have all possible access
+            if ((user?.IsAdmin ?? false) || TryCheckRole(context, user)) //Admins have all possible access
                 return;
-
-            if (TryGetEntityId(context, out var folderId))
-                foreach (var role in _roles)
-                    if (HasRole(user, folderId, role))
-                        return;
 
             context.Result = _redirectToHomeIndex;
         }
 
         public void OnActionExecuted(ActionExecutedContext context) { }
 
+
         protected abstract bool HasRole(User user, Guid? entityId, ProductRoleEnum role);
 
         protected abstract Guid? GetEntityId(object arg, ActionExecutingContext context = null);
 
-        protected virtual bool TryGetEntityId(ActionExecutingContext context, out Guid? folderId)
+
+        protected virtual bool TryCheckRole(ActionExecutingContext context, User user)
         {
-            folderId = null;
+            if (TryGetEntityId(context, out var entityId))
+                foreach (var role in _roles)
+                    if (HasRole(user, entityId, role))
+                        return true;
+
+            return false;
+        }
+
+        protected virtual bool TryGetEntityId(ActionExecutingContext context, out Guid? entityId)
+        {
+            entityId = null;
 
             if (context.ActionArguments.TryGetValue(_argumentName, out var arg))
-                folderId = GetEntityId(arg, context);
+                entityId = GetEntityId(arg, context);
 
-            return folderId != null;
+            return entityId != null;
         }
     }
 }
