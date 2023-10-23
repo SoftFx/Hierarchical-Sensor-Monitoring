@@ -16,8 +16,12 @@ window.collapseButton =  {
 
         $.ajax({
             type: 'put',
-            url: `${closeNode}?nodeIds=${this.treeState.core.open}`,
-            cache: false
+            url: closeNode,
+            cache: false,
+            contentType: 'application/json',
+            data: JSON.stringify({
+                nodeIds: collapseButton.treeState.core.open
+            })
         }).done(function (){
             collapseButton.tree.jstree('close_all');
             collapseButton.isTriggered = false;

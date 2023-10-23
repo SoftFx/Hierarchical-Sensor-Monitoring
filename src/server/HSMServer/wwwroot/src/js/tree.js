@@ -45,8 +45,12 @@ window.initializeTree = function () {
 
         $.ajax({
             type: 'put',
-            url: `${closeNode}?nodeIds=${data.node.id}`,
-            cache: false
+            url: closeNode,
+            cache: false,
+            contentType: 'application/json',
+            data: JSON.stringify({
+                nodeIds: [data.node.id]
+            })
         })
     }).on('refresh.jstree', function (e, data){
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
