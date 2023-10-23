@@ -41,6 +41,8 @@ namespace HSMServer.Folders
 
         public event Action<Guid, List<Guid>> AddFolderToChats;
 
+        public event Func<Guid, string> GetChatName;
+
 
         public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService)
         {
@@ -78,6 +80,7 @@ namespace HSMServer.Folders
                 foreach (var productId in model.Products.Keys)
                     await AddProductToFolder(productId, model.Id, info);
 
+                model.GetChatName += GetChatNameById;
                 model.ChangesHandler += _journalService.AddRecord;
             }
 
@@ -146,7 +149,9 @@ namespace HSMServer.Folders
 
             foreach (var (_, folder) in this)
             {
+                folder.GetChatName += GetChatNameById;
                 folder.ChangesHandler += _journalService.AddRecord;
+
                 if (_userManager.TryGetValue(folder.AuthorId, out var author))
                     folder.Author = author.Name;
             }
@@ -335,5 +340,8 @@ namespace HSMServer.Folders
         }
 
         private List<FolderModel> GetFolders() => Values.Select(x => x.RecalculateState()).ToList();
+
+
+        private string GetChatNameById(Guid id) => GetChatName?.Invoke(id);
     }
 }

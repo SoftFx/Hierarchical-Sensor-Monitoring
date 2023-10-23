@@ -84,6 +84,7 @@ namespace HSMServer.Notifications
             }
         }
 
+        public string GetChatName(Guid id) => TryGetValue(id, out var chat) ? chat.Name : null;
 
         public string GetInvitationLink(Guid folderId, User user) =>
             $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(folderId, user)}";
