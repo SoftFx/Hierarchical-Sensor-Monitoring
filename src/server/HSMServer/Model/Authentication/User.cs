@@ -110,4 +110,10 @@ namespace HSMServer.Model.Authentication
 
         internal bool IsUserProduct(Guid productId) => ProductsRoles.Any(x => x.Item1 == productId);
     }
+
+
+    public class RemoveNodesRequestModel
+    {
+        public Guid[] NodeIds { get; set; }
+    }
 }

@@ -45,8 +45,12 @@ window.initializeTree = function () {
 
         $.ajax({
             type: 'put',
-            url: `${closeNode}?nodeIds=${data.node.id}`,
-            cache: false
+            url: closeNode,
+            cache: false,
+            contentType: 'application/json',
+            data: JSON.stringify({
+                nodeIds: [data.node.id]
+            })
         })
     }).on('refresh.jstree', function (e, data){
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
@@ -84,7 +88,10 @@ window.initializeTree = function () {
     function search(value){
         if (value === '')
             return;
-        
+
+        clearTimeout(refreshTreeTimeoutId)
+        clearTimeout(updateSelectedNodeDataTimeoutId)
+
         $('#search_field').val(value);
         $('#jstree').hide().jstree(true).refresh(true);
 
@@ -404,13 +411,18 @@ function buildContextMenu(node) {
                 "label": `Remove ${getKeyByValue(curType)}`,
                 "action": _ => {
                     var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-
+                    let type = getKeyByValue(curType);
                     //modal
                     $('#modalDeleteLabel').empty();
-                    $('#modalDeleteLabel').append(`Remove ${getKeyByValue(curType)}`);
+                    $('#modalDeleteLabel').append(`Remove ${type}`);
                     $('#modalDeleteBody').empty();
 
-                    let parent = node.parent;
+                    let prevDom = $('#jstree').jstree('get_prev_dom', node.id);
+                    let parent = undefined;
+
+                    if (prevDom)
+                        parent = prevDom[0].id
+
                     
                     $.when(getFullPathAction(node.id)).done((path) => {
                         $('#modalDeleteBody').append(`Do you really want to remove ${path}?`);
@@ -433,14 +445,20 @@ function buildContextMenu(node) {
                                 selectParentAfterRefresh();
                                 
                                 updateTreeTimer();
-                                showToast(`${getKeyByValue(curType)} has been removed`);
+                                showToast(`${type} has been removed`);
                             });
                     });
                     
                     function selectParentAfterRefresh(){
                         setTimeout(function (){
                             if (!isRefreshing)
-                                $(`#${parent}_anchor`).trigger('click');
+                            {
+                                parent = $(`#${parent}_anchor`);
+                                if (jQuery.isEmptyObject(parent[0]))
+                                    $('#nodeDataPanel').html('');
+                                else
+                                    parent.trigger('click');
+                            }
                             else 
                                 selectParentAfterRefresh();
                         }, 50)

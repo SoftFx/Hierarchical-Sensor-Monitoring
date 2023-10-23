@@ -33,6 +33,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using HSMServer.Model.Authentication;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
@@ -122,7 +123,7 @@ namespace HSMServer.Controllers
                 : NotFound();
 
         [HttpPut]
-        public void RemoveRenderingNode(params Guid[] nodeIds) => CurrentUser.Tree.RemoveOpenedNode(nodeIds);
+        public void RemoveRenderingNode([FromBody] RemoveNodesRequestModel request) => CurrentUser.Tree.RemoveOpenedNode(request.NodeIds);
 
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)
@@ -451,7 +452,7 @@ namespace HSMServer.Controllers
 
             var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
 
-            if (value is null)
+            if (value?.Value is null)
                 return _emptyResult;
 
             var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
@@ -466,7 +467,7 @@ namespace HSMServer.Controllers
 
             var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
 
-            if (value is null)
+            if (value?.Value is null)
                 return _emptyResult;
 
             var fileContentsStream = new MemoryStream(value.Value);

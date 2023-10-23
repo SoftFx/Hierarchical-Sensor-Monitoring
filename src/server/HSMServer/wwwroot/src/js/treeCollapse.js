@@ -8,27 +8,34 @@ window.collapseButton =  {
     isTriggered: false,
     
     collapse(){
-        this.isTreeCollapsed = true;
-        this.treeState = this.tree.jstree('get_state');
+        if (this.isTriggered)
+            return;
+
         this.isTriggered = true;
+        this.treeState = this.tree.jstree('get_state');
 
         $.ajax({
             type: 'put',
-            url: `${closeNode}?nodeIds=${this.treeState.core.open}`,
-            cache: false
+            url: closeNode,
+            cache: false,
+            contentType: 'application/json',
+            data: JSON.stringify({
+                nodeIds: collapseButton.treeState.core.open
+            })
         }).done(function (){
             collapseButton.tree.jstree('close_all');
             collapseButton.isTriggered = false;
+            collapseButton.isTreeCollapsed = true;
+            collapseButton.collapseIcon.removeClass('fa-regular fa-square-minus').addClass('fa-regular fa-square-plus').attr('title', 'Restore tree')
         })
-        
-        this.collapseIcon.removeClass('fa-regular fa-square-minus').addClass('fa-regular fa-square-plus').attr('title', 'Restore tree')
     },
     
     restore(){
-        this.isTreeCollapsed = false;
-        this.tree.jstree('set_state', this.treeState);
+        this.tree.jstree('set_state', this.treeState, function (){
+            collapseButton.isTreeCollapsed = false;
+            collapseButton.collapseIcon.removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title', 'Save and close tree');
+        });
         
-        this.collapseIcon.removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title', 'Save and close tree');
     },
     
     collapseOnClick(){
