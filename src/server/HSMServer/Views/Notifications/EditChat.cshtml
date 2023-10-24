@@ -57,9 +57,7 @@
 
             <div class="row mt-2">
                 <label class="col-2 col-form-label" asp-for="Description"></label>
-                <div class="col ps-0">
-                    <textarea type='text' class='form-control' asp-for="Description" value='@Model.Description'></textarea>
-                </div>
+                <label class="col col-form-label px-0">@Model.Description</label>
             </div>
 
             <partial name="_ChatFolders" for="Folders" />

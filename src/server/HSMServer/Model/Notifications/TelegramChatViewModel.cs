@@ -10,6 +10,8 @@ namespace HSMServer.Model.Notifications
 
         public string Author { get; }
 
+        public string Description { get; }
+
         public ConnectedChatType Type { get; }
 
         [Display(Name = "Authorizarion date")]
@@ -20,8 +22,6 @@ namespace HSMServer.Model.Notifications
 
         [Display(Name = "Messages delay")]
         public int MessagesDelay { get; set; }
-
-        public string Description { get; set; }
 
         [Display(Name = "Enable messages")]
         public bool EnableMessages { get; set; }

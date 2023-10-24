@@ -185,6 +185,12 @@ div.form-switch input.form-check-input:checked {
     display: none;
 }
 
+.disabled-link {
+    pointer-events: none;
+    cursor: default;
+    color: grey;
+}
+
 /* Wrappers
 -------------------------------------------------- */
 

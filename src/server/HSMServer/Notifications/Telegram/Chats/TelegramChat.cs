@@ -41,16 +41,16 @@ namespace HSMServer.Notifications
         public bool IsUserChat { get; init; }
 
 
-        public bool SendMessages { get; private set; }
+        public string Name { get; set; }
 
-        public string Description { get; private set; }
+        public string Description { get; set; }
+
+        public bool SendMessages { get; private set; }
 
         public int MessagesAggregationTimeSec { get; private set; }
 
 
         public string Author { get; set; }
-
-        public string Name { get; set; }
 
 
         public TelegramChat()
@@ -86,6 +86,7 @@ namespace HSMServer.Notifications
 
         public void Update(TelegramChatUpdate update)
         {
+            Name = update.Name ?? Name;
             Description = update.Description ?? Description;
             SendMessages = update.SendMessages ?? SendMessages;
             MessagesAggregationTimeSec = update.MessagesAggregationTimeSec ?? MessagesAggregationTimeSec;
