@@ -168,7 +168,6 @@ namespace HSMServer.Model.History
 
             return Convert(sum / commonCount);
         }
-        
 
         /// <returns>median from the percentiles list</returns>
         private T CountMedian()
