@@ -203,13 +203,20 @@ namespace HSMServer.Notifications
                 try
                 {
                     var telegramChat = await _bot?.GetChatAsync(chat.ChatId, _tokenSource.Token);
+
                     var chatName = chat.Type is ConnectedChatType.TelegramPrivate ? telegramChat.Username : telegramChat.Title;
+                    var chatDescription = telegramChat.Description;
 
-                    if (chat.Name != chatName)
+                    if (chat.Name != chatName || chat.Description != chatDescription)
                     {
-                        chat.Name = chatName;
+                        var update = new TelegramChatUpdate()
+                        {
+                            Id = chat.Id,
+                            Name = chatName,
+                            Description = chatDescription,
+                        };
 
-                        await _chatsManager.TryUpdate(chat);
+                        await _chatsManager.TryUpdate(update);
                     }
                 }
                 catch (Exception ex)

@@ -108,6 +108,7 @@ namespace HSMServer.Notifications
                     AuthorId = token.User.Id,
                     Author = token.User.Name,
                     AuthorizationTime = DateTime.UtcNow,
+                    Description = message.Chat.Description,
                     Name = isUserChat ? message.From.Username : message.Chat.Title,
                     Type = isUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup,
                 };
