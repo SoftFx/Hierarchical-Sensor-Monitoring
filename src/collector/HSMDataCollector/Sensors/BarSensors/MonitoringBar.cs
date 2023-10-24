@@ -36,6 +36,9 @@ namespace HSMDataCollector.DefaultSensors
                 else
                     ApplyNewValue(value);
 
+                if (FirstValue == null)
+                    FirstValue = value;
+
                 LastValue = value;
                 Count++;
             }
