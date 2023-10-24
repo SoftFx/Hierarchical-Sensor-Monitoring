@@ -15,6 +15,7 @@ namespace HSMServer.Notifications
     public sealed class TelegramBot : IAsyncDisposable
     {
         private const string ConfigurationsError = "Invalid Bot configurations.";
+        public const string BotIsNotRunningError = "Telegram Bot is not running.";
 
         private readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
 
@@ -35,7 +36,7 @@ namespace HSMServer.Notifications
 
         private string BotToken => _config.BotToken;
 
-        private bool IsBotRunning => _bot is not null;
+        public bool IsBotRunning => _bot is not null;
 
 
         internal TelegramBot(ITelegramChatsManager chatsManager, IFolderManager folderManager, ITreeValuesCache cache, TelegramConfig config)
@@ -58,22 +59,27 @@ namespace HSMServer.Notifications
 
         internal async Task<(string link, string error)> TryGetChatLink(long chatId)
         {
-            try
+            if (IsBotRunning)
             {
-                var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _tokenSource.Token);
+                try
+                {
+                    var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _tokenSource.Token);
 
-                return (link.InviteLink, null);
+                    return (link.InviteLink, null);
+                }
+                catch (Exception ex)
+                {
+                    return (null, ex.Message);
+                }
             }
-            catch (Exception ex)
-            {
-                return (null, ex.Message);
-            }
+
+            return (null, BotIsNotRunningError);
         }
 
         internal void SendTestMessage(ChatId chatId, string message)
         {
             if (IsBotRunning)
-                _bot?.SendTextMessageAsync(chatId, message, cancellationToken: _tokenSource.Token);
+                _bot.SendTextMessageAsync(chatId, message, cancellationToken: _tokenSource.Token);
         }
 
         internal async Task<string> StartBot()
@@ -198,30 +204,33 @@ namespace HSMServer.Notifications
 
         internal async Task ChatNamesSynchronization()
         {
-            foreach (var chat in _chatsManager.GetValues())
+            if (IsBotRunning)
             {
-                try
+                foreach (var chat in _chatsManager.GetValues())
                 {
-                    var telegramChat = await _bot?.GetChatAsync(chat.ChatId, _tokenSource.Token);
-
-                    var chatName = chat.Type is ConnectedChatType.TelegramPrivate ? telegramChat.Username : telegramChat.Title;
-                    var chatDescription = telegramChat.Description;
-
-                    if (chat.Name != chatName || chat.Description != chatDescription)
+                    try
                     {
-                        var update = new TelegramChatUpdate()
-                        {
-                            Id = chat.Id,
-                            Name = chatName,
-                            Description = chatDescription,
-                        };
+                        var telegramChat = await _bot.GetChatAsync(chat.ChatId, _tokenSource.Token);
 
-                        await _chatsManager.TryUpdate(update);
+                        var chatName = chat.Type is ConnectedChatType.TelegramPrivate ? telegramChat.Username : telegramChat.Title;
+                        var chatDescription = telegramChat.Description;
+
+                        if (chat.Name != chatName || chat.Description != chatDescription)
+                        {
+                            var update = new TelegramChatUpdate()
+                            {
+                                Id = chat.Id,
+                                Name = chatName,
+                                Description = chatDescription,
+                            };
+
+                            await _chatsManager.TryUpdate(update);
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"Telegram chat name '{chat.Name}' updating is failed - {ex}");
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Telegram chat name '{chat.Name}' updating is failed - {ex}");
+                    }
                 }
             }
         }
