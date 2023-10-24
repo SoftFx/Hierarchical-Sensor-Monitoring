@@ -6,7 +6,7 @@ using System.Numerics;
 
 namespace HSMServer.Model.History
 {
-    internal abstract class BarHistoryProcessor<T> : HistoryProcessorBase where T : INumber<T>, IComparable
+    internal abstract class BarHistoryProcessor<T> : HistoryProcessorBase where T : struct, INumber<T>, IComparable
     {
         private readonly List<(T, int)> _meanList = new();
         private readonly List<T> _percentilesList = new();

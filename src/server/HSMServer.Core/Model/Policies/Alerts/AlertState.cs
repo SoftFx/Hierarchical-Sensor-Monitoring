@@ -185,7 +185,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
         public static AlertState Build<T>(BarBaseValue<T> value, BaseSensorModel sensor)
-            where T : INumber<T>
+            where T : struct, INumber<T>
         {
             var state = BuildBase(value, sensor);
 
