@@ -30,6 +30,8 @@ namespace HSMServer.Model.History
               Percentiles = summary.Percentiles,
               Time = summary.CloseTime.ToUniversalTime(),
               ReceivingTime = summary.CloseTime.ToUniversalTime(),
+              LastValue = summary.LastValue / ValuesCount,
+              FirstValue = summary.FirstValue / ValuesCount
           };
 
         protected override double Average(double value1, double value2) =>

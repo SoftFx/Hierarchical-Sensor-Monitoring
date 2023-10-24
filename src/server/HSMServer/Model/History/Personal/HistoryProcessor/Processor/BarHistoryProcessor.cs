@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Threading;
 
 namespace HSMServer.Model.History
 {
@@ -10,6 +11,7 @@ namespace HSMServer.Model.History
     {
         private readonly List<(T, int)> _meanList = new();
         private readonly List<T> _percentilesList = new();
+        private int _valuesCounter = 0;
 
 
         protected abstract T DefaultMax { get; }
@@ -25,48 +27,50 @@ namespace HSMServer.Model.History
 
         protected abstract T Average(T value1, T value2);
 
+        protected int ValuesCount => _valuesCounter;
 
-        // protected override List<BaseValue> Compress(List<BaseValue> values, TimeSpan compressionInterval)
-        // {
-        //     if (values == null || values.Count == 0)
-        //         return new();
-        //
-        //     var result = new List<BaseValue>();
-        //
-        //     var oldestValue = values.First() as BarBaseValue<T>;
-        //     DateTime nextBarTime = oldestValue.OpenTime + compressionInterval;
-        //
-        //     SummaryBarItem<T> summary = new(oldestValue.OpenTime, oldestValue.CloseTime, DefaultMax, DefaultMin);
-        //     ProcessItem(oldestValue, summary);
-        //
-        //     for (int i = 1; i < values.Count; ++i)
-        //     {
-        //         if (values[i] is not BarBaseValue<T> value || value.CloseTime == DateTime.MinValue)
-        //             continue;
-        //
-        //         if (summary.CloseTime + (value.CloseTime - value.OpenTime) > nextBarTime)
-        //         {
-        //             result.Add(Convert(summary, summary.Count != value.Count));
-        //
-        //             summary = new(value.OpenTime, value.CloseTime, DefaultMax, DefaultMin);
-        //             ProcessItem(value, summary);
-        //
-        //             while (nextBarTime <= summary.CloseTime)
-        //                 nextBarTime += compressionInterval;
-        //         }
-        //         else
-        //             ProcessItem(value, summary);
-        //     }
-        //
-        //     result.Add(Convert(summary, (values[^1] as BarBaseValue).Count != summary.Count));
-        //
-        //     return result;
-        // }
+        protected override List<BaseValue> Compress(List<BaseValue> values, TimeSpan compressionInterval)
+        {
+            if (values == null || values.Count == 0)
+                return new();
+        
+            var result = new List<BaseValue>();
+        
+            var oldestValue = values.First() as BarBaseValue<T>;
+            DateTime nextBarTime = oldestValue.OpenTime + compressionInterval;
+        
+            SummaryBarItem<T> summary = new(oldestValue.OpenTime, oldestValue.CloseTime, DefaultMax, DefaultMin, oldestValue.FirstValue ?? oldestValue.Min, oldestValue.LastValue);
+            ProcessItem(oldestValue, summary);
+        
+            for (int i = 1; i < values.Count; ++i)
+            {
+                if (values[i] is not BarBaseValue<T> value || value.CloseTime == DateTime.MinValue)
+                    continue;
+        
+                if (summary.CloseTime + (value.CloseTime - value.OpenTime) > nextBarTime)
+                {
+                    result.Add(Convert(summary, summary.Count != value.Count));
+        
+                    summary = new(value.OpenTime, value.CloseTime, DefaultMax, DefaultMin, oldestValue.FirstValue ?? oldestValue.Min, oldestValue.LastValue);
+                    ProcessItem(value, summary);
+        
+                    while (nextBarTime <= summary.CloseTime)
+                        nextBarTime += compressionInterval;
+                }
+                else
+                    ProcessItem(value, summary);
+            }
+        
+            result.Add(Convert(summary, (values[^1] as BarBaseValue).Count != summary.Count));
+        
+            return result;
+        }
 
         private void AddValueToList(BarBaseValue<T> value)
         {
             try
             {
+                Interlocked.Add(ref _valuesCounter, 1);
                 _meanList.Add((value.Mean, value.Count));
                 if (value.Percentiles != null && value.Percentiles.Count > 0)
                     _percentilesList.AddRange(value.Percentiles.Select(p => p.Value));
@@ -113,6 +117,7 @@ namespace HSMServer.Model.History
         {
             _meanList.Clear();
             _percentilesList.Clear();
+            Interlocked.Exchange(ref _valuesCounter, 0);
         }
 
         private BarBaseValue<T> Convert(SummaryBarItem<T> summary, bool isCompressed = true)
@@ -137,6 +142,8 @@ namespace HSMServer.Model.History
 
             summary.CloseTime = value.CloseTime;
             summary.Count += value.Count;
+            summary.FirstValue += value.FirstValue ?? value.Min;
+            summary.LastValue += value.LastValue;
 
             if (value.Max.CompareTo(summary.Max) > 0)
                 summary.Max = value.Max;
