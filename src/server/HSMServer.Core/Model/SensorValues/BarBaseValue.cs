@@ -27,6 +27,8 @@ namespace HSMServer.Core.Model
 
         public T LastValue { get; init; }
 
+        public T? FirstValue { get; init; }
+
         public override string ShortInfo =>
             $"Min = {Min}, Mean = {Mean}, Max = {Max}, Count = {Count}, Last = {LastValue}.";
 

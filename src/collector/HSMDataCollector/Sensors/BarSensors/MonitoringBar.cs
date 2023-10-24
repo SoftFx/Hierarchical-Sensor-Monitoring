@@ -5,7 +5,7 @@ using System;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class MonitoringBarBase<T> : BarSensorValueBase<T>
+    public abstract class MonitoringBarBase<T> : BarSensorValueBase<T> where T: struct
     {
         private readonly object _lock = new object();
 

@@ -5,8 +5,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.0.4" />
+<!--    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.0.4" />-->
     <PackageReference Include="NLog" Version="5.1.2" />
+    <ProjectReference Include="..\..\collector\HSMDataCollector\HSMDataCollector.csproj" />
   </ItemGroup>
 
   <ItemGroup>
