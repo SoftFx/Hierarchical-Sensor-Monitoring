@@ -84,7 +84,9 @@ namespace HSMServer.Notifications
             }
         }
 
-        public string GetChatName(Guid id) => TryGetValue(id, out var chat) ? chat.Name : null;
+        public string GetChatName(Guid id) => this.GetValueOrDefault(id)?.Name;
+
+        public TelegramChat GetChatByChatId(ChatId chatId) => _telegramChatIds.GetValueOrDefault(chatId);
 
         public string GetInvitationLink(Guid folderId, User user) =>
             $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(folderId, user)}";

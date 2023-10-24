@@ -20,6 +20,8 @@ namespace HSMServer.Notifications
 
         string GetChatName(Guid id);
 
+        TelegramChat GetChatByChatId(ChatId chatId);
+
         string GetInvitationLink(Guid folderId, User user);
 
         string GetGroupInvitation(Guid folderId, User user);
