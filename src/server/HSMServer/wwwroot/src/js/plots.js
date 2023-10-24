@@ -61,6 +61,7 @@ export class Plot {
     getLayout() {
         if (this.#customYaxisName !== undefined) {
             return {
+                dragmode: 'zoom',
                 autosize: true,
                 xaxis: {
                     title: {
@@ -71,6 +72,9 @@ export class Plot {
                             color: '#7f7f7f'
                         }
                     },
+                    rangeslider: {
+                        visible: false
+                    }
                 },
                 yaxis: {
                     title: {
@@ -86,6 +90,7 @@ export class Plot {
         }
         
         return {
+            dragmode: 'zoom',
             autosize: true,
             xaxis: {
                 title: {
@@ -96,6 +101,9 @@ export class Plot {
                         color: '#7f7f7f'
                     }
                 },
+                rangeslider: {
+                    visible: false
+                }
             }
         }
     }
@@ -327,17 +335,21 @@ export class BarPLot extends Plot {
     constructor(data, name, unitType = undefined) {
         super(data, unitType);
 
-        this.type = 'box';
+        this.type = 'candlestick';
         this.name = 'bar';
 
-        this.upperfence = [];
-        this.lowerfence = [];
-        this.median = [];
-        this.q1 = [];
-        this.q3 = [];
-        this.mean = [];
-        this.count = [];
+        this.close = [];
+        this.high = [];
+        this.low = [];
+        this.open = [];
+        this.increasing = {line: {color: 'green'}};
+        this.decreasing = {line: {color: 'green'}};
 
+        this.text = [];
+        this.hovertemplate = '%{customdata} <extra>this.name</extra>'
+        this.hoverinfo='text';
+        this.xaxis= 'x';
+        this.yaxis = 'y';
         this.setUpData(data);
     }
 
@@ -347,14 +359,17 @@ export class BarPLot extends Plot {
                 this.x.push(i.openTime);
             else
                 this.x.push(i.closeTime);
+            
+            this.high.push(i.max);
+            this.low.push(i.min);
 
-            this.upperfence.push(i.max);
-            this.lowerfence.push(i.min);
-            this.median.push(i.percentiles[0.5]);
-            this.q1.push(i.percentiles[0.25]);
-            this.q3.push(i.percentiles[0.75]);
-            this.mean.push(i.mean);
-            this.count.push(i.count);
+            this.open.push(i.mean);
+            this.text.push(
+                'min: ' + i.min +
+                '<br>mean: ' + i.mean +
+                '<br>max: ' + i.max +
+                '<br>count: ' + i.count);
+            this.close.push(i.lastValue);
         }
 
         window.graphData.plot = this;
