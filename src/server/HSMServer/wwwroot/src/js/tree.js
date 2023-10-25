@@ -270,39 +270,31 @@ function buildContextMenu(node) {
         contextMenu["RemoveNode"] = {
             "label": `Remove items`,
             "action": _ => {
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+                showConfirmationModal(
+                    `Remove items`,
+                    `Do you really want to remove ${selectedNodes.length} selected items?`,
+                    () => {
+                        $.ajax({
+                            url: `${removeNodeAction}`,
+                            type: 'POST',
+                            cache: false,
+                            async: true,
+                            data: JSON.stringify(selectedNodes),
+                            contentType: "application/json"
+                        }).done((response) => {
+                            updateTreeTimer();
 
-                //modal
-                $('#modalDeleteLabel').empty().append(`Remove items`);
-                $('#modalDeleteBody').empty().append(`Do you really want to remove ${selectedNodes.length} selected items?`);
-                modal.show();
-                
-                //modal confirm
-                $('#confirmDeleteButton').off('click').on('click', () => {
-                    modal.hide();
-                    
-                    $.ajax({
-                        url:`${removeNodeAction}`,
-                        type: 'POST',
-                        cache: false,
-                        async: true,
-                        data: JSON.stringify(selectedNodes),
-                        contentType: "application/json"
-                    }).done((response) => {
-                        updateTreeTimer();
-                        
-                        let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
+                            let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
 
-                        if (response.errorMessage !== "")
-                            message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
-                        
-                        showToast(message);
+                            if (response.errorMessage !== "")
+                                message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
 
-                        $(`#${$('#jstree').jstree(true).get_node('#').children[0]}_anchor`).trigger('click');
-                    });
-                });
+                            showToast(message);
 
-                $('#closeDeleteButton').off('click').on('click', () => modal.hide());
+                            $(`#${$('#jstree').jstree(true).get_node('#').children[0]}_anchor`).trigger('click');
+                        });
+                    }
+                );
             }
         }
         
@@ -410,45 +402,37 @@ function buildContextMenu(node) {
             contextMenu["RemoveNode"] = {
                 "label": `Remove ${getKeyByValue(curType)}`,
                 "action": _ => {
-                    var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                     let type = getKeyByValue(curType);
-                    //modal
-                    $('#modalDeleteLabel').empty();
-                    $('#modalDeleteLabel').append(`Remove ${type}`);
-                    $('#modalDeleteBody').empty();
 
                     let prevDom = $('#jstree').jstree('get_prev_dom', node.id);
                     let parent = undefined;
 
                     if (prevDom)
-                        parent = prevDom[0].id
+                        parent = prevDom[0].id;
 
-                    
                     $.when(getFullPathAction(node.id)).done((path) => {
-                        $('#modalDeleteBody').append(`Do you really want to remove ${path}?`);
-                        modal.show();
+                        showConfirmationModal(
+                            `Remove ${type}`,
+                            `Do you really want to remove ${path}?`,
+                            () => {
+                                $.ajax({
+                                    url: `${removeNodeAction}`,
+                                    type: 'POST',
+                                    cache: false,
+                                    async: true,
+                                    data: JSON.stringify([node.id]),
+                                    contentType: "application/json"
+                                })
+                                .done(() => {
+                                    selectParentAfterRefresh();
+
+                                    updateTreeTimer();
+                                    showToast(`${type} has been removed`);
+                                });
+                            }
+                        );
                     })
 
-                    //modal confirm
-                    $('#confirmDeleteButton').off('click').on('click', () => {
-                        modal.hide();
-
-                        $.ajax({
-                                url:`${removeNodeAction}`,
-                                type: 'POST',
-                                cache: false,
-                                async: true,
-                                data: JSON.stringify([node.id]),
-                                contentType: "application/json"
-                            })
-                            .done(() => {
-                                selectParentAfterRefresh();
-                                
-                                updateTreeTimer();
-                                showToast(`${type} has been removed`);
-                            });
-                    });
-                    
                     function selectParentAfterRefresh(){
                         setTimeout(function (){
                             if (!isRefreshing)
@@ -463,8 +447,6 @@ function buildContextMenu(node) {
                                 selectParentAfterRefresh();
                         }, 50)
                     }
-
-                    $('#closeDeleteButton').off('click').on('click', () => modal.hide());
                 }
             }
         }
