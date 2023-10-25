@@ -211,7 +211,7 @@ function initSelectedNode(selectedId) {
         contenttype: 'application/json',
         cache: false,
         success: function (viewData) {
-            $("#nodeDataPanel").html(viewData);
+            $("#nodeDataPanel").removeClass('d-none').html(viewData);
         }
     }).done(function () {
         initialize();
@@ -298,7 +298,7 @@ function buildContextMenu(node) {
                         
                         showToast(message);
 
-                        $(`#${$('#jstree').jstree(true).get_node('#').children[0]}_anchor`).trigger('click');
+                        $('#nodeDataPanel').addClass('d-none');
                     });
                 });
 
@@ -417,13 +417,6 @@ function buildContextMenu(node) {
                     $('#modalDeleteLabel').append(`Remove ${type}`);
                     $('#modalDeleteBody').empty();
 
-                    let prevDom = $('#jstree').jstree('get_prev_dom', node.id);
-                    let parent = undefined;
-
-                    if (prevDom)
-                        parent = prevDom[0].id
-
-                    
                     $.when(getFullPathAction(node.id)).done((path) => {
                         $('#modalDeleteBody').append(`Do you really want to remove ${path}?`);
                         modal.show();
@@ -442,27 +435,12 @@ function buildContextMenu(node) {
                                 contentType: "application/json"
                             })
                             .done(() => {
-                                selectParentAfterRefresh();
+                                $('#nodeDataPanel').addClass('d-none');
                                 
                                 updateTreeTimer();
                                 showToast(`${type} has been removed`);
                             });
                     });
-                    
-                    function selectParentAfterRefresh(){
-                        setTimeout(function (){
-                            if (!isRefreshing)
-                            {
-                                parent = $(`#${parent}_anchor`);
-                                if (jQuery.isEmptyObject(parent[0]))
-                                    $('#nodeDataPanel').html('');
-                                else
-                                    parent.trigger('click');
-                            }
-                            else 
-                                selectParentAfterRefresh();
-                        }, 50)
-                    }
 
                     $('#closeDeleteButton').off('click').on('click', () => modal.hide());
                 }
