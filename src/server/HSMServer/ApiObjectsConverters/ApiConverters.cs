@@ -170,7 +170,7 @@ namespace HSMServer.ApiObjectsConverters
         }
 
 
-        public static BarSensorHistory Convert<T>(this BarBaseValue<T> value) where T : struct, INumber<T> =>
+        public static BarSensorHistory Convert<T>(this BarBaseValue<T> value) where T : INumber<T> =>
             new()
             {
                 Comment = value.Comment,

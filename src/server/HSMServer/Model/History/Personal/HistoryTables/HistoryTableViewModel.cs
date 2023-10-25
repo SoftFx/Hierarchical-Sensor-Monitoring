@@ -151,7 +151,7 @@ namespace HSMServer.Model.History
                 IsTimeout = value.IsTimeout
             };
 
-        private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : struct, INumber<T> =>
+        private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : INumber<T> =>
             new()
             {
                 OpenTime = value.OpenTime,
