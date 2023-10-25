@@ -1,0 +1,151 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Model.Authentication
+@using HSMServer.Model
+@using HSMServer.Model.ViewModel
+@using HSMServer.Model.TreeViewModel
+@using HSMServer.UserFilters
+
+@model TreeViewModel
+
+@{
+    var user = User as User;
+
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+
+<script>
+    var selectNode = "@Url.Action(nameof(HomeController.SelectNode), ViewConstants.HomeController)";
+    var refreshTree = "@Url.Action(nameof(HomeController.RefreshTree), ViewConstants.HomeController)";
+    var isDataValidAction = "@Url.Action(nameof(HomeController.IsMetaInfoValid), ViewConstants.HomeController)";
+
+    var getNode = "@Url.Action(nameof(HomeController.GetNode), ViewConstants.HomeController)";
+    var closeNode = "@Url.Action(nameof(HomeController.RemoveRenderingNode), ViewConstants.HomeController)";
+
+    var getNodePathAction = "@Url.Action(nameof(HomeController.GetNodePath), ViewConstants.HomeController)";
+    var editFolderAction = "@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)";
+    var editProductAction = "@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController)";
+    var removeNodeAction = "@Url.Action(nameof(HomeController.RemoveNode), ViewConstants.HomeController)";
+
+    var enableGrafanaAction = "@Url.Action(nameof(HomeController.EnableGrafana), ViewConstants.HomeController)";
+    var disableGrafanaAction = "@Url.Action(nameof(HomeController.DisableGrafana), ViewConstants.HomeController)";
+
+    var muteAction = "@Url.Action(nameof(HomeController.MuteSensors), ViewConstants.HomeController)";
+    var unmuteAction = "@Url.Action(nameof(HomeController.RemoveMutedStateToSensor), ViewConstants.HomeController)";
+
+    var exportAlerts = "@Url.Action(nameof(HomeController.ExportAlerts), ViewConstants.HomeController)";
+    var importAlerts = "@Url.Action(nameof(HomeController.ImportAlerts), ViewConstants.HomeController)";
+</script>
+
+
+@await Html.PartialAsync("~/Views/Tree/_EditSensorStatusModal.cshtml", new EditSensorStatusViewModal())
+@await Html.PartialAsync("~/Views/Tree/_MultiEditModal.cshtml", new EditAlertsViewModel())
+@await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
+@await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
+
+<div id="ignoreNotificatios_partial">@await Html.PartialAsync("~/Views/Tree/_IgnoreNotificationsModal.cshtml", (IgnoreNotificationsViewModel)null)</div>
+
+<div id="mainSpinner" class="spinner-border big_spinner text-secondary center_spinner" role="status"></div>
+
+<div id="mainContainer" class="container tree-main-container mw-100 d-inline-flex flex-nowrap hidden_element m-0 p-0">
+    <div>
+        <div class="d-flex pt-3 pb-1">
+            <div class="d-flex flex-fill me-auto">
+                <button id="show" type="button" title="@user.TreeFilter.EnabledFiltersMessage" class="btn btn-sm btn-outline-primary ms-3 position-relative text-nowrap" style="height: 2.5rem">
+                    <i class="fa-solid fa-filter"></i>
+                    <span>Filters</span>
+                    @if (user?.TreeFilter.EnabledFiltersCount > 0)
+                    {
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            @(user.TreeFilter.EnabledFiltersCount)
+                        </span>
+                    }
+                </button>
+
+                <div class="mx-3 my-2">
+                    <i id="currentSort" class="@(user?.TreeFilter.TreeSortType == TreeSortType.ByTime ? "fas fa-sort-numeric-down-alt" : "fas fa-sort-alpha-down")"></i>
+                </div>
+
+                <div class="input-group border-1 d-flex rounded-1" style="border-style: solid; border-width: 1px; width: auto">
+                    <form id="searchForm" class="form-outline d-flex">
+                        <input id="search_input" placeholder="Folders, products, sensors" title="Folders, products, sensors" type="text" class="no-border ms-1" style="width: 8rem; font-size: smaller;" />
+                        <input class="d-none" id="search_field" />
+                        <button id="search_tree" type="button" class="btn no-border">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </form>
+                </div>
+
+                <div class="flex-fill align-self-center ms-3">
+                    <i id="collapseIcon" onclick="collapseButton.collapseOnClick()" class="fa-regular fa-square-minus tree-collapse-button" title="Save and close tree"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex d-none justify-content-center mt-2" id="jstreeSpinner">
+            <div class="spinner-border normal_spinner text-secondary" role="status"></div>
+        </div>
+
+        <div class="d-flex justify-content-center tree-wrapper reserved-scroll-y overflow-y-auto mt-1">
+            <div class="d-flex me-auto">
+                <div class="ms-2 mb-1"> @await Html.PartialAsync("~/Views/Tree/_TreeFilter.cshtml", new UserFilterViewModel(user.TreeFilter)) </div>
+                <div class="row justify-content-start mw-100 me-1">
+                    <div class="tree-height-weight-parameters col-auto ms-2 pe-0">
+                        <div class="col-md-auto">
+                            <div id="jstree">@await Html.PartialAsync("~/Views/Tree/_Tree.cshtml", user.Tree.GetUserTree())</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @RenderBody()
+</div>
+
+
+<script>
+    initializeTree();
+
+
+    var clipboard = new ClipboardJS('[id^="copy_"]', {
+        container: document.getElementById('accessKeys_modal')
+    });
+
+    var interval = $("#treeInterval").val() * 1000;
+    setTimeout(updateTreeTimer, interval);
+
+
+    $(document).ready(() => {
+        $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
+    })
+
+    $(window).on('load', function () {
+        $('body').css('overflow', 'hidden');
+    }).on('unload', function () {
+        $('body').css('overflow', 'auto');
+    });
+
+    $("#show").click(function () {
+        if (!$("#filter").is(":visible"))
+            $("#filter").css("display", "block");
+        else
+            $("#filter").css("display", "none");
+    });
+
+    $("#mainSpinner").css("display", "none");
+    $('#mainContainer').removeClass('hidden_element');
+
+
+    var refreshTreeTimeoutId;
+    var isRefreshing = false;
+    function updateTreeTimer() {
+        clearTimeout(refreshTreeTimeoutId);
+        isRefreshing = true;
+
+        $('#jstree').jstree(true).refresh(true);
+
+        isRefreshing = false;
+    }
+</script>
