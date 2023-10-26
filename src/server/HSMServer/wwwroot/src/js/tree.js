@@ -1,8 +1,10 @@
-﻿var needToActivateListTab = false;
+﻿import {getPlotSourceView} from "./dashboard";
+
+var needToActivateListTab = false;
 
 window.currentSelectedNodeId = "";
 
-interact('.dropzone').dropzone({
+window.interact('.dropzone').dropzone({
     overlap: 0.75,
 
     ondropactivate: function (event) {
@@ -23,11 +25,27 @@ interact('.dropzone').dropzone({
         // alert(event.relatedTarget.id
         //     + ' was dropped into '
         //     + event.target.id)
-        console.log(event.relatedTarget)
-        console.log(event.target)
-        console.log('On drop event:')
-        console.log(event.relatedTarget)
-        event.target.innerHTML += event.relatedTarget.innerHTML;
+        // console.log(event.relatedTarget)
+        // console.log(event.target)
+        // console.log('On drop event:')
+        // console.log(event.relatedTarget)
+        // //event.target.innerHTML += event.relatedTarget.innerHTML;
+        // console.log(event.relatedTarget.innerHTML)
+        // console.log(JSON.stringify(event.relatedTarget))
+        // //console.log(event.relatedTarget.data('jstree'))
+        // console.log($('#jstree').jstree().get_json(event.relatedTarget.id, ['id', 'class', 'title']))
+        // console.log(JSON.stringify(event.relatedTarget, ['id', 'className', 'jstree', 'title', 'title']))
+        // console.log(JSON.stringify(event.relatedTarget.innerHTML))
+        // $("#plots").html(function(i, origText){
+        //     return  origText + event.relatedTarget.innerHTML;
+        // });
+        let sources = $('#sources');
+        getPlotSourceView(event.relatedTarget.id).then(function (data){
+            sources.html(function(n, origText){
+                return origText + data;
+            });
+        })
+        
     },
     ondropdeactivate: function (event) {
         event.target.classList.remove('drop-active')
@@ -35,7 +53,7 @@ interact('.dropzone').dropzone({
     }
 })
 
-interact('.drag-drop')
+window.interact('.drag-drop')
     .draggable({
         inertia: true,
         modifiers: [],

@@ -50,6 +50,7 @@ import './js/products.js';
 import './js/tree.js';
 import './js/site.js';
 import './js/treeCollapse';
+import './js/dashboard.js'
 
 import './css/site.css';
 import './css/accessKey.css';
