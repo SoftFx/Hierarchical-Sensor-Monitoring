@@ -199,6 +199,21 @@ window.activateNode = function (currentNodeId, nodeIdToActivate) {
     }
 }
 
+window.loadEditSensorStatusModal = function (id) {
+    $.ajax({
+        url: `${editStatusAction}?sensorId=${id}`,
+        type: 'GET',
+        datatype: 'json',
+        async: true,
+        success: (viewData) => {
+            $('#editSensorStatus_form').replaceWith(viewData);
+        }
+    }).done(function () {
+        $('#editSensorStatus_modal').modal('show');
+    });
+}
+
+
 function isDisabled(node) {
     return typeof node.disabled === 'undefined';
 }
@@ -297,7 +312,7 @@ function initSelectedNode(selectedId) {
         contenttype: 'application/json',
         cache: false,
         success: function (viewData) {
-            $("#nodeDataPanel").html(viewData);
+            $("#nodeDataPanel").removeClass('d-none').html(viewData);
         }
     }).done(function () {
         initialize();
@@ -356,39 +371,31 @@ function buildContextMenu(node) {
         contextMenu["RemoveNode"] = {
             "label": `Remove items`,
             "action": _ => {
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+                showConfirmationModal(
+                    `Remove items`,
+                    `Do you really want to remove ${selectedNodes.length} selected items?`,
+                    () => {
+                        $.ajax({
+                            url: `${removeNodeAction}`,
+                            type: 'POST',
+                            cache: false,
+                            async: true,
+                            data: JSON.stringify(selectedNodes),
+                            contentType: "application/json"
+                        }).done((response) => {
+                            updateTreeTimer();
 
-                //modal
-                $('#modalDeleteLabel').empty().append(`Remove items`);
-                $('#modalDeleteBody').empty().append(`Do you really want to remove ${selectedNodes.length} selected items?`);
-                modal.show();
-                
-                //modal confirm
-                $('#confirmDeleteButton').off('click').on('click', () => {
-                    modal.hide();
-                    
-                    $.ajax({
-                        url:`${removeNodeAction}`,
-                        type: 'POST',
-                        cache: false,
-                        async: true,
-                        data: JSON.stringify(selectedNodes),
-                        contentType: "application/json"
-                    }).done((response) => {
-                        updateTreeTimer();
-                        
-                        let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
+                            let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
 
-                        if (response.errorMessage !== "")
-                            message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
-                        
-                        showToast(message);
+                            if (response.errorMessage !== "")
+                                message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
 
-                        $(`#${$('#jstree').jstree(true).get_node('#').children[0]}_anchor`).trigger('click');
-                    });
-                });
+                            showToast(message);
 
-                $('#closeDeleteButton').off('click').on('click', () => modal.hide());
+                            $('#nodeDataPanel').addClass('d-none');
+                        });
+                    }
+                );
             }
         }
         
@@ -496,61 +503,30 @@ function buildContextMenu(node) {
             contextMenu["RemoveNode"] = {
                 "label": `Remove ${getKeyByValue(curType)}`,
                 "action": _ => {
-                    var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                     let type = getKeyByValue(curType);
-                    //modal
-                    $('#modalDeleteLabel').empty();
-                    $('#modalDeleteLabel').append(`Remove ${type}`);
-                    $('#modalDeleteBody').empty();
 
-                    let prevDom = $('#jstree').jstree('get_prev_dom', node.id);
-                    let parent = undefined;
-
-                    if (prevDom)
-                        parent = prevDom[0].id
-
-                    
                     $.when(getFullPathAction(node.id)).done((path) => {
-                        $('#modalDeleteBody').append(`Do you really want to remove ${path}?`);
-                        modal.show();
-                    })
+                        showConfirmationModal(
+                            `Remove ${type}`,
+                            `Do you really want to remove ${path}?`,
+                            () => {
+                                $.ajax({
+                                    url: `${removeNodeAction}`,
+                                    type: 'POST',
+                                    cache: false,
+                                    async: true,
+                                    data: JSON.stringify([node.id]),
+                                    contentType: "application/json"
+                                })
+                                .done(() => {
+                                    $('#nodeDataPanel').addClass('d-none');
 
-                    //modal confirm
-                    $('#confirmDeleteButton').off('click').on('click', () => {
-                        modal.hide();
-
-                        $.ajax({
-                                url:`${removeNodeAction}`,
-                                type: 'POST',
-                                cache: false,
-                                async: true,
-                                data: JSON.stringify([node.id]),
-                                contentType: "application/json"
-                            })
-                            .done(() => {
-                                selectParentAfterRefresh();
-                                
-                                updateTreeTimer();
-                                showToast(`${type} has been removed`);
-                            });
-                    });
-                    
-                    function selectParentAfterRefresh(){
-                        setTimeout(function (){
-                            if (!isRefreshing)
-                            {
-                                parent = $(`#${parent}_anchor`);
-                                if (jQuery.isEmptyObject(parent[0]))
-                                    $('#nodeDataPanel').html('');
-                                else
-                                    parent.trigger('click');
+                                    updateTreeTimer();
+                                    showToast(`${type} has been removed`);
+                                });
                             }
-                            else 
-                                selectParentAfterRefresh();
-                        }, 50)
-                    }
-
-                    $('#closeDeleteButton').off('click').on('click', () => modal.hide());
+                        );
+                    })
                 }
             }
         }
@@ -560,7 +536,7 @@ function buildContextMenu(node) {
                 "label": `Edit status`,
                 "icon": "/dist/edit.svg",
                 "action": _ => {
-                    loadEditSensorStatusModal();
+                    loadEditSensorStatusModal(node.id);
                 }
             }
         }
