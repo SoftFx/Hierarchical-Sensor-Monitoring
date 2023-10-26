@@ -17,12 +17,18 @@ namespace HSMServer.Model.History
         public T Max { get; set; }
 
         public T Mean { get; set; }
+        
+        public T FirstValue { get; set; }
+        
+        public T LastValue { get; set; }
 
         public Dictionary<double, T> Percentiles { get; set; }
 
 
-        public SummaryBarItem(DateTime openTime, DateTime closeTime, T max, T min)
-        {
+        public SummaryBarItem(DateTime openTime, DateTime closeTime, T max, T min, T firstValue, T lastValue)
+        { 
+            FirstValue = firstValue;
+            LastValue = lastValue;
             OpenTime = openTime;
             CloseTime = closeTime;
             Max = max;
