@@ -113,6 +113,21 @@ window.activateNode = function (currentNodeId, nodeIdToActivate) {
     }
 }
 
+window.loadEditSensorStatusModal = function (id) {
+    $.ajax({
+        url: `${editStatusAction}?sensorId=${id}`,
+        type: 'GET',
+        datatype: 'json',
+        async: true,
+        success: (viewData) => {
+            $('#editSensorStatus_form').replaceWith(viewData);
+        }
+    }).done(function () {
+        $('#editSensorStatus_modal').modal('show');
+    });
+}
+
+
 function isDisabled(node) {
     return typeof node.disabled === 'undefined';
 }
@@ -456,7 +471,7 @@ function buildContextMenu(node) {
                 "label": `Edit status`,
                 "icon": "/dist/edit.svg",
                 "action": _ => {
-                    loadEditSensorStatusModal();
+                    loadEditSensorStatusModal(node.id);
                 }
             }
         }
