@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using System.Threading;
 
 namespace HSMServer.Model.History
 {
@@ -11,7 +10,6 @@ namespace HSMServer.Model.History
     {
         private readonly List<(T, int)> _meanList = new();
         private readonly List<T> _percentilesList = new();
-        private int _valuesCounter = 0;
 
 
         protected abstract T DefaultMax { get; }
@@ -27,7 +25,6 @@ namespace HSMServer.Model.History
 
         protected abstract T Average(T value1, T value2);
 
-        protected int ValuesCount => _valuesCounter;
 
         protected override List<BaseValue> Compress(List<BaseValue> values, TimeSpan compressionInterval)
         {
@@ -70,7 +67,6 @@ namespace HSMServer.Model.History
         {
             try
             {
-                Interlocked.Add(ref _valuesCounter, 1);
                 _meanList.Add((value.Mean, value.Count));
                 if (value.Percentiles != null && value.Percentiles.Count > 0)
                     _percentilesList.AddRange(value.Percentiles.Select(p => p.Value));
@@ -117,7 +113,6 @@ namespace HSMServer.Model.History
         {
             _meanList.Clear();
             _percentilesList.Clear();
-            Interlocked.Exchange(ref _valuesCounter, 0);
         }
 
         private BarBaseValue<T> Convert(SummaryBarItem<T> summary, bool isCompressed = true)
