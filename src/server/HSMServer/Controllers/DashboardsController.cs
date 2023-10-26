@@ -4,12 +4,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace HSMServer.Controllers
 {
-    public class DashboardController : BaseController
+    public class DashboardsController : BaseController
     {
         private readonly TreeViewModel _treeViewModel;
 
 
-        public DashboardController(TreeViewModel treeViewModel, IUserManager userManager) : base(userManager)
+        public DashboardsController(TreeViewModel treeViewModel, IUserManager userManager) : base(userManager)
         {
             _treeViewModel = treeViewModel;
         }
