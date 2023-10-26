@@ -1,24 +1,6 @@
 import interact from "interactjs";
 window.interact = interact;
-function dragMoveListener (event) {
-    // console.log('Listener:')
-    // console.log(event)
 
-    var target = event.target
-    // keep the dragged position in the data-x/data-y attributes
-    var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
-    var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy
-
-    // translate the element
-    target.style.transform = 'translate(' + x + 'px, ' + y + 'px)'
-
-    // update the posiion attributes
-    target.setAttribute('data-x', x)
-    target.setAttribute('data-y', y)
-}
-
-// this function is used later in the resizing and gesture demos
-window.dragMoveListener = dragMoveListener
 
 // interact('.draggable')
 //     .draggable({
@@ -97,31 +79,31 @@ window.dragMoveListener = dragMoveListener
 //     }
 // })
 
-interact('.drag-drop')
-    .draggable({
-        inertia: true,
-        modifiers: [
-            // interact.modifiers.restrictRect({
-            //     restriction: 'parent',
-            //     endOnly: true
-            // })
-        ],
-        autoScroll: true,
-        // dragMoveListener from the dragging demo above
-        listeners: {
-            start (event) {
-                event.target.style.position = "fixed";
-            },
-            move: dragMoveListener,
-            end: showEventInfo
-        }
-    })
+// interact('.drag-drop')
+//     .draggable({
+//         inertia: true,
+//         modifiers: [
+//             // interact.modifiers.restrictRect({
+//             //     restriction: 'parent',
+//             //     endOnly: true
+//             // })
+//         ],
+//         autoScroll: true,
+//         // dragMoveListener from the dragging demo above
+//         listeners: {
+//             start (event) {
+//                 event.target.style.position = "fixed";
+//             },
+//             move: dragMoveListener,
+//             end: showEventInfo
+//         }
+//     })
 
-function showEventInfo (event) {
-    console.log('On end:')
-    console.log(event)
-    event.target.style.transform = '';
-    event.target.style.position = 'relative';
-    event.target.removeAttribute('data-x')
-    event.target.removeAttribute('data-y')
-} 
+// function showEventInfo (event) {
+//     console.log('On end:')
+//     console.log(event)
+//     event.target.style.transform = '';
+//     event.target.style.position = 'relative';
+//     event.target.removeAttribute('data-x')
+//     event.target.removeAttribute('data-y')
+// } 

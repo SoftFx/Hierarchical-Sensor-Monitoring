@@ -29,7 +29,6 @@ window.marked = Marked;
 import * as DOMPurify from 'dompurify';
 window.DOMPurify = DOMPurify;
 
-
 import 'datatables';
 import 'datatables/media/css/jquery.dataTables.min.css';
 
