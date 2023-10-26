@@ -321,7 +321,7 @@ export class DoublePlot extends ErrorColorPlot {
             if (customField === 'count' && value.isCompressed === undefined)
                 return `${name}=${value[customField]} (aggregated value)`;
 
-            if (customField === 'min' || customField === 'max' || customField === 'mean')
+            if (customField === 'min' || customField === 'max' || customField === 'mean' || customField === 'count')
                 return `${name}=${value[customField]}`;
 
             return value[customField];
