@@ -367,7 +367,7 @@ export class BarPLot extends Plot {
                 'min: ' + i.min +
                 '<br>mean: ' + i.mean +
                 '<br>max: ' + i.max +
-                '<br>count: ' + i.count + (i.isCompressed && "(aggregated value)"));
+                '<br>count: ' + i.count + (i.isCompressed === undefined ? " (aggregated value)" : ''));
             this.close.push(i.lastValue);
         }
 

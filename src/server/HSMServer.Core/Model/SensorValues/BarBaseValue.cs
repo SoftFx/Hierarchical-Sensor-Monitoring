@@ -57,7 +57,7 @@ namespace HSMServer.Core.Model
         public bool IsCompressed { get; set; } = false;
 
 
-        public NotCompressedValue(BarBaseValue<T> value)
+        public NotCompressedValue(BarBaseValue<T> value, DateTime? time = null)
         {
             Count = value.Count;
             Max = value.Max;
@@ -71,7 +71,7 @@ namespace HSMServer.Core.Model
             LastValue = value.LastValue;
             Percentiles = value.Percentiles;
             Status = value.Status;
-            Time = value.Time;
+            Time = time?.ToUniversalTime() ?? value.Time;
         }
     };
 }
