@@ -132,7 +132,7 @@ namespace HSMServer.ApiObjectsConverters
                     var jsonPropertyName = column.GetPropertyName(value);
                     var propValue = properties.GetProperty(jsonPropertyName).ToString();
 
-                    rowValues.Add(GetTransformedValue(column, value, propValue));
+                    rowValues.Add(GetCsvValue(column, value, propValue));
                 }
 
                 content.AppendLine(rowValues.BuildRow());
@@ -155,6 +155,10 @@ namespace HSMServer.ApiObjectsConverters
 
                 return propValue;
             }
+
+            static string GetCsvValue(Header column, BaseValue value, string propValue) => $"""
+                                                                                            "{GetTransformedValue(column, value, propValue)}"
+                                                                                            """;
         }
 
         private static List<Header> GetHeader(this List<BaseValue> values, ExportOptions options)
