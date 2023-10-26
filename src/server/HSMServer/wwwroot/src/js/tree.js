@@ -36,12 +36,14 @@ window.initializeTree = function () {
         "contextmenu": {
             "items": buildContextMenu
         },
-        "dnd" :{
-            copy: false,
-            blank_space_drop: true,
-            use_html5: true
-        },
-        "plugins": ["state", "contextmenu", "themes", "wholerow", "dnd"],
+        // "dnd" :{
+        //     copy: false,
+        //     blank_space_drop: true,
+        //     use_html5: true
+        // },
+        "plugins": ["state", "contextmenu", "themes", "wholerow", 
+            //"dnd"
+        ],
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected')[0]);
     }).on('close_node.jstree', function (e, data) {

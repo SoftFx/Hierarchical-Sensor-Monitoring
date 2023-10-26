@@ -31,6 +31,39 @@ window.DOMPurify = DOMPurify;
 
 import interact from "interactjs";
 
+interact('.draggable')
+    .draggable({
+        // enable inertial throwing
+        inertia: true,
+        // keep the element within the area of it's parent
+        modifiers: [
+            interact.modifiers.restrictRect({
+                restriction: 'parent',
+                endOnly: true
+            })
+        ],
+        // enable autoScroll
+        autoScroll: true,
+
+        listeners: {
+            // call this function on every dragmove event
+            move: dragMoveListener,
+
+            // call this function on every dragend event
+            end (event) {
+                console.log('End:')
+                console.log(event)
+                var textEl = event.target.querySelector('p')
+
+                textEl && (textEl.textContent =
+                    'moved a distance of ' +
+                    (Math.sqrt(Math.pow(event.pageX - event.x0, 2) +
+                        Math.pow(event.pageY - event.y0, 2) | 0))
+                        .toFixed(2) + 'px')
+            }
+        }
+    })
+
 interact('.dropzone').dropzone({
     // only accept elements matching this CSS selector
     // Require a 75% element overlap for a drop to be possible
@@ -43,27 +76,35 @@ interact('.dropzone').dropzone({
         event.target.classList.add('drop-active')
     },
     ondragenter: function (event) {
+        // console.log('On drag enter event:')
+        // console.log(event)
+        
         var draggableElement = event.relatedTarget
         var dropzoneElement = event.target
 
         // feedback the possibility of a drop
         dropzoneElement.classList.add('drop-target')
         draggableElement.classList.add('can-drop')
-        draggableElement.textContent = 'Dragged in'
     },
     ondragleave: function (event) {
+        // console.log('On drag leave event:')
+        // console.log(event)
         // remove the drop feedback style
         event.target.classList.remove('drop-target')
         event.relatedTarget.classList.remove('can-drop')
-        event.relatedTarget.textContent = 'Dragged out'
     },
     ondrop: function (event) {
-        event.relatedTarget.textContent = 'Dropped'
+        alert(event.relatedTarget.id
+            + ' was dropped into '
+            + event.target.id)
+        console.log('On drop event:')
+        console.log(event)
     },
     ondropdeactivate: function (event) {
         // remove active dropzone feedback
         event.target.classList.remove('drop-active')
         event.target.classList.remove('drop-target')
+        console.log(event)
     }
 })
 
@@ -71,15 +112,30 @@ interact('.drag-drop')
     .draggable({
         inertia: true,
         modifiers: [
-            interact.modifiers.restrictRect({
-                restriction: 'parent',
-                endOnly: true
-            })
+            // interact.modifiers.restrictRect({
+            //     restriction: 'parent',
+            //     endOnly: true
+            // })
         ],
         autoScroll: true,
         // dragMoveListener from the dragging demo above
-        listeners: { move: dragMoveListener }
+        listeners: { 
+            start (event) {
+                event.target.style.position = "fixed";
+            },
+            move: dragMoveListener,
+            end: showEventInfo
+        }
     })
+
+function showEventInfo (event) {
+    console.log('On end:')
+    console.log(event)
+    event.target.style.transform = '';
+    event.target.style.position = 'relative';
+    event.target.removeAttribute('data-x')
+    event.target.removeAttribute('data-y')
+} 
 
 import 'datatables';
 import 'datatables/media/css/jquery.dataTables.min.css';
@@ -106,3 +162,4 @@ import './css/site.css';
 import './css/accessKey.css';
 import './css/home.css';
 import './css/product.css';
+import './css/datagging.css'

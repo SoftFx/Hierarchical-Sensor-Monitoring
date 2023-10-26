@@ -1,0 +1,29 @@
+.dropzone {
+    background-color: #bfe4ff;
+    border: dashed 4px transparent;
+    border-radius: 4px;
+    width: 100%;
+    transition: background-color 0.3s;
+}
+
+.drop-active {
+    border-color: #aaa;
+}
+
+.drop-target {
+    background-color: #29e;
+    border-color: #fff;
+    border-style: solid;
+}
+
+.drag-drop {
+    touch-action: none;
+    transform: translate(0px, 0px);
+
+    transition: background-color 0.3s;
+}
+
+.drag-drop.can-drop {
+    color: #000;
+    background-color: #4e4;
+}

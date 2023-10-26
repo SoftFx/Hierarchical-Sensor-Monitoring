@@ -90,6 +90,9 @@ window.replaceHtmlToMarkdown = function (elementId) {
 }
 
 function dragMoveListener (event) {
+    // console.log('Listener:')
+    // console.log(event)
+    
     var target = event.target
     // keep the dragged position in the data-x/data-y attributes
     var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx

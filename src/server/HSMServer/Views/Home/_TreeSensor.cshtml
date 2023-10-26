@@ -11,7 +11,7 @@
 }
 
 
-<li id='@data.EncodedId drag-drop' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
+<li id='@data.EncodedId' class="drag-drop" title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@data.State.ToCssClass()">
         @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", new AlertIconsViewModel(data.AlertIcons))
         @Html.Raw(data.Name.GetShortNodeName())
