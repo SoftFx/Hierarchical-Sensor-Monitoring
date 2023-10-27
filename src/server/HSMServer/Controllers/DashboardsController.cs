@@ -16,5 +16,7 @@ namespace HSMServer.Controllers
 
 
         public IActionResult Index() => View(_treeViewModel);
+
+        public IActionResult AddDashboard() => View("EditDashboard", _treeViewModel);
     }
 }
