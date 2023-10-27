@@ -16,9 +16,6 @@ namespace HSMServer.Dashboards
         protected override Func<List<DashboardEntity>> GetFromDb => throw new NotImplementedException();
 
 
-        protected override Dashboard FromEntity(DashboardEntity entity)
-        {
-            throw new NotImplementedException();
-        }
+        protected override Dashboard FromEntity(DashboardEntity entity) => new(entity);
     }
 }

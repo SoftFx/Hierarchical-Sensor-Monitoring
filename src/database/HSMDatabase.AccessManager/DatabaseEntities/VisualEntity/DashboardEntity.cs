@@ -2,7 +2,7 @@
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public record DashboardEntity : BaseSiteEntity
+    public record DashboardEntity : BaseServerEntity
     {
 
     }

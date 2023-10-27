@@ -108,10 +108,16 @@ namespace HSMServer.Notifications
                     AuthorId = token.User.Id,
                     Author = token.User.Name,
                     AuthorizationTime = DateTime.UtcNow,
-                    Description = message.Chat.Description,
-                    Name = isUserChat ? message.From.Username : message.Chat.Title,
                     Type = isUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup,
                 };
+
+                chat.Update(new TelegramChatUpdate()
+                {
+                    Id = chat.Id,
+
+                    Name = isUserChat ? message.From.Username : message.Chat.Title,
+                    Description = message.Chat.Description,
+                });
             }
 
             var folderName = await ConnectChatToFolder?.Invoke(chat.Id, token.FolderId, token.User.Name);

@@ -2,17 +2,17 @@
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public sealed record TelegramChatEntity : BaseSiteEntity
+    public sealed record TelegramChatEntity : BaseServerEntity
     {
-        public byte Type { get; init; }
+        public byte Type { get; set; }
 
-        public long ChatId { get; init; }
+        public long ChatId { get; set; }
 
-        public long AuthorizationTime { get; init; }
+        public long AuthorizationTime { get; set; }
 
 
-        public bool SendMessages { get; init; }
+        public bool SendMessages { get; set; }
 
-        public int MessagesAggregationTimeSec { get; init; }
+        public int MessagesAggregationTimeSec { get; set; }
     }
 }

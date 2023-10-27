@@ -16,7 +16,7 @@ namespace HSMServer.Notifications
     }
 
 
-    public sealed class TelegramChat : IServerModel<TelegramChatEntity, TelegramChatUpdate>
+    public sealed class TelegramChat : BaseServerModel<TelegramChatEntity, TelegramChatUpdate>
     {
         private const bool DefaultSendMessages = true;
         private const int DefaultMessagesAggregationTimeSec = 60;
@@ -27,11 +27,7 @@ namespace HSMServer.Notifications
         internal MessageBuilder MessageBuilder { get; } = new();
 
 
-        public Guid Id { get; init; } // TODO: should be just get after telegram chats migration
-
         public ChatId ChatId { get; init; }
-
-        public Guid? AuthorId { get; init; }
 
         public ConnectedChatType Type { get; init; }
 
@@ -41,10 +37,6 @@ namespace HSMServer.Notifications
         public bool IsUserChat { get; init; }
 
 
-        public string Name { get; set; }
-
-        public string Description { get; set; }
-
         public bool SendMessages { get; private set; }
 
         public int MessagesAggregationTimeSec { get; private set; }
@@ -53,9 +45,8 @@ namespace HSMServer.Notifications
         public string Author { get; set; }
 
 
-        public TelegramChat()
+        public TelegramChat() : base()
         {
-            Id = Guid.NewGuid();
             SendMessages = DefaultSendMessages;
             MessagesAggregationTimeSec = DefaultMessagesAggregationTimeSec;
         }
@@ -69,14 +60,10 @@ namespace HSMServer.Notifications
             AuthorizationTime = new DateTime(entity.AuthorizationTime);
         }
 
-        internal TelegramChat(TelegramChatEntity entity)
+        internal TelegramChat(TelegramChatEntity entity) : base(entity)
         {
-            Id = new Guid(entity.Id);
             ChatId = new(entity.ChatId);
-            AuthorId = entity.Author is not null ? new Guid(entity.Author) : null;
 
-            Name = entity.Name;
-            Description = entity.Description;
             SendMessages = entity.SendMessages;
             Type = (ConnectedChatType)entity.Type;
             MessagesAggregationTimeSec = entity.MessagesAggregationTimeSec;
@@ -84,26 +71,25 @@ namespace HSMServer.Notifications
         }
 
 
-        public void Update(TelegramChatUpdate update)
+        public override void Update(TelegramChatUpdate update)
         {
-            Name = update.Name ?? Name;
-            Description = update.Description ?? Description;
+            base.Update(update);
+
             SendMessages = update.SendMessages ?? SendMessages;
             MessagesAggregationTimeSec = update.MessagesAggregationTimeSec ?? MessagesAggregationTimeSec;
         }
 
-        public TelegramChatEntity ToEntity() =>
-            new()
-            {
-                Name = Name,
-                Type = (byte)Type,
-                Id = Id.ToByteArray(),
-                Description = Description,
-                SendMessages = SendMessages,
-                Author = AuthorId?.ToByteArray(),
-                ChatId = ChatId?.Identifier ?? 0L,
-                AuthorizationTime = AuthorizationTime.Ticks,
-                MessagesAggregationTimeSec = MessagesAggregationTimeSec,
-            };
+        public override TelegramChatEntity ToEntity()
+        {
+            var entity = base.ToEntity();
+
+            entity.Type = (byte)Type;
+            entity.SendMessages = SendMessages;
+            entity.ChatId = ChatId?.Identifier ?? 0L;
+            entity.AuthorizationTime = AuthorizationTime.Ticks;
+            entity.MessagesAggregationTimeSec = MessagesAggregationTimeSec;
+
+            return entity;
+        }
     }
 }

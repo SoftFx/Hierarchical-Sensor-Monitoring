@@ -1,6 +1,6 @@
 ﻿namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 {
-    public abstract record BaseSiteEntity
+    public abstract record BaseServerEntity
     {
         public byte[] Id { get; init; }
 
