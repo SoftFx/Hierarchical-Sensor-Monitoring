@@ -1,11 +1,13 @@
 using HSMDatabase.DatabaseWorkCore;
 using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
+using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TreeStateSnapshot;
+using HSMServer.Dashboards;
 using HSMServer.Filters;
 using HSMServer.Folders;
 using HSMServer.Middleware;
@@ -20,13 +22,18 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Security.Authentication;
+using System.Threading.Tasks;
 
 namespace HSMServer.ServiceExtensions;
 
 public static class ApplicationServiceExtensions
 {
+    private static readonly HashSet<Type> _asyncStorageTypes = new();
+
+
     public static IServiceCollection AddApplicationServices(this IServiceCollection services, IServerConfig config)
     {
         services.AddSingleton(config);
@@ -35,10 +42,12 @@ public static class ApplicationServiceExtensions
                 .AddSingleton<ITreeStateSnapshot, TreeStateSnapshot>()
                 .AddSingleton<IUpdatesQueue, UpdatesQueue>()
                 .AddSingleton<ITreeValuesCache, TreeValuesCache>()
-                .AddSingleton<IUserManager, UserManager>()
-                .AddSingleton<IFolderManager, FolderManager>()
-                .AddSingleton<ITelegramChatsManager, TelegramChatsManager>()
                 .AddSingleton<IJournalService, JournalService>();
+
+        services.AddAsyncStorage<IUserManager, UserManager>()
+                .AddAsyncStorage<IFolderManager, FolderManager>()
+                .AddAsyncStorage<ITelegramChatsManager, TelegramChatsManager>()
+                .AddAsyncStorage<IDashboardManager, DashboardManager>();
 
         services.AddSingleton<NotificationsCenter>()
                 .AddSingleton<DataCollectorWrapper>()
@@ -112,9 +121,7 @@ public static class ApplicationServiceExtensions
     public static IApplicationBuilder ConfigureMiddleware(this IApplicationBuilder applicationBuilder, bool isDevelopment)
     {
         if (isDevelopment)
-        {
             applicationBuilder.UseDeveloperExceptionPage();
-        }
         else
         {
             applicationBuilder.UseHsts();
@@ -144,6 +151,14 @@ public static class ApplicationServiceExtensions
         return applicationBuilder;
     }
 
+    public static async Task InitStorages(this IServiceProvider services)
+    {
+        foreach (var type in _asyncStorageTypes)
+            if (services.GetService(type) is IAsyncStorage storage)
+                await storage.Initialize();
+    }
+
+
     private static Action<ListenOptions> KestrelListenOptions(ServerCertificateConfig config) =>
         options =>
         {
@@ -154,4 +169,13 @@ public static class ApplicationServiceExtensions
                 portOptions.ServerCertificate = config.Certificate;
             });
         };
+
+    private static IServiceCollection AddAsyncStorage<TService, TImplementation>(this IServiceCollection services)
+        where TService : class
+        where TImplementation : class, TService
+    {
+        _asyncStorageTypes.Add(typeof(TService));
+
+        return services.AddSingleton<TService, TImplementation>();
+    }
 }

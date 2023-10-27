@@ -107,5 +107,8 @@ namespace HSMServer.ConcurrentStorage
 
             return Task.CompletedTask;
         }
+
+
+        public virtual void Dispose() { }
     }
 }

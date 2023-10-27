@@ -59,9 +59,6 @@ namespace HSMServer.Notifications
         }
 
 
-        public void Dispose() { }
-
-
         public async override Task<bool> TryAdd(TelegramChat model) =>
             await base.TryAdd(model) && _telegramChatIds.TryAdd(model.ChatId, model);
 
