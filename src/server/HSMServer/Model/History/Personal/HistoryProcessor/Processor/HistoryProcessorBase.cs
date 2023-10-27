@@ -18,13 +18,19 @@ namespace HSMServer.Model.History
             Func<BaseValue, DateTime> orderByFilter = sensor.AggregateValues ? ByReceivingTime : ByTime;
             Func<BaseValue, DateTime> thenByFilter = sensor.AggregateValues ? ByTime : ByReceivingTime;
 
-            values = values.OrderBy(orderByFilter)
-                           .ThenBy(thenByFilter)
-                           .Select(v => v with { Time = v.Time.ToUniversalTime() })
-                           .ToList();
+            var tempValues = values.OrderBy(orderByFilter).ThenBy(thenByFilter);
 
             if (values.Count < compressedValuesCount)
-                return values;
+                return tempValues
+                        .Select(v => v switch
+                        {
+                            DoubleBarValue doubleBarValue => new NotCompressedValue<double>(doubleBarValue, v.Time),
+                            IntegerBarValue integerBarValue => new NotCompressedValue<int>(integerBarValue, v.Time),
+                            _ => v with { Time = v.Time.ToUniversalTime() }
+                        })
+                        .ToList();;
+
+            values = tempValues.Select(v => v with { Time = v.Time.ToUniversalTime() }).ToList();
 
             var interval = CountInterval(values, compressedValuesCount);
             if (interval == TimeSpan.Zero)

@@ -10,6 +10,7 @@
 }
 
 <script>
+    var isDataValidAction = "@Url.Action(nameof(HomeController.IsMetaInfoValid), ViewConstants.HomeController)";
     var getSensorStatus = "@Url.Action(nameof(SensorHistoryController.GetServiceStatusHistory), ViewConstants.HistoryController)";
 
     var updateSelectedNode = "@Url.Action(nameof(HomeController.UpdateSelectedNode), ViewConstants.HomeController)";
@@ -50,6 +51,7 @@
 
 <script>
     initialize();
+    initializeTreeNode();
 
 
     var interval = $("#treeInterval").val() * 1000;
@@ -142,17 +144,6 @@
             if (isFile)
                 setContentPreview(id);
         }
-    }
-
-    var refreshTreeTimeoutId;
-    var isRefreshing = false;
-    function updateTreeTimer() {
-        clearTimeout(refreshTreeTimeoutId);
-        isRefreshing = true;
-
-        $('#jstree').jstree(true).refresh(true);
-
-        isRefreshing = false;
     }
 
     var updateSelectedNodeDataTimeoutId;

@@ -11,7 +11,7 @@ namespace HSMServer.Core.Extensions
     {
         private static readonly JsonSerializerOptions _options = new () 
         { 
-            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals 
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
         };
         
         

@@ -47,6 +47,7 @@ import './js/history.js';
 import './js/plotting.js';
 import './js/metaInfo.js';
 import './js/products.js';
+import './js/nodeData.js';
 import './js/tree.js';
 import './js/site.js';
 import './js/treeCollapse';

@@ -5,9 +5,6 @@ namespace HSMServer.Model.History
 {
     internal sealed class DoubleBarHistoryProcessor : BarHistoryProcessor<double>
     {
-        private readonly NumberFormatInfo _format;
-
-
         protected override double DefaultMax { get; } = double.MinValue;
 
         protected override double DefaultMin { get; } = double.MaxValue;
@@ -15,7 +12,7 @@ namespace HSMServer.Model.History
 
         public DoubleBarHistoryProcessor()
         {
-            _format = new NumberFormatInfo { NumberDecimalSeparator = "." };
+            //_format = new NumberFormatInfo { NumberDecimalSeparator = "." };
         }
 
         protected override BarBaseValue<double> GetBarValue(SummaryBarItem<double> summary) =>
@@ -30,6 +27,7 @@ namespace HSMServer.Model.History
               Percentiles = summary.Percentiles,
               Time = summary.CloseTime.ToUniversalTime(),
               ReceivingTime = summary.CloseTime.ToUniversalTime(),
+              LastValue = summary.LastValue,
           };
 
         protected override double Average(double value1, double value2) =>

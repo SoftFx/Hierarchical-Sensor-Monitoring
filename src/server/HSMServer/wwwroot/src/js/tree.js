@@ -1,8 +1,12 @@
-﻿import {getPlotSourceView} from "./dashboard";
+import {getPlotSourceView} from "./dashboard";
 
-var needToActivateListTab = false;
+window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
 
-window.currentSelectedNodeId = "";
+const AjaxPost = {
+    type: 'POST',
+    cache: false,
+    async: true
+};
 
 window.interact('.dropzone').dropzone({
     overlap: 0.75,
@@ -122,16 +126,7 @@ window.initializeTree = function () {
         "contextmenu": {
             "items": buildContextMenu
         },
-        // "dnd" :{
-        //     copy: false,
-        //     blank_space_drop: true,
-        //     use_html5: true
-        // },
-        "plugins": ["state", "contextmenu", "themes", "wholerow", 
-            //"dnd"
-        ],
-    }).on("state_ready.jstree", function () {
-        selectNodeAjax($(this).jstree('get_selected')[0]);
+        "plugins": ["state", "contextmenu", "themes", "wholerow"],
     }).on('close_node.jstree', function (e, data) {
         if (collapseButton.isTriggered)
             return;
@@ -147,7 +142,10 @@ window.initializeTree = function () {
         })
     }).on('refresh.jstree', function (e, data){
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
-        updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+
+        if (window.hasOwnProperty('updateSelectedNodeDataTimeoutId')) {
+            updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+        }
 
         if (searchRefresh) {
             $(this).jstree(true).get_json('#', { flat: true }).forEach((node) => {
@@ -166,17 +164,6 @@ window.initializeTree = function () {
     $("#search_tree").on('click', function () {
         search($('#search_input').val());
     });
-
-    $(document).on('dnd_start.vakata', function(e, data) {
-        console.log('Started dragging node from jstree');
-    });
-    $(document).on('dnd_move.vakata', function(e, data) {
-        console.log('Moving node from jstree to div');
-    });
-
-    $(document).on('dnd_stop.vakata', function(e, data) {
-        console.log('Stop moving node from jstree to div');
-    })
     
     $('#search_input').on('keyup', function (e){
         if (e.keyCode == 13){
@@ -188,32 +175,22 @@ window.initializeTree = function () {
            $('#jstree').jstree(true).refresh(true);
        } 
     });
-    
+
     function search(value){
         if (value === '')
             return;
 
-        clearTimeout(refreshTreeTimeoutId)
-        clearTimeout(updateSelectedNodeDataTimeoutId)
+        clearTimeout(refreshTreeTimeoutId);
+
+        if (window.hasOwnProperty('updateSelectedNodeDataTimeoutId')) {
+            clearTimeout(updateSelectedNodeDataTimeoutId);
+        }
 
         $('#search_field').val(value);
         $('#jstree').hide().jstree(true).refresh(true);
 
         searchRefresh = true;
         $('#jstreeSpinner').removeClass('d-none')
-    }
-
-    initializeActivateNodeTree();
-}
-
-window.activateNode = function (currentNodeId, nodeIdToActivate) {
-    needToActivateListTab = $(`#list_${currentNodeId}`).hasClass('active');
-
-    $('#jstree').jstree('activate_node', nodeIdToActivate);
-    $('#jstree').jstree('open_node', nodeIdToActivate);
-
-    if (currentSelectedNodeId != nodeIdToActivate) {
-        selectNodeAjax(nodeIdToActivate);
     }
 }
 
@@ -231,147 +208,6 @@ window.loadEditSensorStatusModal = function (id) {
     });
 }
 
-
-function isDisabled(node) {
-    return typeof node.disabled === 'undefined';
-}
-
-function isFolder(node) {
-    return node.icon.includes("fa-folder");
-}
-
-function initializeActivateNodeTree() {
-    $('#jstree').on('activate_node.jstree', function (e, data) {
-        if (data.node.id != undefined) {
-            selectNodeAjax(data.node.id);
-        }
-    });
-}
-
-function selectNodeAjax(selectedId) {
-    if (currentSelectedNodeId == selectedId || selectedId == undefined)
-        return;
-
-    let isEditMode = !$("#description").hasClass("d-none") && currentSelectedNodeId !== "";
-
-    if (isEditMode) {
-        saveMetaData(selectedId);
-    }
-    else {
-        initSelectedNode(selectedId);
-    }
-}
-
-function saveMetaData(selectedId) {
-    let form = document.getElementById("editMetaInfo_form");
-    let formData = new FormData(form);
-    collectAlerts(formData);
-
-    $.ajax({
-        type: 'POST',
-        url: isDataValidAction,
-        data: formData,
-        processData: false,
-        contentType: false,
-        async: true
-    }).done(function (isValid) {
-        let isAlertsValid = true;
-        $("#editMetaInfo_form").find("div.dataAlertRow").each(function () {
-            $(this).find(`input[name='Comment']`).each(function () {
-                isAlertsValid &= $(this)[0].checkValidity();
-            });
-
-            $(this).find('input[name="Target"]').each(function () {
-                isAlertsValid &= $(this)[0].checkValidity();
-            });
-        });
-
-        if (isValid && isAlertsValid) {
-            let path = $("#nodeHeader").text();
-
-            showConfirmationModal(
-                `Saving changes`,
-                `Do you want to save '${path}' changes?`,
-                () => {
-                    $.ajax({
-                        url: form.action,
-                        type: 'POST',
-                        data: formData,
-                        processData: false,
-                        contentType: false,
-                        async: true
-                    }).done(() => initSelectedNode(selectedId));
-                },
-                () => initSelectedNode(selectedId),
-                "Yes",
-                "No"
-            );
-        }
-        else {
-            initSelectedNode(selectedId);
-        }
-    });
-}
-
-function initSelectedNode(selectedId) {
-    currentSelectedNodeId = selectedId;
-
-    // Show spinner only if selected tree node contains 20 children (nodes/sensors) or it is sensor (doesn't have children)
-    var selectedNode = $('#jstree').jstree().get_node(selectedId);
-    if (!selectedNode || selectedNode.children.length > 20 || selectedNode.children.length == 0) {
-        $("#nodeDataSpinner").css("display", "block");
-        $('#nodeDataPanel').addClass('hidden_element');
-    }
-
-    $.ajax({
-        type: 'post',
-        url: `${selectNode}?selectedId=${selectedId}`,
-        datatype: 'html',
-        contenttype: 'application/json',
-        cache: false,
-        success: function (viewData) {
-            $("#nodeDataPanel").removeClass('d-none').html(viewData);
-        }
-    }).done(function () {
-        initialize();
-
-        if (needToActivateListTab) {
-            selectNodeInfoTab("list", selectedId);
-            needToActivateListTab = false;
-        }
-        else {
-            selectNodeInfoTab("grid", selectedId);
-        }
-
-        $("#nodeDataSpinner").css("display", "none");
-        $('#nodeDataPanel').removeClass('hidden_element');
-    });
-}
-
-function openAccordions(accordionsId) {
-    let accordions = document.querySelectorAll(accordionsId);
-
-    accordions.forEach(element => {
-        if (element.getAttribute('aria-expanded') == 'false') {
-            element.click();
-        }
-    });
-}
-
-function selectNodeInfoTab(tab, selectedId) {
-    let tabLink = document.getElementById(`${tab}Link_${selectedId}`);
-
-    if (tabLink != null)
-        tabLink.click();
-}
-
-window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
-
-const AjaxPost = {
-    type: 'POST',
-    cache: false,
-    async: true
-};
 
 function buildContextMenu(node) {
     var contextMenu = {};
@@ -458,8 +294,10 @@ function buildContextMenu(node) {
                 });
             }
         }
+
         return contextMenu;
     }
+
 
     if (curType === NodeType.Product) {
         contextMenu["AccessKeys"] = {
@@ -641,10 +479,18 @@ function buildContextMenu(node) {
     return contextMenu;
 }
 
+
+function isFolder(node) {
+    return node.icon.includes("fa-folder");
+}
+
 function unmuteRequest(node){
-    return $.ajax(`${unmuteAction}?selectedId=${node.id}`, AjaxPost).done(() => { 
-        updateSelectedNodeData();
+    return $.ajax(`${unmuteAction}?selectedId=${node.id}`, AjaxPost).done(() => {
         updateTreeTimer();
+
+        if (window.hasOwnProperty('updateSelectedNodeData')) {
+            updateSelectedNodeData();
+        }
     });
 }
 
