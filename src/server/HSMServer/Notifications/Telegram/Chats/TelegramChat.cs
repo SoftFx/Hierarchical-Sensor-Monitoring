@@ -27,7 +27,7 @@ namespace HSMServer.Notifications
         internal MessageBuilder MessageBuilder { get; } = new();
 
 
-        public Guid Id { get; init; } // TODO: should be just get after telegram chats migration
+        public Guid Id { get; }
 
         public ChatId ChatId { get; init; }
 
