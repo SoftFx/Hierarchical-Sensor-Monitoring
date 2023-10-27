@@ -1,4 +1,6 @@
 import {getPlotSourceView} from "./dashboard";
+import {convertToGraphData} from "./plotting";
+import {BarPLot, BoolPlot, DoublePlot, EnumPlot, IntegerPlot, TimeSpanPlot} from "./plots";
 
 window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
 
@@ -26,23 +28,6 @@ window.interact('.dropzone').dropzone({
         event.relatedTarget.classList.remove('can-drop')
     },
     ondrop: function (event) {
-        // alert(event.relatedTarget.id
-        //     + ' was dropped into '
-        //     + event.target.id)
-        // console.log(event.relatedTarget)
-        // console.log(event.target)
-        // console.log('On drop event:')
-        // console.log(event.relatedTarget)
-        // //event.target.innerHTML += event.relatedTarget.innerHTML;
-        // console.log(event.relatedTarget.innerHTML)
-        // console.log(JSON.stringify(event.relatedTarget))
-        // //console.log(event.relatedTarget.data('jstree'))
-        // console.log($('#jstree').jstree().get_json(event.relatedTarget.id, ['id', 'class', 'title']))
-        // console.log(JSON.stringify(event.relatedTarget, ['id', 'className', 'jstree', 'title', 'title']))
-        // console.log(JSON.stringify(event.relatedTarget.innerHTML))
-        // $("#plots").html(function(i, origText){
-        //     return  origText + event.relatedTarget.innerHTML;
-        // });
         let sources = $('#sources');
         getPlotSourceView(event.relatedTarget.id).then(function (data){
             let text = `<li class="d-flex list-group-item">
@@ -51,6 +36,11 @@ window.interact('.dropzone').dropzone({
                                     <input type="color" class="form-control form-control-color" id="color-picker">Plot color</input>
 
                                 </li>`
+            
+            let parsedData = JSON.stringify(data);
+            let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.name);
+           
+            Plotly.addTraces('plot', plot.getPlotData());
             
             sources.html(function(n, origText){
                 return origText + text;

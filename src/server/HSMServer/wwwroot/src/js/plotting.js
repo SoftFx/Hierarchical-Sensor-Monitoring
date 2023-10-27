@@ -137,7 +137,7 @@ function getPreviousZoomData(graphElementId) {
     return window.sessionStorage.getItem(graphElementId);
 }
 
-function convertToGraphData(graphData, sensorInfo, graphName) {
+export function convertToGraphData(graphData, sensorInfo, graphName) {
     let escapedData = JSON.parse(graphData);
 
     switch (sensorInfo.plotType) {

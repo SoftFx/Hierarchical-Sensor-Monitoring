@@ -8,3 +8,4 @@ export function getPlotSourceView(id){
         })
     })
 }
+

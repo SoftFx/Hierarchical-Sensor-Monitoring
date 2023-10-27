@@ -11,7 +11,7 @@
     var sourceLink = '@Url.Action(nameof(DashboardsController.GetSource))';
 </script>
 
-<div class="w-100">
+<div class="w-100 overflow-y-auto">
     <h1>This is DASHBOARD!</h1>
     
     <div id="plot" class="w-75 h-75 dropzone">
@@ -22,6 +22,6 @@
 
 <script>
     $(document).ready(function (){
-        Plotly.newPlot('plot')
+        Plotly.newPlot('plot', [], {})
     })
 </script>
