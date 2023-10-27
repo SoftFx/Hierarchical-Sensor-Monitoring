@@ -17,8 +17,7 @@ namespace HSMServer.Controllers
         private readonly ITreeValuesCache _cache;
 
 
-        public DashboardsController(TreeViewModel treeViewModel, IUserManager userManager, ITreeValuesCache cache) :
-            base(userManager)
+        public DashboardsController(TreeViewModel treeViewModel, IUserManager userManager, ITreeValuesCache cache) : base(userManager)
         {
             _treeViewModel = treeViewModel;
             _cache = cache;
@@ -26,6 +25,8 @@ namespace HSMServer.Controllers
 
 
         public IActionResult Index() => View(_treeViewModel);
+
+        public IActionResult AddDashboard() => View("EditDashboard", _treeViewModel);
 
         [HttpGet]
         public async Task<SourceDto> GetSource(Guid id)
