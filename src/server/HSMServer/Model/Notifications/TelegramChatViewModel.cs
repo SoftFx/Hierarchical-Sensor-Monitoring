@@ -14,7 +14,7 @@ namespace HSMServer.Model.Notifications
 
         public ConnectedChatType Type { get; }
 
-        [Display(Name = "Authorizarion date")]
+        [Display(Name = "Authorization date")]
         public DateTime AuthorizationTime { get; }
 
 

@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using System.Text;
 
 namespace HSMServer.Model.History
 {
@@ -37,7 +36,7 @@ namespace HSMServer.Model.History
             var oldestValue = values.First() as BarBaseValue<T>;
             DateTime nextBarTime = oldestValue.OpenTime + compressionInterval;
 
-            SummaryBarItem<T> summary = new(oldestValue.OpenTime, oldestValue.CloseTime, DefaultMax, DefaultMin);
+            SummaryBarItem<T> summary = new(oldestValue.OpenTime, oldestValue.CloseTime, DefaultMax, DefaultMin, oldestValue.Min, oldestValue.LastValue);
             ProcessItem(oldestValue, summary);
 
             for (int i = 1; i < values.Count; ++i)
@@ -49,7 +48,7 @@ namespace HSMServer.Model.History
                 {
                     result.Add(Convert(summary, summary.Count != value.Count));
 
-                    summary = new(value.OpenTime, value.CloseTime, DefaultMax, DefaultMin);
+                    summary = new(value.OpenTime, value.CloseTime, DefaultMax, DefaultMin, oldestValue.Min, oldestValue.LastValue);
                     ProcessItem(value, summary);
 
                     while (nextBarTime <= summary.CloseTime)
@@ -69,7 +68,6 @@ namespace HSMServer.Model.History
             try
             {
                 _meanList.Add((value.Mean, value.Count));
-
                 if (value.Percentiles != null && value.Percentiles.Count > 0)
                     _percentilesList.AddRange(value.Percentiles.Select(p => p.Value));
             }
@@ -137,7 +135,12 @@ namespace HSMServer.Model.History
         {
             AddValueToList(value);
 
+            if (summary.Count == 0)
+                summary.FirstValue = value.Min;
+
+            summary.LastValue = value.LastValue;
             summary.CloseTime = value.CloseTime;
+
             summary.Count += value.Count;
 
             if (value.Max.CompareTo(summary.Max) > 0)
