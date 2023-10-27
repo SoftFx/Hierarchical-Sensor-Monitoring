@@ -45,8 +45,15 @@ window.interact('.dropzone').dropzone({
         // });
         let sources = $('#sources');
         getPlotSourceView(event.relatedTarget.id).then(function (data){
+            let text = `<li class="d-flex list-group-item">
+                                    <span>${data.name}</span>
+                                    <span>${data.units}</span>
+                                    <input type="color" class="form-control form-control-color" id="color-picker">Plot color</input>
+
+                                </li>`
+            
             sources.html(function(n, origText){
-                return origText + data;
+                return origText + text;
             });
         })
         
