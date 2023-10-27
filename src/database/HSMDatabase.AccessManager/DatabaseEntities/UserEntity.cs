@@ -9,10 +9,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public Dictionary<string, byte> FolderRoles { get; set; } = new();
 
-
-        [Obsolete("Should be removed after telegram chats migration")]
-        public NotificationSettingsEntity NotificationSettings { get; set; }
-
         public object TreeFilter { get; set; }
 
 
