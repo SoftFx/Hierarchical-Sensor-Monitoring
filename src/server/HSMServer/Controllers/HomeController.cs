@@ -12,6 +12,7 @@ using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
@@ -33,7 +34,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using HSMServer.Model.Authentication;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
@@ -119,7 +119,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetNode(string id) =>
             _treeViewModel.Nodes.TryGetValue(id.ToGuid(), out var node)
-                ? PartialView("_TreeNode", CurrentUser.Tree.LoadNode(node))
+                ? PartialView("~/Views/Tree/_TreeNode.cshtml", CurrentUser.Tree.LoadNode(node))
                 : NotFound();
 
         [HttpPut]
@@ -143,7 +143,7 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         public IActionResult RefreshTree(string searchParameter) =>
-            PartialView("_Tree", CurrentUser.Tree.GetUserTree(searchParameter));
+            PartialView("~/Views/Tree/_Tree.cshtml", CurrentUser.Tree.GetUserTree(searchParameter));
 
         [HttpGet]
         public IActionResult ApplyFilter(UserFilterViewModel viewModel)
@@ -230,7 +230,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetEditAlertsPartialView() => PartialView("_AlertsModal", new EditAlertsViewModel());
+        public IActionResult GetEditAlertsPartialView() => PartialView("~/Views/Tree/_MultiEditModal.cshtml", new EditAlertsViewModel());
 
         [HttpPost]
         public async Task<IActionResult> EditAlerts(EditAlertsViewModel model)
@@ -345,7 +345,7 @@ namespace HSMServer.Controllers
             else if (_folderManager.TryGetValue(decodedId, out var folder))
                 viewModel = new IgnoreNotificationsViewModel(folder);
 
-            return PartialView("_IgnoreNotificationsModal", viewModel);
+            return PartialView("~/Views/Tree/_IgnoreNotificationsModal.cshtml", viewModel);
         }
 
         [HttpPost]
@@ -662,7 +662,7 @@ namespace HSMServer.Controllers
             if (!isAccessKeyExist)
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
 
-            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
+            return PartialView("~/Views/Tree/_EditSensorStatusModal.cshtml", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
         }
 
         [HttpPost]

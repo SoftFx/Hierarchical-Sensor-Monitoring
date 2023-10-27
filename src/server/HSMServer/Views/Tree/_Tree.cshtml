@@ -8,11 +8,11 @@
     {
         @if (node is NodeShallowModel product)
         {
-            @await Html.PartialAsync("_TreeNode", product)
+            @await Html.PartialAsync("~/Views/Tree/_TreeNode.cshtml", product)
         }
         else if (node is FolderShallowModel folder)
         {
-            @await Html.PartialAsync("_TreeFolder", folder)
+            @await Html.PartialAsync("~/Views/Tree/_TreeFolder.cshtml", folder)
         }
     }
 </ul>

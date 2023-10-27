@@ -1,0 +1,70 @@
+﻿@using HSMServer.Controllers
+@using HSMServer.Model.TreeViewModel
+
+@model TreeViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    ViewData["Title"] = "Dashboards";
+    Layout = "~/Views/Tree/_Layout.cshtml";
+}
+
+
+<div class="flex-grow-1 m-2">
+    <div class="d-flex justify-content-between my-2">
+        <h5>Dashboards</h5>
+
+        <div class='d-flex col-md-auto'>
+            <a asp-action="@nameof(DashboardsController.AddDashboard)">
+                <i class="fa-solid fa-plus"></i> Add dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="d-flex flex-row align-items-center">
+        <div class="card mb-2 w-100">
+            <div class="card-body py-2">
+                <div style="font-weight: bold;">Dashboard1</div>
+                <div id="markdown_description1">some description</div>
+            </div>
+        </div>
+
+        <div>
+            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                <a class="dropdown-item text-decoration-none fw-normal button-link">View/Edit</a>
+                <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex flex-row align-items-center">
+        <div class="card mb-2 w-100">
+            <div class="card-body py-2">
+                <div style="font-weight: bold;">Dashboard2</div>
+                <div id="markdown_description2">some description11111111111111111111111111 **222222222222222222222222** 3333333333333333333sdgasgasdg argagagakdfbnlzsdjfb fbjsbhdfaugrfyasdgvfjhasdbf adhgvadhljasgvflkavghdf dfhvdsgbfhvbdfhv dsfjhdfvhabdgvasbd fvgjsdhfvgsjdhfg vsdf vsjdhfgvsjdfhgvjahdvfa;kjsdfvadb vsdjfhgv</div>
+            </div>
+        </div>
+
+        <div>
+            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                <a class="dropdown-item text-decoration-none fw-normal button-link">Edit</a>
+                <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    $(document).ready(() => {
+        replaceHtmlToMarkdown('markdown_description1');
+        replaceHtmlToMarkdown('markdown_description2');
+    });
+</script>

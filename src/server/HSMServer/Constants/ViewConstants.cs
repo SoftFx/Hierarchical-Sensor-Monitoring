@@ -6,6 +6,7 @@
         public const string ApiSwagger = "/api/swagger/index.html";
 
         public const string HomeController = "Home";
+        public const string DashboardsController = "Dashboards";
         public const string AccountController = "Account";
         public const string ProductController = "Product";
         public const string FoldersController = "Folders";
