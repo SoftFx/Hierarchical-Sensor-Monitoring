@@ -1,0 +1,26 @@
+﻿@using HSMServer.Controllers
+@using HSMServer.Model.TreeViewModel
+
+@model TreeViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    ViewData["Title"] = "Dashboard";
+    Layout = "~/Views/Tree/_Layout.cshtml";
+}
+<script>
+    var sourceLink = '@Url.Action(nameof(DashboardsController.GetSource))';
+</script>
+
+<div class="w-100 overflow-y-auto">
+    <div id="plot" class="w-75 h-75 dropzone"></div>
+    @(await Html.PartialAsync("Source/Sources"))
+</div>
+
+
+<script>
+    $(document).ready(function (){
+        Plotly.newPlot('plot', [], {})
+    })
+</script>

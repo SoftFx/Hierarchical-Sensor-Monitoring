@@ -9,10 +9,6 @@
     ViewData["Title"] = "Dashboards";
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
-<script>
-    var sourceLink = '@Url.Action(nameof(DashboardsController.GetSource))';
-</script>
-
 
 <div class="flex-grow-1 m-2">
     <div class="d-flex justify-content-between my-2">
@@ -62,11 +58,6 @@
             </div>
         </div>
     </div>
-    <div class="w-100 overflow-y-auto">
-        <div id="plot" class="w-75 h-75 dropzone">
-        </div>
-        @(await Html.PartialAsync("Source/Sources"))  
-    </div>
 </div>
 
 
@@ -74,6 +65,5 @@
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description1');
         replaceHtmlToMarkdown('markdown_description2');
-        Plotly.newPlot('plot', [], {})
     });
 </script>
