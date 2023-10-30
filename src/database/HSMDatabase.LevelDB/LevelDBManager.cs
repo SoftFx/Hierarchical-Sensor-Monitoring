@@ -13,5 +13,9 @@ namespace HSMDatabase.LevelDB
         
         public static IJournalValuesDatabase GetJournalValuesDatabaseInstance(string name, long from, long to) =>
             new JournalValuesDatabaseWorker(name, from, to);
+
+
+        public static IEntityDatabase GetEntityDatabase(string name) =>
+            new LevelDBDatabaseAdapter(name);
     }
 }

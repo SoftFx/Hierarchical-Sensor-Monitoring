@@ -1,6 +1,7 @@
 ﻿using FluentValidation.AspNetCore;
 using HSMCommon.Constants;
 using HSMServer.Authentication;
+using HSMServer.ConcurrentStorage;
 using HSMServer.Folders;
 using HSMServer.Middleware;
 using HSMServer.Notifications;
@@ -84,9 +85,7 @@ try
 {
     var app = builder.Build();
 
-    await app.Services.GetRequiredService<IUserManager>().Initialize();
-    await app.Services.GetRequiredService<IFolderManager>().Initialize();
-    await app.Services.GetRequiredService<ITelegramChatsManager>().Initialize();
+    await app.Services.InitStorages();
 
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
 

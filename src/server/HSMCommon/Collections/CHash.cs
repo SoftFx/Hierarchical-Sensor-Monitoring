@@ -9,19 +9,21 @@ namespace HSMCommon.Collections
 
         public CHash() : base() { }
 
+        public CHash(int capacity) : base(capacity) { }
+
         public CHash(IEqualityComparer<T> comparer) : base(comparer) { }
 
 
-        public new void Add(T item)
+        public new bool Add(T item)
         {
             lock (_lock)
-                base.Add(item);
+                return base.Add(item);
         }
 
-        public new void Remove(T item)
+        public new bool Remove(T item)
         {
             lock (_lock)
-                base.Remove(item);
+                return base.Remove(item);
         }
 
         public new void Clear()
@@ -35,6 +37,12 @@ namespace HSMCommon.Collections
             lock (_lock)
                 foreach (var item in items)
                     base.Remove(item);
+        }
+
+        public new IEnumerator<T> GetEnumerator()
+        {
+            lock (_lock)
+                return base.GetEnumerator();
         }
     }
 }
