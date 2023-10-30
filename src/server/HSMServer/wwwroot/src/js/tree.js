@@ -47,7 +47,7 @@ window.interact('.dropzone').dropzone({
             
             let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, event.relatedTarget.id, color);
             plot.name = event.relatedTarget.id;
-
+            plot.mode = 'lines';
             
             Plotly.addTraces('plot', plot.getPlotData());
            

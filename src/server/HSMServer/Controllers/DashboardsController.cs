@@ -4,9 +4,9 @@ using System.Threading.Tasks;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.DTOs.Sensor;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Views.Dashboards.Source;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HSMServer.Controllers

@@ -14,14 +14,27 @@
 </script>
 
 <div class="w-100 overflow-y-auto">
-    <div id="plot" class="w-75 h-75 dropzone"></div>
-    @(await Html.PartialAsync("Source/Sources"))
+    <div id="plot" class="w-100 h-75 dropzone me-2 pe-2" style="box-sizing:content-box"></div>
+    <div id="plots" class="mt-1">
+        <ul id="sources" class="list-group">
+        </ul>
+    </div>
 </div>
 
 
 <script>
     $(document).ready(function (){
-        Plotly.newPlot('plot', [], {})
+        Plotly.newPlot('plot', [], {hovermode: 'x'},  {
+            responsive: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: [
+                'pan',
+                'lasso2d',
+                'pan2d',
+                'select2d',
+                'autoScale2d',
+                ]
+        })
          
         $('[id^="source"]').on('input', '.form-control-color', function () {
             $(this).attr('value', this.value);
