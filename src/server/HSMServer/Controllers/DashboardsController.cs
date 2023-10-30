@@ -35,8 +35,8 @@ namespace HSMServer.Controllers
         {
             if (_treeViewModel.Sensors.TryGetValue(id, out var sensorNodeViewModel))
             {
-                var values = (await _cache.GetSensorValuesPage(sensorNodeViewModel.Id, DateTime.UtcNow.AddDays(-5),
-                    DateTime.UtcNow, 200, RequestOptions.IncludeTtl).Flatten()).Select(x => (object)x);
+                var values = (await _cache.GetSensorValuesPage(sensorNodeViewModel.Id, DateTime.UtcNow.AddDays(-30),
+                    DateTime.UtcNow, 500, RequestOptions.IncludeTtl).Flatten()).Select(x => (object)x);
 
                 var model = new SourceDto(sensorNodeViewModel, values.ToList());
                 

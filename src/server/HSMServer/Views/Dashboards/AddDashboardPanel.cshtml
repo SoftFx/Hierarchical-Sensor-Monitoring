@@ -21,21 +21,13 @@
 
 <script>
     $(document).ready(function (){
-        var plots = $('#plot');
-        
         Plotly.newPlot('plot', [], {})
          
         $('[id^="source"]').on('input', '.form-control-color', function () {
             $(this).attr('value', this.value);
             let id = this.id.substring("color_".length, this.id.length);
-            let model = getCurrentPlotInDashboard(id)
-
-            let update = {
-                'line.color' :  $(this).val()
-            }
-
-            if (model !== undefined)
-                Plotly.restyle('plot', update, model.id)
+            
+            updateColor($(this).val(), id)
         })
         .on('click', 'button',function (){
              let id = this.id.substring("deletePlot_".length, this.id.length);
