@@ -52,8 +52,8 @@ namespace HSMServer.ConcurrentStorage
 
         public virtual void Update(UpdateType update)
         {
-            Name = update.Name;
-            Description = update.Description;
+            Name = update.Name ?? Name;
+            Description = update.Description ?? Description;
         }
 
 
