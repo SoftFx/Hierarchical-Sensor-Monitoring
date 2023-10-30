@@ -13,11 +13,11 @@
 
 <div class="flex-grow-1 m-2">
     <div class="d-flex justify-content-between my-2">
-        <h5>Dashboards</h5>
+        <h5 class="m-0">Dashboards</h5>
 
         <div class='d-flex col-md-auto'>
-            <a asp-action="@nameof(DashboardsController.AddDashboard)">
-                <i class="fa-solid fa-plus"></i> Add dashboard
+            <a class="icon-link" asp-action="@nameof(DashboardsController.AddDashboard)">
+                <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add dashboard
             </a>
         </div>
     </div>

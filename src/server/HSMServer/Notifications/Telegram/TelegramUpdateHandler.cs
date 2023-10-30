@@ -2,7 +2,6 @@
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
 using HSMServer.Folders;
-using HSMServer.Notification.Settings;
 using HSMServer.ServerConfiguration;
 using NLog;
 using System;

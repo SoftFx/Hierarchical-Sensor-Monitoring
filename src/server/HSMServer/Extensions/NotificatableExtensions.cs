@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Notification.Settings
+﻿namespace HSMServer.Extensions
 {
     internal static class NotificatableExtensions
     {

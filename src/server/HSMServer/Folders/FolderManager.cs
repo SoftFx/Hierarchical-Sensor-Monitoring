@@ -100,8 +100,8 @@ namespace HSMServer.Folders
 
             if (update.TelegramChats is not null)
             {
-                addedTelegramChats.AddRange(update.TelegramChats.Except(folder.TelegramChats ?? new())); // TODO: remove null check after telegram chats migration
-                removedTelegramChats.AddRange(folder.TelegramChats?.Except(update.TelegramChats) ?? new List<Guid>()); // TODO: remove null check after telegram chats migration
+                addedTelegramChats.AddRange(update.TelegramChats.Except(folder.TelegramChats));
+                removedTelegramChats.AddRange(folder.TelegramChats.Except(update.TelegramChats));
             }
 
 
