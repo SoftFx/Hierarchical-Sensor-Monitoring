@@ -28,7 +28,7 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly IDatabaseSettings _settings;
 
 
-        public IDashboardsCollection Dashboards { get; }
+        public IDashboardCollection Dashboards { get; }
 
         public ISnapshotDatabase Snapshots { get; }
 

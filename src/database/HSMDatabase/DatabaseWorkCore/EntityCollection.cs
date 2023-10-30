@@ -14,7 +14,7 @@ using System.Text.Json.Serialization;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
-    internal sealed class DashboardCollection : EntityCollection<DashboardEntity>, IDashboardsCollection
+    internal sealed class DashboardCollection : EntityCollection<DashboardEntity>, IDashboardCollection
     {
         protected override string TableName => "ServerDashboards";
 
@@ -152,7 +152,7 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         private CHash<Guid> LoadHash() => _database.TryRead(_tableId, out var table) ?
-            JsonSerializer.Deserialize<CHash<Guid>>(table, _options) : new CHash<Guid>();
+            JsonSerializer.Deserialize<CHash<Guid>>(table, _options) : new();
 
         private void RunDbRequest(Action action, [CallerMemberName] string callerName = null)
         {

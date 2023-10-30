@@ -9,7 +9,7 @@ namespace HSMServer.Dashboards
 {
     public sealed class DashboardManager : ConcurrentStorage<Dashboard, DashboardEntity, DashboardUpdate>, IDashboardManager
     {
-        private readonly IDashboardsCollection _dbCollection;
+        private readonly IDashboardCollection _dbCollection;
 
 
         protected override Action<DashboardEntity> AddToDb => _dbCollection.AddEntity;

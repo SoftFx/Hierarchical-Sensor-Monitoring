@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager.DatabaseSettings
 {
-    public interface IDashboardsCollection : IEntityCollection<DashboardEntity> { }
+    public interface IDashboardCollection : IEntityCollection<DashboardEntity> { }
 
 
     public interface IEntityCollection<T> where T : class, IBaseEntity

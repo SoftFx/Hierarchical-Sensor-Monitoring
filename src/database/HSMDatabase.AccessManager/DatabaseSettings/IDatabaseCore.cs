@@ -8,7 +8,7 @@ namespace HSMServer.Core.DataLayer
 {
     public interface IDatabaseCore : IDisposable
     {
-        IDashboardsCollection Dashboards { get; }
+        IDashboardCollection Dashboards { get; }
 
         ISnapshotDatabase Snapshots { get; }
 
