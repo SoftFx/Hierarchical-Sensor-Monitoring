@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager;
+﻿using HSMCommon.Collections;
+using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMDatabase.AccessManager.DatabaseSettings;
@@ -31,7 +32,7 @@ namespace HSMDatabase.DatabaseWorkCore
             IgnoreReadOnlyProperties = true,
         };
 
-        private readonly HashSet<Guid> _idsHash = new(1 << 4);
+        private readonly CHash<Guid> _idsHash = new(1 << 4);
         private readonly byte[] _tableId;
 
         private readonly IEntityDatabase _database;
@@ -142,8 +143,8 @@ namespace HSMDatabase.DatabaseWorkCore
             LogInfo($"Id list has been uploaded");
         }
 
-        private HashSet<Guid> LoadHash() => _database.TryRead(_tableId, out var table) ?
-            JsonSerializer.Deserialize<HashSet<Guid>>(table, _options) : new HashSet<Guid>();
+        private CHash<Guid> LoadHash() => _database.TryRead(_tableId, out var table) ?
+            JsonSerializer.Deserialize<CHash<Guid>>(table, _options) : new CHash<Guid>();
 
 
         private static byte[] ToBytes(T entity) => JsonSerializer.SerializeToUtf8Bytes(entity, _options);
