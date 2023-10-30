@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseSettings;
 using System;
 using System.Collections.Generic;
 
@@ -7,6 +8,8 @@ namespace HSMServer.Core.DataLayer
 {
     public interface IDatabaseCore : IDisposable
     {
+        IDashboardsCollection Dashboards { get; }
+
         ISnapshotDatabase Snapshots { get; }
 
 

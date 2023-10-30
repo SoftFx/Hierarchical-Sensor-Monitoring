@@ -1,6 +1,12 @@
 ﻿namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 {
-    public abstract record BaseServerEntity
+    public interface IBaseEntity
+    {
+        public byte[] Id { get; }
+    }
+
+
+    public abstract record BaseServerEntity : IBaseEntity
     {
         public byte[] Id { get; init; }
 
