@@ -1,4 +1,4 @@
-﻿import {currentDashboard} from "./dashboard";
+﻿import {currentPanel} from "./dashboard";
 
 window.hiddenColumns = {
     id: undefined,

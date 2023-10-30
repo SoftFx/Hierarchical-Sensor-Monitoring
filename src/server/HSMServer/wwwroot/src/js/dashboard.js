@@ -11,7 +11,7 @@ export function getPlotSourceView(id) {
     })
 }
 
-export const currentDashboard = {};
+export const currentPanel = {};
 export const plotColorDelay = 1000;
 
 export function Model(id) {
@@ -43,7 +43,7 @@ export function initDropzone(){
             let sources = $('#sources');
             let color = getRandomColor();
             getPlotSourceView(event.relatedTarget.id).then(function (data){
-                if (currentDashboard[event.relatedTarget.id] !== undefined)
+                if (currentPanel[event.relatedTarget.id] !== undefined)
                     return;
                 
                 let text = `<li id=${'source_'+ event.relatedTarget.id} class="d-flex list-group-item align-items-center justify-content-between">
@@ -67,7 +67,7 @@ export function initDropzone(){
                     return origText + text;
                 });
 
-                currentDashboard[event.relatedTarget.id] = new Model($('#multichart')[0].data.length - 1);
+                currentPanel[event.relatedTarget.id] = new Model($('#multichart')[0].data.length - 1);
             })
         },
         ondropdeactivate: function (event) {
@@ -86,32 +86,31 @@ export function initDropzone(){
                     event.target.style.position = "fixed";
                 },
                 move: dragMoveListener,
-                end: showEventInfo
             }
         })
 }
 
 window.updateColor = function (color, id) {
-    if (currentDashboard[id] === undefined)
+    if (currentPanel[id] === undefined)
         return;
 
-    if (currentDashboard[id].colorTimeout !== undefined)
-        clearTimeout(currentDashboard[id].colorTimeout);
+    if (currentPanel[id].colorTimeout !== undefined)
+        clearTimeout(currentPanel[id].colorTimeout);
 
-    currentDashboard[id].colorTimeout = setTimeout(updatePlotColor, plotColorDelay, color, id);
+    currentPanel[id].colorTimeout = setTimeout(updatePlotColor, plotColorDelay, color, id);
 }
 
 window.getCurrentPlotInDashboard = function (id) {
-    return currentDashboard[id]
+    return currentPanel[id]
 }
 
 window.updateCurrentPlotsIds = function (idToCompare, id) {
-    delete currentDashboard[id];
+    delete currentPanel[id];
     
-    for (let item in currentDashboard) {
+    for (let item in currentPanel) {
         console.log(item)
-        if (currentDashboard[item].id >= idToCompare)
-            currentDashboard[item].id = currentDashboard[item].id - 1;
+        if (currentPanel[item].id >= idToCompare)
+            currentPanel[item].id = currentPanel[item].id - 1;
     }
 }
 
@@ -120,22 +119,14 @@ function updatePlotColor(color, id) {
         'line.color': color
     }
 
-    if (currentDashboard[id] !== undefined)
-        Plotly.restyle('multichart', update, currentDashboard[id].id)
+    if (currentPanel[id] !== undefined)
+        Plotly.restyle('multichart', update, currentPanel[id].id)
 
-    currentDashboard[id].colorTimeout = undefined;
+    currentPanel[id].colorTimeout = undefined;
 }
 
 function getRandomColor() {
     return '#' + (0x1000000 + Math.floor(Math.random() * 0x1000000)).toString(16).slice(1);
-}
-
-
-function showEventInfo (event) {
-    event.target.style.transform = '';
-    event.target.style.position = 'relative';
-    event.target.removeAttribute('data-x')
-    event.target.removeAttribute('data-y')
 }
 
 function dragMoveListener (event) {
