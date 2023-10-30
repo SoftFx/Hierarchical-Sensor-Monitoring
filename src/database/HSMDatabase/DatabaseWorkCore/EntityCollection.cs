@@ -52,33 +52,34 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddEntity(T entity)
         {
-            try
+            void Add()
             {
                 RegisterId(new Guid(entity.Id));
 
                 _database.Put(entity.Id, ToBytes(entity));
             }
-            catch (Exception ex)
-            {
-                LogError(ex);
-            }
+
+            RunDbRequest(Add);
         }
 
         public void RemoveEntity(Guid id)
         {
-            try
+            void Remove()
             {
                 RemoveId(id);
 
                 _database.Delete(id.ToByteArray());
             }
-            catch (Exception ex)
-            {
-                LogError(ex);
-            }
+
+            RunDbRequest(Remove);
         }
 
-        public void UpdateEntity(T entity) => _database.Put(entity.Id, ToBytes(entity));
+        public void UpdateEntity(T entity)
+        {
+            void Update() => _database.Put(entity.Id, ToBytes(entity));
+
+            RunDbRequest(Update);
+        }
 
 
         public bool TryReadEntity(Guid id, out T entity)
@@ -106,9 +107,16 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var list = new List<T>(1 << 2);
 
-            foreach (var id in _idsHash)
-                if (TryReadEntity(id, out var entity))
-                    list.Add(entity);
+            try
+            {
+                foreach (var id in _idsHash)
+                    if (TryReadEntity(id, out var entity))
+                        list.Add(entity);
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+            }
 
             return list;
         }
@@ -145,6 +153,18 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private CHash<Guid> LoadHash() => _database.TryRead(_tableId, out var table) ?
             JsonSerializer.Deserialize<CHash<Guid>>(table, _options) : new CHash<Guid>();
+
+        private void RunDbRequest(Action action, [CallerMemberName] string callerName = null)
+        {
+            try
+            {
+                action?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                LogError(ex, callerName);
+            }
+        }
 
 
         private static byte[] ToBytes(T entity) => JsonSerializer.SerializeToUtf8Bytes(entity, _options);
