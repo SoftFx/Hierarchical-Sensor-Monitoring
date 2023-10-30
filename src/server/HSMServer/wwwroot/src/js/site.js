@@ -90,7 +90,3 @@ window.replaceHtmlToMarkdown = function (elementId) {
         element.children().last().css('margin-bottom', 0);
     }
 }
-
-window.getCurrentPlotInDashboard = function (id) {
-    return currentDashboard[id]
-}
