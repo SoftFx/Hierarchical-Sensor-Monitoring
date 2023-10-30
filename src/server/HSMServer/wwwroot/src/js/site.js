@@ -1,4 +1,6 @@
-﻿window.hiddenColumns = {
+﻿import {currentDashboard} from "./dashboard";
+
+window.hiddenColumns = {
     id: undefined,
     
     showText: "Show all columns",
@@ -87,4 +89,8 @@ window.replaceHtmlToMarkdown = function (elementId) {
         element.empty().append(markdownToHTML(innerHtml));
         element.children().last().css('margin-bottom', 0);
     }
+}
+
+window.getCurrentPlotInDashboard = function (id) {
+    return currentDashboard[id]
 }

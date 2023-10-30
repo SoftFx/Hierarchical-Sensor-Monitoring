@@ -9,3 +9,9 @@ export function getPlotSourceView(id){
     })
 }
 
+export const currentDashboard = {};
+
+export function Model(id)
+{
+    this.id = id;
+}

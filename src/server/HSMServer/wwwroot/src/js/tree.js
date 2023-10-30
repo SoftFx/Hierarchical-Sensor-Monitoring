@@ -1,4 +1,4 @@
-import {getPlotSourceView} from "./dashboard";
+import {currentDashboard, getPlotSourceView, Model} from "./dashboard";
 import {convertToGraphData} from "./plotting";
 import {BarPLot, BoolPlot, DoublePlot, EnumPlot, IntegerPlot, TimeSpanPlot} from "./plots";
 
@@ -48,11 +48,16 @@ window.interact('.dropzone').dropzone({
             let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, event.relatedTarget.id, color);
             plot.name = event.relatedTarget.id;
 
-            Plotly.addTraces('plot', plot.getPlotData());
             
+            Plotly.addTraces('plot', plot.getPlotData());
+           
+
             sources.html(function(n, origText){
                 return origText + text;
             });
+
+            currentDashboard[event.relatedTarget.id] = new Model($('#plot')[0].data.length - 1);
+            console.log(currentDashboard)
         })
     },
     ondropdeactivate: function (event) {

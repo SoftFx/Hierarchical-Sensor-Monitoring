@@ -28,36 +28,22 @@
         $('[id^="source"]').on('input', '.form-control-color', function () {
             $(this).attr('value', this.value);
             let id = this.id.substring("color_".length, this.id.length);
-            let foundId = getId(id)
+            let model = getCurrentPlotInDashboard(id)
 
             let update = {
                 'line.color' :  $(this).val()
             }
 
-            if (foundId !== undefined)
-                Plotly.restyle('plot', update, foundId)
+            if (model !== undefined)
+                Plotly.restyle('plot', update, model.id)
         })
         .on('click', 'button',function (){
              let id = this.id.substring("deletePlot_".length, this.id.length);
-             let foundId = getId(id)
-             if (foundId !== undefined) {
-                Plotly.deleteTraces('plot', foundId)
-                $('[id^="source"] li')[foundId].remove();
+             let model = getCurrentPlotInDashboard(id)
+             if (model !== undefined) {
+                Plotly.deleteTraces('plot', model.id)
+                $('[id^="source"] li')[model.id].remove();
              }
         })
-        
-        function getId(id){
-            let foundId = undefined;
-            for(let i = 0; i < plots[0].data.length; i++){
-                if (plots[0].data[i].name === id){
-                    foundId = i;
-                    break;
-                }
-            }
-            
-            return foundId;
-        }
-    })
-    
-       
+    })  
 </script>
