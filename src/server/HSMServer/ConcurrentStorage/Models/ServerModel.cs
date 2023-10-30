@@ -20,7 +20,7 @@ namespace HSMServer.ConcurrentStorage
         where EntityType : BaseServerEntity, new()
         where UpdateType : BaseUpdateRequest
     {
-        public Guid Id { get; set; } // TODO should be get after Telegram chats migration
+        public Guid Id { get; }
 
 
         public Guid? AuthorId { get; init; }
@@ -28,9 +28,9 @@ namespace HSMServer.ConcurrentStorage
         public DateTime CreationDate { get; init; }
 
 
-        public string Name { get; set; } // TODO should be private after Telegram chats migration
+        public string Name { get; private set; }
 
-        public string Description { get; set; } // TODO should be private after Telegram chats migration
+        public string Description { get; private set; }
 
 
         protected BaseServerModel()
