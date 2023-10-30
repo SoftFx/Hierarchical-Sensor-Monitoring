@@ -27,7 +27,7 @@ namespace HSMServer.Notifications
         internal MessageBuilder MessageBuilder { get; } = new();
 
 
-        public Guid Id { get; init; } // TODO: should be just get after telegram chats migration
+        public Guid Id { get; }
 
         public ChatId ChatId { get; init; }
 
@@ -36,9 +36,6 @@ namespace HSMServer.Notifications
         public ConnectedChatType Type { get; init; }
 
         public DateTime AuthorizationTime { get; init; }
-
-        [Obsolete("Should be removed after telegram chats migration")]
-        public bool IsUserChat { get; init; }
 
 
         public string Name { get; set; }
@@ -58,15 +55,6 @@ namespace HSMServer.Notifications
             Id = Guid.NewGuid();
             SendMessages = DefaultSendMessages;
             MessagesAggregationTimeSec = DefaultMessagesAggregationTimeSec;
-        }
-
-        internal TelegramChat(TelegramChatEntityOld entity)
-        {
-            ChatId = new(entity.Id);
-            Id = new Guid(entity.SystemId);
-            IsUserChat = entity.IsUserChat;
-            Name = entity.Name;
-            AuthorizationTime = new DateTime(entity.AuthorizationTime);
         }
 
         internal TelegramChat(TelegramChatEntity entity)

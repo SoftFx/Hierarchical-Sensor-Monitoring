@@ -4,7 +4,6 @@ using HSMServer.Extensions;
 using HSMServer.Model.History;
 using HSMServer.Model.History.Personal.Journal;
 using HSMServer.Model.TreeViewModels;
-using HSMServer.Notification.Settings;
 using HSMServer.UserFilters;
 using System;
 using System.Collections.Generic;
@@ -23,9 +22,6 @@ namespace HSMServer.Model.Authentication
         public string Name { get; init; }
 
         public string Password { get; set; }
-
-        [Obsolete("Should be removed after telegram chats migration")]
-        public ClientNotifications Notifications { get; set; }
 
         public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; } = new();
 
@@ -63,7 +59,6 @@ namespace HSMServer.Model.Authentication
             Name = entity.UserName;
             Password = entity.Password;
             IsAdmin = entity.IsAdmin;
-            Notifications = new(entity.NotificationSettings);
 
             if (entity.ProductsRoles != null)
                 ProductsRoles.AddRange(entity.ProductsRoles.Select(r => (r.Key.ToGuid(), (ProductRoleEnum)r.Value)));

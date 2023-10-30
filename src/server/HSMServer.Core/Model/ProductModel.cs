@@ -31,10 +31,6 @@ namespace HSMServer.Core.Model
         public Guid? FolderId { get; private set; }
 
 
-        [Obsolete("Should be removed after telegram chats migration")]
-        public NotificationSettingsEntity NotificationsSettings { get; private set; }
-
-
         public ProductModel(string name, Guid? authorId = default) : base(name.Trim(), authorId)
         {
             State = ProductState.FullAccess;
@@ -45,7 +41,6 @@ namespace HSMServer.Core.Model
         public ProductModel(ProductEntity entity) : base(entity)
         {
             State = (ProductState)entity.State;
-            NotificationsSettings = entity.NotificationSettings;
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
 
             Policies.BuildDefault(this, entity.TTLPolicy);
@@ -80,8 +75,6 @@ namespace HSMServer.Core.Model
             if (update.FolderId is not null)
                 FolderId = update.FolderId != Guid.Empty ? update.FolderId : null;
 
-            NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
-
             return this;
         }
 
@@ -108,7 +101,6 @@ namespace HSMServer.Core.Model
             DisplayName = DisplayName,
             Description = Description,
             CreationDate = CreationDate.Ticks,
-            NotificationSettings = NotificationsSettings,
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
             ChangeTable = ChangeTable.ToEntity(),
