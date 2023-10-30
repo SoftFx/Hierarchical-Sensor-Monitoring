@@ -10,6 +10,10 @@ const AjaxPost = {
     async: true
 };
 
+function getRandomColor() {
+    return '#' + (0x1000000 + Math.floor(Math.random() * 0x1000000)).toString(16).slice(1);
+}
+
 window.interact('.dropzone').dropzone({
     overlap: 0.75,
 
@@ -29,24 +33,27 @@ window.interact('.dropzone').dropzone({
     },
     ondrop: function (event) {
         let sources = $('#sources');
+        let color = getRandomColor();
         getPlotSourceView(event.relatedTarget.id).then(function (data){
-            let text = `<li class="d-flex list-group-item">
-                                    <span>${data.name}</span>
-                                    <span>${data.units}</span>
-                                    <input type="color" class="form-control form-control-color" id="color-picker">Plot color</input>
-
+            let text = `<li id=${'source_'+ event.relatedTarget.id} class="d-flex list-group-item align-items-center justify-content-between">
+                                    <div class="d-flex mx-1 align-items-center">
+                                        <span>${data.name + data.units}</span>
+                                        <input id=${'color_'+ event.relatedTarget.id} type="color" value=${color} class="form-control form-control-color mx-1">Plot color</input>
+                                    </div>
+                                    <button id=${'deletePlot_'+ event.relatedTarget.id} class="btn" type="button">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
                                 </li>`
             
-            let parsedData = JSON.stringify(data);
-            let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.name);
-           
+            let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, event.relatedTarget.id, color);
+            plot.name = event.relatedTarget.id;
+
             Plotly.addTraces('plot', plot.getPlotData());
             
             sources.html(function(n, origText){
                 return origText + text;
             });
         })
-        
     },
     ondropdeactivate: function (event) {
         event.target.classList.remove('drop-active')

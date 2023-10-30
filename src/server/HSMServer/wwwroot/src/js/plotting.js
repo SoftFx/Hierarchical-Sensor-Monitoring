@@ -1,6 +1,6 @@
 ﻿import {
     BarPLot,
-    BoolPlot,
+    BoolPlot, Colors,
     DoublePlot,
     EnumPlot,
     IntegerPlot,
@@ -137,22 +137,22 @@ function getPreviousZoomData(graphElementId) {
     return window.sessionStorage.getItem(graphElementId);
 }
 
-export function convertToGraphData(graphData, sensorInfo, graphName) {
+export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default) {
     let escapedData = JSON.parse(graphData);
 
     switch (sensorInfo.plotType) {
         case 0:
-            return new BoolPlot(escapedData, sensorInfo.units);
+            return new BoolPlot(escapedData, sensorInfo.units, color);
         case 1:
-            return new IntegerPlot(escapedData, sensorInfo.units);
+            return new IntegerPlot(escapedData, sensorInfo.units, color);
         case 2:
-            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units);
+            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color);
         case 4:
-            return new BarPLot(escapedData, graphName, sensorInfo.units);
+            return new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 5:
-            return new BarPLot(escapedData, graphName, sensorInfo.units);
+            return new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 7:
-            return new TimeSpanPlot(escapedData, sensorInfo.units);
+            return new TimeSpanPlot(escapedData, sensorInfo.units, color);
         case 9:
             if (sensorInfo.realType === 0)
                 return new EnumPlot(escapedData, false, false)
