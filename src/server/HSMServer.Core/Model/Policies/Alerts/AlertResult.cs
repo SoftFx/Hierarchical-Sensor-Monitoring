@@ -18,6 +18,9 @@ namespace HSMServer.Core.Model.Policies
         public string Icon { get; }
 
 
+        public bool IsStatusIsChangeResult { get; }
+
+
         public AlertState LastState { get; private set; }
 
         public string LastComment { get; private set; }
@@ -36,6 +39,10 @@ namespace HSMServer.Core.Model.Policies
             Template = policy.Template;
             PolicyId = policy.Id;
             Icon = policy.Icon;
+
+            IsStatusIsChangeResult = policy.Conditions.Count == 1 &&
+                                     policy.Conditions[0].Property is PolicyProperty.Status &&
+                                     policy.Conditions[0].Operation is PolicyOperation.IsChanged;
 
             AddPolicyResult(policy);
         }
