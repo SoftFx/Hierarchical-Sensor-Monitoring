@@ -6,7 +6,10 @@ export function getPlotSourceView(id) {
             type: 'GET',
             url: sourceLink + `?sourceId=${id}`
         }).done(function (data) {
-            resolve(data);
+            if (data.errorMessage === undefined)
+                return resolve(data);
+            else
+                return reject(data.errorMessage)
         })
     })
 }
@@ -45,8 +48,9 @@ export function initDropzone(){
 
             let sources = $('#sources');
             let color = getRandomColor();
-            getPlotSourceView(event.relatedTarget.id).then(function (data){
-                let text = `<li id=${'source_'+ event.relatedTarget.id} class="d-flex list-group-item align-items-center justify-content-between">
+            getPlotSourceView(event.relatedTarget.id).then(
+                (data) => {
+                    let text = `<li id=${'source_'+ event.relatedTarget.id} class="d-flex list-group-item align-items-center justify-content-between">
                                     <div class="d-flex mx-1 align-items-center">
                                         <span>${data.name + data.units}</span>
                                         <input id=${'color_'+ event.relatedTarget.id} type="color" value=${color} class="form-control form-control-color mx-1">Plot color</input>
@@ -56,31 +60,35 @@ export function initDropzone(){
                                     </button>
                                 </li>`
 
-                let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, event.relatedTarget.id, color);
-                plot.id = event.relatedTarget.id
-                plot.name = data.name;
-                plot.mode = 'lines';
-                plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
-                Plotly.addTraces('multichart', plot.getPlotData());
+                    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, event.relatedTarget.id, color);
+                    plot.id = event.relatedTarget.id
+                    plot.name = data.name;
+                    plot.mode = 'lines';
+                    plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
+                    Plotly.addTraces('multichart', plot.getPlotData());
 
-                let updateLayout = {
-                    'yaxis.title' : {
-                        text: data.sensorInfo.units,
-                        font: {
-                            family: 'Courier New, monospace',
-                            size: 18,
-                            color: '#7f7f7f'
+                    let updateLayout = {
+                        'yaxis.title' : {
+                            text: data.sensorInfo.units,
+                            font: {
+                                family: 'Courier New, monospace',
+                                size: 18,
+                                color: '#7f7f7f'
+                            }
                         }
                     }
+                    Plotly.relayout('multichart', updateLayout)
+
+                    sources.html(function(n, origText){
+                        return origText + text;
+                    });
+
+                    currentPanel[event.relatedTarget.id] = new Model($('#multichart')[0].data.length - 1);
+                },
+                (error) => {
+                    showToast(error)
                 }
-                Plotly.relayout('multichart', updateLayout)
-
-                sources.html(function(n, origText){
-                    return origText + text;
-                });
-
-                currentPanel[event.relatedTarget.id] = new Model($('#multichart')[0].data.length - 1);
-            })
+            )
         },
         ondropdeactivate: function (event) {
             event.target.classList.remove('drop-active')

@@ -32,22 +32,24 @@ namespace HSMServer.Controllers
         public IActionResult AddDashboardPanel() => View("AddDashboardPanel", _treeViewModel);
 
         [HttpGet]
-        public async Task<SourceDto> GetSource(Guid sourceId, Guid panelId)
+        public async Task<JsonResult> GetSource(Guid sourceId, Guid panelId)
         {
             if (!CurrentUser.ConfiguredPanels.TryGetValue(panelId, out var panel))
                 panel = new PanelViewModel();
 
-            if (_treeViewModel.Sensors.TryGetValue(sourceId, out var sensorNodeViewModel) && panel.TryAddSource(sensorNodeViewModel))
+            var errorMessage = string.Empty;
+            if (_treeViewModel.Sensors.TryGetValue(sourceId, out var sensorNodeViewModel) && panel.TryAddSource(sensorNodeViewModel, out errorMessage))
             {
                 var values = (await _cache.GetSensorValuesPage(sensorNodeViewModel.Id, DateTime.UtcNow.AddDays(-30),
                     DateTime.UtcNow, 500, RequestOptions.IncludeTtl).Flatten()).Select(x => (object)x);
 
-                var model = new SourceDto(sensorNodeViewModel, values.ToList(), panel.Id);
-
-                return model;
+                return Json(new SourceDto(sensorNodeViewModel, values.ToList(), panel.Id));
             }
 
-            return new SourceDto();
+            return Json(new
+            {
+                errorMessage
+            });
         }
 
         [HttpPost]
