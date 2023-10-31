@@ -50,14 +50,25 @@ export function initDropzone(){
             let color = getRandomColor();
             getPlotSourceView(event.relatedTarget.id).then(
                 (data) => {
-                    let text = `<li id=${'source_'+ event.relatedTarget.id} class="d-flex list-group-item align-items-center justify-content-between">
-                                    <div class="d-flex mx-1 align-items-center">
-                                        <span>${data.name + data.units}</span>
-                                        <input id=${'color_'+ event.relatedTarget.id} type="color" value=${color} class="form-control form-control-color mx-1">Plot color</input>
+                    let text = `<li id=${'source_' + event.relatedTarget.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
+                                    style="border-top-width: 1px;
+                                           border-radius: 5px;"
+                                    >
+                                    <div class="d-flex align-items-center justify-content-between w-100">
+                                        <div class="d-flex mx-1 align-items-center">
+                                            <input value="${data.name}" type="text"></input>
+                                            <input id=${'color_' + event.relatedTarget.id} type="color" value=${color} class="form-control form-control-color mx-1"></input>
+                                        </div>
+                                        <button id=${'deletePlot_' + event.relatedTarget.id} class="btn" type="button" style="color: red">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
                                     </div>
-                                    <button id=${'deletePlot_'+ event.relatedTarget.id} class="btn" type="button">
-                                        <i class="fa-solid fa-xmark"></i>
-                                    </button>
+     
+                                    <div class="d-flex align-items-center">
+                                         <span class="ms-1" style="color: grey;">
+                                            ${data.path}
+                                        </span>
+                                    </div>
                                 </li>`
 
                     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, event.relatedTarget.id, color);
