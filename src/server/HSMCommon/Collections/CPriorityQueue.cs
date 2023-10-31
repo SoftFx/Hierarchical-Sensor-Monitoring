@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMCommon.Collections
 {
@@ -23,6 +24,24 @@ namespace HSMCommon.Collections
             lock (_lock)
             {
                 return base.TryDequeue(out element, out priority);
+            }
+        }
+
+        public bool TryPeekValue(out TElement element) => TryPeek(out element, out _);
+
+        public List<TElement> UnwrapToList()
+        {
+            lock (_lock)
+            {
+                var elements = new List<(TElement value, TKey key)>(Count);
+
+                while (!IsEmpty && TryDequeue(out var value, out var key))
+                    elements.Add((value, key));
+
+                foreach (var (value, key) in elements)
+                    Enqueue(value, key);
+
+                return elements.Select(u => u.value).ToList();
             }
         }
     }
