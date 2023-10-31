@@ -1,8 +1,14 @@
 ﻿@using HSMServer.Controllers
+@using HSMServer.Constants
+@using HSMServer.Model.Dashboards
+
+@model DashboardViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
+    var isModify = Model is not null;
+
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
@@ -10,27 +16,27 @@
 
 <div class="d-flex flex-column w-100">
     <div class="m-2">
-        <div id="dashboardSettings" class="my-2">
+        <div id="dashboardSettings" class="my-2 @(isModify ? string.Empty : "d-none")">
             <div class="d-flex justify-content-between mb-1">
-                <h5>Dashboard2</h5>
+                <h5>@Model?.Name</h5>
 
                 <a class="icon-link text-nowrap" href="javascript:editDahsboardSettings();" title='edit dashboard settings'>
                     <i class='fas fa-edit'><use xlink:href="#box-seam"></i> Edit
                 </a>
             </div>
 
-            <div id="markdown_description">some description11111111111111111111111111 **222222222222222222222222** 3333333333333333333sdgasgasdg argagagakdfbnlzsdjfb fbjsbhdfaugrfyasdgvfjhasdbf adhgvadhljasgvflkavghdf dfhvdsgbfhvbdfhv dsfjhdfvhabdgvasbd fvgjsdhfvgsjdhfg vsdf vsjdhfgvsjdfhgvjahdvfa;kjsdfvadb vsdjfhgv</div> 
+            <div id="markdown_description">@Model?.Description</div> 
         </div>
 
-        <div id="editableDashboardSettings" class="my-2 d-none">
-            <form id="dahsboardSettings_form">
+        <div id="editableDashboardSettings" class="my-2 @(isModify ? "d-none" : string.Empty)">
+            <form method="post" asp-action="@(isModify ? nameof(DashboardsController.EditDashboard) : nameof(DashboardsController.AddDashboard))">
                 <div class="d-flex justify-content-between mb-1">
-                    <input class="form-control" value="Dashboard2" />
+                    <input class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" />
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
 
-                <textarea id='description' class="form-control w-100" type='text'>some description11111111111111111111111111 **222222222222222222222222** 3333333333333333333sdgasgasdg argagagakdfbnlzsdjfb fbjsbhdfaugrfyasdgvfjhasdbf adhgvadhljasgvflkavghdf dfhvdsgbfhvbdfhv dsfjhdfvhabdgvasbd fvgjsdhfvgsjdhfg vsdf vsjdhfgvsjdfhgvjahdvfa;kjsdfvadb vsdjfhgv</textarea>
+                <textarea id='description' class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
             </form>
         </div>
 
@@ -57,14 +63,6 @@
 <script>
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description');
-    });
-
-    $(document).on("submit", "#dahsboardSettings_form", function (event) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-
-        $('#dashboardSettings').removeClass('d-none');
-        $('#editableDashboardSettings').addClass('d-none');
     });
 
     function editDahsboardSettings() {

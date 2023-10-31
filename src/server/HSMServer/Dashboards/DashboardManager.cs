@@ -4,6 +4,7 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.DataLayer;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace HSMServer.Dashboards
 {
@@ -26,6 +27,13 @@ namespace HSMServer.Dashboards
             _dbCollection = database.Dashboards;
         }
 
+
+        public Task<bool> TryAdd(DashboardAdd dashboardAdd, out Dashboard dashboard)
+        {
+            dashboard = new Dashboard(dashboardAdd);
+
+            return TryAdd(dashboard);
+        }
 
         protected override Dashboard FromEntity(DashboardEntity entity) => new(entity);
     }
