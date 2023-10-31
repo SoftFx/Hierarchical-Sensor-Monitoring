@@ -59,7 +59,7 @@
                 if (action.Chats.Contains(ActionViewModel.AllChatsId))
                     chats = "all chats";
                 else
-                    chats = string.Join(", ", action.Chats.Select(ch => telegramChats[ch]));
+                    chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch]));
 
                 actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: #0366d6;'>{chats}</span>"));
             }
