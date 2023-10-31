@@ -2,12 +2,11 @@
 @using HSMServer.Controllers
 @using HSMServer.Model.TreeViewModel
 
-@model TreeViewModel
-
 @{
     ViewData["Title"] = "Home";
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
+
 
 <script>
     var isDataValidAction = "@Url.Action(nameof(HomeController.IsMetaInfoValid), ViewConstants.HomeController)";

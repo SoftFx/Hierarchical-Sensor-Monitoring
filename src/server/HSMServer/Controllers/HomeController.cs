@@ -78,10 +78,7 @@ namespace HSMServer.Controllers
         }
 
 
-        public IActionResult Index()
-        {
-            return View(_treeViewModel);
-        }
+        public IActionResult Index() => View();
 
         [HttpPost]
         public async Task<PartialViewResult> SelectNode(string selectedId)
