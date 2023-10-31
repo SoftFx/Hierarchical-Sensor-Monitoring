@@ -65,9 +65,9 @@ export function initDropzone(){
                                     </div>
      
                                     <div class="d-flex align-items-center">
-                                         <span class="ms-1" style="color: grey;">
+                                         <a class="ms-1" href="" style="color: grey;">
                                             ${data.path}
-                                        </span>
+                                        </a>
                                     </div>
                                 </li>`
 
@@ -117,6 +117,7 @@ export function initDropzone(){
                     event.target.style.position = "fixed";
                 },
                 move: dragMoveListener,
+                end: showEventInfo
             }
         })
 }
@@ -144,7 +145,12 @@ window.updateCurrentPlotsIds = function (idToCompare, id) {
             currentPanel[item].id = currentPanel[item].id - 1;
     }
 }
-
+function showEventInfo (event) {
+    event.target.style.transform = '';
+    event.target.style.position = 'relative';
+    event.target.removeAttribute('data-x')
+    event.target.removeAttribute('data-y')
+}
 function updatePlotColor(color, id) {
     let update = {
         'line.color': color
