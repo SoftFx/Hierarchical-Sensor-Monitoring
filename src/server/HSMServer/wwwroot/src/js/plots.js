@@ -55,7 +55,6 @@ export class Plot {
         this.customColor = customColor;
         if (customColor && customColor !== Colors.default){
             this.line.color = customColor;
-           
         }
     }
 

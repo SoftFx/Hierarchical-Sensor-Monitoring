@@ -334,7 +334,7 @@ function buildContextMenu(node) {
         }
 
         if (isManager && (curType === NodeType.Product || curType === NodeType.Node)) {
-            alertsSubmenu = {}
+            var alertsSubmenu = {}
 
             alertsSubmenu["Export"] = {
                 "label": `Export`,
