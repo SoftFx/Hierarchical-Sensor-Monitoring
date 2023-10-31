@@ -58,7 +58,7 @@ namespace HSMServer.Folders
         }
 
 
-        public void Dispose()
+        public override void Dispose()
         {
             _cache.ChangeProductEvent -= ChangeProductHandler;
             _userManager.Removed -= RemoveUserHandler;

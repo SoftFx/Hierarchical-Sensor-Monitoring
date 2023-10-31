@@ -51,6 +51,7 @@
 
   <ItemGroup>
     <Folder Include="Images\" />
+    <Folder Include="Model\Charts\" />
   </ItemGroup>
 
   <ItemGroup>
