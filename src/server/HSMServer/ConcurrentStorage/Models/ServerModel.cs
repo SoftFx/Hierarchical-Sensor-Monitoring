@@ -49,7 +49,7 @@ namespace HSMServer.ConcurrentStorage
             Description = entity.Description;
         }
 
-        protected BaseServerModel(IAddRequest add) : this()
+        protected BaseServerModel(BaseAddRequest add) : this()
         {
             Name = add.Name;
             AuthorId = add.AuthorId;
