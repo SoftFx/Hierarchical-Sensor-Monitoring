@@ -4,7 +4,7 @@ export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
         $.ajax({
             type: 'GET',
-            url: sourceLink + `?id=${id}`
+            url: sourceLink + `?sourceId=${id}`
         }).done(function (data) {
             resolve(data);
         })
@@ -40,12 +40,12 @@ export function initDropzone(){
             event.relatedTarget.classList.remove('can-drop')
         },
         ondrop: function (event) {
+            if (currentPanel[event.relatedTarget.id] !== undefined)
+                return;
+
             let sources = $('#sources');
             let color = getRandomColor();
             getPlotSourceView(event.relatedTarget.id).then(function (data){
-                if (currentPanel[event.relatedTarget.id] !== undefined)
-                    return;
-                
                 let text = `<li id=${'source_'+ event.relatedTarget.id} class="d-flex list-group-item align-items-center justify-content-between">
                                     <div class="d-flex mx-1 align-items-center">
                                         <span>${data.name + data.units}</span>
@@ -57,11 +57,23 @@ export function initDropzone(){
                                 </li>`
 
                 let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, event.relatedTarget.id, color);
-                plot.name = event.relatedTarget.id;
+                plot.id = event.relatedTarget.id
+                plot.name = data.name;
                 plot.mode = 'lines';
-
+                plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
                 Plotly.addTraces('multichart', plot.getPlotData());
 
+                let updateLayout = {
+                    'yaxis.title' : {
+                        text: data.sensorInfo.units,
+                        font: {
+                            family: 'Courier New, monospace',
+                            size: 18,
+                            color: '#7f7f7f'
+                        }
+                    }
+                }
+                Plotly.relayout('multichart', updateLayout)
 
                 sources.html(function(n, origText){
                     return origText + text;
