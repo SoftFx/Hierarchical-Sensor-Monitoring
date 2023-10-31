@@ -29,11 +29,11 @@ namespace HSMServer.Model.DataAlerts
 
         public AlertExportViewModel() { }
 
-        internal AlertExportViewModel(PolicyGroup group)
+        internal AlertExportViewModel(List<PolicyExportInfo> info)
         {
-            Sensors = group.Policies.Select(p => p.Value.Sensor.DisplayName).OrderBy(u => u).ToList();
+            Sensors = info.Select(u => u.FullRelativePath).OrderBy(u => u).ToList();
 
-            var policy = group.Policies.First().Value;
+            var policy = info.First().Policy;
 
             Icon = policy.Icon;
             Status = policy.Status;
