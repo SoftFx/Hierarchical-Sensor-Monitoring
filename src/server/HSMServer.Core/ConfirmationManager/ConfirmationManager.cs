@@ -12,7 +12,7 @@ namespace HSMServer.Core.Confirmation
     internal sealed class ConfirmationManager
     {
         private readonly CGuidDict<CGuidDict<CPriorityQueue<AlertResult, DateTime>>> _tree = new(); //sensorId -> alertId -> alertResult
-        private readonly ConcurrentDictionary<Guid, AlertResult> _statusLastUpdates = new();
+        private readonly ConcurrentDictionary<Guid, AlertResult> _lastStatusUpdates = new();
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -41,7 +41,7 @@ namespace HSMServer.Core.Confirmation
                         newAlerts.Remove(alertId);
 
                         if (alert.IsStatusIsChangeResult)
-                            _statusLastUpdates.TryAdd(alertId, alert);
+                            _lastStatusUpdates.AddOrUpdate(alertId, alert, (_, _) => alert);
                     }
                 }
 
@@ -76,10 +76,10 @@ namespace HSMServer.Core.Confirmation
                                 }
                                 else
                                 {
-                                    if (allResults.TryPeekValue(out var first) && _statusLastUpdates.TryGetValue(alertId, out var last) && first.LastState.Status != last.LastState.Status)
+                                    if (allResults.TryPeekValue(out var first) && _lastStatusUpdates.TryGetValue(alertId, out var last) && first.LastState.PrevStatus != last.LastState.Status)
                                         thrownAlerts.AddRange(allResults.UnwrapToList());
 
-                                    _statusLastUpdates.TryRemove(alertId, out _);
+                                    _lastStatusUpdates.TryRemove(alertId, out _);
                                     allResults.Clear();
                                 }
                             }
