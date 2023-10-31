@@ -36,7 +36,7 @@ namespace HSMServer.Notifications
 
         private string BotToken => _config.BotToken;
 
-        private bool CanSendNotifications => IsBotRunning && _config.IsValid && _config.IsRunning;
+        private bool CanSendNotifications => IsBotRunning && _config.IsRunning;
 
 
         public bool IsBotRunning => _bot is not null;
