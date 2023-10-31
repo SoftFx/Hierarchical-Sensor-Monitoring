@@ -47,23 +47,42 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        public bool TryAddResult(AlertResult alertResult)
+        public bool TryAddResult(AlertResult result)
         {
-            if (PolicyId != alertResult.PolicyId)
+            if (PolicyId != result.PolicyId)
                 return false;
 
-            Count += alertResult.Count;
-            LastComment = alertResult.LastComment;
-            LastState = alertResult.LastState;
+            if (!TryCustomUpdateApply(result.LastState))
+            {
+                Count += result.Count;
+                LastComment = result.LastComment;
+                LastState = result.LastState;
+            }
 
             return true;
         }
 
         internal void AddPolicyResult(Policy policy)
         {
-            Count++;
-            LastComment = policy.Comment;
-            LastState = policy.State;
+            if (!TryCustomUpdateApply(policy.State))
+            {
+                Count++;
+                LastComment = policy.Comment;
+                LastState = policy.State;
+            }
+        }
+
+        private bool TryCustomUpdateApply(AlertState newState)
+        {
+            if (IsStatusIsChangeResult && LastState is not null)
+            {
+                LastState = newState with { PrevStatus = $"{LastState.PrevStatus}->{newState.PrevStatus}" };
+                LastComment = LastState.BuildComment();
+
+                return true;
+            }
+
+            return false;
         }
 
 
