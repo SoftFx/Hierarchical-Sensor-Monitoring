@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMServer.Core.Extensions;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -40,9 +41,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyId = policy.Id;
             Icon = policy.Icon;
 
-            IsStatusIsChangeResult = policy.Conditions.Count == 1 &&
-                                     policy.Conditions[0].Property is PolicyProperty.Status &&
-                                     policy.Conditions[0].Operation is PolicyOperation.IsChanged;
+            IsStatusIsChangeResult = policy.Conditions.IsStatusChangeResult();
 
             AddPolicyResult(policy);
         }
