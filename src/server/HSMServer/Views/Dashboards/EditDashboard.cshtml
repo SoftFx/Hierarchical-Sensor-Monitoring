@@ -48,7 +48,7 @@
                 <option>last 6 hours</option>
             </select>
 
-            <a class="icon-link text-nowrap" asp-action="">
+            <a id="addPanel" class="icon-link text-nowrap @(isModify ? "d-none" : string.Empty)" asp-action="">
                 <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add panel
             </a>
         </div>
@@ -67,6 +67,8 @@
 
     function editDahsboardSettings() {
         $('#dashboardSettings').addClass('d-none');
+
+        $('#addPanel').removeClass('d-none');
         $('#editableDashboardSettings').removeClass('d-none');
     }
 </script>

@@ -39,9 +39,11 @@ namespace HSMServer.Controllers
                 : View(nameof(EditDashboard));
 
         [HttpPost]
-        public void EditDashboard(DashboardViewModel dashboard)
+        public async Task<IActionResult> EditDashboard(DashboardViewModel editDashboard)
         {
+            await _dashboardManager.TryUpdate(editDashboard.ToDashboardUpdate());
 
+            return View(nameof(EditDashboard), new DashboardViewModel(_dashboardManager[editDashboard.Id]));
         }
     }
 }

@@ -30,5 +30,13 @@ namespace HSMServer.Model.Dashboards
                 AuthorId = author.Id,
                 Description = Description,
             };
+
+        internal DashboardUpdate ToDashboardUpdate() =>
+            new()
+            {
+                Id = Id,
+                Name = Name,
+                Description = Description,
+            };
     }
 }
