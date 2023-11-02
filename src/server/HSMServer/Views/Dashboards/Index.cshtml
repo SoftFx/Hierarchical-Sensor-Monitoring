@@ -1,4 +1,5 @@
 ﻿@using HSMServer.Controllers
+@using HSMServer.Constants
 @using HSMServer.Model.Dashboards
 
 @model List<DashboardViewModel>
@@ -40,8 +41,11 @@
                     <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-                    <a class="dropdown-item text-decoration-none fw-normal button-link">View/Edit</a>
-                    <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+                    <a class="dropdown-item text-decoration-none fw-normal button-link"
+                       asp-action="@nameof(DashboardsController.EditDashboard)" asp-route-dashboardId="@dashboard.Id">
+                       View/Edit
+                   </a>
+                    <a class="dropdown-item text-decoration-none fw-normal button-link" id="remove_@dashboard.Id" name="@dashboard.Name">Remove</a>
                 </div>
             </div>
         </div>
@@ -52,5 +56,24 @@
 <script>
     $(document).ready(() => {
         '@dashboards'.split('@separator').forEach((id) => replaceHtmlToMarkdown(`markdown_description_${id}`));
+    });
+
+    $('[id^=remove_]').on('click', function () {
+        let id = this.id.substring("remove_".length, this.id.length);
+        let name = this.name;
+
+        showConfirmationModal(
+            `Removing '${name}' dashboard`,
+            `Do you really want to remove selected dashboard <strong>${name}</strong>?`,
+            function () {
+                $.ajax({
+                    type: 'GET',
+                    url: `@Html.Raw(Url.Action(nameof(DashboardsController.RemoveDashboard), ViewConstants.DashboardsController))?dashboardId=${id}`,
+                    cache: false,
+                    async: true,
+                    success: () => document.location.reload()
+                })
+            }
+        );
     });
 </script>

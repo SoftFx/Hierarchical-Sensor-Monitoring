@@ -45,5 +45,9 @@ namespace HSMServer.Controllers
 
             return View(nameof(EditDashboard), new DashboardViewModel(_dashboardManager[editDashboard.Id]));
         }
+
+        [HttpGet]
+        public async Task RemoveDashboard(Guid dashboardId) =>
+            await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
     }
 }

@@ -88,30 +88,3 @@ window.replaceHtmlToMarkdown = function (elementId) {
         element.children().last().css('margin-bottom', 0);
     }
 }
-
-window.replaceHtmlsToMarkdown = function (partId) {
-    console.log()
-    for (let element in document.querySelectorAll(`div[id^='${partId}']`))
-    {
-        console.log(element);
-        console.log(element[0]);
-        console.log("replaceHtmlsToMarkdown:", partId);
-        let innerHtml = element.html();
-
-        if (innerHtml !== undefined) {
-            element.empty().append(markdownToHTML(innerHtml));
-            element.children().last().css('margin-bottom', 0);
-        }
-    };
-    //$(`div[id^='${partId}']`).each((element) => {
-    //    console.log(element);
-    //    console.log(element[0]);
-    //    console.log("replaceHtmlsToMarkdown:", partId);
-    //    let innerHtml = element.html();
-
-    //    if (innerHtml !== undefined) {
-    //        element.empty().append(markdownToHTML(innerHtml));
-    //        element.children().last().css('margin-bottom', 0);
-    //    }
-    //})
-}
