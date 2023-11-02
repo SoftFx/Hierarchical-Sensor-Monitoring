@@ -116,6 +116,8 @@ namespace HSMServer.ApiObjectsConverters
             if ((values?.Count ?? 0) == 0)
                 return string.Empty;
 
+            values.Sort((firstValue, secondValue) => firstValue.Time < secondValue.Time ? 1 : -1);          
+            
             var content = new StringBuilder(1 << 7);
             var header = values.GetHeader(options);
 
