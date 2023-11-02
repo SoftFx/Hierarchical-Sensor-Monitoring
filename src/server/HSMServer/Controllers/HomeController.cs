@@ -452,7 +452,7 @@ namespace HSMServer.Controllers
 
             var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
 
-            var fileName = $"{path.Replace('/', '_')}.{value.Extension ?? "txt"}";
+            var fileName = $"{path.Replace('/', '_')}.{value.Extension ?? FileExtensions.DefaultFileExtension}";
 
             return File(value.Value ?? Array.Empty<byte>(), fileName.GetContentType(), fileName);
         }
