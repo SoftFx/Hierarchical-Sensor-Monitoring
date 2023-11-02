@@ -9,6 +9,10 @@ namespace HSMServer.Extensions
 
         public static string ToDefaultFormat(this DateTime dateTime) => dateTime.ToString(DateTimeDefaultFormat);
 
+        public static string ToDefaultFormat(this DateTime dateTime, string minValueString) =>
+            dateTime == DateTime.MinValue ? minValueString : dateTime.ToDefaultFormat();
+
+
         public static string GetTimeAgo(this DateTime lastUpdateDate)
         {
             string UnitsToString(double value, string unit)

@@ -9,7 +9,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model.ViewModel
 {
-    public abstract class NodeInfoBaseViewModel
+    public class NodeInfoBaseViewModel // this class can't be abstract because it's used for HomeController.IsMetaInfoValid action
     {
         public ConcurrentDictionary<string, int> AlertIcons { get; }
 

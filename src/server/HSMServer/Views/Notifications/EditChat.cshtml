@@ -36,7 +36,7 @@
                 </div>
 
                 <label class="offset-2 col-2 col-form-label">@Model.Type.GetDisplayName().CapitalizeFirstChar() creator</label>
-                <label class="col-2 col-form-label">@Model.Author</label>
+                <label class="col-2 col-form-label">@(Model.Author ?? "not set")</label>
             </div>
 
             <div class="row">
@@ -52,14 +52,12 @@
                 </div>
 
                 <label class="offset-2 col-2 col-form-label" asp-for="AuthorizationTime"></label>
-                <label class="col-2 col-form-label">@Model.AuthorizationTime.ToDefaultFormat()</label>
+                <label class="col-2 col-form-label">@Model.AuthorizationTime.ToDefaultFormat("not set")</label>
             </div>
 
             <div class="row mt-2">
                 <label class="col-2 col-form-label" asp-for="Description"></label>
-                <div class="col ps-0">
-                    <textarea type='text' class='form-control' asp-for="Description" value='@Model.Description'></textarea>
-                </div>
+                <label class="col col-form-label px-0">@Model.Description</label>
             </div>
 
             <partial name="_ChatFolders" for="Folders" />

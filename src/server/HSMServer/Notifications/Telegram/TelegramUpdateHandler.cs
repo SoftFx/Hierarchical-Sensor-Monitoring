@@ -6,6 +6,7 @@ using HSMServer.Notification.Settings;
 using HSMServer.ServerConfiguration;
 using NLog;
 using System;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -69,7 +70,7 @@ namespace HSMServer.Notifications
                 };
 
                 if (!string.IsNullOrEmpty(response))
-                    await botClient.SendTextMessageAsync(message.Chat, response, null, ParseMode.MarkdownV2, cancellationToken: cToken);
+                    await botClient.SendTextMessageAsync(message.Chat, response, parseMode: ParseMode.MarkdownV2, cancellationToken: cToken);
                 else
                     _logger.Warn($"There is some invalid update message: {msgText}");
             }
@@ -114,14 +115,24 @@ namespace HSMServer.Notifications
             return response.ToString().EscapeMarkdownV2();
         }
 
-        // TODO: /info command should return chat settings (delay, enable) and all connected products
-        private string EntitiesInfo(ChatId chat)
+        private string EntitiesInfo(ChatId chatId)
         {
+            var chat = _chatsManager.GetChatByChatId(chatId);
             var response = new StringBuilder(1 << 6);
 
-            response.AppendLine("Chat settings:".EscapeMarkdownV2());
-            response.AppendLine($"Messages delay: 60 sec".EscapeMarkdownV2());
-            response.AppendLine($"Messages are enabled: True".EscapeMarkdownV2());
+            if (chat is not null)
+            {
+                response.Append($"*Messages delay*");
+                response.AppendLine($": {chat.MessagesAggregationTimeSec} seconds".EscapeMarkdownV2());
+
+                response.Append($"*Messages are enabled*");
+                response.AppendLine($": {chat.SendMessages}".EscapeMarkdownV2());
+
+                response.Append($"*Connected folders*");
+                response.AppendLine($": {string.Join(", ", chat.Folders.Select(f => _folderManager[f]?.Name).OrderBy(n => n))}".EscapeMarkdownV2());
+            }
+            else
+                response.AppendLine("Chat is not found.".EscapeMarkdownV2());
 
             return response.ToString();
         }

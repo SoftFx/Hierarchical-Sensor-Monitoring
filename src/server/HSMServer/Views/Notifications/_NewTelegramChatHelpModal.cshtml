@@ -1,12 +1,19 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Notifications
 @using HSMServer.ServerConfiguration;
 
 @model Guid
 
 @inject IServerConfig Config
+@inject NotificationsCenter Notifications
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var botLinksClass = Notifications.TelegramBot.IsBotRunning ? string.Empty : "disabled-link";
+    var botLinksTitle = Notifications.TelegramBot.IsBotRunning ? string.Empty : TelegramBot.BotIsNotRunningError;
+}
 
 
 <div class="modal fade" tabindex="-1" role="dialog" id="newTelegramGroupHelp_modal">
@@ -23,14 +30,14 @@
                     1. <a href='https://telegram.org/faq?setln=uz#q-how-do-i-create-a-group' target='_blank'>Create</a> group chat in Telegram. <br />
                     2. <a href='https://telegram.org/faq?setln=uz#q-how-do-i-add-more-members-what-39s-an-invite-link' target='_blank'>Add</a> Telegram Bot (@Config.Telegram.BotName) to group chat. <br />
                     3. <a href='https://telegram.org/faq?setln=uz#q-can-i-assign-administrators' target='_blank'>Give Admin right</a> to Telegram Bot (@Config.Telegram.BotName). <br />
-                    4. Send <a href="javascript:getGroupStartCommand()">this message</a> from clipboard to group chat.
+                    4. Send <span title="@botLinksTitle"><a href="javascript:getGroupStartCommand()" class="@botLinksClass">this message</a></span> from clipboard to group chat.
                 </p>
 
                 <hr />
 
                 <h5>For direct chat</h5>
                 <p class="ms-2">
-                    Click <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenInvitationLink)" asp-route-folderId="@Model" target="_blank">invitation link</a> and press <b>Start</b> button at opened direct chat with Telegram Bot (@Config.Telegram.BotName).
+                    Click <span title="@botLinksTitle"><a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenInvitationLink)" asp-route-folderId="@Model" target="_blank" class="@botLinksClass">invitation link</a></span> and press <b>Start</b> button at opened direct chat with Telegram Bot (@Config.Telegram.BotName).
                 </p>
             </div>
         </div>

@@ -60,7 +60,7 @@ public sealed class JournalRecordViewModel
                      <strong>{model.OldValue}</strong>
                      """, $"{model.PropertyName} {model.OldValue} {model.Initiator}");
 
-        if (string.IsNullOrEmpty(model.OldValue))
+        if (string.IsNullOrEmpty(model.OldValue) || model.Enviroment == "Added new value")
         {
             header = "Added new";
             value = model.NewValue;

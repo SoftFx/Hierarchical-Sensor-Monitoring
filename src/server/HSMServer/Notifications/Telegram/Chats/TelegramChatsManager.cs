@@ -84,6 +84,9 @@ namespace HSMServer.Notifications
             }
         }
 
+        public string GetChatName(Guid id) => this.GetValueOrDefault(id)?.Name;
+
+        public TelegramChat GetChatByChatId(ChatId chatId) => _telegramChatIds.GetValueOrDefault(chatId);
 
         public string GetInvitationLink(Guid folderId, User user) =>
             $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(folderId, user)}";
@@ -105,6 +108,7 @@ namespace HSMServer.Notifications
                     AuthorId = token.User.Id,
                     Author = token.User.Name,
                     AuthorizationTime = DateTime.UtcNow,
+                    Description = message.Chat.Description,
                     Name = isUserChat ? message.From.Username : message.Chat.Title,
                     Type = isUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup,
                 };

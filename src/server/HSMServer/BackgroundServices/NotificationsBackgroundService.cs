@@ -1,5 +1,4 @@
 ﻿using HSMServer.Notifications;
-using Newtonsoft.Json.Linq;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,7 +7,7 @@ namespace HSMServer.BackgroundServices
 {
     public class NotificationsBackgroundService : BaseDelayedBackgroundService
     {
-        private const int CenterRecalculationPeriodSec = 30;
+        private const int CenterRecalculationPeriodMin = 5;
 
         private readonly NotificationsCenter _center;
         private DateTime _lastCenterRecalculation = DateTime.MinValue;
@@ -28,17 +27,16 @@ namespace HSMServer.BackgroundServices
         public override Task StopAsync(CancellationToken token) => _center.DisposeAsync().AsTask().ContinueWith(_ => base.StopAsync(token)).Unwrap();
 
 
-        protected override Task ServiceAction()
+        protected override async Task ServiceAction()
         {
             _center.SendAllMessages();
 
-            if ((DateTime.UtcNow - _lastCenterRecalculation).TotalSeconds >= CenterRecalculationPeriodSec)
+            if ((DateTime.UtcNow - _lastCenterRecalculation).TotalMinutes >= CenterRecalculationPeriodMin)
             {
                 _lastCenterRecalculation = DateTime.UtcNow;
-                _center.RecalculateState();
-            }
 
-            return Task.CompletedTask;
+                await _center.RecalculateState();
+            }
         }
     }
 }

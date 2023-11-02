@@ -18,6 +18,10 @@ namespace HSMServer.Notifications
         event Func<Guid, Guid, string, Task<string>> ConnectChatToFolder;
 
 
+        string GetChatName(Guid id);
+
+        TelegramChat GetChatByChatId(ChatId chatId);
+
         string GetInvitationLink(Guid folderId, User user);
 
         string GetGroupInvitation(Guid folderId, User user);
