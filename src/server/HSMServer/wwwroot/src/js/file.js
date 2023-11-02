@@ -83,7 +83,7 @@ window.previewFile = function(url, id, extension, time = null, fileNumber = null
             }
             else if (extension === 'txt') {
                 $(`#preview${fileId}`).removeClass('d-none container');
-                $(`#preview-content_${fileId}`).addClass('w-100 mw-100 text-break').html(file);
+                $(`#preview-content${fileId}`).addClass('w-100 mw-100 text-break').html(file);
             }
         }
     })
