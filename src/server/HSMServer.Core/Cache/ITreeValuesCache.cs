@@ -51,6 +51,7 @@ namespace HSMServer.Core.Cache
 
         bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);
         bool TryUpdateSensor(SensorUpdate updatedSensor, out string error);
+        bool TryGetSensorByPath(string product, string path, out BaseSensorModel sensor);
         void UpdateSensorValue(UpdateSensorValueRequestModel request);
         void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null);
         void UpdateMutedSensorState(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);

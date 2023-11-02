@@ -48,31 +48,19 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        internal Dictionary<Guid, PolicyUpdate> ToUpdates(Dictionary<string, Guid> availableSensors, Dictionary<string, Guid> availableChats)
-        {
-            var result = new Dictionary<Guid, PolicyUpdate>(Sensors.Count);
-
-            foreach (var sensorName in Sensors)
-                if (availableSensors.TryGetValue(sensorName, out var sensorId) && !result.ContainsKey(sensorId))
-                {
-                    var policyUpdate = new PolicyUpdate()
-                    {
-                        Icon = Icon,
-                        Status = Status,
-                        Template = Template,
-                        IsDisabled = IsDisabled,
-                        ConfirmationPeriod = ConfirmationPeriod?.Ticks,
-                        Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
-                        Destination = Chats is null
-                            ? new PolicyDestinationUpdate()
-                            : new PolicyDestinationUpdate(Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
-                    };
-
-                    result.Add(sensorId, policyUpdate);
-                }
-
-            return result;
-        }
+        internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats) =>
+            new()
+            {
+                Icon = Icon,
+                Status = Status,
+                Template = Template,
+                IsDisabled = IsDisabled,
+                ConfirmationPeriod = ConfirmationPeriod?.Ticks,
+                Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
+                Destination = Chats is null
+                    ? new PolicyDestinationUpdate()
+                    : new PolicyDestinationUpdate(Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
+            };
     }
 
 

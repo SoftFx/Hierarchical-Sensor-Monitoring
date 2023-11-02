@@ -96,26 +96,33 @@ namespace HSMServer.Controllers
         {
             var toastViewModel = new ImportAlertsToastViewModel();
 
-            if (_tree.Nodes.TryGetValue(model.NodeId, out var node))
+            if (_tree.Nodes.TryGetValue(model.NodeId, out var targetNode))
             {
                 try
                 {
-                    var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _deserializeOptions);
+                    var importList = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _deserializeOptions);
 
-                    var availableSensors = node.Sensors.ToDictionary(k => k.Value.Name, v => v.Key);
-                    var availableChats = node.GetAvailableChats(_telegram).ToDictionary(k => k.Value, v => v.Key);
+                    var availableChats = targetNode.GetAvailableChats(_telegram).ToDictionary(k => k.Value, v => v.Key);
+                    var productName = targetNode.RootProduct.Name;
 
-                    var sensorAlerts = new CGuidDict<List<PolicyUpdate>>();
+                    var newSensorAlerts = new CGuidDict<List<PolicyUpdate>>();
 
-                    foreach (var alert in alerts)
-                    {
-                        var updates = alert.ToUpdates(availableSensors, availableChats);
+                    foreach (var importModel in importList)
+                        foreach (var sensorPath in importModel.Sensors)
+                        {
+                            var fullSensorPath = $"{targetNode.Path}/{sensorPath}";
 
-                        foreach (var (sensorId, update) in updates)
-                            sensorAlerts[sensorId].Add(update);
-                    }
+                            if (_cache.TryGetSensorByPath(productName, fullSensorPath, out var sensor))
+                            {
+                                var newAlert = importModel.ToUpdate(sensor.Id, availableChats);
 
-                    foreach (var (sensorId, alertUpdates) in sensorAlerts)
+                                newSensorAlerts[sensor.Id].Add(newAlert);
+                            }
+                            else
+                                toastViewModel.AddError("Sensor by path not found", fullSensorPath);
+                        }
+
+                    foreach (var (sensorId, alertUpdates) in newSensorAlerts)
                     {
                         var update = new SensorUpdate()
                         {
