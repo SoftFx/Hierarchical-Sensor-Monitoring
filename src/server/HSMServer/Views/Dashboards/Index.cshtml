@@ -6,6 +6,9 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
+    const string separator = ",";
+    var dashboards = string.Join(separator, Model.Select(d => d.Id));
+
     ViewData["Title"] = "Dashboards";
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
@@ -48,33 +51,6 @@
 
 <script>
     $(document).ready(() => {
-        partId = "markdown_description_";
-        //let list = $(document).find(`div[id^='${partId}']`);
-        //for (let index in list) {
-
-        //    let element = list[index];
-        //    //let innerHtml = element.html();
-
-        //    console.log(element);
-        //    console.log(element);
-        //    console.log("replaceHtmlsToMarkdown:", partId);
-
-        //    if (innerHtml !== undefined) {
-        //        element.empty().append(markdownToHTML(innerHtml));
-        //        element.children().last().css('margin-bottom', 0);
-        //    }
-        //};
-        $(`div[id^='${partId}']`).each((i, element) => {
-            console.log(element);
-            console.log(element[0]);
-            console.log("replaceHtmlsToMarkdown:", partId);
-            let innerHtml = element.html();
-
-            if (innerHtml !== undefined) {
-                element.empty().append(markdownToHTML(innerHtml));
-                element.children().last().css('margin-bottom', 0);
-            }
-        })
-        //replaceHtmlsToMarkdown('markdown_description_');
+        '@dashboards'.split('@separator').forEach((id) => replaceHtmlToMarkdown(`markdown_description_${id}`));
     });
 </script>

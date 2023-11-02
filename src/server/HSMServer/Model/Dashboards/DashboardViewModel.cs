@@ -6,7 +6,7 @@ namespace HSMServer.Model.Dashboards
 {
     public sealed class DashboardViewModel
     {
-        public Guid Id { get; set; }
+        public Guid? Id { get; set; }
 
         public string Name { get; set; }
 
@@ -34,7 +34,7 @@ namespace HSMServer.Model.Dashboards
         internal DashboardUpdate ToDashboardUpdate() =>
             new()
             {
-                Id = Id,
+                Id = Id.Value,
                 Name = Name,
                 Description = Description,
             };

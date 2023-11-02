@@ -19,7 +19,7 @@ namespace HSMServer.Controllers
         }
 
 
-        public IActionResult Index() => View(_dashboardManager.GetValues().Select(d => new DashboardViewModel(d)).ToList());
+        public IActionResult Index() => View(_dashboardManager.GetValues().Select(d => new DashboardViewModel(d)).OrderBy(d => d.Name).ToList());
 
         [HttpPost]
         public async Task<IActionResult> AddDashboard(DashboardViewModel newDashboard)
