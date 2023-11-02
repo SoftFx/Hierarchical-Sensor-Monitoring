@@ -2,7 +2,7 @@
 
 namespace HSMServer.Dashboards
 {
-    public record DashboardAdd : BaseAddRequest
+    public sealed record DashboardAdd : BaseAddRequest
     {
     }
 }
