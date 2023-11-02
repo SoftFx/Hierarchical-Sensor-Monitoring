@@ -8,5 +8,7 @@ namespace HSMServer.Dashboards
         internal Dashboard(DashboardEntity entity) : base(entity)
         {
         }
+
+        internal Dashboard(DashboardAdd addModel) : base(addModel) { }
     }
 }

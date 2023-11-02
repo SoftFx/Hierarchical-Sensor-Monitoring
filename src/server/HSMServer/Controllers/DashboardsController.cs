@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using HSMSensorDataObjects.HistoryRequests;
@@ -8,29 +8,62 @@ using HSMServer.DTOs.Sensor;
 using HSMServer.Extensions;
 using HSMServer.Model.Dashboards;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Dashboards;
+using HSMServer.Model.Dashboards;
 using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
-        private readonly TreeViewModel _treeViewModel;
         private readonly ITreeValuesCache _cache;
+        private readonly IDashboardManager _dashboardManager;
+        private readonly TreeViewModel _treeViewModel;
 
-
-        public DashboardsController(TreeViewModel treeViewModel, IUserManager userManager, ITreeValuesCache cache) : base(userManager)
+        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, ITreeValuesCache cache, TreeViewModel treeViewModel) : base(userManager)
         {
-            _treeViewModel = treeViewModel;
+            _dashboardManager = dashboardManager;
             _cache = cache;
+            _treeViewModel = treeViewModel;
         }
 
 
-        public IActionResult Index() => View();
+        public IActionResult Index() => View(_dashboardManager.GetValues().Select(d => new DashboardViewModel(d)).OrderBy(d => d.Name).ToList());
 
-        public IActionResult AddDashboard() => View("EditDashboard");
+        [HttpPost]
+        public async Task<IActionResult> AddDashboard(DashboardViewModel newDashboard)
+        {
+            if (!ModelState.IsValid)
+                return View(nameof(EditDashboard), newDashboard);
 
-        public IActionResult AddDashboardPanel() => View("AddDashboardPanel", _treeViewModel);
+            await _dashboardManager.TryAdd(newDashboard.ToDashboardAdd(CurrentUser), out var dashboard);
 
+            return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id });
+        }
+        
+        public IActionResult AddDashboardPanel() => View("AddDashboardPanel");
+
+        [HttpGet]
+        public IActionResult EditDashboard(Guid? dashboardId) =>
+            dashboardId.HasValue && _dashboardManager.TryGetValue(dashboardId.Value, out var dashboard)
+                ? View(nameof(EditDashboard), new DashboardViewModel(dashboard))
+                : View(nameof(EditDashboard));
+
+        [HttpPost]
+        public async Task<IActionResult> EditDashboard(DashboardViewModel editDashboard)
+        {
+            await _dashboardManager.TryUpdate(editDashboard.ToDashboardUpdate());
+
+            return View(nameof(EditDashboard), new DashboardViewModel(_dashboardManager[editDashboard.Id]));
+        }
+
+        [HttpGet]
+        public async Task RemoveDashboard(Guid dashboardId) =>
+            await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
+        
         [HttpGet]
         public async Task<JsonResult> GetSource(Guid sourceId, Guid panelId)
         {
