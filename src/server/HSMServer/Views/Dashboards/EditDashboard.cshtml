@@ -1,8 +1,14 @@
 ﻿@using HSMServer.Controllers
+@using HSMServer.Constants
+@using HSMServer.Model.Dashboards
+
+@model DashboardViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
+    var isModify = Model is not null;
+
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
@@ -10,39 +16,41 @@
 
 <div class="d-flex flex-column w-100">
     <div class="m-2">
-        <div id="dashboardSettings" class="my-2">
+        <div id="dashboardSettings" class="my-2 @(isModify ? string.Empty : "d-none")">
             <div class="d-flex justify-content-between mb-1">
-                <h5>Dashboard2</h5>
+                <h5>@Model?.Name</h5>
 
                 <a class="icon-link text-nowrap" href="javascript:editDahsboardSettings();" title='edit dashboard settings'>
                     <i class='fas fa-edit'><use xlink:href="#box-seam"></i> Edit
                 </a>
             </div>
 
-            <div id="markdown_description">some description11111111111111111111111111 **222222222222222222222222** 3333333333333333333sdgasgasdg argagagakdfbnlzsdjfb fbjsbhdfaugrfyasdgvfjhasdbf adhgvadhljasgvflkavghdf dfhvdsgbfhvbdfhv dsfjhdfvhabdgvasbd fvgjsdhfvgsjdhfg vsdf vsjdhfgvsjdfhgvjahdvfa;kjsdfvadb vsdjfhgv</div> 
+            <div id="markdown_description">@Model?.Description</div> 
         </div>
 
-        <div id="editableDashboardSettings" class="my-2 d-none">
-            <form id="dahsboardSettings_form">
+        <div id="editableDashboardSettings" class="my-2 @(isModify ? "d-none" : string.Empty)">
+            <form method="post" asp-action="@(isModify ? nameof(DashboardsController.EditDashboard) : nameof(DashboardsController.AddDashboard))">
+                <input class="d-none" asp-for="Id" value="@Model?.Id"/>
+
                 <div class="d-flex justify-content-between mb-1">
-                    <input class="form-control" value="Dashboard2" />
+                    <input class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" />
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
 
-                <textarea id='description' class="form-control w-100" type='text'>some description11111111111111111111111111 **222222222222222222222222** 3333333333333333333sdgasgasdg argagagakdfbnlzsdjfb fbjsbhdfaugrfyasdgvfjhasdbf adhgvadhljasgvflkavghdf dfhvdsgbfhvbdfhv dsfjhdfvhabdgvasbd fvgjsdhfvgsjdhfg vsdf vsjdhfgvsjdfhgvjahdvfa;kjsdfvadb vsdjfhgv</textarea>
+                <textarea id='description' class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
             </form>
         </div>
 
         <div class="d-flex justify-content-end">
-            <select class="form-select mx-2" style="width: auto">
+            <select class="form-select" style="width: auto">
                 <option>last 30 minutes</option>
                 <option>last 1 hour</option>
                 <option>last 3 hours</option>
                 <option>last 6 hours</option>
             </select>
 
-            <a class="icon-link text-nowrap" asp-action="">
+            <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? "d-none" : string.Empty)" asp-action="">
                 <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add panel
             </a>
         </div>
@@ -59,16 +67,10 @@
         replaceHtmlToMarkdown('markdown_description');
     });
 
-    $(document).on("submit", "#dahsboardSettings_form", function (event) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-
-        $('#dashboardSettings').removeClass('d-none');
-        $('#editableDashboardSettings').addClass('d-none');
-    });
-
     function editDahsboardSettings() {
         $('#dashboardSettings').addClass('d-none');
+
+        $('#addPanel').removeClass('d-none');
         $('#editableDashboardSettings').removeClass('d-none');
     }
 </script>

@@ -1,8 +1,15 @@
 ﻿@using HSMServer.Controllers
+@using HSMServer.Constants
+@using HSMServer.Model.Dashboards
+
+@model List<DashboardViewModel>
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
+    const string separator = ",";
+    var dashboards = string.Join(separator, Model.Select(d => d.Id));
+
     ViewData["Title"] = "Dashboards";
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
@@ -13,55 +20,60 @@
         <h5 class="m-0">Dashboards</h5>
 
         <div class='d-flex col-md-auto'>
-            <a class="icon-link" asp-action="@nameof(DashboardsController.AddDashboard)">
+            <a class="icon-link" method="GET" asp-action="@nameof(DashboardsController.EditDashboard)">
                 <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add dashboard
             </a>
         </div>
     </div>
 
-    <div class="d-flex flex-row align-items-center">
-        <div class="card mb-2 w-100">
-            <div class="card-body py-2">
-                <div style="font-weight: bold;">Dashboard1</div>
-                <div id="markdown_description1">some description</div>
+    @foreach (var dashboard in Model)
+    {
+        <div class="d-flex flex-row align-items-center">
+            <div class="card mb-2 w-100">
+                <div class="card-body py-2">
+                    <div style="font-weight: bold;">@dashboard.Name</div>
+                    <div id="markdown_description_@dashboard.Id">@dashboard.Description</div>
+                </div>
             </div>
-        </div>
 
-        <div>
-            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                <i class="fa-solid fa-ellipsis-vertical button-link"></i>
-            </button>
-            <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-                <a class="dropdown-item text-decoration-none fw-normal button-link">View/Edit</a>
-                <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+            <div>
+                <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                    <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                    <a class="dropdown-item text-decoration-none fw-normal button-link"
+                       asp-action="@nameof(DashboardsController.EditDashboard)" asp-route-dashboardId="@dashboard.Id">
+                       View/Edit
+                   </a>
+                    <a class="dropdown-item text-decoration-none fw-normal button-link" id="remove_@dashboard.Id" name="@dashboard.Name">Remove</a>
+                </div>
             </div>
         </div>
-    </div>
-
-    <div class="d-flex flex-row align-items-center">
-        <div class="card mb-2 w-100">
-            <div class="card-body py-2">
-                <div style="font-weight: bold;">Dashboard2</div>
-                <div id="markdown_description2">some description11111111111111111111111111 **222222222222222222222222** 3333333333333333333sdgasgasdg argagagakdfbnlzsdjfb fbjsbhdfaugrfyasdgvfjhasdbf adhgvadhljasgvflkavghdf dfhvdsgbfhvbdfhv dsfjhdfvhabdgvasbd fvgjsdhfvgsjdhfg vsdf vsjdhfgvsjdfhgvjahdvfa;kjsdfvadb vsdjfhgv</div>
-            </div>
-        </div>
-
-        <div>
-            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                <i class="fa-solid fa-ellipsis-vertical button-link"></i>
-            </button>
-            <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-                <a class="dropdown-item text-decoration-none fw-normal button-link">Edit</a>
-                <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
-            </div>
-        </div>
-    </div>
+    }
 </div>
 
 
 <script>
     $(document).ready(() => {
-        replaceHtmlToMarkdown('markdown_description1');
-        replaceHtmlToMarkdown('markdown_description2');
+        '@dashboards'.split('@separator').forEach((id) => replaceHtmlToMarkdown(`markdown_description_${id}`));
+    });
+
+    $('[id^=remove_]').on('click', function () {
+        let id = this.id.substring("remove_".length, this.id.length);
+        let name = this.name;
+
+        showConfirmationModal(
+            `Removing '${name}' dashboard`,
+            `Do you really want to remove selected dashboard <strong>${name}</strong>?`,
+            function () {
+                $.ajax({
+                    type: 'GET',
+                    url: `@Html.Raw(Url.Action(nameof(DashboardsController.RemoveDashboard), ViewConstants.DashboardsController))?dashboardId=${id}`,
+                    cache: false,
+                    async: true,
+                    success: () => document.location.reload()
+                })
+            }
+        );
     });
 </script>
