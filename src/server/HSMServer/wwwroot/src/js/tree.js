@@ -478,13 +478,13 @@ function buildContextMenu(node) {
 
             alertsSubmenu["Export"] = {
                 "label": `Export`,
-                "icon": "fa-solid fa-download",
+                "icon": "fa-solid fa-upload",
                 "action": _ => window.location.href = `${exportAlerts}?selectedId=${node.id}`
             }
 
             alertsSubmenu["Import"] = {
                 "label": `Import`,
-                "icon": "fa-solid fa-upload",
+                "icon": "fa-solid fa-download",
                 "action": _ => {
                     var $input = $('<input type="file" />');
 

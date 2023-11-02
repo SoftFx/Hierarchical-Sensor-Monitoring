@@ -48,10 +48,11 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertsController(ITelegramChatsManager telegram, ITreeValuesCache cache, IUserManager users) : base(users)
+        public AlertsController(ITelegramChatsManager telegram, TreeViewModel tree, ITreeValuesCache cache, IUserManager users) : base(users)
         {
             _telegram = telegram;
             _cache = cache;
+            _tree = tree;
         }
 
 

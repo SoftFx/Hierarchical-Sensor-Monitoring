@@ -458,7 +458,7 @@ namespace HSMServer.Core.Cache
 
             var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            foreach (var subNodeName in parts[..-1])
+            foreach (var subNodeName in parts[..^1])
             {
                 node = node.SubProducts.Values.FirstOrDefault(u => u.DisplayName == subNodeName);
 
