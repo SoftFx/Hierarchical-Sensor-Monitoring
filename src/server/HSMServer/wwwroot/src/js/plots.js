@@ -438,7 +438,7 @@ export class TimeSpanPlot extends ErrorColorPlot {
         }
         minutes = Number(time[1]);
         seconds = Number(time[2]);
-        
+
         return new TimeSpan.TimeSpan(0, seconds, minutes, hours, days);
     }
 
