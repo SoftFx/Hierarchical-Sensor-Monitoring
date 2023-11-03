@@ -1,0 +1,22 @@
+﻿@using HSMServer.Controllers
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="panel resize-draggable">
+    <div class="d-flex flex-column">
+        <div class="d-flex flex-row justify-content-between align-items-center">
+            <div>Panel name</div>
+            <div>
+                <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                    <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                    <a class="dropdown-item text-decoration-none fw-normal button-link" asp-action="@nameof(DashboardsController.AddDashboardPanel)">Edit</a>
+                    <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+                </div>
+            </div>
+        </div>
+        <div>drag and drop sensor</div>
+    </div>
+</div>
