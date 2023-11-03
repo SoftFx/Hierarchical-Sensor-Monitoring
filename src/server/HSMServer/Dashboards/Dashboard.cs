@@ -1,5 +1,4 @@
-﻿using HSMCommon.Collections;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using System;
@@ -13,6 +12,11 @@ namespace HSMServer.Dashboards
         public ConcurrentDictionary<Guid, Panel> Panels { get; } = new();
 
 
+        public DateTime FromDataPeriod { get; private set; }
+
+        public DateTime? ToDataPeriod { get; private set; }
+
+
         internal Func<Guid, BaseSensorModel> GetSensorModel;
 
 
@@ -24,11 +28,17 @@ namespace HSMServer.Dashboards
         internal Dashboard(DashboardAdd addModel) : base(addModel) { }
 
 
+        public void UpdateDataPeriod(DateTime from, DateTime? to)
+        {
+            FromDataPeriod = from;
+            ToDataPeriod = to;
+        }
+
+
         public override void Update(DashboardUpdate update)
         {
             base.Update(update);
         }
-
 
         public override DashboardEntity ToEntity()
         {
