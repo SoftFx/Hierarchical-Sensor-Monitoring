@@ -55,16 +55,20 @@
             let id = this.id.substring("color_".length, this.id.length);
             
             updateColor($(this).val(), id)
-        })
-        .on('click', 'button',function (){
-             let id = this.id.substring("deletePlot_".length, this.id.length);
-             let model = getCurrentPlotInDashboard(id)
-             if (model !== undefined) {
+        }).on('input', '.form-control', function () {
+            $(this).attr('value', this.value);
+            let id = this.id.substring("name_input_".length, this.id.length);
+                      
+            updateName($(this).val(), id)
+        }).on('click', 'button',function (){
+            let id = this.id.substring("deletePlot_".length, this.id.length);
+            let model = getCurrentPlotInDashboard(id)
+            if (model !== undefined) {
                 Plotly.deleteTraces('multichart', model.id).then(function (){
                     $('[id^="source"] li')[model.id].remove();
                     updateCurrentPlotsIds(model.id, id)
                 })
-             }
+            }
         })
     })  
 </script>
