@@ -20,6 +20,7 @@ export const plotColorDelay = 1000;
 export function Model(id) {
     this.id = id;
     this.colorTimeout = undefined;
+    this.nameTimeout = undefined;
 }
 
 export function initDropzone(){
@@ -55,17 +56,18 @@ export function initDropzone(){
                                            border-radius: 5px;"
                                     >
                                     <div class="d-flex align-items-center justify-content-between w-100">
-                                        <div class="d-flex mx-1 align-items-center">
-                                            <input value="${data.name}" type="text"></input>
-                                            <input id=${'color_' + event.relatedTarget.id} type="color" value=${color} class="form-control form-control-color mx-1"></input>
+                                        <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
+                                            <input id=${'name_input_' + event.relatedTarget.id} class="form-control"  value="${data.name}" type="text" style="flex-grow: 10"></input>
+                                            <input id=${'color_' + event.relatedTarget.id} type="color" value=${color} class="form-control form-control-color mx-1 ="></input>
                                         </div>
+                                        <div class="d-flex flex-grow-1"></div>
                                         <button id=${'deletePlot_' + event.relatedTarget.id} class="btn" type="button" style="color: red">
                                             <i class="fa-solid fa-xmark"></i>
                                         </button>
                                     </div>
      
                                     <div class="d-flex align-items-center">
-                                         <a class="ms-1" href="" style="color: grey;">
+                                         <a class="ms-1" href="" style="color: grey;font-size: x-small">
                                             ${data.path}
                                         </a>
                                     </div>
@@ -199,6 +201,16 @@ window.updateColor = function (color, id) {
     currentPanel[id].colorTimeout = setTimeout(updatePlotColor, plotColorDelay, color, id);
 }
 
+window.updateName = function (name, id){
+    if (currentPanel[id] === undefined)
+        return;
+
+    if (currentPanel[id].nameTimeout !== undefined)
+        clearTimeout(currentPanel[id].nameTimeout);
+
+    currentPanel[id].nameTimeout = setTimeout(updatePlotName, plotColorDelay, name, id);
+}
+
 window.getCurrentPlotInDashboard = function (id) {
     return currentPanel[id]
 }
@@ -260,6 +272,17 @@ function updatePlotColor(color, id) {
         Plotly.restyle('multichart', update, currentPanel[id].id)
 
     currentPanel[id].colorTimeout = undefined;
+}
+
+function updatePlotName(name, id) {
+    let update = {
+        'hovertemplate': `${name}, %{customdata}<extra></extra>` 
+    }
+
+    if (currentPanel[id] !== undefined)
+        Plotly.restyle('multichart', update, currentPanel[id].id)
+
+    currentPanel[id].nameTimeout = undefined;
 }
 
 function getRandomColor() {
