@@ -8,6 +8,7 @@
 
 @{
     var isModify = Model is not null;
+    var isEmptyDashboard = !isModify || Model.Panels.Count == 0;
 
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Tree/_Layout.cshtml";
@@ -56,7 +57,11 @@
         </div>
     </div>
 
-    <div id="dashboardPanels" class="flex-grow-1 dashboard mx-2"></div>
+     <div id="noPanels" class="d-flex justify-content-center align-items-end noData-label @(isEmptyDashboard ?string.Empty  : "d-none")">
+        <label>No panels</label>
+    </div>
+
+    <div id="dashboardPanels" class="flex-grow-1 dashboard mx-2 @(isEmptyDashboard ? "d-none" : string.Empty)"></div>
 </div>
 
 
@@ -73,6 +78,9 @@
             async: true,
             success: (viewData) => {
                 $('#dashboardPanels').append(viewData);
+
+                $('#dashboardPanels').removeClass("d-none");
+                $('#noPanels').addClass("d-none");
             }
         })
     }
