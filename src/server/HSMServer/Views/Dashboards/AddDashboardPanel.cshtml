@@ -19,36 +19,8 @@
 
 
 <script>
-    $(document).ready(function (){
-        Plotly.newPlot('multichart', [], {
-                hovermode: 'x',
-                dragmode: 'zoom',
-                autosize: true,
-                xaxis: {
-                    title: {
-                        text: 'Time',
-                        font: {
-                            family: 'Courier New, monospace',
-                            size: 18,
-                            color: '#7f7f7f'
-                        }
-                    },
-                    rangeslider: {
-                        visible: false
-                    }
-                }
-            },  
-            {
-                responsive: true,
-                displaylogo: false,
-                modeBarButtonsToRemove: [
-                    'pan',
-                    'lasso2d',
-                    'pan2d',
-                    'select2d',
-                    'autoScale2d',
-                ]
-        })
+    $(document).ready(function () {
+        initMultichart('multichart');
          
         $('[id^="source"]').on('input', '.form-control-color', function () {
             $(this).attr('value', this.value);

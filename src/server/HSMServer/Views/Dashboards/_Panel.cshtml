@@ -3,9 +3,9 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<div class="panel resize-draggable">
+<div class="panel resize-draggable" title="Drag and drop sensor from tree to panel">
     <div class="d-flex flex-column">
-        <div class="d-flex flex-row justify-content-between align-items-center">
+        <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1">
             <div>Panel name</div>
             <div>
                 <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
@@ -17,6 +17,14 @@
                 </div>
             </div>
         </div>
-        <div>drag and drop sensor</div>
+
+        <div id="panelChart" class="dropzone" style="box-sizing:content-box"></div>
     </div>
 </div>
+
+
+<script>
+    $(document).ready(function () {
+        initMultichart('panelChart');
+    })
+</script>

@@ -138,11 +138,11 @@ export function initDropzone(){
                 end(event) {
                     var textEl = event.target.querySelector('p')
 
-                    textEl && (textEl.textContent =
-                        'moved a distance of ' +
-                        (Math.sqrt(Math.pow(event.pageX - event.x0, 2) +
-                            Math.pow(event.pageY - event.y0, 2) | 0))
-                            .toFixed(2) + 'px')
+                    //textEl && (textEl.textContent =
+                    //    'moved a distance of ' +
+                    //    (Math.sqrt(Math.pow(event.pageX - event.x0, 2) +
+                    //        Math.pow(event.pageY - event.y0, 2) | 0))
+                    //        .toFixed(2) + 'px')
                 }
             }
         })
@@ -165,7 +165,14 @@ export function initDropzone(){
 
                     target.setAttribute('data-x', x)
                     target.setAttribute('data-y', y)
-                    target.textContent = Math.round(event.rect.width) + '\u00D7' + Math.round(event.rect.height)
+
+
+                    var update = {
+                        width: event.rect.width,
+                        height: event.rect.heigh
+                    };
+
+                    Plotly.relayout('panelChart', update);
                 }
             },
             modifiers: [
@@ -205,6 +212,39 @@ window.updateCurrentPlotsIds = function (idToCompare, id) {
             currentPanel[item].id = currentPanel[item].id - 1;
     }
 }
+
+window.initMultichart = function (chartId) {
+    Plotly.newPlot(chartId, [], {
+        hovermode: 'x',
+        dragmode: 'zoom',
+        autosize: true,
+        xaxis: {
+            title: {
+                text: 'Time',
+                font: {
+                    family: 'Courier New, monospace',
+                    size: 18,
+                    color: '#7f7f7f'
+                }
+            },
+            rangeslider: {
+                visible: false
+            }
+        }
+    },
+    {
+        responsive: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: [
+            'pan',
+            'lasso2d',
+            'pan2d',
+            'select2d',
+            'autoScale2d',
+        ]
+    });
+}
+
 function showEventInfo (event) {
     event.target.style.transform = '';
     event.target.style.position = 'relative';
