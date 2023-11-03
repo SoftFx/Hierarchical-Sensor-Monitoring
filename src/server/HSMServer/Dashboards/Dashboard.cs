@@ -13,7 +13,7 @@ namespace HSMServer.Dashboards
 
         internal Dashboard(DashboardEntity entity) : base(entity)
         {
-            Panels = new CGuidDict<Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), v => new Panel(v)));
+            Panels = new CGuidDict<Panel>(entity.Panels?.ToDictionary(k => new Guid(k.Id), v => new Panel(v)) ?? new());
         }
 
         internal Dashboard(DashboardAdd addModel) : base(addModel) { }
