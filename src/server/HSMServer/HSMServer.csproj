@@ -24,13 +24,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Model\Charts\**" />
-    <Content Remove="Model\Charts\**" />
-    <EmbeddedResource Remove="Model\Charts\**" />
-    <None Remove="Model\Charts\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Content Remove="nlog.config" />
     <Content Update="Config\appsettings.Development.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
