@@ -7,6 +7,7 @@
 
         public const string HomeController = "Home";
         public const string DashboardsController = "Dashboards";
+        public const string AlertsController = "Alerts";
         public const string AccountController = "Account";
         public const string ProductController = "Product";
         public const string FoldersController = "Folders";
@@ -20,7 +21,7 @@
         public const string RegistrationAction = "Registration";
 
         public const string IndexAction = "Index";
-        
+
         public const string RemoveProductAction = "RemoveProduct";
         public const string EditProductAction = "EditProduct";
 
