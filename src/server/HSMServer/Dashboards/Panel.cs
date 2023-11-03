@@ -1,23 +1,49 @@
-﻿using HSMCommon.Collections;
-using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.Model;
+using System;
+using System.Collections.Concurrent;
 using System.Linq;
 
 namespace HSMServer.Dashboards
 {
     public sealed class Panel : BaseServerModel<DashboardPanelEntity, PanelUpdate>
     {
-        public CGuidDict<PanelDataSource> Sources { get; }
+        private readonly Dashboard _board;
 
 
-        public Panel() { }
+        public ConcurrentDictionary<Guid, PanelDataSource> Sources { get; } = new();
 
-        internal Panel(DashboardPanelEntity entity) : base(entity)
+
+        internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
         {
-            Sources = new CGuidDict<PanelDataSource>(entity.Sources.Select(u => new PanelDataSource(u))
-                                                                   .ToDictionary(k => k.Id, v => v));
+            _board = board;
+
+            foreach (var sourceEntity in entity.Sources)
+            {
+                var sensorId = new Guid(sourceEntity.SensorId);
+
+                if (TryGetSensor(sensorId, out var sensor))
+                {
+                    var panel = new PanelDataSource(sourceEntity, sensor);
+
+                    Sources.TryAdd(panel.Id, panel);
+                }
+            }
         }
 
+
+        public bool TryAddSource(Guid sensorId)
+        {
+            if (TryGetSensor(sensorId, out var sensor))
+            {
+                var source = new PanelDataSource(sensor);
+
+                return Sources.TryAdd(source.Id, source);
+            }
+
+            return false;
+        }
 
         public override DashboardPanelEntity ToEntity()
         {
@@ -26,6 +52,14 @@ namespace HSMServer.Dashboards
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
 
             return entity;
+        }
+
+
+        private bool TryGetSensor(Guid id, out BaseSensorModel sensor)
+        {
+            sensor = _board.GetSensorModel?.Invoke(id);
+
+            return sensor is not null;
         }
     }
 }

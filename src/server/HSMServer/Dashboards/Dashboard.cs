@@ -1,22 +1,33 @@
 ﻿using HSMCommon.Collections;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.Model;
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 
 namespace HSMServer.Dashboards
 {
     public sealed class Dashboard : BaseServerModel<DashboardEntity, DashboardUpdate>
     {
-        public CGuidDict<Panel> Panels { get; }
+        public ConcurrentDictionary<Guid, Panel> Panels { get; } = new();
+
+
+        internal Func<Guid, BaseSensorModel> GetSensorModel;
 
 
         internal Dashboard(DashboardEntity entity) : base(entity)
         {
-            Panels = new CGuidDict<Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), v => new Panel(v)));
+            Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), v => new Panel(v, this)));
         }
 
         internal Dashboard(DashboardAdd addModel) : base(addModel) { }
+
+
+        public override void Update(DashboardUpdate update)
+        {
+            base.Update(update);
+        }
 
 
         public override DashboardEntity ToEntity()
