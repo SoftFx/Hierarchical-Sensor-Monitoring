@@ -35,14 +35,14 @@
 }
 
 .panel {
-    width: 25%;
+    width: 25rem;
     min-height: 15rem;
     margin: 1rem 0 0 1rem;
     background-color: white;
     border: lightgray;
     border-width: 1px;
     border-style: solid;
-    padding: 4%;
+    padding: 0.5rem;
     box-sizing: border-box;
     touch-action: none;
     user-select: none;
