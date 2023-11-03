@@ -34,7 +34,7 @@
                 <input class="d-none" asp-for="Id" value="@Model?.Id"/>
 
                 <div class="d-flex justify-content-between mb-1">
-                    <input class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" />
+                    <input class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
