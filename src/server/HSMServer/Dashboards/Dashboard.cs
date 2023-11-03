@@ -17,5 +17,15 @@ namespace HSMServer.Dashboards
         }
 
         internal Dashboard(DashboardAdd addModel) : base(addModel) { }
+
+
+        public override DashboardEntity ToEntity()
+        {
+            var entity = base.ToEntity();
+
+            entity.Panels.AddRange(Panels.Select(u => u.Value.ToEntity()));
+
+            return entity;
+        }
     }
 }

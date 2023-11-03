@@ -27,5 +27,16 @@ namespace HSMServer.Dashboards
 
             Label = entity.Label;
         }
+
+
+        public PanelSourceEntity ToEntity() =>
+            new()
+            {
+                Id = Id.ToByteArray(),
+                SensorId = SensorId.ToByteArray(),
+
+                Color = Color.ToArgb(),
+                Label = Label,
+            };
     }
 }
