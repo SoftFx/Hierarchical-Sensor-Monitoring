@@ -1,5 +1,3 @@
-using HSMCommon.Collections;
-using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -12,6 +10,7 @@ using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
@@ -29,11 +28,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using HSMServer.Model.Authentication;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
@@ -42,30 +37,12 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
-        private static readonly JsonSerializerOptions _alertSerializeJsonOptions = new()
-        {
-            WriteIndented = true,
-        };
-
-        public static readonly JsonSerializerOptions _alertDeserializeJsonOptions = new()
-        {
-            AllowTrailingCommas = true,
-        };
-
         private readonly ITelegramChatsManager _telegramChatsManager;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IJournalService _journalService;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
 
-
-        static HomeController()
-        {
-            _alertDeserializeJsonOptions.Converters.Add(new JsonStringEnumConverter());
-
-            _alertSerializeJsonOptions.Converters.Add(new ListAsJsonStringConverter());
-            _alertSerializeJsonOptions.Converters.Add(new JsonStringEnumConverter());
-        }
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
                               IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager) : base(userManager)
@@ -764,71 +741,6 @@ namespace HSMServer.Controllers
                 ? PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[update.Id]))
                 : _emptyResult;
         }
-
-
-        [HttpGet]
-        public IActionResult ExportAlerts(Guid selectedId)
-        {
-            var node = _treeValuesCache.GetProduct(selectedId);
-
-            if (node is null)
-                return _emptyResult;
-
-
-            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), _alertSerializeJsonOptions);
-
-            var fileName = $"{node.FullPath.Replace('/', '_')}-alerts.json";
-            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
-
-            return File(Encoding.UTF8.GetBytes(policies), fileName.GetContentType(), fileName);
-        }
-
-        [HttpPost]
-        public string ImportAlerts([FromBody] AlertImportViewModel model)
-        {
-            var toastViewModel = new ImportAlertsToastViewModel();
-
-            if (_treeViewModel.Nodes.TryGetValue(model.NodeId, out var node))
-            {
-                try
-                {
-                    var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _alertDeserializeJsonOptions);
-
-                    var availableSensors = node.Sensors.ToDictionary(k => k.Value.Name, v => v.Key);
-                    var availableChats = node.GetAvailableChats(_telegramChatsManager).ToDictionary(k => k.Value, v => v.Key);
-
-                    var sensorAlerts = new CGuidDict<List<PolicyUpdate>>();
-
-                    foreach (var alert in alerts)
-                    {
-                        var updates = alert.ToUpdates(availableSensors, availableChats);
-
-                        foreach (var (sensorId, update) in updates)
-                            sensorAlerts[sensorId].Add(update);
-                    }
-
-                    foreach (var (sensorId, alertUpdates) in sensorAlerts)
-                    {
-                        var update = new SensorUpdate()
-                        {
-                            Id = sensorId,
-                            Policies = alertUpdates,
-                            Initiator = CurrentInitiator,
-                        };
-
-                        if (!_treeValuesCache.TryUpdateSensor(update, out var error))
-                            toastViewModel.AddError(error, _treeViewModel.Sensors[sensorId].Name);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    return ex.Message;
-                }
-            }
-
-            return toastViewModel.ToResponse();
-        }
-
 
         private string GetSensorPath(string encodedId)
         {

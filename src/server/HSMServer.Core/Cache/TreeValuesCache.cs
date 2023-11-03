@@ -447,6 +447,30 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
+        public bool TryGetSensorByPath(string productName, string path, out BaseSensorModel sensor)
+        {
+            sensor = null;
+
+            var node = GetProductByName(productName);
+
+            if (node is null)
+                return false;
+
+            var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            foreach (var subNodeName in parts[..^1])
+            {
+                node = node.SubProducts.Values.FirstOrDefault(u => u.DisplayName == subNodeName);
+
+                if (node is null)
+                    return false;
+            }
+
+            sensor = node.Sensors.Values.FirstOrDefault(u => u.DisplayName == parts[^1]);
+
+            return sensor is not null;
+        }
+
 
         public void ThrowAlertResults(Guid sensorId, List<AlertResult> alertResults)
         {
