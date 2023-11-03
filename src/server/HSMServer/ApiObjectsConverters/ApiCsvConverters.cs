@@ -116,15 +116,13 @@ namespace HSMServer.ApiObjectsConverters
             if ((values?.Count ?? 0) == 0)
                 return string.Empty;
 
-            values.Sort((firstValue, secondValue) => firstValue.Time < secondValue.Time ? 1 : -1);          
-            
             var content = new StringBuilder(1 << 7);
             var header = values.GetHeader(options);
 
             content.AppendLine(header.Select(x => x.DisplayName).ToList().BuildRow());
 
             var rowValues = new List<string>(header.Count);
-            foreach (var value in values)
+            foreach (var value in values.OrderByDescending(x => x.Time))
             {
                 var rowValue = value is FileValue fileValue ? fileValue.DecompressContent() : value; // TODO smth with this crutch
                 var properties = JsonSerializer.SerializeToElement<object>(rowValue, _serializerOptions);
