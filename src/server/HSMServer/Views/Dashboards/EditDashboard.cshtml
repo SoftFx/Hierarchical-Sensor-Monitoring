@@ -8,6 +8,7 @@
 
 @{
     var isModify = Model is not null;
+    var isEmptyDashboard = !isModify || Model.Panels.Count == 0;
 
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Tree/_Layout.cshtml";
@@ -33,7 +34,7 @@
                 <input class="d-none" asp-for="Id" value="@Model?.Id"/>
 
                 <div class="d-flex justify-content-between mb-1">
-                    <input class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" />
+                    <input class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
@@ -50,15 +51,17 @@
                 <option>last 6 hours</option>
             </select>
 
-            <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? "d-none" : string.Empty)" asp-action="AddDashboardPanel">
+            <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? "d-none" : string.Empty)" href="javascript:addPanel();">
                 <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add panel
             </a>
         </div>
     </div>
 
-    <div class="flex-grow-1 h-100 mx-2" style="border-width: 2px; border-style: solid; border-color: black;">
-        Drag and drop panel
+     <div id="noPanels" class="d-flex justify-content-center align-items-end noData-label @(isEmptyDashboard ?string.Empty  : "d-none")">
+        <label>No panels</label>
     </div>
+
+    <div id="dashboardPanels" class="flex-grow-1 dashboard mx-2 @(isEmptyDashboard ? "d-none" : string.Empty)"></div>
 </div>
 
 
@@ -66,6 +69,21 @@
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description');
     });
+
+    function addPanel() {
+        $.ajax({
+            type: 'GET',
+            url: `@Html.Raw(Url.Action(nameof(DashboardsController.GetPanel), ViewConstants.DashboardsController))`,
+            cache: false,
+            async: true,
+            success: (viewData) => {
+                $('#dashboardPanels').append(viewData);
+
+                $('#dashboardPanels').removeClass("d-none");
+                $('#noPanels').addClass("d-none");
+            }
+        })
+    }
 
     function editDahsboardSettings() {
         $('#dashboardSettings').addClass('d-none');

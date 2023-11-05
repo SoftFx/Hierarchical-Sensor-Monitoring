@@ -73,6 +73,9 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task RemoveDashboard(Guid dashboardId) =>
             await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
+
+        [HttpGet]
+        public IActionResult GetPanel() => PartialView("_Panel");
         
         [HttpGet]
         public async Task<JsonResult> GetSource(Guid sourceId, Guid panelId)

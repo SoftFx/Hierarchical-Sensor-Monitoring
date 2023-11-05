@@ -14,6 +14,7 @@
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
 
+
 <div class="flex-grow-1 m-2">
     <div class="d-flex justify-content-between my-2">
         <h5 class="m-0">Dashboards</h5>
@@ -28,7 +29,7 @@
     @foreach (var dashboard in Model)
     {
         <div class="d-flex flex-row align-items-center">
-            <div class="card mb-2 w-100">
+            <div class="card mb-2 w-100" onclick="javascript:editDashboard('@dashboard.Id')" style="cursor:pointer;">
                 <div class="card-body py-2">
                     <div style="font-weight: bold;">@dashboard.Name</div>
                     <div id="markdown_description_@dashboard.Id">@dashboard.Description</div>
@@ -40,7 +41,7 @@
                     <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-                    <a class="dropdown-item text-decoration-none fw-normal button-link"
+                    <a id="edit_@dashboard.Id" class="dropdown-item text-decoration-none fw-normal button-link"
                        asp-action="@nameof(DashboardsController.EditDashboard)" asp-route-dashboardId="@dashboard.Id">
                        View/Edit
                    </a>
@@ -75,4 +76,8 @@
             }
         );
     });
+
+    function editDashboard(id) {
+        document.getElementById(`edit_${id}`).click();
+    }
 </script>
