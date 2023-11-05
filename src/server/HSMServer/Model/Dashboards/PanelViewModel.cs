@@ -13,6 +13,12 @@ public class PanelViewModel
 
 
     public Guid Id { get; set; } = Guid.NewGuid();
+    
+    public Guid DashboardId { get; set; }
+    
+    public string Name { get; set; }
+    
+    public string Description { get; set; }
 
     public SensorType? SensorType { get; set; }
 

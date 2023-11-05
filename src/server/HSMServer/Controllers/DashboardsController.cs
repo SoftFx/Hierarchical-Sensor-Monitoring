@@ -44,7 +44,17 @@ namespace HSMServer.Controllers
             return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id });
         }
         
-        public IActionResult AddDashboardPanel() => View("AddDashboardPanel");
+        public IActionResult AddDashboardPanel([FromQuery] Guid dashBoardId)
+        {
+            _dashboardManager.TryGetValue(dashBoardId, out var dashboard);
+            return View("AddDashboardPanel");
+        }
+
+        [HttpPost]
+        public IActionResult SaveDashboardPanel(PanelViewModel panelViewModel)
+        {
+            
+        }
 
         [HttpGet]
         public IActionResult EditDashboard(Guid? dashboardId) =>
