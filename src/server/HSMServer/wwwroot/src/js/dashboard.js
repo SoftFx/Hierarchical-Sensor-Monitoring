@@ -4,7 +4,7 @@ export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
         $.ajax({
             type: 'GET',
-            url: sourceLink + `?sourceId=${id}`
+            url: window.location.pathname + `/${id}`
         }).done(function (data) {
             if (data.errorMessage === undefined)
                 return resolve(data);

@@ -2,6 +2,7 @@
 using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.Dashboards
 {
@@ -24,6 +25,7 @@ namespace HSMServer.Model.Dashboards
             Id = dashboard.Id;
             Name = dashboard.Name;
             Description = dashboard.Description;
+            Panels = dashboard.Panels.Select(x => new PanelViewModel(x.Value, Id.Value)).ToList();
         }
 
 

@@ -3,15 +3,17 @@ using HSMDatabase.AccessManager.DatabaseSettings;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.DataLayer;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using HSMServer.Model.Dashboards;
 
 namespace HSMServer.Dashboards
 {
     public sealed class DashboardManager : ConcurrentStorage<Dashboard, DashboardEntity, DashboardUpdate>, IDashboardManager
     {
         private readonly IDashboardCollection _dbCollection;
-
+        private readonly ConcurrentDictionary<Guid, DashboardViewModel> _dashboardViewModels = new();
 
         protected override Action<DashboardEntity> AddToDb => _dbCollection.AddEntity;
 

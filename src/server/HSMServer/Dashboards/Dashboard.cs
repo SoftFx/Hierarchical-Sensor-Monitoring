@@ -8,7 +8,7 @@ namespace HSMServer.Dashboards
 {
     public sealed class Dashboard : BaseServerModel<DashboardEntity, DashboardUpdate>
     {
-        public CGuidDict<Panel> Panels { get; }
+        public CGuidDict<Panel> Panels { get; } = new();
 
 
         internal Dashboard(DashboardEntity entity) : base(entity)
@@ -23,7 +23,7 @@ namespace HSMServer.Dashboards
         {
             var entity = base.ToEntity();
 
-            entity.Panels.AddRange(Panels.Select(u => u.Value.ToEntity()));
+            entity.Panels?.AddRange(Panels.Select(u => u.Value.ToEntity()));
 
             return entity;
         }

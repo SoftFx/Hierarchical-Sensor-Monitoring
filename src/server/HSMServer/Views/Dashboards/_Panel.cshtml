@@ -1,30 +1,31 @@
-﻿@using HSMServer.Controllers
+﻿@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
-
+@using HSMServer.Model.Dashboards
+@model HSMServer.Model.Dashboards.PanelViewModel
 
 <div class="panel resize-draggable" title="Drag and drop sensor from tree to panel">
     <div class="d-flex flex-column">
         <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1">
-            <div>Panel name</div>
+            <div>@Model.Name</div>
             <div>
                 <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
                     <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-                    <a class="dropdown-item text-decoration-none fw-normal button-link" asp-action="@nameof(DashboardsController.AddDashboardPanel)">Edit</a>
+                    <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="Dashboards" asp-action="AddDashboardPanel" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
                     <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
                 </div>
             </div>
         </div>
 
-        <div id="panelChart" class="dropzone" style="box-sizing:content-box"></div>
+        <div id="panelChart_@Model.Id" class="dropzone" style="box-sizing:content-box"></div>
     </div>
 </div>
 
 
 <script>
     $(document).ready(function () {
-        initMultichart('panelChart');
+        var testArr = @Html.Raw(Json.Serialize(Model?.Sources?.Select(x => x.Value) ?? Array.Empty<DatasourceViewModel>()))
+        initMultichart('panelChart_@Model.Id');
     })
 </script>

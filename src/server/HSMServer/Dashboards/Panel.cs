@@ -7,7 +7,7 @@ namespace HSMServer.Dashboards
 {
     public sealed class Panel : BaseServerModel<DashboardPanelEntity, PanelUpdate>
     {
-        public CGuidDict<PanelDataSource> Sources { get; }
+        public CGuidDict<PanelDataSource> Sources { get; } = new();
 
 
         public Panel() { }
@@ -17,8 +17,7 @@ namespace HSMServer.Dashboards
             Sources = new CGuidDict<PanelDataSource>(entity.Sources.Select(u => new PanelDataSource(u))
                                                                    .ToDictionary(k => k.Id, v => v));
         }
-
-
+        
         public override DashboardPanelEntity ToEntity()
         {
             var entity = base.ToEntity();

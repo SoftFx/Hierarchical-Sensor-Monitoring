@@ -1,9 +1,9 @@
 ﻿@using HSMServer.Controllers
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
+@model HSMServer.Model.Dashboards.PanelViewModel
+
 @{
-    var isModify = true;
-    var name = "qwe";
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
@@ -15,32 +15,18 @@
     <div>
 
     </div>
-    <div id="panelSettings" class="my-2 @(isModify ? string.Empty : "d-none")">
-        <div class="d-flex justify-content-between mb-1">
-            <h5>@name</h5>
-
-            <a class="icon-link text-nowrap" href="javascript:editPanelSettings();" title='edit dashboard settings'>
-                <i class='fas fa-edit'>
-                    <use xlink:href="#box-seam">
-                </i> Edit
-            </a>
-        </div>
-
-        <div id="editablePanelSettings" class="my-2 @(isModify ? "d-none" : string.Empty)">
-            <form method="post" asp-action="@(isModify ? nameof(DashboardsController.EditDashboard) : nameof(DashboardsController.AddDashboard))">
-                <input class="d-none" asp-for="@name" value="@name"/>
-
+    <div id="panelSettings" class="my-2">
+        <div id="editablePanelSettings" class="my-2">
+            <form method="post" asp-controller="Dashboards" asp-action="SaveDashboardPanel" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
                 <div class="d-flex justify-content-between mb-1">
-                    <input class="form-control" asp-for="@name" placeholder="@name"/>
+                    <input class="form-control" asp-for="Name" placeholder="@Model.Name"/>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
 
-                <textarea id='description' class="form-control w-100" type='text' asp-for="@name" placeholder="@name"></textarea>
+                <textarea id='description' class="form-control w-100" type='text' asp-for="Description" placeholder="@Model.Description"></textarea>
             </form>
         </div>
-
-        <div id="markdown_description">@name</div>
     </div>
 
     <div id="multichart" class="w-100 h-75 dropzone me-2 pe-2" style="box-sizing:content-box"></div>
