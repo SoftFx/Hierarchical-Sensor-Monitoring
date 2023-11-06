@@ -22,9 +22,6 @@ namespace HSMServer.Datasources
         private BaseSensorModel _sensor;
 
 
-        public Guid Id { get; }
-
-
         protected abstract ChartType NormalType { get; }
 
         protected abstract ChartType AggreatedType { get; }
@@ -49,7 +46,6 @@ namespace HSMServer.Datasources
             {
                 Values = data.Select(Convert).ToList(),
                 ChartType = NormalType,
-                SourceId = Id,
             };
         }
 
@@ -59,7 +55,7 @@ namespace HSMServer.Datasources
 
     public abstract record BaseChartSourceResponse
     {
-        public required Guid SourceId { get; init; }
+       // public required Guid SourceId { get; init; }
     }
 
 

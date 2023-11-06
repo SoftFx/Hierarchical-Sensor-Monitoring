@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.Core.Model;
+using HSMServer.Datasources;
 using System;
 using System.Drawing;
 
@@ -10,9 +11,11 @@ namespace HSMServer.Dashboards
         private readonly BaseSensorModel _sensor;
 
 
-        public Guid Id { get; }
+        public SensorDatasourceBase Source { get; }
 
         public Guid SensorId { get; }
+
+        public Guid Id { get; }
 
 
         public Color Color { get; private set; }
@@ -20,12 +23,13 @@ namespace HSMServer.Dashboards
         public string Label { get; private set; }
 
 
-        public PanelDatasource(BaseSensorModel sensor) 
+        public PanelDatasource(BaseSensorModel sensor)
         {
             _sensor = sensor;
 
-            Id = Guid.NewGuid();
+            Source = DatasourceFactory.Build(_sensor.Type).AttachSensor(sensor);
             Label = _sensor.DisplayName;
+            Id = Guid.NewGuid();
         }
 
         public PanelDatasource(PanelSourceEntity entity, BaseSensorModel sensor) : this(sensor)

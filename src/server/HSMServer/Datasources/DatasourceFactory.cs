@@ -1,4 +1,4 @@
-﻿using HSMSensorDataObjects;
+﻿using HSMServer.Core.Model;
 using System;
 
 namespace HSMServer.Datasources
@@ -7,11 +7,11 @@ namespace HSMServer.Datasources
     {
         public static SensorDatasourceBase Build(SensorType type) => type switch
         {
-            SensorType.IntSensor => new LineDatasource<int>(),
-            SensorType.DoubleSensor => new LineDatasource<double>(),
-            SensorType.TimeSpanSensor => new LineDatasource<long>(),
-            SensorType.BooleanSensor => new PointDatasource(),
-            SensorType.DoubleBarSensor or SensorType.IntegerBarSensor => new BarsDatasource(),
+            SensorType.Integer => new LineDatasource<int>(),
+            SensorType.Double => new LineDatasource<double>(),
+            SensorType.TimeSpan => new LineDatasource<long>(),
+            SensorType.Boolean => new PointDatasource(),
+            SensorType.DoubleBar or SensorType.IntegerBar => new BarsDatasource(),
             _ => throw new Exception($"History visualization for {type} sensor is not supported")
         };
     }
