@@ -12,7 +12,7 @@ namespace HSMServer.Dashboards
         private readonly Dashboard _board;
 
 
-        public ConcurrentDictionary<Guid, PanelDataSource> Sources { get; } = new();
+        public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
 
 
         internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
@@ -25,7 +25,7 @@ namespace HSMServer.Dashboards
 
                 if (TryGetSensor(sensorId, out var sensor))
                 {
-                    var panel = new PanelDataSource(sourceEntity, sensor);
+                    var panel = new PanelDatasource(sourceEntity, sensor);
 
                     Sources.TryAdd(panel.Id, panel);
                 }
@@ -37,7 +37,7 @@ namespace HSMServer.Dashboards
         {
             if (TryGetSensor(sensorId, out var sensor))
             {
-                var source = new PanelDataSource(sensor);
+                var source = new PanelDatasource(sensor);
 
                 return Sources.TryAdd(source.Id, source);
             }

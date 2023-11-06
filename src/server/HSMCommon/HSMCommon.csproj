@@ -5,6 +5,9 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="System.Linq.Async" Version="6.0.1" />
+  </ItemGroup>
+  <ItemGroup>
     <Reference Include="BouncyCastle.Crypto">
       <HintPath>..\..\lib\BouncyCastle.Crypto.dll</HintPath>
     </Reference>

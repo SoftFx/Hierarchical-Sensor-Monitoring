@@ -5,7 +5,7 @@ using System.Drawing;
 
 namespace HSMServer.Dashboards
 {
-    public sealed class PanelDataSource
+    public sealed class PanelDatasource
     {
         private readonly BaseSensorModel _sensor;
 
@@ -20,7 +20,7 @@ namespace HSMServer.Dashboards
         public string Label { get; private set; }
 
 
-        public PanelDataSource(BaseSensorModel sensor) 
+        public PanelDatasource(BaseSensorModel sensor) 
         {
             _sensor = sensor;
 
@@ -28,7 +28,7 @@ namespace HSMServer.Dashboards
             Label = _sensor.DisplayName;
         }
 
-        public PanelDataSource(PanelSourceEntity entity, BaseSensorModel sensor) : this(sensor)
+        public PanelDatasource(PanelSourceEntity entity, BaseSensorModel sensor) : this(sensor)
         {
             Id = new Guid(entity.Id);
             SensorId = new Guid(entity.SensorId);

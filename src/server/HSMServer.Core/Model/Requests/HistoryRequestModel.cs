@@ -1,5 +1,5 @@
-﻿using System;
-using HSMSensorDataObjects.HistoryRequests;
+﻿using HSMSensorDataObjects.HistoryRequests;
+using System;
 
 namespace HSMServer.Core.Model.Requests
 {
@@ -13,6 +13,19 @@ namespace HSMServer.Core.Model.Requests
 
         public RequestOptions Options { get; set; }
 
+
         public HistoryRequestModel(string key, string path) : base(key, path) { }
+    }
+
+
+    public record SensorHistoryRequest()
+    {
+        public DateTime From { get; init; }
+
+        public DateTime To { get; init; }
+
+        public int Count { get; init; }
+
+        public RequestOptions Options { get; init; }
     }
 }

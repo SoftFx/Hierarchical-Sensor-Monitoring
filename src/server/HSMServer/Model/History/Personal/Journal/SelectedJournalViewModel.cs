@@ -1,3 +1,4 @@
+using HSMCommon.Extensions;
 using HSMServer.Controllers.DataTables;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;

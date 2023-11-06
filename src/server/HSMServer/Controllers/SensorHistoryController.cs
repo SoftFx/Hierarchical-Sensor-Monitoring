@@ -16,6 +16,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using HSMServer.DTOs.SensorInfo;
+using HSMCommon.Extensions;
 
 namespace HSMServer.Controllers
 {
