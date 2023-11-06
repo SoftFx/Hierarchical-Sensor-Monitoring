@@ -1,4 +1,13 @@
-﻿using HSMServer.Authentication;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using HSMSensorDataObjects.HistoryRequests;
+using HSMServer.Authentication;
+using HSMServer.Core.Cache;
+using HSMServer.DTOs.Sensor;
+using HSMServer.Extensions;
+using HSMServer.Model.Dashboards;
+using HSMServer.Model.TreeViewModel;
 using HSMServer.Dashboards;
 using HSMServer.Model.Dashboards;
 using Microsoft.AspNetCore.Mvc;
@@ -10,12 +19,15 @@ namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
+        private readonly ITreeValuesCache _cache;
         private readonly IDashboardManager _dashboardManager;
+        private readonly TreeViewModel _treeViewModel;
 
-
-        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager) : base(userManager)
+        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, ITreeValuesCache cache, TreeViewModel treeViewModel) : base(userManager)
         {
             _dashboardManager = dashboardManager;
+            _cache = cache;
+            _treeViewModel = treeViewModel;
         }
 
 
@@ -31,6 +43,8 @@ namespace HSMServer.Controllers
 
             return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id });
         }
+        
+        public IActionResult AddDashboardPanel() => View("AddDashboardPanel");
 
         [HttpGet]
         public IActionResult EditDashboard(Guid? dashboardId) =>
@@ -49,5 +63,40 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task RemoveDashboard(Guid dashboardId) =>
             await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
+
+        [HttpGet]
+        public IActionResult GetPanel() => PartialView("_Panel");
+        
+        [HttpGet]
+        public async Task<JsonResult> GetSource(Guid sourceId, Guid panelId)
+        {
+            if (!CurrentUser.ConfiguredPanels.TryGetValue(panelId, out var panel))
+                panel = new PanelViewModel();
+
+            var errorMessage = string.Empty;
+            if (_treeViewModel.Sensors.TryGetValue(sourceId, out var sensorNodeViewModel) && panel.TryAddSource(sensorNodeViewModel, out errorMessage))
+            {
+                var values = (await _cache.GetSensorValuesPage(sensorNodeViewModel.Id, DateTime.UtcNow.AddDays(-30),
+                    DateTime.UtcNow, 500, RequestOptions.IncludeTtl).Flatten()).Select(x => (object)x);
+
+                return Json(new SourceDto(sensorNodeViewModel, values.ToList(), panel.Id));
+            }
+
+            return Json(new
+            {
+                errorMessage
+            });
+        }
+
+        [HttpPost]
+        public void CreatePanel(Guid[] sourceIds, Guid panelId)
+        {
+            if (CurrentUser.ConfiguredPanels.TryGetValue(panelId, out var panel))
+                foreach (var id in sourceIds)
+                {
+                    if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
+                        panel.UpdateSources(sensor);
+                }
+        }
     }
 }

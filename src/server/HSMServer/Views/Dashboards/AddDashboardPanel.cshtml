@@ -1,0 +1,46 @@
+﻿@using HSMServer.Controllers
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    ViewData["Title"] = "Dashboard";
+    Layout = "~/Views/Tree/_Layout.cshtml";
+}
+<script>
+    var sourceLink = '@Url.Action(nameof(DashboardsController.GetSource))';
+</script>
+
+<div class="w-100 overflow-y-auto">
+    <div id="multichart" class="w-100 h-75 dropzone me-2 pe-2" style="box-sizing:content-box"></div>
+    <div id="plots" class="mt-1">
+        <ul id="sources" class="list-group">
+        </ul>
+    </div>
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        initMultichart('multichart');
+         
+        $('[id^="source"]').on('input', '.form-control-color', function () {
+            $(this).attr('value', this.value);
+            let id = this.id.substring("color_".length, this.id.length);
+            
+            updateColor($(this).val(), id)
+        }).on('input', '.form-control', function () {
+            $(this).attr('value', this.value);
+            let id = this.id.substring("name_input_".length, this.id.length);
+                      
+            updateName($(this).val(), id)
+        }).on('click', 'button',function (){
+            let id = this.id.substring("deletePlot_".length, this.id.length);
+            let model = getCurrentPlotInDashboard(id)
+            if (model !== undefined) {
+                Plotly.deleteTraces('multichart', model.id).then(function (){
+                    $('[id^="source"] li')[model.id].remove();
+                    updateCurrentPlotsIds(model.id, id)
+                })
+            }
+        })
+    })  
+</script>

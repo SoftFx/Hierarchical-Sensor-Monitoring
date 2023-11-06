@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
+using HSMServer.Model.Dashboards;
 
 namespace HSMServer.Model.Authentication
 {
@@ -27,6 +28,8 @@ namespace HSMServer.Model.Authentication
 
         public Dictionary<Guid, ProductRoleEnum> FoldersRoles { get; } = new();
 
+        public Dictionary<Guid, PanelViewModel> ConfiguredPanels { get; } = new();
+
         public TreeUserFilter TreeFilter { get; set; }
 
         public VisibleTreeViewModel Tree { get; }
@@ -36,6 +39,7 @@ namespace HSMServer.Model.Authentication
         public SelectedJournalViewModel Journal { get; } = new();
 
         public SelectedNodeViewModel SelectedNode { get; } = new();
+        
 
 
         public User(string userName) : this()

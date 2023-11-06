@@ -1,4 +1,8 @@
-﻿window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
+import {currentPanel, getPlotSourceView, initDropzone, Model} from "./dashboard";
+import {convertToGraphData} from "./plotting";
+import {BarPLot, BoolPlot, DoublePlot, EnumPlot, IntegerPlot, TimeSpanPlot} from "./plots";
+
+window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
 
 const AjaxPost = {
     type: 'POST',
@@ -8,6 +12,8 @@ const AjaxPost = {
 
 
 window.initializeTree = function () {
+    initDropzone()
+    
     var sortingType = $("input[name='TreeSortType']:checked");
     var searchRefresh = false;
     
@@ -328,7 +334,7 @@ function buildContextMenu(node) {
         }
 
         if (isManager && (curType === NodeType.Product || curType === NodeType.Node)) {
-            alertsSubmenu = {}
+            var alertsSubmenu = {}
 
             alertsSubmenu["Export"] = {
                 "label": `Export`,

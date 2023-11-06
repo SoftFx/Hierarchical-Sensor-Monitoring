@@ -1,11 +1,15 @@
 ﻿using HSMServer.Dashboards;
 using HSMServer.Model.Authentication;
 using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Model.Dashboards
 {
     public sealed class DashboardViewModel
     {
+        public List<PanelViewModel> Panels { get; set; } = new();
+
+
         public Guid? Id { get; set; }
 
         public string Name { get; set; }
