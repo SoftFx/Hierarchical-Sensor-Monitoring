@@ -93,27 +93,31 @@ namespace HSMServer.Controllers
             });
         }
 
-        [HttpGet]
-        public async Task<IActionResult> EditDashboard(Guid? dashboardId)
+        [HttpGet("Dashboards/{dashboardId:guid?}")]
+        public IActionResult EditDashboard(Guid? dashboardId)
         {
-            Dashboard dashboard = null;
+             _dashboardManager.TryGetValue(dashboardId.Value, out var dashboard);
 
-            var isModify = dashboardId.HasValue && _dashboardManager.TryGetValue(dashboardId.Value, out dashboard);
-            if (!isModify)
-                await _dashboardManager.TryAdd(DashboardViewModel.ToDashboardAdd(CurrentUser), out dashboard);
-
-            return View(nameof(EditDashboard), new DashboardViewModel(dashboard, isModify));
+            return View(nameof(EditDashboard), new DashboardViewModel(dashboard));
         }
 
-        [HttpPost]
-        public async Task<IActionResult> EditDashboard(DashboardViewModel editDashboard)
+        [HttpGet]
+        public async Task<IActionResult> CreateDashboard()
+        {
+            await _dashboardManager.TryAdd(DashboardViewModel.ToDashboardAdd(CurrentUser), out var dashboard);
+
+            return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id });
+        }
+
+        [HttpPost("Dashboards/{dashboardId:guid?}")]
+        public async Task<IActionResult> EditDashboard([FromForm]DashboardViewModel editDashboard)
         {
             if (!ModelState.IsValid)
                 return View(nameof(EditDashboard), editDashboard);
 
             await _dashboardManager.TryUpdate(editDashboard.ToDashboardUpdate());
 
-            return View(nameof(EditDashboard), new DashboardViewModel(_dashboardManager[editDashboard.Id]));
+            return RedirectToAction(nameof(EditDashboard), new { dashboardId = editDashboard.Id });
         }
 
         [HttpGet]
