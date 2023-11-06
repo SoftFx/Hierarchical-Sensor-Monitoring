@@ -1,4 +1,4 @@
-import {currentPanel, getPlotSourceView, initDropzone, Model} from "./dashboard";
+import { currentPanel, getPlotSourceView, initDropzone, Model} from "./dashboard";
 import {convertToGraphData} from "./plotting";
 import {BarPLot, BoolPlot, DoublePlot, EnumPlot, IntegerPlot, TimeSpanPlot} from "./plots";
 

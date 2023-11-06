@@ -122,7 +122,9 @@ export function initDropzone(){
                 end: showEventInfo
             }
         })
+}
 
+window.initDashboard = function () {
     window.interact('.resize-draggable')
         .draggable({
             inertia: true,
@@ -171,7 +173,7 @@ export function initDropzone(){
 
                     var update = {
                         width: event.rect.width,
-                        height: event.rect.heigh
+                        height: event.rect.height
                     };
 
                     Plotly.relayout(`panelChart_${event.target.id}`, update);
@@ -230,6 +232,7 @@ window.initMultichart = function (chartId) {
         hovermode: 'x',
         dragmode: 'zoom',
         autosize: true,
+        height: 300,
         xaxis: {
             title: {
                 text: 'Time',

@@ -7,7 +7,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<div id="@Model.Id" class="panel resize-draggable" title="Drag and drop sensor from tree to panel">
+<div id="@Model.Id" class="panel resize-draggable">
     <div class="d-flex flex-column">
         <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1">
             <div>@Model.Name</div>
@@ -22,7 +22,7 @@
             </div>
         </div>
 
-        <div id="panelChart_@Model.Id" class="dropzone" style="box-sizing:content-box"></div>
+        <div id="panelChart_@Model.Id"></div>
     </div>
 </div>
 

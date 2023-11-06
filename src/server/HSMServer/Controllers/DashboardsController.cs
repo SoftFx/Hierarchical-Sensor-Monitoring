@@ -93,12 +93,12 @@ namespace HSMServer.Controllers
             });
         }
 
-        [HttpGet("Dashboards/{dashboardId:guid?}")]
-        public IActionResult EditDashboard(Guid? dashboardId)
+        [HttpGet("Dashboards/{dashboardId:guid}")]
+        public IActionResult EditDashboard(Guid dashboardId, bool isModify = true)
         {
-             _dashboardManager.TryGetValue(dashboardId.Value, out var dashboard);
+             _dashboardManager.TryGetValue(dashboardId, out var dashboard);
 
-            return View(nameof(EditDashboard), new DashboardViewModel(dashboard));
+            return View(nameof(EditDashboard), new DashboardViewModel(dashboard, isModify));
         }
 
         [HttpGet]
@@ -106,7 +106,7 @@ namespace HSMServer.Controllers
         {
             await _dashboardManager.TryAdd(DashboardViewModel.ToDashboardAdd(CurrentUser), out var dashboard);
 
-            return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id });
+            return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id, isModify = true });
         }
 
         [HttpPost("Dashboards/{dashboardId:guid?}")]
