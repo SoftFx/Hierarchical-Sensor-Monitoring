@@ -11,45 +11,46 @@
     var dashboards = string.Join(separator, Model.Select(d => d.Id));
 
     ViewData["Title"] = "Dashboards";
-    Layout = "~/Views/Tree/_Layout.cshtml";
 }
 
 
-<div class="flex-grow-1 m-2">
-    <div class="d-flex justify-content-between my-2">
-        <h5 class="m-0">Dashboards</h5>
+<div class="container">
+    <div class="flex-grow-1 m-2">
+        <div class="d-flex justify-content-between my-2">
+            <h5 class="m-0">Dashboards</h5>
 
-        <div class='d-flex col-md-auto'>
-            <a class="icon-link" method="GET" asp-action="@nameof(DashboardsController.EditDashboard)">
-                <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add dashboard
-            </a>
+            <div class='d-flex col-md-auto'>
+                <a class="icon-link" method="GET" asp-action="@nameof(DashboardsController.CreateDashboard)">
+                    <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add dashboard
+                </a>
+            </div>
         </div>
+
+        @foreach (var dashboard in Model)
+        {
+            <div class="d-flex flex-row align-items-center">
+                <div class="card mb-2 w-100" onclick="javascript:editDashboard('@dashboard.Id')" style="cursor:pointer;">
+                    <div class="card-body py-2">
+                        <div style="font-weight: bold;">@dashboard.Name</div>
+                        <div id="markdown_description_@dashboard.Id">@dashboard.Description</div>
+                    </div>
+                </div>
+
+                <div>
+                    <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                        <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                        <a id="edit_@dashboard.Id" class="dropdown-item text-decoration-none fw-normal button-link"
+                           asp-action="@nameof(DashboardsController.EditDashboard)" asp-route-dashboardId="@dashboard.Id">
+                           View/Edit
+                       </a>
+                        <a class="dropdown-item text-decoration-none fw-normal button-link" id="remove_@dashboard.Id" name="@dashboard.Name">Remove</a>
+                    </div>
+                </div>
+            </div>
+        }
     </div>
-
-    @foreach (var dashboard in Model)
-    {
-        <div class="d-flex flex-row align-items-center">
-            <div class="card mb-2 w-100" onclick="javascript:editDashboard('@dashboard.Id')" style="cursor:pointer;">
-                <div class="card-body py-2">
-                    <div style="font-weight: bold;">@dashboard.Name</div>
-                    <div id="markdown_description_@dashboard.Id">@dashboard.Description</div>
-                </div>
-            </div>
-
-            <div>
-                <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                    <i class="fa-solid fa-ellipsis-vertical button-link"></i>
-                </button>
-                <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-                    <a id="edit_@dashboard.Id" class="dropdown-item text-decoration-none fw-normal button-link"
-                       asp-action="@nameof(DashboardsController.EditDashboard)" asp-route-dashboardId="@dashboard.Id">
-                       View/Edit
-                   </a>
-                    <a class="dropdown-item text-decoration-none fw-normal button-link" id="remove_@dashboard.Id" name="@dashboard.Name">Remove</a>
-                </div>
-            </div>
-        </div>
-    }
 </div>
 
 

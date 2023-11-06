@@ -7,7 +7,7 @@ namespace HSMServer.Dashboards
 {
     public sealed class Panel : BaseServerModel<DashboardPanelEntity, PanelUpdate>
     {
-        public CGuidDict<PanelDataSource> Sources { get; }
+        public CGuidDict<PanelDataSource> Sources { get; } = new();
 
 
         public Panel() { }

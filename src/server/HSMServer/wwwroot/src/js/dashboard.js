@@ -4,7 +4,7 @@ export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
         $.ajax({
             type: 'GET',
-            url: sourceLink + `?sourceId=${id}`
+            url: `${window.location.pathname}/${id}`
         }).done(function (data) {
             if (data.errorMessage === undefined)
                 return resolve(data);
@@ -122,7 +122,9 @@ export function initDropzone(){
                 end: showEventInfo
             }
         })
+}
 
+window.initDashboard = function () {
     window.interact('.resize-draggable')
         .draggable({
             inertia: true,
@@ -171,10 +173,10 @@ export function initDropzone(){
 
                     var update = {
                         width: event.rect.width,
-                        height: event.rect.heigh
+                        height: event.rect.height
                     };
 
-                    Plotly.relayout('panelChart', update);
+                    Plotly.relayout(`panelChart_${event.target.id}`, update);
                 }
             },
             modifiers: [
@@ -230,6 +232,7 @@ window.initMultichart = function (chartId) {
         hovermode: 'x',
         dragmode: 'zoom',
         autosize: true,
+        height: 300,
         xaxis: {
             title: {
                 text: 'Time',

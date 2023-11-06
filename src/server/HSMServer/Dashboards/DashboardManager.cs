@@ -12,7 +12,6 @@ namespace HSMServer.Dashboards
     {
         private readonly IDashboardCollection _dbCollection;
 
-
         protected override Action<DashboardEntity> AddToDb => _dbCollection.AddEntity;
 
         protected override Action<DashboardEntity> UpdateInDb => _dbCollection.UpdateEntity;

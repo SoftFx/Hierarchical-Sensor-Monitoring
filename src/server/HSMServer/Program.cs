@@ -19,6 +19,7 @@ using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.FileSystemGlobbing.Internal.Patterns;
 
 const string NLogConfigFileName = "nlog.config";
 
@@ -97,6 +98,10 @@ try
     app.MapControllerRoute(
         name: "Home",
         pattern: "{controller=Home}/{action=Index}");
+
+    app.MapControllerRoute(
+        name: "DashboardsPanelEdit",
+        pattern: "{controller=Dashboards}/{dashboardId?}/{panelId?}");
 
     app.Run();
 }
