@@ -5,12 +5,6 @@ using System;
 
 namespace HSMServer.Model
 {
-    public enum NotificationsTarget
-    {
-        Groups,
-        Accounts
-    }
-
     public class IgnoreNotificationsViewModel
     {
         private const string NodeTreeElement = "node";
@@ -19,8 +13,6 @@ namespace HSMServer.Model
         private const string FolderTreeElement = "folder";
 
 
-        public NotificationsTarget NotificationsTarget { get; set; }
-
         public string Path { get; }
 
         public string TreeElement { get; }
@@ -28,8 +20,6 @@ namespace HSMServer.Model
         public string EncodedId { get; set; }
 
         public TimeIntervalViewModel IgnorePeriod { get; set; }
-
-        public long? Chat { get; set; }
 
         public int Days { get; set; }
 
@@ -42,10 +32,8 @@ namespace HSMServer.Model
         public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval is TimeInterval.Forever ?
                                              DateTime.MaxValue : DateTimeNow.AddDays(Days).AddHours(Hours).AddMinutes(Minutes);
 
-        public bool IsOffTimeModal { get; set; }
 
-
-        private IgnoreNotificationsViewModel(BaseNodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
+        private IgnoreNotificationsViewModel(BaseNodeViewModel node)
         {
             TreeElement = node switch
             {
@@ -58,15 +46,12 @@ namespace HSMServer.Model
             IgnorePeriod = new(PredefinedIntervals.ForIgnore, useCustomTemplate: false);
 
             DateTimeNow = DateTime.UtcNow.RoundToMin();
-            NotificationsTarget = target;
-            IsOffTimeModal = isOffTimeModal;
         }
 
         // public constructor without parameters for action Home/IgnoreNotifications
         public IgnoreNotificationsViewModel() { }
 
-        public IgnoreNotificationsViewModel(NodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
-            : this((BaseNodeViewModel)node, target, isOffTimeModal)
+        public IgnoreNotificationsViewModel(NodeViewModel node) : this((BaseNodeViewModel)node)
         {
             EncodedId = node.EncodedId;
             Path = node.FullPath;
@@ -75,8 +60,7 @@ namespace HSMServer.Model
                 TreeElement = ProductTreeElement;
         }
 
-        public IgnoreNotificationsViewModel(FolderModel folder, NotificationsTarget target, bool isOffTimeModal)
-            : this((BaseNodeViewModel)folder, target, isOffTimeModal)
+        public IgnoreNotificationsViewModel(FolderModel folder) : this((BaseNodeViewModel)folder)
         {
             EncodedId = folder.Id.ToString();
             Path = folder.Name;

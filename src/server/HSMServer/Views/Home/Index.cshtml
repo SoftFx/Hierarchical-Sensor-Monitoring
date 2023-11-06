@@ -29,7 +29,7 @@
     var closeNode = "@Url.Action(nameof(HomeController.RemoveRenderingNode), ViewConstants.HomeController)";
 
     var getJournalPage = "@Url.Action(nameof(JournalController.GetPage), ViewConstants.JournalController)";
-    
+
     var historyLatestAction = "@Url.Action(nameof(SensorHistoryController.TabelHistoryLatest), ViewConstants.HistoryController)";
     var historyAction = "@Url.Action(nameof(SensorHistoryController.TableHistory), ViewConstants.HistoryController)";
     var nextPageAction = "@Url.Action(nameof(SensorHistoryController.GetNextTablePage), ViewConstants.HistoryController)";
@@ -49,20 +49,19 @@
 
     var enableGrafanaAction = "@Url.Action(nameof(HomeController.EnableGrafana), ViewConstants.HomeController)";
     var disableGrafanaAction = "@Url.Action(nameof(HomeController.DisableGrafana), ViewConstants.HomeController)";
-    var enableNotificationsAction = "@Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController)";
-    var ignoreNotificationsAction = "@Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController)";
+    var muteAction = "@Url.Action(nameof(HomeController.MuteSensors), ViewConstants.HomeController)";
     var unmuteAction = "@Url.Action(nameof(HomeController.RemoveMutedStateToSensor), ViewConstants.HomeController)";
 
     var isDataValidAction = "@Url.Action(nameof(HomeController.IsMetaInfoValid), ViewConstants.HomeController)";
-    
+
     var getGrid = `@Url.Action(nameof(HomeController.GetGrid))`;
     var getList = `@Url.Action(nameof(HomeController.GetList))`;
-    
+
     var getSensorPlotInfo = "@Url.Action(nameof(SensorHistoryController.GetSensorPlotInfo), ViewConstants.HistoryController)";
     var getBackgroundId = "@Url.Action(nameof(SensorHistoryController.GetBackgroundSensorInfo), ViewConstants.HistoryController)";
 
-    var exportAlerts = "@Url.Action(nameof(HomeController.ExportAlerts), ViewConstants.HomeController)";
-    var importAlerts = "@Url.Action(nameof(HomeController.ImportAlerts), ViewConstants.HomeController)";
+    var exportAlerts = "@Url.Action(nameof(AlertsController.ExportAlerts), ViewConstants.AlertsController)";
+    var importAlerts = "@Url.Action(nameof(AlertsController.ImportAlerts), ViewConstants.AlertsController)";
 </script>
 
 
@@ -96,9 +95,9 @@
     <div>
         <div class="d-flex pt-3 pb-1">
             <div class="d-flex flex-fill me-auto">
-                <button id="show" type="button" class="btn btn-sm btn-outline-primary ms-3 position-relative" style="height: 2.5rem">
+                <button id="show" type="button" title="@user.TreeFilter.EnabledFiltersMessage" class="btn btn-sm btn-outline-primary ms-3 position-relative text-nowrap" style="height: 2.5rem">
                     <i class="fa-solid fa-filter"></i>
-                    Filters
+                    <span>Filters</span>
                     @if (user?.TreeFilter.EnabledFiltersCount > 0)
                     {
                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
@@ -110,19 +109,26 @@
                 <div class="mx-3 my-2">
                     <i id="currentSort" class="@(user?.TreeFilter.TreeSortType == TreeSortType.ByTime ? "fas fa-sort-numeric-down-alt" : "fas fa-sort-alpha-down")"></i>
                 </div>
-                @if (user?.TreeFilter.EnabledFiltersCount > 0)
-                {
-                    <span class="enabled-filters-message text-break">@user.TreeFilter.EnabledFiltersMessage</span>
-                }
-                <div class="flex-fill align-self-center text-end">
+                <div class="input-group border-1 d-flex rounded-1" style="border-style: solid; border-width: 1px; width: auto">
+                    <form id="searchForm" class="form-outline d-flex">
+                        <input id="search_input" placeholder="Folders, products, sensors" title="Folders, products, sensors" type="text" class="no-border ms-1" style="width: 8rem; font-size: smaller;" />
+                        <input class="d-none" id="search_field" />
+                        <button id="search_tree" type="button" class="btn no-border">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </form>
+                </div>
+                <div class="flex-fill align-self-center ms-3">
                     <i id="collapseIcon" onclick="collapseButton.collapseOnClick()" class="fa-regular fa-square-minus tree-collapse-button" title="Save and close tree"></i>
                 </div>
             </div>
         </div>
-        <div class="d-flex justify-content-center tree-wrapper reserved-scroll-y overflow-y-auto">
+        <div class="d-flex d-none justify-content-center mt-2" id="jstreeSpinner">
+            <div class="spinner-border normal_spinner text-secondary" role="status"></div>
+        </div>
+        <div class="d-flex justify-content-center tree-wrapper reserved-scroll-y overflow-y-auto mt-1">
             <div class="d-flex me-auto">
                 <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(user.TreeFilter)) </div>
-
                 <div class="row justify-content-start mw-100 me-1">
                     <div class="tree-height-weight-parameters col-auto ms-2 pe-0">
                         <div class="col-md-auto">
@@ -192,21 +198,21 @@
             $('#update_' + id).empty().append(dataObject.updatedTimeStr);
 
         $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
-                          .addClass(dataObject.statusIconColorClass)
-                          .prop('title', `Status: ${dataObject.status}`)
-        
+            .addClass(dataObject.statusIconColorClass)
+            .prop('title', `Status: ${dataObject.status}`)
+
         $('#file_status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
-                               .addClass(dataObject.statusIconColorClass)
-                               .prop('title', `Status: ${dataObject.status}`)
-                               
-        $('#file_name_' + id).text(dataObject.fileNameString)                     
+            .addClass(dataObject.statusIconColorClass)
+            .prop('title', `Status: ${dataObject.status}`)
+
+        $('#file_name_' + id).text(dataObject.fileNameString)
 
         $("#newValuesCount").empty().html(dataObject.newValuesCount);
         if (dataObject.newValuesCount != null && $(`#link_table_${id}`).hasClass("active")) {
             $("#tableHistoryRefreshButton").removeClass("d-none");
         }
     }
-    
+
     function updateGeneralInfo(selectedNodeId) {
         $.ajax({
             type: 'GET',
@@ -247,7 +253,7 @@
 
         if (dataObject.isValidationErrorVisible) {
             $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
-                                               <span>Status comment: ${dataObject.validationError}</span>`);
+                                                           <span>Status comment: ${dataObject.validationError}</span>`);
 
             $('#markdown_status_comment').children().last().css('margin-bottom', 0);
         }
@@ -255,9 +261,9 @@
         let accordionLoaded = $('[id^="sensorData"]');
 
         if (accordionLoaded.length !== 0) {
-            if (isFile && dataObject.receivingTime !== null) {
+            if (isFile && dataObject.sendingTime !== null) {
                 $('#side_info_' + id).empty().append(`<span>Size: ${dataObject.size}</span>
-                                                           <span>${dataObject.receivingTime}</span>`);
+                                                                       <span>${dataObject.sendingTime}</span>`);
             }
 
             if (isFile)
@@ -300,12 +306,12 @@
 
                     if (dataObject.value !== null && dataObject.value !== undefined)
                         displayChildrenInfo = true;
-                    
+
                     if (dataObject.hasOwnProperty('value')) {
                         updateSpecificSensorData(dataObject);
                     }
                 }
-                
+
                 let accordionName = "";
                 let dataPanel = $('#dataPanel li a.active');
                 if (dataPanel.length > 0) {
@@ -328,7 +334,7 @@
                 if (isDisplayMode) {
                     updateGeneralInfo(selectedNodeId);
                 }
-                
+
                 if (displayChildrenInfo)
                     $('#dataPanel').removeClass('d-none');
             });
@@ -340,10 +346,10 @@
     var clipboard = new ClipboardJS('[id^="copy_"]', {
         container: document.getElementById('accessKeys_modal')
     });
-    
-    function getGridPage(accordionId, pageNumber = -1, pageSize = -1){
-        let accordion  = $(`#grid-accordion_${accordionId}`);
-        
+
+    function getGridPage(accordionId, pageNumber = -1, pageSize = -1) {
+        let accordion = $(`#grid-accordion_${accordionId}`);
+
         $.ajax({
             type: 'get',
             url: `${getGrid}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
@@ -355,19 +361,19 @@
                     let currInput = $(`#pageSize_${accordionId}`);
                     let [wasFocused, lastValue] = getFocusAndVal(currInput);
                     accordionId = accordion.length !== 0 ? accordionId : 'gridProducts';
- 
+
                     $(`#grid-accordion_${accordionId}`).empty().replaceWith(viewData);
-                    
+
                     if (pageNumber === -1 || pageSize === -1)
                         setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
                 }
             }
         });
     }
-    
-    function getListPage(accordionId, pageNumber = -1, pageSize = -1){
-        let accordion  = $(`#list-accordion_${accordionId}`);
-        
+
+    function getListPage(accordionId, pageNumber = -1, pageSize = -1) {
+        let accordion = $(`#list-accordion_${accordionId}`);
+
         $.ajax({
             type: 'get',
             url: `${getList}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
@@ -381,22 +387,22 @@
                     accordionId = accordion.length !== 0 ? accordionId : 'listProducts';
 
                     $(`#list-accordion_${accordionId}`).empty().replaceWith(viewData);
-                    
+
                     if (pageNumber === -1 || pageSize === -1)
                         setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
                 }
             }
         });
     }
-    
+
     function setPaginationFocus(accordionId, wasFocused, lastValue, currInput) {
         if (wasFocused)
-           currInput.focus();
-        
+            currInput.focus();
+
         if (lastValue !== undefined)
-           currInput.val(lastValue)
+            currInput.val(lastValue)
     }
-    
+
     function getFocusAndVal(input) {
         return [input.is(':focus'), input.val()]
     }

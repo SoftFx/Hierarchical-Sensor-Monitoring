@@ -1,12 +1,19 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Extensions
+@using HSMServer.Notifications
 @using HSMServer.Model.Authentication
 @using HSMServer.Model.Folders.ViewModels
 
 @model FolderViewModel
 
+@inject ITelegramChatsManager TelegramChatsManager
+
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var user = User as User;
+}
 
 
 <div class='accordion my-1' id='folderData_@Model.Id'>
@@ -18,7 +25,7 @@
                 <div class="w-100">
                     <div class='d-flex col-md-auto'>
                         <div style="font-weight: bold;">@Html.Raw(Model.Name)</div>
-                        @if (Model.Id.HasValue && (User as User).IsFolderManager(Model.Id.Value))
+                        @if (Model.Id.HasValue && user.IsFolderManager(Model.Id.Value))
                         {
                             <a asp-controller="@ViewConstants.FoldersController" asp-action="@nameof(FoldersController.EditFolder)" asp-route-folderId="@Model.Id"
                                 class="ms-2" style="color:@Model.Foreground">
@@ -33,6 +40,41 @@
         <div id='collapse_@Model.Id' class='accordion-collapse collapse show text-break' aria-labelledby='heading_@Model.Id' data-bs-parent='#folderData_@Model.Id'>
             <div id="accordionBody_@Model.Id" class='accordion-body p-3'>
                 @await Html.PartialAsync("_ProductList", Model)
+
+                @if (Model.TelegramChats is not null)
+                {
+                    @if (Model.TelegramChats.Count > 0)
+                    {
+                        var availableChats = Model.TelegramChats.GetAvailableChats(TelegramChatsManager).OrderBy(ch => ch.Type == ConnectedChatType.TelegramPrivate).ThenBy(ch => ch.Name).ToList();
+
+                        <div>
+                            <b>Telegram chats:</b>
+
+                            @if (user.IsFolderManager(Model.Id.Value))
+                            {
+                                @for (int i = 0; i < availableChats.Count; ++i)
+                                {
+                                    @if (i > 0)
+                                    {
+                                        <span>, </span>
+                                    }
+
+                                    <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@availableChats[i].Id">
+                                        @availableChats[i].Name
+                                    </a>
+                                }
+                            }
+                            else
+                            {
+                                @string.Join(", ", availableChats.Select(ch => ch.Name))
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <b>No telegram chats</b>
+                    }
+                }
             </div>
         </div>
     </div>

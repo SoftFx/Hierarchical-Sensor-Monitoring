@@ -5,6 +5,7 @@ window.currentSelectedNodeId = "";
 
 window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
+    var searchRefresh = false;
     
     if (window.localStorage.jstree) {
         let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
@@ -25,7 +26,10 @@ window.initializeTree = function () {
                     return getNode;
                 },
                 data: function (node) {
-                    return { 'id' : node.id };
+                    return { 
+                        'id' : node.id,
+                        'searchParameter': $('#search_field').val()
+                    }
                 }
             }
         },
@@ -41,15 +45,59 @@ window.initializeTree = function () {
 
         $.ajax({
             type: 'put',
-            url: `${closeNode}?nodeIds=${data.node.id}`,
-            cache: false
+            url: closeNode,
+            cache: false,
+            contentType: 'application/json',
+            data: JSON.stringify({
+                nodeIds: [data.node.id]
+            })
         })
     }).on('refresh.jstree', function (e, data){
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+
+        if (searchRefresh) {
+            $(this).jstree(true).get_json('#', { flat: true }).forEach((node) => {
+                if (node.state.loaded === true)
+                    $(this).jstree('open_node', node.id);
+            })
+            
+            $(this).show();
+            $('#jstreeSpinner').addClass('d-none');
+            searchRefresh = false;
+        }
     }).on('open_node.jstree', function (e, data){
         collapseButton.reset();
     });
+
+    $("#search_tree").on('click', function () {
+        search($('#search_input').val());
+    });
+    
+    $('#search_input').on('keyup', function (e){
+        if (e.keyCode == 13){
+            search($(this).val()); 
+        }
+    }).on('input', function(){
+       if ($(this).val() === ''){
+           $('#search_field').val($(this).val());
+           $('#jstree').jstree(true).refresh(true);
+       } 
+    });
+
+    function search(value){
+        if (value === '')
+            return;
+
+        clearTimeout(refreshTreeTimeoutId)
+        clearTimeout(updateSelectedNodeDataTimeoutId)
+
+        $('#search_field').val(value);
+        $('#jstree').hide().jstree(true).refresh(true);
+
+        searchRefresh = true;
+        $('#jstreeSpinner').removeClass('d-none')
+    }
 
     initializeActivateNodeTree();
 }
@@ -163,7 +211,7 @@ function initSelectedNode(selectedId) {
         contenttype: 'application/json',
         cache: false,
         success: function (viewData) {
-            $("#nodeDataPanel").html(viewData);
+            $("#nodeDataPanel").removeClass('d-none').html(viewData);
         }
     }).done(function () {
         initialize();
@@ -198,7 +246,6 @@ function selectNodeInfoTab(tab, selectedId) {
         tabLink.click();
 }
 
-const TelegramTarget = { Groups: 0, Accounts: 1 };
 window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
 
 const AjaxPost = {
@@ -251,7 +298,7 @@ function buildContextMenu(node) {
                         
                         showToast(message);
 
-                        $(`#${$('#jstree').jstree(true).get_node('#').children[0]}_anchor`).trigger('click');
+                        $('#nodeDataPanel').addClass('d-none');
                     });
                 });
 
@@ -333,7 +380,7 @@ function buildContextMenu(node) {
                     "label": `Mute ${getKeyByValue(curType)} for...`,
                     "separator_after": true,
                     "separator_before": true,
-                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+                    "action": _ => muteRequest(node)
                 }
             }
             else {
@@ -364,10 +411,10 @@ function buildContextMenu(node) {
                 "label": `Remove ${getKeyByValue(curType)}`,
                 "action": _ => {
                     var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-
+                    let type = getKeyByValue(curType);
                     //modal
                     $('#modalDeleteLabel').empty();
-                    $('#modalDeleteLabel').append(`Remove ${getKeyByValue(curType)}`);
+                    $('#modalDeleteLabel').append(`Remove ${type}`);
                     $('#modalDeleteBody').empty();
 
                     $.when(getFullPathAction(node.id)).done((path) => {
@@ -388,10 +435,10 @@ function buildContextMenu(node) {
                                 contentType: "application/json"
                             })
                             .done(() => {
+                                $('#nodeDataPanel').addClass('d-none');
+                                
                                 updateTreeTimer();
-                                showToast(`${getKeyByValue(curType)} has been removed`);
-
-                                $(`#${node.parents[0]}_anchor`).trigger('click');
+                                showToast(`${type} has been removed`);
                             });
                     });
 
@@ -431,13 +478,13 @@ function buildContextMenu(node) {
 
             alertsSubmenu["Export"] = {
                 "label": `Export`,
-                "icon": "fa-solid fa-download",
+                "icon": "fa-solid fa-upload",
                 "action": _ => window.location.href = `${exportAlerts}?selectedId=${node.id}`
             }
 
             alertsSubmenu["Import"] = {
                 "label": `Import`,
-                "icon": "fa-solid fa-upload",
+                "icon": "fa-solid fa-download",
                 "action": _ => {
                     var $input = $('<input type="file" />');
 
@@ -488,60 +535,8 @@ function buildContextMenu(node) {
             };
         }
     }
-
-    notificationSubmenu = {}
-    isAccEnabled = node.data.jstree.isAccountsEnable === "True";
-
-    if (isAccEnabled) {
-        notificationSubmenu["Accounts ignore"] = {
-            "label": "Ignore for accounts...",
-            "icon": "fab fa-telegram",
-            "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Accounts),
-        }
-    }
-    else {
-        notificationSubmenu["Accounts enable"] = {
-            "label": "Enable for accounts...",
-            "icon": "fab fa-telegram",
-            "action": _ => enableNotificationsRequest(node, TelegramTarget.Accounts),
-        }
-    }
-
-    if (isManager) {
-        let groups = node.data.jstree.groups;
-
-        for (let chatId in groups) {
-            let group = groups[chatId].Name;
-
-            if (groups[chatId].IsEnabled && !groups[chatId].IsIgnored) {
-                notificationSubmenu[`Groups ignore ${chatId}`] = {
-                    "label": `Ignore for '${group}'...`,
-                    "icon": "fab fa-telegram",
-                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, false, chatId),
-                }
-            }
-            else {
-                notificationSubmenu[`Groups enable ${chatId}`] = {
-                    "label": `Enable for '${group}'...`,
-                    "icon": "fab fa-telegram",
-                    "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups, chatId),
-                }
-            }
-        }
-    }
-
-    //if ((curType === NodeType.Folder && node.children.length != 0) || (isMutedState !== '' && isMutedState !== undefined))
-    //    contextMenu["Notifications"] = {
-    //        "label": "Notifications",
-    //        "separator_before": true,
-    //        "submenu": notificationSubmenu,
-    //    };
     
     return contextMenu;
-}
-
-function enableNotificationsRequest(node, target, chat = null) {
-    return $.ajax(`${enableNotificationsAction}?selectedId=${node.id}&target=${target}&chat=${chat}`, AjaxPost).done(updateTreeTimer);
 }
 
 function unmuteRequest(node){
@@ -551,8 +546,8 @@ function unmuteRequest(node){
     });
 }
 
-function ignoreNotificationsRequest(node, target, isOffTimeModal = 'false', chat = null) {
-    return $.ajax(`${ignoreNotificationsAction}?selectedId=${node.id}&target=${target}&isOffTimeModal=${isOffTimeModal}&chat=${chat}`, {
+function muteRequest(node) {
+    return $.ajax(`${muteAction}?selectedId=${node.id}`, {
         cache: false,
         success: (v) => $("#ignoreNotificatios_partial").html(v),
     }).done(() => $('#ignoreNotifications_modal').modal('show'))

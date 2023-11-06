@@ -1,12 +1,12 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Core;
+﻿using HSMServer.Core;
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
-using HSMServer.Model.TreeViewModel;
+using HSMServer.Folders;
 using HSMServer.Notification.Settings;
 using HSMServer.ServerConfiguration;
 using NLog;
 using System;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,59 +23,60 @@ namespace HSMServer.Notifications
     public sealed class TelegramUpdateHandler : IUpdateHandler
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly AddressBook _addressBook;
-        private readonly IUserManager _userManager;
-        private readonly TreeViewModel _tree;
-        private readonly TelegramConfig _config;
+        private readonly ITelegramChatsManager _chatsManager;
+        private readonly IFolderManager _folderManager;
         private readonly ITreeValuesCache _cache;
+        private readonly TelegramConfig _config;
 
         private string BotName => $"@{_config.BotName.ToLower()}";
 
 
-        internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager,
-            TreeViewModel tree, ITreeValuesCache cache, TelegramConfig config)
+        internal TelegramUpdateHandler(ITelegramChatsManager chatsManager, ITreeValuesCache cache, IFolderManager folderManager, TelegramConfig config)
         {
-            _addressBook = addressBook;
-            _userManager = userManager;
+            _folderManager = folderManager;
+            _chatsManager = chatsManager;
             _config = config;
             _cache = cache;
-            _tree = tree;
         }
 
 
         public async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cToken)
         {
-            if (update?.Type == UpdateType.Message)
+            try
             {
-                var message = update?.Message;
-                var isUserChat = message?.Chat?.Type == ChatType.Private;
-                var msgText = message?.Text?.ToLowerInvariant();
-                var parts = msgText?.Split(' ');
-
-                if (parts == null || parts.Length == 0)
+                if (update is null || update.Message is null || update.Message.Chat is null || string.IsNullOrEmpty(update.Message.Text) || update.Type is not UpdateType.Message)
                     return;
 
-                if (!isUserChat)
+                var message = update.Message;
+                var msgText = message.Text.ToLowerInvariant();
+                var parts = msgText.Split(' ');
+                var command = parts[0];
+
+                if (!message.FromPrivateChat())
                 {
-                    if (!parts[0].Contains(BotName))
+                    if (!command.Contains(BotName))
                         return;
 
-                    parts[0] = parts[0].Replace(BotName, string.Empty);
+                    command = command.Replace(BotName, string.Empty); // for group chats commands colled as command@botsname
                 }
 
-                var response = parts[0] switch
+                var response = command switch
                 {
-                    TelegramBotCommands.Start => StartBot(parts, message, isUserChat),
-                    TelegramBotCommands.Info => EntitiesInfo(message.Chat, isUserChat),
+                    TelegramBotCommands.Start => await StartBot(parts, message),
+                    TelegramBotCommands.Info => EntitiesInfo(message.Chat),
                     TelegramBotCommands.Server => ServerStatus(),
                     TelegramBotCommands.Help => Help(),
                     _ => null,
                 };
 
                 if (!string.IsNullOrEmpty(response))
-                    await botClient.SendTextMessageAsync(message.Chat, response, ParseMode.MarkdownV2, cancellationToken: cToken);
+                    await botClient.SendTextMessageAsync(message.Chat, response, parseMode: ParseMode.MarkdownV2, cancellationToken: cToken);
                 else
                     _logger.Warn($"There is some invalid update message: {msgText}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Invalid message has been received: {update?.Type} - {update?.Message}. Exception: {ex}");
             }
         }
 
@@ -87,33 +88,26 @@ namespace HSMServer.Notifications
         }
 
 
-        private string StartBot(string[] commandParts, Message message, bool isUserChat)
+        private async Task<string> StartBot(string[] commandParts, Message message)
         {
             if (commandParts.Length != 2)
                 return null;
 
-            var response = new StringBuilder(1 << 5);
+            var response = new StringBuilder($"Hi. ");
 
-            if (_addressBook.TryGetToken(commandParts[1], out var token))
+            if (_chatsManager.TokenManager.TryRemoveToken(commandParts[1], out var token))
             {
-                response.Append(token.Entity.BuildGreetings());
-
-                if (token.ExpirationTime < DateTime.UtcNow)
+                if (token.ExpirationTime >= DateTime.UtcNow)
                 {
-                    _addressBook.RemoveToken(token.Token);
+                    var folderName = await _chatsManager.TryConnect(message, token);
 
-                    response.Append("Sorry, your invitation token is expired.");
+                    if (string.IsNullOrEmpty(folderName))
+                        response.Append("Sorry, your token is invalid or folder doesn't exsist.");
+                    else
+                        response.Append($"Folder '{folderName}' is successfully added to {(message.FromPrivateChat() ? "direct" : $"group by {token.User.Name}")}.");
                 }
                 else
-                {
-                    var newChat = _addressBook.RegisterChat(message, token, isUserChat);
-                    token.Entity.UpdateEntity(_userManager, _tree);
-
-                    if (newChat is not null)
-                        _cache.AddNewChat(newChat.SystemId, newChat.Name, isUserChat ? null : token.Entity.Name);
-
-                    response.Append(token.Entity.BuildSuccessfullResponse());
-                }
+                    response.Append("Sorry, your invitation token is expired.");
             }
             else
                 response.Append("Your token is invalid or expired.");
@@ -121,21 +115,24 @@ namespace HSMServer.Notifications
             return response.ToString().EscapeMarkdownV2();
         }
 
-        private string EntitiesInfo(ChatId chat, bool isUserChat)
+        private string EntitiesInfo(ChatId chatId)
         {
+            var chat = _chatsManager.GetChatByChatId(chatId);
             var response = new StringBuilder(1 << 6);
-            var entityStr = isUserChat ? "user" : "product";
 
-            response.AppendLine($"{(isUserChat ? "Authorized" : "Added")} {entityStr}(s) settings:".EscapeMarkdownV2());
-
-            foreach (var entity in _addressBook.GetAuthorizedEntities(chat))
+            if (chat is not null)
             {
-                var telegramSetting = entity.Notifications.UsedTelegram;
+                response.Append($"*Messages delay*");
+                response.AppendLine($": {chat.MessagesAggregationTimeSec} seconds".EscapeMarkdownV2());
 
-                response.AppendLine($"{entityStr} *{entity.Name.EscapeMarkdownV2()}*");
-                response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelaySec} sec".EscapeMarkdownV2());
-                response.AppendLine($"    Messages are enabled: {telegramSetting.MessagesAreEnabled}".EscapeMarkdownV2());
+                response.Append($"*Messages are enabled*");
+                response.AppendLine($": {chat.SendMessages}".EscapeMarkdownV2());
+
+                response.Append($"*Connected folders*");
+                response.AppendLine($": {string.Join(", ", chat.Folders.Select(f => _folderManager[f]?.Name).OrderBy(n => n))}".EscapeMarkdownV2());
             }
+            else
+                response.AppendLine("Chat is not found.".EscapeMarkdownV2());
 
             return response.ToString();
         }

@@ -4,26 +4,33 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notifications;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HSMServer.Folders
 {
-    public interface IFolderManager : IConcurrentStorage<FolderModel, FolderEntity, FolderUpdate>
+    public interface IFolderManager : IConcurrentStorageNames<FolderModel, FolderEntity, FolderUpdate>
     {
-        event Action<Guid> ResetProductTelegramInheritance;
+        event Func<Guid, List<Guid>, InitiatorInfo, Task> RemoveFolderFromChats;
+
+        event Action<Guid, List<Guid>> AddFolderToChats;
+
+        event Func<Guid, string> GetChatName;
 
 
         Task<bool> TryAdd(FolderAdd folderAdd, out FolderModel folder);
-
-        Task<bool> TryRemove(Guid folderId, InitiatorInfo initiator);
 
         Task MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId, InitiatorInfo initiator);
 
         Task AddProductToFolder(Guid productId, Guid folderId, InitiatorInfo initiator);
 
         Task RemoveProductFromFolder(Guid productId, Guid folderId, InitiatorInfo initiator);
+
+        Task<string> AddChatToFolder(Guid chatId, Guid folderId, string userName);
+
+        void RemoveChatHandler(TelegramChat chat, InitiatorInfo initiator);
 
         List<FolderModel> GetUserFolders(User user);
     }

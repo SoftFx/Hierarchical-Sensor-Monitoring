@@ -1,15 +1,18 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Constants;
+using HSMServer.Filters.FolderRoleFilters;
+using HSMServer.Filters.TelegramRoleFilters;
 using HSMServer.Folders;
-using HSMServer.Helpers;
-using HSMServer.Model;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.TreeViewModel;
-using HSMServer.Notification.Settings;
+using HSMServer.Model.Folders;
+using HSMServer.Model.Notifications;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+
 
 namespace HSMServer.Controllers
 {
@@ -18,118 +21,100 @@ namespace HSMServer.Controllers
     {
         private readonly IFolderManager _folderManager;
         private readonly TelegramBot _telegramBot;
-        private readonly TreeViewModel _tree;
+
+        internal ITelegramChatsManager ChatsManager { get; }
 
 
-        public NotificationsController(IUserManager userManager, IFolderManager folderManager,
-            TreeViewModel tree, NotificationsCenter notifications) : base(userManager)
+        public NotificationsController(ITelegramChatsManager chatsManager, NotificationsCenter notifications,
+            IFolderManager folderManager, IUserManager userManager) : base(userManager)
         {
+            ChatsManager = chatsManager;
             _folderManager = folderManager;
-            _tree = tree;
-
             _telegramBot = notifications.TelegramBot;
         }
 
 
-        public IActionResult Index()
-        {
-            return View(new TelegramSettingsViewModel(CurrentUser.Notifications.UsedTelegram, CurrentUser.Id));
-        }
+        [HttpGet]
+        [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
+        public IActionResult EditChat(Guid id) => ChatsManager.TryGetValue(id, out var chat)
+            ? View(new TelegramChatViewModel(chat, BuildChatFolders(chat)))
+            : _emptyResult;
 
         [HttpPost]
-        public IActionResult ChangeInheritance(string productId, bool fromParent)
+        [TelegramRoleFilterByEditModel(nameof(updateModel), ProductRoleEnum.ProductManager)]
+        public async Task<IActionResult> EditChat(TelegramChatViewModel updateModel)
         {
-            var update = new TelegramMessagesSettingsUpdate()
+            if (await ChatsManager.TryUpdate(updateModel.ToUpdate()))
             {
-                Inheritance = fromParent ? InheritedSettings.FromParent : InheritedSettings.Custom
-            };
+                var updatedChat = ChatsManager[updateModel.Id];
+                var removedFolders = updatedChat.Folders.Except(updateModel.Folders.Folders).ToList();
 
-            return UpdateTelegramMessageSettings(productId, update);
-        }
+                foreach (var folderId in updateModel.Folders.SelectedFolders)
+                    if (_folderManager.TryGetValue(folderId, out var folder))
+                        await UpdateFolder(folderId, new HashSet<Guid>(folder.TelegramChats) { updateModel.Id });
 
-        [HttpPost]
-        public void ChangeAutoSubscription(string productId, bool autoSubscription)
-        {
-            if (_tree.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(productId), out var product))
-            {
-                product.Notifications.AutoSubscription = autoSubscription;
+                foreach (var folderId in removedFolders)
+                    if (_folderManager.TryGetValue(folderId, out var folder))
+                    {
+                        var folderChats = new HashSet<Guid>(folder.TelegramChats);
+                        folderChats.Remove(updateModel.Id);
 
-                _tree.UpdateProductNotificationSettings(product);
-            }
-        }
-
-        [HttpPost]
-        public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string entityId)
-        {
-            var update = telegramSettings.GetUpdateModel();
-
-            if (!string.IsNullOrEmpty(entityId) && Guid.TryParse(entityId, out var id) &&
-                _folderManager.TryGetValue(id, out var folder))
-            {
-                folder.Notifications.Telegram.Update(update);
-
-                _folderManager.TryUpdate(folder);
-
-                return PartialView("_MessagesSettings", new TelegramSettingsViewModel(folder.Notifications.Telegram, folder.Id));
+                        await UpdateFolder(folderId, folderChats);
+                    }
             }
 
-            return UpdateTelegramMessageSettings(entityId, update);
+            return ChatsManager.TryGetValue(updateModel.Id, out var chat)
+                ? View(new TelegramChatViewModel(chat, BuildChatFolders(chat)))
+                : RedirectToAction(nameof(ProductController.Index), ViewConstants.ProductController);
         }
 
-        public RedirectResult OpenInvitationLink() =>
-            Redirect(_telegramBot.GetInvitationLink(GetCurrentUser()));
-
-        public async Task<RedirectResult> OpenTelegramGroup(long chatId) =>
-            Redirect(await _telegramBot.GetChatLink(chatId));
+        [TelegramRoleFilterById(nameof(id), ProductRoleEnum.ProductManager)]
+        public async Task RemoveChat(Guid id) => await ChatsManager.TryRemove(new(id));
 
         [HttpGet]
-        public string CopyStartCommandForGroup(string entityId)
+        [FolderRoleFilterByFolderId(nameof(folderId), ProductRoleEnum.ProductManager)]
+        public RedirectResult OpenInvitationLink(Guid folderId) =>
+            Redirect(ChatsManager.GetInvitationLink(folderId, CurrentUser));
+
+        [HttpGet]
+        [FolderRoleFilterByFolderId(nameof(folderId), ProductRoleEnum.ProductManager)]
+        public string GetGroupInvitation(Guid folderId) => ChatsManager.GetGroupInvitation(folderId, CurrentUser);
+
+        [HttpGet]
+        public async Task<IActionResult> OpenTelegramGroup(long chatId)
         {
-            var id = SensorPathHelper.DecodeGuid(entityId);
+            (var link, var error) = await _telegramBot.TryGetChatLink(chatId);
 
-            _tree.Nodes.TryGetValue(id, out var product);
-
-            return _telegramBot.GetStartCommandForGroup(product);
+            return Json(new { link, error });
         }
 
-        public IActionResult SendTestTelegramMessage(long chatId, string entityId)
+        [HttpGet]
+        public void SendTestTelegramMessage(long chatId)
         {
             var testMessage = $"Test message for {CurrentUser.Name}.";
-            if (GetEntity(entityId) is ProductNodeViewModel product)
-                testMessage = $"{testMessage} (Product {product.Name})";
 
             _telegramBot.SendTestMessage(chatId, testMessage);
-
-            return GetResult(entityId);
         }
 
-        public IActionResult RemoveTelegramAuthorization(long chatId, string entityId)
+
+        private ChatFoldersViewModel BuildChatFolders(TelegramChat chat)
         {
-            _telegramBot.RemoveChat(GetEntity(entityId), chatId);
+            var availableFolders = _folderManager.GetUserFolders(CurrentUser).Where(f => !f.TelegramChats.Contains(chat.Id)).ToList();
+            var chatFolders = _folderManager.GetValues().Where(f => chat.Folders.Contains(f.Id)).ToList();
 
-            return GetResult(entityId);
+            return new(availableFolders, chatFolders);
         }
 
-        private IActionResult UpdateTelegramMessageSettings(string productId, TelegramMessagesSettingsUpdate update)
+        private async Task UpdateFolder(Guid folderId, HashSet<Guid> folderChats)
         {
-            var entity = GetEntity(productId);
-            entity.Notifications.Telegram.Update(update);
+            var update = new FolderUpdate()
+            {
+                Id = folderId,
+                TelegramChats = folderChats,
+                Initiator = CurrentInitiator,
+            };
 
-            entity.UpdateEntity(_userManager, _tree);
-
-            return GetResult(productId);
+            await _folderManager.TryUpdate(update);
         }
-
-        private INotificatable GetEntity(string entityId) =>
-            !string.IsNullOrEmpty(entityId)
-                ? _tree.Nodes[SensorPathHelper.DecodeGuid(entityId)]
-                : GetCurrentUser();
-
-        private User GetCurrentUser() => _userManager[CurrentUser.Id];
-
-        private RedirectToActionResult GetResult(string entityId) =>
-            string.IsNullOrEmpty(entityId)
-                ? RedirectToAction(nameof(Index))
-                : RedirectToAction(nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = entityId });
     }
 }

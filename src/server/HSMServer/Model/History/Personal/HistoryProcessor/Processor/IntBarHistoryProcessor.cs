@@ -9,8 +9,8 @@ namespace HSMServer.Model.History
         protected override int DefaultMin { get; } = int.MaxValue;
 
 
-        protected override IntegerBarValue GetBarValue(SummaryBarItem<int> summary) =>
-            new()
+        protected override BarBaseValue<int> GetBarValue(SummaryBarItem<int> summary) =>
+            new IntegerBarValue()
             {
                 Count = summary.Count,
                 OpenTime = summary.OpenTime.ToUniversalTime(),
@@ -21,6 +21,7 @@ namespace HSMServer.Model.History
                 Percentiles = summary.Percentiles,
                 Time = summary.CloseTime.ToUniversalTime(),
                 ReceivingTime = summary.CloseTime.ToUniversalTime(),
+                LastValue = summary.LastValue,
             };
 
         protected override int Average(int value1, int value2) =>

@@ -19,32 +19,6 @@
 
     @if (showIcons)
     {
-        @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
-            </span>
-        }
-        else if (!Model.IsMutedState && Model.IsAccountsIgnore && !Model.Parent.IsAccountsIgnore)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
-            </span>
-        }
-        
-        @if (Model.IsGroupsEnable && !Model.Parent.IsGroupsEnable)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
-            </span>
-        }
-        else if (!Model.IsMutedState && Model.IsGroupsIgnore && !Model.Parent.IsGroupsIgnore)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
-            </span>
-        }
-
         @if (Model.IsGrafanaEnabled && !Model.Parent.IsGrafanaEnabled)
         {
             <span>

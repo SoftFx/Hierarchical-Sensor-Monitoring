@@ -9,9 +9,8 @@ public sealed class AlertIconsViewModel
     private const int MaxDisplayedSize = 2;
     private const int MaxBadgeCounterSize = 9;
     private const string InfiniteCharacter = "∞";
-    
-    public const int VisibleMaxSize = 3;
 
+    public const int VisibleMaxSize = 3;
 
     private readonly ConcurrentDictionary<string, int> _alerts;
     private readonly bool _showFullList;
@@ -29,6 +28,7 @@ public sealed class AlertIconsViewModel
         _showFullList = showFullList;
         _visibleCount = IsTooLong ? MaxDisplayedSize : _alerts.Count;
     }
+
 
     public string GetLabelCount(int count) => count > MaxBadgeCounterSize ? InfiniteCharacter : $"{count}";
 }

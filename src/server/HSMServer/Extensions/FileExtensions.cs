@@ -8,7 +8,7 @@ namespace HSMServer.Extensions
     internal static class FileExtensions
     {
         private const string DefaultFileName = "temp";
-        private const string DefaultFileExtension = "txt";
+        public const string DefaultFileExtension = "txt";
 
 
         internal static string GetContentType(this string fileName)

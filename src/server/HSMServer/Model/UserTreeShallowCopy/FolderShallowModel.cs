@@ -13,20 +13,16 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public IntegrationState GrafanaState { get; } = new();
 
-        public UserNotificationsState AccountState { get; } = new();
-
 
         public override bool CurUserIsManager { get; }
 
 
         public override bool IsGrafanaEnabled => GrafanaState.IsAllEnabled;
 
-        public override bool IsAccountsEnable => AccountState.IsAllEnabled;
 
-        public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
+        public bool AllDataIsEmpty => Products.All(n => n.Data.IsEmpty);
 
-
-        public bool IsEmpty => Products.All(n => n.Data.IsEmpty);
+        public bool IsEmpty => Products.Count == 0;
 
 
         public FolderShallowModel(FolderModel data, User user) : base(data)
@@ -41,12 +37,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
             ErrorsCount += node.ErrorsCount;
 
-            if (!node.IsMutedState)
-            {
-                AccountState.CalculateState(node.AccountState);
-                UpdateGroupsState(node);
-            }
-
             GrafanaState.CalculateState(node.GrafanaState);
 
             if (node.VisibleSubtreeSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
@@ -60,9 +50,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "icon": "fa-regular fa-folder",
             "time": "{{Data.UpdateTime.Ticks}}",
             "isManager": "{{CurUserIsManager}}",
-            "isGrafanaEnabled": "{{IsGrafanaEnabled}}",
-            "isAccountsEnable": "{{IsAccountsEnable}}",
-            "groups": {{GroupsJsonDict}}
+            "isGrafanaEnabled": "{{IsGrafanaEnabled}}"
         }
         """;
     }

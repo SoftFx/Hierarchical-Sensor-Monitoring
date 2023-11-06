@@ -3,6 +3,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using NLog;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -11,6 +12,8 @@ namespace HSMServer.Core.Confirmation
     internal sealed class ConfirmationManager
     {
         private readonly CGuidDict<CGuidDict<CPriorityQueue<AlertResult, DateTime>>> _tree = new(); //sensorId -> alertId -> alertResult
+        private readonly ConcurrentDictionary<Guid, AlertResult> _lastStatusUpdates = new();
+
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         public event Action<Guid, List<AlertResult>> ThrowAlertResultsEvent;
@@ -36,6 +39,9 @@ namespace HSMServer.Core.Confirmation
                     {
                         branch[alertId].Enqueue(alert, DateTime.UtcNow);
                         newAlerts.Remove(alertId);
+
+                        if (alert.IsStatusIsChangeResult)
+                            _lastStatusUpdates.AddOrUpdate(alertId, alert, (_, _) => alert);
                     }
                 }
 
@@ -57,20 +63,31 @@ namespace HSMServer.Core.Confirmation
                 {
                     var thrownAlerts = new List<AlertResult>(1 << 4);
 
-                    foreach (var (alertId, alertResults) in sensorAlerts)
+                    foreach (var (alertId, allResults) in sensorAlerts)
                     {
-                        while (alertResults.TryPeek(out var alertResult, out var stateTime))
+                        while (allResults.TryPeek(out var result, out var stateTime))
                         {
-                            if ((DateTime.UtcNow - stateTime).Ticks > alertResult.ConfirmationPeriod.Value)
+                            if ((DateTime.UtcNow - stateTime).Ticks > result.ConfirmationPeriod.Value)
                             {
-                                alertResults.TryDequeue(out _, out _);
-                                thrownAlerts.Add(alertResult);
+                                if (!result.IsStatusIsChangeResult)
+                                {
+                                    allResults.TryDequeue(out _, out _);
+                                    thrownAlerts.Add(result);
+                                }
+                                else
+                                {
+                                    if (allResults.TryPeekValue(out var first) && _lastStatusUpdates.TryGetValue(alertId, out var last) && first.LastState.PrevStatus != last.LastState.Status)
+                                        thrownAlerts.AddRange(allResults.UnwrapToList());
+
+                                    _lastStatusUpdates.TryRemove(alertId, out _);
+                                    allResults.Clear();
+                                }
                             }
                             else
                                 break;
                         }
 
-                        if (alertResults.IsEmpty)
+                        if (allResults.IsEmpty)
                             sensorAlerts.TryRemove(alertId, out _);
                     }
 

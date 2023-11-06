@@ -59,11 +59,12 @@ window.removePlot = function (name, isInit = false) {
     }
 }
 
-window.displayGraph = function (data, sensorTypes, graphElementId, graphName) {
+window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
     graphData.graph.id = graphElementId;
     graphData.graph.self = $(`#${graphElementId}`)[0];
 
-    let plot = convertToGraphData(data, sensorTypes, graphName);
+    let plot = convertToGraphData(data, sensorInfo, graphName);
+
     let zoomData = getPreviousZoomData(graphElementId);
 
     let config = {
@@ -79,17 +80,19 @@ window.displayGraph = function (data, sensorTypes, graphElementId, graphName) {
         ]
     }
     let layout;
-    if (sensorTypes.plotType === 9 || sensorTypes.plotType === 7)
+    if (sensorInfo.plotType === 9 || sensorInfo.plotType === 7)
         layout = plot.getLayout();
     else {
         if (zoomData === undefined || zoomData === null)
             layout = plot.getLayout()
         else
-            layout = createLayoutFromZoomData(zoomData, plot.getLayout());
+        {
+            let plotLayout = plot.getLayout()
+            layout = createLayoutFromZoomData(zoomData, plotLayout);
+        }
     }
 
     Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
-
     if (plot.name !== serviceAlivePlotName)
         config.modeBarButtonsToAdd.forEach(x => {
             if(x.name === "Show/Hide service alive plot")
@@ -123,14 +126,8 @@ window.displayGraph = function (data, sensorTypes, graphElementId, graphName) {
 function createLayoutFromZoomData(zoomData, layout) {
     let processedData = Object.values(JSON.parse(zoomData));
 
-    layout.xaxis = {
-        range: [processedData[0], processedData[1]]
-    };
-
-    layout.yaxis = {
-        range: [processedData[2], processedData[3]]
-    };
-
+    layout.xaxis.range = [processedData[0], processedData[1]];
+    layout.yaxis.range = [processedData[2], processedData[3]];
     layout.autosize = true;
 
     return layout;
@@ -140,24 +137,24 @@ function getPreviousZoomData(graphElementId) {
     return window.sessionStorage.getItem(graphElementId);
 }
 
-function convertToGraphData(graphData, sensorTypes, graphName) {
+function convertToGraphData(graphData, sensorInfo, graphName) {
     let escapedData = JSON.parse(graphData);
 
-    switch (sensorTypes.plotType) {
+    switch (sensorInfo.plotType) {
         case 0:
-            return new BoolPlot(escapedData);
+            return new BoolPlot(escapedData, sensorInfo.units);
         case 1:
-            return new IntegerPlot(escapedData);
+            return new IntegerPlot(escapedData, sensorInfo.units);
         case 2:
-            return new DoublePlot(escapedData);
+            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units);
         case 4:
-            return new BarPLot(escapedData, graphName);
+            return new BarPLot(escapedData, graphName, sensorInfo.units);
         case 5:
-            return new BarPLot(escapedData, graphName);
+            return new BarPLot(escapedData, graphName, sensorInfo.units);
         case 7:
-            return new TimeSpanPlot(escapedData);
+            return new TimeSpanPlot(escapedData, sensorInfo.units);
         case 9:
-            if (sensorTypes.realType === 0)
+            if (sensorInfo.realType === 0)
                 return new EnumPlot(escapedData, false, false)
 
             return new EnumPlot(escapedData, true, false);

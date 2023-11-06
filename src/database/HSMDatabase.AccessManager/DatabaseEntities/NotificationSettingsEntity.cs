@@ -1,34 +1,24 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
+    [Obsolete("Should be removed after telegram chats migration")]
     public class NotificationSettingsEntity
     {
-        public TelegramSettingsEntity TelegramSettings { get; init; }
-
-        public Dictionary<long, Dictionary<string, long>> PartiallyIgnored { get; init; }
-
-        public List<string> EnabledSensors { get; init; }
-
-        public bool AutoSubscription { get; init; } = true;
+        public TelegramSettingsEntityOld TelegramSettings { get; init; }
     }
 
 
-    public sealed class TelegramSettingsEntity
+    [Obsolete("Should be removed after telegram chats migration")]
+    public sealed class TelegramSettingsEntityOld
     {
-        public List<TelegramChatEntity> Chats { get; init; }
-
-        public byte MessagesMinStatus { get; init; }
-
-        public bool MessagesAreEnabled { get; init; }
-
-        public int MessagesDelay { get; init; }
-
-        public byte Inheritance { get; init; }
+        public List<TelegramChatEntityOld> Chats { get; init; }
     }
 
 
-    public sealed class TelegramChatEntity
+    [Obsolete("Should be removed after telegram chats migration")]
+    public sealed class TelegramChatEntityOld
     {
         public byte[] SystemId { get; init; }
 

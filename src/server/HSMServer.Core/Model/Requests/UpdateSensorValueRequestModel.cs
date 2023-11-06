@@ -40,7 +40,11 @@ public sealed record UpdateSensorValueRequestModel
     public BaseValue BuildNewValue(BaseValue value, BaseValue oldValue)
     {
         if (value is FileValue && oldValue is FileValue oldFileValue)
-            value = oldFileValue;
+            value = ChangeLast ? oldFileValue : oldFileValue with
+            {
+                Value = Array.Empty<byte>(),
+                OriginalSize = 0L
+            };
 
         value = value with
         {

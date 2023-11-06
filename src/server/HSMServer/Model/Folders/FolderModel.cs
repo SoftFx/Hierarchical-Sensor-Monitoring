@@ -6,10 +6,10 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace HSMServer.Model.Folders
@@ -25,7 +25,7 @@ namespace HSMServer.Model.Folders
         public Guid AuthorId { get; }
 
 
-        public NotificationSettings Notifications { get; private set; } = new();
+        public HashSet<Guid> TelegramChats { get; private set; } // TODO: should be without set and = new() after telegram chats migration
 
         public Color Color { get; private set; }
 
@@ -33,6 +33,8 @@ namespace HSMServer.Model.Folders
 
 
         public event Action<JournalRecordModel> ChangesHandler;
+
+        public event Func<Guid, string> GetChatName;
 
 
         public FolderModel(FolderEntity entity)
@@ -43,11 +45,13 @@ namespace HSMServer.Model.Folders
             Color = Color.FromArgb(entity.Color);
             AuthorId = Guid.Parse(entity.AuthorId);
             CreationDate = new DateTime(entity.CreationDate);
-            Notifications = new NotificationSettings(entity.Notifications);
 
             KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)));
             SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
             TTL = LoadTTL(entity.Settings.GetValueOrDefault(nameof(TTL)));
+
+            if (entity.TelegramChats is not null)
+                TelegramChats = new HashSet<Guid>(entity.TelegramChats.Select(c => new Guid(c)));
         }
 
         internal FolderModel(FolderAdd addModel)
@@ -65,12 +69,13 @@ namespace HSMServer.Model.Folders
             KeepHistory = LoadKeepHistory();
             SelfDestroy = LoadSelfDestroy();
             TTL = LoadTTL();
+
+            TelegramChats = new(); // TODO: should be removed after telegram chats migration
         }
 
 
         public void Update(FolderUpdate update)
         {
-            Notifications = update.Notifications ?? Notifications;
             Description = UpdateProperty(Description, update.Description, update.Initiator);
             Color = update.Color ?? Color;
             Name = update.Name ?? Name;
@@ -83,6 +88,9 @@ namespace HSMServer.Model.Folders
 
             if (update.SelfDestroy != null)
                 SelfDestroy = UpdateSetting(SelfDestroy, new TimeIntervalViewModel(update.SelfDestroy, PredefinedIntervals.ForSelfDestory), update.Initiator, "Remove sensor after inactivity");
+
+            if (update.TelegramChats is not null)
+                TelegramChats = UpdateChats(TelegramChats, update.TelegramChats, update.Initiator);
         }
 
         private TimeIntervalViewModel UpdateSetting(TimeIntervalViewModel currentValue, TimeIntervalViewModel newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(currentValue))] string propName = "", NoneValues none = NoneValues.Never)
@@ -122,6 +130,27 @@ namespace HSMServer.Model.Folders
             return newValue ?? oldValue;
         }
 
+        private HashSet<Guid> UpdateChats(HashSet<Guid> oldValue, HashSet<Guid> newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
+        {
+            var oldChats = oldValue?.Select(id => GetChatName(id)).OrderBy(n => n).ToList() ?? new(); // TODO: remove nulldable operation after telegram chats migration
+            var newChats = newValue?.Select(id => GetChatName(id)).OrderBy(n => n).ToList();
+
+            if (newValue is not null && !newChats.SequenceEqual(oldChats))
+            {
+                ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
+                {
+                    Enviroment = "Folder chats update",
+                    OldValue = string.Join(", ", oldChats),
+                    NewValue = string.Join(", ", newChats),
+
+                    PropertyName = propName,
+                    Path = Name,
+                });
+            }
+
+            return newValue;
+        }
+
 
         public FolderEntity ToEntity() =>
             new()
@@ -132,7 +161,7 @@ namespace HSMServer.Model.Folders
                 CreationDate = CreationDate.Ticks,
                 Description = Description,
                 Color = Color.ToArgb(),
-                Notifications = Notifications.ToEntity(),
+                TelegramChats = TelegramChats?.Select(c => c.ToByteArray()).ToList() ?? new(), // TODO: remove nullable operation after telegram chats migration
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
                     [nameof(TTL)] = TTL.ToEntity(),

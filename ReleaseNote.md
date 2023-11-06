@@ -1,59 +1,70 @@
 # HSM Server
 
-## New setting for Alerts - **Alert confirmation period** has been added
-Alert confirmation period is TimeSpan (format 0.00:00:00 or 00:00:00). When alert confirmation period is set, notifications are sent with selected delay. Notifications aren't sent if new data has arrived that didn't trigger the alert.
+## Telegram chat logic has been reworked
+The logic for creating and storing direct and group chats has been merged. All telegram chats have been migrated. The next improvements and changes have been done:
 
-## Import/export alerts
-* **Alert confirmation period*** has been added for alerts
-* Lists of strings are serialized into one line
-* Exporting have been fixed for removed sensors
-* Sorting by name has been added for **Sensors** list
+* **TELEGRAM CHAT CONNECTION LOGIC IS AVAILABLE ONLY FOR FOLDERS!!!**
+* **Edit** telegram chat page has been added
+* **Who add Telegram chat** info has been added
+* **Invite** logic for telegram chats has been improved.
+* **Invite** and **Edit** telegram chats logic has been added for **Admin** users and **folder Managers**
+* **All chats** logic from Alert constructor has been fixed. It's including direct and group chats now
+* **Guide** for inviting all types of telegram chat has been added
+* List of connected chats has been added in **Edit** folder page
+* **/info** command has been reworked. It's including all telegram chats settings and connected folders now
+* Chat settings synchronization has been called every 5 min
 
-## Sensors
-* Rounding by seconds for instant **Singleton** sensors have been added
-* **Singleton** reseting after sensors update has been fixed
+## Search for Tree has been added
+New search by name has been added to tree. Search is processed by names of folders, products, nodes and sensors with ignore case insensitive and partial matches. Also the next logic for search has been added:
+* **Enter** hotkey for search input
+* Autoupdate for tree after clearing search
+* Autoopening for filtered nodes has been added
+
+## Telegram bot
+* Default timeout period has been increased to 5 min
+* Logging for TG bot has been improved
+
+## Alerts
+* Full tree depth for **Import/Export** alerts has been added
+* Confirmation period for **Status is change** has been reworked. Notifications removed if status get back to the first state of a period
+* Icon aggregation for **Status is change** notification has been added. Aggregation aplies only if **$prevSatus** variable has been added to message template.  
+
+*Old style:*
+```
+✅->❌ [AggrST2]/Bridge/Lp Connections/st2/Connection Status = Disconnected (2 times)
+❌->✅ [AggrST2]/Bridge/Lp Connections/st2/Connection Status = Connected (2 times)
+```
+
+*New style:*
+```
+✅->❌->✅->❌->✅ [AggrST2]/Bridge/Lp Connections/st2/Connection Status = Connected
+```
 
 ## Tree
-* Alert icons hide if sensor has **OffTime** status
-* Node opening has been fixed if you select a node in the grid
+* **Notifications** filters have been removed
+* Enabled/Ignored notifications icons have been removed
+* Filters tips have been moved in tooltip for **Filters** button
+* Autocollapsing for tree after refresh request has been fixed
 
-## Notifications
-* Notifications with OffTime status have been fixed (notifications with OffTime status shouldn't be sent)
+## Exporting sensor history
+* **Comment** wrap has been fixed for exporting sensor history
+* Exporting with empty cells has been fixed
+* Data order has been fixed
 
 ## File sensor
-* Journal message for empty file has been fixed
-* View for empty file has been fixed
-* Realtime update for the last value has been fixed
+* Empty file preview has been fixed
+* **Time** property has been fixed
 
-## History
-* Date column size has been fixed
-* Pagination lock has been fixed (the lock is exist only for file sensors)
-* TTL records have been added for history exporting
-* All hidden columns have been added for history exporting (if hidden columns are enabled)
-* Persistance for hidden columns for paging has been added
+## Charts
+* **Comment** has been added in tooltip if data has **Error** status
+* **Property** names have been added for **Bar tooltip**
+* **Aggregated count** tip has been added for aggregated bars
+* Supporting of **NaN** values has been added for double charts
+* Labels for axis have been added: **Time** and **Unit**
+* Plot type for Bar sensors has been changed from box to bar
+* **IsServiceAlive** and **Service status** buttons have been hidden for sensors in **.computer** node
+* Y axis resizing has been fixed
 
-## Bugfixing
-* Null value for Version sensor data has been fixed
-* **TTL** and **Keep sensor(s) setting** have been fixed for product moving between folders
-* False **Enable for Grafana** has been fixed for **/addOrUpdate** endpoint
-* Output for alert errors has been added for **/addOrUpdate** endpoint
-
-# HSM DataCollector 
-
-## v. 3.2.3
-* **PostDataPeriod** for **WindowsInfoSensorOptions** have been fixed to 12 hours
-* **AndConfirmationPeriod*** block has been added for Alert API
-* Double '/' has been fixed for path with Module settings
-* Path building for File sensors has been fixed
-
-# HSM DataObjects
-## v. 3.1.0
-* **Sensitivity** for alert request has been renamed to **ConfirmationPeriod**
-
-# HSM Pinger
-
-## v. 0.0.4
-* Master countries (for checking VPN access) has been added
-* 10 request aggregated into 1 record statistic
-* Description and alerts for sensors have been added
-* Country switching and request attempts have been improved
+## Other
+* Product and sensor selection has been fixed for removed entities
+* Journal record for manual status change has been improved

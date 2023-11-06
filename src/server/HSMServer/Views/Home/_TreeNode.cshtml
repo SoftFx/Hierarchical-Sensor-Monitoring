@@ -25,32 +25,6 @@
 
     @if (!data.IsEmpty && !Model.IsMutedState && showIcons)
     {
-        @if (Model.IsAccountsEnable && !(Model.Parent?.IsAccountsEnable ?? false))
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
-            </span>
-        }
-        else if (Model.IsAccountsIgnore && !(Model.Parent?.IsAccountsIgnore ?? false))
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
-            </span>
-        }
-
-        @if (Model.IsGroupsEnable && !(Model.Parent?.IsGroupsEnable ?? false))
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
-            </span>
-        }
-        else if (Model.IsGroupsIgnore && !(Model.Parent?.IsGroupsIgnore ?? false))
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
-            </span>
-        }
-
         @if (Model.IsGrafanaEnabled && !(Model.Parent?.IsGrafanaEnabled ?? false))
         {
             <span>

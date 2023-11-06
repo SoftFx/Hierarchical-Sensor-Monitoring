@@ -1,7 +1,10 @@
-﻿namespace HSMDatabase.AccessManager.DatabaseEntities
+﻿using System;
+
+namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public sealed record ProductEntity : BaseNodeEntity
     {
+        [Obsolete("Should be removed after telegram chats migration")]
         public NotificationSettingsEntity NotificationSettings { get; init; }
 
 

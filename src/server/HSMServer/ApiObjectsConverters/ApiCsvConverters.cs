@@ -122,7 +122,7 @@ namespace HSMServer.ApiObjectsConverters
             content.AppendLine(header.Select(x => x.DisplayName).ToList().BuildRow());
 
             var rowValues = new List<string>(header.Count);
-            foreach (var value in values)
+            foreach (var value in values.OrderByDescending(x => x.Time))
             {
                 var rowValue = value is FileValue fileValue ? fileValue.DecompressContent() : value; // TODO smth with this crutch
                 var properties = JsonSerializer.SerializeToElement<object>(rowValue, _serializerOptions);
@@ -132,13 +132,7 @@ namespace HSMServer.ApiObjectsConverters
                     var jsonPropertyName = column.GetPropertyName(value);
                     var propValue = properties.GetProperty(jsonPropertyName).ToString();
 
-                    if (column.PropertyName != nameof(BaseValue.Comment) && DateTime.TryParse(propValue, out var dateTime))
-                        propValue = dateTime.ToDefaultFormat();
-
-                    if (value.IsTimeout && !_validProperties.TryGetValue(column.PropertyName, out _))
-                        propValue = string.Empty;
-
-                    rowValues.Add(propValue);
+                    rowValues.Add(GetCsvValue(column, value, propValue));
                 }
 
                 content.AppendLine(rowValues.BuildRow());
@@ -146,6 +140,25 @@ namespace HSMServer.ApiObjectsConverters
             }
 
             return content.ToString();
+
+            static string GetTransformedValue(Header column, BaseValue value, string propValue)
+            {
+                if (column.PropertyName != nameof(BaseValue.Comment) && DateTime.TryParse(propValue, out var dateTime)) 
+                    return dateTime.ToDefaultFormat();
+
+                if (value.IsTimeout && !_validProperties.TryGetValue(column.PropertyName, out _))
+                    return string.Empty;
+
+                //TODO: should be removed after removing SensorStatusJsonConverter
+                if (column.PropertyName == nameof(BaseValue.Status) && Enum.TryParse<SensorStatus>(propValue, out var status))
+                    return status.ToString();
+
+                return propValue;
+            }
+
+            static string GetCsvValue(Header column, BaseValue value, string propValue) => $"""
+                                                                                            "{GetTransformedValue(column, value, propValue)}"
+                                                                                            """;
         }
 
         private static List<Header> GetHeader(this List<BaseValue> values, ExportOptions options)

@@ -1,16 +1,19 @@
 ﻿using HSMServer.ConcurrentStorage;
 using HSMServer.Core.TableOfChanges;
-using HSMServer.Notification.Settings;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 
 namespace HSMServer.Model.Folders
 {
-    public record FolderUpdate : IUpdateModel
+    public record FolderUpdate : IUpdateRequest
     {
         public required Guid Id { get; init; }
 
         public required InitiatorInfo Initiator { get; init; }
+
+
+        public HashSet<Guid> TelegramChats { get; init; }
 
 
         public TimeIntervalViewModel TTL { get; init; }
@@ -19,8 +22,6 @@ namespace HSMServer.Model.Folders
 
         public TimeIntervalViewModel SelfDestroy { get; init; }
 
-
-        public NotificationSettings Notifications { get; init; }
 
         public string Description { get; init; }
 

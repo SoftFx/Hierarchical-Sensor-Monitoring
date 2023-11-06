@@ -1,5 +1,4 @@
 ﻿using HSMServer.Authentication;
-using HSMServer.Core.TableOfChanges;
 using HSMServer.Filters.FolderRoleFilters;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
@@ -7,6 +6,7 @@ using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
+using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -17,12 +17,15 @@ namespace HSMServer.Controllers
 {
     public class FoldersController : BaseController
     {
+        private readonly ITelegramChatsManager _telegramChatsManager;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _tree;
 
 
-        public FoldersController(IFolderManager folderManager, IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
+        public FoldersController(IFolderManager folderManager, IUserManager userManager,
+            TreeViewModel treeViewModel, ITelegramChatsManager chatsManager) : base(userManager)
         {
+            _telegramChatsManager = chatsManager;
             _folderManager = folderManager;
             _tree = treeViewModel;
         }
@@ -85,46 +88,50 @@ namespace HSMServer.Controllers
 
             await _folderManager.TryAdd(editFolder.ToFolderAdd(CurrentUser, CurrentInitiator, _tree), out var newFolder);
 
-            return View(nameof(EditFolder), BuildEditFolder(newFolder.Id));
+            return RedirectToAction(nameof(EditFolder), new { folderId = newFolder.Id });
         }
 
         [HttpPost]
         [FolderRoleFilterByFolderId(nameof(folderId), ProductRoleEnum.ProductManager)]
-        public Task RemoveFolder(Guid folderId) => _folderManager.TryRemove(folderId, CurrentInitiator);
+        public Task RemoveFolder(Guid folderId) => _folderManager.TryRemove(new(folderId, CurrentInitiator));
 
 
         [HttpPost]
-        [FolderRoleFilterByEditCleanup(nameof(folderCleanup), ProductRoleEnum.ProductManager)]
-        public async Task<IActionResult> EditCleanup(FolderCleanupViewModel folderCleanup)
+        [FolderRoleFilterByEditSettings(nameof(folderSettings), ProductRoleEnum.ProductManager)]
+        public async Task<IActionResult> EditSettings(FolderSettingsViewModel folderSettings)
         {
             var update = new FolderUpdate()
             {
-                Id = folderCleanup.Id,
-                KeepHistory = folderCleanup.SavedHistoryPeriod,
-                SelfDestroy = folderCleanup.SelfDestoryPeriod,
+                Id = folderSettings.Id,
+                TTL = folderSettings.ExpectedUpdateInterval,
+                KeepHistory = folderSettings.SavedHistoryPeriod,
+                SelfDestroy = folderSettings.SelfDestoryPeriod,
                 Initiator = CurrentInitiator
             };
 
             await _folderManager.TryUpdate(update);
 
-            return PartialView("_Cleanup", new FolderCleanupViewModel(_folderManager[update.Id]));
+            return PartialView("_Settings", new FolderSettingsViewModel(_folderManager[update.Id]));
         }
 
 
         [HttpPost]
-        [FolderRoleFilterByEditAlerts(nameof(folderAlerts), ProductRoleEnum.ProductManager)]
-        public async Task<IActionResult> EditAlerts(FolderAlertsViewModel folderAlerts)
+        public async Task<IActionResult> UpdateTelegram(FolderTelegramViewModel viewModel)
         {
+            var connectedChats = viewModel.ConnectedChatIds?.Where(ch => ch != Guid.Empty).ToList() ?? new();
+            if (viewModel.NewChats is not null)
+                connectedChats.AddRange(viewModel.NewChats);
+
             var update = new FolderUpdate()
             {
-                Id = folderAlerts.Id,
-                TTL = folderAlerts.ExpectedUpdateInterval,
+                Id = viewModel.FolderId,
+                TelegramChats = new HashSet<Guid>(connectedChats),
                 Initiator = CurrentInitiator
             };
 
             await _folderManager.TryUpdate(update);
 
-            return PartialView("_Alerts", new FolderAlertsViewModel(_folderManager[update.Id]));
+            return PartialView("_TelegramChats", BuildFolderTelegram(_folderManager[viewModel.FolderId]));
         }
 
 
@@ -199,7 +206,7 @@ namespace HSMServer.Controllers
         {
             var folder = _folderManager[folderId];
 
-            return new(folder, BuildFolderProducts(), BuildFolderUsers(folder));
+            return new(folder, BuildFolderProducts(), BuildFolderUsers(folder), BuildFolderTelegram(folder));
         }
 
         private FolderProductsViewModel BuildFolderProducts(List<string> selectedProducts = null)
@@ -211,5 +218,12 @@ namespace HSMServer.Controllers
 
         private FolderUsersViewModel BuildFolderUsers(FolderModel folder) =>
             new(folder, _userManager.GetUsers(u => !u.IsAdmin));
+
+        private FolderTelegramViewModel BuildFolderTelegram(FolderModel folder)
+        {
+            var chats = _telegramChatsManager.GetValues();
+
+            return new(folder, chats);
+        }
     }
 }

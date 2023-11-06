@@ -67,5 +67,16 @@ namespace HSMDatabase.AccessManager
         List<UserEntity> ReadUsersPage(int page, int pageSize);
 
         #endregion
+
+        #region Telegram chats
+
+        List<byte[]> GetTelegramChatsList();
+        TelegramChatEntity GetTelegramChat(byte[] chatId);
+        void AddTelegramChat(TelegramChatEntity chat);
+        void RemoveTelegramChat(byte[] chatId);
+        void AddTelegramChatToList(byte[] chatId);
+        void RemoveTelegramChatFromList(byte[] chatId);
+
+        #endregion
     }
 }

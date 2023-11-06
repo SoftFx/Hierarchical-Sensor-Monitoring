@@ -3,12 +3,12 @@ using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Confirmation;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Core.Confirmation;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.TreeStateSnapshot;
@@ -47,7 +47,7 @@ namespace HSMServer.Core.Cache
         public event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
-        public event Action<List<AlertResult>> ThrowAlertResultsEvent;
+        public event Action<List<AlertResult>, Guid> ThrowAlertResultsEvent;
 
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue, IJournalService journalService)
@@ -177,11 +177,11 @@ namespace HSMServer.Core.Cache
             GetAccessKeyModel(request).IsValid(KeyPermissions.CanReadSensorData, out message) &&
             TryGetSensor(request, product, null, out _, out message);
 
-        public bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out ProductModel product, out Guid sensorId, out string message)
+        public bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message)
         {
             sensorId = Guid.Empty;
 
-            if (!TryCheckProductKey(request, out product, out message))
+            if (!TryCheckProductKey(request, out var product, out message))
                 return false;
 
             var accessKey = GetAccessKeyModel(request);
@@ -447,11 +447,40 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
+        public bool TryGetSensorByPath(string productName, string path, out BaseSensorModel sensor)
+        {
+            sensor = null;
+
+            var node = GetProductByName(productName);
+
+            if (node is null)
+                return false;
+
+            var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            foreach (var subNodeName in parts[..^1])
+            {
+                node = node.SubProducts.Values.FirstOrDefault(u => u.DisplayName == subNodeName);
+
+                if (node is null)
+                    return false;
+            }
+
+            sensor = node.Sensors.Values.FirstOrDefault(u => u.DisplayName == parts[^1]);
+
+            return sensor is not null;
+        }
+
 
         public void ThrowAlertResults(Guid sensorId, List<AlertResult> alertResults)
         {
             if (_sensors.TryGetValue(sensorId, out var sensor) && sensor.CanSendNotifications)
-                ThrowAlertResultsEvent?.Invoke(alertResults);
+            {
+                var product = GetProductByName(sensor.RootProductName);
+
+                if (product.FolderId.HasValue)
+                    ThrowAlertResultsEvent?.Invoke(alertResults, product.FolderId.Value);
+            }
         }
 
         public void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
@@ -507,52 +536,99 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public void AddNewChat(Guid chatId, string name, string productName)
+        public void RemoveChatsFromPolicies(Guid folderId, List<Guid> chats, InitiatorInfo initiator)
         {
-            foreach (var (_, sensor) in _sensors)
-                if (productName is null || sensor.RootProductName == productName)
-                {
-                    foreach (var policy in sensor.Policies)
-                        if (policy.Destination.AllChats && !policy.Destination.Chats.ContainsKey(chatId))
-                        {
-                            policy.Destination.Chats.Add(chatId, name);
-                            policy.RebuildState();
+            if (chats.Count == 0)
+                return;
 
-                            UpdatePolicy(ActionType.Update, policy);
-                        }
+            var chatsHash = new HashSet<Guid>(chats);
 
-                    if (sensor.Policies.TimeToLive.AddChat(chatId, name))
-                        UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
-                }
-
-            foreach (var (_, product) in _tree)
-                if (productName is null || product.RootProductName == productName)
-                    if (product.Policies.TimeToLive.AddChat(chatId, name))
-                        UpdatePolicy(ActionType.Update, product.Policies.TimeToLive);
+            foreach (var product in GetProducts().Where(p => p.FolderId == folderId))
+                RemoveChatsFromPolicies(product, chatsHash, initiator);
         }
 
-        public void RemoveChat(Guid chatId, string productName)
+        private void RemoveChatsFromPolicies(ProductModel product, HashSet<Guid> chats, InitiatorInfo initiator)
         {
-            foreach (var (_, sensor) in _sensors)
-                if (productName is null || sensor.RootProductName == productName)
+            if (TryGetPolicyUpdate(product.Policies.TimeToLive, chats, initiator, out var productTtlUpdate))
+            {
+                var update = new ProductUpdate()
                 {
+                    Id = product.Id,
+                    TTLPolicy = productTtlUpdate,
+                    Initiator = initiator,
+                };
+
+                UpdateProduct(update);
+            }
+
+            foreach (var (_, sensor) in product.Sensors)
+            {
+                TryGetPolicyUpdate(sensor.Policies.TimeToLive, chats, initiator, out var sensorTtlUpdate);
+
+                List<PolicyUpdate> policiesUpdate = null;
+                if (sensor.Policies.Any(p => CanRemoveChatsFromPolicy(p.Destination, chats)))
+                {
+                    policiesUpdate = new(sensor.Policies.Count());
+
                     foreach (var policy in sensor.Policies)
-                        if (policy.Destination.Chats.Remove(chatId))
-                        {
-                            policy.RebuildState();
+                    {
+                        if (!TryGetPolicyUpdate(policy, chats, initiator, out var policyUpdate))
+                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination.Chats, policy.Destination.AllChats), initiator);
 
-                            UpdatePolicy(ActionType.Update, policy);
-                        }
-
-                    if (sensor.Policies.TimeToLive.RemoveChat(chatId))
-                        UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
+                        policiesUpdate.Add(policyUpdate);
+                    }
                 }
 
-            foreach (var (_, product) in _tree)
-                if (productName is null || product.RootProductName == productName)
-                    if (product.Policies.TimeToLive.RemoveChat(chatId))
-                        UpdatePolicy(ActionType.Update, product.Policies.TimeToLive);
+                if (policiesUpdate is not null || sensorTtlUpdate is not null)
+                {
+                    var update = new SensorUpdate()
+                    {
+                        Id = sensor.Id,
+                        Policies = policiesUpdate,
+                        TTLPolicy = sensorTtlUpdate,
+                        Initiator = initiator,
+                    };
+
+                    TryUpdateSensor(update, out _);
+                }
+            }
+
+            foreach (var (_, subProduct) in product.SubProducts)
+                RemoveChatsFromPolicies(subProduct, chats, initiator);
         }
+
+        private static bool TryGetPolicyUpdate(Policy policy, HashSet<Guid> chats, InitiatorInfo initiator, out PolicyUpdate update)
+        {
+            update = null;
+
+            var destination = policy.Destination;
+            if (CanRemoveChatsFromPolicy(destination, chats))
+            {
+                var destinationUpdate = new PolicyDestinationUpdate(destination.Chats.ExceptBy(chats, ch => ch.Key).ToDictionary(k => k.Key, v => v.Value));
+
+                update = BuildPolicyUpdate(policy, destinationUpdate, initiator);
+            }
+
+            return update is not null;
+        }
+
+        private static bool CanRemoveChatsFromPolicy(PolicyDestination destination, HashSet<Guid> chats) =>
+            !destination.AllChats && destination.Chats.Any(pair => chats.Contains(pair.Key));
+
+        private static PolicyUpdate BuildPolicyUpdate(Policy policy, PolicyDestinationUpdate destination, InitiatorInfo initiator) =>
+            new()
+            {
+                Id = policy.Id,
+                Conditions = policy.Conditions.Select(c => new PolicyConditionUpdate(c.Operation, c.Property, c.Target, c.Combination)).ToList(),
+                ConfirmationPeriod = policy.ConfirmationPeriod,
+                Status = policy.Status,
+                Template = policy.Template,
+                Icon = policy.Icon,
+                IsDisabled = policy.IsDisabled,
+                Destination = destination,
+                Initiator = initiator,
+            };
+
 
         private void UpdatePolicy(ActionType type, Policy policy)
         {
@@ -874,8 +950,7 @@ namespace HSMServer.Core.Cache
 
             SubscribeSensorToPolicyUpdate(sensor);
 
-            var root = GetProductByName(sensor.RootProductName);
-            sensor.Policies.AddDefault(root?.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(u => new Guid(u.SystemId), v => v.Name), options);
+            sensor.Policies.AddDefault(options);
 
             AddSensor(sensor);
             UpdateProduct(parent);

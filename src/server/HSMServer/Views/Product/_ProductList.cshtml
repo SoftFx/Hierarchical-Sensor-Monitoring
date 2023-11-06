@@ -59,7 +59,7 @@
                             <td class="text-break">
                                 @if (user.IsManager(product.Id))
                                 {
-                                    <a class="productName_anchor" id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
+                                    <a id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
                                         @Html.Raw(product.Name)
                                     </a>
                                 }

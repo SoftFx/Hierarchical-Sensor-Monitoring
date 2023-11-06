@@ -1,4 +1,4 @@
-﻿import {serviceAlivePlotName, ServiceStatus, serviceStatusPlotName} from "./plotting";
+﻿import { serviceAlivePlotName, ServiceStatus, serviceStatusPlotName } from "./plotting";
 
 export const ServiceAliveIcon = {
     'width': 500,
@@ -46,33 +46,93 @@ export class Plot {
         color: Colors.defaultTrace
     }
 
-    constructor(data) {}
+    #customYaxisName = undefined;
 
-    setUpData(data) {}
+    constructor(data, customYaxisName = undefined) {
+        this.#customYaxisName = customYaxisName;
+    }
+
+    setUpData(data) { }
 
     getPlotData() {
         return [this];
     }
 
     getLayout() {
+        if (this.#customYaxisName !== undefined) {
+            return {
+                dragmode: 'zoom',
+                autosize: true,
+                xaxis: {
+                    title: {
+                        text: 'Time',
+                        font: {
+                            family: 'Courier New, monospace',
+                            size: 18,
+                            color: '#7f7f7f'
+                        }
+                    },
+                    rangeslider: {
+                        visible: false
+                    }
+                },
+                yaxis: {
+                    title: {
+                        text: this.#customYaxisName,
+                        font: {
+                            family: 'Courier New, monospace',
+                            size: 18,
+                            color: '#7f7f7f'
+                        }
+                    },
+                }
+            }
+        }
+
         return {
-            autosize: true
+            dragmode: 'zoom',
+            autosize: true,
+            xaxis: {
+                title: {
+                    text: 'Time',
+                    font: {
+                        family: 'Courier New, monospace',
+                        size: 18,
+                        color: '#7f7f7f'
+                    }
+                },
+                rangeslider: {
+                    visible: false
+                }
+            }
         }
     }
 
     checkTtl(value) {
         return !!value.isTimeout;
     }
-    
+
     checkError(value) {
         return value.status === SensorsStatus.Error
     }
 
+    checkNaN(value) {
+        return value === "NaN";
+    }
+
     addCustomData(value, compareFunc = null, customField = 'value') {
-        if (this.checkTtl(value))
+        if (this.checkTtl(value)) {
             this.customdata.push(value.comment);
-        else
-            this.customdata.push(compareFunc === null ? value[customField] : compareFunc(value));
+            return;
+        }
+
+        let customValue = compareFunc === null ? value[customField] : compareFunc(value);
+        if (this.checkError(value)) {
+            this.customdata.push(customValue + '<br>' + value.comment);
+            return;
+        }
+
+        this.customdata.push(customValue);
     }
 
     markerColorCompareFunc(value) {
@@ -90,19 +150,23 @@ export class Plot {
     }
 }
 
-class ErrorColorPlot extends Plot{
+class ErrorColorPlot extends Plot {
     line = {
         color: Colors.defaultTrace
     }
     mode = "markers+lines";
 
-    markerColorCompareFunc(value){
+    constructor(data, unitType) {
+        super(data, unitType);
+    }
+
+    markerColorCompareFunc(value) {
         if (this.checkTtl(value))
             return Colors.TtlGrey
 
         if (this.checkError(value))
             return Colors.red
-        
+
         return Colors.default;
     }
 
@@ -112,14 +176,14 @@ class ErrorColorPlot extends Plot{
 
         if (this.checkError(value))
             return MarkerSize.Error;
-        
+
         return MarkerSize.defaultLineSize;
     }
 }
 
 export class BoolPlot extends Plot {
-    constructor(data) {
-        super();
+    constructor(data, unitType = undefined) {
+        super(data, unitType);
         this.type = 'scatter';
         this.mode = 'markers';
         this.marker = {
@@ -138,7 +202,11 @@ export class BoolPlot extends Plot {
         for (let i of data) {
             this.x.push(i.time)
 
-            this.y.push(i.value === true ? 1 : 0)
+            if (this.checkNaN(i.value))
+                this.y.push(0)
+            else
+                this.y.push(i.value === true ? 1 : 0)
+
             this.addCustomData(i, this.customDataCompareFunc)
             this.marker.color.push(this.markerColorCompareFunc(i));
             this.marker.size.push(this.getMarkerSize(i))
@@ -160,6 +228,7 @@ export class BoolPlot extends Plot {
 
     getLayout() {
         return {
+            ...super.getLayout(),
             autosize: true,
             yaxis: {
                 tickmode: 'auto',
@@ -179,8 +248,8 @@ export class BoolPlot extends Plot {
 }
 
 export class IntegerPlot extends ErrorColorPlot {
-    constructor(data) {
-        super();
+    constructor(data, unitType = undefined) {
+        super(data, unitType);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
@@ -200,7 +269,10 @@ export class IntegerPlot extends ErrorColorPlot {
     setUpData(data) {
         for (let i of data) {
             this.x.push(i.time)
-            this.y.push(i.value)
+            if (this.checkNaN(i.value))
+                this.y.push(0)
+            else
+                this.y.push(i.value)
             this.addCustomData(i);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
@@ -209,8 +281,8 @@ export class IntegerPlot extends ErrorColorPlot {
 }
 
 export class DoublePlot extends ErrorColorPlot {
-    constructor(data, name, field = 'value') {
-        super();
+    constructor(data, name, field = 'value', unitType = undefined) {
+        super(data, unitType);
 
         this.type = 'scatter';
         this.name = name;
@@ -227,36 +299,55 @@ export class DoublePlot extends ErrorColorPlot {
     }
 
     setUpData(data, customField = 'value') {
+        let name = this.name;
         for (let i of data) {
             this.x.push(i.time)
-            this.y.push(i[customField])
 
-            this.addCustomData(i, null, customField);
+            if (this.checkNaN(i[customField]))
+                this.y.push(0)
+            else
+                this.y.push(i[customField])
+
+            this.addCustomData(i, checkNotCompressedCount, customField);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
         }
 
         if (customField !== 'value') {
-            this.hovertemplate = `%{customdata} <extra>${this.name}</extra>`
+            this.hovertemplate = `%{customdata} <extra></extra>`
+        }
+
+        function checkNotCompressedCount(value) {
+            if (customField === 'count' && value.isCompressed === undefined)
+                return `${name}=${value[customField]} (aggregated value)`;
+
+            if (customField === 'min' || customField === 'max' || customField === 'mean' || customField === 'count')
+                return `${name}=${value[customField]}`;
+
+            return value[customField];
         }
     }
 }
 
 export class BarPLot extends Plot {
-    constructor(data, name) {
-        super();
+    constructor(data, name, unitType = undefined) {
+        super(data, unitType);
 
-        this.type = 'box';
+        this.type = 'candlestick';
         this.name = 'bar';
 
-        this.upperfence = [];
-        this.lowerfence = [];
-        this.median = [];
-        this.q1 = [];
-        this.q3 = [];
-        this.mean = [];
-        this.count = [];
+        this.close = [];
+        this.high = [];
+        this.low = [];
+        this.open = [];
+        this.increasing = { line: { color: 'green' } };
+        this.decreasing = { line: { color: 'green' } };
 
+        this.text = [];
+        this.hovertemplate = '%{customdata} <extra>this.name</extra>'
+        this.hoverinfo = 'text';
+        this.xaxis = 'x';
+        this.yaxis = 'y';
         this.setUpData(data);
     }
 
@@ -267,13 +358,17 @@ export class BarPLot extends Plot {
             else
                 this.x.push(i.closeTime);
 
-            this.upperfence.push(i.max);
-            this.lowerfence.push(i.min);
-            this.median.push(i.percentiles[0.5]);
-            this.q1.push(i.percentiles[0.25]);
-            this.q3.push(i.percentiles[0.75]);
-            this.mean.push(i.mean);
-            this.count.push(i.count);
+            this.high.push(i.max);
+            this.low.push(i.min);
+
+            /*this.open.push(i.firstValue === null ? i.min : i.firstValue);*/
+            this.open.push(i.min);
+            this.text.push(
+                'min: ' + i.min +
+                '<br>mean: ' + i.mean +
+                '<br>max: ' + i.max +
+                '<br>count: ' + i.count + (i.isCompressed === undefined ? " (aggregated value)" : ''));
+            this.close.push(i.lastValue);
         }
 
         window.graphData.plot = this;
@@ -282,8 +377,8 @@ export class BarPLot extends Plot {
 }
 
 export class TimeSpanPlot extends ErrorColorPlot {
-    constructor(data) {
-        super();
+    constructor(data, unitType = undefined) {
+        super(data, unitType);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
@@ -319,7 +414,7 @@ export class TimeSpanPlot extends ErrorColorPlot {
 
             let timespan = this.getTimeSpanValue(i);
             this.y.push(timespan.totalMilliseconds());
-            this.customdata.push(this.getTimeSpanCustomData(timespan, i))
+            this.customdata.push(this.checkError(i) ? this.getTimeSpanCustomData(timespan, i) + '<br>' + i.comment : this.getTimeSpanCustomData(timespan, i))
             this.marker.color.push(this.markerColorCompareFunc(i));
             this.marker.size.push(this.getMarkerSize(i));
         }
@@ -328,6 +423,9 @@ export class TimeSpanPlot extends ErrorColorPlot {
     }
 
     getTimeSpanValue(value) {
+        if (this.checkNaN(value.value))
+            return new TimeSpan.TimeSpan(0, 0, 0, 0, 0);
+
         let time = value.value.split(':');
         let temp = time[0].split('.')
         let days, hours, minutes, seconds;
@@ -351,7 +449,7 @@ export class TimeSpanPlot extends ErrorColorPlot {
         return this.getTimeSpanAsText(timespan);
     }
 
-    getTimeSpanAsText(timespan){
+    getTimeSpanAsText(timespan) {
         if (timespan === undefined)
             return '0h 0m 0s';
 
@@ -364,12 +462,13 @@ export class TimeSpanPlot extends ErrorColorPlot {
         const MAX_TIME_POINTS = 10
 
         let maxVal = Math.max(...this.y)
-        let step = Math.max(maxVal / MAX_TIME_POINTS, 1)
+        let minVal = Math.min(...this.y)
+        let step = Math.max((maxVal - minVal) / Math.min(MAX_TIME_POINTS, this.y.length), 1)
 
         let tVals = []
         let tValsCustomData = []
 
-        let cur = 0
+        let cur = minVal;
         while (cur <= maxVal) {
             tVals.push(cur);
             tValsCustomData.push(this.getTimeSpanAsText(new TimeSpan.TimeSpan(cur)))
@@ -377,6 +476,7 @@ export class TimeSpanPlot extends ErrorColorPlot {
         }
 
         return {
+            ...super.getLayout(),
             yaxis: {
                 ticktext: tValsCustomData,
                 tickvals: tVals,
@@ -425,8 +525,7 @@ export class EnumPlot extends Plot {
 
                 if (this.data[index].lastReceivingTime !== null && !!!this.data[index].isTimeout)
                     this.endTime = new Date(this.data[index].lastReceivingTime).toUTCString()
-                else
-                {
+                else {
                     if (index + 1 < this.data.length)
                         this.endTime = new Date(this.data[index + 1].time).toUTCString()
                     else
@@ -441,14 +540,14 @@ export class EnumPlot extends Plot {
             this.x.push(data[i].time);
             if (this.isServiceStatus) {
                 this.customdata.push(`${ServiceStatus[`${data[i].value}`][1]} <br>`)
-                this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? this.isBackgroundPlot ?  0.7 : 0.5 : 0)
-            } 
+                this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? this.isBackgroundPlot ? 0.7 : 0.5 : 0)
+            }
             else {
                 if (this.checkTtl(data[i])) {
                     this.z.push(0);
                     this.customdata.push(`${ServiceStatus["8"][1]} <br>`)
                 } else {
-                    this.z.push(this.isBackgroundPlot ?  0.7 : 0.5);
+                    this.z.push(this.isBackgroundPlot ? 0.7 : 0.5);
                     this.customdata.push(`${data[i].value === true ? ServiceStatus["4"][1] : ServiceStatus["1"][1]} <br>`)
                 }
             }
@@ -464,7 +563,7 @@ export class EnumPlot extends Plot {
         this.y = [minValue, maxValue];
         this.z = [this.z];
         this.customdata = [this.customdata];
-        
+
         if (!this.name)
             this.name = name;
 
@@ -473,6 +572,7 @@ export class EnumPlot extends Plot {
 
     getLayout() {
         return {
+            ...super.getLayout(),
             yaxis: {
                 visible: false,
             },

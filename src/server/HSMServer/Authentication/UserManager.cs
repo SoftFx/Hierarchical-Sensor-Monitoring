@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Authentication
 {
-    public sealed class UserManager : ConcurrentStorage<User, UserEntity, UserUpdate>, IUserManager
+    public sealed class UserManager : ConcurrentStorageNames<User, UserEntity, UserUpdate>, IUserManager
     {
         private const string DefaultUserUsername = "default";
 
@@ -39,14 +39,12 @@ namespace HSMServer.Authentication
 
             _treeValuesCache = cache;
             _treeValuesCache.ChangeProductEvent += ChangeProductEventHandler;
-            _treeValuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
         }
 
 
         public void Dispose()
         {
             _treeValuesCache.ChangeProductEvent -= ChangeProductEventHandler;
-            _treeValuesCache.ChangeSensorEvent -= ChangeSensorEventHandler;
         }
 
         public Task<bool> AddUser(string userName, string passwordHash, bool isAdmin, List<(Guid, ProductRoleEnum)> productRoles = null)
@@ -65,14 +63,6 @@ namespace HSMServer.Authentication
 
         public Task<bool> UpdateUser(User user) =>
             ContainsKey(user.Id) ? TryUpdate(user) : TryAdd(user);
-
-        public async Task RemoveUser(string userName)
-        {
-            if (TryGetIdByName(userName, out var userId))
-                await TryRemove(userId);
-            else
-                _logger.LogWarning($"There are no users with name={userName} to remove");
-        }
 
         public bool TryAuthenticate(string login, string password)
         {
@@ -159,20 +149,6 @@ namespace HSMServer.Authentication
 
                 foreach (var userToEdit in updatedUsers)
                     TryUpdate(userToEdit);
-            }
-        }
-
-        private void ChangeSensorEventHandler(BaseSensorModel sensor, ActionType transaction)
-        {
-            if (transaction == ActionType.Delete)
-            {
-                foreach (var (_, user) in this)
-                {
-                    if (!user.Notifications.RemoveSensor(sensor.Id))
-                        continue;
-
-                    TryUpdate(user);
-                }
             }
         }
     }

@@ -7,28 +7,36 @@ namespace HSMServer.BackgroundServices
 {
     public class NotificationsBackgroundService : BaseDelayedBackgroundService
     {
+        private const int CenterRecalculationPeriodMin = 5;
+
         private readonly NotificationsCenter _center;
+        private DateTime _lastCenterRecalculation = DateTime.MinValue;
 
 
-        public override TimeSpan Delay { get; } = TimeSpan.FromSeconds(10);
+        public override TimeSpan Delay { get; } = TimeSpan.FromSeconds(1);
 
 
-        public NotificationsBackgroundService(NotificationsCenter center) 
+        public NotificationsBackgroundService(NotificationsCenter center)
         {
             _center = center;
         }
 
 
-        public override Task StartAsync(CancellationToken cancellationToken) => _center.Start();
+        public override Task StartAsync(CancellationToken token) => _center.Start().ContinueWith(_ => base.StartAsync(token)).Unwrap();
 
-        public override Task StopAsync(CancellationToken token) => _center.DisposeAsync().AsTask();
+        public override Task StopAsync(CancellationToken token) => _center.DisposeAsync().AsTask().ContinueWith(_ => base.StopAsync(token)).Unwrap();
 
 
-        protected override Task ServiceAction()
+        protected override async Task ServiceAction()
         {
-            _center.CheckState();
+            _center.SendAllMessages();
 
-            return Task.CompletedTask;
+            if ((DateTime.UtcNow - _lastCenterRecalculation).TotalMinutes >= CenterRecalculationPeriodMin)
+            {
+                _lastCenterRecalculation = DateTime.UtcNow;
+
+                await _center.RecalculateState();
+            }
         }
     }
 }
