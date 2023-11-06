@@ -228,7 +228,7 @@ window.updateCurrentPlotsIds = function (idToCompare, id) {
 }
 
 window.initMultichart = function (chartId) {
-    Plotly.newPlot(chartId, [], {
+    return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
         dragmode: 'zoom',
         autosize: true,

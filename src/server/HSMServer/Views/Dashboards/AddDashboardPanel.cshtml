@@ -9,7 +9,7 @@
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
 
-<div class="w-100 overflow-y-auto">
+<div class="w-100 overflow-y-auto m-2">
     <div id="panelSettings" class="my-2">
         <div id="editablePanelSettings" class="my-2">
             <form method="post"  asp-action="@nameof(DashboardsController.SaveDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
@@ -23,8 +23,9 @@
             </form>
         </div>
     </div>
-
-    <div id="multichart" class="w-100 h-75 dropzone me-2 pe-2" style="box-sizing:content-box"></div>
+    <div class="dropzone" style="max-width: 98%;min-width: 100%; width: 100%!important;">
+         <div id="multichart"></div>
+    </div>
     <div id="plots" class="mt-1">
         <ul id="sources" class="list-group">
         </ul>
@@ -34,8 +35,12 @@
 
 <script>
     $(document).ready(function () {
-        initMultichart('multichart');
-         
+        initMultichart('multichart').then(
+            (dom) => {
+                window.dispatchEvent(new Event('resize'));
+            }
+        );
+
         $('[id^="source"]').on('input', '.form-control-color', function () {
             $(this).attr('value', this.value);
             let id = this.id.substring("color_".length, this.id.length);
