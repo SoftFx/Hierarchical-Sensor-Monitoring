@@ -174,7 +174,7 @@ export function initDropzone(){
                         height: event.rect.heigh
                     };
 
-                    Plotly.relayout('panelChart', update);
+                    Plotly.relayout(`panelChart_${event.target.id}`, update);
                 }
             },
             modifiers: [

@@ -1,9 +1,13 @@
-﻿@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
-
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
 @using HSMServer.Model.Dashboards
+
 @model HSMServer.Model.Dashboards.PanelViewModel
 
-<div class="panel resize-draggable" title="Drag and drop sensor from tree to panel">
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div id="@Model.Id" class="panel resize-draggable" title="Drag and drop sensor from tree to panel">
     <div class="d-flex flex-column">
         <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1">
             <div>@Model.Name</div>
@@ -12,7 +16,7 @@
                     <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-                    <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="Dashboards" asp-action="AddDashboardPanel" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
+                    <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
                     <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
                 </div>
             </div>
