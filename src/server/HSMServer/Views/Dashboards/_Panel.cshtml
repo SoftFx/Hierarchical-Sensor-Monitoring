@@ -29,7 +29,6 @@
 
 <script>
     $(document).ready(function () {
-        var testArr = @Html.Raw(Json.Serialize(Model?.Sources?.Select(x => x.Value) ?? Array.Empty<DatasourceViewModel>()))
         initMultichart('panelChart_@Model.Id');
     })
 </script>

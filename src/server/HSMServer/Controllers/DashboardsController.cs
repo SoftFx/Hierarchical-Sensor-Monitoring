@@ -34,8 +34,6 @@ namespace HSMServer.Controllers
         [Route("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public IActionResult AddDashboardPanel(Guid dashBoardId, Guid panelId)
         {
-            Console.WriteLine(dashBoardId);
-            Console.WriteLine(panelId);
             _dashboardManager.TryGetValue(dashBoardId, out var dashboard);
             dashboard.Panels.TryGetValue(panelId, out var panel);
             return View("AddDashboardPanel", new PanelViewModel(panel, dashboard.Id));
@@ -49,15 +47,11 @@ namespace HSMServer.Controllers
             panel?.Update(new PanelUpdate() { Id = panel.Id, Name = model.Name, Description = model.Description });
             _dashboardManager.TryUpdate(dashboard);
 
-            return View("AddDashboardPanel", new PanelViewModel()
-            {
-                DashboardId = dashBoardId,
-                Id = panelId
-            });
+            return View("AddDashboardPanel", new PanelViewModel(panel, dashboard.Id));
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
-        public async Task<JsonResult> GetSource2(Guid sourceId, Guid dashboardId, Guid panelId)
+        public async Task<JsonResult> GetSource(Guid sourceId, Guid dashboardId, Guid panelId)
         {
             string errorMessage = string.Empty;
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
@@ -84,7 +78,7 @@ namespace HSMServer.Controllers
                     if (_treeViewModel.Sensors.TryGetValue(sourceId, out var newSource) && viewModel.TryAddSource(newSource, out errorMessage))
                     {
                         panel.Sources.TryAdd(newSource.Id, new PanelDataSource(newSource.Id));
-                        _dashboardManager.TryUpdate(dashboard);
+                        await _dashboardManager.TryUpdate(dashboard);
                         var values = (await _cache.GetSensorValuesPage(newSource.Id, DateTime.UtcNow.AddDays(-30),
                             DateTime.UtcNow, 500, RequestOptions.IncludeTtl).Flatten()).Select(x => (object)x);
 
@@ -129,45 +123,12 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetPanel(Guid dashboardId)
         {
-            Console.WriteLine(dashboardId);
             _dashboardManager.TryGetValue(dashboardId, out var dashboard);
             var newPanel = new Panel();
             dashboard.Panels.TryAdd(newPanel.Id, newPanel);
             _dashboardManager.TryUpdate(dashboard);
 
-            return PartialView("_Panel", new PanelViewModel() { Id = newPanel.Id, DashboardId = dashboard.Id });
-        }
-
-        [HttpGet]
-        public async Task<JsonResult> GetSource(Guid sourceId, Guid panelId)
-        {
-            if (!CurrentUser.ConfiguredPanels.TryGetValue(panelId, out var panel))
-                panel = new PanelViewModel();
-
-            var errorMessage = string.Empty;
-            if (_treeViewModel.Sensors.TryGetValue(sourceId, out var sensorNodeViewModel) && panel.TryAddSource(sensorNodeViewModel, out errorMessage))
-            {
-                var values = (await _cache.GetSensorValuesPage(sensorNodeViewModel.Id, DateTime.UtcNow.AddDays(-30),
-                    DateTime.UtcNow, 500, RequestOptions.IncludeTtl).Flatten()).Select(x => (object)x);
-
-                return Json(new SourceDto(sensorNodeViewModel, values.ToList(), panel.Id));
-            }
-
-            return Json(new
-            {
-                errorMessage
-            });
-        }
-
-        [HttpPost]
-        public void CreatePanel(Guid[] sourceIds, Guid panelId)
-        {
-            if (CurrentUser.ConfiguredPanels.TryGetValue(panelId, out var panel))
-                foreach (var id in sourceIds)
-                {
-                    if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
-                        panel.UpdateSources(sensor);
-                }
+            return PartialView("_Panel", new PanelViewModel(newPanel, dashboard.Id));
         }
     }
 }

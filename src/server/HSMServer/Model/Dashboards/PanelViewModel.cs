@@ -31,10 +31,7 @@ public class PanelViewModel
     public Unit? UnitType { get; set; }
 
 
-    public PanelViewModel()
-    {
-        
-    }
+    public PanelViewModel() { }
 
     public PanelViewModel(Panel panel, Guid dashboardId)
     {
@@ -99,9 +96,8 @@ public class DatasourceViewModel
     public Guid Id { get; set; }
 
     public Guid SensorId { get; set; }
-    
-    public SensorType Type { get; set; }
 
+    public SensorType Type { get; set; }
 
     public string Color { get; set; }
 

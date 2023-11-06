@@ -1,5 +1,4 @@
-﻿@using HSMServer.Controllers
-@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+﻿@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @model HSMServer.Model.Dashboards.PanelViewModel
 
@@ -7,9 +6,6 @@
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
-<script>
-    var sourceLink = '@Url.Action(nameof(DashboardsController.GetSource))';
-</script>
 
 <div class="w-100 overflow-y-auto">
     <div>
