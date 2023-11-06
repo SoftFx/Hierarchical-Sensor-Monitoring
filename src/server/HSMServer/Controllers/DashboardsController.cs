@@ -1,20 +1,15 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
+using HSMCommon.Extensions;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Dashboards;
 using HSMServer.DTOs.Sensor;
-using HSMServer.Extensions;
 using HSMServer.Model.Dashboards;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Dashboards;
-using HSMServer.Model.Dashboards;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMCommon.Extensions;
 
 namespace HSMServer.Controllers
 {
@@ -44,7 +39,7 @@ namespace HSMServer.Controllers
 
             return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id });
         }
-        
+
         public IActionResult AddDashboardPanel() => View("AddDashboardPanel");
 
         [HttpGet]
@@ -67,7 +62,7 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         public IActionResult GetPanel() => PartialView("_Panel");
-        
+
         [HttpGet]
         public async Task<JsonResult> GetSource(Guid sourceId, Guid panelId)
         {
