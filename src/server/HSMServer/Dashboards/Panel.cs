@@ -17,7 +17,8 @@ namespace HSMServer.Dashboards
             Sources = new CGuidDict<PanelDataSource>(entity.Sources.Select(u => new PanelDataSource(u))
                                                                    .ToDictionary(k => k.Id, v => v));
         }
-        
+
+
         public override DashboardPanelEntity ToEntity()
         {
             var entity = base.ToEntity();

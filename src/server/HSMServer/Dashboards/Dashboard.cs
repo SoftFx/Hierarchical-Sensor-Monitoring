@@ -23,7 +23,7 @@ namespace HSMServer.Dashboards
         {
             var entity = base.ToEntity();
 
-            entity.Panels?.AddRange(Panels.Select(u => u.Value.ToEntity()));
+            entity.Panels.AddRange(Panels.Select(u => u.Value.ToEntity()));
 
             return entity;
         }

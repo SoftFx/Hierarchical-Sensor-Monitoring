@@ -1,6 +1,4 @@
 using System;
-using System.Drawing;
-using System.Globalization;
 using System.Linq;
 using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
