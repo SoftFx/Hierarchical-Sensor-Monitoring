@@ -1,17 +1,16 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
-using HSMCommon.Collections;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Model;
+using HSMServer.Dashboards;
 using HSMServer.DTOs.Sensor;
 using HSMServer.Extensions;
 using HSMServer.Model.Dashboards;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Dashboards;
 using Microsoft.AspNetCore.Mvc;
-using HSMServer.Core.Model;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
 {
@@ -31,21 +30,7 @@ namespace HSMServer.Controllers
 
         public IActionResult Index() => View(_dashboardManager.GetValues().Select(d => new DashboardViewModel(d)).OrderBy(d => d.Name).ToList());
 
-        [HttpPost]
-        public async Task<IActionResult> AddDashboard(DashboardViewModel newDashboard)
-        {
-            if (!ModelState.IsValid)
-                return View(nameof(EditDashboard), newDashboard);
 
-            if (_dashboardManager.TryGetValue(newDashboard.Id.Value, out _))
-                await _dashboardManager.TryUpdate(newDashboard.ToDashboardUpdate());
-            else 
-                await _dashboardManager.TryAdd(newDashboard.ToDashboardAdd(CurrentUser), out _);
-
-            return RedirectToAction(nameof(EditDashboard), new { dashboardId = newDashboard.Id });
-        }
-        
-        
         [Route("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public IActionResult AddDashboardPanel(Guid dashBoardId, Guid panelId)
         {
@@ -55,22 +40,22 @@ namespace HSMServer.Controllers
             dashboard.Panels.TryGetValue(panelId, out var panel);
             return View("AddDashboardPanel", new PanelViewModel(panel, dashboard.Id));
         }
-        
+
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public IActionResult SaveDashboardPanel(Guid dashBoardId, Guid panelId, [FromForm] PanelViewModel model)
         {
             _dashboardManager.TryGetValue(dashBoardId, out var dashboard);
             dashboard.Panels.TryGetValue(panelId, out var panel);
-            panel?.Update(new PanelUpdate(){Id = panel.Id,Name = model.Name, Description = model.Description});
+            panel?.Update(new PanelUpdate() { Id = panel.Id, Name = model.Name, Description = model.Description });
             _dashboardManager.TryUpdate(dashboard);
-            
+
             return View("AddDashboardPanel", new PanelViewModel()
             {
                 DashboardId = dashBoardId,
                 Id = panelId
             });
         }
-        
+
         [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
         public async Task<JsonResult> GetSource2(Guid sourceId, Guid dashboardId, Guid panelId)
         {
@@ -95,7 +80,7 @@ namespace HSMServer.Controllers
                         SensorType = currentType,
                         UnitType = currentUnitType,
                     };
-                    
+
                     if (_treeViewModel.Sensors.TryGetValue(sourceId, out var newSource) && viewModel.TryAddSource(newSource, out errorMessage))
                     {
                         panel.Sources.TryAdd(newSource.Id, new PanelDataSource(newSource.Id));
@@ -107,7 +92,7 @@ namespace HSMServer.Controllers
                     }
                 }
             }
-            
+
             return Json(new
             {
                 errorMessage
@@ -117,17 +102,21 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task<IActionResult> EditDashboard(Guid? dashboardId)
         {
-            if (dashboardId.HasValue && _dashboardManager.TryGetValue(dashboardId.Value, out var dashboard))
-                return View(nameof(EditDashboard), new DashboardViewModel(dashboard));
+            Dashboard dashboard = null;
 
-            await _dashboardManager.TryAdd(new DashboardAdd() {AuthorId = CurrentUser.Id, Name = "New Dashboard"}, out var newDashboard);
-            
-            return View(nameof(EditDashboard), new DashboardViewModel(newDashboard));
+            var isModify = dashboardId.HasValue && _dashboardManager.TryGetValue(dashboardId.Value, out dashboard);
+            if (!isModify)
+                await _dashboardManager.TryAdd(DashboardViewModel.ToDashboardAdd(CurrentUser), out dashboard);
+
+            return View(nameof(EditDashboard), new DashboardViewModel(dashboard, isModify));
         }
 
         [HttpPost]
         public async Task<IActionResult> EditDashboard(DashboardViewModel editDashboard)
         {
+            if (!ModelState.IsValid)
+                return View(nameof(EditDashboard), editDashboard);
+
             await _dashboardManager.TryUpdate(editDashboard.ToDashboardUpdate());
 
             return View(nameof(EditDashboard), new DashboardViewModel(_dashboardManager[editDashboard.Id]));
@@ -145,8 +134,8 @@ namespace HSMServer.Controllers
             var newPanel = new Panel();
             dashboard.Panels.TryAdd(newPanel.Id, newPanel);
             _dashboardManager.TryUpdate(dashboard);
-            
-            return PartialView("_Panel", new PanelViewModel() {Id = newPanel.Id, DashboardId = dashboard.Id});
+
+            return PartialView("_Panel", new PanelViewModel() { Id = newPanel.Id, DashboardId = dashboard.Id });
         }
 
         [HttpGet]

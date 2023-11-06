@@ -8,6 +8,9 @@ namespace HSMServer.Model.Dashboards
 {
     public sealed class DashboardViewModel
     {
+        private const string DefaultName = "New Dashboard";
+
+
         public List<PanelViewModel> Panels { get; set; } = new();
 
 
@@ -18,24 +21,21 @@ namespace HSMServer.Model.Dashboards
         public string Description { get; set; }
 
 
+        public bool IsModify { get; init; }
+
+
         public DashboardViewModel() { }
 
-        public DashboardViewModel(Dashboard dashboard)
+        public DashboardViewModel(Dashboard dashboard, bool isModify = true)
         {
             Id = dashboard.Id;
             Name = dashboard.Name;
             Description = dashboard.Description;
             Panels = dashboard.Panels.Select(x => new PanelViewModel(x.Value, Id.Value)).ToList();
+
+            IsModify = isModify;
         }
 
-
-        internal DashboardAdd ToDashboardAdd(User author) =>
-            new()
-            {
-                Name = Name,
-                AuthorId = author.Id,
-                Description = Description,
-            };
 
         internal DashboardUpdate ToDashboardUpdate() =>
             new()
@@ -44,5 +44,13 @@ namespace HSMServer.Model.Dashboards
                 Name = Name,
                 Description = Description,
             };
+
+        internal static DashboardAdd ToDashboardAdd(User author) =>
+            new()
+            {
+                Name = DefaultName,
+                AuthorId = author.Id,
+            };
+
     }
 }
