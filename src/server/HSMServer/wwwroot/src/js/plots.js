@@ -417,7 +417,7 @@ export class TimeSpanPlot extends ErrorColorPlot {
 
             let timespan = this.getTimeSpanValue(i);
             this.y.push(timespan.totalMilliseconds());
-            this.customdata.push(this.getTimeSpanCustomData(timespan, i))
+            this.customdata.push(this.checkError(i) ? this.getTimeSpanCustomData(timespan, i) + '<br>' + i.comment : this.getTimeSpanCustomData(timespan, i))
             this.marker.color.push(this.markerColorCompareFunc(i));
             this.marker.size.push(this.getMarkerSize(i));
         }

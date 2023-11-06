@@ -426,12 +426,9 @@ namespace HSMServer.Controllers
 
             var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
 
-            if (value?.Value is null)
-                return _emptyResult;
+            var fileName = $"{path.Replace('/', '_')}.{value.Extension ?? FileExtensions.DefaultFileExtension}";
 
-            var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
-
-            return File(value.Value, fileName.GetContentType(), fileName);
+            return File(value.Value ?? Array.Empty<byte>(), fileName.GetContentType(), fileName);
         }
 
         [HttpPost]

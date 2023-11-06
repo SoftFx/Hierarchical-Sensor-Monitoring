@@ -122,7 +122,7 @@ namespace HSMServer.ApiObjectsConverters
             content.AppendLine(header.Select(x => x.DisplayName).ToList().BuildRow());
 
             var rowValues = new List<string>(header.Count);
-            foreach (var value in values)
+            foreach (var value in values.OrderByDescending(x => x.Time))
             {
                 var rowValue = value is FileValue fileValue ? fileValue.DecompressContent() : value; // TODO smth with this crutch
                 var properties = JsonSerializer.SerializeToElement<object>(rowValue, _serializerOptions);
