@@ -55,9 +55,16 @@
             let id = this.id.substring("deletePlot_".length, this.id.length);
             let model = getCurrentPlotInDashboard(id)
             if (model !== undefined) {
-                Plotly.deleteTraces('multichart', model.id).then(function (){
-                    $('[id^="source"] li')[model.id].remove();
-                    updateCurrentPlotsIds(model.id, id)
+                $.ajax({
+                    type:'delete',
+                    url: window.location.pathname + '/' + id
+                }).done(function (response){
+                    Plotly.deleteTraces('multichart', model.id).then(function (){
+                        $('[id^="source"] li')[model.id].remove();
+                        updateCurrentPlotsIds(model.id, id)
+                    })
+                }).fail(function (response){
+                    showToast(response.responseText);
                 })
             }
         })

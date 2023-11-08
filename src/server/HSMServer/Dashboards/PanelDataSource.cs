@@ -18,9 +18,12 @@ namespace HSMServer.Dashboards
 
         public PanelDataSource() { }
 
-        public PanelDataSource(Guid sensorId)
+        public PanelDataSource(Guid sensorId, Color color, string label = "")
         {
+            Id = Guid.NewGuid();
             SensorId = sensorId;
+            Color = color;
+            Label = label;
         }
 
         public PanelDataSource(PanelSourceEntity entity)
