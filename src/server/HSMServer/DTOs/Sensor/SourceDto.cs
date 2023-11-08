@@ -17,7 +17,7 @@ public class SourceDto
     
     public List<object> Values { get; set; }
 
-    public SensorInfoDTO SensorInfo { get; set; }
+    public SensorInfoDto SensorInfo { get; set; }
 
     public Guid PanelId { get; set; }
 
@@ -29,7 +29,7 @@ public class SourceDto
     public SourceDto(SensorNodeViewModel sensor, List<object> values, Guid panelId, Guid sourceId, Color color)
     {
         Color = color.ToRGB();
-        SensorInfo = new SensorInfoDTO(sensor.Type, sensor.Type, sensor.SelectedUnit.ToString());
+        SensorInfo = new SensorInfoDto(sensor.Type, sensor.Type, sensor.SelectedUnit.ToString());
         Name = sensor.Name;
         Path = sensor.FullPath;
         Values = values;

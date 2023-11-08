@@ -11,9 +11,9 @@ namespace HSMServer.Dashboards
         public Guid SensorId { get; }
 
 
-        public Color Color { get; private set; }
+        public Color Color { get; set; }
 
-        public string Label { get; private set; }
+        public string Label { get; set; }
 
 
         public PanelDataSource() { }

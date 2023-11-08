@@ -195,24 +195,14 @@ window.initDashboard = function () {
         })
 }
 
-window.updateColor = function (color, id) {
+window.updateSource = function (name, color, id){
     if (currentPanel[id] === undefined)
         return;
 
-    if (currentPanel[id].colorTimeout !== undefined)
-        clearTimeout(currentPanel[id].colorTimeout);
+    if (currentPanel[id].updateTimeout !== undefined)
+        clearTimeout(currentPanel[id].updateTimeout);
 
-    currentPanel[id].colorTimeout = setTimeout(updatePlotColor, plotColorDelay, color, id);
-}
-
-window.updateName = function (name, id){
-    if (currentPanel[id] === undefined)
-        return;
-
-    if (currentPanel[id].nameTimeout !== undefined)
-        clearTimeout(currentPanel[id].nameTimeout);
-
-    currentPanel[id].nameTimeout = setTimeout(updatePlotName, plotColorDelay, name, id);
+    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, id);
 }
 
 window.getCurrentPlotInDashboard = function (id) {
@@ -268,26 +258,30 @@ function showEventInfo (event) {
     event.target.removeAttribute('data-x')
     event.target.removeAttribute('data-y')
 }
-function updatePlotColor(color, id) {
-    let update = {
-        'line.color': color
-    }
 
-    if (currentPanel[id] !== undefined)
-        Plotly.restyle('multichart', update, currentPanel[id].id)
+function updatePlotSource(name, color, id){
+    $.ajax({
+        processData: false,
+        type: 'put',
+        contentType: 'application/json',
+        url: window.location.pathname + '/' + id,
+        data: JSON.stringify({
+            name: name,
+            color: color
+        })
+    }).done(function (){
+        let update = {
+            'hovertemplate': `${name}, %{customdata}<extra></extra>`,
+            'line.color': color
+        }
 
-    currentPanel[id].colorTimeout = undefined;
-}
+        if (currentPanel[id] !== undefined)
+            Plotly.restyle('multichart', update, currentPanel[id].id)
 
-function updatePlotName(name, id) {
-    let update = {
-        'hovertemplate': `${name}, %{customdata}<extra></extra>` 
-    }
-
-    if (currentPanel[id] !== undefined)
-        Plotly.restyle('multichart', update, currentPanel[id].id)
-
-    currentPanel[id].nameTimeout = undefined;
+        currentPanel[id].updateTimeout = undefined;
+    }).fail(function (response){
+        showToast(response.responseText)
+    })
 }
 
 function getRandomColor() {

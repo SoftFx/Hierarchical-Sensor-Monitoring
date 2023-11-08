@@ -17,7 +17,6 @@ namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
-        private readonly Random _random = new();
         private readonly ITreeValuesCache _cache;
         private readonly IDashboardManager _dashboardManager;
         private readonly TreeViewModel _treeViewModel;
@@ -82,7 +81,7 @@ namespace HSMServer.Controllers
 
                     if (_treeViewModel.Sensors.TryGetValue(sourceId, out var newSource) && viewModel.TryAddSource(newSource, out errorMessage))
                     {
-                        var datasource = new PanelDataSource(newSource.Id, Color.FromArgb(_random.Next(256), _random.Next(256), _random.Next(256)));
+                        var datasource = new PanelDataSource(newSource.Id, Color.FromName(ColorExtensions.GenerateRandomColor()), newSource.Name);
 
                         if (panel.Sources.TryAdd(datasource.Id, datasource) && (await _dashboardManager.TryUpdate(dashboard)))
                         {
@@ -100,10 +99,22 @@ namespace HSMServer.Controllers
             });
         }
 
-        [HttpPut]
-        public IActionResult UpdateSource()
+        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
+        public IActionResult UpdateSource([FromBody] UpdateSourceDto update, Guid dashboardId, Guid panelId, Guid sourceId)
         {
-            return _emptyResult;
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
+                dashboard.Panels.TryGetValue(panelId, out var panel) &&
+                panel.Sources.TryGetValue(sourceId, out var source))
+            {
+                source.Color = Color.FromName(update.Color);
+                source.Label = update.Name;
+
+                _dashboardManager.TryUpdate(dashboard);
+                
+                return Ok();
+            }
+                
+            return NotFound("No such source");
         }
 
         [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]

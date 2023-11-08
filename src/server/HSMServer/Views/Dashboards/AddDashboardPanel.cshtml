@@ -45,12 +45,12 @@
             $(this).attr('value', this.value);
             let id = this.id.substring("color_".length, this.id.length);
             
-            updateColor($(this).val(), id)
+            updateSource($(`#name_input_${id}`).val(), $(this).val(), id)
         }).on('input', '.form-control', function () {
             $(this).attr('value', this.value);
             let id = this.id.substring("name_input_".length, this.id.length);
                       
-            updateName($(this).val(), id)
+            updateSource($(this).val(), $(`#color_${id}`).val(), id)
         }).on('click', 'button',function (){
             let id = this.id.substring("deletePlot_".length, this.id.length);
             let model = getCurrentPlotInDashboard(id)
