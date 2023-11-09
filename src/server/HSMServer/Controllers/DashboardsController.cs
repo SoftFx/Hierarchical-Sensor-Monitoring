@@ -1,7 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
-using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
@@ -14,7 +10,6 @@ using System;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Extensions;
 
 namespace HSMServer.Controllers
 {
@@ -58,6 +53,7 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> GetSource(Guid sourceId, Guid dashboardId, Guid panelId)
         {
             string errorMessage = string.Empty;
+
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
                 if (dashboard.Panels.TryGetValue(panelId, out var panel))
@@ -84,13 +80,14 @@ namespace HSMServer.Controllers
 
                     if (_treeViewModel.Sensors.TryGetValue(sourceId, out var newSource) && viewModel.TryAddSource(newSource, out errorMessage))
                     {
-                        var datasource = new PanelDatasource(newSource.Id, Color.FromName(ColorExtensions.GenerateRandomColor()), newSource.Name);
+                        var sensorModel = _cache.GetSensor(sourceId);
+                        var datasource = new PanelDatasource(sensorModel);
 
                         if (panel.Sources.TryAdd(datasource.Id, datasource) && (await _dashboardManager.TryUpdate(dashboard)))
                         {
-                            //var values = (await _cache.GetSensorValuesPage(newSource.Id, DateTime.UtcNow.AddDays(-30),
-                            //    DateTime.UtcNow, 500, RequestOptions.IncludeTtl).Flatten()).Select(x => (object)x);
-                            //return Json(new SourceDto(newSource, values.ToList(), panel.Id, datasource.Id, datasource.Color));
+                            var response = await datasource.Source.GetInitializationData();
+
+                            return Json(new SourceDto(newSource, null, panel.Id, datasource.Id, datasource.Color));
                         }
                     }
                 }
@@ -113,10 +110,10 @@ namespace HSMServer.Controllers
                 source.Label = update.Name;
 
                 _dashboardManager.TryUpdate(dashboard);
-                
+
                 return Ok();
             }
-                
+
             return NotFound("No such source");
         }
 
@@ -134,7 +131,7 @@ namespace HSMServer.Controllers
         [HttpGet("Dashboards/{dashboardId:guid}")]
         public IActionResult EditDashboard(Guid dashboardId, bool isModify = true)
         {
-             _dashboardManager.TryGetValue(dashboardId, out var dashboard);
+            _dashboardManager.TryGetValue(dashboardId, out var dashboard);
 
             return View(nameof(EditDashboard), new DashboardViewModel(dashboard, isModify));
         }
@@ -148,7 +145,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost("Dashboards/{dashboardId:guid?}")]
-        public async Task<IActionResult> EditDashboard([FromForm]DashboardViewModel editDashboard)
+        public async Task<IActionResult> EditDashboard([FromForm] DashboardViewModel editDashboard)
         {
             if (!ModelState.IsValid)
                 return View(nameof(EditDashboard), editDashboard);

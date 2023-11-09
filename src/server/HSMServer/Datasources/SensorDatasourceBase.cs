@@ -44,7 +44,7 @@ namespace HSMServer.Datasources
 
             return new()
             {
-                Values = data.Select(Convert).ToList(),
+                Values = data.Select(Convert).Reverse().ToList(),
                 ChartType = NormalType,
             };
         }

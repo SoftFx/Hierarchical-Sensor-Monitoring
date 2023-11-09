@@ -38,8 +38,7 @@ public class PanelViewModel
         Id = panel.Id;
         DashboardId = dashboardId;
 
-        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Key,
-            x => new DatasourceViewModel(x.Value)));
+        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Key, x => new DatasourceViewModel(x.Value)));
     }
 
     public bool TryAddSource(SensorNodeViewModel source, out string message)
