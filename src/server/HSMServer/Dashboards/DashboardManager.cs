@@ -41,12 +41,12 @@ namespace HSMServer.Dashboards
             return TryAdd(dashboard);
         }
 
-        protected override Dashboard FromEntity(DashboardEntity entity) => new(entity);
+        protected override Dashboard FromEntity(DashboardEntity entity) => new(entity, _cache.GetSensor);
 
 
         private void AddDashboardSubscriptions(Dashboard board)
         {
-            board.GetSensorModel += _cache.GetSensor;
+            board.GetSensorModel ??= _cache.GetSensor;
         }
 
         private void RemoveDashboardSubscriptions(Dashboard board, InitiatorInfo _)
