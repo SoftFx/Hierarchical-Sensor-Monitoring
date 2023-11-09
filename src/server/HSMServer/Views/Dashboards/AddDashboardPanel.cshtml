@@ -1,5 +1,5 @@
 ﻿@using HSMServer.Controllers
-
+@using System.Text.Json;
 @model HSMServer.Model.Dashboards.PanelViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -35,9 +35,13 @@
 
 <script>
     $(document).ready(function () {
+        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}))
         initMultichart('multichart').then(
             (dom) => {
                 window.dispatchEvent(new Event('resize'));
+                values.forEach(function (x) {
+                    addNewSourceHtml(x);
+                })
             }
         );
 

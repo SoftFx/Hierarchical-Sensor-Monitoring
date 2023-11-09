@@ -100,7 +100,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
-        public IActionResult UpdateSource([FromBody] UpdateSourceDto update, Guid dashboardId, Guid panelId, Guid sourceId)
+        public async Task<IActionResult> UpdateSource([FromBody] UpdateSourceDto update, Guid dashboardId, Guid panelId, Guid sourceId)
         {
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
                 dashboard.Panels.TryGetValue(panelId, out var panel) &&
@@ -109,7 +109,7 @@ namespace HSMServer.Controllers
                 source.Color = Color.FromName(update.Color);
                 source.Label = update.Name;
 
-                _dashboardManager.TryUpdate(dashboard);
+                await _dashboardManager.TryUpdate(dashboard);
 
                 return Ok();
             }

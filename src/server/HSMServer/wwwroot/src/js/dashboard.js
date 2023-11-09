@@ -25,6 +25,56 @@ export function Model(id) {
     this.nameTimeout = undefined;
 }
 
+window.addNewSourceHtml = function (data){
+    let sources = $('#sources');
+    let text = `<li id=${'source_' + data.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
+                                    style="border-top-width: 1px;
+                                           border-radius: 5px;"
+                                    >
+                                    <div class="d-flex align-items-center justify-content-between w-100">
+                                        <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
+                                            <input id=${'name_input_' + data.id} class="form-control"  value="${data.label}" type="text" style="flex-grow: 10"></input>
+                                            <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
+                                        </div>
+                                        <div class="d-flex flex-grow-1"></div>
+                                        <button id=${'deletePlot_' + data.id} class="btn" type="button" style="color: red">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+     
+                                    <div class="d-flex align-items-center">
+                                         <span id=${'redirectToHome_' + data.id} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
+                                            ${data.path}
+                                        </span>
+                                    </div>
+                                </li>`
+
+    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
+    plot.id = data.id;
+    plot.name = data.label;
+    plot.mode = 'lines';
+    plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
+    Plotly.addTraces('multichart', plot.getPlotData());
+
+    let updateLayout = {
+        'yaxis.title' : {
+            text: data.sensorInfo.units,
+            font: {
+                family: 'Courier New, monospace',
+                size: 18,
+                color: '#7f7f7f'
+            }
+        }
+    }
+    Plotly.relayout('multichart', updateLayout)
+
+    sources.html(function(n, origText){
+        return origText + text;
+    });
+
+    currentPanel[data.id] = new Model($('#multichart')[0].data.length - 1);
+}
+
 export function initDropzone(){
     window.dragMoveListener = dragMoveListener
     

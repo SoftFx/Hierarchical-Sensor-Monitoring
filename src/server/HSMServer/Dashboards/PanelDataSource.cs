@@ -38,10 +38,12 @@ namespace HSMServer.Dashboards
 
         public PanelDatasource(PanelSourceEntity entity, BaseSensorModel sensor) : this(sensor)
         {
+            _sensor = sensor;
+            
             Id = new Guid(entity.Id);
             SensorId = new Guid(entity.SensorId);
 
-            Color = Color.FromArgb(entity.Color);
+            Color = Color.FromName(entity.Color);
             Label = entity.Label;
         }
 
@@ -52,7 +54,7 @@ namespace HSMServer.Dashboards
                 Id = Id.ToByteArray(),
                 SensorId = SensorId.ToByteArray(),
 
-                Color = Color.ToArgb(),
+                Color = Color.Name,
                 Label = Label,
             };
     }

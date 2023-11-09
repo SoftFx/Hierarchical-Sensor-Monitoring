@@ -49,6 +49,9 @@ namespace HSMServer.Datasources
             };
         }
 
+        public (string Path, SensorType Type, Unit? unit) GetSourceInfo() => (_sensor.Path, _sensor.Type, _sensor.OriginalUnit);
+
+
         protected abstract BaseChartValue Convert(BaseValue baseValue);
     }
 
