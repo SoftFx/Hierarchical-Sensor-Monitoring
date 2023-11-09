@@ -18,9 +18,9 @@ namespace HSMServer.Dashboards
         public Guid Id { get; }
 
 
-        public Color Color { get; private set; }
+        public Color Color { get; set; }
 
-        public string Label { get; private set; }
+        public string Label { get; set; }
 
 
         public PanelDatasource(BaseSensorModel sensor)
@@ -30,6 +30,16 @@ namespace HSMServer.Dashboards
             Source = DatasourceFactory.Build(_sensor.Type).AttachSensor(sensor);
             Label = _sensor.DisplayName;
             Id = Guid.NewGuid();
+        }
+
+        public PanelDatasource() { }
+
+        public PanelDatasource(Guid sensorId, Color color, string label = "")
+        {
+            Id = Guid.NewGuid();
+            SensorId = sensorId;
+            Color = color;
+            Label = label;
         }
 
         public PanelDatasource(PanelSourceEntity entity, BaseSensorModel sensor) : this(sensor)

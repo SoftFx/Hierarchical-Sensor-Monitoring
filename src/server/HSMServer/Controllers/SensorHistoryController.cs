@@ -83,10 +83,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public ActionResult<SensorInfoDTO> GetSensorPlotInfo([FromQuery] Guid id)
+        public ActionResult<SensorInfoDto> GetSensorPlotInfo([FromQuery] Guid id)
         {
             if (_tree.Sensors.TryGetValue(id, out var sensorNodeViewModel))
-                return new SensorInfoDTO(sensorNodeViewModel.Type, sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type, sensorNodeViewModel.SelectedUnit.ToString());
+                return new SensorInfoDto(sensorNodeViewModel.Type, sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type, sensorNodeViewModel.SelectedUnit.ToString());
 
             return _emptyJsonResult;
         }

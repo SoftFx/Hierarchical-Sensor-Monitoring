@@ -11,8 +11,10 @@ using HSMServer.Model.Dashboards;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Extensions;
 
 namespace HSMServer.Controllers
 {
@@ -32,7 +34,7 @@ namespace HSMServer.Controllers
 
         public IActionResult Index() => View(_dashboardManager.GetValues().Select(d => new DashboardViewModel(d)).OrderBy(d => d.Name).ToList());
 
-
+        [ApiExplorerSettings(IgnoreApi = true)]
         [Route("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public IActionResult AddDashboardPanel(Guid dashBoardId, Guid panelId)
         {
@@ -53,7 +55,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
-        public async Task<JsonResult> GetSource(Guid sourceId, Guid dashboardId, Guid panelId)
+        public async Task<IActionResult> GetSource(Guid sourceId, Guid dashboardId, Guid panelId)
         {
             string errorMessage = string.Empty;
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
@@ -66,6 +68,9 @@ namespace HSMServer.Controllers
                     if (panel?.Sources != null)
                         foreach (var (id, source) in panel.Sources)
                         {
+                            if (source.SensorId == sourceId)
+                                return BadRequest("Source already exists");
+
                             _treeViewModel.Sensors.TryGetValue(source.SensorId, out var sensorNodeViewModel);
                             currentType = sensorNodeViewModel?.Type;
                             currentUnitType = sensorNodeViewModel?.SelectedUnit ?? currentUnitType;
@@ -79,12 +84,14 @@ namespace HSMServer.Controllers
 
                     if (_treeViewModel.Sensors.TryGetValue(sourceId, out var newSource) && viewModel.TryAddSource(newSource, out errorMessage))
                     {
-                        //panel.Sources.TryAdd(newSource.Id, new PanelDatasource(newSource.Id));
-                        //await _dashboardManager.TryUpdate(dashboard);
-                        //var values = (await _cache.GetSensorValuesPage(newSource.Id, DateTime.UtcNow.AddDays(-30),
-                        //    DateTime.UtcNow, 500, RequestOptions.IncludeTtl).Flatten()).Select(x => (object)x);
+                        var datasource = new PanelDatasource(newSource.Id, Color.FromName(ColorExtensions.GenerateRandomColor()), newSource.Name);
 
-                        return Json(new SourceDto(newSource, null, panel.Id));
+                        if (panel.Sources.TryAdd(datasource.Id, datasource) && (await _dashboardManager.TryUpdate(dashboard)))
+                        {
+                            //var values = (await _cache.GetSensorValuesPage(newSource.Id, DateTime.UtcNow.AddDays(-30),
+                            //    DateTime.UtcNow, 500, RequestOptions.IncludeTtl).Flatten()).Select(x => (object)x);
+                            //return Json(new SourceDto(newSource, values.ToList(), panel.Id, datasource.Id, datasource.Color));
+                        }
                     }
                 }
             }
@@ -93,6 +100,35 @@ namespace HSMServer.Controllers
             {
                 errorMessage
             });
+        }
+
+        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
+        public IActionResult UpdateSource([FromBody] UpdateSourceDto update, Guid dashboardId, Guid panelId, Guid sourceId)
+        {
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
+                dashboard.Panels.TryGetValue(panelId, out var panel) &&
+                panel.Sources.TryGetValue(sourceId, out var source))
+            {
+                source.Color = Color.FromName(update.Color);
+                source.Label = update.Name;
+
+                _dashboardManager.TryUpdate(dashboard);
+                
+                return Ok();
+            }
+                
+            return NotFound("No such source");
+        }
+
+        [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
+        public IActionResult DeleteSource(Guid dashboardId, Guid panelId, Guid sourceId)
+        {
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
+                dashboard.Panels.TryGetValue(panelId, out var panel) &&
+                panel.Sources.TryRemove(sourceId, out _))
+                return Ok();
+
+            return NotFound("No source found to delete");
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}")]

@@ -10,6 +10,8 @@ export function getPlotSourceView(id) {
                 return resolve(data);
             else
                 return reject(data.errorMessage)
+        }).fail(function (data){
+            reject(data.responseText)
         })
     })
 }
@@ -51,30 +53,30 @@ export function initDropzone(){
             let color = getRandomColor();
             getPlotSourceView(event.relatedTarget.id).then(
                 (data) => {
-                    let text = `<li id=${'source_' + event.relatedTarget.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
+                    let text = `<li id=${'source_' + data.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
                                     style="border-top-width: 1px;
                                            border-radius: 5px;"
                                     >
                                     <div class="d-flex align-items-center justify-content-between w-100">
                                         <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
-                                            <input id=${'name_input_' + event.relatedTarget.id} class="form-control"  value="${data.name}" type="text" style="flex-grow: 10"></input>
-                                            <input id=${'color_' + event.relatedTarget.id} type="color" value=${color} class="form-control form-control-color mx-1 ="></input>
+                                            <input id=${'name_input_' + data.id} class="form-control"  value="${data.name}" type="text" style="flex-grow: 10"></input>
+                                            <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
                                         </div>
                                         <div class="d-flex flex-grow-1"></div>
-                                        <button id=${'deletePlot_' + event.relatedTarget.id} class="btn" type="button" style="color: red">
+                                        <button id=${'deletePlot_' + data.id} class="btn" type="button" style="color: red">
                                             <i class="fa-solid fa-xmark"></i>
                                         </button>
                                     </div>
      
                                     <div class="d-flex align-items-center">
-                                         <a class="ms-1" href="" style="color: grey;font-size: x-small">
+                                         <span id=${'redirectToHome_' + data.id} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
                                             ${data.path}
-                                        </a>
+                                        </span>
                                     </div>
                                 </li>`
 
-                    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, event.relatedTarget.id, color);
-                    plot.id = event.relatedTarget.id
+                    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
+                    plot.id = data.id;
                     plot.name = data.name;
                     plot.mode = 'lines';
                     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
@@ -96,7 +98,7 @@ export function initDropzone(){
                         return origText + text;
                     });
 
-                    currentPanel[event.relatedTarget.id] = new Model($('#multichart')[0].data.length - 1);
+                    currentPanel[data.id] = new Model($('#multichart')[0].data.length - 1);
                 },
                 (error) => {
                     showToast(error)
@@ -193,24 +195,14 @@ window.initDashboard = function () {
         })
 }
 
-window.updateColor = function (color, id) {
+window.updateSource = function (name, color, id){
     if (currentPanel[id] === undefined)
         return;
 
-    if (currentPanel[id].colorTimeout !== undefined)
-        clearTimeout(currentPanel[id].colorTimeout);
+    if (currentPanel[id].updateTimeout !== undefined)
+        clearTimeout(currentPanel[id].updateTimeout);
 
-    currentPanel[id].colorTimeout = setTimeout(updatePlotColor, plotColorDelay, color, id);
-}
-
-window.updateName = function (name, id){
-    if (currentPanel[id] === undefined)
-        return;
-
-    if (currentPanel[id].nameTimeout !== undefined)
-        clearTimeout(currentPanel[id].nameTimeout);
-
-    currentPanel[id].nameTimeout = setTimeout(updatePlotName, plotColorDelay, name, id);
+    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, id);
 }
 
 window.getCurrentPlotInDashboard = function (id) {
@@ -228,7 +220,7 @@ window.updateCurrentPlotsIds = function (idToCompare, id) {
 }
 
 window.initMultichart = function (chartId) {
-    Plotly.newPlot(chartId, [], {
+    return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
         dragmode: 'zoom',
         autosize: true,
@@ -266,26 +258,30 @@ function showEventInfo (event) {
     event.target.removeAttribute('data-x')
     event.target.removeAttribute('data-y')
 }
-function updatePlotColor(color, id) {
-    let update = {
-        'line.color': color
-    }
 
-    if (currentPanel[id] !== undefined)
-        Plotly.restyle('multichart', update, currentPanel[id].id)
+function updatePlotSource(name, color, id){
+    $.ajax({
+        processData: false,
+        type: 'put',
+        contentType: 'application/json',
+        url: window.location.pathname + '/' + id,
+        data: JSON.stringify({
+            name: name,
+            color: color
+        })
+    }).done(function (){
+        let update = {
+            'hovertemplate': `${name}, %{customdata}<extra></extra>`,
+            'line.color': color
+        }
 
-    currentPanel[id].colorTimeout = undefined;
-}
+        if (currentPanel[id] !== undefined)
+            Plotly.restyle('multichart', update, currentPanel[id].id)
 
-function updatePlotName(name, id) {
-    let update = {
-        'hovertemplate': `${name}, %{customdata}<extra></extra>` 
-    }
-
-    if (currentPanel[id] !== undefined)
-        Plotly.restyle('multichart', update, currentPanel[id].id)
-
-    currentPanel[id].nameTimeout = undefined;
+        currentPanel[id].updateTimeout = undefined;
+    }).fail(function (response){
+        showToast(response.responseText)
+    })
 }
 
 function getRandomColor() {

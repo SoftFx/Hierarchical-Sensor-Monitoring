@@ -262,7 +262,8 @@ namespace HSMServer.Controllers
                     };
 
                     if (!expectedUpdate)
-                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live",
+                            TimeInterval.FromParent);
                     else
                     {
                         toastViewModel.AddItem(product);
@@ -468,7 +469,10 @@ namespace HSMServer.Controllers
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
         private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) =>
-            (ticks == default ? GetFileSensorValue(encodedId) : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks)).DecompressContent();
+            (ticks == default
+                ? GetFileSensorValue(encodedId)
+                : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
+            .DecompressContent();
 
         private async Task<HistoryTableViewModel> GetFileHistory(string encodedId)
         {
@@ -511,7 +515,9 @@ namespace HSMServer.Controllers
             var availableChats = sensor.GetAvailableChats(_telegramChatsManager);
 
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
-            var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list) ? list.Select(a => a.ToUpdate(availableChats)).ToList() : new();
+            var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
+                ? list.Select(a => a.ToUpdate(availableChats)).ToList()
+                : new();
 
             var update = new SensorUpdate
             {
@@ -628,7 +634,8 @@ namespace HSMServer.Controllers
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
             _treeViewModel.Sensors.TryGetValue(sensorId, out var sensorNodeViewModel);
-            var isAccessKeyExist = GetKeyOrDefaultWithPermissions(sensorNodeViewModel?.RootProduct.Id ?? Guid.Empty, KeyPermissions.CanSendSensorData) is not null;
+            var isAccessKeyExist =
+                GetKeyOrDefaultWithPermissions(sensorNodeViewModel?.RootProduct.Id ?? Guid.Empty, KeyPermissions.CanSendSensorData) is not null;
 
             if (!isAccessKeyExist)
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
