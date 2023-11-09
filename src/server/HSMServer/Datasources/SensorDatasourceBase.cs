@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Model.Model.History;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,8 +18,10 @@ namespace HSMServer.Datasources
     }
 
 
-    public abstract class SensorDatasourceBase
+    public abstract class SensorDatasourceBase : IDisposable
     {
+        private LinkedList<BaseChartValue> _curValues;
+        private GetSensorHistoryRequest _request;
         private BaseSensorModel _sensor;
 
 
@@ -30,9 +33,16 @@ namespace HSMServer.Datasources
         public SensorDatasourceBase AttachSensor(BaseSensorModel sensor)
         {
             _sensor = sensor;
+            _sensor.ReceivedNewValue += ApplyNewValue;
 
             return this;
         }
+
+        public void Dispose()
+        {
+            _sensor.ReceivedNewValue -= ApplyNewValue;
+        }
+
 
         public async Task<InitChartSourceResponse> GetInitializationData(int lastValuesCnt = 100)
         {
@@ -42,14 +52,28 @@ namespace HSMServer.Datasources
                 Count = -lastValuesCnt,
             });
 
+            _curValues = new LinkedList<BaseChartValue>(data.Select(Convert).Reverse());
+
             return new()
             {
-                Values = data.Select(Convert).Reverse().ToList(),
+                Values = _curValues.ToList(),
                 ChartType = NormalType,
             };
         }
 
+        public void Reload(GetSensorHistoryRequest request)
+        {
+            _request = request;
+        }
+
+
         protected abstract BaseChartValue Convert(BaseValue baseValue);
+
+
+        private void ApplyNewValue(BaseValue value)
+        {
+
+        }
     }
 
 

@@ -111,6 +111,10 @@ namespace HSMServer.ConcurrentStorage
         }
 
 
-        public virtual void Dispose() { }
+        public virtual void Dispose()
+        {
+            foreach ((_, var value) in this)
+               value.Dispose();
+        }
     }
 }

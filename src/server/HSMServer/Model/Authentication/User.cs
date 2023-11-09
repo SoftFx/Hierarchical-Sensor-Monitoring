@@ -28,8 +28,6 @@ namespace HSMServer.Model.Authentication
 
         public Dictionary<Guid, ProductRoleEnum> FoldersRoles { get; } = new();
 
-        public Dictionary<Guid, PanelViewModel> ConfiguredPanels { get; } = new();
-
         public TreeUserFilter TreeFilter { get; set; }
 
         public VisibleTreeViewModel Tree { get; }
@@ -108,6 +106,8 @@ namespace HSMServer.Model.Authentication
             (FoldersRoles.TryGetValue(folderId, out var role) && role == ProductRoleEnum.ProductManager);
 
         internal bool IsUserProduct(Guid productId) => ProductsRoles.Any(x => x.Item1 == productId);
+
+        public void Dispose() { }
     }
 
 

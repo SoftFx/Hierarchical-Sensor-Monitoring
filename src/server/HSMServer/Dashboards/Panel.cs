@@ -15,9 +15,9 @@ namespace HSMServer.Dashboards
         public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
 
 
-        internal Panel() //TODO remove
+        internal Panel(Dashboard board) : base()
         {
-
+            _board = board;
         }
 
         internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
@@ -65,6 +65,12 @@ namespace HSMServer.Dashboards
             sensor = _board.GetSensorModel?.Invoke(id);
 
             return sensor is not null;
+        }
+
+        public override void Dispose()
+        {
+            foreach ((_, var source) in Sources)
+                source.Source.Dispose();
         }
     }
 }

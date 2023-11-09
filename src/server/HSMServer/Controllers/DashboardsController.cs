@@ -19,6 +19,7 @@ namespace HSMServer.Controllers
         private readonly IDashboardManager _dashboardManager;
         private readonly TreeViewModel _treeViewModel;
 
+
         public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, ITreeValuesCache cache, TreeViewModel treeViewModel) : base(userManager)
         {
             _dashboardManager = dashboardManager;
@@ -156,14 +157,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public async Task RemoveDashboard(Guid dashboardId) =>
-            await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
+        public Task RemoveDashboard(Guid dashboardId) => _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
 
         [HttpGet]
         public IActionResult GetPanel(Guid dashboardId)
         {
             _dashboardManager.TryGetValue(dashboardId, out var dashboard);
-            var newPanel = new Panel();
+            var newPanel = new Panel(dashboard);
             dashboard.Panels.TryAdd(newPanel.Id, newPanel);
             _dashboardManager.TryUpdate(dashboard);
 
