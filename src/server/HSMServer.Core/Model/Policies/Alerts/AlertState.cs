@@ -40,6 +40,9 @@ namespace HSMServer.Core.Model.Policies
         [AlertVariable("$sensor", "Sensor name")]
         public string Sensor { get; init; }
 
+        [AlertVariable("$sensorUnit", "Sensor unit")]
+        public string Unit { get; init; }
+
         [AlertVariable("$status", "Sensor status")]
         public string Status { get; init; }
 
@@ -50,8 +53,14 @@ namespace HSMServer.Core.Model.Policies
         public string Comment { get; init; }
 
 
-        [AlertVariable("$prevStatus", "Status of the previous sensor value")]
+        [AlertVariable("$prevStatus", "Status of the previous sensor data")]
         public string PrevStatus { get; init; }
+
+        [AlertVariable("$prevComment", "Comment of the previous sensor data")]
+        public string PrevComment { get; init; }
+
+        [AlertVariable("$prevValue", "Value of the previous sensor data")]
+        public string PrevValue { get; private set; }
 
 
         [AlertVariable("$value", "Sensor Value")]
@@ -145,8 +154,8 @@ namespace HSMServer.Core.Model.Policies
 
 
         public string BuildComment(string template = null) => string.Format(template ?? Template?.Text ?? string.Empty,
-            Product, Path, Sensor, Status, Time, Comment, PrevStatus, ValueSingle, MinValueBar, MaxValueBar, MeanValueBar,
-            LastValueBar, CountBar, Property, Operation, GetCorrectTarget());
+            Product, Path, Sensor, Unit, Status, Time, Comment, PrevStatus, PrevComment, PrevValue, ValueSingle,
+            MinValueBar, MaxValueBar, MeanValueBar, LastValueBar, CountBar, Property, Operation, GetCorrectTarget());
 
         public static AlertSystemTemplate BuildSystemTemplate(string raw)
         {
@@ -175,6 +184,7 @@ namespace HSMServer.Core.Model.Policies
         {
             var state = BuildBase(value, sensor);
 
+            state.PrevValue = (sensor.LastValue as BaseValue<T>)?.Value?.ToString();
             state.ValueSingle = value switch
             {
                 TimeSpanValue timeSpan => timeSpan.Value.ToReadableView(),
@@ -202,9 +212,11 @@ namespace HSMServer.Core.Model.Policies
         {
             Product = sensor.RootProductName,
             Sensor = sensor.DisplayName,
+            Unit = sensor.OriginalUnit?.GetDisplayName(),
             Path = sensor.Path,
 
             PrevStatus = sensor.LastValue?.Status.ToIcon(),
+            PrevComment = sensor.LastValue?.Comment,
 
             Status = value?.Status.ToIcon(),
             Time = value?.Time.ToString(),
