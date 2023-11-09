@@ -212,7 +212,7 @@ namespace HSMServer.Core.Model.Policies
         {
             Product = sensor.RootProductName,
             Sensor = sensor.DisplayName,
-            Unit = sensor.OriginalUnit?.ToString(),
+            Unit = sensor.OriginalUnit?.GetDisplayName(),
             Path = sensor.Path,
 
             PrevStatus = sensor.LastValue?.Status.ToIcon(),
