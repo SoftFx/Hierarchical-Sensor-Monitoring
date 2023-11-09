@@ -155,7 +155,7 @@ namespace HSMServer.Controllers
             return RedirectToAction(nameof(EditDashboard), new { dashboardId = editDashboard.Id });
         }
 
-        [HttpGet]
+        [HttpDelete]
         public async Task RemoveDashboard(Guid dashboardId) =>
             await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
 
