@@ -53,13 +53,13 @@ namespace HSMServer.Core.Model.Policies
         public string Comment { get; init; }
 
 
-        [AlertVariable("$prevStatus", "Status of the previous sensor value")]
+        [AlertVariable("$prevStatus", "Status of the previous sensor data")]
         public string PrevStatus { get; init; }
 
-        [AlertVariable("$prevComment", "Comment of the previous sensor value")]
+        [AlertVariable("$prevComment", "Comment of the previous sensor data")]
         public string PrevComment { get; init; }
 
-        [AlertVariable("$prevValue", "Value of the previous sensor")]
+        [AlertVariable("$prevValue", "Value of the previous sensor data")]
         public string PrevValue { get; private set; }
 
 
