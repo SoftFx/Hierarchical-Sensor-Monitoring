@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Model.Model.History;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,9 +19,15 @@ namespace HSMServer.Datasources
 
     public abstract class SensorDatasourceBase : IDisposable
     {
+        private const int MaxVisibleCnt = 100;
+
+        private readonly LinkedList<BaseChartValue> _newVisibleValues = new();
         private LinkedList<BaseChartValue> _curValues;
-        private GetSensorHistoryRequest _request;
+
         private BaseSensorModel _sensor;
+
+        private long _removedValuesCnt = 0;
+        private bool _aggreagateValues;
 
 
         protected abstract ChartType NormalType { get; }
@@ -30,70 +35,87 @@ namespace HSMServer.Datasources
         protected abstract ChartType AggreatedType { get; }
 
 
+        protected abstract BaseChartValue Convert(BaseValue baseValue);
+
+
         public SensorDatasourceBase AttachSensor(BaseSensorModel sensor)
         {
             _sensor = sensor;
-            _sensor.ReceivedNewValue += ApplyNewValue;
+            _sensor.ReceivedNewValue += AddNewValue;
 
             return this;
         }
 
-        public void Dispose()
-        {
-            _sensor.ReceivedNewValue -= ApplyNewValue;
-        }
 
-
-        public async Task<InitChartSourceResponse> GetInitializationData(int lastValuesCnt = 100)
-        {
-            var data = await _sensor.GetHistoryData(new SensorHistoryRequest
+        public Task<InitChartSourceResponse> Initialize() =>
+            Initialize(new SensorHistoryRequest
             {
                 To = DateTime.UtcNow,
-                Count = -lastValuesCnt,
+                Count = -MaxVisibleCnt,
             });
 
+        public Task<InitChartSourceResponse> Initialize(DateTime from, DateTime to) =>
+            Initialize(new SensorHistoryRequest
+            {
+                From = from,
+                To = to,
+            });
+
+        public async Task<InitChartSourceResponse> Initialize(SensorHistoryRequest request)
+        {
+            var data = await _sensor.GetHistoryData(request);
+
+            _newVisibleValues.Clear();
+            _removedValuesCnt = 0;
+
+            _aggreagateValues = data.Count > MaxVisibleCnt;
             _curValues = new LinkedList<BaseChartValue>(data.Select(Convert).Reverse());
 
             return new()
             {
+                ChartType = _aggreagateValues ? AggreatedType : NormalType,
                 Values = _curValues.ToList(),
-                ChartType = NormalType,
             };
         }
 
-        public void Reload(GetSensorHistoryRequest request)
+
+        public UpdateChartSourceResponse GetSourceUpdates() =>
+            new()
+            {
+                NewVisibleValues = _newVisibleValues.ToList(),
+                RemovedValuesCount = _removedValuesCnt,
+            };
+
+
+        public void Dispose()
         {
-            _request = request;
+            _sensor.ReceivedNewValue -= AddNewValue;
         }
 
 
-        protected abstract BaseChartValue Convert(BaseValue baseValue);
-
-
-        private void ApplyNewValue(BaseValue value)
+        private void AddNewValue(BaseValue value)
         {
+            if (_aggreagateValues)
+            {
 
+            }
+            else
+            {
+                var newVisibleValue = Convert(value);
+
+                _curValues.AddLast(newVisibleValue);
+                _newVisibleValues.AddLast(newVisibleValue);
+            }
+
+            while (_curValues.Count > MaxVisibleCnt)
+            {
+                _curValues.RemoveFirst();
+                _removedValuesCnt = Math.Min(++_removedValuesCnt, MaxVisibleCnt);
+            }
+
+            while (_newVisibleValues.Count > MaxVisibleCnt)
+                _newVisibleValues.RemoveFirst();
         }
-    }
-
-
-    public abstract record BaseChartSourceResponse
-    {
-       // public required Guid SourceId { get; init; }
-    }
-
-
-    public sealed record InitChartSourceResponse : BaseChartSourceResponse
-    {
-        public List<BaseChartValue> Values { get; init; }
-
-        public ChartType ChartType { get; init; }
-    }
-
-
-    public sealed record UpdateChartSourceResponse : BaseChartSourceResponse
-    {
-        public int RemovedValuesCount { get; init; }
     }
 
 
