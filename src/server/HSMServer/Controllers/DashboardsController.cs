@@ -86,8 +86,8 @@ namespace HSMServer.Controllers
                         if (panel.Sources.TryAdd(datasource.Id, datasource) && (await _dashboardManager.TryUpdate(dashboard)))
                         {
                             var response = await datasource.Source.GetInitializationData();
-
-                            return Json(new SourceDto(newSource, null, panel.Id, datasource.Id, datasource.Color));
+                            
+                            return Json(new SourceDto(response, datasource, newSource));
                         }
                     }
                 }
