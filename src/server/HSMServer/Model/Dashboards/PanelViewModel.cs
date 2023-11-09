@@ -1,7 +1,11 @@
 using System;
+using System.Linq;
 using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
 using HSMCommon.Collections;
+using HSMServer.Dashboards;
+using HSMServer.Extensions;
+
 namespace HSMServer.Model.Dashboards;
 
 public class PanelViewModel
@@ -9,15 +13,34 @@ public class PanelViewModel
     private const string TypeError = "Can't plot using {0} sensor type";
     private const string UnitError = "Can't plot using {0} unit type";
 
-    private readonly CHash<Guid> _sources = new();
+    public CGuidDict<DatasourceViewModel> Sources { get; }
 
 
     public Guid Id { get; set; } = Guid.NewGuid();
+    
+    public Guid DashboardId { get; set; }
+    
+    public string Name { get; set; }
+    
+    public string Description { get; set; }
 
     public SensorType? SensorType { get; set; }
 
     public Unit? UnitType { get; set; }
-    
+
+
+    public PanelViewModel() { }
+
+    public PanelViewModel(Panel panel, Guid dashboardId)
+    {
+        Name = panel.Name;
+        Description = panel.Description;
+        Id = panel.Id;
+        DashboardId = dashboardId;
+
+        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Key,
+            x => new DatasourceViewModel(x.Value)));
+    }
 
     public bool TryAddSource(SensorNodeViewModel source, out string message)
     {
@@ -35,7 +58,7 @@ public class PanelViewModel
     public void UpdateSources(SensorNodeViewModel source)
     {
         if (IsSuits(source.Type, source.SelectedUnit, out _))
-            _sources.Add(source.Id);
+            Sources.TryAdd(source.Id, new DatasourceViewModel(){Id = Guid.NewGuid(), SensorId = source.Id});
     }
 
 
@@ -64,4 +87,28 @@ public class PanelViewModel
                                                  type != Core.Model.SensorType.String &&
                                                  type != Core.Model.SensorType.DoubleBar &&
                                                  type != Core.Model.SensorType.IntegerBar;
+}
+
+public class DatasourceViewModel
+{
+    public Guid Id { get; set; }
+
+    public Guid SensorId { get; set; }
+
+    public SensorType Type { get; set; }
+
+    public string Color { get; set; }
+
+    public string Label { get; set; }
+
+
+    public DatasourceViewModel() { }
+
+    public DatasourceViewModel(PanelDatasource dataSource)
+    {
+        Id = dataSource.Id;
+        SensorId = dataSource.SensorId;
+        Color = dataSource.Color.ToRGB();
+        Label = dataSource.Label;
+    }
 }

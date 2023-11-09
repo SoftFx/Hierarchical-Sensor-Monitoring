@@ -65,10 +65,22 @@ public sealed class VisibleTreeViewModel
                     tree.Add(node);
             }
         }
+        
+        Func<FolderShallowModel, bool> filter = isSearchTree ? folder =>
+            {
+                var isFolderEmpty = folder.IsEmpty;
 
+                if (folder.Products.Count == 1)
+                {
+                    isFolderEmpty = isFolderEmpty && folder.Products[0].RenderedNodes.Count == 0 && folder.Products[0].RenderedSensors.Count == 0;
 
-        Func<FolderShallowModel, bool> filter = isSearchTree ? folder => (!folder.IsEmpty || folder.IsNameContainsPattern(searchParameter)) && IsVisibleFolderForUser(folder.Id)
-                                                             : folder => !folder.IsEmpty || IsVisibleFolderForUser(folder.Id);
+                    if (isFolderEmpty)
+                        isFolderEmpty = !folder.Products[0].IsNameContainsPattern(searchParameter);
+                }
+
+                return !isFolderEmpty || (folder.IsNameContainsPattern(searchParameter) && IsVisibleFolderForUser(folder.Id));
+            }
+            : folder => !folder.IsEmpty || IsVisibleFolderForUser(folder.Id);
 
         folderTree.AddRange(folders.Values.Where(filter));
         folderTree.AddRange(tree);

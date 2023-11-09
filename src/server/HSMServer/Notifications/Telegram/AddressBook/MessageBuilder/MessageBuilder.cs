@@ -18,7 +18,8 @@ namespace HSMServer.Notifications
 
         internal void AddMessage(AlertResult alert)
         {
-            var branch = _alertsTree[alert.Template][alert.LastComment];
+            var mapComment = alert.IsStatusIsChangeResult ? string.Empty : alert.LastComment;
+            var branch = _alertsTree[alert.Template][mapComment];
 
             if (branch.TryGetValue(alert.PolicyId, out var policy))
                 policy.TryAddResult(alert);

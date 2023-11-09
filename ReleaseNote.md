@@ -24,6 +24,22 @@ New search by name has been added to tree. Search is processed by names of folde
 * Default timeout period has been increased to 5 min
 * Logging for TG bot has been improved
 
+## Alerts
+* Full tree depth for **Import/Export** alerts has been added
+* Confirmation period for **Status is change** has been reworked. Notifications removed if status get back to the first state of a period
+* Icon aggregation for **Status is change** notification has been added. Aggregation aplies only if **$prevSatus** variable has been added to message template.  
+
+*Old style:*
+```
+✅->❌ [AggrST2]/Bridge/Lp Connections/st2/Connection Status = Disconnected (2 times)
+❌->✅ [AggrST2]/Bridge/Lp Connections/st2/Connection Status = Connected (2 times)
+```
+
+*New style:*
+```
+✅->❌->✅->❌->✅ [AggrST2]/Bridge/Lp Connections/st2/Connection Status = Connected
+```
+
 ## Tree
 * **Notifications** filters have been removed
 * Enabled/Ignored notifications icons have been removed

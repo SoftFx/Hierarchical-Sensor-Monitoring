@@ -15,7 +15,6 @@ namespace HSMServer.Dashboards
         private readonly IDashboardCollection _dbCollection;
         private readonly ITreeValuesCache _cache;
 
-
         protected override Action<DashboardEntity> AddToDb => _dbCollection.AddEntity;
 
         protected override Action<DashboardEntity> UpdateInDb => _dbCollection.UpdateEntity;

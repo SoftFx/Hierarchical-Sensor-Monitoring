@@ -15,6 +15,11 @@ namespace HSMServer.Dashboards
         public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
 
 
+        internal Panel() //TODO remove
+        {
+
+        }
+
         internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
         {
             _board = board;

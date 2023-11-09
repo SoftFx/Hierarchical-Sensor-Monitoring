@@ -5,6 +5,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public record DashboardEntity : BaseServerEntity
     {
-        public List<DashboardPanelEntity> Panels { get; init; }
+        public List<DashboardPanelEntity> Panels { get; init; } = new();
     }
 }

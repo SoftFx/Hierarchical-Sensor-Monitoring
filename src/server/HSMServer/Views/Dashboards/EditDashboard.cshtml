@@ -7,11 +7,10 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var isModify = Model is not null;
-    var isEmptyDashboard = !isModify || Model.Panels.Count == 0;
+    var isModify = Model.IsModify;
+    var isEmptyDashboard = Model.Panels.Count == 0;
 
     ViewData["Title"] = "Dashboard";
-    Layout = "~/Views/Tree/_Layout.cshtml";
 }
 
 
@@ -19,22 +18,22 @@
     <div class="m-2">
         <div id="dashboardSettings" class="my-2 @(isModify ? string.Empty : "d-none")">
             <div class="d-flex justify-content-between mb-1">
-                <h5>@Model?.Name</h5>
+                <h5>@Model.Name</h5>
 
                 <a class="icon-link text-nowrap" href="javascript:editDahsboardSettings();" title='edit dashboard settings'>
                     <i class='fas fa-edit'><use xlink:href="#box-seam"></i> Edit
                 </a>
             </div>
 
-            <div id="markdown_description">@Model?.Description</div> 
+            <div id="markdown_description">@Model.Description</div> 
         </div>
 
         <div id="editableDashboardSettings" class="my-2 @(isModify ? "d-none" : string.Empty)">
-            <form method="post" asp-action="@(isModify ? nameof(DashboardsController.EditDashboard) : nameof(DashboardsController.AddDashboard))">
-                <input class="d-none" asp-for="Id" value="@Model?.Id"/>
+            <form method="post" asp-action="@nameof(DashboardsController.EditDashboard)">
+                <input class="d-none" asp-for="Id" value="@Model.Id"/>
 
                 <div class="d-flex justify-content-between mb-1">
-                    <input class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" />
+                    <input class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
@@ -61,19 +60,26 @@
         <label>No panels</label>
     </div>
 
-    <div id="dashboardPanels" class="flex-grow-1 dashboard mx-2 @(isEmptyDashboard ? "d-none" : string.Empty)"></div>
+    <div id="dashboardPanels" class="flex-grow-1 dashboard mx-2 @(isEmptyDashboard ? "d-none" : string.Empty)">
+        @foreach (var panel in Model.Panels)
+        {
+            @(await Html.PartialAsync("_Panel", panel))
+        }
+    </div>
 </div>
 
 
 <script>
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description');
+
+        initDashboard();
     });
 
     function addPanel() {
         $.ajax({
             type: 'GET',
-            url: `@Html.Raw(Url.Action(nameof(DashboardsController.GetPanel), ViewConstants.DashboardsController))`,
+            url: `@Html.Raw(Url.Action(nameof(DashboardsController.GetPanel), ViewConstants.DashboardsController))?dashboardId=@Model.Id`,
             cache: false,
             async: true,
             success: (viewData) => {

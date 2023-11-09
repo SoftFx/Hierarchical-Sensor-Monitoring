@@ -13,7 +13,22 @@ namespace HSMServer.Core.Model.Policies
         private readonly ConcurrentDictionary<Guid, PolicyGroup> _groups = new();
         private readonly ConcurrentDictionary<Guid, Guid> _policyToGroup = new();
 
-        public List<PolicyGroup> GroupedPolicies => _groups.Values.ToList();
+
+        public PolicyExportGroup SaveStateToExportGroup(PolicyExportGroup exportGroup, string relativePath)
+        {
+            foreach (var (template, groupId) in _templateToGroup)
+                if (_groups.TryGetValue(groupId, out var group))
+                {
+                    var info = group.Policies.Select(p => new PolicyExportInfo(p.Value, relativePath)).ToList();
+
+                    if (exportGroup.TryGetValue(template, out var policies))
+                        policies.AddRange(info);
+                    else
+                        exportGroup.TryAdd(template, info);
+                }
+
+            return exportGroup;
+        }
 
 
         internal void ReceivePolicyUpdate(ActionType type, Policy policy)

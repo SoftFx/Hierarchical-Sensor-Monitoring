@@ -1,15 +1,29 @@
 ﻿@using HSMServer.Controllers
+
+@model HSMServer.Model.Dashboards.PanelViewModel
+
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
-<script>
-    var sourceLink = '@Url.Action(nameof(DashboardsController.GetSource))';
-</script>
 
 <div class="w-100 overflow-y-auto">
+    <div id="panelSettings" class="my-2">
+        <div id="editablePanelSettings" class="my-2">
+            <form method="post"  asp-action="@nameof(DashboardsController.SaveDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
+                <div class="d-flex justify-content-between mb-1">
+                    <input class="form-control" asp-for="Name" placeholder="@Model.Name"/>
+
+                    <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
+                </div>
+
+                <textarea id='description' class="form-control w-100" type='text' asp-for="Description" placeholder="@Model.Description"></textarea>
+            </form>
+        </div>
+    </div>
+
     <div id="multichart" class="w-100 h-75 dropzone me-2 pe-2" style="box-sizing:content-box"></div>
     <div id="plots" class="mt-1">
         <ul id="sources" class="list-group">
@@ -42,5 +56,5 @@
                 })
             }
         })
-    })  
+    })
 </script>

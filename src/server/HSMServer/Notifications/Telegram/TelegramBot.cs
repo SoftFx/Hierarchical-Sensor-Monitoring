@@ -36,6 +36,9 @@ namespace HSMServer.Notifications
 
         private string BotToken => _config.BotToken;
 
+        private bool CanSendNotifications => IsBotRunning && _config.IsRunning;
+
+
         public bool IsBotRunning => _bot is not null;
 
 
@@ -146,7 +149,7 @@ namespace HSMServer.Notifications
         {
             try
             {
-                if (IsBotRunning && _config.IsRunning && _folderManager.TryGetValue(folderId, out var folder))
+                if (CanSendNotifications && _folderManager.TryGetValue(folderId, out var folder))
                     foreach (var alert in result)
                     {
                         var chatIds = alert.Destination.AllChats ? folder.TelegramChats : alert.Destination.Chats;
@@ -169,7 +172,7 @@ namespace HSMServer.Notifications
 
         internal void SendMessages()
         {
-            if (IsBotRunning)
+            if (CanSendNotifications)
             {
                 try
                 {
