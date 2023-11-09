@@ -83,8 +83,10 @@ namespace HSMServer.Controllers
 
             RunDfsLoad(node);
 
+            var chats = _telegram.GetValues().ToDictionary(ch => ch.Id, ch => ch.Name);
+
             var fileName = $"{node.FullPath.Replace('/', '_')}-alerts.json";
-            var content = JsonSerializer.SerializeToUtf8Bytes(exportModel.Select(p => new AlertExportViewModel(p.Value)), _serializeOptions);
+            var content = JsonSerializer.SerializeToUtf8Bytes(exportModel.Select(p => new AlertExportViewModel(p.Value, chats)), _serializeOptions);
 
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 

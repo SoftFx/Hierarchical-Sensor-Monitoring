@@ -48,7 +48,6 @@ namespace HSMServer.Notifications
             MessagesAggregationTimeSec = DefaultMessagesAggregationTimeSec;
         }
 
-
         internal TelegramChat(TelegramChatEntity entity) : base(entity)
         {
             ChatId = new(entity.ChatId);
