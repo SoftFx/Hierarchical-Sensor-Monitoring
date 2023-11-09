@@ -13,7 +13,7 @@ public class SourceDto
 {
     public Guid Id { get; set; }
 
-    public string Name { get; set; }
+    public string Label { get; set; }
 
     public string Path { get; set; }
     
@@ -31,7 +31,7 @@ public class SourceDto
         Color = source.Color.ToRGB();
         SensorInfo = new SensorInfoDto(sensor.Type, sensor.Type, sensor.SelectedUnit.ToString());
         Id = source.Id;
-        Name = sensor.Name;
+        Label = sensor.Name;
         Path = sensor.Path;
         Values = chartResponse.Values.Cast<object>().ToList();
     }

@@ -25,7 +25,7 @@ export function Model(id) {
     this.nameTimeout = undefined;
 }
 
-window.addNewSourceHtml = function (data){
+window.insertSourceHtml = function (data) {
     let sources = $('#sources');
     let text = `<li id=${'source_' + data.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
                                     style="border-top-width: 1px;
@@ -49,12 +49,18 @@ window.addNewSourceHtml = function (data){
                                     </div>
                                 </li>`
 
+    sources.html(function(n, origText) {
+        return origText + text;
+    });
+}
+
+window.insertSourcePlot = function (data, id) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
     plot.id = data.id;
     plot.name = data.label;
     plot.mode = 'lines';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
-    Plotly.addTraces('multichart', plot.getPlotData());
+    Plotly.addTraces(id, plot.getPlotData());
 
     let updateLayout = {
         'yaxis.title' : {
@@ -66,13 +72,13 @@ window.addNewSourceHtml = function (data){
             }
         }
     }
-    Plotly.relayout('multichart', updateLayout)
+    Plotly.relayout(id, updateLayout)
+    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1);
+}
 
-    sources.html(function(n, origText){
-        return origText + text;
-    });
-
-    currentPanel[data.id] = new Model($('#multichart')[0].data.length - 1);
+window.addNewSourceHtml = function (data, id){
+    insertSourceHtml(data);
+    insertSourcePlot(data, id);
 }
 
 export function initDropzone(){
@@ -102,57 +108,8 @@ export function initDropzone(){
             let sources = $('#sources');
             let color = getRandomColor();
             getPlotSourceView(event.relatedTarget.id).then(
-                (data) => {
-                    let text = `<li id=${'source_' + data.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
-                                    style="border-top-width: 1px;
-                                           border-radius: 5px;"
-                                    >
-                                    <div class="d-flex align-items-center justify-content-between w-100">
-                                        <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
-                                            <input id=${'name_input_' + data.id} class="form-control"  value="${data.name}" type="text" style="flex-grow: 10"></input>
-                                            <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
-                                        </div>
-                                        <div class="d-flex flex-grow-1"></div>
-                                        <button id=${'deletePlot_' + data.id} class="btn" type="button" style="color: red">
-                                            <i class="fa-solid fa-xmark"></i>
-                                        </button>
-                                    </div>
-     
-                                    <div class="d-flex align-items-center">
-                                         <span id=${'redirectToHome_' + data.id} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
-                                            ${data.path}
-                                        </span>
-                                    </div>
-                                </li>`
-
-                    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
-                    plot.id = data.id;
-                    plot.name = data.name;
-                    plot.mode = 'lines';
-                    plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
-                    Plotly.addTraces('multichart', plot.getPlotData());
-
-                    let updateLayout = {
-                        'yaxis.title' : {
-                            text: data.sensorInfo.units,
-                            font: {
-                                family: 'Courier New, monospace',
-                                size: 18,
-                                color: '#7f7f7f'
-                            }
-                        }
-                    }
-                    Plotly.relayout('multichart', updateLayout)
-
-                    sources.html(function(n, origText){
-                        return origText + text;
-                    });
-
-                    currentPanel[data.id] = new Model($('#multichart')[0].data.length - 1);
-                },
-                (error) => {
-                    showToast(error)
-                }
+                (data) => addNewSourceHtml(data, 'multichart'),
+                (error) => showToast(error)
             )
         },
         ondropdeactivate: function (event) {
@@ -275,6 +232,13 @@ window.initMultichart = function (chartId) {
         dragmode: 'zoom',
         autosize: true,
         height: 300,
+        margin: {
+            autoexpand: true,
+            l: 20,
+            r: 10,
+            t: 10,
+            b: 40,
+        },
         xaxis: {
             title: {
                 text: 'Time',
@@ -287,6 +251,9 @@ window.initMultichart = function (chartId) {
             rangeslider: {
                 visible: false
             }
+        },
+        yaxis: {
+            automargin: 'width+right'
         }
     },
     {

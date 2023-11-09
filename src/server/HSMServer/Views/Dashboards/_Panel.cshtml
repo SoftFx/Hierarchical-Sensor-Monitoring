@@ -1,6 +1,6 @@
-﻿@using HSMServer.Constants
+﻿@using System.Text.Json
+@using HSMServer.Constants
 @using HSMServer.Controllers
-@using HSMServer.Model.Dashboards
 
 @model HSMServer.Model.Dashboards.PanelViewModel
 
@@ -29,6 +29,15 @@
 
 <script>
     $(document).ready(function () {
-        initMultichart('panelChart_@Model.Id');
+       let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}))
+
+        initMultichart('panelChart_@Model.Id').then(
+            (data) => {
+                 values.forEach(function (x) {
+                    insertSourcePlot(x, 'panelChart_@Model.Id')
+                 })
+            },
+            (error) => showToast(error)
+        );
     })
 </script>
