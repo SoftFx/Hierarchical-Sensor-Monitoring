@@ -29,7 +29,7 @@ namespace HSMServer.Model.DataAlerts
 
         public AlertExportViewModel() { }
 
-        internal AlertExportViewModel(List<PolicyExportInfo> info)
+        internal AlertExportViewModel(List<PolicyExportInfo> info, Dictionary<Guid, string> availableChats)
         {
             Sensors = info.Select(u => u.FullRelativePath).OrderBy(u => u).ToList();
 
@@ -42,7 +42,13 @@ namespace HSMServer.Model.DataAlerts
             IsDisabled = policy.IsDisabled;
 
             if (!policy.Destination.AllChats)
-                Chats = policy.Destination.Chats.Values.ToList();
+            {
+                Chats = new();
+
+                foreach (var (id, _) in policy.Destination.Chats)
+                    if (availableChats.TryGetValue(id, out var name))
+                        Chats.Add(name);
+            }
 
             Conditions = policy.Conditions.Select(c => new ConditionExportViewModel(c)).ToList();
         }
