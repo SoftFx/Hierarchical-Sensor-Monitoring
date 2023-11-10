@@ -74,6 +74,7 @@
         replaceHtmlToMarkdown('markdown_description');
 
         initDashboard();
+        disableDragAndResize();
     });
 
     function addPanel() {
@@ -96,6 +97,7 @@
 
         $('#addPanel').removeClass('d-none');
         $('#editableDashboardSettings').removeClass('d-none');
+        enableDragAndResize();
     }
     
     $('.panel.resize-draggable').on('click', 'a.removePanel', function (){
