@@ -64,7 +64,7 @@ namespace HSMServer.Model.DataAlerts
                 ConfirmationPeriod = ConfirmationPeriod?.Ticks,
                 Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
                 Destination = Chats is null
-                    ? new PolicyDestinationUpdate()
+                    ? new PolicyDestinationUpdate(allChats: true)
                     : new PolicyDestinationUpdate(Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
             };
     }

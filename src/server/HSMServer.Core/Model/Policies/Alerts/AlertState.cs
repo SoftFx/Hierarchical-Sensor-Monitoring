@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model.Policies
         [AlertVariable("$sensor", "Sensor name")]
         public string Sensor { get; init; }
 
-        [AlertVariable("$sensorUnit", "Sensor unit")]
+        [AlertVariable("$unit", "Sensor unit")]
         public string Unit { get; init; }
 
         [AlertVariable("$status", "Sensor status")]
@@ -60,7 +60,7 @@ namespace HSMServer.Core.Model.Policies
         public string PrevComment { get; init; }
 
         [AlertVariable("$prevValue", "Value of the previous sensor data")]
-        public string PrevValue { get; private set; }
+        public string PrevValue { get; set; }
 
 
         [AlertVariable("$value", "Sensor Value")]
