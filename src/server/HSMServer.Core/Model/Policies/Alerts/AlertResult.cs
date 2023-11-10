@@ -76,7 +76,13 @@ namespace HSMServer.Core.Model.Policies
         {
             if (IsStatusIsChangeResult && LastState is not null)
             {
-                LastState = newState with { PrevStatus = $"{LastState.PrevStatus}->{newState.PrevStatus}" };
+                LastState = newState with
+                {
+                    PrevStatus = $"{LastState.PrevStatus}->{newState.PrevStatus}",
+                    PrevComment = $"{LastState.PrevComment}->{newState.PrevComment}",
+                    PrevValue = $"{LastState.PrevValue}->{newState.PrevValue}"
+                };
+
                 LastComment = LastState.BuildComment();
 
                 return true;
