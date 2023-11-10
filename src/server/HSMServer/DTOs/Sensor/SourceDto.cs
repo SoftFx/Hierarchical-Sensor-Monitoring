@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
+using System.Linq;
+using HSMServer.Dashboards;
+using HSMServer.Datasources;
 using HSMServer.DTOs.SensorInfo;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
@@ -11,7 +13,7 @@ public class SourceDto
 {
     public Guid Id { get; set; }
 
-    public string Name { get; set; }
+    public string Label { get; set; }
 
     public string Path { get; set; }
     
@@ -19,21 +21,18 @@ public class SourceDto
 
     public SensorInfoDto SensorInfo { get; set; }
 
-    public Guid PanelId { get; set; }
-
     public string Color { get; set; }
 
 
     public SourceDto() {}
 
-    public SourceDto(SensorNodeViewModel sensor, List<object> values, Guid panelId, Guid sourceId, Color color)
+    public SourceDto(InitChartSourceResponse chartResponse, PanelDatasource source, SensorNodeViewModel sensor)
     {
-        Color = color.ToRGB();
+        Color = source.Color.ToRGB();
         SensorInfo = new SensorInfoDto(sensor.Type, sensor.Type, sensor.SelectedUnit.ToString());
-        Name = sensor.Name;
-        Path = sensor.FullPath;
-        Values = values;
-        PanelId = panelId;
-        Id = sourceId;
+        Id = source.Id;
+        Label = sensor.Name;
+        Path = sensor.Path;
+        Values = chartResponse.Values.Cast<object>().ToList();
     }
 }

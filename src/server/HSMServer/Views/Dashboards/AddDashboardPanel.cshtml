@@ -1,5 +1,5 @@
 ﻿@using HSMServer.Controllers
-
+@using System.Text.Json;
 @model HSMServer.Model.Dashboards.PanelViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -14,12 +14,12 @@
         <div id="editablePanelSettings" class="my-2">
             <form method="post"  asp-action="@nameof(DashboardsController.SaveDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
                 <div class="d-flex justify-content-between mb-1">
-                    <input class="form-control" asp-for="Name" placeholder="@Model.Name"/>
+                    <input class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)"/>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
 
-                <textarea id='description' class="form-control w-100" type='text' asp-for="Description" placeholder="@Model.Description"></textarea>
+                <textarea id='description' class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
             </form>
         </div>
     </div>
@@ -35,9 +35,13 @@
 
 <script>
     $(document).ready(function () {
+        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}))
         initMultichart('multichart').then(
             (dom) => {
                 window.dispatchEvent(new Event('resize'));
+                values.forEach(function (x) {
+                    addNewSourceHtml(x, 'multichart');
+                })
             }
         );
 

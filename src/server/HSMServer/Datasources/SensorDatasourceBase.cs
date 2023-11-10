@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
+using HSMServer.Datasources;
 
 namespace HSMServer.Datasources
 {
@@ -79,6 +80,7 @@ namespace HSMServer.Datasources
             };
         }
 
+        public (string Path, SensorType Type, Unit? unit) GetSourceInfo() => (_sensor.Path, _sensor.Type, _sensor.OriginalUnit);
 
         public UpdateChartSourceResponse GetSourceUpdates() =>
             new()
@@ -123,7 +125,6 @@ namespace HSMServer.Datasources
         {
             if (_aggreagateValues)
             {
-
             }
             else
             {

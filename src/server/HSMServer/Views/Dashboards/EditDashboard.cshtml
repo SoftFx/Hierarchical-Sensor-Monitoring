@@ -97,4 +97,26 @@
         $('#addPanel').removeClass('d-none');
         $('#editableDashboardSettings').removeClass('d-none');
     }
+    
+    $('.panel.resize-draggable').on('click', 'a.removePanel', function (){
+        let id = this.id.substring("remove_".length, this.id.length);
+        console.log(id)
+        let name = this.name;
+        showConfirmationModal(
+            `Removing '${name}' panel`,
+            `Do you really want to remove selected panel <strong>${name}</strong>?`,
+            function () {
+                $.ajax({
+                    type: 'DELETE',
+                    url: window.location.pathname + `/${id}`,
+                    cache: false,
+                    async: true,
+                }).done(function (){
+                    $(`#${id}`).remove();
+                }).fail(function (data){
+                    showToast(data.responseText)
+                })
+                }
+            );
+    })
 </script>
