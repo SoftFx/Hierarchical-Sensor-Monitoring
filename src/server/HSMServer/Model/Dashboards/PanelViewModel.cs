@@ -115,7 +115,7 @@ public class DatasourceViewModel
 
     public DatasourceViewModel(PanelDatasource dataSource)
     {
-        var result = dataSource.Source.GetInitializationData().GetAwaiter().GetResult();
+        var result = dataSource.Source.Initialize().GetAwaiter().GetResult();
 
         Id = dataSource.Id;
         SensorId = dataSource.SensorId;

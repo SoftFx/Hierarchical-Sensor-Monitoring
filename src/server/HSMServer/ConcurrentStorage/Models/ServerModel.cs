@@ -3,7 +3,7 @@ using System;
 
 namespace HSMServer.ConcurrentStorage
 {
-    public interface IServerModel<EntityType, UpdateType>
+    public interface IServerModel<EntityType, UpdateType> : IDisposable
     {
         Guid Id { get; }
 
@@ -73,5 +73,7 @@ namespace HSMServer.ConcurrentStorage
             Name = Name,
             Description = Description,
         };
+
+        public virtual void Dispose() { }
     }
 }

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
+using HSMServer.Datasources;
 
 namespace HSMServer.Datasources
 {
@@ -17,9 +18,17 @@ namespace HSMServer.Datasources
     }
 
 
-    public abstract class SensorDatasourceBase
+    public abstract class SensorDatasourceBase : IDisposable
     {
+        private const int MaxVisibleCnt = 100;
+
+        private readonly LinkedList<BaseChartValue> _newVisibleValues = new();
+        private LinkedList<BaseChartValue> _curValues;
+
         private BaseSensorModel _sensor;
+
+        private long _removedValuesCnt = 0;
+        private bool _aggreagateValues;
 
 
         protected abstract ChartType NormalType { get; }
@@ -27,52 +36,87 @@ namespace HSMServer.Datasources
         protected abstract ChartType AggreatedType { get; }
 
 
+        protected abstract BaseChartValue Convert(BaseValue baseValue);
+
+
         public SensorDatasourceBase AttachSensor(BaseSensorModel sensor)
         {
             _sensor = sensor;
+            _sensor.ReceivedNewValue += AddNewValue;
 
             return this;
         }
 
-        public async Task<InitChartSourceResponse> GetInitializationData(int lastValuesCnt = 100)
-        {
-            var data = await _sensor.GetHistoryData(new SensorHistoryRequest
+
+        public Task<InitChartSourceResponse> Initialize() =>
+            Initialize(new SensorHistoryRequest
             {
                 To = DateTime.UtcNow,
-                Count = -lastValuesCnt,
+                Count = -MaxVisibleCnt,
             });
+
+        public Task<InitChartSourceResponse> Initialize(DateTime from, DateTime to) =>
+            Initialize(new SensorHistoryRequest
+            {
+                From = from,
+                To = to,
+            });
+
+        public async Task<InitChartSourceResponse> Initialize(SensorHistoryRequest request)
+        {
+            var data = await _sensor.GetHistoryData(request);
+
+            _newVisibleValues.Clear();
+            _removedValuesCnt = 0;
+
+            _aggreagateValues = data.Count > MaxVisibleCnt;
+            _curValues = new LinkedList<BaseChartValue>(data.Select(Convert).Reverse());
 
             return new()
             {
-                Values = data.Select(Convert).Reverse().ToList(),
-                ChartType = NormalType,
+                ChartType = _aggreagateValues ? AggreatedType : NormalType,
+                Values = _curValues.ToList(),
             };
         }
 
         public (string Path, SensorType Type, Unit? unit) GetSourceInfo() => (_sensor.Path, _sensor.Type, _sensor.OriginalUnit);
 
-
-        protected abstract BaseChartValue Convert(BaseValue baseValue);
-    }
-
-
-    public abstract record BaseChartSourceResponse
-    {
-       // public required Guid SourceId { get; init; }
-    }
+        public UpdateChartSourceResponse GetSourceUpdates() =>
+            new()
+            {
+                NewVisibleValues = _newVisibleValues.ToList(),
+                RemovedValuesCount = _removedValuesCnt,
+            };
 
 
-    public sealed record InitChartSourceResponse : BaseChartSourceResponse
-    {
-        public List<BaseChartValue> Values { get; init; }
-
-        public ChartType ChartType { get; init; }
-    }
+        public void Dispose()
+        {
+            _sensor.ReceivedNewValue -= AddNewValue;
+        }
 
 
-    public sealed record UpdateChartSourceResponse : BaseChartSourceResponse
-    {
-        public int RemovedValuesCount { get; init; }
+        private void AddNewValue(BaseValue value)
+        {
+            if (_aggreagateValues)
+            {
+            }
+            else
+            {
+                var newVisibleValue = Convert(value);
+
+                _curValues.AddLast(newVisibleValue);
+                _newVisibleValues.AddLast(newVisibleValue);
+            }
+
+            while (_curValues.Count > MaxVisibleCnt)
+            {
+                _curValues.RemoveFirst();
+                _removedValuesCnt = Math.Min(++_removedValuesCnt, MaxVisibleCnt);
+            }
+
+            while (_newVisibleValues.Count > MaxVisibleCnt)
+                _newVisibleValues.RemoveFirst();
+        }
     }
 
 
