@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Collections;
-using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using System;
@@ -7,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
-using HSMServer.Datasources;
 
 namespace HSMServer.Datasources
 {
@@ -25,7 +23,7 @@ namespace HSMServer.Datasources
         private const int MaxVisibleCnt = 100;
 
         private readonly CLinkedList<BaseChartValue> _newVisibleValues = new();
-        private CLinkedList<BaseChartValue> _curValues;
+        private readonly CLinkedList<BaseChartValue> _curValues = new();
 
         private BaseSensorModel _sensor;
 
@@ -68,10 +66,10 @@ namespace HSMServer.Datasources
         {
             var data = await _sensor.GetHistoryData(request);
 
+            BuildInitialValues(data, request);
+
             _newVisibleValues.Clear();
             _removedValuesCnt = 0;
-
-            BuildInitialValues(data, request);
 
             return new()
             {
@@ -101,38 +99,32 @@ namespace HSMServer.Datasources
             rawList.Reverse();
 
             _aggreagateValues = rawList.Count > MaxVisibleCnt;
-            _aggrValuesStep = 0;
+            _aggrValuesStep = _aggreagateValues ? (request.To - request.From).Ticks / MaxVisibleCnt : 0L;
             _curValues.Clear();
 
-            if (rawList.Count <= MaxVisibleCnt)
-            {
-                foreach (var raw in rawList)
-                    _curValues.AddLast(Convert(raw));
-            } 
-            else
-            {
-                _aggrValuesStep = (request.To - request.From).Ticks / MaxVisibleCnt;
-
-                foreach (var raw in rawList)
-                    if (_curValues.Count == 0 || _curValues.Last.Value.Time.Ticks + _aggrValuesStep < raw.Time.Ticks)
-                        _curValues.AddLast(Convert(raw));
-                    else
-                        _curValues.Last.Value.Apply(raw);
-            }
+            foreach (var raw in rawList)
+                AddNewValue(raw);
         }
 
         private void AddNewValue(BaseValue value)
         {
-            if (_aggreagateValues)
-            {
-            }
-            else
+            void AddVisibleValue()
             {
                 var newVisibleValue = Convert(value);
 
                 _curValues.AddLast(newVisibleValue);
                 _newVisibleValues.AddLast(newVisibleValue);
             }
+
+            if (_aggreagateValues && _aggrValuesStep > 0)
+            {
+                if (_curValues.Count == 0 || _curValues.Last.Value.Time.Ticks + _aggrValuesStep < value.Time.Ticks)
+                    AddVisibleValue();
+                else
+                    _curValues.Last.Value.Apply(value);
+            }
+            else
+                AddVisibleValue();
 
             while (_curValues.Count > MaxVisibleCnt)
             {
@@ -181,9 +173,7 @@ namespace HSMServer.Datasources
         protected override ChartType AggreatedType => ChartType.Line;
 
 
-        protected override BaseChartValue Convert(BaseValue rawValue)
-        {
-            return rawValue is BaseValue<T> value ? new LineChartValue<T>(value) : null;
-        }
+        protected override BaseChartValue Convert(BaseValue rawValue) =>
+            rawValue is BaseValue<T> value ? new LineChartValue<T>(value) : null;
     }
 }
