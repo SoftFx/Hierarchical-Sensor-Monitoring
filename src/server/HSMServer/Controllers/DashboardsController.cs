@@ -27,7 +27,7 @@ namespace HSMServer.Controllers
             _treeViewModel = treeViewModel;
         }
 
-
+        [HttpGet("Dashboards")]
         public IActionResult Index() => View(_dashboardManager.GetValues().Select(d => new DashboardViewModel(d)).OrderBy(d => d.Name).ToList());
 
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -156,8 +156,17 @@ namespace HSMServer.Controllers
             return RedirectToAction(nameof(EditDashboard), new { dashboardId = editDashboard.Id });
         }
 
-        [HttpDelete]
+        [HttpDelete("Dashboards/{dashboardId:guid}")]
         public async Task RemoveDashboard(Guid dashboardId) => await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
+        
+        [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}")]
+        public Task<IActionResult> RemovePanel(Guid dashboardId, Guid panelId)
+        {
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) && dashboard.Panels.TryRemove(panelId, out _))
+                return Task.FromResult<IActionResult>(Ok());
+
+            return Task.FromResult<IActionResult>(NotFound());
+        }
 
         [HttpGet]
         public IActionResult GetPanel(Guid dashboardId)

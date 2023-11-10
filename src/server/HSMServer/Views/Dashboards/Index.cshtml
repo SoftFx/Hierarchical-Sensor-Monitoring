@@ -28,7 +28,7 @@
 
         @foreach (var dashboard in Model)
         {
-            <div class="d-flex flex-row align-items-center">
+            <div id="@dashboard.Id" class="d-flex flex-row align-items-center">
                 <div class="card mb-2 w-100" onclick="javascript:editDashboard('@dashboard.Id')" style="cursor:pointer;">
                     <div class="card-body py-2">
                         <div style="font-weight: bold;">@dashboard.Name</div>
@@ -68,11 +68,14 @@
             function () {
                 $.ajax({
                 type: 'DELETE',
-                url: `@Html.Raw(Url.Action(nameof(DashboardsController.RemoveDashboard), ViewConstants.DashboardsController))?dashboardId=${id}`,
+                url: window.location.pathname + `/${id}`,
                 cache: false,
                 async: true,
                 }).done(function (){
-                    document.location.reload()
+                    $(`#${id}`).remove();
+                })
+                .fail(function (data){
+                    showToast(data.responseText)
                 })
             }
         );
