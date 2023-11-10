@@ -50,6 +50,21 @@ namespace HSMServer.Controllers
             return View("AddDashboardPanel", new PanelViewModel(panel, dashboard.Id));
         }
 
+        [HttpGet("Dashboards/{dashboardId:guid}/SourceUpdate/{panelId:guid}/{sourceId:guid}")]
+        public async Task<IActionResult> Source(Guid dashboardId, Guid panelId, Guid sourceId)
+        {
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
+                dashboard.Panels.TryGetValue(panelId, out var panel) &&
+                panel.Sources.TryGetValue(sourceId, out var source))
+            {
+                var updates = source.Source.GetSourceUpdates();
+
+                return Json(updates);
+            }
+
+            return _emptyResult;
+        }
+
         [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
         public async Task<IActionResult> GetSource(Guid sourceId, Guid dashboardId, Guid panelId)
         {

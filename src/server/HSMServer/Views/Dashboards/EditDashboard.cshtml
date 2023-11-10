@@ -83,12 +83,11 @@
             url: `@Html.Raw(Url.Action(nameof(DashboardsController.GetPanel), ViewConstants.DashboardsController))?dashboardId=@Model.Id`,
             cache: false,
             async: true,
-            success: (viewData) => {
-                $('#dashboardPanels').append(viewData);
+        }).done(function (viewData){
+            $('#dashboardPanels').append(viewData);
 
-                $('#dashboardPanels').removeClass("d-none");
-                $('#noPanels').addClass("d-none");
-            }
+            $('#dashboardPanels').removeClass("d-none");
+            $('#noPanels').addClass("d-none");
         })
     }
 
@@ -102,7 +101,6 @@
     
     $('.panel.resize-draggable').on('click', 'a.removePanel', function (){
         let id = this.id.substring("remove_".length, this.id.length);
-        console.log(id)
         let name = this.name;
         showConfirmationModal(
             `Removing '${name}' panel`,
@@ -118,7 +116,7 @@
                 }).fail(function (data){
                     showToast(data.responseText)
                 })
-                }
-            );
+            }
+        );
     })
 </script>

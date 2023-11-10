@@ -1,4 +1,5 @@
 import {convertToGraphData} from "./plotting";
+import {pan} from "plotly.js/src/fonts/ploticon";
 
 export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
@@ -19,10 +20,12 @@ export function getPlotSourceView(id) {
 export const currentPanel = {};
 export const plotColorDelay = 1000;
 
-export function Model(id) {
+export function Model(id, panelId, dashboardId) {
     this.id = id;
-    this.colorTimeout = undefined;
-    this.nameTimeout = undefined;
+    this.panelId = panelId;
+    this.dashboardId = dashboardId;
+    this.updateTimeout = undefined;
+    this.requestTimeout = undefined;
 }
 
 window.insertSourceHtml = function (data) {
@@ -54,7 +57,7 @@ window.insertSourceHtml = function (data) {
     });
 }
 
-window.insertSourcePlot = function (data, id) {
+window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
     plot.id = data.id;
     plot.name = data.label;
@@ -73,7 +76,7 @@ window.insertSourcePlot = function (data, id) {
         }
     }
     Plotly.relayout(id, updateLayout)
-    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1);
+    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
 }
 
 window.addNewSourceHtml = function (data, id){
@@ -137,6 +140,40 @@ window.initDashboard = function () {
     const interact = window.interact('.resize-draggable')
     addDraggable(interact)
     addResizable(interact)
+    for (let i in currentPanel){
+        currentPanel[i].requestTimeout = setInterval(function() {
+            $.ajax({
+                type: 'get',
+                url: window.location.pathname + '/SourceUpdate' + `/${currentPanel[i].panelId}/${i}`,
+            }).done(function(data){
+                if (data.newVisibleValues.length > 0) {
+                    let x = [];
+                    let y = [];
+                    let customData = []
+                    for(let j of data.newVisibleValues){
+                        x.push(j.time);
+                        y.push(j.value);
+                        customData.push(j.value);
+                    }
+                    
+                    let correctId = 0;
+                    let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
+                    for(let j of plot.data){
+                        if (j.id === i)
+                            break;
+                        
+                        correctId += 1;
+                    }
+
+                    Plotly.extendTraces(plot, {
+                        y: [y],
+                        x: [x],
+                        customdata: [customData]
+                    }, [correctId])
+                }
+            })
+        }, 30000)
+    }
 }
 
 window.disableDragAndResize = function () {

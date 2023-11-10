@@ -34,7 +34,7 @@
         initMultichart('panelChart_@Model.Id').then(
             (data) => {
                  values.forEach(function (x) {
-                    insertSourcePlot(x, 'panelChart_@Model.Id')
+                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')
                  })
             },
             (error) => showToast(error)
