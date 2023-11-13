@@ -26,10 +26,10 @@ namespace HSMServer.Dashboards
         public TimeSpan DataPeriod { get; set; }
 
 
-        public PanelDatasource(BaseSensorModel sensor)
+        public PanelDatasource(BaseSensorModel sensor, Dashboard dashboard)
         {
             _sensor = sensor;
-
+            _board = dashboard;
             Label = _sensor.DisplayName;
 
             Source = DatasourceFactory.Build(_sensor.Type).AttachSensor(sensor);
@@ -38,11 +38,10 @@ namespace HSMServer.Dashboards
             Id = Guid.NewGuid();
         }
 
-        public PanelDatasource(PanelSourceEntity entity, BaseSensorModel sensor, Dashboard dashboard) : this(sensor)
+        public PanelDatasource(PanelSourceEntity entity, BaseSensorModel sensor, Dashboard dashboard) : this(sensor, dashboard)
         {
             _sensor = sensor;
 
-            _board = dashboard;
             Id = new Guid(entity.Id);
             SensorId = new Guid(entity.SensorId);
 

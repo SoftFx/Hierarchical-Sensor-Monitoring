@@ -42,7 +42,7 @@ namespace HSMServer.Dashboards
         {
             if (TryGetSensor(sensorId, out var sensor))
             {
-                var source = new PanelDatasource(sensor);
+                var source = new PanelDatasource(sensor, _board);
 
                 return Sources.TryAdd(source.Id, source);
             }

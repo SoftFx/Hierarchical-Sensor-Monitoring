@@ -97,11 +97,12 @@ namespace HSMServer.Controllers
                     if (_treeViewModel.Sensors.TryGetValue(sourceId, out var newSource) && viewModel.TryAddSource(newSource, out errorMessage))
                     {
                         var sensorModel = _cache.GetSensor(sourceId);
-                        var datasource = new PanelDatasource(sensorModel);
+                        var datasource = new PanelDatasource(sensorModel, dashboard);
 
                         if (panel.Sources.TryAdd(datasource.Id, datasource) && (await _dashboardManager.TryUpdate(dashboard)))
                         {
-                            var response = await datasource.Source.Initialize();
+                            var (from, to) = datasource.GetFromTo();
+                            var response = await datasource.Source.Initialize(from, to);
 
                             return Json(new SourceDto(response, datasource, newSource));
                         }
