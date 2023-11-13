@@ -12,7 +12,7 @@ namespace HSMServer.Datasources
 
     public sealed record UpdateChartSourceResponse
     {
-        public List<BaseChartValue> NewVisibleValues { get; init; }
+        public List<object> NewVisibleValues { get; init; }
 
         public long RemovedValuesCount { get; init; }
     }

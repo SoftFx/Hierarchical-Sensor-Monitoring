@@ -1,4 +1,5 @@
 import {convertToGraphData} from "./plotting";
+import {pan} from "plotly.js/src/fonts/ploticon";
 
 export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
@@ -19,10 +20,12 @@ export function getPlotSourceView(id) {
 export const currentPanel = {};
 export const plotColorDelay = 1000;
 
-export function Model(id) {
+export function Model(id, panelId, dashboardId) {
     this.id = id;
-    this.colorTimeout = undefined;
-    this.nameTimeout = undefined;
+    this.panelId = panelId;
+    this.dashboardId = dashboardId;
+    this.updateTimeout = undefined;
+    this.requestTimeout = undefined;
 }
 
 window.insertSourceHtml = function (data) {
@@ -54,7 +57,7 @@ window.insertSourceHtml = function (data) {
     });
 }
 
-window.insertSourcePlot = function (data, id) {
+window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
     plot.id = data.id;
     plot.name = data.label;
@@ -73,7 +76,7 @@ window.insertSourcePlot = function (data, id) {
         }
     }
     Plotly.relayout(id, updateLayout)
-    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1);
+    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
 }
 
 window.addNewSourceHtml = function (data, id){
@@ -134,72 +137,124 @@ export function initDropzone(){
 }
 
 window.initDashboard = function () {
-    window.interact('.resize-draggable')
-        .draggable({
-            inertia: true,
-            modifiers: [
-                interact.modifiers.restrictRect({
-                    restriction: 'parent',
-                    endOnly: true
-                })
-            ],
-            autoScroll: true,
+    const interact = window.interact('.resize-draggable')
+    addDraggable(interact)
+    addResizable(interact)
+    for (let i in currentPanel){
+        currentPanel[i].requestTimeout = setInterval(function() {
+            $.ajax({
+                type: 'get',
+                url: window.location.pathname + '/SourceUpdate' + `/${currentPanel[i].panelId}/${i}`,
+            }).done(function(data){
+                if (data.newVisibleValues.length > 0) {
+                    let x = [];
+                    let y = [];
+                    let customData = []
+                    for(let j of data.newVisibleValues){
+                        x.push(j.time);
+                        y.push(j.value);
+                        customData.push(j.value);
+                    }
+                    
+                    let correctId = 0;
+                    let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
+                    for(let j of plot.data){
+                        if (j.id === i)
+                            break;
+                        
+                        correctId += 1;
+                    }
 
-            listeners: {
-                move: dragMoveListener,
-
-                end(event) {
-                    var textEl = event.target.querySelector('p')
-
-                    //textEl && (textEl.textContent =
-                    //    'moved a distance of ' +
-                    //    (Math.sqrt(Math.pow(event.pageX - event.x0, 2) +
-                    //        Math.pow(event.pageY - event.y0, 2) | 0))
-                    //        .toFixed(2) + 'px')
+                    Plotly.extendTraces(plot, {
+                        y: [y],
+                        x: [x],
+                        customdata: [customData]
+                    }, [correctId])
                 }
+            })
+        }, 30000)
+    }
+}
+
+window.disableDragAndResize = function () {
+    interact('.resize-draggable').options.resize.enabled = false;
+    interact('.resize-draggable').options.drag.enabled = false;
+}
+
+window.enableDragAndResize = function () {
+    interact('.resize-draggable').options.resize.enabled = true;
+    interact('.resize-draggable').options.drag.enabled = true;
+}
+
+function addDraggable(interactable) {
+    interactable.draggable({
+        inertia: true,
+        modifiers: [
+            interact.modifiers.restrictRect({
+                restriction: 'parent',
+                endOnly: true
+            })
+        ],
+        autoScroll: true,
+
+        listeners: {
+            move: dragMoveListener,
+
+            end(event) {
+                var textEl = event.target.querySelector('p')
+
+                //textEl && (textEl.textContent =
+                //    'moved a distance of ' +
+                //    (Math.sqrt(Math.pow(event.pageX - event.x0, 2) +
+                //        Math.pow(event.pageY - event.y0, 2) | 0))
+                //        .toFixed(2) + 'px')
             }
-        })
-        .resizable({
-            edges: { left: true, right: true, bottom: true, top: true },
+        }
+    })
+}
 
-            listeners: {
-                move(event) {
-                    var target = event.target
-                    var x = (parseFloat(target.getAttribute('data-x')) || 0)
-                    var y = (parseFloat(target.getAttribute('data-y')) || 0)
+function addResizable(interactable){
+    interactable.resizable({
+        edges: { left: true, right: true, bottom: true, top: true },
 
-                    target.style.width = event.rect.width + 'px'
-                    target.style.height = event.rect.height + 'px'
+        listeners: {
+            move(event) {
+                var target = event.target
+                var x = (parseFloat(target.getAttribute('data-x')) || 0)
+                var y = (parseFloat(target.getAttribute('data-y')) || 0)
 
-                    x += event.deltaRect.left
-                    y += event.deltaRect.top
+                target.style.width = event.rect.width + 'px'
+                target.style.height = event.rect.height + 'px'
 
-                    target.style.transform = 'translate(' + x + 'px,' + y + 'px)'
+                x += event.deltaRect.left
+                y += event.deltaRect.top
 
-                    target.setAttribute('data-x', x)
-                    target.setAttribute('data-y', y)
+                target.style.transform = 'translate(' + x + 'px,' + y + 'px)'
+
+                target.setAttribute('data-x', x)
+                target.setAttribute('data-y', y)
 
 
-                    var update = {
-                        width: event.rect.width,
-                        height: event.rect.height
-                    };
+                var update = {
+                    width: event.rect.width,
+                    height: event.rect.height
+                };
 
-                    Plotly.relayout(`panelChart_${event.target.id}`, update);
-                }
-            },
-            modifiers: [
-                interact.modifiers.restrictEdges({
-                    outer: 'parent'
-                }),
+                Plotly.relayout(`panelChart_${event.target.id}`, update);
+            }
+        },
+        modifiers: [
+            interact.modifiers.restrictEdges({
+                outer: 'parent'
+            }),
 
-                interact.modifiers.restrictSize({
-                    min: { width: 100, height: 50 }
-                })
-            ],
+            interact.modifiers.restrictSize({
+                min: { width: 100, height: 50 }
+            })
+        ],
 
-            inertia: true
-        })
+        inertia: true
+    })
 }
 
 window.updateSource = function (name, color, id){

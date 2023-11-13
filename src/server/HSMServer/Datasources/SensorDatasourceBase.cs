@@ -83,7 +83,7 @@ namespace HSMServer.Datasources
         public UpdateChartSourceResponse GetSourceUpdates() =>
             new()
             {
-                NewVisibleValues = _newVisibleValues.ToList(),
+                NewVisibleValues = _newVisibleValues.Cast<object>().ToList(),
                 RemovedValuesCount = _removedValuesCnt,
             };
 
