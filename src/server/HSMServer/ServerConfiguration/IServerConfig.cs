@@ -4,6 +4,9 @@
     {
         TelegramConfig Telegram { get; }
 
+        BackupDatabaseConfig BackupDatabase { get; }
+
+
         void ResaveSettings();
     }
 }

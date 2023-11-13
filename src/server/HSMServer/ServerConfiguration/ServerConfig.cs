@@ -1,5 +1,4 @@
 ﻿using HSMCommon;
-using HSMCommon.Extensions;
 using HSMServer.Extensions;
 using Microsoft.Extensions.Configuration;
 using System;
@@ -44,9 +43,11 @@ namespace HSMServer.ServerConfiguration
 
         public ServerCertificateConfig ServerCertificate { get; }
 
-        public KestrelConfig Kestrel { get; }
+        public BackupDatabaseConfig BackupDatabase { get; }
 
         public TelegramConfig Telegram { get; }
+
+        public KestrelConfig Kestrel { get; }
 
 
         static ServerConfig()
@@ -67,6 +68,7 @@ namespace HSMServer.ServerConfiguration
             _configuration = configuration;
 
             ServerCertificate = Register<ServerCertificateConfig>(nameof(ServerCertificate));
+            BackupDatabase = Register<BackupDatabaseConfig>(nameof(BackupDatabase));
             Telegram = Register<TelegramConfig>(nameof(Telegram));
             Kestrel = Register<KestrelConfig>(nameof(Kestrel));
 
