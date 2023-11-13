@@ -169,7 +169,7 @@ window.initDashboard = function () {
                         y: [y],
                         x: [x],
                         customdata: [customData]
-                    }, [correctId])
+                    }, [correctId], 100)
                 }
             })
         }, 30000)
