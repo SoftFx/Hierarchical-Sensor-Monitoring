@@ -16,6 +16,8 @@ namespace HSMServer.Dashboards
 
         public DateTime? ToDataPeriod { get; private set; }
 
+        public TimeSpan DataPeriod { get; private set; } = new (0, 30, 0);
+
 
         internal Func<Guid, BaseSensorModel> GetSensorModel;
 
@@ -23,11 +25,13 @@ namespace HSMServer.Dashboards
         internal Dashboard(DashboardEntity entity) : base(entity)
         {
             Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels?.ToDictionary(k => new Guid(k.Id), v => new Panel(v, this))) ?? new();
+            DataPeriod = entity.Period;
         }
         
         internal Dashboard(DashboardEntity entity, Func<Guid, BaseSensorModel> getSensorModel) : base(entity)
         {
             GetSensorModel += getSensorModel;
+            DataPeriod = entity.Period;
             Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels?.ToDictionary(k => new Guid(k.Id), v => new Panel(v, this))) ?? new();
         }
 
@@ -43,6 +47,7 @@ namespace HSMServer.Dashboards
 
         public override void Update(DashboardUpdate update)
         {
+            DataPeriod = update.FromPeriod;
             base.Update(update);
         }
 
@@ -51,7 +56,7 @@ namespace HSMServer.Dashboards
             var entity = base.ToEntity();
 
             entity.Panels.AddRange(Panels.Select(u => u.Value.ToEntity()));
-
+            entity.Period = DataPeriod;
             return entity;
         }
     }
