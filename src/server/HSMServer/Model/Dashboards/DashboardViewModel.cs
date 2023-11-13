@@ -32,6 +32,7 @@ namespace HSMServer.Model.Dashboards
             Id = dashboard.Id;
             Name = dashboard.Name;
             Description = dashboard.Description;
+            FromPeriod = dashboard.DataPeriod;
             Panels = dashboard.Panels.Select(x => new PanelViewModel(x.Value, Id.Value)).ToList();
 
             IsModify = isModify;
