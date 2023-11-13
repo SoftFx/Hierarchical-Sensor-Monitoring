@@ -367,7 +367,9 @@ export class BarPLot extends Plot {
                 'min: ' + i.min +
                 '<br>mean: ' + i.mean +
                 '<br>max: ' + i.max +
-                '<br>count: ' + i.count + (i.isCompressed === undefined ? " (aggregated value)" : ''));
+                '<br>count: ' + i.count + (i.isCompressed === undefined ? " (aggregated value)" : '') +
+                '<br>open time: ' + moment(i.openTime).format('DD/MM/yyyy HH:mm:ss') +
+                '<br>close time: ' + moment(i.closeTime).format('DD/MM/yyyy HH:mm:ss'));
             this.close.push(i.lastValue);
         }
 
