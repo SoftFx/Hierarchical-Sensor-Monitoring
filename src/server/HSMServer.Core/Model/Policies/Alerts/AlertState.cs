@@ -184,12 +184,10 @@ namespace HSMServer.Core.Model.Policies
         {
             var state = BuildBase(value, sensor);
 
-            state.PrevValue = (sensor.LastValue as BaseValue<T>)?.Value?.ToString();
-            state.ValueSingle = value switch
-            {
-                TimeSpanValue timeSpan => timeSpan.Value.ToReadableView(),
-                _ => value?.Value?.ToString(),
-            };
+            state.ValueSingle = GetReadableValue(value);
+
+            if (sensor.LastValue is BaseValue<T> lastValue)
+                state.PrevValue = GetReadableValue(lastValue);
 
             return state;
         }
@@ -227,5 +225,11 @@ namespace HSMServer.Core.Model.Policies
         private bool UseProperty(string name) => Template?.Contains(name) ?? false;
 
         private string GetCorrectTarget() => Guid.TryParse(Target, out _) ? Sensor : Target; //skipping for guid
+
+        private static string GetReadableValue<T>(BaseValue<T> value) => value switch
+        {
+            TimeSpanValue timeSpan => timeSpan.Value.ToReadableView(),
+            _ => value?.Value?.ToString(),
+        };
     }
 }
