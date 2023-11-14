@@ -72,6 +72,7 @@ namespace HSMServer.Core.Model
             Percentiles = value.Percentiles;
             Status = value.Status;
             Time = time?.ToUniversalTime() ?? value.Time;
+            ReceivingTime = value.ReceivingTime;
         }
     };
 }
