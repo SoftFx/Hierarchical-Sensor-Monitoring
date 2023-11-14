@@ -7,17 +7,6 @@ using System.Linq;
 
 namespace HSMServer.Dashboards
 {
-    public record Cords
-    {
-        public double Width { get; set; } = 300;
-
-        public double Height { get; set; } = 200;
-
-        public double X { get; set; }
-
-        public double Y { get; set; }
-    }
-
     public sealed class Panel : BaseServerModel<DashboardPanelEntity, PanelUpdate>
     {
         private readonly Dashboard _board;
@@ -25,19 +14,19 @@ namespace HSMServer.Dashboards
 
         public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
 
-        public Cords Cords { get; set; }
+        public CordsEntity Cords { get; set; }
 
 
         internal Panel(Dashboard board) : base()
         {
             _board = board;
-            Cords = new Cords();
+            Cords = new CordsEntity();
         }
 
         internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
         {
             _board = board;
-            Cords = entity.Cords as Cords;
+            Cords = entity.Cords ?? new ();
             foreach (var sourceEntity in entity.Sources)
             {
                 var sensorId = new Guid(sourceEntity.SensorId);
@@ -69,7 +58,7 @@ namespace HSMServer.Dashboards
             var entity = base.ToEntity();
 
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
-
+            entity.Cords = Cords;
             return entity;
         }
 

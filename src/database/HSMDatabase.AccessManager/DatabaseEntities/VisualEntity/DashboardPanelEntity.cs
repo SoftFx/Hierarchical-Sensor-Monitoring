@@ -6,6 +6,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
     {
         public List<PanelSourceEntity> Sources { get; init; } = new();
         
-        public object Cords { get; set; }
+        public CordsEntity Cords { get; set; }
     }
+
+    public record CordsEntity(double Width = 300, double Height = 300, double X = 0, double Y = 0);
 }

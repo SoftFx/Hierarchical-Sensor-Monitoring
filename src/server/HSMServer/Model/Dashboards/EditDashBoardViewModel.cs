@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using HSMServer.Dashboards;
+using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 
 namespace HSMServer.Model.Dashboards;
 
@@ -14,5 +14,5 @@ public class EditDashBoardViewModel
     
     public TimeSpan FromPeriod { get; set; }
     
-    public Dictionary<Guid, Cords> Panels { get; set; }
+    public Dictionary<Guid, CordsEntity> Panels { get; set; }
 }
