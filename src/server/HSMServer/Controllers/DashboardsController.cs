@@ -47,7 +47,7 @@ namespace HSMServer.Controllers
             panel?.Update(new PanelUpdate() { Id = panel.Id, Name = model.Name, Description = model.Description });
             _dashboardManager.TryUpdate(dashboard);
 
-            return View("AddDashboardPanel", new PanelViewModel(panel, dashboard.Id));
+            return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id });
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}/SourceUpdate/{panelId:guid}/{sourceId:guid}")]
