@@ -37,7 +37,8 @@ window.insertSourceHtml = function (data) {
                                     <div class="d-flex flex-grow-1">
                                         <div class="d-flex flex-column" style="flex-grow: 10">
                                             <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
-                                                <input id=${'name_input_' + data.id} class="form-control"  value="${data.label}" type="text" style="flex-grow: 10"></input>
+                                                <label class="me-1">Label:</label>
+                                                <input id=${'name_input_' + data.id} class="form-control" value="${data.label}" type="text" style="flex-grow: 10"></input>
                                                 <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
                                             </div>
                                             <div class="d-flex align-items-center">
