@@ -34,21 +34,23 @@ window.insertSourceHtml = function (data) {
                                     style="border-top-width: 1px;
                                            border-radius: 5px;"
                                     >
-                                    <div class="d-flex align-items-center justify-content-between w-100">
-                                        <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
-                                            <input id=${'name_input_' + data.id} class="form-control"  value="${data.label}" type="text" style="flex-grow: 10"></input>
-                                            <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
+                                    <div class="d-flex flex-grow-1">
+                                        <div class="d-flex flex-column" style="flex-grow: 10">
+                                            <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
+                                                <input id=${'name_input_' + data.id} class="form-control"  value="${data.label}" type="text" style="flex-grow: 10"></input>
+                                                <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
+                                            </div>
+                                            <div class="d-flex align-items-center">
+                                                <span id=${'redirectToHome_' + data.id} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
+                                                    ${data.path}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div class="d-flex flex-grow-1"></div>
-                                        <button id=${'deletePlot_' + data.id} class="btn" type="button" style="color: red">
-                                            <i class="fa-solid fa-xmark"></i>
-                                        </button>
-                                    </div>
-     
-                                    <div class="d-flex align-items-center">
-                                         <span id=${'redirectToHome_' + data.id} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
-                                            ${data.path}
-                                        </span>
+                                        <div class="d-flex justify-content-center">
+                                             <button id=${'deletePlot_' + data.id} class="btn" type="button" style="color: red">
+                                                <i class="fa-solid fa-xmark"></i>
+                                             </button>
+                                        </div>
                                     </div>
                                 </li>`
 

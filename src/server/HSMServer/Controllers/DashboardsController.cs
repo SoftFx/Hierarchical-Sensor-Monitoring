@@ -176,12 +176,14 @@ namespace HSMServer.Controllers
         public async Task RemoveDashboard(Guid dashboardId) => await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
         
         [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public Task<IActionResult> RemovePanel(Guid dashboardId, Guid panelId)
+        public async Task<IActionResult> RemovePanel(Guid dashboardId, Guid panelId)
         {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) && dashboard.Panels.TryRemove(panelId, out _))
-                return Task.FromResult<IActionResult>(Ok());
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
+                dashboard.Panels.TryRemove(panelId, out _) &&
+                await _dashboardManager.TryUpdate(dashboard))
+                return Ok();
 
-            return Task.FromResult<IActionResult>(NotFound());
+            return NotFound();
         }
 
         [HttpGet]
