@@ -128,7 +128,9 @@ public sealed class VisibleTreeViewModel
             if (sensor.IsNameContainsPattern(searchParameter))
             {
                 toRender = node.ToRenderNode(sensor.Id);
-                SearchedSensors.Add(sensor.Id);
+
+                if (toRender)
+                    SearchedSensors.Add(sensor.Id);
             }
         }
 
