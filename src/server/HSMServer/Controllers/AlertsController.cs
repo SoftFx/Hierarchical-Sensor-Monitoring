@@ -135,7 +135,7 @@ namespace HSMServer.Controllers
                         newSensorAlerts[sensor.Id].Add(newAlert);
                     }
                     else
-                        toast.AddError("Sensor by path not found", fullSensorPath);
+                        toast.AddError("Sensor by path not found", $"{productName}{fullSensorPath}");
                 }
 
                 foreach (var (sensorId, alertUpdates) in newSensorAlerts)
