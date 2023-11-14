@@ -14,6 +14,7 @@ public class PanelViewModel
 {
     private const string TypeError = "Can't plot using {0} sensor type";
     private const string UnitError = "Can't plot using {0} unit type";
+    private const string DefaultName = "New Panel";
 
     public CGuidDict<DatasourceViewModel> Sources { get; }
 
@@ -35,7 +36,7 @@ public class PanelViewModel
 
     public PanelViewModel(Panel panel, Guid dashboardId)
     {
-        Name = panel.Name;
+        Name = panel.Name ?? DefaultName;
         Description = panel.Description;
         Id = panel.Id;
         DashboardId = dashboardId;
