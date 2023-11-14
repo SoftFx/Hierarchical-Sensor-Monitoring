@@ -47,7 +47,7 @@ namespace HSMServer.Controllers
             panel?.Update(new PanelUpdate() { Id = panel.Id, Name = model.Name, Description = model.Description });
             _dashboardManager.TryUpdate(dashboard);
 
-            return View("AddDashboardPanel", new PanelViewModel(panel, dashboard.Id));
+            return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id });
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}/SourceUpdate/{panelId:guid}/{sourceId:guid}")]
@@ -97,11 +97,12 @@ namespace HSMServer.Controllers
                     if (_treeViewModel.Sensors.TryGetValue(sourceId, out var newSource) && viewModel.TryAddSource(newSource, out errorMessage))
                     {
                         var sensorModel = _cache.GetSensor(sourceId);
-                        var datasource = new PanelDatasource(sensorModel);
+                        var datasource = new PanelDatasource(sensorModel, dashboard);
 
                         if (panel.Sources.TryAdd(datasource.Id, datasource) && (await _dashboardManager.TryUpdate(dashboard)))
                         {
-                            var response = await datasource.Source.Initialize();
+                            var (from, to) = datasource.GetFromTo();
+                            var response = await datasource.Source.Initialize(from, to);
 
                             return Json(new SourceDto(response, datasource, newSource));
                         }
@@ -175,12 +176,14 @@ namespace HSMServer.Controllers
         public async Task RemoveDashboard(Guid dashboardId) => await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
         
         [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public Task<IActionResult> RemovePanel(Guid dashboardId, Guid panelId)
+        public async Task<IActionResult> RemovePanel(Guid dashboardId, Guid panelId)
         {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) && dashboard.Panels.TryRemove(panelId, out _))
-                return Task.FromResult<IActionResult>(Ok());
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
+                dashboard.Panels.TryRemove(panelId, out _) &&
+                await _dashboardManager.TryUpdate(dashboard))
+                return Ok();
 
-            return Task.FromResult<IActionResult>(NotFound());
+            return NotFound();
         }
 
         [HttpGet]

@@ -34,21 +34,24 @@ window.insertSourceHtml = function (data) {
                                     style="border-top-width: 1px;
                                            border-radius: 5px;"
                                     >
-                                    <div class="d-flex align-items-center justify-content-between w-100">
-                                        <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
-                                            <input id=${'name_input_' + data.id} class="form-control"  value="${data.label}" type="text" style="flex-grow: 10"></input>
-                                            <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
+                                    <div class="d-flex flex-grow-1">
+                                        <div class="d-flex flex-column" style="flex-grow: 10">
+                                            <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
+                                                <label class="me-1">Label:</label>
+                                                <input id=${'name_input_' + data.id} class="form-control" value="${data.label}" type="text" style="flex-grow: 10"></input>
+                                                <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
+                                            </div>
+                                            <div class="d-flex align-items-center">
+                                                <span id=${'redirectToHome_' + data.id} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
+                                                    ${data.path}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div class="d-flex flex-grow-1"></div>
-                                        <button id=${'deletePlot_' + data.id} class="btn" type="button" style="color: red">
-                                            <i class="fa-solid fa-xmark"></i>
-                                        </button>
-                                    </div>
-     
-                                    <div class="d-flex align-items-center">
-                                         <span id=${'redirectToHome_' + data.id} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
-                                            ${data.path}
-                                        </span>
+                                        <div class="d-flex justify-content-center">
+                                             <button id=${'deletePlot_' + data.id} class="btn" type="button" style="color: red">
+                                                <i class="fa-solid fa-xmark"></i>
+                                             </button>
+                                        </div>
                                     </div>
                                 </li>`
 
@@ -147,22 +150,27 @@ window.initDashboard = function () {
                 url: window.location.pathname + '/SourceUpdate' + `/${currentPanel[i].panelId}/${i}`,
             }).done(function(data){
                 if (data.newVisibleValues.length > 0) {
+                    let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
+                    let correctId = 0;
+
+                    for(let j of plot.data){
+                        if (j.id === i)
+                            break;
+
+                        correctId += 1;
+                    }
+                    
+                    let lastTime = new Date(plot.data[correctId].x.at(-1));
                     let x = [];
                     let y = [];
                     let customData = []
                     for(let j of data.newVisibleValues){
+                        if (lastTime > new Date(j.time))
+                            continue;
+ 
                         x.push(j.time);
                         y.push(j.value);
                         customData.push(j.value);
-                    }
-                    
-                    let correctId = 0;
-                    let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
-                    for(let j of plot.data){
-                        if (j.id === i)
-                            break;
-                        
-                        correctId += 1;
                     }
 
                     Plotly.extendTraces(plot, {

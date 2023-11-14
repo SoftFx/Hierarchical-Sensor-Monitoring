@@ -10,7 +10,6 @@ namespace HSMServer.Model.Dashboards
     {
         private const string DefaultName = "New Dashboard";
 
-
         public List<PanelViewModel> Panels { get; set; } = new();
 
 
@@ -19,6 +18,8 @@ namespace HSMServer.Model.Dashboards
         public string Name { get; set; }
 
         public string Description { get; set; }
+        
+        public TimeSpan FromPeriod { get; set; }
 
 
         public bool IsModify { get; init; }
@@ -31,6 +32,7 @@ namespace HSMServer.Model.Dashboards
             Id = dashboard.Id;
             Name = dashboard.Name;
             Description = dashboard.Description;
+            FromPeriod = dashboard.DataPeriod;
             Panels = dashboard.Panels.Select(x => new PanelViewModel(x.Value, Id.Value)).ToList();
 
             IsModify = isModify;
@@ -43,6 +45,7 @@ namespace HSMServer.Model.Dashboards
                 Id = Id.Value,
                 Name = Name,
                 Description = Description,
+                FromPeriod = FromPeriod
             };
 
         internal static DashboardAdd ToDashboardAdd(User author) =>

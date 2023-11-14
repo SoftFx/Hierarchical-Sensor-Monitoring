@@ -29,7 +29,7 @@
         </div>
 
         <div id="editableDashboardSettings" class="my-2 @(isModify ? "d-none" : string.Empty)">
-            <form method="post" asp-action="@nameof(DashboardsController.EditDashboard)">
+            <form id="saveDashBoardForm" method="post" asp-action="@nameof(DashboardsController.EditDashboard)">
                 <input class="d-none" asp-for="Id" value="@Model.Id"/>
 
                 <div class="d-flex justify-content-between mb-1">
@@ -43,11 +43,11 @@
         </div>
 
         <div class="d-flex justify-content-end">
-            <select class="form-select" style="width: auto">
-                <option>last 30 minutes</option>
-                <option>last 1 hour</option>
-                <option>last 3 hours</option>
-                <option>last 6 hours</option>
+            <select asp-for="FromPeriod" form="saveDashBoardForm" id="from_select" class="form-select" style="width: auto">
+                <option value="00:30:00">last 30 minutes</option>
+                <option value="01:00:00">last 1 hour</option>
+                <option value="03:00:00">last 3 hours</option>
+                <option value="06:00:00">last 6 hours</option>
             </select>
 
             <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? "d-none" : string.Empty)" href="javascript:addPanel();">
@@ -75,6 +75,7 @@
 
         initDashboard();
         disableDragAndResize();
+        $('#from_select').val('@Model.FromPeriod');
     });
 
     function addPanel() {
