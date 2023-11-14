@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model.Policies
                 if (_groups.TryGetValue(groupId, out var group))
                 {
                     var info = group.Policies.Where(u => filter(u.Value.Sensor.Id))
-                                             .Select(p => new PolicyExportInfo(p.Value, relativePath))
+                                             .Select(p => new PolicyExportInfo(p.Value, relativePath, exportGroup.CurrentProduct))
                                              .ToList();
 
                     if (info.Count > 0)

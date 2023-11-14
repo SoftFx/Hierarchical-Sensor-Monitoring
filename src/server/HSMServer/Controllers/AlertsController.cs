@@ -6,6 +6,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
+using HSMServer.Folders;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.MultiToastViewModels;
 using HSMServer.Model.TreeViewModel;
@@ -37,6 +38,7 @@ namespace HSMServer.Controllers
 
         private readonly ITelegramChatsManager _telegram;
         private readonly ITreeValuesCache _cache;
+        private readonly IFolderManager _folders;
         private readonly TreeViewModel _tree;
 
 
@@ -48,50 +50,37 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertsController(ITelegramChatsManager telegram, TreeViewModel tree, ITreeValuesCache cache, IUserManager users) : base(users)
+        public AlertsController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache, IUserManager users) : base(users)
         {
             _telegram = telegram;
+            _folders = folders;
             _cache = cache;
             _tree = tree;
         }
 
 
         [HttpGet]
+        public IActionResult ExportFolderAlerts(Guid folderId)
+        {
+            if (_folders.TryGetValue(folderId, out var folder))
+            {
+                var exportGroup = new PolicyExportGroup();
+
+                foreach (var (productId, product) in folder.Products)
+                    exportGroup = AddNodeAlertsToGroup(exportGroup.SetProduct(product.Name), productId);
+
+                return ExportModelToFile(folder.Name, exportGroup);
+            }
+            else
+                return _emptyResult;
+        }
+
+        [HttpGet]
         public IActionResult ExportAlerts(Guid selectedId)
         {
-            var renderedSensors = CurrentUser.Tree.SearchedSensors;
             var node = _cache.GetProduct(selectedId);
 
-            if (node is null)
-                return _emptyResult;
-
-            var exportModel = node.Policies.SaveStateToExportGroup(new PolicyExportGroup(), string.Empty, renderedSensors.IsRendered);
-            var relativeNodes = new LinkedList<string>();
-
-            void RunDfsLoad(ProductModel curNode)
-            {
-                foreach (var (_, subNode) in curNode.SubProducts)
-                {
-                    relativeNodes.AddLast(subNode.DisplayName);
-
-                    subNode.Policies.SaveStateToExportGroup(exportModel, string.Join('/', relativeNodes), renderedSensors.IsRendered);
-
-                    RunDfsLoad(subNode);
-
-                    relativeNodes.RemoveLast();
-                }
-            }
-
-            RunDfsLoad(node);
-
-            var chats = _telegram.GetValues().ToDictionary(ch => ch.Id, ch => ch.Name);
-
-            var fileName = $"{node.FullPath.Replace('/', '_')}-alerts.json";
-            var content = JsonSerializer.SerializeToUtf8Bytes(exportModel.Select(p => new AlertExportViewModel(p.Value, chats)), _serializeOptions);
-
-            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
-
-            return File(content, fileName.GetContentType(), fileName);
+            return node is null ? _emptyResult : ExportModelToFile(node.FullPath, AddNodeAlertsToGroup(new PolicyExportGroup(), node.Id));
         }
 
 
@@ -146,6 +135,52 @@ namespace HSMServer.Controllers
             }
 
             return toastViewModel.ToResponse();
+        }
+
+
+        private PolicyExportGroup AddNodeAlertsToGroup(PolicyExportGroup exportGroup, Guid nodeId)
+        {
+            var renderedSensors = CurrentUser.Tree.SearchedSensors;
+            var node = _cache.GetProduct(nodeId);
+
+            if (node is not null)
+            {
+                var relativeNodes = new LinkedList<string>();
+
+                exportGroup = node.Policies.SaveStateToExportGroup(exportGroup, string.Empty, renderedSensors.IsRendered);
+
+                void RunDfsLoad(ProductModel curNode)
+                {
+                    foreach (var (_, subNode) in curNode.SubProducts)
+                    {
+                        relativeNodes.AddLast(subNode.DisplayName);
+
+                        subNode.Policies.SaveStateToExportGroup(exportGroup, string.Join('/', relativeNodes), renderedSensors.IsRendered);
+
+                        RunDfsLoad(subNode);
+
+                        relativeNodes.RemoveLast();
+                    }
+                }
+
+                RunDfsLoad(node);
+            }
+
+            return exportGroup;
+        }
+
+        private FileContentResult ExportModelToFile(string selectedNodePath, PolicyExportGroup group)
+        {
+            var chats = _telegram.GetValues().ToDictionary(ch => ch.Id, ch => ch.Name);
+
+            var fileName = $"{selectedNodePath.Replace('/', '_')}-alerts.json";
+            var content = JsonSerializer.SerializeToUtf8Bytes(group.SelectMany(p => p.Value.Select(info => (p.Key, info)))
+                                                                   .GroupBy(g => (g.info.ProductName, g.Key))
+                                                                   .Select(p => new AlertExportViewModel(p.Select(v => v.info), chats)), _serializeOptions);
+
+            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
+
+            return File(content, fileName.GetContentType(), fileName);
         }
     }
 }
