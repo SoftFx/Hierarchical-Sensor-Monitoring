@@ -201,7 +201,14 @@ function addDraggable(interactable) {
             interact.modifiers.restrictRect({
                 restriction: 'parent',
                 endOnly: true
-            })
+            }),
+            interact.modifiers.snap({
+                targets: [
+                    interact.snappers.grid({ x: 5, y: 5 })
+                ],
+                range: Infinity,
+                relativePoints: [ { x: 0, y: 0 } ]
+            }),
         ],
         autoScroll: true,
 
