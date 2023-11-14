@@ -283,7 +283,6 @@ window.updateCurrentPlotsIds = function (idToCompare, id) {
     delete currentPanel[id];
     
     for (let item in currentPanel) {
-        console.log(item)
         if (currentPanel[item].id >= idToCompare)
             currentPanel[item].id = currentPanel[item].id - 1;
     }
@@ -370,8 +369,7 @@ function getRandomColor() {
 
 function dragMoveListener (event) {
     var target = event.target
-    console.log(target)
-    console.log(event)
+
     var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
     var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy
 

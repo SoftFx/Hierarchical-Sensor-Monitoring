@@ -5,5 +5,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
     public record DashboardPanelEntity : BaseServerEntity
     {
         public List<PanelSourceEntity> Sources { get; init; } = new();
+        
+        public object Cords { get; set; }
     }
 }

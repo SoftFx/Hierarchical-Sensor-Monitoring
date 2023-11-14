@@ -79,23 +79,34 @@
     });
     
     $('#saveDashBoardForm').on('submit', function (e){
+        e.preventDefault();
+        e.stopPropagation();
         let arr = $(this).serializeArray();
         let panels = {};
-        console.log($('#dashboardPanels').children('div'))
-        for (let i in $('#dashboardPanels').children('div')){
-            console.log(i)    
+        for (let i of $('#dashboardPanels').children('div')){
+            panels[i.id] = {
+                width: i.offsetWidth,
+                height: i.offsetHeight,
+                x: parseFloat(i.dataset.x || 0),
+                y: parseFloat(i.dataset.y || 0)
+            };
         }
         // $('#dashboardPanels').children('div').forEach((value) => {
         //     console.log(value)
         //    panels[value.id] = {}; 
         // });
-        console.log(arr);
         let object = {};
         arr.forEach((value, key) => object[value.name] = value.value);
-        let json = JSON.stringify(object);
-        console.log(object)
-        e.preventDefault();
-        e.stopPropagation();
+        object.panels = panels;
+
+        $.ajax({
+            type: 'post',
+            url: window.location.pathname,
+            contentType: 'application/json',
+            data: JSON.stringify(object)
+        }).done(function (d){
+            console.log(d)
+        })
     })
 
     function addPanel() {
