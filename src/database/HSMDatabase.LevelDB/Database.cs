@@ -16,19 +16,18 @@ namespace HSMDatabase.LevelDB
 
         private readonly DB _database;
         private readonly ReadOptions _iteratorOptions = new();
+        private readonly Options _databaseOptions = new()
+        {
+            CreateIfMissing = true,
+            MaxOpenFiles = 100000,
+            CompressionLevel = CompressionLevel.SnappyCompression,
+            BlockSize = 200 * 1024,
+            WriteBufferSize = 8 * 1024 * 1024,
+        };
 
 
         public LevelDBDatabaseAdapter(string name)
         {
-            Options databaseOptions = new()
-            {
-                CreateIfMissing = true,
-                MaxOpenFiles = 100000,
-                CompressionLevel = CompressionLevel.SnappyCompression,
-                BlockSize = 200 * 1024,
-                WriteBufferSize = 8 * 1024 * 1024,
-            };
-
             Directory.CreateDirectory(Path.Combine(Environment.CurrentDirectory, name));
             var attempts = 0;
 
@@ -36,7 +35,7 @@ namespace HSMDatabase.LevelDB
             {
                 try
                 {
-                    _database = new DB(name, databaseOptions);
+                    _database = new DB(name, _databaseOptions);
 
                     return;
                 }
@@ -175,7 +174,7 @@ namespace HSMDatabase.LevelDB
                 iterator?.Dispose();
             }
         }
-        
+
         public IEnumerable<(byte[], byte[])> GetValueKeyPairFromTo(byte[] from, byte[] to)
         {
             Iterator iterator = null;
@@ -222,7 +221,7 @@ namespace HSMDatabase.LevelDB
                 iterator?.Dispose();
             }
         }
-        
+
         public IEnumerable<(byte[], byte[])> GetValueKeyPairToFrom(byte[] from, byte[] to)
         {
             Iterator iterator = null;
@@ -336,6 +335,30 @@ namespace HSMDatabase.LevelDB
                 iterator?.Dispose();
             }
         }
+
+        public void Backup(string backupPath)
+        {
+            try
+            {
+                using var backupDb = new DB(backupPath, _databaseOptions);
+                using var snapshot = _database.CreateSnapshot();
+
+                using var readOptions = new ReadOptions() { Snapshot = snapshot };
+                using var snapshotIterator = _database.CreateIterator(readOptions);
+
+                snapshotIterator.SeekToFirst();
+                while (snapshotIterator.IsValid)
+                {
+                    backupDb.Put(snapshotIterator.Key(), snapshotIterator.Value());
+                    snapshotIterator.Next();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Backup database error: {ex}");
+            }
+        }
+
 
         public void Dispose()
         {

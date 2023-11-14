@@ -48,7 +48,8 @@ public static class ApplicationServiceExtensions
                 .AddHostedService<ClearDatabaseService>()
                 .AddHostedService<MonitoringBackgroundService>()
                 .AddHostedService<DatacollectorService>()
-                .AddHostedService<NotificationsBackgroundService>();
+                .AddHostedService<NotificationsBackgroundService>()
+                .AddHostedService<BackupDatabaseService>();
 
         services.AddSwaggerGen(o =>
         {
