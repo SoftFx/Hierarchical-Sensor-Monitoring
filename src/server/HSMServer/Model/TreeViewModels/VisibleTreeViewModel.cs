@@ -22,6 +22,9 @@ public sealed class VisibleTreeViewModel
     public event Func<List<FolderModel>> GetFolders;
 
 
+    internal SensorRenderedHash SearchedSensors { get; } = new();
+
+
     public VisibleTreeViewModel(User user)
     {
         _user = user;
@@ -45,6 +48,7 @@ public sealed class VisibleTreeViewModel
         var tree = new List<BaseShallowModel>(1 << 4);
         var isSearchTree = !string.IsNullOrEmpty(searchParameter);
 
+        SearchedSensors.Clear();
         _allTree.Clear();
 
         if (isSearchTree)
@@ -65,22 +69,20 @@ public sealed class VisibleTreeViewModel
                     tree.Add(node);
             }
         }
-        
+
         Func<FolderShallowModel, bool> filter = isSearchTree ? folder =>
+        {
+            var isFolderEmpty = folder.IsEmpty;
+
+            if (folder.Products.Count == 1)
             {
-                var isFolderEmpty = folder.IsEmpty;
-
-                if (folder.Products.Count == 1)
-                {
-                    isFolderEmpty = isFolderEmpty && folder.Products[0].RenderedNodes.Count == 0 && folder.Products[0].RenderedSensors.Count == 0;
-
-                    if (isFolderEmpty)
-                        isFolderEmpty = !folder.Products[0].IsNameContainsPattern(searchParameter);
-                }
-
-                return !isFolderEmpty || (folder.IsNameContainsPattern(searchParameter) && IsVisibleFolderForUser(folder.Id));
+                if (isFolderEmpty && folder.Products[0].ContentIsEmpty)
+                    isFolderEmpty = !folder.Products[0].IsNameContainsPattern(searchParameter);
             }
-            : folder => !folder.IsEmpty || IsVisibleFolderForUser(folder.Id);
+
+            return !isFolderEmpty || (folder.IsNameContainsPattern(searchParameter) && IsVisibleFolderForUser(folder.Id));
+        }
+        : folder => !folder.IsEmpty || IsVisibleFolderForUser(folder.Id);
 
         folderTree.AddRange(folders.Values.Where(filter));
         folderTree.AddRange(tree);
@@ -114,9 +116,8 @@ public sealed class VisibleTreeViewModel
 
             if (subNode.IsNameContainsPattern(searchParameter) || currentNodeToRender)
             {
-                toRender = true;
+                toRender = node.ToRenderNode(subNode.Id);
                 AddOpenedNode(subNode.Id);
-                node.ToRenderNode(subNode.Id);
             }
         }
 
@@ -126,8 +127,8 @@ public sealed class VisibleTreeViewModel
 
             if (sensor.IsNameContainsPattern(searchParameter))
             {
-                toRender = true;
-                node.ToRenderNode(sensor.Id);
+                toRender = node.ToRenderNode(sensor.Id);
+                SearchedSensors.Add(sensor.Id);
             }
         }
 

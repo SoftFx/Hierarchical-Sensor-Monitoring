@@ -59,12 +59,13 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult ExportAlerts(Guid selectedId)
         {
+            var renderedSensors = CurrentUser.Tree.SearchedSensors;
             var node = _cache.GetProduct(selectedId);
 
             if (node is null)
                 return _emptyResult;
 
-            var exportModel = node.Policies.SaveStateToExportGroup(new PolicyExportGroup(), string.Empty);
+            var exportModel = node.Policies.SaveStateToExportGroup(new PolicyExportGroup(), string.Empty, renderedSensors.IsRendered);
             var relativeNodes = new LinkedList<string>();
 
             void RunDfsLoad(ProductModel curNode)
@@ -73,7 +74,7 @@ namespace HSMServer.Controllers
                 {
                     relativeNodes.AddLast(subNode.DisplayName);
 
-                    subNode.Policies.SaveStateToExportGroup(exportModel, string.Join('/', relativeNodes));
+                    subNode.Policies.SaveStateToExportGroup(exportModel, string.Join('/', relativeNodes), renderedSensors.IsRendered);
 
                     RunDfsLoad(subNode);
 

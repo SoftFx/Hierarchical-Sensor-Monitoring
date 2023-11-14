@@ -14,17 +14,22 @@ namespace HSMServer.Core.Model.Policies
         private readonly ConcurrentDictionary<Guid, Guid> _policyToGroup = new();
 
 
-        public PolicyExportGroup SaveStateToExportGroup(PolicyExportGroup exportGroup, string relativePath)
+        public PolicyExportGroup SaveStateToExportGroup(PolicyExportGroup exportGroup, string relativePath, Predicate<Guid> filter)
         {
             foreach (var (template, groupId) in _templateToGroup)
                 if (_groups.TryGetValue(groupId, out var group))
                 {
-                    var info = group.Policies.Select(p => new PolicyExportInfo(p.Value, relativePath)).ToList();
+                    var info = group.Policies.Where(u => filter(u.Value.Sensor.Id))
+                                             .Select(p => new PolicyExportInfo(p.Value, relativePath))
+                                             .ToList();
 
-                    if (exportGroup.TryGetValue(template, out var policies))
-                        policies.AddRange(info);
-                    else
-                        exportGroup.TryAdd(template, info);
+                    if (info.Count > 0)
+                    {
+                        if (exportGroup.TryGetValue(template, out var policies))
+                            policies.AddRange(info);
+                        else
+                            exportGroup.TryAdd(template, info);
+                    }
                 }
 
             return exportGroup;
