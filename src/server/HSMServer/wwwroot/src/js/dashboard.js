@@ -147,29 +147,34 @@ window.initDashboard = function () {
                 url: window.location.pathname + '/SourceUpdate' + `/${currentPanel[i].panelId}/${i}`,
             }).done(function(data){
                 if (data.newVisibleValues.length > 0) {
+                    let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
+                    let correctId = 0;
+
+                    for(let j of plot.data){
+                        if (j.id === i)
+                            break;
+
+                        correctId += 1;
+                    }
+                    
+                    let lastTime = new Date(plot.data[correctId].x.at(-1));
                     let x = [];
                     let y = [];
                     let customData = []
                     for(let j of data.newVisibleValues){
+                        if (lastTime > new Date(j.time))
+                            continue;
+ 
                         x.push(j.time);
                         y.push(j.value);
                         customData.push(j.value);
-                    }
-                    
-                    let correctId = 0;
-                    let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
-                    for(let j of plot.data){
-                        if (j.id === i)
-                            break;
-                        
-                        correctId += 1;
                     }
 
                     Plotly.extendTraces(plot, {
                         y: [y],
                         x: [x],
                         customdata: [customData]
-                    }, [correctId], 100)
+                    }, [correctId])
                 }
             })
         }, 30000)

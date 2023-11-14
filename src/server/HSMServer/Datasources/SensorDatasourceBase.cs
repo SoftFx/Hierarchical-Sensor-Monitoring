@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
+using HSMServer.Core.Cache;
 
 namespace HSMServer.Datasources
 {
@@ -60,6 +61,7 @@ namespace HSMServer.Datasources
             {
                 From = from,
                 To = to,
+                Count = -TreeValuesCache.MaxHistoryCount
             });
 
         public async Task<InitChartSourceResponse> Initialize(SensorHistoryRequest request)
