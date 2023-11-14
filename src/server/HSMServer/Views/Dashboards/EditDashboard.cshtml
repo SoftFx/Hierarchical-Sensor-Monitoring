@@ -77,6 +77,26 @@
         disableDragAndResize();
         $('#from_select').val('@Model.FromPeriod');
     });
+    
+    $('#saveDashBoardForm').on('submit', function (e){
+        let arr = $(this).serializeArray();
+        let panels = {};
+        console.log($('#dashboardPanels').children('div'))
+        for (let i in $('#dashboardPanels').children('div')){
+            console.log(i)    
+        }
+        // $('#dashboardPanels').children('div').forEach((value) => {
+        //     console.log(value)
+        //    panels[value.id] = {}; 
+        // });
+        console.log(arr);
+        let object = {};
+        arr.forEach((value, key) => object[value.name] = value.value);
+        let json = JSON.stringify(object);
+        console.log(object)
+        e.preventDefault();
+        e.stopPropagation();
+    })
 
     function addPanel() {
         $.ajax({

@@ -370,6 +370,8 @@ function getRandomColor() {
 
 function dragMoveListener (event) {
     var target = event.target
+    console.log(target)
+    console.log(event)
     var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
     var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy
 
