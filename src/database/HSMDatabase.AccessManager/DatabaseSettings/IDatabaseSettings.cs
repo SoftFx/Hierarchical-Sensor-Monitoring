@@ -6,9 +6,12 @@ namespace HSMDatabase.AccessManager
     {
         public string DatabaseFolder { get; init; }
 
-        public string EnvironmentDatabaseName { get; init; }
+        public string DatabaseBackupsFolder { get; init; }
+
 
         public string SnaphotsDatabaseName { get; init; }
+
+        public string EnvironmentDatabaseName { get; init; }
 
         public string SensorValuesDatabaseName { get; init; }
 

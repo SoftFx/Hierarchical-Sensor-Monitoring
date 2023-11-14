@@ -17,6 +17,9 @@ namespace HSMServer.Core.DataLayer
         long EnviromentDbSize { get; }
 
 
+        void BackupEnvironment(string backupPath);
+
+
         #region Folders
 
         public void AddFolder(FolderEntity entity);
