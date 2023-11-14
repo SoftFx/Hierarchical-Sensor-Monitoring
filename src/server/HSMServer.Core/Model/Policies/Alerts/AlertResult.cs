@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Extensions;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -80,7 +81,7 @@ namespace HSMServer.Core.Model.Policies
                 {
                     PrevStatus = $"{LastState.PrevStatus}->{newState.PrevStatus}",
                     PrevComment = $"{LastState.PrevComment}->{newState.PrevComment}",
-                    PrevValue = $"{LastState.PrevValue}->{newState.PrevValue}"
+                    PrevValue = $"{LastState.PrevValue}->{newState.PrevValue.ToReadableView()}"
                 };
 
                 LastComment = LastState.BuildComment();

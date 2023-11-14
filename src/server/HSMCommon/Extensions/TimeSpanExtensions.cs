@@ -5,6 +5,9 @@ namespace HSMCommon.Extensions
 {
     public static class TimeSpanExtensions
     {
+        public static string ToReadableView(this string str) =>
+            TimeSpan.TryParse(str, out var time) ? time.ToReadableView() : str;
+
         public static string ToReadableView(this TimeSpan time)
         {
             bool hasPrevious = false;
