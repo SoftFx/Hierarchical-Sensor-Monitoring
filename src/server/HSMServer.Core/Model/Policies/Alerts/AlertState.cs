@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model.Policies
         [AlertVariable("$sensor", "Sensor name")]
         public string Sensor { get; init; }
 
-        [AlertVariable("$sensorUnit", "Sensor unit")]
+        [AlertVariable("$unit", "Sensor unit")]
         public string Unit { get; init; }
 
         [AlertVariable("$status", "Sensor status")]
@@ -60,7 +60,7 @@ namespace HSMServer.Core.Model.Policies
         public string PrevComment { get; init; }
 
         [AlertVariable("$prevValue", "Value of the previous sensor data")]
-        public string PrevValue { get; private set; }
+        public string PrevValue { get; set; }
 
 
         [AlertVariable("$value", "Sensor Value")]
@@ -184,12 +184,10 @@ namespace HSMServer.Core.Model.Policies
         {
             var state = BuildBase(value, sensor);
 
-            state.PrevValue = (sensor.LastValue as BaseValue<T>)?.Value?.ToString();
-            state.ValueSingle = value switch
-            {
-                TimeSpanValue timeSpan => timeSpan.Value.ToReadableView(),
-                _ => value?.Value?.ToString(),
-            };
+            state.ValueSingle = GetReadableValue(value);
+
+            if (sensor.LastValue is BaseValue<T> lastValue)
+                state.PrevValue = GetReadableValue(lastValue);
 
             return state;
         }
@@ -227,5 +225,11 @@ namespace HSMServer.Core.Model.Policies
         private bool UseProperty(string name) => Template?.Contains(name) ?? false;
 
         private string GetCorrectTarget() => Guid.TryParse(Target, out _) ? Sensor : Target; //skipping for guid
+
+        private static string GetReadableValue<T>(BaseValue<T> value) => value switch
+        {
+            TimeSpanValue timeSpan => timeSpan.Value.ToReadableView(),
+            _ => value?.Value?.ToString(),
+        };
     }
 }

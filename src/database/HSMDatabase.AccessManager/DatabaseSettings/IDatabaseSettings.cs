@@ -4,6 +4,8 @@ namespace HSMDatabase.AccessManager
 {
     public interface IDatabaseSettings
     {
+        public string DatabaseBackupsFolder { get; init; }
+
         public string DatabaseFolder { get; init; }
 
 

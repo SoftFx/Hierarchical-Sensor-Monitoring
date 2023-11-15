@@ -31,9 +31,13 @@
 
     var getGrid = `@Url.Action(nameof(HomeController.GetGrid))`;
     var getList = `@Url.Action(nameof(HomeController.GetList))`;
-    
+
     var getSensorPlotInfo = "@Url.Action(nameof(SensorHistoryController.GetSensorPlotInfo), ViewConstants.HistoryController)";
     var getBackgroundId = "@Url.Action(nameof(SensorHistoryController.GetBackgroundSensorInfo), ViewConstants.HistoryController)";
+
+    var exportFolderAlerts = "@Url.Action(nameof(AlertsController.ExportFolderAlerts), ViewConstants.AlertsController)";
+    var exportAlerts = "@Url.Action(nameof(AlertsController.ExportAlerts), ViewConstants.AlertsController)";
+    var importAlerts = "@Url.Action(nameof(AlertsController.ImportAlerts), ViewConstants.AlertsController)";
 </script>
 
 
@@ -72,21 +76,21 @@
             $('#update_' + id).empty().append(dataObject.updatedTimeStr);
 
         $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
-                          .addClass(dataObject.statusIconColorClass)
-                          .prop('title', `Status: ${dataObject.status}`)
-        
+            .addClass(dataObject.statusIconColorClass)
+            .prop('title', `Status: ${dataObject.status}`)
+
         $('#file_status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
-                               .addClass(dataObject.statusIconColorClass)
-                               .prop('title', `Status: ${dataObject.status}`)
-                               
-        $('#file_name_' + id).text(dataObject.fileNameString)                     
+            .addClass(dataObject.statusIconColorClass)
+            .prop('title', `Status: ${dataObject.status}`)
+
+        $('#file_name_' + id).text(dataObject.fileNameString)
 
         $("#newValuesCount").empty().html(dataObject.newValuesCount);
         if (dataObject.newValuesCount != null && $(`#link_table_${id}`).hasClass("active")) {
             $("#tableHistoryRefreshButton").removeClass("d-none");
         }
     }
-    
+
     function updateGeneralInfo(selectedNodeId) {
         $.ajax({
             type: 'GET',
@@ -127,7 +131,7 @@
 
         if (dataObject.isValidationErrorVisible) {
             $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
-                                               <span>Status comment: ${dataObject.validationError}</span>`);
+                                           <span>Status comment: ${dataObject.validationError}</span>`);
 
             $('#markdown_status_comment').children().last().css('margin-bottom', 0);
         }
@@ -137,7 +141,7 @@
         if (accordionLoaded.length !== 0) {
             if (isFile && dataObject.sendingTime !== null) {
                 $('#side_info_' + id).empty().append(`<span>Size: ${dataObject.size}</span>
-                                                           <span>${dataObject.sendingTime}</span>`);
+                                                      <span>${dataObject.sendingTime}</span>`);
             }
 
             if (isFile)
@@ -169,12 +173,12 @@
 
                     if (dataObject.value !== null && dataObject.value !== undefined)
                         displayChildrenInfo = true;
-                    
+
                     if (dataObject.hasOwnProperty('value')) {
                         updateSpecificSensorData(dataObject);
                     }
                 }
-                
+
                 let accordionName = "";
                 let dataPanel = $('#dataPanel li a.active');
                 if (dataPanel.length > 0) {
@@ -197,7 +201,7 @@
                 if (isDisplayMode) {
                     updateGeneralInfo(selectedNodeId);
                 }
-                
+
                 if (displayChildrenInfo)
                     $('#dataPanel').removeClass('d-none');
             });
@@ -205,10 +209,10 @@
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
     }
-    
-    function getGridPage(accordionId, pageNumber = -1, pageSize = -1){
-        let accordion  = $(`#grid-accordion_${accordionId}`);
-        
+
+    function getGridPage(accordionId, pageNumber = -1, pageSize = -1) {
+        let accordion = $(`#grid-accordion_${accordionId}`);
+
         $.ajax({
             type: 'get',
             url: `${getGrid}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
@@ -220,19 +224,19 @@
                     let currInput = $(`#pageSize_${accordionId}`);
                     let [wasFocused, lastValue] = getFocusAndVal(currInput);
                     accordionId = accordion.length !== 0 ? accordionId : 'gridProducts';
- 
+
                     $(`#grid-accordion_${accordionId}`).empty().replaceWith(viewData);
-                    
+
                     if (pageNumber === -1 || pageSize === -1)
                         setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
                 }
             }
         });
     }
-    
-    function getListPage(accordionId, pageNumber = -1, pageSize = -1){
-        let accordion  = $(`#list-accordion_${accordionId}`);
-        
+
+    function getListPage(accordionId, pageNumber = -1, pageSize = -1) {
+        let accordion = $(`#list-accordion_${accordionId}`);
+
         $.ajax({
             type: 'get',
             url: `${getList}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
@@ -246,22 +250,22 @@
                     accordionId = accordion.length !== 0 ? accordionId : 'listProducts';
 
                     $(`#list-accordion_${accordionId}`).empty().replaceWith(viewData);
-                    
+
                     if (pageNumber === -1 || pageSize === -1)
                         setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
                 }
             }
         });
     }
-    
+
     function setPaginationFocus(accordionId, wasFocused, lastValue, currInput) {
         if (wasFocused)
-           currInput.focus();
-        
+            currInput.focus();
+
         if (lastValue !== undefined)
-           currInput.val(lastValue)
+            currInput.val(lastValue)
     }
-    
+
     function getFocusAndVal(input) {
         return [input.is(':focus'), input.val()]
     }

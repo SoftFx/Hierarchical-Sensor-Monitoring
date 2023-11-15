@@ -148,6 +148,13 @@ namespace HSMServer.Core.Cache
         public ProductModel GetProductByName(string name) =>
             _tree.FirstOrDefault(p => p.Value.Parent == null && p.Value.DisplayName == name).Value;
 
+        public bool TryGetProductByName(string name, out ProductModel product)
+        {
+            product = GetProductByName(name);
+
+            return product is not null;
+        }
+
         public string GetProductNameById(Guid id) => GetProduct(id)?.DisplayName;
 
         /// <returns>list of root products (without parent)</returns>

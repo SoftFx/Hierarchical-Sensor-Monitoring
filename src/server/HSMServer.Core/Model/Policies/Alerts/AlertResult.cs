@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Extensions;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -76,7 +77,13 @@ namespace HSMServer.Core.Model.Policies
         {
             if (IsStatusIsChangeResult && LastState is not null)
             {
-                LastState = newState with { PrevStatus = $"{LastState.PrevStatus}->{newState.PrevStatus}" };
+                LastState = newState with
+                {
+                    PrevStatus = $"{LastState.PrevStatus}->{newState.PrevStatus}",
+                    PrevComment = $"{LastState.PrevComment}->{newState.PrevComment}",
+                    PrevValue = $"{LastState.PrevValue}->{newState.PrevValue.ToReadableView()}"
+                };
+
                 LastComment = LastState.BuildComment();
 
                 return true;

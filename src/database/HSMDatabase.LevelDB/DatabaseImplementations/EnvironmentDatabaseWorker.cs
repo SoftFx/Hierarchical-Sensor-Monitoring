@@ -36,6 +36,9 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         }
 
 
+        public void Backup(string backupPath) => _database.Backup(backupPath);
+
+
         #region Folders
 
         public void PutFolder(FolderEntity entity)

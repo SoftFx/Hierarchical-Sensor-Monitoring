@@ -35,7 +35,7 @@ namespace HSMServer.Core.Model.Policies
                 Id = Id.ToByteArray(),
                 Template = DefaultTemplate,
                 Icon = DefaultIcon,
-                Destination = new PolicyDestinationEntity() { AllChats = true },
+                Destination = new PolicyDestinationEntity(),
             }, node as BaseSensorModel);
 
             _okPolicy = new OkPolicy(this, node);

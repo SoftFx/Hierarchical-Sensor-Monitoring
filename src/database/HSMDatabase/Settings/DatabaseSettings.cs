@@ -4,8 +4,10 @@ namespace HSMDatabase.Settings
 {
     public sealed record DatabaseSettings : IDatabaseSettings
     {
-        private const string DefaultDatabaseFolder = "Databases";
+        private const string DefaultDatabaseBackupsFolder = "DatabasesBackups";
         private const string DefaultSnaphotsDatabaseName = "Snapshots";
+        private const string DefaultDatabaseFolder = "Databases";
+
         private const string DefaultEnvironmentDatabaseName = "EnvironmentData";
         private const string DefaultSensorValuesDatabaseName = "SensorValues";
         private const string DefaultJournalValuesDatabaseName = "JournalValues";
@@ -13,6 +15,9 @@ namespace HSMDatabase.Settings
 
 
         public string DatabaseFolder { get; init; } = DefaultDatabaseFolder;
+
+        public string DatabaseBackupsFolder { get; init; } = DefaultDatabaseBackupsFolder;
+
 
         public string SnaphotsDatabaseName { get; init; } = DefaultSnaphotsDatabaseName;
 

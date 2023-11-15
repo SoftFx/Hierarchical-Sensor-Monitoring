@@ -70,7 +70,7 @@ namespace HSMServer.Model.History
 
             await TryReadNextPage();
 
-            LoadCachedValue();
+            LoadCachedValue(request.FromUtc, request.ToUtc);
 
             await TryReadNextPage();
         }
@@ -110,16 +110,19 @@ namespace HSMServer.Model.History
             return hasNext;
         }
 
-        private void LoadCachedValue()
+        private void LoadCachedValue(DateTime from, DateTime to)
         {
             if (IsBarSensor && _model is IBarSensor sensor && sensor.LocalLastValue != null)
             {
                 var value = sensor.LocalLastValue;
 
-                if (Pages.Count == 0)
-                    Pages.Add(new() { value });
-                else if (CurrentPage.Count == 0 || CurrentPage.First().Time != value.Time)
-                    CurrentPage.Insert(0, value);
+                if (from <= value.Time && value.Time <= to)
+                {
+                    if (Pages.Count == 0)
+                        Pages.Add(new() { value });
+                    else if (CurrentPage.Count == 0 || CurrentPage.First().Time != value.Time)
+                        CurrentPage.Insert(0, value);
+                }
             }
         }
 
