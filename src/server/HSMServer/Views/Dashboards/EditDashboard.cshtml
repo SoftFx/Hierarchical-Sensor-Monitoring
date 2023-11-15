@@ -77,6 +77,33 @@
         disableDragAndResize();
         $('#from_select').val('@Model.FromPeriod');
     });
+    
+    $('#saveDashBoardForm').on('submit', function (e){
+        e.preventDefault();
+        e.stopPropagation();
+        let arr = $(this).serializeArray();
+        let panels = {};
+        for (let i of $('#dashboardPanels').children('div')){
+            panels[i.id] = {
+                width: i.offsetWidth,
+                height: i.offsetHeight,
+                x: parseFloat(i.dataset.x || 0),
+                y: parseFloat(i.dataset.y || 0)
+            };
+        }
+
+        let object = {};
+        arr.forEach((value, key) => object[value.name] = value.value);
+        object.panels = panels;
+        $.ajax({
+            type: 'post',
+            url: window.location.pathname,
+            contentType: 'application/json',
+            data: JSON.stringify(object)
+        }).done(function (d){
+            disableEdit();
+        })
+    })
 
     function addPanel() {
         $.ajax({
@@ -98,6 +125,14 @@
         $('#addPanel').removeClass('d-none');
         $('#editableDashboardSettings').removeClass('d-none');
         enableDragAndResize();
+    }
+    
+    function disableEdit(){
+        $('#dashboardSettings').removeClass('d-none');
+
+        $('#addPanel').addClass('d-none');
+        $('#editableDashboardSettings').addClass('d-none');
+        disableDragAndResize();
     }
     
     $('.panel.resize-draggable').on('click', 'a.removePanel', function (){

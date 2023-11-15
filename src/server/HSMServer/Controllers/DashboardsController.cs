@@ -162,14 +162,26 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost("Dashboards/{dashboardId:guid?}")]
-        public async Task<IActionResult> EditDashboard([FromForm] DashboardViewModel editDashboard)
+        public async Task<IActionResult> EditDashboard([FromBody] EditDashBoardViewModel editDashboard, Guid dashboardId)
         {
-            if (!ModelState.IsValid)
-                return View(nameof(EditDashboard), editDashboard);
+            // if (!ModelState.IsValid)
+            //     return View(nameof(EditDashboard), editDashboard);
 
-            await _dashboardManager.TryUpdate(editDashboard.ToDashboardUpdate());
+            if (editDashboard is null)
+                return BadRequest();
 
-            return RedirectToAction(nameof(EditDashboard), new { dashboardId = editDashboard.Id });
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
+            {
+                dashboard.Update(editDashboard.ToUpdate());
+                foreach (var (id, cords) in editDashboard.Panels)
+                {
+                    if (dashboard.Panels.TryGetValue(id, out var panel))
+                        panel.Cords = cords;
+                }
+            }
+
+            await _dashboardManager.TryUpdate(dashboard);
+            return Ok(dashboard);
         }
 
         [HttpDelete("Dashboards/{dashboardId:guid}")]

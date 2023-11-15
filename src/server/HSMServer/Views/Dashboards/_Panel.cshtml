@@ -29,8 +29,15 @@
 
 <script>
     $(document).ready(function () {
+        let cords = @Html.Raw(JsonSerializer.Serialize(Model.Cords, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}));
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}))
 
+        $('#@Model.Id').width(cords.width)
+                       .height(cords.height)
+                       .css('transform', 'translate(' + cords.x + 'px, ' + cords.y + 'px)')
+                       .attr('data-x', cords.x)
+                       .attr('data-y', cords.y);
+        
         initMultichart('panelChart_@Model.Id').then(
             (data) => {
                  values.forEach(function (x) {

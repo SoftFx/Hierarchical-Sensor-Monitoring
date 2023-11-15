@@ -4,6 +4,7 @@ using System.Linq;
 using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
 using HSMCommon.Collections;
+using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.Dashboards;
 using HSMServer.DTOs.SensorInfo;
 using HSMServer.Extensions;
@@ -30,6 +31,8 @@ public class PanelViewModel
     public SensorType? SensorType { get; set; }
 
     public Unit? UnitType { get; set; }
+    
+    public CordsEntity Cords { get; set; }
 
 
     public PanelViewModel() { }
@@ -40,6 +43,7 @@ public class PanelViewModel
         Description = panel.Description;
         Id = panel.Id;
         DashboardId = dashboardId;
+        Cords = panel.Cords;
 
         Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Key, x => new DatasourceViewModel(x.Value)));
     }
