@@ -1,41 +1,56 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+using HSMServer.Core.Model;
+using HSMServer.Datasources;
+using HSMServer.Extensions;
 using System;
 using System.Drawing;
 
 namespace HSMServer.Dashboards
 {
-    public sealed class PanelDataSource
+    public sealed class PanelDatasource
     {
-        public Guid Id { get; }
+        private readonly BaseSensorModel _sensor;
+        private readonly Dashboard _board;
+
+        public SensorDatasourceBase Source { get; }
 
         public Guid SensorId { get; }
+
+        public Guid Id { get; }
 
 
         public Color Color { get; set; }
 
         public string Label { get; set; }
+        
+        public TimeSpan DataPeriod { get; set; }
 
 
-        public PanelDataSource() { }
-
-        public PanelDataSource(Guid sensorId, Color color, string label = "")
+        public PanelDatasource(BaseSensorModel sensor, Dashboard dashboard)
         {
+            _sensor = sensor;
+            _board = dashboard;
+            Label = _sensor.DisplayName;
+
+            Source = DatasourceFactory.Build(_sensor.Type).AttachSensor(sensor);
+            Color = Color.FromName(ColorExtensions.GenerateRandomColor());
+            SensorId = _sensor.Id;
             Id = Guid.NewGuid();
-            SensorId = sensorId;
-            Color = color;
-            Label = label;
         }
 
-        public PanelDataSource(PanelSourceEntity entity)
+        public PanelDatasource(PanelSourceEntity entity, BaseSensorModel sensor, Dashboard dashboard) : this(sensor, dashboard)
         {
+            _sensor = sensor;
+
             Id = new Guid(entity.Id);
             SensorId = new Guid(entity.SensorId);
 
-            Color = Color.FromArgb(entity.Color);
-
+            Color = Color.FromName(entity.Color);
             Label = entity.Label;
         }
 
+
+        public (DateTime From, DateTime To) GetFromTo() => (DateTime.UtcNow.AddTicks(-_board.DataPeriod.Ticks), DateTime.UtcNow);
 
         public PanelSourceEntity ToEntity() =>
             new()
@@ -43,7 +58,7 @@ namespace HSMServer.Dashboards
                 Id = Id.ToByteArray(),
                 SensorId = SensorId.ToByteArray(),
 
-                Color = Color.ToArgb(),
+                Color = Color.Name,
                 Label = Label,
             };
     }

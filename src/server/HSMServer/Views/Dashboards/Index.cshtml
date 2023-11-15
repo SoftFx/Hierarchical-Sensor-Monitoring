@@ -28,7 +28,7 @@
 
         @foreach (var dashboard in Model)
         {
-            <div class="d-flex flex-row align-items-center">
+            <div id="@dashboard.Id" class="d-flex flex-row align-items-center">
                 <div class="card mb-2 w-100" onclick="javascript:editDashboard('@dashboard.Id')" style="cursor:pointer;">
                     <div class="card-body py-2">
                         <div style="font-weight: bold;">@dashboard.Name</div>
@@ -62,17 +62,20 @@
     $('[id^=remove_]').on('click', function () {
         let id = this.id.substring("remove_".length, this.id.length);
         let name = this.name;
-
         showConfirmationModal(
             `Removing '${name}' dashboard`,
             `Do you really want to remove selected dashboard <strong>${name}</strong>?`,
             function () {
                 $.ajax({
-                    type: 'GET',
-                    url: `@Html.Raw(Url.Action(nameof(DashboardsController.RemoveDashboard), ViewConstants.DashboardsController))?dashboardId=${id}`,
-                    cache: false,
-                    async: true,
-                    success: () => document.location.reload()
+                type: 'DELETE',
+                url: window.location.pathname + `/${id}`,
+                cache: false,
+                async: true,
+                }).done(function (){
+                    $(`#${id}`).remove();
+                })
+                .fail(function (data){
+                    showToast(data.responseText)
                 })
             }
         );

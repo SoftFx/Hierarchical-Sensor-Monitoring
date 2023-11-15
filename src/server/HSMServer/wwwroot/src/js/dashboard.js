@@ -1,4 +1,5 @@
 import {convertToGraphData} from "./plotting";
+import {pan} from "plotly.js/src/fonts/ploticon";
 
 export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
@@ -19,10 +20,71 @@ export function getPlotSourceView(id) {
 export const currentPanel = {};
 export const plotColorDelay = 1000;
 
-export function Model(id) {
+export function Model(id, panelId, dashboardId) {
     this.id = id;
-    this.colorTimeout = undefined;
-    this.nameTimeout = undefined;
+    this.panelId = panelId;
+    this.dashboardId = dashboardId;
+    this.updateTimeout = undefined;
+    this.requestTimeout = undefined;
+}
+
+window.insertSourceHtml = function (data) {
+    let sources = $('#sources');
+    let text = `<li id=${'source_' + data.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
+                                    style="border-top-width: 1px;
+                                           border-radius: 5px;"
+                                    >
+                                    <div class="d-flex flex-grow-1">
+                                        <div class="d-flex flex-column" style="flex-grow: 10">
+                                            <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
+                                                <label class="me-1">Label:</label>
+                                                <input id=${'name_input_' + data.id} class="form-control" value="${data.label}" type="text" style="flex-grow: 10"></input>
+                                                <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
+                                            </div>
+                                            <div class="d-flex align-items-center">
+                                                <span id=${'redirectToHome_' + data.id} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
+                                                    ${data.path}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex justify-content-center">
+                                             <button id=${'deletePlot_' + data.id} class="btn" type="button" style="color: red">
+                                                <i class="fa-solid fa-xmark"></i>
+                                             </button>
+                                        </div>
+                                    </div>
+                                </li>`
+
+    sources.html(function(n, origText) {
+        return origText + text;
+    });
+}
+
+window.insertSourcePlot = function (data, id, panelId, dashboardId) {
+    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
+    plot.id = data.id;
+    plot.name = data.label;
+    plot.mode = 'lines';
+    plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
+    Plotly.addTraces(id, plot.getPlotData());
+
+    let updateLayout = {
+        'yaxis.title' : {
+            text: data.sensorInfo.units,
+            font: {
+                family: 'Courier New, monospace',
+                size: 18,
+                color: '#7f7f7f'
+            }
+        }
+    }
+    Plotly.relayout(id, updateLayout)
+    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
+}
+
+window.addNewSourceHtml = function (data, id){
+    insertSourceHtml(data);
+    insertSourcePlot(data, id);
 }
 
 export function initDropzone(){
@@ -52,57 +114,8 @@ export function initDropzone(){
             let sources = $('#sources');
             let color = getRandomColor();
             getPlotSourceView(event.relatedTarget.id).then(
-                (data) => {
-                    let text = `<li id=${'source_' + data.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
-                                    style="border-top-width: 1px;
-                                           border-radius: 5px;"
-                                    >
-                                    <div class="d-flex align-items-center justify-content-between w-100">
-                                        <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
-                                            <input id=${'name_input_' + data.id} class="form-control"  value="${data.name}" type="text" style="flex-grow: 10"></input>
-                                            <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
-                                        </div>
-                                        <div class="d-flex flex-grow-1"></div>
-                                        <button id=${'deletePlot_' + data.id} class="btn" type="button" style="color: red">
-                                            <i class="fa-solid fa-xmark"></i>
-                                        </button>
-                                    </div>
-     
-                                    <div class="d-flex align-items-center">
-                                         <span id=${'redirectToHome_' + data.id} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
-                                            ${data.path}
-                                        </span>
-                                    </div>
-                                </li>`
-
-                    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
-                    plot.id = data.id;
-                    plot.name = data.name;
-                    plot.mode = 'lines';
-                    plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
-                    Plotly.addTraces('multichart', plot.getPlotData());
-
-                    let updateLayout = {
-                        'yaxis.title' : {
-                            text: data.sensorInfo.units,
-                            font: {
-                                family: 'Courier New, monospace',
-                                size: 18,
-                                color: '#7f7f7f'
-                            }
-                        }
-                    }
-                    Plotly.relayout('multichart', updateLayout)
-
-                    sources.html(function(n, origText){
-                        return origText + text;
-                    });
-
-                    currentPanel[data.id] = new Model($('#multichart')[0].data.length - 1);
-                },
-                (error) => {
-                    showToast(error)
-                }
+                (data) => addNewSourceHtml(data, 'multichart'),
+                (error) => showToast(error)
             )
         },
         ondropdeactivate: function (event) {
@@ -127,72 +140,136 @@ export function initDropzone(){
 }
 
 window.initDashboard = function () {
-    window.interact('.resize-draggable')
-        .draggable({
-            inertia: true,
-            modifiers: [
-                interact.modifiers.restrictRect({
-                    restriction: 'parent',
-                    endOnly: true
-                })
-            ],
-            autoScroll: true,
+    const interact = window.interact('.resize-draggable')
+    addDraggable(interact)
+    addResizable(interact)
+    for (let i in currentPanel){
+        currentPanel[i].requestTimeout = setInterval(function() {
+            $.ajax({
+                type: 'get',
+                url: window.location.pathname + '/SourceUpdate' + `/${currentPanel[i].panelId}/${i}`,
+            }).done(function(data){
+                if (data.newVisibleValues.length > 0) {
+                    let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
+                    let correctId = 0;
 
-            listeners: {
-                move: dragMoveListener,
+                    for(let j of plot.data){
+                        if (j.id === i)
+                            break;
 
-                end(event) {
-                    var textEl = event.target.querySelector('p')
+                        correctId += 1;
+                    }
+                    
+                    let lastTime = new Date(plot.data[correctId].x.at(-1));
+                    let x = [];
+                    let y = [];
+                    let customData = []
+                    for(let j of data.newVisibleValues){
+                        if (lastTime > new Date(j.time))
+                            continue;
+ 
+                        x.push(j.time);
+                        y.push(j.value);
+                        customData.push(j.value);
+                    }
 
-                    //textEl && (textEl.textContent =
-                    //    'moved a distance of ' +
-                    //    (Math.sqrt(Math.pow(event.pageX - event.x0, 2) +
-                    //        Math.pow(event.pageY - event.y0, 2) | 0))
-                    //        .toFixed(2) + 'px')
+                    Plotly.extendTraces(plot, {
+                        y: [y],
+                        x: [x],
+                        customdata: [customData]
+                    }, [correctId])
                 }
+            })
+        }, 30000)
+    }
+}
+
+window.disableDragAndResize = function () {
+    interact('.resize-draggable').options.resize.enabled = false;
+    interact('.resize-draggable').options.drag.enabled = false;
+}
+
+window.enableDragAndResize = function () {
+    interact('.resize-draggable').options.resize.enabled = true;
+    interact('.resize-draggable').options.drag.enabled = true;
+}
+
+function addDraggable(interactable) {
+    interactable.draggable({
+        inertia: true,
+        modifiers: [
+            interact.modifiers.restrictRect({
+                restriction: 'parent',
+                endOnly: true
+            }),
+            interact.modifiers.snap({
+                targets: [
+                    interact.snappers.grid({ x: 5, y: 5 })
+                ],
+                range: Infinity,
+                relativePoints: [ { x: 0, y: 0 } ]
+            }),
+        ],
+        autoScroll: true,
+
+        listeners: {
+            move: dragMoveListener,
+
+            end(event) {
+                var textEl = event.target.querySelector('p')
+
+                //textEl && (textEl.textContent =
+                //    'moved a distance of ' +
+                //    (Math.sqrt(Math.pow(event.pageX - event.x0, 2) +
+                //        Math.pow(event.pageY - event.y0, 2) | 0))
+                //        .toFixed(2) + 'px')
             }
-        })
-        .resizable({
-            edges: { left: true, right: true, bottom: true, top: true },
+        }
+    })
+}
 
-            listeners: {
-                move(event) {
-                    var target = event.target
-                    var x = (parseFloat(target.getAttribute('data-x')) || 0)
-                    var y = (parseFloat(target.getAttribute('data-y')) || 0)
+function addResizable(interactable){
+    interactable.resizable({
+        edges: { left: true, right: true, bottom: true, top: true },
 
-                    target.style.width = event.rect.width + 'px'
-                    target.style.height = event.rect.height + 'px'
+        listeners: {
+            move(event) {
+                var target = event.target
+                var x = (parseFloat(target.getAttribute('data-x')) || 0)
+                var y = (parseFloat(target.getAttribute('data-y')) || 0)
 
-                    x += event.deltaRect.left
-                    y += event.deltaRect.top
+                target.style.width = event.rect.width + 'px'
+                target.style.height = event.rect.height + 'px'
 
-                    target.style.transform = 'translate(' + x + 'px,' + y + 'px)'
+                x += event.deltaRect.left
+                y += event.deltaRect.top
 
-                    target.setAttribute('data-x', x)
-                    target.setAttribute('data-y', y)
+                target.style.transform = 'translate(' + x + 'px,' + y + 'px)'
+
+                target.setAttribute('data-x', x)
+                target.setAttribute('data-y', y)
 
 
-                    var update = {
-                        width: event.rect.width,
-                        height: event.rect.height
-                    };
+                var update = {
+                    width: event.rect.width,
+                    height: event.rect.height
+                };
 
-                    Plotly.relayout(`panelChart_${event.target.id}`, update);
-                }
-            },
-            modifiers: [
-                interact.modifiers.restrictEdges({
-                    outer: 'parent'
-                }),
+                Plotly.relayout(`panelChart_${event.target.id}`, update);
+            }
+        },
+        modifiers: [
+            interact.modifiers.restrictEdges({
+                outer: 'parent'
+            }),
 
-                interact.modifiers.restrictSize({
-                    min: { width: 100, height: 50 }
-                })
-            ],
+            interact.modifiers.restrictSize({
+                min: { width: 100, height: 50 }
+            })
+        ],
 
-            inertia: true
-        })
+        inertia: true
+    })
 }
 
 window.updateSource = function (name, color, id){
@@ -213,7 +290,6 @@ window.updateCurrentPlotsIds = function (idToCompare, id) {
     delete currentPanel[id];
     
     for (let item in currentPanel) {
-        console.log(item)
         if (currentPanel[item].id >= idToCompare)
             currentPanel[item].id = currentPanel[item].id - 1;
     }
@@ -225,6 +301,13 @@ window.initMultichart = function (chartId) {
         dragmode: 'zoom',
         autosize: true,
         height: 300,
+        margin: {
+            autoexpand: true,
+            l: 20,
+            r: 10,
+            t: 10,
+            b: 40,
+        },
         xaxis: {
             title: {
                 text: 'Time',
@@ -237,6 +320,9 @@ window.initMultichart = function (chartId) {
             rangeslider: {
                 visible: false
             }
+        },
+        yaxis: {
+            automargin: 'width+right'
         }
     },
     {
@@ -290,6 +376,7 @@ function getRandomColor() {
 
 function dragMoveListener (event) {
     var target = event.target
+
     var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
     var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy
 

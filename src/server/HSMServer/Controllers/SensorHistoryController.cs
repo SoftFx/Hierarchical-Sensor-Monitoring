@@ -16,6 +16,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using HSMServer.DTOs.SensorInfo;
+using HSMCommon.Extensions;
 
 namespace HSMServer.Controllers
 {
@@ -40,7 +41,7 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public Task<IActionResult> TabelHistoryLatest([FromBody] GetSensorHistoryModel model)
+        public Task<IActionResult> TabelHistoryLatest([FromBody] GetSensorHistoryRequest model)
         {
             if (model == null)
                 return Task.FromResult(_emptyResult as IActionResult);
@@ -49,7 +50,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> TableHistory([FromBody] GetSensorHistoryModel model)
+        public async Task<IActionResult> TableHistory([FromBody] GetSensorHistoryRequest model)
         {
             if (model == null)
                 return _emptyResult;
@@ -73,7 +74,7 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public Task<JsonResult> ChartHistoryLatest([FromBody] GetSensorHistoryModel model)
+        public Task<JsonResult> ChartHistoryLatest([FromBody] GetSensorHistoryRequest model)
         {
             if (model == null)
                 return Task.FromResult(_emptyJsonResult);
@@ -91,7 +92,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task<JsonResult> ChartHistory([FromBody] GetSensorHistoryModel model)
+        public async Task<JsonResult> ChartHistory([FromBody] GetSensorHistoryRequest model)
         {
             if (model == null || !TryGetSensor(model.EncodedId, out var sensor))
                 return _emptyJsonResult;
@@ -110,7 +111,7 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public void ReloadHistoryRequest([FromBody] GetSensorHistoryModel model)
+        public void ReloadHistoryRequest([FromBody] GetSensorHistoryRequest model)
         {
             StoredUser.History.Reload(model);
         }
@@ -139,7 +140,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model, [FromQuery] bool isStatusService = false)
+        public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryRequest model, [FromQuery] bool isStatusService = false)
         {
             var currentId = SensorPathHelper.DecodeGuid(model.EncodedId);
 
@@ -183,7 +184,7 @@ namespace HSMServer.Controllers
             return _cache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from, to, count, options).Flatten();
         }
 
-        private GetSensorHistoryModel SpecifyLatestHistoryModel(GetSensorHistoryModel model)
+        private GetSensorHistoryRequest SpecifyLatestHistoryModel(GetSensorHistoryRequest model)
         {
             if (!TryGetSensor(model.EncodedId, out var sensor))
                 return null;

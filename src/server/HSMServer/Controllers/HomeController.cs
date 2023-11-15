@@ -476,7 +476,7 @@ namespace HSMServer.Controllers
 
         private async Task<HistoryTableViewModel> GetFileHistory(string encodedId)
         {
-            var request = new GetSensorHistoryModel()
+            var request = new GetSensorHistoryRequest()
             {
                 EncodedId = encodedId,
                 Count = -20,

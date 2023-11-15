@@ -1,31 +1,79 @@
-﻿using HSMCommon.Collections;
-using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.Model;
+using System;
+using System.Collections.Concurrent;
 using System.Linq;
 
 namespace HSMServer.Dashboards
 {
     public sealed class Panel : BaseServerModel<DashboardPanelEntity, PanelUpdate>
     {
-        public CGuidDict<PanelDataSource> Sources { get; } = new();
+        private readonly Dashboard _board;
 
 
-        public Panel() { }
+        public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
 
-        internal Panel(DashboardPanelEntity entity) : base(entity)
+        public CordsEntity Cords { get; set; }
+
+
+        internal Panel(Dashboard board) : base()
         {
-            Sources = new CGuidDict<PanelDataSource>(entity.Sources.Select(u => new PanelDataSource(u))
-                                                                   .ToDictionary(k => k.Id, v => v));
+            _board = board;
+            Cords = new CordsEntity();
         }
 
+        internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
+        {
+            _board = board;
+            Cords = entity.Cords ?? new ();
+            foreach (var sourceEntity in entity.Sources)
+            {
+                var sensorId = new Guid(sourceEntity.SensorId);
+
+                if (TryGetSensor(sensorId, out var sensor))
+                {
+                    var panel = new PanelDatasource(sourceEntity, sensor, _board);
+
+                    Sources.TryAdd(panel.Id, panel);
+                }
+            }
+        }
+
+
+        public bool TryAddSource(Guid sensorId)
+        {
+            if (TryGetSensor(sensorId, out var sensor))
+            {
+                var source = new PanelDatasource(sensor, _board);
+
+                return Sources.TryAdd(source.Id, source);
+            }
+
+            return false;
+        }
 
         public override DashboardPanelEntity ToEntity()
         {
             var entity = base.ToEntity();
 
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
-
+            entity.Cords = Cords;
             return entity;
+        }
+
+
+        private bool TryGetSensor(Guid id, out BaseSensorModel sensor)
+        {
+            sensor = _board.GetSensorModel?.Invoke(id);
+
+            return sensor is not null;
+        }
+
+        public override void Dispose()
+        {
+            foreach ((_, var source) in Sources)
+                source.Source.Dispose();
         }
     }
 }

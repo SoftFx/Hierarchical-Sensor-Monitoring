@@ -62,7 +62,7 @@ namespace HSMServer.Model.History
         }
 
 
-        public async Task Reload(ITreeValuesCache cache, GetSensorHistoryModel request)
+        public async Task Reload(ITreeValuesCache cache, GetSensorHistoryRequest request)
         {
             Reset();
 

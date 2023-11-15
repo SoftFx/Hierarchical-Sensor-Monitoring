@@ -1,6 +1,6 @@
-﻿@using HSMServer.Constants
+﻿@using System.Text.Json
+@using HSMServer.Constants
 @using HSMServer.Controllers
-@using HSMServer.Model.Dashboards
 
 @model HSMServer.Model.Dashboards.PanelViewModel
 
@@ -17,7 +17,7 @@
                 </button>
                 <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
                     <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
-                    <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+                    <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
                 </div>
             </div>
         </div>
@@ -29,6 +29,22 @@
 
 <script>
     $(document).ready(function () {
-        initMultichart('panelChart_@Model.Id');
+        let cords = @Html.Raw(JsonSerializer.Serialize(Model.Cords, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}));
+        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}))
+
+        $('#@Model.Id').width(cords.width)
+                       .height(cords.height)
+                       .css('transform', 'translate(' + cords.x + 'px, ' + cords.y + 'px)')
+                       .attr('data-x', cords.x)
+                       .attr('data-y', cords.y);
+        
+        initMultichart('panelChart_@Model.Id').then(
+            (data) => {
+                 values.forEach(function (x) {
+                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')
+                 })
+            },
+            (error) => showToast(error)
+        );
     })
 </script>
