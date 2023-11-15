@@ -172,6 +172,7 @@ namespace HSMServer.Controllers
 
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
+                dashboard.Update(editDashboard.ToUpdate());
                 foreach (var (id, cords) in editDashboard.Panels)
                 {
                     if (dashboard.Panels.TryGetValue(id, out var panel))

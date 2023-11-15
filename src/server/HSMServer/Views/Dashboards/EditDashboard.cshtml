@@ -91,21 +91,17 @@
                 y: parseFloat(i.dataset.y || 0)
             };
         }
-        // $('#dashboardPanels').children('div').forEach((value) => {
-        //     console.log(value)
-        //    panels[value.id] = {}; 
-        // });
+
         let object = {};
         arr.forEach((value, key) => object[value.name] = value.value);
         object.panels = panels;
-
         $.ajax({
             type: 'post',
             url: window.location.pathname,
             contentType: 'application/json',
             data: JSON.stringify(object)
         }).done(function (d){
-            console.log(d)
+            disableEdit();
         })
     })
 
@@ -129,6 +125,14 @@
         $('#addPanel').removeClass('d-none');
         $('#editableDashboardSettings').removeClass('d-none');
         enableDragAndResize();
+    }
+    
+    function disableEdit(){
+        $('#dashboardSettings').removeClass('d-none');
+
+        $('#addPanel').addClass('d-none');
+        $('#editableDashboardSettings').addClass('d-none');
+        disableDragAndResize();
     }
     
     $('.panel.resize-draggable').on('click', 'a.removePanel', function (){
