@@ -8,6 +8,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     {
         public List<DashboardPanelEntity> Panels { get; init; } = new();
         
-        public TimeSpan Period { get; set; }
+        public TimeSpan DataPeriod { get; set; }
     }
 }
