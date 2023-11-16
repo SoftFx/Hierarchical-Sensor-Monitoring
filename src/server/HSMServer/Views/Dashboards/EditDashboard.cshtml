@@ -18,7 +18,7 @@
     <div class="m-2">
         <div id="dashboardSettings" class="my-2 @(isModify ? string.Empty : "d-none")">
             <div class="d-flex justify-content-between mb-1">
-                <h5>@Model.Name</h5>
+                <h5 id="name">@Model.Name</h5>
 
                 <a class="icon-link text-nowrap" href="javascript:editDahsboardSettings();" title='edit dashboard settings'>
                     <i class='fas fa-edit'><use xlink:href="#box-seam"></i> Edit
@@ -33,12 +33,12 @@
                 <input class="d-none" asp-for="Id" value="@Model.Id"/>
 
                 <div class="d-flex justify-content-between mb-1">
-                    <input class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
+                    <input id="form_name" class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
 
-                <textarea id='description' class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
+                <textarea id='form_description' class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
             </form>
         </div>
 
@@ -103,6 +103,7 @@
     $('#saveDashBoardForm').on('submit', function (e){
         e.preventDefault();
         e.stopPropagation();
+        let dashboard = $('#dashboardSettings');
         let arr = $(this).serializeArray();
         let panels = {};
         for (let i of $('#dashboardPanels').children('div')){
@@ -123,6 +124,9 @@
             contentType: 'application/json',
             data: JSON.stringify(object)
         }).done(function (d){
+            console.log(dashboard)
+            dashboard.find('h5#name').text(object.Name);
+            replaceHtmlToMarkdownJquery( dashboard.find('div#markdown_description').text(object.Description))
             disableEdit();
         })
     })

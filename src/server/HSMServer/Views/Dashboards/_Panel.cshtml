@@ -6,6 +6,9 @@
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
+@{
+    var jsonOptions = new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}; 
+}
 
 <div id="@Model.Id" class="panel resize-draggable">
     <div class="d-flex flex-column">
@@ -29,8 +32,8 @@
 
 <script>
     $(document).ready(function () {
-        let cords = @Html.Raw(JsonSerializer.Serialize(Model.Cords, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}));
-        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}))
+        let cords = @Html.Raw(JsonSerializer.Serialize(Model.Cords, jsonOptions));
+        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
 
         $('#@Model.Id').width(cords.width)
                        .height(cords.height)
