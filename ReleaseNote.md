@@ -13,6 +13,9 @@
 ## Alerts Import
 * New property **Products** has been added in import model. If this property is empty then relative path from the selected node is used, otherwise paths are built from specified product names
 
+## Notifications
+* **Status is change** notification has been fixed if there are several errors in a row in a chain
+
 ## Alerts
 * New variable **$unit** has been added
 * New variable **$prevValue** has been added
@@ -22,6 +25,3 @@
 
 ## Charts:
 * **IntegerBar/DoubleBar** Open and Close time have been added in tooltip
-
-## Other
-* Bugfixing
