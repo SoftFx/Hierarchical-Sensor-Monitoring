@@ -9,7 +9,7 @@ namespace HSMServer.Dashboards
 {
     public sealed class Dashboard : BaseServerModel<DashboardEntity, DashboardUpdate>
     {
-        private static readonly TimeSpan _defaultPeriod = new (0, 30, 0);
+        private static readonly TimeSpan _defaultPeriod = new(0, 30, 0);
 
 
         public ConcurrentDictionary<Guid, Panel> Panels { get; } = new();
@@ -19,26 +19,22 @@ namespace HSMServer.Dashboards
 
         public DateTime? ToDataPeriod { get; private set; }
 
-        public TimeSpan DataPeriod { get; private set; } = new (0, 30, 0);
+        public TimeSpan DataPeriod { get; private set; } = new(0, 30, 0);
 
 
         internal Func<Guid, BaseSensorModel> GetSensorModel;
 
 
-        internal Dashboard(DashboardEntity entity) : base(entity)
-        {
-            Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels?.ToDictionary(k => new Guid(k.Id), v => new Panel(v, this))) ?? new();
-            DataPeriod = GetPeriod(entity.Period);
-        }
-        
+        internal Dashboard(DashboardAdd addModel) : base(addModel) { }
+
         internal Dashboard(DashboardEntity entity, Func<Guid, BaseSensorModel> getSensorModel) : base(entity)
         {
+            Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), v => new Panel(v, this)));
+
             GetSensorModel += getSensorModel;
-            DataPeriod = GetPeriod(entity.Period);
-            Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels?.ToDictionary(k => new Guid(k.Id), v => new Panel(v, this))) ?? new();
+            DataPeriod = GetPeriod(entity.DataPeriod);
         }
 
-        internal Dashboard(DashboardAdd addModel) : base(addModel) { }
 
         public void UpdateDataPeriod(DateTime from, DateTime? to)
         {
@@ -58,11 +54,11 @@ namespace HSMServer.Dashboards
             var entity = base.ToEntity();
 
             entity.Panels.AddRange(Panels.Select(u => u.Value.ToEntity()));
-            entity.Period = DataPeriod;
+            entity.DataPeriod = DataPeriod;
             return entity;
         }
 
 
-        private TimeSpan GetPeriod(TimeSpan entityPeriod) => entityPeriod == TimeSpan.Zero ? _defaultPeriod : entityPeriod;
+        private static TimeSpan GetPeriod(TimeSpan entityPeriod) => entityPeriod == TimeSpan.Zero ? _defaultPeriod : entityPeriod;
     }
 }
