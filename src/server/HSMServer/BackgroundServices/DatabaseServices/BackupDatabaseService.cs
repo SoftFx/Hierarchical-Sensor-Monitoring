@@ -14,6 +14,8 @@ namespace HSMServer.BackgroundServices
         private readonly IDatabaseSettings _dbSettings = new DatabaseSettings();
         private readonly IDatabaseCore _database;
 
+        private readonly TimeSpan _storagePeriod;
+
 
         public override TimeSpan Delay { get; }
 
@@ -22,11 +24,20 @@ namespace HSMServer.BackgroundServices
         {
             _database = database;
 
+            _storagePeriod = TimeSpan.FromDays(config.BackupDatabase.StoragePeriodDays);
             Delay = TimeSpan.FromHours(config.BackupDatabase.PeriodHours);
         }
 
 
         protected override Task ServiceAction()
+        {
+            Backup();
+            DeleteOldBackups();
+
+            return Task.CompletedTask;
+        }
+
+        private void Backup()
         {
             try
             {
@@ -39,8 +50,29 @@ namespace HSMServer.BackgroundServices
             {
                 _logger.Error($"Environment database backup error: {ex}");
             }
+        }
 
-            return Task.CompletedTask;
+        private void DeleteOldBackups()
+        {
+            var environmentBackupsDirectories =
+               Directory.GetDirectories(_dbSettings.DatabaseBackupsFolder, $"{_dbSettings.EnvironmentDatabaseName}*", SearchOption.TopDirectoryOnly);
+
+
+            foreach (var backup in environmentBackupsDirectories)
+            {
+                try
+                {
+                    if (!Directory.Exists(backup))
+                        continue;
+
+                    if (Directory.GetCreationTimeUtc(backup) < (DateTime.UtcNow - _storagePeriod))
+                        Directory.Delete(backup, true);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Deleting '{backup}' error: {ex}");
+                }
+            }
         }
     }
 }
