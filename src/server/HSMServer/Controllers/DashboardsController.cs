@@ -164,14 +164,13 @@ namespace HSMServer.Controllers
         [HttpPost("Dashboards/{dashboardId:guid?}")]
         public async Task<IActionResult> EditDashboard([FromBody] EditDashBoardViewModel editDashboard, Guid dashboardId)
         {
-            // if (!ModelState.IsValid)
-            //     return View(nameof(EditDashboard), editDashboard);
-
             if (editDashboard is null)
                 return BadRequest();
 
+            var isReload = false;
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
+                isReload = dashboard.DataPeriod != editDashboard.FromPeriod;
                 dashboard.Update(editDashboard.ToUpdate());
                 foreach (var (id, cords) in editDashboard.Panels)
                 {
@@ -181,7 +180,10 @@ namespace HSMServer.Controllers
             }
 
             await _dashboardManager.TryUpdate(dashboard);
-            return Ok(dashboard);
+            return Ok(new
+            {
+                reload = isReload,
+            });
         }
 
         [HttpDelete("Dashboards/{dashboardId:guid}")]

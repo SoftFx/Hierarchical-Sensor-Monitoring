@@ -123,10 +123,15 @@
             url: window.location.pathname,
             contentType: 'application/json',
             data: JSON.stringify(object)
-        }).done(function (d){
-            dashboard.find('h5#name').text(object.Name);
-            replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
-            disableEdit();
+        }).done(function (response){
+            if (response.reload && response.reload === true)
+                 window.location.reload();   
+            else 
+            {
+                dashboard.find('h5#name').text(object.Name);
+                replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
+                disableEdit();
+            }
         })
     })
 
