@@ -197,10 +197,9 @@ window.enableDragAndResize = function () {
 
 function addDraggable(interactable) {
     interactable.draggable({
-        inertia: true,
         modifiers: [
             interact.modifiers.restrictRect({
-                restriction: 'parent',
+                restriction: '#dashboardPanels',
                 endOnly: true
             }),
             interact.modifiers.snap({
@@ -268,8 +267,6 @@ function addResizable(interactable){
                 min: { width: 50, height: 100 }
             })
         ],
-
-        inertia: true
     })
 }
 
