@@ -15,6 +15,21 @@ namespace HSMDataCollector.DefaultSensors
         public WindowsSensorsCollection(SensorsStorage storage, PrototypesCollection prototype) : base(storage, prototype) { }
 
 
+        public IWindowsCollection AddAllComputer() =>
+            (this as IWindowsCollection).AddSystemMonitoringSensors().AddAllDisksMonitoringSensors().AddWindowsInfoMonitoringSensors();
+
+        public IWindowsCollection AddAllModule(Version productVersion)
+        {
+            var versionOptions = new VersionSensorOptions(productVersion) { Version = productVersion };
+
+            return (this as IWindowsCollection).AddProcessMonitoringSensors()
+                                               .AddCollectorMonitoringSensors()
+                                               .AddProductVersion(versionOptions);
+        }
+
+        public IWindowsCollection AddAllCollection(Version productVersion) => AddAllComputer().AddAllModule(productVersion);
+
+
         #region Process
 
         public IWindowsCollection AddProcessCpu(BarSensorOptions options)
@@ -72,7 +87,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             return ToWindows(new WindowsActiveTimeDisk(_prototype.WindowsActiveTimeDisk.Get(options)));
         }
-        
+
         public IWindowsCollection AddDiskQueueLength(DiskBarSensorOptions options)
         {
             return ToWindows(new WindowsDiskQueueLength(_prototype.WindowsDiskQueueLength.Get(options)));
@@ -101,7 +116,7 @@ namespace HSMDataCollector.DefaultSensors
 
             return this;
         }
-        
+
         public IWindowsCollection AddDisksQueueLength(DiskBarSensorOptions options = null)
         {
             foreach (var diskOptions in _prototype.WindowsDiskQueueLength.GetAllDisksOptions(options))

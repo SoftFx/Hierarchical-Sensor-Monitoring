@@ -1,9 +1,17 @@
 ﻿using HSMDataCollector.Options;
+using System;
 
 namespace HSMDataCollector.PublicInterface
 {
     public interface IWindowsCollection
     {
+        IWindowsCollection AddAllComputer();
+
+        IWindowsCollection AddAllModule(Version productVersion);
+
+        IWindowsCollection AddAllCollection(Version productVersion);
+
+
         IWindowsCollection AddProcessCpu(BarSensorOptions options = null);
 
         IWindowsCollection AddProcessMemory(BarSensorOptions options = null);
@@ -31,7 +39,7 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddActiveDiskTime(DiskBarSensorOptions options = null);
 
         IWindowsCollection AddActiveDisksTime(DiskBarSensorOptions options = null);
-        
+
         IWindowsCollection AddDiskQueueLength(DiskBarSensorOptions options = null);
 
         IWindowsCollection AddDisksQueueLength(DiskBarSensorOptions options = null);

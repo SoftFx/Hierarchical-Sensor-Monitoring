@@ -8,11 +8,11 @@ namespace HSMDataCollector.DefaultSensors.Other
         private readonly Version _version;
         private readonly DateTime _startTime;
 
-        
+
         public ProductVersionSensor(VersionSensorOptions options) : base(options)
         {
             _version = options.Version;
-            _startTime = options.StartTime.ToUniversalTime();
+            _startTime = options.StartTime.HasValue ? options.StartTime.Value.ToUniversalTime() : DateTime.UtcNow;
         }
 
 

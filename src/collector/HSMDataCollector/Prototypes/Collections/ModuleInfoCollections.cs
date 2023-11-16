@@ -2,7 +2,6 @@
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
 
@@ -15,7 +14,7 @@ namespace HSMDataCollector.Prototypes
             var options = base.Get(customOptions);
 
             options.Type = SensorType.VersionSensor;
-            options.StartTime = DateTime.UtcNow;
+            options.StartTime = customOptions?.StartTime ?? DateTime.UtcNow;
 
             options.Version = customOptions?.Version;
 
