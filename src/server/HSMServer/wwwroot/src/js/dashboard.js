@@ -141,7 +141,7 @@ export function initDropzone(){
 
 window.initDashboard = function () {
     const interact = window.interact('.resize-draggable')
-    addDraggable(interact)
+    addDraggable(window.interact('.name-draggable'))
     addResizable(interact)
     for (let i in currentPanel){
         currentPanel[i].requestTimeout = setInterval(function() {
