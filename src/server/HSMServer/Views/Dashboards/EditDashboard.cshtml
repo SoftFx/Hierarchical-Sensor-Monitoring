@@ -77,7 +77,29 @@
         disableDragAndResize();
         $('#from_select').val('@Model.FromPeriod');
     });
-    
+
+    $('#dashboardPanels').on('click', 'div.panel a.removePanel', function () {
+        let id = this.id.substring("remove_".length, this.id.length);
+        let name = $(`#${id}`).find('#panel_name').text();
+        showConfirmationModal(
+            `Removing '${name}' dashboard`,
+            `Do you really want to remove selected dashboard <strong>${name}</strong>?`,
+            function () {
+                $.ajax({
+                type: 'DELETE',
+                url: window.location.pathname + `/${id}`,
+                cache: false,
+                async: true,
+                }).done(function (){
+                    $(`#${id}`).remove();
+                })
+                .fail(function (data){
+                    showToast(data.responseText)
+                })
+            }
+        );
+    });
+
     $('#saveDashBoardForm').on('submit', function (e){
         e.preventDefault();
         e.stopPropagation();

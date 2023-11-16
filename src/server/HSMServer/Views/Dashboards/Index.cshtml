@@ -1,5 +1,4 @@
 ﻿@using HSMServer.Controllers
-@using HSMServer.Constants
 @using HSMServer.Model.Dashboards
 
 @model List<DashboardViewModel>
@@ -57,28 +56,6 @@
 <script>
     $(document).ready(() => {
         '@dashboards'.split('@separator').forEach((id) => replaceHtmlToMarkdown(`markdown_description_${id}`));
-    });
-
-    $('[id^=remove_]').on('click', function () {
-        let id = this.id.substring("remove_".length, this.id.length);
-        let name = this.name;
-        showConfirmationModal(
-            `Removing '${name}' dashboard`,
-            `Do you really want to remove selected dashboard <strong>${name}</strong>?`,
-            function () {
-                $.ajax({
-                type: 'DELETE',
-                url: window.location.pathname + `/${id}`,
-                cache: false,
-                async: true,
-                }).done(function (){
-                    $(`#${id}`).remove();
-                })
-                .fail(function (data){
-                    showToast(data.responseText)
-                })
-            }
-        );
     });
 
     function editDashboard(id) {
