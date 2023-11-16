@@ -90,3 +90,12 @@ window.replaceHtmlToMarkdown = function (elementId) {
         element.children().last().css('margin-bottom', 0);
     }
 }
+
+window.replaceHtmlToMarkdownJquery = function (jqueryElement) {
+    let innerHtml = jqueryElement.html();
+
+    if (innerHtml !== undefined) {
+        jqueryElement.empty().append(markdownToHTML(innerHtml));
+        jqueryElement.children().last().css('margin-bottom', 0);
+    }
+}

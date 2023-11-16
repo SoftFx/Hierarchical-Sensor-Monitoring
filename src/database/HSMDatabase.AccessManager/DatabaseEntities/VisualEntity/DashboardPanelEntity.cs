@@ -12,9 +12,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 
     public record PanelPositionEntity
     {
-        public double Width { get; set; } = 300;
+        public double Width { get; set; } = 0.3;
 
-        public double Height { get; set; } = 300;
+        public double Height { get; set; } = 0.2;
 
 
         public double X { get; set; }
