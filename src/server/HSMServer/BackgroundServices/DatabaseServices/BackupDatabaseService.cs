@@ -54,16 +54,21 @@ namespace HSMServer.BackgroundServices
 
         private void DeleteOldBackups()
         {
+            var now = DateTime.UtcNow;
             var environmentBackupsDirectories =
                Directory.GetDirectories(_dbSettings.DatabaseBackupsFolder, $"{_dbSettings.EnvironmentDatabaseName}*", SearchOption.TopDirectoryOnly);
-
 
             foreach (var backup in environmentBackupsDirectories)
             {
                 try
                 {
-                    if (Directory.Exists(backup) && Directory.GetCreationTimeUtc(backup) < (DateTime.UtcNow - _storagePeriod))
-                        Directory.Delete(backup, true);
+                    if (Directory.Exists(backup))
+                    {
+                        var creationTime = Directory.GetCreationTimeUtc(backup);
+
+                        if (creationTime < (now - _storagePeriod) || creationTime.Date == now.Date)
+                            Directory.Delete(backup, true);
+                    }
                 }
                 catch (Exception ex)
                 {
