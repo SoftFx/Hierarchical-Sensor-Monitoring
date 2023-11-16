@@ -22,6 +22,7 @@
                     <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                    <a id="toggle_@Model.Id" class="toggle-legend dropdown-item text-decoration-none fw-normal button-link">Toggle legends</a>
                     <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
                     <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
                 </div>

@@ -187,5 +187,9 @@
                 })
             }
         );
+    }).on('click', 'a.toggle-legend', function (){
+        let id = this.id.substring("toggle_".length, this.id.length);
+        let showlegend = !$(`#panelChart_${id}`)[0].layout.showlegend;
+        Plotly.relayout(`panelChart_${id}`, {showlegend: showlegend});
     })
 </script>

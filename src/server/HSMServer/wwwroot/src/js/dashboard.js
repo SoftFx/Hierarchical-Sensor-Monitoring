@@ -66,6 +66,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     plot.name = data.label;
     plot.mode = 'lines';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
+    plot.showlegend = true;
     Plotly.addTraces(id, plot.getPlotData());
 
     let updateLayout = {
@@ -305,6 +306,11 @@ window.initMultichart = function (chartId, height = 300) {
             r: 10,
             t: 10,
             b: 40,
+        },
+        showlegend: true,
+        legend: {
+            "orientation": "h",
+            traceorder: "grouped"
         },
         xaxis: {
             title: {
