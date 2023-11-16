@@ -62,10 +62,7 @@ namespace HSMServer.BackgroundServices
             {
                 try
                 {
-                    if (!Directory.Exists(backup))
-                        continue;
-
-                    if (Directory.GetCreationTimeUtc(backup) < (DateTime.UtcNow - _storagePeriod))
+                    if (Directory.Exists(backup) && Directory.GetCreationTimeUtc(backup) < (DateTime.UtcNow - _storagePeriod))
                         Directory.Delete(backup, true);
                 }
                 catch (Exception ex)
