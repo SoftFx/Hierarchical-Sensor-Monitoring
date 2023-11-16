@@ -124,9 +124,8 @@
             contentType: 'application/json',
             data: JSON.stringify(object)
         }).done(function (d){
-            console.log(dashboard)
             dashboard.find('h5#name').text(object.Name);
-            replaceHtmlToMarkdownJquery( dashboard.find('div#markdown_description').text(object.Description))
+            replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
             disableEdit();
         })
     })
@@ -139,7 +138,6 @@
             async: true,
         }).done(function (viewData){
             $('#dashboardPanels').append(viewData);
-
             $('#dashboardPanels').removeClass("d-none");
             $('#noPanels').addClass("d-none");
         })
