@@ -5,9 +5,20 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
     public record DashboardPanelEntity : BaseServerEntity
     {
         public List<PanelSourceEntity> Sources { get; init; } = new();
-        
-        public CordsEntity Cords { get; set; }
+
+        public PanelPositionEntity Position { get; set; }
     }
 
-    public record CordsEntity(double Width = 300, double Height = 300, double X = 0, double Y = 0);
+
+    public record PanelPositionEntity
+    {
+        public double Width { get; set; } = 300;
+
+        public double Height { get; set; } = 300;
+
+
+        public double X { get; set; }
+
+        public double Y { get; set; }
+    }
 }

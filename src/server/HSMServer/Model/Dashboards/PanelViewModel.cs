@@ -32,7 +32,7 @@ public class PanelViewModel
 
     public Unit? UnitType { get; set; }
     
-    public CordsEntity Cords { get; set; }
+    public PanelPositionEntity Cords { get; set; }
 
 
     public PanelViewModel() { }
