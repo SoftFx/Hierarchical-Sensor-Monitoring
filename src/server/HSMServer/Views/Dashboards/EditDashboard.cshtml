@@ -105,13 +105,17 @@
         e.stopPropagation();
         let dashboard = $('#dashboardSettings');
         let arr = $(this).serializeArray();
+        let dashboardPanels = $('#dashboardPanels');
+        let width = dashboardPanels.width();
+        let height = dashboardPanels.height();
         let panels = {};
-        for (let i of $('#dashboardPanels').children('div')){
+        for (let i of dashboardPanels.children('div')){
+            let item = $(i);
             panels[i.id] = {
-                width: i.offsetWidth,
-                height: i.offsetHeight,
-                x: parseFloat(i.dataset.x || 0),
-                y: parseFloat(i.dataset.y || 0)
+                width: Number((item.width() / width).toFixed(5)),
+                height: Number((item.height() / height).toFixed(5)),
+                x: Number((parseFloat(i.dataset.x || 0) / width).toFixed(5)),
+                y: Number((parseFloat(i.dataset.y || 0) / height).toFixed(5))
             };
         }
 

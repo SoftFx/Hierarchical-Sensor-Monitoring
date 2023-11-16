@@ -34,12 +34,14 @@
     $(document).ready(function () {
         let cords = @Html.Raw(JsonSerializer.Serialize(Model.Cords, jsonOptions));
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
-
-        $('#@Model.Id').width(cords.width)
-                       .height(cords.height)
-                       .css('transform', 'translate(' + cords.x + 'px, ' + cords.y + 'px)')
-                       .attr('data-x', cords.x)
-                       .attr('data-y', cords.y);
+        let dashboardPanels = $('#dashboardPanels');
+        let width = dashboardPanels.width();
+        let height = dashboardPanels.height();
+        $('#@Model.Id').width(Number((cords.width * width).toFixed(5)))
+                       .height(Number((cords.height * height)).toFixed(5))
+                       .css('transform', 'translate(' + cords.x * width + 'px, ' + cords.y * height + 'px)')
+                       .attr('data-x', cords.x * width)
+                       .attr('data-y', cords.y * height);
         
         initMultichart('panelChart_@Model.Id').then(
             (data) => {
