@@ -37,13 +37,16 @@
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
         let height = dashboardPanels.height();
-        $('#@Model.Id').width(Number((cords.width * width).toFixed(5)))
-                       .height(Number((cords.height * height)).toFixed(5))
+        
+        let currWidth = Number((cords.width * width).toFixed(5))
+        let currHeight = Number((cords.height * height).toFixed(5))
+        $('#@Model.Id').width(currWidth)
+                       .height(currHeight)
                        .css('transform', 'translate(' + cords.x * width + 'px, ' + cords.y * height + 'px)')
                        .attr('data-x', cords.x * width)
                        .attr('data-y', cords.y * height);
         
-        initMultichart('panelChart_@Model.Id').then(
+        initMultichart('panelChart_@Model.Id', currHeight).then(
             (data) => {
                  values.forEach(function (x) {
                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')
