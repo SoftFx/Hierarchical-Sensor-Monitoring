@@ -15,8 +15,10 @@ namespace HSMDataCollector.Core
 {
     internal sealed class SensorsStorage : ConcurrentDictionary<string, SensorBase>, IDisposable
     {
-        private readonly IQueueManager _queueManager;
         private readonly IDataCollector _collector;
+
+
+        internal IQueueManager QueueManager { get; }
 
         internal ILoggerManager Logger { get; }
 
@@ -24,8 +26,8 @@ namespace HSMDataCollector.Core
         internal SensorsStorage(IDataCollector collector, IQueueManager queue, ILoggerManager logger)
         {
             _collector = collector;
-            _queueManager = queue;
 
+            QueueManager = queue;
             Logger = logger;
         }
 
@@ -34,8 +36,8 @@ namespace HSMDataCollector.Core
         {
             foreach (var value in Values)
             {
-                value.SensorCommandRequest -= _queueManager.Commands.CallServer;
-                value.ReceiveSensorValue -= _queueManager.Data.Push;
+                value.SensorCommandRequest -= QueueManager.Commands.CallServer;
+                value.ReceiveSensorValue -= QueueManager.Data.Push;
                 value.ExceptionThrowing -= WriteSensorException;
 
                 value.Dispose();
@@ -69,6 +71,7 @@ namespace HSMDataCollector.Core
 
             return (DoubleBarPublicSensor)Register(new DoubleBarPublicSensor(options));
         }
+
 
         internal SensorBase Register(SensorBase sensor)
         {
@@ -105,8 +108,8 @@ namespace HSMDataCollector.Core
 
             if (TryAdd(path, sensor))
             {
-                sensor.SensorCommandRequest += _queueManager.Commands.CallServer;
-                sensor.ReceiveSensorValue += _queueManager.Data.Push;
+                sensor.SensorCommandRequest += QueueManager.Commands.CallServer;
+                sensor.ReceiveSensorValue += QueueManager.Data.Push;
                 sensor.ExceptionThrowing += WriteSensorException;
 
                 Logger.Info($"New sensor has been added {path}");

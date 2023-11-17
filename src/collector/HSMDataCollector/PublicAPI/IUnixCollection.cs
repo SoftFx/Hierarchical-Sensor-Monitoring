@@ -42,9 +42,9 @@ namespace HSMDataCollector.PublicInterface
 
         IUnixCollection AddQueuePackageProcessTime(BarSensorOptions options = null);
 
-        IUnixCollection AddQueuePackageValues(BarSensorOptions options = null);
+        IUnixCollection AddQueuePackageContentSize(BarSensorOptions options = null);
 
-        IUnixCollection AddQueueContentSize(BarSensorOptions options = null);
+        IUnixCollection AddQueuePackageValues(BarSensorOptions options = null);
 
         IUnixCollection AddQueueOverflow(BarSensorOptions options = null);
 

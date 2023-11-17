@@ -65,7 +65,7 @@ namespace HSMDataCollector.Prototypes.Collections
 
         public PackageValuesCountPrototype ApplyOptions(CollectorOptions options)
         {
-            Description = $"The sensor sends information about the number of values in each collected packet. Package max values count = **{options.MaxValuesInPackage}**.";
+            Description = $"The sensor sends information about the number of values in each collected package. Package max values count = **{options.MaxValuesInPackage}**.";
 
             return this;
         }
@@ -85,7 +85,7 @@ namespace HSMDataCollector.Prototypes.Collections
 
         public PackageProcessTimePrototype ApplyOptions(CollectorOptions options)
         {
-            Description = $"The sensor sends information about the packet processing time. Package collect period = **{options.PackageCollectPeriod}**.";
+            Description = $"The sensor sends information about the package processing time. Package collect period = **{options.PackageCollectPeriod}**.";
 
             return this;
         }

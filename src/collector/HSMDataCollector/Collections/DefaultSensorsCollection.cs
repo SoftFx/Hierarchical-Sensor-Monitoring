@@ -25,8 +25,8 @@ namespace HSMDataCollector.DefaultSensors
 
         protected DefaultSensorsCollection(SensorsStorage storage, PrototypesCollection prototype)
         {
-            _storage = storage;
             _prototype = prototype;
+            _storage = storage;
         }
 
 
