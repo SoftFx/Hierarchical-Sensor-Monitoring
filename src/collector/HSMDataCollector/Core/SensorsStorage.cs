@@ -20,8 +20,6 @@ namespace HSMDataCollector.Core
 
         internal ILoggerManager Logger { get; }
 
-        internal bool IsRunning => _collector.Status == CollectorStatus.Running;
-
 
         internal SensorsStorage(IDataCollector collector, IQueueManager queue, ILoggerManager logger)
         {

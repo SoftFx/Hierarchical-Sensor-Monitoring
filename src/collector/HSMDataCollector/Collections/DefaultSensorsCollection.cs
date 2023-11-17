@@ -17,11 +17,7 @@ namespace HSMDataCollector.DefaultSensors
 
         internal CollectorStatusSensor StatusSensor { get; private set; }
 
-        internal ProductVersionSensor ProductVersion { get; private set; }
-
         internal CollectorErrorsSensor CollectorErrors { get; private set; }
-
-        internal ProductVersionSensor CollectorVersion { get; private set; }
 
 
         protected abstract bool IsCorrectOs { get; }
@@ -53,12 +49,7 @@ namespace HSMDataCollector.DefaultSensors
 
         protected DefaultSensorsCollection AddCollectorVersionCommon()
         {
-            if (CollectorVersion != null)
-                return this;
-
-            CollectorVersion = new ProductVersionSensor(_prototype.CollectorVersion.Get(null));
-
-            return Register(CollectorVersion);
+            return Register(new ProductVersionSensor(_prototype.CollectorVersion.Get(null)));
         }
 
         protected DefaultSensorsCollection AddFullCollectorMonitoringCommon(CollectorMonitoringInfoOptions monitoringOptions) =>
@@ -67,12 +58,7 @@ namespace HSMDataCollector.DefaultSensors
 
         protected DefaultSensorsCollection AddProductVersionCommon(VersionSensorOptions options)
         {
-            if (ProductVersion != null)
-                return this;
-
-            ProductVersion = new ProductVersionSensor(_prototype.ProductVersion.Get(options));
-
-            return Register(ProductVersion);
+            return Register(new ProductVersionSensor(_prototype.ProductVersion.Get(options)));
         }
 
 

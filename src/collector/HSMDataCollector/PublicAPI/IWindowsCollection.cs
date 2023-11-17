@@ -67,6 +67,17 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddProductVersion(VersionSensorOptions options);
 
 
+        IWindowsCollection AddQueuePackageProcessTime(BarSensorOptions options = null);
+
+        IWindowsCollection AddQueuePackageValues(BarSensorOptions options = null);
+
+        IWindowsCollection AddQueueContentSize(BarSensorOptions options = null);
+
+        IWindowsCollection AddQueueOverflow(BarSensorOptions options = null);
+
+        IWindowsCollection AddAllQueueDiagnosticSensors(BarSensorOptions options = null);
+
+
         IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);
 
         IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options);
