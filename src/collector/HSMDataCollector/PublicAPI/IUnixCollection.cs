@@ -1,9 +1,17 @@
 ﻿using HSMDataCollector.Options;
+using System;
 
 namespace HSMDataCollector.PublicInterface
 {
     public interface IUnixCollection
     {
+        IUnixCollection AddAllComputer();
+
+        IUnixCollection AddAllModule(Version productVersion = null);
+
+        IUnixCollection AddAllCollection(Version productVersion = null);
+
+
         IUnixCollection AddProcessCpu(BarSensorOptions options = null);
 
         IUnixCollection AddProcessMemory(BarSensorOptions options = null);

@@ -2,6 +2,7 @@
 using HSMDataCollector.DefaultSensors.Unix;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using System;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -11,6 +12,29 @@ namespace HSMDataCollector.DefaultSensors
 
 
         internal UnixSensorsCollection(SensorsStorage storage, PrototypesCollection prototype) : base(storage, prototype) { }
+
+
+        public IUnixCollection AddAllComputer() =>
+            (this as IUnixCollection).AddSystemMonitoringSensors().AddDiskMonitoringSensors();
+
+        public IUnixCollection AddAllModule(Version productVersion)
+        {
+            var moduleCollection = (this as IUnixCollection).AddProcessMonitoringSensors()
+                                                            .AddCollectorMonitoringSensors();
+
+            if (productVersion != null)
+            {
+                var versionOptions = new VersionSensorOptions(productVersion) { Version = productVersion };
+
+                moduleCollection.AddProductVersion(versionOptions);
+            }
+
+            return moduleCollection;
+        }
+
+        public IUnixCollection AddAllCollection(Version productVersion) => AddAllComputer().AddAllModule(productVersion);
+
+
 
 
         #region Process
