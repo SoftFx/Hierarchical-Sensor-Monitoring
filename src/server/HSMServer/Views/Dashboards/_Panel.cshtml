@@ -36,21 +36,21 @@
 
 <script>
     $(document).ready(function () {
-        let cords = @Html.Raw(JsonSerializer.Serialize(Model.Cords, jsonOptions));
+        let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
         let height = dashboardPanels.height();
         
-        let currWidth = Number((cords.width * width).toFixed(5))
-        let currHeight = Number((cords.height * height).toFixed(5))
+        let currWidth = Number((settings.width * width).toFixed(5))
+        let currHeight = Number((settings.height * height).toFixed(5))
         $('#@Model.Id').width(currWidth)
                        .height(currHeight)
-                       .css('transform', 'translate(' + cords.x * width + 'px, ' + cords.y * height + 'px)')
-                       .attr('data-x', cords.x * width)
-                       .attr('data-y', cords.y * height);
-        
-        initMultichart('panelChart_@Model.Id', currHeight).then(
+                       .css('transform', 'translate(' + settings.x * width + 'px, ' + settings.y * height + 'px)')
+                       .attr('data-x', settings.x * width)
+                       .attr('data-y', settings.y * height);
+
+        initMultichart('panelChart_@Model.Id', currHeight, settings.showLegend).then(
             (data) => {
                  values.forEach(function (x) {
                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')

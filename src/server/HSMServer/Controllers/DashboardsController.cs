@@ -116,6 +116,20 @@ namespace HSMServer.Controllers
             });
         }
 
+        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
+        public async Task<IActionResult> UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
+        {
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
+                dashboard.Panels.TryGetValue(panelId, out var panel))
+            {
+                panel.Settings.ShowLegend = showlegend;
+                if (await _dashboardManager.TryUpdate(dashboard))
+                    return Ok("Successfully updated");
+            }
+
+            return BadRequest("Couldn't update panel");
+        }
+
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
         public async Task<IActionResult> UpdateSource([FromBody] UpdateSourceDto update, Guid dashboardId, Guid panelId, Guid sourceId)
         {
@@ -175,7 +189,7 @@ namespace HSMServer.Controllers
                 foreach (var (id, cords) in editDashboard.Panels)
                 {
                     if (dashboard.Panels.TryGetValue(id, out var panel))
-                        panel.Cords = cords;
+                        panel.Settings = cords;
                 }
             }
 

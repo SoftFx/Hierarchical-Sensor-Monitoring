@@ -294,7 +294,7 @@ window.updateCurrentPlotsIds = function (idToCompare, id) {
     }
 }
 
-window.initMultichart = function (chartId, height = 300) {
+window.initMultichart = function (chartId, height = 300, showlegend = true) {
     return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
         dragmode: 'zoom',
@@ -307,7 +307,7 @@ window.initMultichart = function (chartId, height = 300) {
             t: 10,
             b: 40,
         },
-        showlegend: true,
+        showlegend: showlegend,
         legend: {
             "orientation": "h",
             traceorder: "grouped"

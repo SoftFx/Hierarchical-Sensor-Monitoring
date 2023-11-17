@@ -14,19 +14,19 @@ namespace HSMServer.Dashboards
 
         public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
 
-        public PanelPositionEntity Cords { get; set; }
+        public PanelSettingsEntity Settings { get; set; }
 
 
         internal Panel(Dashboard board) : base()
         {
             _board = board;
-            Cords = new PanelPositionEntity();
+            Settings = new PanelSettingsEntity();
         }
 
         internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
         {
             _board = board;
-            Cords = entity.Position ?? new ();
+            Settings = entity.Settings ?? new ();
             foreach (var sourceEntity in entity.Sources)
             {
                 var sensorId = new Guid(sourceEntity.SensorId);
@@ -58,7 +58,7 @@ namespace HSMServer.Dashboards
             var entity = base.ToEntity();
 
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
-            entity.Position = Cords;
+            entity.Settings = Settings;
             return entity;
         }
 

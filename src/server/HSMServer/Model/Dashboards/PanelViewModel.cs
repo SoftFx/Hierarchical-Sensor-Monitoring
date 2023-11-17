@@ -32,7 +32,7 @@ public class PanelViewModel
 
     public Unit? UnitType { get; set; }
     
-    public PanelPositionEntity Cords { get; set; }
+    public PanelSettingsEntity Settings { get; set; }
 
 
     public PanelViewModel() { }
@@ -43,7 +43,7 @@ public class PanelViewModel
         Description = panel.Description;
         Id = panel.Id;
         DashboardId = dashboardId;
-        Cords = panel.Cords;
+        Settings = panel.Settings;
 
         Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Key, x => new DatasourceViewModel(x.Value)));
     }

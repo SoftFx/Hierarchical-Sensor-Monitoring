@@ -190,6 +190,20 @@
     }).on('click', 'a.toggle-legend', function (){
         let id = this.id.substring("toggle_".length, this.id.length);
         let showlegend = !$(`#panelChart_${id}`)[0].layout.showlegend;
-        Plotly.relayout(`panelChart_${id}`, {showlegend: showlegend});
+        $.ajax({
+            type: 'put',
+            url: window.location.pathname + `/${id}?showlegend=${showlegend}`
+        }).done(function (response){
+            Plotly.relayout(`panelChart_${id}`, {showlegend: showlegend}).then(
+                (success) => {
+                    showToast(response)
+                },
+                (error) => {
+                    showToast(error)
+                }
+            );
+        }).fail(function (response){
+            showToast(response.responseText)
+        })
     })
 </script>
