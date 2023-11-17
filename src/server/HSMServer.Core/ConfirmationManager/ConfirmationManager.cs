@@ -28,7 +28,7 @@ namespace HSMServer.Core.Confirmation
                 var branch = _tree[sensorId];
 
                 foreach (var (storedAlertId, _) in branch)
-                    if (!newAlerts.ContainsKey(storedAlertId))
+                    if (!newAlerts.ContainsKey(storedAlertId) && !_lastStatusUpdates.ContainsKey(storedAlertId))
                         branch.TryRemove(storedAlertId, out _);
 
                 foreach (var alertId in newAlerts.Keys.ToList())
@@ -75,7 +75,7 @@ namespace HSMServer.Core.Confirmation
                                     thrownAlerts.Add(result);
                                 }
                                 else
-                                {
+                                 {
                                     if (allResults.TryPeekValue(out var first) && _lastStatusUpdates.TryGetValue(alertId, out var last) && first.LastState.PrevStatus != last.LastState.Status)
                                         thrownAlerts.AddRange(allResults.UnwrapToList());
 
