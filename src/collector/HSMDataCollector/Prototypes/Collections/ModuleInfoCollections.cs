@@ -160,7 +160,7 @@ namespace HSMDataCollector.Prototypes
 
         public CollectorErrorsPrototype() : base()
         {
-            Description = "Indicator that the monitored errors that thrown in a DataCollector";
+            Description = "Indicator that the monitored errors that thrown in a DataCollector.";
             Type = SensorType.StringSensor;
             AggregateData = true;
 

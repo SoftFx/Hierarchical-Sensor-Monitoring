@@ -73,6 +73,18 @@ namespace HSMDataCollector.Options
 
         #endregion
 
+        #region Queue diagnostic info
+
+        internal QueueOverflowPrototype QueueOverflow { get; } = new QueueOverflowPrototype();
+
+        internal PackageContentSizePrototype PackageContentSize { get; } = new PackageContentSizePrototype();
+
+        internal PackageProcessTimePrototype PackageProcessTime { get; } = new PackageProcessTimePrototype();
+
+        internal PackageValuesCountPrototype PackageValuesCount { get; } = new PackageValuesCountPrototype();
+
+        #endregion
+
 
         internal PrototypesCollection(CollectorOptions options)
         {
@@ -109,6 +121,11 @@ namespace HSMDataCollector.Options
             ServiceCommands = Register<ServiceCommandsPrototype>();
             ProductVersion = Register<ProductVersionPrototype>();
             ServiceStatus = Register<ServiceStatusPrototype>();
+
+            QueueOverflow = Register<QueueOverflowPrototype>().ApplyOptions(options);
+            PackageValuesCount = Register<PackageValuesCountPrototype>().ApplyOptions(options);
+            PackageProcessTime = Register<PackageProcessTimePrototype>().ApplyOptions(options);
+            PackageContentSize = Register<PackageContentSizePrototype>();
         }
     }
 }
