@@ -116,6 +116,18 @@ namespace HSMServer.Controllers
             });
         }
 
+        [HttpPut("Dashboards/{dashboardId:guid}/Relayout")]
+        public async Task<IActionResult> Relayout(Guid dashboardId)
+        {
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
+            {
+                if (await _dashboardManager.TryUpdate(dashboard))
+                    return Ok("Successfully relayout");
+            }
+
+            return BadRequest("Couldn't relayout");
+        }
+        
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public async Task<IActionResult> UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
         {
@@ -186,10 +198,10 @@ namespace HSMServer.Controllers
             {
                 isReload = dashboard.DataPeriod != editDashboard.FromPeriod;
                 dashboard.Update(editDashboard.ToUpdate());
-                foreach (var (id, cords) in editDashboard.Panels)
+                foreach (var (id, settings) in editDashboard.Panels)
                 {
                     if (dashboard.Panels.TryGetValue(id, out var panel))
-                        panel.Settings = cords;
+                        panel.Settings = settings;
                 }
             }
 
