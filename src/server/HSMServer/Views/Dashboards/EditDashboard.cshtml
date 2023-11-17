@@ -163,6 +163,10 @@
         $.ajax({
             type: 'put',
             url: window.location.pathname + '/Relayout'
+        }).done(function (response){
+            window.location.reload()  
+        }).fail(function (response){
+            showToast(response.responseText)  
         })
     }
 

@@ -121,45 +121,15 @@ namespace HSMServer.Controllers
         {
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
-                var multiplierW = 0.328D;
-                var multiplierH = 0D;
-                var first = true;
-                var counter = 0;
-                var currentW = 0.328D;
-                var currentH = 0D;
-                foreach (var (id, panel) in dashboard.Panels)
-                {
-                    panel.Settings.Width = multiplierW;
-                    panel.Settings.Height = 0.2D;
-                    if (first)
-                    {
-                        panel.Settings.X = 0;
-                        panel.Settings.Y = 0;
-                        first = false;
-                        counter++;
-                    }
-                    else
-                    {
-                        if (counter == 3)
-                        {
-                            counter = 0;
-                            multiplierH += 0.22D;
-                            currentW = 0D;
-                        }
-                        panel.Settings.X = currentW;
-                        panel.Settings.Y = multiplierH;
-                        currentW += multiplierW;
-                        
-                        counter++;
-                    }
-                }
+                Panel.Relayout(dashboard.Panels);
+
                 if (await _dashboardManager.TryUpdate(dashboard))
                     return Ok("Successfully relayout");
             }
 
             return BadRequest("Couldn't relayout");
         }
-        
+
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public async Task<IActionResult> UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
         {
