@@ -22,6 +22,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public double Y { get; set; }
 
 
-        public bool ShowLegend { get; set; } = true;
+        public bool ShowLegend { get; set; }
     }
 }
