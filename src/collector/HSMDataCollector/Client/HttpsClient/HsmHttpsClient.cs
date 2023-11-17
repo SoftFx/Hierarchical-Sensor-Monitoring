@@ -16,7 +16,7 @@ namespace HSMDataCollector.Client
     internal sealed class HsmHttpsClient : IDisposable
     {
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
-        private readonly ICollectorLogger _logger;
+        private readonly ILoggerManager _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
 
@@ -26,7 +26,7 @@ namespace HSMDataCollector.Client
         internal DataHandlers Data { get; }
 
 
-        internal HsmHttpsClient(CollectorOptions options, IQueueManager queue, ICollectorLogger logger)
+        internal HsmHttpsClient(CollectorOptions options, IQueueManager queue, ILoggerManager logger)
         {
             _endpoints = new Endpoints(options);
             _logger = logger;

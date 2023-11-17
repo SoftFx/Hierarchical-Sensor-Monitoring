@@ -15,7 +15,7 @@ namespace HSMDataCollector.SyncQueue
         public ICommandQueue Commands { get; }
 
 
-        internal QueueManager(CollectorOptions options, ICollectorLogger logger) : base()
+        internal QueueManager(CollectorOptions options, ILoggerManager logger) : base()
         {
             Commands = RegisterQueue(new CommandsQueue(options, logger));
             Data = RegisterQueue(new SensorDataQueue(options));

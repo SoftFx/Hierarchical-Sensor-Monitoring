@@ -5,7 +5,7 @@ using System;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    internal abstract class DefaultSensorsCollection
+    internal abstract class DefaultSensorsCollection : IDisposable
     {
         private const string NotSupportedSensor = "Sensor is not supported for current OS";
 
@@ -18,6 +18,8 @@ namespace HSMDataCollector.DefaultSensors
         internal CollectorStatusSensor StatusSensor { get; private set; }
 
         internal ProductVersionSensor ProductVersion { get; private set; }
+
+        internal CollectorErrorsSensor CollectorErrors { get; private set; }
 
         internal ProductVersionSensor CollectorVersion { get; private set; }
 
@@ -37,6 +39,18 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new CollectorAlive(_prototype.CollectorAlive.Get(options)));
         }
 
+        protected DefaultSensorsCollection AddCollectorErrorsCommon()
+        {
+            if (CollectorErrors != null)
+                return this;
+
+            CollectorErrors = new CollectorErrorsSensor(_prototype.CollectorErrors.Get(null));
+
+            _storage.Logger.ThrowNewError += CollectorErrors.SendCollectorError;
+
+            return Register(CollectorErrors);
+        }
+
         protected DefaultSensorsCollection AddCollectorVersionCommon()
         {
             if (CollectorVersion != null)
@@ -47,9 +61,9 @@ namespace HSMDataCollector.DefaultSensors
             return Register(CollectorVersion);
         }
 
-       
         protected DefaultSensorsCollection AddFullCollectorMonitoringCommon(CollectorMonitoringInfoOptions monitoringOptions) =>
-            AddCollectorAliveCommon(monitoringOptions).AddCollectorVersionCommon();
+            AddCollectorAliveCommon(monitoringOptions).AddCollectorVersionCommon().AddCollectorErrorsCommon();
+
 
         protected DefaultSensorsCollection AddProductVersionCommon(VersionSensorOptions options)
         {
@@ -61,6 +75,7 @@ namespace HSMDataCollector.DefaultSensors
             return Register(ProductVersion);
         }
 
+
         protected DefaultSensorsCollection Register(SensorBase sensor)
         {
             if (!IsCorrectOs)
@@ -69,6 +84,12 @@ namespace HSMDataCollector.DefaultSensors
             _storage.Register(sensor);
 
             return this;
+        }
+
+        public void Dispose()
+        {
+            if (CollectorErrors != null)
+                _storage.Logger.ThrowNewError -= CollectorErrors.SendCollectorError;
         }
     }
 }

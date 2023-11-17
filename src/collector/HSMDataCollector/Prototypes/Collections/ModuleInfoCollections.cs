@@ -2,7 +2,6 @@
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
 
@@ -150,6 +149,22 @@ namespace HSMDataCollector.Prototypes
             options.Description = string.Format(DescriptionTemplate, options.PostDataPeriod.ToReadableView());
 
             return options;
+        }
+    }
+
+
+    internal sealed class CollectorErrorsPrototype : InstantSensorOptionsPrototype<InstantSensorOptions>
+    {
+        protected override string SensorName => "Collector errors";
+
+
+        public CollectorErrorsPrototype() : base()
+        {
+            Description = "Indicator that the monitored errors that thrown in a DataCollector";
+            Type = SensorType.StringSensor;
+            AggregateData = true;
+
+            TTL = TimeSpan.MaxValue; //Never
         }
     }
 }

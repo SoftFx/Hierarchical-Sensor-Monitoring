@@ -1,5 +1,4 @@
 ﻿using HSMDataCollector.Core;
-using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.Prototypes.Collections;
 using HSMDataCollector.Prototypes.Collections.Disks;
@@ -59,7 +58,10 @@ namespace HSMDataCollector.Options
 
         internal CollectorVersionPrototype CollectorVersion { get; } = new CollectorVersionPrototype();
 
+        internal CollectorErrorsPrototype CollectorErrors { get; } = new CollectorErrorsPrototype();
+
         internal ServiceAlivePrototype CollectorAlive { get; } = new ServiceAlivePrototype();
+
 
 
         internal ProductVersionPrototype ProductVersion { get; } = new ProductVersionPrototype();
@@ -101,6 +103,7 @@ namespace HSMDataCollector.Options
             WindowsWarningLogsPrototype = Register<WindowsWarningLogsPrototype>();
 
             CollectorVersion = Register<CollectorVersionPrototype>();
+            CollectorErrors = Register<CollectorErrorsPrototype>();
             CollectorAlive = Register<ServiceAlivePrototype>();
 
             ServiceCommands = Register<ServiceCommandsPrototype>();

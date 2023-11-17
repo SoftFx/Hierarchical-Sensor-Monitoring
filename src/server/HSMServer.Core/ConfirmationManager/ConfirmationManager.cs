@@ -75,7 +75,7 @@ namespace HSMServer.Core.Confirmation
                                     thrownAlerts.Add(result);
                                 }
                                 else
-                                 {
+                                {
                                     if (allResults.TryPeekValue(out var first) && _lastStatusUpdates.TryGetValue(alertId, out var last) && first.LastState.PrevStatus != last.LastState.Status)
                                         thrownAlerts.AddRange(allResults.UnwrapToList());
 

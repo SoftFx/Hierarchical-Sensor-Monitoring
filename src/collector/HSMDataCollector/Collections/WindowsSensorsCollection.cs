@@ -149,6 +149,8 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddCollectorVersion() => (IWindowsCollection)AddCollectorVersionCommon();
 
+        public IWindowsCollection AddCollectorErrors() => (IWindowsCollection)AddCollectorErrorsCommon();
+
         public IWindowsCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options) => (IWindowsCollection)AddFullCollectorMonitoringCommon(options);
 
         #endregion

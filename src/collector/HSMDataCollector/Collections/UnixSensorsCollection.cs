@@ -78,6 +78,8 @@ namespace HSMDataCollector.DefaultSensors
 
         public IUnixCollection AddCollectorVersion() => (IUnixCollection)AddCollectorVersionCommon();
 
+        public IUnixCollection AddCollectorErrors() => (IUnixCollection)AddCollectorErrorsCommon();
+
         public IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options) => (IUnixCollection)AddFullCollectorMonitoringCommon(options);
 
         #endregion
