@@ -20,11 +20,17 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddAllModule(Version productVersion)
         {
-            var versionOptions = new VersionSensorOptions(productVersion) { Version = productVersion };
+            var moduleCollection = (this as IWindowsCollection).AddProcessMonitoringSensors()
+                                                               .AddCollectorMonitoringSensors();
 
-            return (this as IWindowsCollection).AddProcessMonitoringSensors()
-                                               .AddCollectorMonitoringSensors()
-                                               .AddProductVersion(versionOptions);
+            if (productVersion != null)
+            {
+                var versionOptions = new VersionSensorOptions(productVersion) { Version = productVersion };
+
+                moduleCollection.AddProductVersion(versionOptions);
+            }
+
+            return moduleCollection;
         }
 
         public IWindowsCollection AddAllCollection(Version productVersion) => AddAllComputer().AddAllModule(productVersion);

@@ -7,9 +7,9 @@ namespace HSMDataCollector.PublicInterface
     {
         IWindowsCollection AddAllComputer();
 
-        IWindowsCollection AddAllModule(Version productVersion);
+        IWindowsCollection AddAllModule(Version productVersion = null);
 
-        IWindowsCollection AddAllCollection(Version productVersion);
+        IWindowsCollection AddAllCollection(Version productVersion = null);
 
 
         IWindowsCollection AddProcessCpu(BarSensorOptions options = null);
