@@ -6,11 +6,11 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
     {
         public List<PanelSourceEntity> Sources { get; init; } = new();
 
-        public PanelPositionEntity Position { get; set; }
+        public PanelSettingsEntity Settings { get; set; }
     }
 
 
-    public record PanelPositionEntity
+    public record PanelSettingsEntity
     {
         public double Width { get; set; } = 0.3;
 
@@ -20,5 +20,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public double X { get; set; }
 
         public double Y { get; set; }
+
+
+        public bool ShowLegend { get; set; }
     }
 }

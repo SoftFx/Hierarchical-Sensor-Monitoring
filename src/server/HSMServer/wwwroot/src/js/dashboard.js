@@ -66,6 +66,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     plot.name = data.label;
     plot.mode = 'lines';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
+    plot.showlegend = true;
     Plotly.addTraces(id, plot.getPlotData());
 
     let updateLayout = {
@@ -140,9 +141,10 @@ export function initDropzone(){
 }
 
 window.initDashboard = function () {
-    const interact = window.interact('.resize-draggable')
-    addDraggable(window.interact('.name-draggable'))
-    addResizable(interact)
+    const interactPanelResize = window.interact('.resize-draggable')
+    const interactPanelDrag = window.interact('.name-draggable')
+    addDraggable(interactPanelDrag)
+    addResizable(interactPanelResize)
     for (let i in currentPanel){
         currentPanel[i].requestTimeout = setInterval(function() {
             $.ajax({
@@ -186,20 +188,19 @@ window.initDashboard = function () {
 
 window.disableDragAndResize = function () {
     interact('.resize-draggable').options.resize.enabled = false;
-    interact('.resize-draggable').options.drag.enabled = false;
+    interact('.name-draggable').options.drag.enabled = false;
 }
 
 window.enableDragAndResize = function () {
     interact('.resize-draggable').options.resize.enabled = true;
-    interact('.resize-draggable').options.drag.enabled = true;
+    interact('.name-draggable').options.drag.enabled = true;
 }
 
 function addDraggable(interactable) {
     interactable.draggable({
-        inertia: true,
         modifiers: [
             interact.modifiers.restrictRect({
-                restriction: 'parent',
+                restriction: '#dashboardPanels',
                 endOnly: true
             }),
             interact.modifiers.snap({
@@ -213,7 +214,7 @@ function addDraggable(interactable) {
         autoScroll: true,
 
         listeners: {
-            move: dragMoveListener,
+            move: dragMoveListenerPanel,
 
             end(event) {
                 var textEl = event.target.querySelector('p')
@@ -264,11 +265,9 @@ function addResizable(interactable){
             }),
 
             interact.modifiers.restrictSize({
-                min: { width: 100, height: 50 }
+                min: { width: 50, height: 100 }
             })
         ],
-
-        inertia: true
     })
 }
 
@@ -295,18 +294,23 @@ window.updateCurrentPlotsIds = function (idToCompare, id) {
     }
 }
 
-window.initMultichart = function (chartId) {
+window.initMultichart = function (chartId, height = 300, showlegend = true) {
     return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
         dragmode: 'zoom',
         autosize: true,
-        height: 300,
+        height: height,
         margin: {
             autoexpand: true,
             l: 20,
             r: 10,
             t: 10,
             b: 40,
+        },
+        showlegend: showlegend,
+        legend: {
+            "orientation": "h",
+            traceorder: "grouped"
         },
         xaxis: {
             title: {
@@ -376,6 +380,18 @@ function getRandomColor() {
 
 function dragMoveListener (event) {
     var target = event.target
+
+    var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
+    var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy
+
+    target.style.transform = 'translate(' + x + 'px, ' + y + 'px)'
+
+    target.setAttribute('data-x', x)
+    target.setAttribute('data-y', y)
+}
+
+function dragMoveListenerPanel (event) {
+    var target = event.target.parentNode.parentElement;
 
     var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
     var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy

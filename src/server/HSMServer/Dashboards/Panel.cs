@@ -14,19 +14,19 @@ namespace HSMServer.Dashboards
 
         public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
 
-        public PanelPositionEntity Cords { get; set; }
+        public PanelSettingsEntity Settings { get; set; }
 
 
         internal Panel(Dashboard board) : base()
         {
             _board = board;
-            Cords = new PanelPositionEntity();
+            Settings = new PanelSettingsEntity();
         }
 
         internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
         {
             _board = board;
-            Cords = entity.Position ?? new ();
+            Settings = entity.Settings ?? new ();
             foreach (var sourceEntity in entity.Sources)
             {
                 var sensorId = new Guid(sourceEntity.SensorId);
@@ -40,6 +40,32 @@ namespace HSMServer.Dashboards
             }
         }
 
+        internal static void Relayout(ConcurrentDictionary<Guid,Panel> panels)
+        {
+            const int layoutWidth = 3;
+            const double width = 0.328D;
+            const double height = 0.2D;
+            const double translateX = 0.328D;
+            const double translateY = 0.23D;
+                
+            var layoutHeight = 0;
+            var counter = 0;
+            foreach (var (_, panel) in panels)
+            {
+                panel.Settings.Width = width;
+                panel.Settings.Height = height;
+                panel.Settings.X = translateX * counter;
+                panel.Settings.Y = translateY * layoutHeight;
+
+                if (counter == layoutWidth - 1)
+                {
+                    counter = 0;
+                    layoutHeight++;
+                }
+                else 
+                    counter++;
+            }
+        }
 
         public bool TryAddSource(Guid sensorId)
         {
@@ -58,7 +84,7 @@ namespace HSMServer.Dashboards
             var entity = base.ToEntity();
 
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
-            entity.Position = Cords;
+            entity.Settings = Settings;
             return entity;
         }
 

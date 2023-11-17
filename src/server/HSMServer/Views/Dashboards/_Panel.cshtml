@@ -13,12 +13,16 @@
 <div id="@Model.Id" class="panel resize-draggable">
     <div class="d-flex flex-column">
         <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1 name-draggable">
-            <span id="panel_name">@Model.Name</span>
+            <div class="d-inline-block">
+                <span class="fw-bold d-flex" id="panel_name">@Model.Name</span>
+                <span class="fw-lighter" id="panel_description" style="color: grey">@Model.Description</span>
+            </div>
             <div>
                 <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
                     <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                    <a id="toggle_@Model.Id" class="toggle-legend dropdown-item text-decoration-none fw-normal button-link">Toggle legends</a>
                     <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
                     <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
                 </div>
@@ -32,18 +36,21 @@
 
 <script>
     $(document).ready(function () {
-        let cords = @Html.Raw(JsonSerializer.Serialize(Model.Cords, jsonOptions));
+        let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
         let height = dashboardPanels.height();
-        $('#@Model.Id').width(Number((cords.width * width).toFixed(5)))
-                       .height(Number((cords.height * height)).toFixed(5))
-                       .css('transform', 'translate(' + cords.x * width + 'px, ' + cords.y * height + 'px)')
-                       .attr('data-x', cords.x * width)
-                       .attr('data-y', cords.y * height);
         
-        initMultichart('panelChart_@Model.Id').then(
+        let currWidth = Number((settings.width * width).toFixed(5))
+        let currHeight = Number((settings.height * height).toFixed(5))
+        $('#@Model.Id').width(currWidth)
+                       .height(currHeight)
+                       .css('transform', 'translate(' + settings.x * width + 'px, ' + settings.y * height + 'px)')
+                       .attr('data-x', settings.x * width)
+                       .attr('data-y', settings.y * height);
+
+        initMultichart('panelChart_@Model.Id', currHeight, settings.showLegend).then(
             (data) => {
                  values.forEach(function (x) {
                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')

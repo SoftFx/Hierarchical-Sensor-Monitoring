@@ -15,7 +15,7 @@ public class EditDashBoardViewModel
     
     public TimeSpan FromPeriod { get; set; }
     
-    public Dictionary<Guid, PanelPositionEntity> Panels { get; set; }
+    public Dictionary<Guid, PanelSettingsEntity> Panels { get; set; }
 
     public DashboardUpdate ToUpdate() => new()
     {
