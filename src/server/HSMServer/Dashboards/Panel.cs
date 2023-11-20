@@ -3,6 +3,7 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Dashboards
@@ -40,49 +41,35 @@ namespace HSMServer.Dashboards
             }
         }
 
-        internal static void Relayout(ConcurrentDictionary<Guid,Panel> panels)
+        internal static void Relayout(ConcurrentDictionary<Guid,Panel> panels, int layerWidth)
         {
-            const int layoutWidth = 3;
-            const double width = 0.329D;
             const double height = 0.2D;
-            const double translateX = 0.329D;
             const double translateY = 0.23D;
-                
+            const double currentWidth = 0.984D;
             var layoutHeight = 0;
             var counter = 0;
+            var layoutTakeSize = panels.Count - panels.Count % layerWidth;
+            
+            Relayout(panels.Take(layoutTakeSize), currentWidth / layerWidth);
+            Relayout(panels.TakeLast(panels.Count - layoutTakeSize), currentWidth / (panels.Count - layoutTakeSize));
 
-            var layoutTakeSize = panels.Count - panels.Count % layoutWidth;
-            foreach (var (_, panel) in panels.Take(layoutTakeSize))
+            void Relayout(IEnumerable<KeyValuePair<Guid, Panel>> panels, double width)
             {
-                panel.Settings.Width = width;
-                panel.Settings.Height = height;
-                panel.Settings.X = translateX * counter;
-                panel.Settings.Y = translateY * layoutHeight;
-
-                if (counter == layoutWidth - 1)
+                foreach (var (_, panel) in panels)
                 {
-                    counter = 0;
-                    layoutHeight++;
-                }
-                else 
-                    counter++;
-            }
+                    panel.Settings.Width = width;
+                    panel.Settings.Height = height;
+                    panel.Settings.X = width * counter;
+                    panel.Settings.Y = translateY * layoutHeight;
 
-            var lastWidth = 0.99 / (panels.Count - layoutTakeSize);
-            foreach (var (_, panel) in panels.TakeLast(panels.Count - layoutTakeSize))
-            {
-                panel.Settings.Width = lastWidth;
-                panel.Settings.Height = height;
-                panel.Settings.X = lastWidth * counter;
-                panel.Settings.Y = translateY * layoutHeight;
-
-                if (counter == layoutWidth - 1)
-                {
-                    counter = 0;
-                    layoutHeight++;
-                }
-                else 
-                    counter++;
+                    if (counter == layerWidth - 1)
+                    {
+                        counter = 0;
+                        layoutHeight++;
+                    }
+                    else 
+                        counter++;
+                }  
             }
         }
 
