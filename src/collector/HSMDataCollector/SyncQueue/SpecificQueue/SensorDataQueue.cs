@@ -6,6 +6,9 @@ namespace HSMDataCollector.SyncQueue
 {
     internal class SensorDataQueue : SyncQueue<SensorValueBase>, IValuesQueue
     {
+        protected override string QueueName => "Sensor data";
+
+
         public SensorDataQueue(CollectorOptions options) : base(options, options.PackageCollectPeriod) { }
 
 

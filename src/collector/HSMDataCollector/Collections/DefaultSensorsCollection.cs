@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Core;
+using HSMDataCollector.DefaultSensors.Diagnostic;
 using HSMDataCollector.DefaultSensors.Other;
 using HSMDataCollector.Options;
 using System;
@@ -13,6 +14,8 @@ namespace HSMDataCollector.DefaultSensors
 
         private readonly SensorsStorage _storage;
         protected readonly PrototypesCollection _prototype;
+
+        private QueueOverflowSensor _queueOverflowSensor;
 
 
         internal CollectorStatusSensor StatusSensor { get; private set; }
@@ -29,6 +32,8 @@ namespace HSMDataCollector.DefaultSensors
             _storage = storage;
         }
 
+
+        #region Collector sensors
 
         protected DefaultSensorsCollection AddCollectorAliveCommon(CollectorMonitoringInfoOptions options)
         {
@@ -61,6 +66,25 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new ProductVersionSensor(_prototype.ProductVersion.Get(options)));
         }
 
+        #endregion
+
+        #region Diagnostic sensors
+
+        protected DefaultSensorsCollection AddQueueOverflowCommon(BarSensorOptions options)
+        {
+            if (_queueOverflowSensor != null)
+                return this;
+
+            _queueOverflowSensor = new QueueOverflowSensor(options);
+
+            _storage.QueueManager.OverflowInfo += _queueOverflowSensor.AddValue;
+
+            return Register(_queueOverflowSensor);
+        }
+
+        #endregion
+
+
 
         protected DefaultSensorsCollection Register(SensorBase sensor)
         {
@@ -74,6 +98,9 @@ namespace HSMDataCollector.DefaultSensors
 
         public void Dispose()
         {
+            if (_queueOverflowSensor != null)
+                _storage.QueueManager.OverflowInfo -= _queueOverflowSensor.AddValue;
+
             if (CollectorErrors != null)
                 _storage.Logger.ThrowNewError -= CollectorErrors.SendCollectorError;
         }

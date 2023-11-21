@@ -10,6 +10,9 @@ namespace HSMDataCollector.SyncQueue
         ICommandQueue Commands { get; }
 
 
+        event Action<string, int> OverflowInfo;
+
+
         void Init();
 
         void Stop();
