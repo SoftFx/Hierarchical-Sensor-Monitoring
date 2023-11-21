@@ -131,11 +131,6 @@
                 })
             }
         );
-    }).on("DOMNodeInserted", function (e){
-        //console.log(e.target.offsetParent)
-        // if (e.target.classList.contains('panel')){    
-        //     console.log(e)
-        // }
     });
 
     $('#saveDashBoardForm').on('submit', function (e){
@@ -145,7 +140,7 @@
         let arr = $(this).serializeArray();
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
-        let height = dashboardPanels.height();
+        let height = 1400;
         let panels = {};
         for (let i of dashboardPanels.children('div')){
             let item = $(i);
