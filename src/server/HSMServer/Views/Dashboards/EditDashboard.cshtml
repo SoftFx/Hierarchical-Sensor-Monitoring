@@ -84,11 +84,30 @@
 
 
 <script>
+     let targetNode = $('#dashboardPanels')[0];
+     let change = 0;
+     let config = { attributes: true, childList: true, subtree: true};
+     let callback = function(mutationsList, observer) {
+         for(let mutation of mutationsList) {
+             if (mutation.target.classList.contains('js-plotly-plot') && mutation.type == 'childList'){
+                 let qwe = mutation.target.parentNode.getBoundingClientRect();
+                 if (qwe.bottom > targetNode.getBoundingClientRect().bottom){
+                     change = Math.max(change, qwe.bottom + qwe.height);
+                 }
+             }  
+         }
+     };
+
+     let observer = new MutationObserver(callback);
+
+     observer.observe(targetNode, config);
+
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description');
-
         initDashboard();
         disableDragAndResize();
+        if(change !== 0)
+            targetNode.style.minHeight = change + "px";
         $('#from_select').val('@Model.FromPeriod');
     });
 
@@ -112,6 +131,11 @@
                 })
             }
         );
+    }).on("DOMNodeInserted", function (e){
+        //console.log(e.target.offsetParent)
+        // if (e.target.classList.contains('panel')){    
+        //     console.log(e)
+        // }
     });
 
     $('#saveDashBoardForm').on('submit', function (e){

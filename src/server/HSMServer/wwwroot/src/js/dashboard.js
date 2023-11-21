@@ -294,6 +294,31 @@ window.updateCurrentPlotsIds = function (idToCompare, id) {
     }
 }
 
+window.initMultyichartCordinates = function(settings, values, id){
+    return new Promise(function(resolve, reject){
+        let dashboardPanels = $('#dashboardPanels');
+        let width = dashboardPanels.width();
+        let height = dashboardPanels.height();
+
+        let currWidth = Number((settings.width * width).toFixed(5))
+        let currHeight = Number((settings.height * height).toFixed(5))
+        let transitionX = settings.x * width;
+        let transitionY = settings.y * height;
+        let panel = $(`#${id}`);
+        
+        if (panel.length === 0)
+            reject();
+        
+        panel.width(currWidth)
+             .height(currHeight)
+             .css('transform', 'translate(' + transitionX + 'px, ' + transitionY + 'px)')
+             .attr('data-x', transitionX)
+             .attr('data-y', transitionY);
+        
+        resolve();
+    })
+}
+
 window.initMultichart = function (chartId, height = 300, showlegend = true) {
     return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
