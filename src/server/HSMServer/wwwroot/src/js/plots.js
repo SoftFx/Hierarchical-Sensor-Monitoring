@@ -71,7 +71,7 @@ export class Plot {
                 autosize: true,
                 xaxis: {
                     title: {
-                        text: 'Time',
+                        //text: 'Time',
                         font: {
                             family: 'Courier New, monospace',
                             size: 18,
@@ -100,7 +100,7 @@ export class Plot {
             autosize: true,
             xaxis: {
                 title: {
-                    text: 'Time',
+                    //text: 'Time',
                     font: {
                         family: 'Courier New, monospace',
                         size: 18,

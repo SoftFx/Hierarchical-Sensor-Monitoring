@@ -38,25 +38,16 @@
     $(document).ready(function () {
         let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
-        let dashboardPanels = $('#dashboardPanels');
-        let width = dashboardPanels.width();
-        let height = dashboardPanels.height();
-        
-        let currWidth = Number((settings.width * width).toFixed(5))
-        let currHeight = Number((settings.height * height).toFixed(5))
-        $('#@Model.Id').width(currWidth)
-                       .height(currHeight)
-                       .css('transform', 'translate(' + settings.x * width + 'px, ' + settings.y * height + 'px)')
-                       .attr('data-x', settings.x * width)
-                       .attr('data-y', settings.y * height);
 
-        initMultichart('panelChart_@Model.Id', currHeight, settings.showLegend).then(
-            (data) => {
-                 values.forEach(function (x) {
-                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')
-                 })
-            },
-            (error) => showToast(error)
-        );
+        initMultyichartCordinates(settings, values, '@Model.Id').then(
+            (data) => initMultichart('panelChart_@Model.Id', Number((settings.height * $('#dashboardPanels').height()).toFixed(5)), settings.showLegend).then(
+                        (data) => {
+                                values.forEach(function (x) {
+                                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')
+                                })
+                            },
+                        (error) => showToast(error)
+            )
+        )
     })
 </script>
