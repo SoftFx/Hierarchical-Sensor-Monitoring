@@ -5,6 +5,7 @@ using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundServices
@@ -54,22 +55,40 @@ namespace HSMServer.BackgroundServices
 
         private void DeleteOldBackups()
         {
-            var environmentBackupsDirectories =
-               Directory.GetDirectories(_dbSettings.DatabaseBackupsFolder, $"{_dbSettings.EnvironmentDatabaseName}*", SearchOption.TopDirectoryOnly);
-
-
-            foreach (var backup in environmentBackupsDirectories)
+            try
             {
-                try
+                var now = DateTime.UtcNow;
+
+                var environmentBackupsDirectories =
+                   Directory.GetDirectories(_dbSettings.DatabaseBackupsFolder, $"{_dbSettings.EnvironmentDatabaseName}*", SearchOption.TopDirectoryOnly)
+                            .Select(d => new BackupDirectory(d, Directory.GetCreationTimeUtc(d)))
+                            .OrderBy(d => d.CreationTime)
+                            .ToList();
+
+                for (int i = 0; i < environmentBackupsDirectories.Count - 1; ++i) // all backups except the last one
                 {
-                    if (Directory.Exists(backup) && Directory.GetCreationTimeUtc(backup) < (DateTime.UtcNow - _storagePeriod))
-                        Directory.Delete(backup, true);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"Deleting '{backup}' error: {ex}");
+                    var backup = environmentBackupsDirectories[i];
+
+                    try
+                    {
+                        var creationTime = backup.CreationTime;
+
+                        if (creationTime < (now - _storagePeriod) || creationTime.Date == now.Date)
+                            Directory.Delete(backup.Name, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Deleting '{backup}' error: {ex}");
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                _logger.Error($"Getting all environment database backups error: {ex}");
+            }
         }
+
+
+        private record BackupDirectory(string Name, DateTime CreationTime);
     }
 }

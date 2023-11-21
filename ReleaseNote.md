@@ -22,6 +22,10 @@
 * New variable **$prevComment** has been added
 * Aggregation in a chain logic for **Status is changed** alert variables **$prevValue** and **$prevComment** has been added
 * Default desctionation for all alerts is **Empty** instead of **All chats**
+* Exporting/Importing logic is available only for Admins or Folder/Product managers
 
 ## Charts:
 * **IntegerBar/DoubleBar** Open and Close time have been added in tooltip
+
+## Other
+* Browser caching logic has been fixed
