@@ -4,7 +4,6 @@ using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
-using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -21,9 +20,6 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
 
-        [Obsolete("Should be removed after telegram chats migration")]
-        public ClientNotifications Notifications { get; }
-
         public int AllSensorsCount { get; private set; }
 
 
@@ -36,8 +32,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public ProductNodeViewModel(ProductModel model, ProductNodeViewModel parent, FolderModel folder) : base(model)
         {
-            Notifications = new(model.NotificationsSettings);
-
             parent?.AddSubNode(this);
 
             if (folder != null)

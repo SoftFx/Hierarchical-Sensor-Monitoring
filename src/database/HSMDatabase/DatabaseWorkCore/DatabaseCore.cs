@@ -66,6 +66,9 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
 
+        public void BackupEnvironment(string backupPath) => _environmentDatabase.Backup(backupPath);
+
+
         #region Fill Sensors (start app)
 
 

@@ -27,7 +27,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public FolderShallowModel(FolderModel data, User user) : base(data)
         {
-            CurUserIsManager = user.IsFolderManager(user.Id);
+            CurUserIsManager = user.IsFolderManager(data.Id);
         }
 
 

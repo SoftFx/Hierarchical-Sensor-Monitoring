@@ -25,7 +25,7 @@ namespace HSMServer.Model.Folders
         public Guid AuthorId { get; }
 
 
-        public HashSet<Guid> TelegramChats { get; private set; } // TODO: should be without set and = new() after telegram chats migration
+        public HashSet<Guid> TelegramChats { get; private set; } = new();
 
         public Color Color { get; private set; }
 
@@ -69,8 +69,6 @@ namespace HSMServer.Model.Folders
             KeepHistory = LoadKeepHistory();
             SelfDestroy = LoadSelfDestroy();
             TTL = LoadTTL();
-
-            TelegramChats = new(); // TODO: should be removed after telegram chats migration
         }
 
 
@@ -132,8 +130,8 @@ namespace HSMServer.Model.Folders
 
         private HashSet<Guid> UpdateChats(HashSet<Guid> oldValue, HashSet<Guid> newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
-            var oldChats = oldValue?.Select(id => GetChatName(id)).OrderBy(n => n).ToList() ?? new(); // TODO: remove nulldable operation after telegram chats migration
-            var newChats = newValue?.Select(id => GetChatName(id)).OrderBy(n => n).ToList();
+            var oldChats = oldValue.Select(id => GetChatName(id)).OrderBy(n => n).ToList();
+            var newChats = newValue.Select(id => GetChatName(id)).OrderBy(n => n).ToList();
 
             if (newValue is not null && !newChats.SequenceEqual(oldChats))
             {
@@ -161,7 +159,7 @@ namespace HSMServer.Model.Folders
                 CreationDate = CreationDate.Ticks,
                 Description = Description,
                 Color = Color.ToArgb(),
-                TelegramChats = TelegramChats?.Select(c => c.ToByteArray()).ToList() ?? new(), // TODO: remove nullable operation after telegram chats migration
+                TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
                     [nameof(TTL)] = TTL.ToEntity(),

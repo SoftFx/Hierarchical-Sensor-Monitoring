@@ -5,12 +5,15 @@ namespace HSMServer.Extensions
     public static class DateTimeExtensions
     {
         private const string DateTimeDefaultFormat = "dd/MM/yyyy HH:mm:ss";
+        private const string DateTimeWindowsFormat = "dd.MM.yyyyTHH.mm";
 
 
         public static string ToDefaultFormat(this DateTime dateTime) => dateTime.ToString(DateTimeDefaultFormat);
 
         public static string ToDefaultFormat(this DateTime dateTime, string minValueString) =>
             dateTime == DateTime.MinValue ? minValueString : dateTime.ToDefaultFormat();
+
+        public static string ToWindowsFormat(this DateTime dateTime) => dateTime.ToString(DateTimeWindowsFormat);
 
 
         public static string GetTimeAgo(this DateTime lastUpdateDate)
@@ -22,22 +25,22 @@ namespace HSMServer.Extensions
             }
 
             var time = lastUpdateDate != DateTime.MinValue ? DateTime.UtcNow - lastUpdateDate : TimeSpan.MinValue;
-            
+
             if (time == TimeSpan.MinValue)
                 return " - no data";
-            
+
             if (time.TotalDays > 30)
                 return "> a month ago";
-            
+
             if (time.TotalDays >= 1)
                 return $"> {UnitsToString(time.TotalDays, "day")} ago";
-            
+
             if (time.TotalHours >= 1)
                 return $"> {UnitsToString(time.TotalHours, "hour")} ago";
-            
+
             if (time.TotalMinutes >= 1)
                 return $"{UnitsToString(time.TotalMinutes, "minute")} ago";
-            
+
             return time.TotalSeconds < 60 ? "< 1 minute ago" : "no info";
         }
 

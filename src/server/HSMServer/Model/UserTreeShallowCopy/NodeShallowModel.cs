@@ -56,6 +56,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
             }
         }
 
+        public bool ContentIsEmpty => RenderedNodes.Count == 0 && RenderedSensors.Count == 0;
+
         private bool CanAddToRender => RenderedNodes.Count + RenderedSensors.Count < MaxRenderWidth;
 
 
@@ -104,9 +106,9 @@ namespace HSMServer.Model.UserTreeShallowCopy
             return node;
         }
 
-        internal void ToRenderNode(Guid nodeId)
+        internal bool ToRenderNode(Guid nodeId)
         {
-            void Recalculate<T>(Dictionary<Guid, T> total, List<T> render, Predicate<T> filter)
+            bool Recalculate<T>(Dictionary<Guid, T> total, List<T> render, Predicate<T> filter)
             {
                 if (total.TryGetValue(nodeId, out var item) && filter(item))
                 {
@@ -117,11 +119,14 @@ namespace HSMServer.Model.UserTreeShallowCopy
                     }
                     else
                         RenderWidthDifference++;
+
+                    return true;
                 }
+
+                return false;
             }
 
-            Recalculate(_subNodes, RenderedNodes, _nodeFilter);
-            Recalculate(_sensors, RenderedSensors, _sensorFilter);
+            return Recalculate(_subNodes, RenderedNodes, _nodeFilter) || Recalculate(_sensors, RenderedSensors, _sensorFilter);
         }
 
         internal void LoadRenderingNodes()

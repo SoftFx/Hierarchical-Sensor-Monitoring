@@ -60,6 +60,7 @@
     var getSensorPlotInfo = "@Url.Action(nameof(SensorHistoryController.GetSensorPlotInfo), ViewConstants.HistoryController)";
     var getBackgroundId = "@Url.Action(nameof(SensorHistoryController.GetBackgroundSensorInfo), ViewConstants.HistoryController)";
 
+    var exportFolderAlerts = "@Url.Action(nameof(AlertsController.ExportFolderAlerts), ViewConstants.AlertsController)";
     var exportAlerts = "@Url.Action(nameof(AlertsController.ExportAlerts), ViewConstants.AlertsController)";
     var importAlerts = "@Url.Action(nameof(AlertsController.ImportAlerts), ViewConstants.AlertsController)";
 </script>
@@ -253,7 +254,7 @@
 
         if (dataObject.isValidationErrorVisible) {
             $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
-                                                           <span>Status comment: ${dataObject.validationError}</span>`);
+                                                               <span>Status comment: ${dataObject.validationError}</span>`);
 
             $('#markdown_status_comment').children().last().css('margin-bottom', 0);
         }
@@ -263,7 +264,7 @@
         if (accordionLoaded.length !== 0) {
             if (isFile && dataObject.sendingTime !== null) {
                 $('#side_info_' + id).empty().append(`<span>Size: ${dataObject.size}</span>
-                                                                       <span>${dataObject.sendingTime}</span>`);
+                                                                           <span>${dataObject.sendingTime}</span>`);
             }
 
             if (isFile)

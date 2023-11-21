@@ -10,6 +10,8 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class AlertExportViewModel
     {
+        public List<string> Products { get; set; }
+
         public List<string> Sensors { get; set; }
 
         public List<ConditionExportViewModel> Conditions { get; set; }
@@ -29,11 +31,15 @@ namespace HSMServer.Model.DataAlerts
 
         public AlertExportViewModel() { }
 
-        internal AlertExportViewModel(List<PolicyExportInfo> info)
+        internal AlertExportViewModel(IEnumerable<PolicyExportInfo> infoList, Dictionary<Guid, string> availableChats)
         {
-            Sensors = info.Select(u => u.FullRelativePath).OrderBy(u => u).ToList();
+            Sensors = infoList.Select(u => u.FullRelativePath).OrderBy(u => u).ToList();
 
-            var policy = info.First().Policy;
+            var info = infoList.First();
+            var policy = info.Policy;
+
+            if (info.ProductName is not null)
+                Products = new List<string>() { info.ProductName };
 
             Icon = policy.Icon;
             Status = policy.Status;
@@ -42,7 +48,13 @@ namespace HSMServer.Model.DataAlerts
             IsDisabled = policy.IsDisabled;
 
             if (!policy.Destination.AllChats)
-                Chats = policy.Destination.Chats.Values.ToList();
+            {
+                Chats = new();
+
+                foreach (var (id, _) in policy.Destination.Chats)
+                    if (availableChats.TryGetValue(id, out var name))
+                        Chats.Add(name);
+            }
 
             Conditions = policy.Conditions.Select(c => new ConditionExportViewModel(c)).ToList();
         }
@@ -58,7 +70,7 @@ namespace HSMServer.Model.DataAlerts
                 ConfirmationPeriod = ConfirmationPeriod?.Ticks,
                 Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
                 Destination = Chats is null
-                    ? new PolicyDestinationUpdate()
+                    ? new PolicyDestinationUpdate(allChats: true)
                     : new PolicyDestinationUpdate(Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
             };
     }

@@ -6,19 +6,19 @@ window.currentSelectedNodeId = "";
 window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
     var searchRefresh = false;
-    
+
     if (window.localStorage.jstree) {
         let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
         if (initOpened > 1)
             isRefreshing = true;
     }
-    
+
     $('#jstree').jstree({
         "core": {
             "check_callback": true,
             "multiple": true,
-            'data' : {
-                url : function (node) {
+            'data': {
+                url: function (node) {
                     if (node.id === '#') {
                         return refreshTree;
                     }
@@ -26,8 +26,8 @@ window.initializeTree = function () {
                     return getNode;
                 },
                 data: function (node) {
-                    return { 
-                        'id' : node.id,
+                    return {
+                        'id': node.id,
                         'searchParameter': $('#search_field').val()
                     }
                 }
@@ -52,7 +52,7 @@ window.initializeTree = function () {
                 nodeIds: [data.node.id]
             })
         })
-    }).on('refresh.jstree', function (e, data){
+    }).on('refresh.jstree', function (e, data) {
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
 
@@ -61,31 +61,31 @@ window.initializeTree = function () {
                 if (node.state.loaded === true)
                     $(this).jstree('open_node', node.id);
             })
-            
+
             $(this).show();
             $('#jstreeSpinner').addClass('d-none');
             searchRefresh = false;
         }
-    }).on('open_node.jstree', function (e, data){
+    }).on('open_node.jstree', function (e, data) {
         collapseButton.reset();
     });
 
     $("#search_tree").on('click', function () {
         search($('#search_input').val());
     });
-    
-    $('#search_input').on('keyup', function (e){
-        if (e.keyCode == 13){
-            search($(this).val()); 
+
+    $('#search_input').on('keyup', function (e) {
+        if (e.keyCode == 13) {
+            search($(this).val());
         }
-    }).on('input', function(){
-       if ($(this).val() === ''){
-           $('#search_field').val($(this).val());
-           $('#jstree').jstree(true).refresh(true);
-       } 
+    }).on('input', function () {
+        if ($(this).val() === '') {
+            $('#search_field').val($(this).val());
+            $('#jstree').jstree(true).refresh(true);
+        }
     });
 
-    function search(value){
+    function search(value) {
         if (value === '')
             return;
 
@@ -256,16 +256,20 @@ const AjaxPost = {
 
 function buildContextMenu(node) {
     var contextMenu = {};
-    
+
     let curType = getCurrentElementType(node);
-    
+
     if (curType === NodeType.Disabled)
         return contextMenu;
-    
+
     let isManager = node.data.jstree.isManager === "True";
-    
+
+    let isFolder = curType === NodeType.Folder;
+    let isSensor = curType === NodeType.Sensor;
+    let isProduct = curType === NodeType.Product;
+
     let selectedNodes = $('#jstree').jstree(true).get_selected();
-    
+
     if (selectedNodes.length > 1) {
         contextMenu["RemoveNode"] = {
             "label": `Remove items`,
@@ -276,13 +280,13 @@ function buildContextMenu(node) {
                 $('#modalDeleteLabel').empty().append(`Remove items`);
                 $('#modalDeleteBody').empty().append(`Do you really want to remove ${selectedNodes.length} selected items?`);
                 modal.show();
-                
+
                 //modal confirm
                 $('#confirmDeleteButton').off('click').on('click', () => {
                     modal.hide();
-                    
+
                     $.ajax({
-                        url:`${removeNodeAction}`,
+                        url: `${removeNodeAction}`,
                         type: 'POST',
                         cache: false,
                         async: true,
@@ -290,12 +294,12 @@ function buildContextMenu(node) {
                         contentType: "application/json"
                     }).done((response) => {
                         updateTreeTimer();
-                        
+
                         let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
 
                         if (response.errorMessage !== "")
                             message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
-                        
+
                         showToast(message);
 
                         $('#nodeDataPanel').addClass('d-none');
@@ -305,12 +309,12 @@ function buildContextMenu(node) {
                 $('#closeDeleteButton').off('click').on('click', () => modal.hide());
             }
         }
-        
+
         contextMenu["Edit policies"] = {
             "label": `Edit policies`,
             "action": _ => {
                 $('#editMultipleInterval_modal').modal('show')
-                $('#editMultipleInterval').submit(function() {
+                $('#editMultipleInterval').submit(function () {
                     event.preventDefault();
                     event.stopImmediatePropagation();
                     $('#NodeIds')[0].value = selectedNodes;
@@ -350,20 +354,20 @@ function buildContextMenu(node) {
         return contextMenu;
     }
 
-    if (curType === NodeType.Product) {
+    if (isProduct) {
         contextMenu["AccessKeys"] = {
             "label": "Access keys",
             "separator_after": true,
             "action": _ => showAccessKeysList(node.id, true),
         };
-        
+
         contextMenu["CopyName"] = {
             "label": "Copy name",
             "separator_after": true,
             "action": _ => copyToClipboard(node.data.jstree.title),
         };
     }
-    else if (curType !== NodeType.Folder) {
+    else if (!isFolder) {
         contextMenu["CopyPath"] = {
             "label": "Copy path",
             "separator_after": true,
@@ -390,23 +394,23 @@ function buildContextMenu(node) {
                     "separator_before": true,
                     "action": _ => unmuteRequest(node)
                 }
-            } 
+            }
         }
 
-        if (curType !== NodeType.Node && curType !== NodeType.Sensor) {
+        if (isFolder || isProduct) {
             contextMenu["Edit"] = {
                 "label": `Edit ${getKeyByValue(curType)}`,
                 "action": _ => {
-                    if (curType === NodeType.Folder)
+                    if (isFolder)
                         window.location.href = `${editFolderAction}?folderId=${node.id}`;
 
-                    if (curType === NodeType.Product)
+                    if (isProduct)
                         window.location.href = `${editProductAction}?Product=${node.id}`;
                 }
             };
         }
 
-        if (curType != NodeType.Folder) {
+        if (!isFolder) {
             contextMenu["RemoveNode"] = {
                 "label": `Remove ${getKeyByValue(curType)}`,
                 "action": _ => {
@@ -427,16 +431,16 @@ function buildContextMenu(node) {
                         modal.hide();
 
                         $.ajax({
-                                url:`${removeNodeAction}`,
-                                type: 'POST',
-                                cache: false,
-                                async: true,
-                                data: JSON.stringify([node.id]),
-                                contentType: "application/json"
-                            })
+                            url: `${removeNodeAction}`,
+                            type: 'POST',
+                            cache: false,
+                            async: true,
+                            data: JSON.stringify([node.id]),
+                            contentType: "application/json"
+                        })
                             .done(() => {
                                 $('#nodeDataPanel').addClass('d-none');
-                                
+
                                 updateTreeTimer();
                                 showToast(`${type} has been removed`);
                             });
@@ -446,8 +450,8 @@ function buildContextMenu(node) {
                 }
             }
         }
-        
-        if (curType === NodeType.Sensor && !(isMutedState === "True")) {
+
+        if (isSensor && !(isMutedState === "True")) {
             contextMenu["ChangeStatus"] = {
                 "label": `Edit status`,
                 "icon": "/dist/edit.svg",
@@ -473,13 +477,18 @@ function buildContextMenu(node) {
             };
         }
 
-        if (isManager && (curType === NodeType.Product || curType === NodeType.Node)) {
+        if (isManager && !isSensor) {
             alertsSubmenu = {}
 
             alertsSubmenu["Export"] = {
                 "label": `Export`,
                 "icon": "fa-solid fa-upload",
-                "action": _ => window.location.href = `${exportAlerts}?selectedId=${node.id}`
+                "action": _ => {
+                    if (isFolder)
+                        window.location.href = `${exportFolderAlerts}?folderId=${node.id}`;
+                    else
+                        window.location.href = `${exportAlerts}?selectedId=${node.id}`;
+                }
             }
 
             alertsSubmenu["Import"] = {
@@ -535,12 +544,12 @@ function buildContextMenu(node) {
             };
         }
     }
-    
+
     return contextMenu;
 }
 
-function unmuteRequest(node){
-    return $.ajax(`${unmuteAction}?selectedId=${node.id}`, AjaxPost).done(() => { 
+function unmuteRequest(node) {
+    return $.ajax(`${unmuteAction}?selectedId=${node.id}`, AjaxPost).done(() => {
         updateSelectedNodeData();
         updateTreeTimer();
     });
@@ -564,17 +573,17 @@ function getFullPathAction(nodeId) {
 function getCurrentElementType(node) {
     if (node.id.includes('disabled'))
         return NodeType.Disabled;
-    
+
     if (node.parents.length === 1 && isFolder(node))
         return NodeType.Folder;
 
     if ((node.parents.length === 1 && !isFolder(node)) ||
         (node.parents.length === 2 && isFolder($('#jstree').jstree().get_node(node.parents[0]))))
         return NodeType.Product;
-    
+
     if (typeof node.li_attr.class === 'undefined')
         return NodeType.Sensor;
-    
+
     return NodeType.Node;
 }
 

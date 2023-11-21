@@ -29,16 +29,18 @@ if ($ExpectedImageId)
 	# $LogsFolder = "/usr/HSM/Logs:/app/Logs"
 	# $SensorConfigFolder = "/usr/HSM/Config:/app/Config"
 	# $EnvironmentDatabaseFolder = "/usr/HSM/Databases:/app/Databases"
+	# $DatabasesBackupsFolder = "/usr/HSM/DatabasesBackups:/app/DatabasesBackups"
 
     # Windows directories
 	$LogsFolder = "C:\HSM\Logs:/app/Logs"
 	$SensorConfigFolder = "C:\HSM\Config:/app/Config"
 	$EnvironmentDatabaseFolder = "C:\HSM\Databases:/app/Databases"
+	$DatabasesBackupsFolder = "C:\HSM\DatabasesBackups:/app/DatabasesBackups"
 
 	$SensorDataPort = "44330:44330"
 	$SensorSitePort = "44333:44333"
 
-	docker run -d -it  --name "${ContainerName}_$Version" -v $LogsFolder -v $SensorConfigFolder -v $EnvironmentDatabaseFolder -p $SensorDataPort -p $SensorSitePort $ExpectedImageId
+	docker run -d -it  --name "${ContainerName}_$Version" -v $LogsFolder -v $SensorConfigFolder -v $EnvironmentDatabaseFolder -v $DatabasesBackupsFolder -p $SensorDataPort -p $SensorSitePort $ExpectedImageId
 }
 else
 {
