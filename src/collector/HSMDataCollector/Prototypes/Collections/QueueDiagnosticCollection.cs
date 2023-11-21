@@ -26,6 +26,8 @@ namespace HSMDataCollector.Prototypes.Collections
         protected QueueDiagnosticBarPrototype() : base()
         {
             Type = SensorType.DoubleBarSensor;
+
+            IsPrioritySensor = true;
         }
     }
 

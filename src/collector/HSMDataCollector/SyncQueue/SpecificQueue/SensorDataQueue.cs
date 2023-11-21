@@ -1,11 +1,15 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.Extensions;
 using HSMSensorDataObjects.SensorValueRequests;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.SyncQueue
 {
     internal class SensorDataQueue : SyncQueue<SensorValueBase>, IValuesQueue
     {
+        private readonly HashSet<string> _prioritySensors = new HashSet<string>();
+
+
         protected override string QueueName => "Sensor data";
 
 
@@ -27,7 +31,15 @@ namespace HSMDataCollector.SyncQueue
                     return false;
             }
 
+            if (_prioritySensors.Contains(value.Path))
+            {
+                InvokeNewValue(value);
+                return false;
+            }
+
             return true;
         }
+
+        public void AddPrioritySensor(string path) => _prioritySensors.Add(path);
     }
 }
