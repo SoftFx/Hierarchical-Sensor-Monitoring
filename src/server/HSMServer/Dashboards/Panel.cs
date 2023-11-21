@@ -44,7 +44,7 @@ namespace HSMServer.Dashboards
         internal static void Relayout(ConcurrentDictionary<Guid,Panel> panels, int layerWidth)
         {
             const double height = 0.2D;
-            const double translateY = 0.23D;
+            const double translateY = 0.24D;
             const double currentWidth = 0.984D;
             var layoutHeight = 0;
             var counter = 0;
@@ -57,7 +57,7 @@ namespace HSMServer.Dashboards
             {
                 foreach (var (_, panel) in panels)
                 {
-                    panel.Settings.Width = width;
+                    panel.Settings.Width = width - 0.01D;
                     panel.Settings.Height = height;
                     panel.Settings.X = width * counter;
                     panel.Settings.Y = translateY * layoutHeight;
@@ -65,6 +65,7 @@ namespace HSMServer.Dashboards
                     if (counter == layerWidth - 1)
                     {
                         counter = 0;
+                        panel.Settings.Width += 0.01D;
                         layoutHeight++;
                     }
                     else 

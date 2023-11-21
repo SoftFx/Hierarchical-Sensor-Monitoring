@@ -15,7 +15,14 @@
         <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1 name-draggable">
             <div class="d-inline-block">
                 <span class="fw-bold d-flex" id="panel_name">@Model.Name</span>
-                <span class="fw-lighter" id="panel_description" style="color: grey">@Model.Description</span>
+                @if (string.IsNullOrEmpty(Model.Description))
+                {
+                    <div style="height: 1.5rem"></div>
+                }
+                else
+                {
+                    <span class="fw-lighter" id="panel_description" style="color: grey">@Model.Description</span>
+                }
             </div>
             <div>
                 <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
