@@ -23,6 +23,8 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddTotalCpu(BarSensorOptions options = null);
 
+        IWindowsCollection AddTimeInGC(BarSensorOptions options = null);
+
         IWindowsCollection AddFreeRamMemory(BarSensorOptions options = null);
 
         IWindowsCollection AddSystemMonitoringSensors(BarSensorOptions options = null);

@@ -71,8 +71,11 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsFreeRamMemory(_prototype.FreeRam.Get(options)));
         }
 
+        public IWindowsCollection AddTimeInGC(BarSensorOptions options) =>
+            ToWindows(new WindowsTimeInGC(_prototype.TimeInGC.Get(options)));
+
         public IWindowsCollection AddSystemMonitoringSensors(BarSensorOptions options) =>
-            AddFreeRamMemory(options).AddTotalCpu(options);
+            AddFreeRamMemory(options).AddTotalCpu(options).AddTimeInGC(options);
 
         #endregion
 

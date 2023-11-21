@@ -21,6 +21,8 @@ namespace HSMDataCollector.Options
 
         internal TotalCPUPrototype TotalCPU { get; }
 
+        internal TimeInGCPrototype TimeInGC { get; }
+
         #endregion
 
 
@@ -86,6 +88,7 @@ namespace HSMDataCollector.Options
             ProcessCpu = Register<ProcessCpuPrototype>();
             FreeRam = Register<FreeRamMemoryPrototype>();
             TotalCPU = Register<TotalCPUPrototype>();
+            TimeInGC = Register<TimeInGCPrototype>();
 
             WindowsFreeSpaceOnDiskPrediction = Register<WindowsFreeSpaceOnDiskPredictionPrototype>();
             WindowsFreeSpaceOnDisk = Register<WindowsFreeSpaceOnDiskPrototype>();
