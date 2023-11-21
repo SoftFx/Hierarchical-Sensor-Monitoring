@@ -21,11 +21,13 @@
                 <h5 id="name">@Model.Name</h5>
 
                 <a class="icon-link text-nowrap" href="javascript:editDahsboardSettings();" title='edit dashboard settings'>
-                    <i class='fas fa-edit'><use xlink:href="#box-seam"></i> Edit
+                    <i class='fas fa-edit'>
+                        <use xlink:href="#box-seam">
+                    </i> Edit
                 </a>
             </div>
 
-            <div id="markdown_description">@Model.Description</div> 
+            <div id="markdown_description">@Model.Description</div>
         </div>
 
         <div id="editableDashboardSettings" class="my-2 @(isModify ? "d-none" : string.Empty)">
@@ -43,9 +45,15 @@
         </div>
 
         <div class="d-flex justify-content-end">
-            <button id="relayout" onclick="relayout()" class="btn d-flex">
-                <img src="~/dist/columns.svg" style="width: 2rem;height: 2rem"/>
-            </button>
+            <div class="btn-group">
+                <button id="relayout_three" onclick="relayout(3)" class="btn d-flex pe-0">
+                    <img src="~/dist/columns.svg" style="width: 2rem;height: 2rem"/>
+                </button>
+                <button id="relayout_two" onclick="relayout(2)" class="btn d-flex ps-1">
+                    <img src="~/dist/two-columns.svg" style="width: 1.7rem;height: 2rem"/>
+                </button>`
+            </div>
+
 
             <select asp-for="FromPeriod" form="saveDashBoardForm" id="from_select" class="form-select" style="width: auto">
                 <option value="00:30:00">last 30 minutes</option>
@@ -55,12 +63,14 @@
             </select>
 
             <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? "d-none" : string.Empty)" href="javascript:addPanel();">
-                <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add panel
+                <i class="fa-solid fa-plus">
+                    <use xlink:href="#box-seam">
+                </i> Add panel
             </a>
         </div>
     </div>
 
-     <div id="noPanels" class="d-flex justify-content-center align-items-end noData-label @(isEmptyDashboard ?string.Empty  : "d-none")">
+    <div id="noPanels" class="d-flex justify-content-center align-items-end noData-label @(isEmptyDashboard ? string.Empty : "d-none")">
         <label>No panels</label>
     </div>
 
@@ -74,11 +84,30 @@
 
 
 <script>
+     let targetNode = $('#dashboardPanels')[0];
+     let change = 0;
+     let config = { attributes: true, childList: true, subtree: true};
+     let callback = function(mutationsList, observer) {
+         for(let mutation of mutationsList) {
+             if (mutation.target.classList.contains('js-plotly-plot') && mutation.type == 'childList'){
+                 let qwe = mutation.target.parentNode.getBoundingClientRect();
+                 if (qwe.bottom > targetNode.getBoundingClientRect().bottom){
+                     change = Math.max(change, qwe.bottom + qwe.height);
+                 }
+             }  
+         }
+     };
+
+     let observer = new MutationObserver(callback);
+
+     observer.observe(targetNode, config);
+
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description');
-
         initDashboard();
         disableDragAndResize();
+        if(change !== 0)
+            targetNode.style.minHeight = change + "px";
         $('#from_select').val('@Model.FromPeriod');
     });
 
@@ -111,7 +140,7 @@
         let arr = $(this).serializeArray();
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
-        let height = dashboardPanels.height();
+        let height = 1400;
         let panels = {};
         for (let i of dashboardPanels.children('div')){
             let item = $(i);
@@ -159,10 +188,10 @@
         })
     }
     
-    function relayout(){
+    function relayout(number){
         $.ajax({
             type: 'put',
-            url: window.location.pathname + '/Relayout'
+            url: window.location.pathname + `/Relayout?width=${number}`
         }).done(function (response){
             window.location.reload()  
         }).fail(function (response){

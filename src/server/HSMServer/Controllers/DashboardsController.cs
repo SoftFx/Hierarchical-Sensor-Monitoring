@@ -117,11 +117,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpPut("Dashboards/{dashboardId:guid}/Relayout")]
-        public async Task<IActionResult> Relayout(Guid dashboardId)
+        public async Task<IActionResult> Relayout(Guid dashboardId, [FromQuery]int width)
         {
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
-                Panel.Relayout(dashboard.Panels);
+                Panel.Relayout(dashboard.Panels, width);
 
                 if (await _dashboardManager.TryUpdate(dashboard))
                     return Ok("Successfully relayout");

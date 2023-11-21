@@ -3,6 +3,7 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Dashboards
@@ -40,30 +41,35 @@ namespace HSMServer.Dashboards
             }
         }
 
-        internal static void Relayout(ConcurrentDictionary<Guid,Panel> panels)
+        internal static void Relayout(ConcurrentDictionary<Guid,Panel> panels, int layerWidth)
         {
-            const int layoutWidth = 3;
-            const double width = 0.328D;
             const double height = 0.2D;
-            const double translateX = 0.328D;
             const double translateY = 0.23D;
-                
+            const double currentWidth = 0.984D;
             var layoutHeight = 0;
             var counter = 0;
-            foreach (var (_, panel) in panels)
-            {
-                panel.Settings.Width = width;
-                panel.Settings.Height = height;
-                panel.Settings.X = translateX * counter;
-                panel.Settings.Y = translateY * layoutHeight;
+            var layoutTakeSize = panels.Count - panels.Count % layerWidth;
+            
+            Relayout(panels.Take(layoutTakeSize), currentWidth / layerWidth);
+            Relayout(panels.TakeLast(panels.Count - layoutTakeSize), currentWidth / (panels.Count - layoutTakeSize));
 
-                if (counter == layoutWidth - 1)
+            void Relayout(IEnumerable<KeyValuePair<Guid, Panel>> panels, double width)
+            {
+                foreach (var (_, panel) in panels)
                 {
-                    counter = 0;
-                    layoutHeight++;
-                }
-                else 
-                    counter++;
+                    panel.Settings.Width = width;
+                    panel.Settings.Height = height;
+                    panel.Settings.X = width * counter;
+                    panel.Settings.Y = translateY * layoutHeight;
+
+                    if (counter == layerWidth - 1)
+                    {
+                        counter = 0;
+                        layoutHeight++;
+                    }
+                    else 
+                        counter++;
+                }  
             }
         }
 
