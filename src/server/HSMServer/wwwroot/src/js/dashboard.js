@@ -314,7 +314,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         },
         xaxis: {
             title: {
-                text: 'Time',
+                //text: 'Time',
                 font: {
                     family: 'Courier New, monospace',
                     size: 18,
