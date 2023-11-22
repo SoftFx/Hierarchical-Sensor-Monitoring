@@ -53,8 +53,13 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsProcessThreadCount(_prototype.ProcessThreadCount.Get(options)));
         }
 
+        public IWindowsCollection AddProcessTimeInGC(BarSensorOptions options)
+        {
+            return ToWindows(new WindowsProcessTimeInGC(_prototype.ProcessTimeInGC.Get(options)));
+        }
+
         public IWindowsCollection AddProcessMonitoringSensors(BarSensorOptions options) =>
-            AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options);
+            AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options).AddProcessTimeInGC(options);
 
         #endregion
 
@@ -71,8 +76,10 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsFreeRamMemory(_prototype.FreeRam.Get(options)));
         }
 
-        public IWindowsCollection AddTimeInGC(BarSensorOptions options) =>
-            ToWindows(new WindowsTimeInGC(_prototype.TimeInGC.Get(options)));
+        public IWindowsCollection AddTimeInGC(BarSensorOptions options)
+        {
+            return ToWindows(new WindowsTimeInGC(_prototype.TimeInGC.Get(options)));
+        }
 
         public IWindowsCollection AddSystemMonitoringSensors(BarSensorOptions options) =>
             AddFreeRamMemory(options).AddTotalCpu(options).AddTimeInGC(options);

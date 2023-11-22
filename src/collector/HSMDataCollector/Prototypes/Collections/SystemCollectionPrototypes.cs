@@ -60,12 +60,7 @@ namespace HSMDataCollector.Prototypes
 
         public TimeInGCPrototype() : base()
         {
-            //Description = " Displays the percentage of elapsed time that was spent performing a garbage collection since the last garbage collection cycle. " +
-            //    "This counter usually indicates the work done by the garbage collector to collect and compact memory on behalf of the application" +
-            //    "CPU usage indicates the total percentage of processing power" +
-            //" exhausted to process data and run various programs on a network device, " +
-            //"server, or computer at any given point. More info can be found [**here**](https://en.wikipedia.org/wiki/Central_processing_unit).";
-
+            //TODO: add description
             SensorUnit = Unit.Percents;
         }
     }

@@ -1,5 +1,4 @@
 ﻿using HSMDataCollector.Core;
-using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.Prototypes.Collections;
 using HSMDataCollector.Prototypes.Collections.Disks;
@@ -11,6 +10,8 @@ namespace HSMDataCollector.Options
         #region System
 
         internal ProcessThreadCountPrototype ProcessThreadCount { get; }
+
+        internal ProcessTimeInGCPrototype ProcessTimeInGC { get; }
 
         internal ProcessMemoryPrototype ProcessMemory { get; }
 
@@ -84,6 +85,7 @@ namespace HSMDataCollector.Options
 
 
             ProcessThreadCount = Register<ProcessThreadCountPrototype>();
+            ProcessTimeInGC = Register<ProcessTimeInGCPrototype>();
             ProcessMemory = Register<ProcessMemoryPrototype>();
             ProcessCpu = Register<ProcessCpuPrototype>();
             FreeRam = Register<FreeRamMemoryPrototype>();
