@@ -1,11 +1,11 @@
 ﻿using HSMDataCollector.DefaultSensors.SystemInfo;
+using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using HSMDataCollector.DefaultSensors.Windows;
-using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -18,7 +18,7 @@ namespace HSMDataCollector.Prototypes
         private string _sensorName;
 
 
-        protected abstract string DescriptionPath { get;}
+        protected abstract string DescriptionPath { get; }
 
         protected override string Category => DisksMonitoringPrototype.DiskCategory;
 
