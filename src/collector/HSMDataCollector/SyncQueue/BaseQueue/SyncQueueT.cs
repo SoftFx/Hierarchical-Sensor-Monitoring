@@ -42,7 +42,10 @@ namespace HSMDataCollector.SyncQueue
                     Dequeue(_valuesQueue, dataList);
 
                     if (dataList.Count > 0)
+                    {
                         NewValuesEvent?.Invoke(dataList);
+                        ThrowSendValuesCount(dataList.Count);
+                    }
                     else
                         break;
                 }

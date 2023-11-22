@@ -10,6 +10,8 @@ namespace HSMDataCollector.SyncQueue
         ICommandQueue Commands { get; }
 
 
+        event Action<string, int> PackageValuesCountInfo;
+
         event Action<string, int> OverflowInfo;
 
 

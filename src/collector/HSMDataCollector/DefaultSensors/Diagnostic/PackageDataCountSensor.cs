@@ -1,10 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Diagnostic
 {
-    internal class PackageDataCountSensor
+    internal sealed class PackageDataCountSensor : BaseQueueInfoIntSensor
     {
+        public PackageDataCountSensor(BarSensorOptions options) : base(options) { }
     }
 }

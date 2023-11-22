@@ -14,6 +14,8 @@ namespace HSMDataCollector.SyncQueue
         protected abstract string QueueName { get; }
 
 
+        public event Action<string, int> SendValuesCnt;
+
         public event Action<string, int> OverflowCnt;
 
 
@@ -42,6 +44,12 @@ namespace HSMDataCollector.SyncQueue
 
         public void Dispose() => Stop();
 
+
+        protected void ThrowSendValuesCount(int count)
+        {
+            if (count > 0)
+                SendValuesCnt?.Invoke(QueueName, count);
+        }
 
         protected void ThrowQueueOverflowCount(int count)
         {
