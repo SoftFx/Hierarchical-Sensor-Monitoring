@@ -14,7 +14,6 @@ namespace HSMDataCollector.Prototypes
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromHours(1);
 
 
-
         public FreeSpaceOnDiskPredictionPrototype() : base()
         {
             Type = SensorType.TimeSpanSensor;
