@@ -11,6 +11,9 @@ namespace HSMDataCollector.Prototypes
     {
         private const string CalibrationInfo = "After the start of the sensor, it's calibrated during {0} requests that post with OffTime status.";
 
+        protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromHours(1);
+
+
 
         public FreeSpaceOnDiskPredictionPrototype() : base()
         {
