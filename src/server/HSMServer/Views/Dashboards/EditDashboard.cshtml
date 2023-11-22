@@ -90,9 +90,9 @@
      let callback = function(mutationsList, observer) {
          for(let mutation of mutationsList) {
              if (mutation.target.classList.contains('js-plotly-plot') && mutation.type == 'childList'){
-                 let qwe = mutation.target.parentNode.getBoundingClientRect();
-                 if (qwe.bottom > targetNode.getBoundingClientRect().bottom){
-                     change = Math.max(change, qwe.bottom + qwe.height);
+                 let target = mutation.target.parentNode.getBoundingClientRect();
+                 if (target.bottom > targetNode.getBoundingClientRect().bottom){
+                     change = Math.max(change, target.bottom + target.height);
                  }
              }  
          }
@@ -145,7 +145,6 @@
         for (let i of dashboardPanels.children('div')){
             let item = $(i);
             let showlegend = item.find('.js-plotly-plot')[0].layout.showlegend;
-            console.log(item)
             panels[i.id] = {
                 width: Number((item.width() / width).toFixed(5)),
                 height: Number((item.height() / height).toFixed(5)),

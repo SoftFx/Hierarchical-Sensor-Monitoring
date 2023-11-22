@@ -45,7 +45,7 @@ namespace HSMServer.Dashboards
         {
             const double height = 0.2D;
             const double translateY = 0.24D;
-            const double currentWidth = 0.984D;
+            const double currentWidth = 1.0D;
             const double gap = 0.01D;
             var layoutHeight = 0;
             var counter = 0;
