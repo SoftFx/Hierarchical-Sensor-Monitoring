@@ -46,26 +46,27 @@ namespace HSMServer.Dashboards
             const double height = 0.2D;
             const double translateY = 0.24D;
             const double currentWidth = 0.984D;
+            const double gap = 0.01D;
             var layoutHeight = 0;
             var counter = 0;
             var layoutTakeSize = panels.Count - panels.Count % layerWidth;
-            
-            Relayout(panels.Take(layoutTakeSize), currentWidth / layerWidth);
-            Relayout(panels.TakeLast(panels.Count - layoutTakeSize), currentWidth / (panels.Count - layoutTakeSize));
+            var width = currentWidth - gap * (layerWidth - 1);
+
+            Relayout(panels.Take(layoutTakeSize), width / layerWidth);
+            Relayout(panels.TakeLast(panels.Count - layoutTakeSize), (currentWidth - gap * (panels.Count - layoutTakeSize - 1)) / (panels.Count - layoutTakeSize));
 
             void Relayout(IEnumerable<KeyValuePair<Guid, Panel>> panels, double width)
             {
                 foreach (var (_, panel) in panels)
                 {
-                    panel.Settings.Width = width - 0.01D;
+                    panel.Settings.Width = width;
                     panel.Settings.Height = height;
-                    panel.Settings.X = width * counter;
+                    panel.Settings.X = (width + gap) * counter;
                     panel.Settings.Y = translateY * layoutHeight;
 
                     if (counter == layerWidth - 1)
                     {
                         counter = 0;
-                        panel.Settings.Width += 0.01D;
                         layoutHeight++;
                     }
                     else 
