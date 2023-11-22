@@ -77,7 +77,7 @@ namespace HSMDataCollector.DefaultSensors
             if (_queueOverflowSensor != null)
                 return this;
 
-            _queueOverflowSensor = new QueueOverflowSensor(options);
+            _queueOverflowSensor = new QueueOverflowSensor(_prototype.QueueOverflow.Get(options));
 
             _storage.QueueManager.OverflowInfo += _queueOverflowSensor.AddValue;
 
@@ -90,7 +90,7 @@ namespace HSMDataCollector.DefaultSensors
             if (_packageDataCountSensor != null)
                 return this;
 
-            _packageDataCountSensor = new PackageDataCountSensor(options);
+            _packageDataCountSensor = new PackageDataCountSensor(_prototype.PackageValuesCount.Get(options));
 
             _storage.QueueManager.PackageValuesCountInfo += _packageDataCountSensor.AddValue;
 

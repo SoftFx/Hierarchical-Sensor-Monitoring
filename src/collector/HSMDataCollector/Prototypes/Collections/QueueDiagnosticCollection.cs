@@ -56,12 +56,12 @@ namespace HSMDataCollector.Prototypes.Collections
 
     internal sealed class PackageValuesCountPrototype : QueueDiagnosticBarPrototype
     {
-        protected override string SensorName => "Package values count";
+        protected override string SensorName => "Values count in package";
 
 
         public PackageValuesCountPrototype()
         {
-            //unit count should be added
+            //count unit count should be added
         }
 
 
