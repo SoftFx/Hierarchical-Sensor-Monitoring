@@ -94,6 +94,11 @@ namespace HSMDataCollector.Prototypes
         public ProcessTimeInGCPrototype() : base()
         {
             SensorUnit = Unit.Percents;
+
+            Alerts = new List<BarAlertTemplate>()
+            {
+                AlertsFactory.IfMean(AlertOperation.GreaterThan, 50).ThenSendNotification("[$product]$path $property $operation $target").AndSetIcon(AlertIcon.Warning).Build(),
+            };
         }
 
 
