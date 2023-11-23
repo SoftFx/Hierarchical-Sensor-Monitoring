@@ -1,4 +1,6 @@
 ﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.DefaultSensors.Windows;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
@@ -60,8 +62,17 @@ namespace HSMDataCollector.Prototypes
 
         public TimeInGCPrototype() : base()
         {
-            //TODO: add description
             SensorUnit = Unit.Percents;
+        }
+
+
+        public override BarSensorOptions Get(BarSensorOptions customOptions)
+        {
+            var options = base.Get(customOptions);
+
+            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView(), $"{WindowsTimeInGCBase.Category}/{WindowsTimeInGCBase.Counter}");
+
+            return options;
         }
     }
 }
