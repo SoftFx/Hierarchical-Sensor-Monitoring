@@ -163,14 +163,14 @@ namespace HSMDataCollector.DefaultSensors
             throw new System.NotImplementedException();
         }
 
-        public IWindowsCollection AddQueuePackageContentSize(BarSensorOptions options = null) => (IWindowsCollection)AddPackageSizeCommon(options);
+        public IWindowsCollection AddQueuePackageContentSize(InstantSensorOptions options = null) => (IWindowsCollection)AddPackageSizeCommon(options);
 
         public IWindowsCollection AddQueuePackageValuesCount(BarSensorOptions options = null) => (IWindowsCollection)AddPackageValuesCountCommon(options);
 
         public IWindowsCollection AddQueueOverflow(BarSensorOptions options = null) => (IWindowsCollection)AddQueueOverflowCommon(options);
 
-        public IWindowsCollection AddAllQueueDiagnosticSensors(BarSensorOptions options = null) =>
-            AddQueueOverflow(options).AddQueuePackageValuesCount(options).AddQueuePackageContentSize(options);
+        public IWindowsCollection AddAllQueueDiagnosticSensors(InstantSensorOptions instantOptions = null, BarSensorOptions barOptions = null) =>
+            AddQueueOverflow(barOptions).AddQueuePackageValuesCount(barOptions).AddQueuePackageContentSize(instantOptions);
 
         #endregion
 

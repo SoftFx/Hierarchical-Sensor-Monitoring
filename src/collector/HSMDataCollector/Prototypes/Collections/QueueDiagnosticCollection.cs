@@ -25,7 +25,7 @@ namespace HSMDataCollector.Prototypes.Collections
 
         protected QueueDiagnosticBarPrototype() : base()
         {
-            Type = SensorType.DoubleBarSensor;
+            Type = SensorType.IntegerBarSensor;
 
             IsPrioritySensor = true;
         }
@@ -94,14 +94,15 @@ namespace HSMDataCollector.Prototypes.Collections
     }
 
 
-    internal sealed class PackageContentSizePrototype : QueueDiagnosticBarPrototype
+    internal sealed class PackageContentSizePrototype : QueueDiagnosticInstantPrototype
     {
         protected override string SensorName => "Package content size";
 
 
         public PackageContentSizePrototype()
         {
-            Description = $"The sensor sends information about the packet body size.";
+            Description = $"The sensor sends information about the package body size.";
+            Type = SensorType.DoubleSensor;
             SensorUnit = Unit.MB;
         }
     }

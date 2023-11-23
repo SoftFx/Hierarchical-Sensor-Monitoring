@@ -19,6 +19,8 @@ namespace HSMDataCollector.DefaultSensors.Diagnostic
                 _queuesInfo.TryAdd(queueName, value);
             else
                 _queuesInfo[queueName] += value;
+
+            AddValue(value);
         }
 
 
@@ -31,6 +33,13 @@ namespace HSMDataCollector.DefaultSensors.Diagnostic
             return buildedValue;
         }
 
+        protected override void BuildNewBar()
+        {
+            base.BuildNewBar();
+
+            _queuesInfo.Clear();
+        }
+
 
         private string GetQueueStats()
         {
@@ -39,8 +48,6 @@ namespace HSMDataCollector.DefaultSensors.Diagnostic
             foreach (var pair in _queuesInfo)
                 if (pair.Value > 0)
                     sb.AppendLine($"{pair.Key}: {pair.Value}");
-
-            _queuesInfo.Clear();
 
             return sb.ToString();
         }
