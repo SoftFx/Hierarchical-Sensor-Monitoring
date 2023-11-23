@@ -7,7 +7,12 @@ namespace HSMCommon.Collections
     public sealed class CDict<T> : CDictBase<string, T> where T : new() { }
 
 
-    public sealed class CGuidDict<T> : CDictBase<Guid, T> where T : new() { }
+    public sealed class CGuidDict<T> : CDictBase<Guid, T> where T : new()
+    {
+        public CGuidDict() : base() { }
+
+        public CGuidDict(Dictionary<Guid, T> dict) : base(dict) { }
+    }
 
 
     public abstract class CDictBase<T, U> : ConcurrentDictionary<T, U> where U : new()

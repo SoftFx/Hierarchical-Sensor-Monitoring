@@ -17,8 +17,8 @@ namespace HSMServer.Model.TreeViewModel
     public sealed class TreeViewModel
     {
         private readonly IFolderManager _folderManager;
-        private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
+        private readonly ITreeValuesCache _cache;
 
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
@@ -107,7 +107,7 @@ namespace HSMServer.Model.TreeViewModel
 
             if (sensor.Path.Contains(".computer"))
                 return sensorId;
-            
+
             var name = isStatusService ? "Service status" : "Service alive";
 
             var splittedPath = sensor.FullPath.Split('/');

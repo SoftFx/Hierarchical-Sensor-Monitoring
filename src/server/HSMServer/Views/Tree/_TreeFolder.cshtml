@@ -33,6 +33,6 @@
 
     @foreach (var child in Model.Products)
     {
-        <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
+        <ul>@await Html.PartialAsync("~/Views/Tree/_TreeNode.cshtml", child)</ul>
     }
 </li>

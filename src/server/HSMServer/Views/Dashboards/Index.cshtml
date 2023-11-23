@@ -1,0 +1,86 @@
+﻿@using HSMServer.Controllers
+@using HSMServer.Model.Dashboards
+
+@model List<DashboardViewModel>
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    const string separator = ",";
+    var dashboards = string.Join(separator, Model.Select(d => d.Id));
+
+    ViewData["Title"] = "Dashboards";
+}
+
+
+<div class="container">
+    <div class="flex-grow-1 m-2">
+        <div class="d-flex justify-content-between my-2">
+            <h5 class="m-0">Dashboards</h5>
+
+            <div class='d-flex col-md-auto'>
+                <a class="icon-link" method="GET" asp-action="@nameof(DashboardsController.CreateDashboard)">
+                    <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add dashboard
+                </a>
+            </div>
+        </div>
+
+        @foreach (var dashboard in Model)
+        {
+            <div id="@dashboard.Id" class="d-flex flex-row align-items-center">
+                <div class="card mb-2 w-100" onclick="javascript:editDashboard('@dashboard.Id')" style="cursor:pointer;">
+                    <div class="card-body py-2">
+                        <div style="font-weight: bold;">@dashboard.Name</div>
+                        <div id="markdown_description_@dashboard.Id">@dashboard.Description</div>
+                    </div>
+                </div>
+
+                <div>
+                    <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                        <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                        <a id="edit_@dashboard.Id" class="dropdown-item text-decoration-none fw-normal button-link"
+                           asp-action="@nameof(DashboardsController.EditDashboard)" asp-route-dashboardId="@dashboard.Id">
+                           View/Edit
+                       </a>
+                        <a class="dropdown-item text-decoration-none fw-normal button-link" id="remove_@dashboard.Id" name="@dashboard.Name">Remove</a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+
+<script>
+    $(document).ready(() => {
+        '@dashboards'.split('@separator').forEach((id) => replaceHtmlToMarkdown(`markdown_description_${id}`));
+    });
+
+    function editDashboard(id) {
+        document.getElementById(`edit_${id}`).click();
+    }
+    
+    $('[id^=remove_]').on('click', function () {
+        let id = this.id.substring("remove_".length, this.id.length);
+        let name = this.name;
+        showConfirmationModal(
+            `Removing '${name}' dashboard`,
+            `Do you really want to remove selected dashboard <strong>${name}</strong>?`,
+            function () {
+                $.ajax({
+                type: 'DELETE',
+                url: window.location.pathname + `/${id}`,
+                cache: false,
+                async: true,
+                }).done(function (){
+                    $(`#${id}`).remove();
+                })
+                .fail(function (data){
+                    showToast(data.responseText)
+                })
+            }
+        );
+    });
+</script>

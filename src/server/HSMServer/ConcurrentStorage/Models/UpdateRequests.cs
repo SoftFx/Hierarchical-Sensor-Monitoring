@@ -8,4 +8,10 @@ namespace HSMServer.ConcurrentStorage
 
         string Name { get; }
     }
+
+
+    public abstract record BaseUpdateRequest : BaseRequest, IUpdateRequest
+    {
+        public required Guid Id { get; init; }
+    }
 }

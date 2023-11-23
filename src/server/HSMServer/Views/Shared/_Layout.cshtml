@@ -38,6 +38,12 @@
                                         </li>
 
                                         <li class="nav-item">
+                                            <a class="nav-link" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.DashboardsController)">
+                                                Dashboards
+                                            </a>
+                                        </li>
+
+                                        <li class="nav-item">
                                             <a class="nav-link" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ProductController)">
                                                 Products
                                             </a>
@@ -158,3 +164,4 @@
 </html>
 
 @await Html.PartialAsync("_ToastTemplate")
+@await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")

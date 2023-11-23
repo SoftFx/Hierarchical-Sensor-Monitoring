@@ -191,5 +191,7 @@ namespace HSMServer.Model.Folders
 
             return new TimeIntervalViewModel(entity, predefinedIntervals);
         }
+
+        public void Dispose() { }
     }
 }

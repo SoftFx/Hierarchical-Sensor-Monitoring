@@ -1,3 +1,4 @@
+using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB.Extensions;
 using LevelDB;
 using NLog;
@@ -8,7 +9,7 @@ using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
 {
-    public class LevelDBDatabaseAdapter : IDisposable
+    public class LevelDBDatabaseAdapter : IEntityDatabase, IDisposable
     {
         private const int OpenDbMaxAttempts = 10;
 

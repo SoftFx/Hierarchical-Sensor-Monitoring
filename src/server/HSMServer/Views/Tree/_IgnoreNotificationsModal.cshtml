@@ -77,8 +77,11 @@
             async: true
         }).done(function () {
             hideIgnoreNotificationsModal();
-            updateSelectedNodeData();
             updateTreeTimer();
+
+            if (window.hasOwnProperty('updateSelectedNodeData')) {
+                updateSelectedNodeData();
+            }
         });
     });
 
