@@ -16,6 +16,7 @@ namespace HSMDataCollector.SyncQueue
         public ICommandQueue Commands { get; }
 
 
+        public event Action<PackageSendingInfo> PackageSendingInfo;
         public event Action<string, int> PackageValuesCountInfo;
         public event Action<string, int> OverflowInfo;
 
@@ -30,6 +31,8 @@ namespace HSMDataCollector.SyncQueue
         public void Init() => _queueList.ForEach(q => q.Init());
 
         public void Stop() => _queueList.ForEach(q => q.Stop());
+
+        public void ThrowPackageSensingInfo(PackageSendingInfo info) => PackageSendingInfo?.Invoke(info);
 
         public void Dispose()
         {
@@ -51,6 +54,7 @@ namespace HSMDataCollector.SyncQueue
 
             return queue;
         }
+
 
         private void ThrowOverflowInfo(string queue, int valuesCnt) => OverflowInfo?.Invoke(queue, valuesCnt);
 

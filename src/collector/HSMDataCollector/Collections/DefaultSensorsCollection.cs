@@ -16,6 +16,7 @@ namespace HSMDataCollector.DefaultSensors
         protected readonly PrototypesCollection _prototype;
 
 
+        private PackageContentSizeSensor _packageSizeCommon;
         private PackageDataCountSensor _packageDataCountSensor;
         private QueueOverflowSensor _queueOverflowSensor;
 
@@ -97,6 +98,18 @@ namespace HSMDataCollector.DefaultSensors
             return Register(_packageDataCountSensor);
         }
 
+
+        protected DefaultSensorsCollection AddPackageSizeCommon(BarSensorOptions options)
+        {
+            if (_packageSizeCommon != null)
+                return this;
+
+            _packageSizeCommon = new PackageContentSizeSensor(_prototype.PackageContentSize.Get(options));
+
+            _storage.QueueManager.PackageSendingInfo += _packageSizeCommon.AddValue;
+
+            return Register(_packageSizeCommon);
+        }
 
         #endregion
 

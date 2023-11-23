@@ -72,7 +72,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             return ToWindows(new WindowsActiveTimeDisk(_prototype.WindowsActiveTimeDisk.Get(options)));
         }
-        
+
         public IWindowsCollection AddDiskQueueLength(DiskBarSensorOptions options)
         {
             return ToWindows(new WindowsDiskQueueLength(_prototype.WindowsDiskQueueLength.Get(options)));
@@ -101,7 +101,7 @@ namespace HSMDataCollector.DefaultSensors
 
             return this;
         }
-        
+
         public IWindowsCollection AddDisksQueueLength(DiskBarSensorOptions options = null)
         {
             foreach (var diskOptions in _prototype.WindowsDiskQueueLength.GetAllDisksOptions(options))
@@ -163,17 +163,14 @@ namespace HSMDataCollector.DefaultSensors
             throw new System.NotImplementedException();
         }
 
-        public IWindowsCollection AddQueuePackageContentSize(BarSensorOptions options = null)
-        {
-            throw new System.NotImplementedException();
-        }
+        public IWindowsCollection AddQueuePackageContentSize(BarSensorOptions options = null) => (IWindowsCollection)AddPackageSizeCommon(options);
 
         public IWindowsCollection AddQueuePackageValuesCount(BarSensorOptions options = null) => (IWindowsCollection)AddPackageValuesCountCommon(options);
 
         public IWindowsCollection AddQueueOverflow(BarSensorOptions options = null) => (IWindowsCollection)AddQueueOverflowCommon(options);
 
         public IWindowsCollection AddAllQueueDiagnosticSensors(BarSensorOptions options = null) =>
-            AddQueueOverflow(options).AddQueuePackageValuesCount(options);
+            AddQueueOverflow(options).AddQueuePackageValuesCount(options).AddQueuePackageContentSize(options);
 
         #endregion
 

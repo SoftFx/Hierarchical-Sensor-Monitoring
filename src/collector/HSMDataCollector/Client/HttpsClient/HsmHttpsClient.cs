@@ -16,6 +16,7 @@ namespace HSMDataCollector.Client
     internal sealed class HsmHttpsClient : IDisposable
     {
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
+        private readonly IQueueManager _queueManager;
         private readonly ILoggerManager _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
@@ -29,6 +30,7 @@ namespace HSMDataCollector.Client
         internal HsmHttpsClient(CollectorOptions options, IQueueManager queue, ILoggerManager logger)
         {
             _endpoints = new Endpoints(options);
+            _queueManager = queue;
             _logger = logger;
 
             ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, error) => true;
@@ -84,12 +86,14 @@ namespace HSMDataCollector.Client
             _logger.Debug($"{nameof(RequestToServer)}: {json}");
 
             var data = new StringContent(json, Encoding.UTF8, "application/json");
-            var res = await _client.PostAsync(uri, data, _tokenSource.Token);
+            var response = await _client.PostAsync(uri, data, _tokenSource.Token);
 
-            if (!res.IsSuccessStatusCode)
-                _logger.Error($"Failed to send data. StatusCode={res.StatusCode}. Data={json}.");
+            _queueManager.ThrowPackageSensingInfo(new PackageSendingInfo(json.Length, response));
 
-            return res;
+            if (!response.IsSuccessStatusCode)
+                _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
+
+            return response;
         }
     }
 }
