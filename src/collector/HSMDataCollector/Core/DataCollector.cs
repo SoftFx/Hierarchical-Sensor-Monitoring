@@ -175,8 +175,6 @@ namespace HSMDataCollector.Core
                 if (!Status.IsRunning())
                     return;
 
-                _queueManager.Stop();
-
                 ChangeStatus(CollectorStatus.Stopping);
 
                 await Task.WhenAll(_sensorsStorage.Stop(), customStartingTask);
@@ -188,6 +186,10 @@ namespace HSMDataCollector.Core
                 _logger.Error(ex);
 
                 StopSensors(ex.Message);
+            }
+            finally
+            {
+                _queueManager.Stop();
             }
         }
 
@@ -204,6 +206,8 @@ namespace HSMDataCollector.Core
 
             ToRunning -= ToStartingCollector;
             ToStopped -= ToStoppedCollector;
+
+            CurrentCollection?.Dispose();
 
             _queueManager.Dispose();
             _hsmClient.Dispose();
@@ -255,17 +259,11 @@ namespace HSMDataCollector.Core
         {
             _queueManager.Init();
 
-            CurrentCollection.ProductVersion?.StartInfo();
-            CurrentCollection.CollectorVersion?.StartInfo();
-
             _ = _sensorsStorage.Start();
         }
 
         private void ToStoppedCollector()
         {
-            CurrentCollection.ProductVersion?.StopInfo();
-            CurrentCollection.CollectorVersion?.StopInfo();
-
             _queueManager.Stop();
         }
 

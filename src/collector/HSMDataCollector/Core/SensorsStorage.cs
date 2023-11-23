@@ -15,16 +15,20 @@ namespace HSMDataCollector.Core
 {
     internal sealed class SensorsStorage : ConcurrentDictionary<string, SensorBase>, IDisposable
     {
-        private readonly IQueueManager _queueManager;
         private readonly IDataCollector _collector;
-        private readonly ICollectorLogger _logger;
 
 
-        internal SensorsStorage(IDataCollector collector, IQueueManager queue, ICollectorLogger logger)
+        internal IQueueManager QueueManager { get; }
+
+        internal ILoggerManager Logger { get; }
+
+
+        internal SensorsStorage(IDataCollector collector, IQueueManager queue, ILoggerManager logger)
         {
             _collector = collector;
-            _queueManager = queue;
-            _logger = logger;
+
+            QueueManager = queue;
+            Logger = logger;
         }
 
 
@@ -32,8 +36,8 @@ namespace HSMDataCollector.Core
         {
             foreach (var value in Values)
             {
-                value.SensorCommandRequest -= _queueManager.Commands.CallServer;
-                value.ReceiveSensorValue -= _queueManager.Data.Push;
+                value.SensorCommandRequest -= QueueManager.Commands.CallServer;
+                value.ReceiveSensorValue -= QueueManager.Data.Push;
                 value.ExceptionThrowing -= WriteSensorException;
 
                 value.Dispose();
@@ -68,6 +72,7 @@ namespace HSMDataCollector.Core
             return (DoubleBarPublicSensor)Register(new DoubleBarPublicSensor(options));
         }
 
+
         internal SensorBase Register(SensorBase sensor)
         {
             var path = sensor.SensorPath;
@@ -90,9 +95,9 @@ namespace HSMDataCollector.Core
             var path = sensor.SensorPath;
 
             if (!await AddSensor(sensor).Init())
-                _logger.Error($"Failed to init {path}");
+                Logger.Error($"Failed to init {path}");
             else if (!await sensor.Start())
-                _logger.Error($"Failed to start {path}");
+                Logger.Error($"Failed to start {path}");
 
             return sensor;
         }
@@ -103,11 +108,11 @@ namespace HSMDataCollector.Core
 
             if (TryAdd(path, sensor))
             {
-                sensor.SensorCommandRequest += _queueManager.Commands.CallServer;
-                sensor.ReceiveSensorValue += _queueManager.Data.Push;
+                sensor.SensorCommandRequest += QueueManager.Commands.CallServer;
+                sensor.ReceiveSensorValue += QueueManager.Data.Push;
                 sensor.ExceptionThrowing += WriteSensorException;
 
-                _logger.Info($"New sensor has been added {path}");
+                Logger.Info($"New sensor has been added {path}");
 
                 return sensor;
             }
@@ -125,6 +130,6 @@ namespace HSMDataCollector.Core
             return options;
         }
 
-        private void WriteSensorException(string sensorPath, Exception ex) => _logger.Error($"Sensor: {sensorPath}, {ex}");
+        private void WriteSensorException(string sensorPath, Exception ex) => Logger.Error($"Sensor: {sensorPath}, {ex}");
     }
 }

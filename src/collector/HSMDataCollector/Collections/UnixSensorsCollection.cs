@@ -78,7 +78,28 @@ namespace HSMDataCollector.DefaultSensors
 
         public IUnixCollection AddCollectorVersion() => (IUnixCollection)AddCollectorVersionCommon();
 
+        public IUnixCollection AddCollectorErrors() => (IUnixCollection)AddCollectorErrorsCommon();
+
         public IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options) => (IUnixCollection)AddFullCollectorMonitoringCommon(options);
+
+        #endregion
+
+
+        #region Diagnostic
+
+        public IUnixCollection AddQueuePackageProcessTime(BarSensorOptions options = null)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        public IUnixCollection AddQueuePackageContentSize(InstantSensorOptions options = null) => (IUnixCollection)AddPackageSizeCommon(options);
+
+        public IUnixCollection AddQueuePackageValuesCount(BarSensorOptions options = null) => (IUnixCollection)AddPackageValuesCountCommon(options);
+
+        public IUnixCollection AddQueueOverflow(BarSensorOptions options = null) => (IUnixCollection)AddQueueOverflowCommon(options);
+
+        public IUnixCollection AddAllQueueDiagnosticSensors(InstantSensorOptions instantOptions = null, BarSensorOptions barOptions = null) =>
+            AddQueueOverflow(barOptions).AddQueuePackageValuesCount(barOptions).AddQueuePackageContentSize(instantOptions);
 
         #endregion
 
