@@ -80,8 +80,8 @@ namespace HSMServer.ApiObjectsConverters
             { new(nameof(IntBarSensorValue.Min)), ExportOptions.Simple },
             { new(nameof(IntBarSensorValue.Mean)), ExportOptions.Simple },
             { new(nameof(IntBarSensorValue.Max)), ExportOptions.Simple },
-            { new(nameof(IntBarSensorValue.Count)), ExportOptions.Simple },
             { new("Last value", nameof(IntBarSensorValue.LastValue)), ExportOptions.Simple },
+            { new(nameof(IntBarSensorValue.Count)), ExportOptions.Simple },
             { new(nameof(SensorValueBase.Status)), ExportOptions.Simple },
             { new(nameof(SensorValueBase.Comment)), ExportOptions.Simple },
         };
