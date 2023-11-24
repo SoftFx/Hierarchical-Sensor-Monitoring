@@ -1,0 +1,53 @@
+﻿@using System.Text.Json
+@using HSMServer.Constants
+@using HSMServer.Controllers
+
+@model HSMServer.Model.Dashboards.PanelViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var jsonOptions = new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}; 
+}
+
+<div id="@Model.Id" class="panel resize-draggable">
+    <div class="d-flex flex-column">
+        <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1 name-draggable">
+            <div class="d-inline-block">
+                <span class="fw-bold d-flex" id="panel_name">@Model.Name</span>
+                <span class="fw-lighter" id="panel_description" style="color: grey">@Model.Description</span>
+            </div>
+            <div>
+                <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                    <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                    <a id="toggle_@Model.Id" class="toggle-legend dropdown-item text-decoration-none fw-normal button-link">Toggle legends</a>
+                    <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
+                    <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+                </div>
+            </div>
+        </div>
+
+        <div id="panelChart_@Model.Id"></div>
+    </div>
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
+        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
+
+        initMultyichartCordinates(settings, values, '@Model.Id').then(
+            (data) => initMultichart('panelChart_@Model.Id', Number((settings.height * $('#dashboardPanels').height()).toFixed(5)), settings.showLegend).then(
+                        (data) => {
+                                values.forEach(function (x) {
+                                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')
+                                })
+                            },
+                        (error) => showToast(error)
+            )
+        )
+    })
+</script>

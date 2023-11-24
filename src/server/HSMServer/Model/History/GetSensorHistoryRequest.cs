@@ -6,7 +6,7 @@ using HSMSensorDataObjects.HistoryRequests;
 
 namespace HSMServer.Model.Model.History
 {
-    public record GetSensorHistoryModel
+    public sealed record GetSensorHistoryRequest
     {
         [JsonIgnore]
         internal int Count { get; set; } = SensorHistoryController.MaxHistoryCount;

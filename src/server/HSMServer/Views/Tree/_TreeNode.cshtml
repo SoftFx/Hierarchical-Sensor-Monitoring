@@ -45,7 +45,7 @@
 
     @foreach (var child in Model.RenderedNodes)
     {
-        <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
+        <ul>@await Html.PartialAsync("~/Views/Tree/_TreeNode.cshtml", child)</ul>
     }
 
     @if (Model.RenderedSensors.Count > 0)
@@ -53,7 +53,7 @@
         <ul>
             @foreach (var sensor in Model.RenderedSensors)
             {
-                @await Html.PartialAsync("_TreeSensor", sensor)
+                @await Html.PartialAsync("~/Views/Tree/_TreeSensor.cshtml", sensor)
             }
         </ul>
     }

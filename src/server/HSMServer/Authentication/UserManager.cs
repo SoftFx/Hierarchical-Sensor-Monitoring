@@ -42,7 +42,7 @@ namespace HSMServer.Authentication
         }
 
 
-        public void Dispose()
+        public override void Dispose()
         {
             _treeValuesCache.ChangeProductEvent -= ChangeProductEventHandler;
         }

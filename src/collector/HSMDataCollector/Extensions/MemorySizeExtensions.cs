@@ -8,6 +8,9 @@
 
         internal static int BytesToMegabytes(this double value) => (int)(value / ByteToMbDivisor);
 
+        internal static double BytesToMegabytesDouble(this double value) => value / ByteToMbDivisor;
+
+
         internal static int BytesToMegabytes(this long value) => (int)(value / ByteToMbDivisor);
 
         internal static int KilobytesToMegabytes(this long value) => (int)(value / KbToMbDivisor);

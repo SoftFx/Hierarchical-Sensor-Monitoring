@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Collections;
 using HSMCommon.Constants;
+using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -17,6 +18,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Core.Cache
 {
@@ -508,6 +510,9 @@ namespace HSMServer.Core.Cache
                    : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.Options);
         }
 
+        private ValueTask<List<BaseValue>> GetSensorValues(Guid sensorId, SensorHistoryRequest request) =>
+            GetSensorValuesPage(sensorId, request.From, request.To, request.Count, request.Options).Flatten();
+
         public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, RequestOptions options = default)
         {
             bool IsNotTimout(BaseValue value) => !value.IsTimeout;
@@ -673,6 +678,7 @@ namespace HSMServer.Core.Cache
             sensor.Policies.Uploaded += UpdatePolicy;
 
             sensor.UpdateFromParentSettings += _database.UpdateSensor;
+            sensor.ReadDataFromDb += GetSensorValues;
 
             AddBaseNodeSubscription(sensor);
         }
@@ -686,6 +692,7 @@ namespace HSMServer.Core.Cache
             sensor.Policies.Uploaded -= UpdatePolicy;
 
             sensor.UpdateFromParentSettings -= _database.UpdateSensor;
+            sensor.ReadDataFromDb -= GetSensorValues;
 
             RemoveBaseNodeSubscription(sensor);
         }

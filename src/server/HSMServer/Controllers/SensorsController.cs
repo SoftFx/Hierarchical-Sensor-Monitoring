@@ -1,4 +1,5 @@
-﻿using HSMSensorDataObjects;
+﻿using HSMCommon.Extensions;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;

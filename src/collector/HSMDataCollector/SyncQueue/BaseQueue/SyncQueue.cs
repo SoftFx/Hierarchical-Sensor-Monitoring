@@ -11,6 +11,14 @@ namespace HSMDataCollector.SyncQueue
         internal bool IsStopped => _sendTimer == null;
 
 
+        protected abstract string QueueName { get; }
+
+
+        public event Action<string, int> SendValuesCnt;
+
+        public event Action<string, int> OverflowCnt;
+
+
         protected SyncQueue(TimeSpan collectPeriod)
         {
             _packageCollectPeriod = collectPeriod;
@@ -35,5 +43,18 @@ namespace HSMDataCollector.SyncQueue
         }
 
         public void Dispose() => Stop();
+
+
+        protected void ThrowSendValuesCount(int count)
+        {
+            if (count > 0)
+                SendValuesCnt?.Invoke(QueueName, count);
+        }
+
+        protected void ThrowQueueOverflowCount(int count)
+        {
+            if (count > 0)
+                OverflowCnt?.Invoke(QueueName, count);
+        }
     }
 }

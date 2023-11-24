@@ -1,4 +1,6 @@
-﻿window.hiddenColumns = {
+﻿import {currentPanel} from "./dashboard";
+
+window.hiddenColumns = {
     id: undefined,
     
     showText: "Show all columns",
@@ -86,5 +88,14 @@ window.replaceHtmlToMarkdown = function (elementId) {
     if (innerHtml !== undefined) {
         element.empty().append(markdownToHTML(innerHtml));
         element.children().last().css('margin-bottom', 0);
+    }
+}
+
+window.replaceHtmlToMarkdownJquery = function (jqueryElement) {
+    let innerHtml = jqueryElement.html();
+
+    if (innerHtml !== undefined) {
+        jqueryElement.empty().append(markdownToHTML(innerHtml));
+        jqueryElement.children().last().css('margin-bottom', 0);
     }
 }

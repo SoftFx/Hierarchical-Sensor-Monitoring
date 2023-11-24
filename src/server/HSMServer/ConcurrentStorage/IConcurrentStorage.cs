@@ -5,7 +5,13 @@ using System.Threading.Tasks;
 
 namespace HSMServer.ConcurrentStorage
 {
-    public interface IConcurrentStorage<ModelType, EntityType, UpdateType> : IDisposable
+    public interface IAsyncStorage : IDisposable
+    {
+        Task Initialize();
+    }
+
+
+    public interface IConcurrentStorage<ModelType, EntityType, UpdateType> : IAsyncStorage
         where ModelType : class, IServerModel<EntityType, UpdateType>
         where UpdateType : IUpdateRequest
     {
@@ -31,7 +37,5 @@ namespace HSMServer.ConcurrentStorage
         bool TryGetValueById(Guid? id, out ModelType model);
 
         List<ModelType> GetValues();
-
-        Task Initialize();
     }
 }

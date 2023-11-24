@@ -154,12 +154,12 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options)
         {
-            return ToWindows(new WindowsLastUpdate(_prototype.WindowsLastRestart.Get(options)));
+            return ToWindows(new WindowsLastUpdate(_prototype.WindowsLastUpdate.Get(options)));
         }
 
         public IWindowsCollection AddWindowsLastRestart(WindowsInfoSensorOptions options)
         {
-            return ToWindows(new WindowsLastRestart(_prototype.WindowsLastUpdate.Get(options)));
+            return ToWindows(new WindowsLastRestart(_prototype.WindowsLastRestart.Get(options)));
         }
 
         public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions, InstantSensorOptions logsOptions) =>
@@ -180,7 +180,28 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddCollectorVersion() => (IWindowsCollection)AddCollectorVersionCommon();
 
+        public IWindowsCollection AddCollectorErrors() => (IWindowsCollection)AddCollectorErrorsCommon();
+
         public IWindowsCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options) => (IWindowsCollection)AddFullCollectorMonitoringCommon(options);
+
+        #endregion
+
+
+        #region Diagnostic
+
+        public IWindowsCollection AddQueuePackageProcessTime(BarSensorOptions options = null)
+        {
+            throw new System.NotImplementedException();
+        }
+
+        public IWindowsCollection AddQueuePackageContentSize(InstantSensorOptions options = null) => (IWindowsCollection)AddPackageSizeCommon(options);
+
+        public IWindowsCollection AddQueuePackageValuesCount(BarSensorOptions options = null) => (IWindowsCollection)AddPackageValuesCountCommon(options);
+
+        public IWindowsCollection AddQueueOverflow(BarSensorOptions options = null) => (IWindowsCollection)AddQueueOverflowCommon(options);
+
+        public IWindowsCollection AddAllQueueDiagnosticSensors(InstantSensorOptions instantOptions = null, BarSensorOptions barOptions = null) =>
+            AddQueueOverflow(barOptions).AddQueuePackageValuesCount(barOptions).AddQueuePackageContentSize(instantOptions);
 
         #endregion
 
