@@ -99,7 +99,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected DefaultSensorsCollection AddPackageSizeCommon(InstantSensorOptions options)
+        protected DefaultSensorsCollection AddPackageSizeCommon(BarSensorOptions options)
         {
             if (_packageSizeCommon != null)
                 return this;

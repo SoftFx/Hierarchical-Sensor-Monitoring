@@ -94,7 +94,7 @@ namespace HSMDataCollector.Prototypes.Collections
     }
 
 
-    internal sealed class PackageContentSizePrototype : QueueDiagnosticInstantPrototype
+    internal sealed class PackageContentSizePrototype : QueueDiagnosticBarPrototype
     {
         protected override string SensorName => "Package content size";
 
