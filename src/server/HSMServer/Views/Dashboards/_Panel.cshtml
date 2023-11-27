@@ -13,15 +13,15 @@
 <div id="@Model.Id" class="panel resize-draggable">
     <div class="d-flex flex-column">
         <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1 name-draggable">
-            <div class="d-inline-block">
-                <span class="fw-bold d-flex" id="panel_name">@Model.Name</span>
+            <div class="d-inline-block overflow-hidden">
+                <span class="fw-bold d-flex" title="@Model.Name" id="panel_name" style="white-space: nowrap">@Model.Name</span>
                 @if (string.IsNullOrEmpty(Model.Description))
                 {
                     <div style="height: 1.5rem"></div>
                 }
                 else
                 {
-                    <span class="fw-lighter" id="panel_description" style="color: grey">@Model.Description</span>
+                    <span class="fw-lighter d-flex" id="panel_description" title="@Model.Description" style="color: grey; white-space: nowrap;">@Model.Description</span>
                 }
             </div>
             <div>
@@ -36,7 +36,7 @@
             </div>
         </div>
     </div>
-     <div id="panelChart_@Model.Id"></div>
+    <div id="panelChart_@Model.Id"></div>
 </div>
 
 
