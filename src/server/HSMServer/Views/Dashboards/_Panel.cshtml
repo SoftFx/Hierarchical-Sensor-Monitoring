@@ -52,6 +52,7 @@
                                 values.forEach(function (x) {
                                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')
                                 })
+                                replaceHtmlToMarkdown('panel_description')
                             },
                         (error) => showToast(error)
             )
