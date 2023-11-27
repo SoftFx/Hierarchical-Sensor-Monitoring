@@ -29,9 +29,9 @@ namespace HSMServer.Dashboards
 
         internal Dashboard(DashboardEntity entity, Func<Guid, BaseSensorModel> getSensorModel) : base(entity)
         {
-            Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), v => new Panel(v, this)));
-
             GetSensorModel += getSensorModel;
+
+            Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), v => new Panel(v, this)));
             DataPeriod = GetPeriod(entity.DataPeriod);
         }
 
