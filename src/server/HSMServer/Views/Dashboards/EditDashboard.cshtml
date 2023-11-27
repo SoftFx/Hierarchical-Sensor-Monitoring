@@ -35,12 +35,12 @@
                 <input class="d-none" asp-for="Id" value="@Model.Id"/>
 
                 <div class="d-flex justify-content-between mb-1">
-                    <input id="form_name" class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
+                    <input id="form_name" maxlength="30" class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
 
-                <textarea id='form_description' class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
+                <textarea id='form_description' maxlength="250" class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
             </form>
         </div>
 
@@ -171,6 +171,8 @@
                 replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
                 disableEdit();
             }
+        }).fail(function (response){
+            showToast(response.responseText)
         })
     })
 
