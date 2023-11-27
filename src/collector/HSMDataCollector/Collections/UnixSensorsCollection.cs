@@ -87,19 +87,16 @@ namespace HSMDataCollector.DefaultSensors
 
         #region Diagnostic
 
-        public IUnixCollection AddQueuePackageProcessTime(BarSensorOptions options = null)
-        {
-            throw new System.NotImplementedException();
-        }
-
-        public IUnixCollection AddQueuePackageContentSize(BarSensorOptions options = null) => (IUnixCollection)AddPackageSizeCommon(options);
+        public IUnixCollection AddQueuePackageProcessTime(BarSensorOptions options = null) => (IUnixCollection)AddPackageProcessTimeCommon(options);
 
         public IUnixCollection AddQueuePackageValuesCount(BarSensorOptions options = null) => (IUnixCollection)AddPackageValuesCountCommon(options);
 
+        public IUnixCollection AddQueuePackageContentSize(BarSensorOptions options = null) => (IUnixCollection)AddPackageSizeCommon(options);
+
         public IUnixCollection AddQueueOverflow(BarSensorOptions options = null) => (IUnixCollection)AddQueueOverflowCommon(options);
 
-        public IUnixCollection AddAllQueueDiagnosticSensors(BarSensorOptions barOptions = null) =>
-            AddQueueOverflow(barOptions).AddQueuePackageValuesCount(barOptions).AddQueuePackageContentSize(barOptions);
+        public IUnixCollection AddAllQueueDiagnosticSensors(BarSensorOptions options = null) =>
+            AddQueueOverflow(options).AddQueuePackageValuesCount(options).AddQueuePackageContentSize(options).AddQueuePackageProcessTime(options);
 
         #endregion
 

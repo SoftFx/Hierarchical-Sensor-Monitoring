@@ -1,4 +1,5 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
+﻿using HSMDataCollector.SyncQueue.BaseQueue;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 
 namespace HSMDataCollector.SyncQueue
@@ -10,9 +11,9 @@ namespace HSMDataCollector.SyncQueue
         ICommandQueue Commands { get; }
 
 
-        event Action<PackageSendingInfo> PackageSendingInfo;
-        event Action<string, int> PackageValuesCountInfo;
-        event Action<string, int> OverflowInfo;
+        event Action<PackageSendingInfo> PackageSendingInfoEvent;
+        event Action<string, PackageInfo> PackageInfoEvent;
+        event Action<string, int> OverflowInfoEvent;
 
 
         void Init();

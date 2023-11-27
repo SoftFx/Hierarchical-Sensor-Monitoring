@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMDataCollector.SyncQueue.BaseQueue;
+using System;
 using System.Threading;
 
 namespace HSMDataCollector.SyncQueue
@@ -14,9 +15,9 @@ namespace HSMDataCollector.SyncQueue
         protected abstract string QueueName { get; }
 
 
-        public event Action<string, int> SendValuesCnt;
+        public event Action<string, PackageInfo> PackageInfoEvent;
 
-        public event Action<string, int> OverflowCnt;
+        public event Action<string, int> OverflowCntEvent;
 
 
         protected SyncQueue(TimeSpan collectPeriod)
@@ -45,16 +46,16 @@ namespace HSMDataCollector.SyncQueue
         public void Dispose() => Stop();
 
 
-        protected void ThrowSendValuesCount(int count)
+        protected void ThrowPackageInfo(PackageInfo info)
         {
-            if (count > 0)
-                SendValuesCnt?.Invoke(QueueName, count);
+            if (info.ValuesCount > 0)
+                PackageInfoEvent?.Invoke(QueueName, info);
         }
 
         protected void ThrowQueueOverflowCount(int count)
         {
             if (count > 0)
-                OverflowCnt?.Invoke(QueueName, count);
+                OverflowCntEvent?.Invoke(QueueName, count);
         }
     }
 }
