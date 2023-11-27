@@ -216,12 +216,14 @@
     }).on('click', 'a.toggle-legend', function (){
         let id = this.id.substring("toggle_".length, this.id.length);
         let showlegend = !$(`#panelChart_${id}`)[0].layout.showlegend;
+        let toggle = $(this);
         $.ajax({
             type: 'put',
             url: window.location.pathname + `/${id}?showlegend=${showlegend}`
         }).done(function (response){
             Plotly.relayout(`panelChart_${id}`, {showlegend: showlegend}).then(
                 (success) => {
+                    toggle.text(showlegend ? "Hide legends" : "Show legends");
                     showToast(response)
                 },
                 (error) => {
