@@ -42,6 +42,9 @@ namespace HSMServer.Controllers
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public IActionResult SaveDashboardPanel(Guid dashBoardId, Guid panelId, [FromBody] PanelViewModel model)
         {
+            if (string.IsNullOrEmpty(model.Name) || string.IsNullOrWhiteSpace(model.Name))
+                return BadRequest("Invalid Name");
+
             if (model.Name.Length > 30)
                 return BadRequest("Name length is grater than 30 characters");
 
