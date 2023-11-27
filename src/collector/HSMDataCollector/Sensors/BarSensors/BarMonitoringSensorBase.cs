@@ -92,7 +92,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        private void BuildNewBar()
+        protected virtual void BuildNewBar()
         {
             _internalBar = new BarType();
             _internalBar.Init(_barPeriod, _precision);

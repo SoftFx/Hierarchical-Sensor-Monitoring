@@ -76,7 +76,8 @@ namespace HSMServer.BackgroundServices
                                   .AddSystemMonitoringSensors()
                                   .AddWindowsInfoMonitoringSensors()
                                   .AddProductVersion(productInfoOptions)
-                                  .AddCollectorMonitoringSensors();
+                                  .AddCollectorMonitoringSensors()
+                                  .AddAllQueueDiagnosticSensors();
             }
             else
             {
@@ -84,7 +85,8 @@ namespace HSMServer.BackgroundServices
                                .AddDiskMonitoringSensors()
                                .AddSystemMonitoringSensors()
                                .AddProductVersion(productInfoOptions)
-                               .AddCollectorMonitoringSensors();
+                               .AddCollectorMonitoringSensors()
+                               .AddAllQueueDiagnosticSensors();
             }
 
             RequestSizeSensor = RegisterParamSensor<double>(RequestSizePath);

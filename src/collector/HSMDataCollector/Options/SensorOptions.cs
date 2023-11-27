@@ -29,6 +29,8 @@ namespace HSMDataCollector.Options
 
         internal bool IsComputerSensor { get; set; }
 
+        internal bool IsPrioritySensor { get; set; }
+
 
         public SpecialAlertTemplate TtlAlert { get; set; }
 

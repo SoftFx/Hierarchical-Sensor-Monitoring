@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMSensorDataObjects.SensorValueRequests;
+using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.SyncQueue
@@ -15,18 +16,15 @@ namespace HSMDataCollector.SyncQueue
         public ICommandQueue Commands { get; }
 
 
-        internal QueueManager(CollectorOptions options, ICollectorLogger logger) : base()
+        public event Action<PackageSendingInfo> PackageSendingInfo;
+        public event Action<string, int> PackageValuesCountInfo;
+        public event Action<string, int> OverflowInfo;
+
+
+        internal QueueManager(CollectorOptions options, ILoggerManager logger) : base()
         {
             Commands = RegisterQueue(new CommandsQueue(options, logger));
             Data = RegisterQueue(new SensorDataQueue(options));
-        }
-
-
-        private T RegisterQueue<T>(T queue) where T : SyncQueue
-        {
-            _queueList.Add(queue);
-
-            return queue;
         }
 
 
@@ -34,6 +32,32 @@ namespace HSMDataCollector.SyncQueue
 
         public void Stop() => _queueList.ForEach(q => q.Stop());
 
-        public void Dispose() => _queueList.ForEach(q => q.Dispose());
+        public void ThrowPackageSensingInfo(PackageSendingInfo info) => PackageSendingInfo?.Invoke(info);
+
+        public void Dispose()
+        {
+            foreach (var queue in _queueList)
+            {
+                queue.SendValuesCnt -= ThrowPackageValuesCountInfo;
+                queue.OverflowCnt -= ThrowOverflowInfo;
+                queue.Dispose();
+            }
+        }
+
+
+        private T RegisterQueue<T>(T queue) where T : SyncQueue
+        {
+            _queueList.Add(queue);
+
+            queue.SendValuesCnt += ThrowPackageValuesCountInfo;
+            queue.OverflowCnt += ThrowOverflowInfo;
+
+            return queue;
+        }
+
+
+        private void ThrowOverflowInfo(string queue, int valuesCnt) => OverflowInfo?.Invoke(queue, valuesCnt);
+
+        private void ThrowPackageValuesCountInfo(string queue, int valuesCnt) => PackageValuesCountInfo?.Invoke(queue, valuesCnt);
     }
 }

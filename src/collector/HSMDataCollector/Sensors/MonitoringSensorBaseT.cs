@@ -73,7 +73,7 @@ namespace HSMDataCollector.DefaultSensors
                 SendValue(value);
         }
 
-        protected SensorValueBase BuildSensorValue()
+        protected virtual SensorValueBase BuildSensorValue()
         {
             try
             {

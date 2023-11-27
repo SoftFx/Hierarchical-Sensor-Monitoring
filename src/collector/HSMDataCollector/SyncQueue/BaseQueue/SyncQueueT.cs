@@ -42,7 +42,10 @@ namespace HSMDataCollector.SyncQueue
                     Dequeue(_valuesQueue, dataList);
 
                     if (dataList.Count > 0)
+                    {
                         NewValuesEvent?.Invoke(dataList);
+                        ThrowSendValuesCount(dataList.Count);
+                    }
                     else
                         break;
                 }
@@ -69,8 +72,17 @@ namespace HSMDataCollector.SyncQueue
 
             queue.Enqueue(value);
 
+            var overflowCnt = 0;
+
             while (queue.Count > _maxQueueSize)
-                queue.TryDequeue(out _);
+            {
+                if (queue.TryDequeue(out _))
+                    overflowCnt++;
+                else
+                    break;
+            }
+
+            ThrowQueueOverflowCount(overflowCnt);
         }
 
         protected List<T> Dequeue(ConcurrentQueue<T> queue, List<T> dataList)

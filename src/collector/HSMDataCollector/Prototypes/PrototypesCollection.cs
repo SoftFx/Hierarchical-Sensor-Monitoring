@@ -1,5 +1,4 @@
 ﻿using HSMDataCollector.Core;
-using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.Prototypes.Collections;
 using HSMDataCollector.Prototypes.Collections.Disks;
@@ -59,7 +58,10 @@ namespace HSMDataCollector.Options
 
         internal CollectorVersionPrototype CollectorVersion { get; } = new CollectorVersionPrototype();
 
+        internal CollectorErrorsPrototype CollectorErrors { get; } = new CollectorErrorsPrototype();
+
         internal ServiceAlivePrototype CollectorAlive { get; } = new ServiceAlivePrototype();
+
 
 
         internal ProductVersionPrototype ProductVersion { get; } = new ProductVersionPrototype();
@@ -68,6 +70,18 @@ namespace HSMDataCollector.Options
         internal ServiceCommandsPrototype ServiceCommands { get; } = new ServiceCommandsPrototype();
 
         internal ServiceStatusPrototype ServiceStatus { get; } = new ServiceStatusPrototype();
+
+        #endregion
+
+        #region Queue diagnostic info
+
+        internal QueueOverflowPrototype QueueOverflow { get; } = new QueueOverflowPrototype();
+
+        internal PackageContentSizePrototype PackageContentSize { get; } = new PackageContentSizePrototype();
+
+        internal PackageProcessTimePrototype PackageProcessTime { get; } = new PackageProcessTimePrototype();
+
+        internal PackageValuesCountPrototype PackageValuesCount { get; } = new PackageValuesCountPrototype();
 
         #endregion
 
@@ -101,11 +115,17 @@ namespace HSMDataCollector.Options
             WindowsWarningLogsPrototype = Register<WindowsWarningLogsPrototype>();
 
             CollectorVersion = Register<CollectorVersionPrototype>();
+            CollectorErrors = Register<CollectorErrorsPrototype>();
             CollectorAlive = Register<ServiceAlivePrototype>();
 
             ServiceCommands = Register<ServiceCommandsPrototype>();
             ProductVersion = Register<ProductVersionPrototype>();
             ServiceStatus = Register<ServiceStatusPrototype>();
+
+            QueueOverflow = Register<QueueOverflowPrototype>().ApplyOptions(options);
+            PackageValuesCount = Register<PackageValuesCountPrototype>().ApplyOptions(options);
+            PackageProcessTime = Register<PackageProcessTimePrototype>().ApplyOptions(options);
+            PackageContentSize = Register<PackageContentSizePrototype>();
         }
     }
 }

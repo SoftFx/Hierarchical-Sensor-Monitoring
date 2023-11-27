@@ -1,8 +1,9 @@
 ﻿using HSMDataCollector.Options;
+using System;
 
 namespace HSMDataCollector.PublicInterface
 {
-    public interface IWindowsCollection
+    public interface IWindowsCollection : IDisposable
     {
         IWindowsCollection AddProcessCpu(BarSensorOptions options = null);
 
@@ -31,7 +32,7 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddActiveDiskTime(DiskBarSensorOptions options = null);
 
         IWindowsCollection AddActiveDisksTime(DiskBarSensorOptions options = null);
-        
+
         IWindowsCollection AddDiskQueueLength(DiskBarSensorOptions options = null);
 
         IWindowsCollection AddDisksQueueLength(DiskBarSensorOptions options = null);
@@ -58,10 +59,23 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddCollectorVersion();
 
+        IWindowsCollection AddCollectorErrors();
+
         IWindowsCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options = null);
 
 
         IWindowsCollection AddProductVersion(VersionSensorOptions options);
+
+
+        IWindowsCollection AddQueuePackageContentSize(InstantSensorOptions options = null);
+
+        IWindowsCollection AddQueuePackageProcessTime(BarSensorOptions options = null);
+
+        IWindowsCollection AddQueuePackageValuesCount(BarSensorOptions options = null);
+
+        IWindowsCollection AddQueueOverflow(BarSensorOptions options = null);
+
+        IWindowsCollection AddAllQueueDiagnosticSensors(InstantSensorOptions instantOptions = null, BarSensorOptions barOptions = null);
 
 
         IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);

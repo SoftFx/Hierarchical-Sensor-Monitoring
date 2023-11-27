@@ -28,6 +28,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                     DatabaseFolder = databaseFolder,
                     EnvironmentDatabaseName = $"EnvironmentData{number}_{Environment.CurrentManagedThreadId}",
                     SensorValuesDatabaseName = $"SensorValues{number}_{Environment.CurrentManagedThreadId}",
+                    ServerLayoutDatabaseName = $"ServerLayout{number}_{Environment.CurrentManagedThreadId}",
                     JournalValuesDatabaseName = $"JournalValues{number}_{Environment.CurrentManagedThreadId}",
                 });
         }

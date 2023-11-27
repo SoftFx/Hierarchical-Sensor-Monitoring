@@ -53,15 +53,22 @@
         var actions = new List<HtmlString>();
         @foreach (var action in Model.Actions)
         {
-            @if (action.Action == ActionType.SendNotification && action.Chats.Count > 0)
+            @if (action.Action == ActionType.SendNotification)
             {
                 string chats = null;
+                string color = "#0366d6";
+
                 if (action.Chats.Contains(ActionViewModel.AllChatsId))
                     chats = "all chats";
+                else if (action.Chats.Count == 0)
+                {
+                    chats = "(chats are not initialized)";
+                    color = "gray";
+                }
                 else
                     chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch]));
 
-                actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: #0366d6;'>{chats}</span>"));
+                actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: {color};'>{chats}</span>"));
             }
             else if (action.Action == ActionType.ShowIcon)
             {

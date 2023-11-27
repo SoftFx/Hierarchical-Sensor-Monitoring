@@ -92,7 +92,9 @@ public class PanelViewModel
                                                  type != Core.Model.SensorType.Enum &&
                                                  type != Core.Model.SensorType.String &&
                                                  type != Core.Model.SensorType.DoubleBar &&
-                                                 type != Core.Model.SensorType.IntegerBar;
+                                                 type != Core.Model.SensorType.IntegerBar &&
+                                                 type != Core.Model.SensorType.Boolean &&
+                                                 type != Core.Model.SensorType.Version;
 }
 
 public class DatasourceViewModel
