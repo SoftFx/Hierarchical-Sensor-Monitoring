@@ -35,12 +35,12 @@
                 <input class="d-none" asp-for="Id" value="@Model.Id"/>
 
                 <div class="d-flex justify-content-between mb-1">
-                    <input id="form_name" class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
+                    <input id="form_name" maxlength="30" class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
 
-                <textarea id='form_description' class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
+                <textarea id='form_description' maxlength="250" class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
             </form>
         </div>
 
@@ -51,7 +51,7 @@
                 </button>
                 <button id="relayout_two" onclick="relayout(2)" class="btn d-flex ps-1">
                     <img src="~/dist/two-columns.svg" style="width: 1.7rem;height: 2rem"/>
-                </button>`
+                </button>
             </div>
 
 
@@ -90,9 +90,9 @@
      let callback = function(mutationsList, observer) {
          for(let mutation of mutationsList) {
              if (mutation.target.classList.contains('js-plotly-plot') && mutation.type == 'childList'){
-                 let qwe = mutation.target.parentNode.getBoundingClientRect();
-                 if (qwe.bottom > targetNode.getBoundingClientRect().bottom){
-                     change = Math.max(change, qwe.bottom + qwe.height);
+                 let target = mutation.target.parentNode.getBoundingClientRect();
+                 if (target.bottom > targetNode.getBoundingClientRect().bottom){
+                     change = Math.max(change, target.bottom + target.height);
                  }
              }  
          }
@@ -145,7 +145,6 @@
         for (let i of dashboardPanels.children('div')){
             let item = $(i);
             let showlegend = item.find('.js-plotly-plot')[0].layout.showlegend;
-
             panels[i.id] = {
                 width: Number((item.width() / width).toFixed(5)),
                 height: Number((item.height() / height).toFixed(5)),
@@ -172,6 +171,8 @@
                 replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
                 disableEdit();
             }
+        }).fail(function (response){
+            showToast(response.responseText)
         })
     })
 
