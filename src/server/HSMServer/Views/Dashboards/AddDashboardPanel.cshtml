@@ -14,12 +14,12 @@
         <div id="editablePanelSettings" class="my-2">
             <form method="post"  asp-action="@nameof(DashboardsController.SaveDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
                 <div class="d-flex justify-content-between mb-1">
-                    <input class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)"/>
+                    <input class="form-control" maxlength="30" asp-for="Name" placeholder="@nameof(Model.Name)"/>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
 
-                <textarea id='description' class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
+                <textarea id='description' maxlength="250" class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
             </form>
         </div>
     </div>
@@ -44,6 +44,23 @@
                 })
             }
         );
+        
+        $('#editablePanelSettings form').on('submit', function (event){
+            event.preventDefault();
+            event.stopPropagation();
+            let object = {};
+            $(this).serializeArray().forEach((value, key) => object[value.name] = value.value);
+            $.ajax({
+                type: 'post',
+                url: window.pathname,
+                contentType: 'application/json',
+                data: JSON.stringify(object)
+            }).done(function(id, status){
+                window.location.href = `/Dashboards/${id}`;
+            }).fail(function (response){
+                showToast(response.responseText);
+            })
+        })
 
         $('[id^="source"]').on('input', '.form-control-color', function () {
             $(this).attr('value', this.value);

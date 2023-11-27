@@ -40,14 +40,20 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public IActionResult SaveDashboardPanel(Guid dashBoardId, Guid panelId, [FromForm] PanelViewModel model)
+        public IActionResult SaveDashboardPanel(Guid dashBoardId, Guid panelId, [FromBody] PanelViewModel model)
         {
+            if (model.Name.Length > 30)
+                return BadRequest("Name length is grater than 30 characters");
+
+            if (model.Description.Length > 250)
+                return BadRequest("Description length is greater than 100 characters");
+
             _dashboardManager.TryGetValue(dashBoardId, out var dashboard);
             dashboard.Panels.TryGetValue(panelId, out var panel);
             panel?.Update(new PanelUpdate() { Id = panel.Id, Name = model.Name, Description = model.Description });
             _dashboardManager.TryUpdate(dashboard);
 
-            return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id });
+            return Ok(dashboard.Id);
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}/SourceUpdate/{panelId:guid}/{sourceId:guid}")]
