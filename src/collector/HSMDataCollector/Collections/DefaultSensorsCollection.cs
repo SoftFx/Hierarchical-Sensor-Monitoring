@@ -16,8 +16,10 @@ namespace HSMDataCollector.DefaultSensors
         protected readonly PrototypesCollection _prototype;
 
 
-        private PackageContentSizeSensor _packageSizeCommon;
+        private PackageDataAvrProcessTimeSensor _packageProcessTimeSensor;
         private PackageDataCountSensor _packageDataCountSensor;
+        private PackageContentSizeSensor _packageSizeSensor;
+
         private QueueOverflowSensor _queueOverflowSensor;
 
 
@@ -80,7 +82,7 @@ namespace HSMDataCollector.DefaultSensors
 
             _queueOverflowSensor = new QueueOverflowSensor(_prototype.QueueOverflow.Get(options));
 
-            _storage.QueueManager.OverflowInfo += _queueOverflowSensor.AddValue;
+            _storage.QueueManager.OverflowInfoEvent += _queueOverflowSensor.AddValue;
 
             return Register(_queueOverflowSensor);
         }
@@ -93,22 +95,35 @@ namespace HSMDataCollector.DefaultSensors
 
             _packageDataCountSensor = new PackageDataCountSensor(_prototype.PackageValuesCount.Get(options));
 
-            _storage.QueueManager.PackageValuesCountInfo += _packageDataCountSensor.AddValue;
+            _storage.QueueManager.PackageInfoEvent += _packageDataCountSensor.AddValue;
 
             return Register(_packageDataCountSensor);
         }
 
 
-        protected DefaultSensorsCollection AddPackageSizeCommon(InstantSensorOptions options)
+        protected DefaultSensorsCollection AddPackageSizeCommon(BarSensorOptions options)
         {
-            if (_packageSizeCommon != null)
+            if (_packageSizeSensor != null)
                 return this;
 
-            _packageSizeCommon = new PackageContentSizeSensor(_prototype.PackageContentSize.Get(options));
+            _packageSizeSensor = new PackageContentSizeSensor(_prototype.PackageContentSize.Get(options));
 
-            _storage.QueueManager.PackageSendingInfo += _packageSizeCommon.AddValue;
+            _storage.QueueManager.PackageSendingInfoEvent += _packageSizeSensor.AddValue;
 
-            return Register(_packageSizeCommon);
+            return Register(_packageSizeSensor);
+        }
+
+
+        protected DefaultSensorsCollection AddPackageProcessTimeCommon(BarSensorOptions options)
+        {
+            if (_packageProcessTimeSensor != null)
+                return this;
+
+            _packageProcessTimeSensor = new PackageDataAvrProcessTimeSensor(_prototype.PackageProcessTime.Get(options));
+
+            _storage.QueueManager.PackageInfoEvent += _packageProcessTimeSensor.AddValue;
+
+            return Register(_packageProcessTimeSensor);
         }
 
         #endregion
@@ -127,11 +142,14 @@ namespace HSMDataCollector.DefaultSensors
 
         public void Dispose()
         {
-            if (_queueOverflowSensor != null)
-                _storage.QueueManager.OverflowInfo -= _queueOverflowSensor.AddValue;
+            if (_packageProcessTimeSensor != null)
+                _storage.QueueManager.PackageInfoEvent -= _packageProcessTimeSensor.AddValue;
 
             if (_packageDataCountSensor != null)
-                _storage.QueueManager.PackageValuesCountInfo -= _packageDataCountSensor.AddValue;
+                _storage.QueueManager.PackageInfoEvent -= _packageDataCountSensor.AddValue;
+
+            if (_queueOverflowSensor != null)
+                _storage.QueueManager.OverflowInfoEvent -= _queueOverflowSensor.AddValue;
 
             if (CollectorErrors != null)
                 _storage.Logger.ThrowNewError -= CollectorErrors.SendCollectorError;

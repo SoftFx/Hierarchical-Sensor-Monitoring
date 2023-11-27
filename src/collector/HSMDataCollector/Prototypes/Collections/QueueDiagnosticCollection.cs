@@ -87,14 +87,14 @@ namespace HSMDataCollector.Prototypes.Collections
 
         public PackageProcessTimePrototype ApplyOptions(CollectorOptions options)
         {
-            Description = $"The sensor sends information about the package processing time. Package collect period = **{options.PackageCollectPeriod}**.";
+            Description = $"The sensor sends information about the package processing time. Package collect period = **{options.PackageCollectPeriod.ToReadableView()}**.";
 
             return this;
         }
     }
 
 
-    internal sealed class PackageContentSizePrototype : QueueDiagnosticInstantPrototype
+    internal sealed class PackageContentSizePrototype : QueueDiagnosticBarPrototype
     {
         protected override string SensorName => "Package content size";
 
