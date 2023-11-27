@@ -326,11 +326,10 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         autosize: true,
         height: height,
         margin: {
-            autoexpand: true,
-            l: 20,
-            r: 10,
+            l: 30,
+            r: 30,
             t: 10,
-            b: 40,
+            b: 0,
         },
         showlegend: showlegend,
         legend: {

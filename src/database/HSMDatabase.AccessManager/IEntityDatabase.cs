@@ -8,5 +8,7 @@
         void Put(byte[] key, byte[] value);
 
         void Delete(byte[] key);
+
+        void Backup(string backupPath);
     }
 }

@@ -31,13 +31,14 @@
 .dashboard {
     background-color: #f5f5f5;
     margin: 0 0.5rem;
+    padding-left: 0.5rem;
+    padding-right: 1rem;
     overflow: auto;
     height: 100%;
     min-height: 100rem;
 }
 
 .panel {
-    margin: 1rem 0 0 1rem;
     background-color: white;
     border: lightgray;
     border-width: 1px;

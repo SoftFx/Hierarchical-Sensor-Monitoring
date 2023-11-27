@@ -448,7 +448,7 @@ function getCurrentElementType(node) {
         (node.parents.length === 2 && isFolder($('#jstree').jstree().get_node(node.parents[0]))))
         return NodeType.Product;
 
-    if (typeof node.li_attr.class === 'undefined')
+    if (node.li_attr.class.includes("jstree-leaf"))
         return NodeType.Sensor;
 
     return NodeType.Node;

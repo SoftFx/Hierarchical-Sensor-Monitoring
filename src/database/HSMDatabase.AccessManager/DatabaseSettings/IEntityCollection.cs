@@ -20,5 +20,7 @@ namespace HSMDatabase.AccessManager.DatabaseSettings
         public bool TryReadEntity(Guid id, out T entity);
 
         public List<T> ReadCollection();
+
+        public void Backup(string backupPath);
     }
 }
