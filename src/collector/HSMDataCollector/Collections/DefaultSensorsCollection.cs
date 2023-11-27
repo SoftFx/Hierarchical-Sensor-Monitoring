@@ -101,7 +101,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected DefaultSensorsCollection AddPackageSizeCommon(BarSensorOptions options)
+        protected DefaultSensorsCollection AddPackageContentSizeCommon(BarSensorOptions options)
         {
             if (_packageSizeSensor != null)
                 return this;

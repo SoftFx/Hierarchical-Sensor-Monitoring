@@ -25,8 +25,6 @@ namespace HSMDataCollector.Prototypes.Collections
 
         protected QueueDiagnosticBarPrototype() : base()
         {
-            Type = SensorType.IntegerBarSensor;
-
             IsPrioritySensor = true;
         }
     }
@@ -81,6 +79,7 @@ namespace HSMDataCollector.Prototypes.Collections
 
         public PackageProcessTimePrototype()
         {
+            Type = SensorType.DoubleSensor;
             SensorUnit = Unit.Seconds;
         }
 

@@ -91,7 +91,7 @@ namespace HSMDataCollector.DefaultSensors
 
         public IUnixCollection AddQueuePackageValuesCount(BarSensorOptions options = null) => (IUnixCollection)AddPackageValuesCountCommon(options);
 
-        public IUnixCollection AddQueuePackageContentSize(BarSensorOptions options = null) => (IUnixCollection)AddPackageSizeCommon(options);
+        public IUnixCollection AddQueuePackageContentSize(BarSensorOptions options = null) => (IUnixCollection)AddPackageContentSizeCommon(options);
 
         public IUnixCollection AddQueueOverflow(BarSensorOptions options = null) => (IUnixCollection)AddQueueOverflowCommon(options);
 

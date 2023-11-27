@@ -162,7 +162,7 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddQueuePackageValuesCount(BarSensorOptions options = null) => (IWindowsCollection)AddPackageValuesCountCommon(options);
 
-        public IWindowsCollection AddQueuePackageContentSize(BarSensorOptions options = null) => (IWindowsCollection)AddPackageSizeCommon(options);
+        public IWindowsCollection AddQueuePackageContentSize(BarSensorOptions options = null) => (IWindowsCollection)AddPackageContentSizeCommon(options);
 
         public IWindowsCollection AddQueueOverflow(BarSensorOptions options = null) => (IWindowsCollection)AddQueueOverflowCommon(options);
 
