@@ -106,7 +106,7 @@
                                         <a id='change_@(Model.Id)_@product.EncodedId' class="dropdown-item text-decoration-none fw-normal button-link">Edit</a>
                                         @if (isProductCrudAllowed)
                                         {
-                                            <a id='delete_@(Model.Id)_@product.Id' class="dropdown-item text-decoration-none fw-normal button-link">Delete</a>
+                                            <a id='delete_@(Model.Id)_@product.Id' class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
                                         }
                                         @if (ViewBag.UserFolders is Dictionary<string, string> folders && folders.Count > 1)
                                         {
