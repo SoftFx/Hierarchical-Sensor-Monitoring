@@ -15,10 +15,10 @@ namespace HSMDataCollector.DefaultSensors
         public WindowsSensorsCollection(SensorsStorage storage, PrototypesCollection prototype) : base(storage, prototype) { }
 
 
-        public IWindowsCollection AddAllComputer() =>
+        public IWindowsCollection AddAllComputerSensors() =>
             (this as IWindowsCollection).AddSystemMonitoringSensors().AddAllDisksMonitoringSensors().AddWindowsInfoMonitoringSensors();
 
-        public IWindowsCollection AddAllModule(Version productVersion)
+        public IWindowsCollection AddAllModuleSensors(Version productVersion)
         {
             var moduleCollection = (this as IWindowsCollection).AddProcessMonitoringSensors()
                                                                .AddCollectorMonitoringSensors();
@@ -33,7 +33,7 @@ namespace HSMDataCollector.DefaultSensors
             return moduleCollection;
         }
 
-        public IWindowsCollection AddAllCollection(Version productVersion) => AddAllComputer().AddAllModule(productVersion);
+        public IWindowsCollection AddAllDefaultSensors(Version productVersion) => AddAllComputerSensors().AddAllModuleSensors(productVersion);
 
 
         #region Process
@@ -76,13 +76,13 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsFreeRamMemory(_prototype.FreeRam.Get(options)));
         }
 
-        public IWindowsCollection AddTimeInGC(BarSensorOptions options)
+        public IWindowsCollection AddGlobalTimeInGC(BarSensorOptions options)
         {
             return ToWindows(new WindowsTimeInGC(_prototype.TimeInGC.Get(options)));
         }
 
         public IWindowsCollection AddSystemMonitoringSensors(BarSensorOptions options) =>
-            AddFreeRamMemory(options).AddTotalCpu(options).AddTimeInGC(options);
+            AddFreeRamMemory(options).AddTotalCpu(options).AddGlobalTimeInGC(options);
 
         #endregion
 

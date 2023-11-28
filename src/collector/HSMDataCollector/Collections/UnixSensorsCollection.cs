@@ -14,10 +14,10 @@ namespace HSMDataCollector.DefaultSensors
         internal UnixSensorsCollection(SensorsStorage storage, PrototypesCollection prototype) : base(storage, prototype) { }
 
 
-        public IUnixCollection AddAllComputer() =>
+        public IUnixCollection AddAllComputerSensors() =>
             (this as IUnixCollection).AddSystemMonitoringSensors().AddDiskMonitoringSensors();
 
-        public IUnixCollection AddAllModule(Version productVersion)
+        public IUnixCollection AddAllModuleSensors(Version productVersion)
         {
             var moduleCollection = (this as IUnixCollection).AddProcessMonitoringSensors()
                                                             .AddCollectorMonitoringSensors();
@@ -32,7 +32,7 @@ namespace HSMDataCollector.DefaultSensors
             return moduleCollection;
         }
 
-        public IUnixCollection AddAllCollection(Version productVersion) => AddAllComputer().AddAllModule(productVersion);
+        public IUnixCollection AddAllDefaultSensors(Version productVersion) => AddAllComputerSensors().AddAllModuleSensors(productVersion);
 
 
 
