@@ -47,7 +47,7 @@ namespace HSMDataCollector.PublicInterface
         IUnixCollection AddProductVersion(VersionSensorOptions options = null);
 
 
-        IUnixCollection AddQueuePackageContentSize(InstantSensorOptions options = null);
+        IUnixCollection AddQueuePackageContentSize(BarSensorOptions options = null);
 
         IUnixCollection AddQueuePackageProcessTime(BarSensorOptions options = null);
 
@@ -55,6 +55,6 @@ namespace HSMDataCollector.PublicInterface
 
         IUnixCollection AddQueueOverflow(BarSensorOptions options = null);
 
-        IUnixCollection AddAllQueueDiagnosticSensors(InstantSensorOptions instantOptions = null, BarSensorOptions barOptions = null);
+        IUnixCollection AddAllQueueDiagnosticSensors(BarSensorOptions barOptions = null);
     }
 }

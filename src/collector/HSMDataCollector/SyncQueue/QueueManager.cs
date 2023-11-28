@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
+using HSMDataCollector.SyncQueue.BaseQueue;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
@@ -16,9 +17,9 @@ namespace HSMDataCollector.SyncQueue
         public ICommandQueue Commands { get; }
 
 
-        public event Action<PackageSendingInfo> PackageSendingInfo;
-        public event Action<string, int> PackageValuesCountInfo;
-        public event Action<string, int> OverflowInfo;
+        public event Action<PackageSendingInfo> PackageSendingInfoEvent;
+        public event Action<string, PackageInfo> PackageInfoEvent;
+        public event Action<string, int> OverflowInfoEvent;
 
 
         internal QueueManager(CollectorOptions options, ILoggerManager logger) : base()
@@ -32,14 +33,14 @@ namespace HSMDataCollector.SyncQueue
 
         public void Stop() => _queueList.ForEach(q => q.Stop());
 
-        public void ThrowPackageSensingInfo(PackageSendingInfo info) => PackageSendingInfo?.Invoke(info);
+        public void ThrowPackageSensingInfo(PackageSendingInfo info) => PackageSendingInfoEvent?.Invoke(info);
 
         public void Dispose()
         {
             foreach (var queue in _queueList)
             {
-                queue.SendValuesCnt -= ThrowPackageValuesCountInfo;
-                queue.OverflowCnt -= ThrowOverflowInfo;
+                queue.PackageInfoEvent -= ThrowPackageInfo;
+                queue.OverflowCntEvent -= ThrowOverflowInfo;
                 queue.Dispose();
             }
         }
@@ -49,15 +50,15 @@ namespace HSMDataCollector.SyncQueue
         {
             _queueList.Add(queue);
 
-            queue.SendValuesCnt += ThrowPackageValuesCountInfo;
-            queue.OverflowCnt += ThrowOverflowInfo;
+            queue.PackageInfoEvent += ThrowPackageInfo;
+            queue.OverflowCntEvent += ThrowOverflowInfo;
 
             return queue;
         }
 
 
-        private void ThrowOverflowInfo(string queue, int valuesCnt) => OverflowInfo?.Invoke(queue, valuesCnt);
+        private void ThrowOverflowInfo(string queue, int valuesCnt) => OverflowInfoEvent?.Invoke(queue, valuesCnt);
 
-        private void ThrowPackageValuesCountInfo(string queue, int valuesCnt) => PackageValuesCountInfo?.Invoke(queue, valuesCnt);
+        private void ThrowPackageInfo(string queue, PackageInfo info) => PackageInfoEvent?.Invoke(queue, info);
     }
 }

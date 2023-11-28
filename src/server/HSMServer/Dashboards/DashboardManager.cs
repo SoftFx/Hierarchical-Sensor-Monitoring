@@ -6,7 +6,9 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Core.Model;
 
 namespace HSMServer.Dashboards
 {
@@ -31,8 +33,22 @@ namespace HSMServer.Dashboards
 
             Added += AddDashboardSubscriptions;
             Removed -= RemoveDashboardSubscriptions;
+
+            _cache.ChangeSensorEvent += ChangeSensorHandler;
         }
 
+
+        private void ChangeSensorHandler(BaseSensorModel model, ActionType action)
+        {
+            if (action == ActionType.Delete)
+                foreach (var (_, panel) in this.SelectMany(x => x.Value.Panels))
+                {
+                    var (_, source) = panel.Sources.FirstOrDefault(x => x.Value.SensorId == model.Id);
+
+                    if (source is not null)
+                        panel.Sources.TryRemove(source.Id, out _);
+                }
+        }
 
         public Task<bool> TryAdd(DashboardAdd dashboardAdd, out Dashboard dashboard)
         {

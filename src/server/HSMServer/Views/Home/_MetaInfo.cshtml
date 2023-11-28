@@ -73,14 +73,15 @@
         {
             <label class="col-form-label py-0" id='markdown_span_description'>@Model.Description</label>
         }
-        <div class="ps-3">
+        <div>
             <textarea id='description' class="form-control w-100 d-none"  type='text' asp-for="Description" value='@Model.Description'></textarea>
         </div>
+
+        @await Html.PartialAsync("~/Views/Home/Alerts/_Alerts.cshtml", Model)
 
         <div class="collapse" id="metaInfoCollapse">
             @await Html.PartialAsync("_GeneralInfo", Model)
             @await Html.PartialAsync("_CleanupSettings", Model)
-            @await Html.PartialAsync("~/Views/Home/Alerts/_Alerts.cshtml", Model)
         </div>
 
         <button class="btn btn-outline-secondary w-100 border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1"
