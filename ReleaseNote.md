@@ -56,16 +56,16 @@ This is a part of Multichart entity, witch describes how to plot different senso
 # HSM Datacollector v.3.2.4
 
 ## New default group **Diagnostic sensors** has been added
-* **Package content size** sensor has been added in *.module/Queue stats*
-* **Package process time** sensor has been added in *.module/Queue stats*
-* **Values count in package** sensor has been added in *.module/Queue stats*
-* **Queue overflow** sensor has been added in *.module/Queue stats*
+* **Package content size** sensor has been added in *.module/Queue stats*. This sensor calculate a body size for each package for Collector message queue.
+* **Package process time** sensor has been added in *.module/Queue stats*. This sensor calculate a average process time for each value in package for Collector message queue.
+* **Values count in package** sensor has been added in *.module/Queue stats*. This sensor calculate a total count of values in each package for Collector message queue.
+* **Queue overflow** sensor has been added in *.module/Queue stats*. This sensor calculate a total count of values witch have been removed from Collector message queue without sending to Server.
 
 ## Sensor settings
 * New setting **IsPriorutySensor** has been added. If **IsPrioritySensor** is true, then data skip global message queue and send directly to a HSM seerver
 
 ## New default sensors
-* **Collector errors** sensor has been added in  *.module*
+* **Collector errors** sensor has been added in *.module*. Sends all collector errors and exceptions to the server.
 
 ## Bugfixing
 * **Windows Info/Last Update** and **Windows Info/Last restart** sensors have been fixed.
