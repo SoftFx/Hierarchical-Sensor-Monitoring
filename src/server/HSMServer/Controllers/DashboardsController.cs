@@ -112,8 +112,7 @@ namespace HSMServer.Controllers
 
                             if (panel.Sources.TryAdd(datasource.Id, datasource) && (await _dashboardManager.TryUpdate(dashboard)))
                             {
-                                var (from, to) = datasource.GetFromTo();
-                                var response = await datasource.Source.Initialize(from, to);
+                                var response = await datasource.Source.Initialize();
 
                                 return Json(new SourceDto(response, datasource, newSource));
                             }
