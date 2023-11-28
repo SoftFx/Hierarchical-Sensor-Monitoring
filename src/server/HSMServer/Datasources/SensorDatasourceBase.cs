@@ -66,12 +66,17 @@ namespace HSMServer.Datasources
 
         public async Task<InitChartSourceResponse> Initialize(SensorHistoryRequest request)
         {
-            var data = await _sensor.GetHistoryData(request);
+            var history = _sensor.GetHistoryData(request);
 
-            BuildInitialValues(data, request);
+            if (history is not null)
+            {
+                var data = await history;
 
-            _newVisibleValues.Clear();
-            _removedValuesCnt = 0;
+                BuildInitialValues(data, request);
+
+                _newVisibleValues.Clear();
+                _removedValuesCnt = 0;
+            }
 
             return new()
             {

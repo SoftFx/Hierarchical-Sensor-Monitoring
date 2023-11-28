@@ -151,6 +151,9 @@ window.initDashboard = function () {
                 type: 'get',
                 url: window.location.pathname + '/SourceUpdate' + `/${currentPanel[i].panelId}/${i}`,
             }).done(function(data){
+                if (!$.trim(data))
+                    return;
+                
                 if (data.newVisibleValues.length > 0) {
                     let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
                     let correctId = 0;
