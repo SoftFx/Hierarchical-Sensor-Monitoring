@@ -42,7 +42,7 @@ window.insertSourceHtml = function (data) {
                                                 <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
                                             </div>
                                             <div class="d-flex align-items-center">
-                                                <span id=${'redirectToHome_' + data.id} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
+                                                <span id=${'redirectToHome_' + data.sensorId} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
                                                     ${data.path}
                                                 </span>
                                             </div>

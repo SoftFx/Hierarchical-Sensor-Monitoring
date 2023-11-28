@@ -7,9 +7,11 @@ using HSMServer.Model.Dashboards;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Controllers
 {
@@ -258,6 +260,26 @@ namespace HSMServer.Controllers
             _dashboardManager.TryUpdate(dashboard);
 
             return PartialView("_Panel", new PanelViewModel(newPanel, dashboard.Id));
+        }
+
+        [HttpGet]
+        public ActionResult<Stack<Guid>> GetRedirectNodesToOpen([FromQuery] Guid sensorId)
+        {
+            if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
+            {
+                var ids = new Stack<Guid>(1 << 4);
+                var parent = sensor.Parent;
+                ids.Push(sensor.Id);
+                while (parent is ProductNodeViewModel node)
+                {
+                    ids.Push(parent.Id);
+                    parent = node.Parent;
+                }
+
+                return ids;
+            }
+
+            return NotFound();
         }
     }
 }

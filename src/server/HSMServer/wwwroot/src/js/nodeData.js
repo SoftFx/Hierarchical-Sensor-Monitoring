@@ -9,7 +9,19 @@ window.initializeTreeNode = function () {
             selectNodeAjax(data.node.id);
         }
     }).on("state_ready.jstree", function () {
-        selectNodeAjax($(this).jstree('get_selected')[0]);
+        let selected = $(this).jstree('get_selected')[0];
+        
+        if (window.sessionStorage.redirectIds){
+            let ids = window.sessionStorage.redirectIds.split(',');
+
+            selected = ids.at(-1);
+            $(this).jstree('load_node', ids, function (){
+                $(this).jstree('select_node', selected)
+            })
+            window.sessionStorage.removeItem('redirectIds');
+        }
+
+        selectNodeAjax(selected);
     });
 }
 

@@ -91,6 +91,15 @@
                     showToast(response.responseText);
                 })
             }
+        }).on('click', '.redirectToHome', function (){
+            let id = this.id.substring("redirectToHome_".length, this.id.length);
+            $.ajax({
+                type: 'get',
+                url: `@Url.Action(nameof(DashboardsController.GetRedirectNodesToOpen))?sensorId=${id}`
+            }).done(function (data){
+                window.sessionStorage.redirectIds = data;
+                window.location = "/Home";
+            })
         })
     })
 </script>
