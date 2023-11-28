@@ -33,7 +33,7 @@ namespace HSMServer.Dashboards
 
             Added += AddDashboardSubscriptions;
             Removed -= RemoveDashboardSubscriptions;
-            
+
             _cache.ChangeSensorEvent += ChangeSensorHandler;
         }
 
@@ -44,8 +44,9 @@ namespace HSMServer.Dashboards
                 foreach (var (_, panel) in this.SelectMany(x => x.Value.Panels))
                 {
                     var (_, source) = panel.Sources.FirstOrDefault(x => x.Value.SensorId == model.Id);
-                    panel.Sources.TryRemove(source.Id, out _);
-                    return;
+
+                    if (source is not null)
+                        panel.Sources.TryRemove(source.Id, out _);
                 }
         }
 
