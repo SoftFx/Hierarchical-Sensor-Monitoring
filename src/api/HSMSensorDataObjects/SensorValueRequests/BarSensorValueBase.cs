@@ -21,8 +21,11 @@ namespace HSMSensorDataObjects.SensorValueRequests
 
         public T Mean { get; set; }
 
+        public T FirstValue { get; set; }
+
         public T LastValue { get; set; }
 
+        [Obsolete("The property doesn't contain right values")]
         public Dictionary<double, T> Percentiles { get; set; }
 
 

@@ -27,6 +27,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (Count == 0)
                 {
+                    FirstValue = value;
                     Mean = value;
                     Min = value;
                     Max = value;
@@ -41,7 +42,7 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        internal void AddPartial(T min, T max, T mean, T last, int count)
+        internal void AddPartial(T min, T max, T mean, T first, T last, int count)
         {
             lock (_lock)
             {
@@ -50,6 +51,7 @@ namespace HSMDataCollector.DefaultSensors
 
                 if (Count == 0)
                 {
+                    FirstValue = first;
                     Mean = mean;
                     Min = min;
                     Max = max;
@@ -69,6 +71,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (Count > 0)
                 {
+                    FirstValue = Round(FirstValue);
                     LastValue = Round(LastValue);
 
                     Min = Round(Min);
