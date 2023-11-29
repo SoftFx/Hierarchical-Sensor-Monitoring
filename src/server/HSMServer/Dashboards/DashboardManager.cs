@@ -3,12 +3,12 @@ using HSMDatabase.AccessManager.DatabaseSettings;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Model;
 using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Core.Model;
 
 namespace HSMServer.Dashboards
 {
@@ -16,6 +16,7 @@ namespace HSMServer.Dashboards
     {
         private readonly IDashboardCollection _dbCollection;
         private readonly ITreeValuesCache _cache;
+
 
         protected override Action<DashboardEntity> AddToDb => _dbCollection.AddEntity;
 
