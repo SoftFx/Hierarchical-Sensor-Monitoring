@@ -99,3 +99,7 @@ window.replaceHtmlToMarkdownJquery = function (jqueryElement) {
         jqueryElement.children().last().css('margin-bottom', 0);
     }
 }
+
+window.redirectToHome = function (id){
+    window.location.href = `/Home/${id}`;
+}

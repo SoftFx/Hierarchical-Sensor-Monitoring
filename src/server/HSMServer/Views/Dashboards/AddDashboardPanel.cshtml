@@ -93,7 +93,7 @@
             }
         }).on('click', '.redirectToHome', function (){
             let id = this.id.substring("redirectToHome_".length, this.id.length);
-            window.location.href = `/Home/${id}`;
+            redirectToHome(id);
         })
     })
 </script>
