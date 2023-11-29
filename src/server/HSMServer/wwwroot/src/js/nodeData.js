@@ -10,16 +10,10 @@ window.initializeTreeNode = function () {
         }
     }).on("state_ready.jstree", function () {
         let selected = $(this).jstree('get_selected')[0];
-        
-        if (window.sessionStorage.redirectIds){
-            let ids = window.sessionStorage.redirectIds.split(',');
 
-            selected = ids.at(-1);
-            $(this).jstree('load_node', ids, function (){
-                $(this).jstree('select_node', selected)
-            })
-            window.sessionStorage.removeItem('redirectIds');
-        }
+        let id = window.location.pathname.slice("/Home/".length)
+        if (id !== '' && id !== undefined)
+            selected = id;
 
         selectNodeAjax(selected);
     });
@@ -47,6 +41,8 @@ function selectNodeAjax(selectedId) {
         saveMetaData(selectedId);
     }
     else {
+        $('#jstree').jstree('deselect_all').jstree('select_node', selectedId);
+        window.history.replaceState( {} , document.title, `/Home/${selectedId}` )
         initSelectedNode(selectedId);
     }
 }

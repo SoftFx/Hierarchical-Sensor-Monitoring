@@ -261,25 +261,5 @@ namespace HSMServer.Controllers
 
             return PartialView("_Panel", new PanelViewModel(newPanel, dashboard.Id));
         }
-
-        [HttpGet]
-        public ActionResult<Stack<Guid>> GetRedirectNodesToOpen([FromQuery] Guid sensorId)
-        {
-            if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
-            {
-                var ids = new Stack<Guid>(1 << 4);
-                var parent = sensor.Parent;
-                ids.Push(sensor.Id);
-                while (parent is ProductNodeViewModel node)
-                {
-                    ids.Push(parent.Id);
-                    parent = node.Parent;
-                }
-
-                return ids;
-            }
-
-            return NotFound();
-        }
     }
 }
