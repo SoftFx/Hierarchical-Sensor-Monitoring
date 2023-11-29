@@ -39,7 +39,7 @@ namespace HSMDataCollector.Prototypes.Collections
         public QueueOverflowPrototype() : base()
         {
             Type = SensorType.IntegerBarSensor;
-            //unit count should be added
+            SensorUnit = Unit.Count;
         }
 
 
@@ -61,7 +61,7 @@ namespace HSMDataCollector.Prototypes.Collections
         public PackageValuesCountPrototype() : base()
         {
             Type = SensorType.IntegerBarSensor;
-            //count unit count should be added
+            SensorUnit = Unit.Count;
         }
 
 

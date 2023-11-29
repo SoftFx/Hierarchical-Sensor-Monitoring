@@ -369,11 +369,18 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorRequests.Unit.KB => Core.Model.Unit.KB,
                 HSMSensorDataObjects.SensorRequests.Unit.MB => Core.Model.Unit.MB,
                 HSMSensorDataObjects.SensorRequests.Unit.GB => Core.Model.Unit.GB,
+
                 HSMSensorDataObjects.SensorRequests.Unit.Percents => Core.Model.Unit.Percents,
+
                 HSMSensorDataObjects.SensorRequests.Unit.Ticks => Core.Model.Unit.Ticks,
                 HSMSensorDataObjects.SensorRequests.Unit.Milliseconds => Core.Model.Unit.Milliseconds,
                 HSMSensorDataObjects.SensorRequests.Unit.Seconds => Core.Model.Unit.Seconds,
                 HSMSensorDataObjects.SensorRequests.Unit.Minutes => Core.Model.Unit.Minutes,
+
+                HSMSensorDataObjects.SensorRequests.Unit.Count => Core.Model.Unit.Count,
+                HSMSensorDataObjects.SensorRequests.Unit.Requests => Core.Model.Unit.Requests,
+                HSMSensorDataObjects.SensorRequests.Unit.Responses => Core.Model.Unit.Responses,
+
                 _ => throw new NotImplementedException(),
             };
     }
