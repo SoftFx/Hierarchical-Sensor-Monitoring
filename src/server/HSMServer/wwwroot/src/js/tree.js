@@ -137,21 +137,29 @@ function buildContextMenu(node) {
     if (curType === NodeType.Disabled)
         return contextMenu;
 
-    let isManager = node.data.jstree.isManager === "True";
-
-    let isFolder = curType === NodeType.Folder;
-    let isSensor = curType === NodeType.Sensor;
-    let isProduct = curType === NodeType.Product;
 
     let selectedNodes = $('#jstree').jstree(true).get_selected();
+    let selectedNodesCount = selectedNodes.length;
 
-    if (selectedNodes.length > 1) {
+    if (selectedNodesCount > 1) {
         contextMenu["RemoveNode"] = {
             "label": `Remove items`,
             "action": _ => {
+                const maxNames = 20;
+
+                let selectedNodesNames = [];
+                for (let i = 0; i < Math.min(selectedNodesCount, maxNames); ++i) {
+                    selectedNodesNames.push($('#jstree').jstree().get_node(selectedNodes[i]).data.jstree.title)
+                }
+
+                let nodesNamesString = selectedNodesNames.join(', ');
+                if (selectedNodesCount > maxNames) {
+                    nodesNamesString += ` and other ${selectedNodesCount - maxNames} items`;
+                }
+
                 showConfirmationModal(
                     `Remove items`,
-                    `Do you really want to remove ${selectedNodes.length} selected items?`,
+                    `Do you really want to remove ${selectedNodesCount} selected items (${nodesNamesString})?`,
                     () => {
                         $.ajax({
                             url: `${removeNodeAction}`,
@@ -221,6 +229,13 @@ function buildContextMenu(node) {
 
         return contextMenu;
     }
+
+
+    let isManager = node.data.jstree.isManager === "True";
+
+    let isFolder = curType === NodeType.Folder;
+    let isSensor = curType === NodeType.Sensor;
+    let isProduct = curType === NodeType.Product;
 
     if (isProduct) {
         contextMenu["AccessKeys"] = {

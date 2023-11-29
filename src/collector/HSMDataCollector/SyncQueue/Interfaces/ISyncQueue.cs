@@ -8,7 +8,7 @@ namespace HSMDataCollector.SyncQueue
         event Action<List<T>> NewValuesEvent;
         event Action<T> NewValueEvent;
 
-        event Action<string, int> OverflowCnt;
+        event Action<string, int> OverflowCntEvent;
 
 
         void Push(T value);

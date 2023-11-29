@@ -25,8 +25,7 @@ namespace HSMDataCollector.Prototypes.Collections
 
         protected QueueDiagnosticBarPrototype() : base()
         {
-            Type = SensorType.IntegerBarSensor;
-
+            Type = SensorType.DoubleBarSensor;
             IsPrioritySensor = true;
         }
     }
@@ -37,7 +36,7 @@ namespace HSMDataCollector.Prototypes.Collections
         protected override string SensorName => "Queue overflow";
 
 
-        public QueueOverflowPrototype()
+        public QueueOverflowPrototype() : base()
         {
             Type = SensorType.IntegerBarSensor;
             //unit count should be added
@@ -59,8 +58,9 @@ namespace HSMDataCollector.Prototypes.Collections
         protected override string SensorName => "Values count in package";
 
 
-        public PackageValuesCountPrototype()
+        public PackageValuesCountPrototype() : base()
         {
+            Type = SensorType.IntegerBarSensor;
             //count unit count should be added
         }
 
@@ -79,7 +79,7 @@ namespace HSMDataCollector.Prototypes.Collections
         protected override string SensorName => "Package process time";
 
 
-        public PackageProcessTimePrototype()
+        public PackageProcessTimePrototype() : base()
         {
             SensorUnit = Unit.Seconds;
         }
@@ -87,22 +87,21 @@ namespace HSMDataCollector.Prototypes.Collections
 
         public PackageProcessTimePrototype ApplyOptions(CollectorOptions options)
         {
-            Description = $"The sensor sends information about the package processing time. Package collect period = **{options.PackageCollectPeriod}**.";
+            Description = $"The sensor sends information about the package processing time. Package collect period = **{options.PackageCollectPeriod.ToReadableView()}**.";
 
             return this;
         }
     }
 
 
-    internal sealed class PackageContentSizePrototype : QueueDiagnosticInstantPrototype
+    internal sealed class PackageContentSizePrototype : QueueDiagnosticBarPrototype
     {
         protected override string SensorName => "Package content size";
 
 
-        public PackageContentSizePrototype()
+        public PackageContentSizePrototype() : base()
         {
             Description = $"The sensor sends information about the package body size.";
-            Type = SensorType.DoubleSensor;
             SensorUnit = Unit.MB;
         }
     }

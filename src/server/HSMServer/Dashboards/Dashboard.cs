@@ -14,11 +14,6 @@ namespace HSMServer.Dashboards
 
         public ConcurrentDictionary<Guid, Panel> Panels { get; } = new();
 
-
-        public DateTime FromDataPeriod { get; private set; }
-
-        public DateTime? ToDataPeriod { get; private set; }
-
         public TimeSpan DataPeriod { get; private set; } = new(0, 30, 0);
 
 
@@ -36,13 +31,6 @@ namespace HSMServer.Dashboards
         }
 
 
-        public void UpdateDataPeriod(DateTime from, DateTime? to)
-        {
-            FromDataPeriod = from;
-            ToDataPeriod = to;
-        }
-
-
         public override void Update(DashboardUpdate update)
         {
             DataPeriod = update.FromPeriod;
@@ -55,6 +43,7 @@ namespace HSMServer.Dashboards
 
             entity.Panels.AddRange(Panels.Select(u => u.Value.ToEntity()));
             entity.DataPeriod = DataPeriod;
+
             return entity;
         }
 
