@@ -108,7 +108,12 @@
         disableDragAndResize();
         if(change !== 0)
             targetNode.style.minHeight = change + "px";
-        $('#from_select').val('@Model.FromPeriod');
+
+        let fromSelect = $('#from_select');
+        fromSelect.val('@Model.FromPeriod');
+        fromSelect.on('change', function (){
+            $('#saveDashBoardForm').submit();
+        })
     });
 
     $('#saveDashBoardForm').on('submit', function (e){
