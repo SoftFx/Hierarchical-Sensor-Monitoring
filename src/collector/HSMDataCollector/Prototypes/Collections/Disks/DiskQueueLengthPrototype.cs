@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.DefaultSensors.Windows;
 using HSMSensorDataObjects.SensorRequests;
 using System.Collections.Generic;
 
@@ -8,7 +9,7 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
     {
         protected override string SensorNameTemplate => "Disk queue length on {0} disk";
 
-        protected override string DescriptionPath => "Avg. Disk Queue Length";
+        protected override string DescriptionPath => WindowsDiskQueueLength.Counter;
 
 
         public WindowsDiskQueueLengthPrototype() : base()
