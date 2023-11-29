@@ -106,6 +106,7 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min,
                 Max = value.Max,
                 Mean = value.Mean,
+                FirstValue = value.FirstValue,
                 LastValue = value.LastValue,
                 Percentiles = value.Percentiles ?? new(),
             };
@@ -123,6 +124,7 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min,
                 Max = value.Max,
                 Mean = value.Mean,
+                FirstValue = value.FirstValue,
                 LastValue = value.LastValue,
                 Percentiles = value.Percentiles ?? new(),
             };
@@ -182,6 +184,7 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
+                FirstValue = value.FirstValue.ToString(),
                 LastValue = value.LastValue.ToString(),
                 Percentiles = value.Percentiles?.Select(p => new PercentileValue { Percentile = p.Key, Value = p.Value.ToString() }).ToList() ?? new(),
             };

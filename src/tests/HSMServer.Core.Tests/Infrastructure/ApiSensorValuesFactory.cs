@@ -71,6 +71,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var intBarSensorValue = new IntBarSensorValue()
             {
+                FirstValue = RandomGenerator.GetRandomInt(),
                 LastValue = RandomGenerator.GetRandomInt(),
                 Min = RandomGenerator.GetRandomInt(),
                 Max = RandomGenerator.GetRandomInt(),
@@ -85,6 +86,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var doubleBarSensorValue = new DoubleBarSensorValue()
             {
+                FirstValue = RandomGenerator.GetRandomDouble(),
                 LastValue = RandomGenerator.GetRandomDouble(),
                 Min = RandomGenerator.GetRandomDouble(),
                 Max = RandomGenerator.GetRandomDouble(),

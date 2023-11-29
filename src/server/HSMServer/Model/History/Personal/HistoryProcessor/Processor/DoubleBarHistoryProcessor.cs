@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.Model;
-using System.Globalization;
 
 namespace HSMServer.Model.History
 {
@@ -27,6 +26,7 @@ namespace HSMServer.Model.History
               Percentiles = summary.Percentiles,
               Time = summary.CloseTime.ToUniversalTime(),
               ReceivingTime = summary.CloseTime.ToUniversalTime(),
+              FirstValue = summary.FirstValue,
               LastValue = summary.LastValue,
           };
 

@@ -85,7 +85,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         private static void TestBarBaseValue<T>(BaseValue value) where T : INumber<T>
         {
             var valueT = value as BarBaseValue<T>;
-            var expectedShortInfo = $"Min = {valueT.Min}, Mean = {valueT.Mean}, Max = {valueT.Max}, Count = {valueT.Count}, Last = {valueT.LastValue}.";
+            var expectedShortInfo = $"Min = {valueT.Min}, Mean = {valueT.Mean}, Max = {valueT.Max}, Count = {valueT.Count}, First = {valueT.FirstValue}, Last = {valueT.LastValue}.";
 
             Assert.Equal(expectedShortInfo, value.ShortInfo);
         }

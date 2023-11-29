@@ -36,7 +36,7 @@ namespace HSMServer.Model.History
             var oldestValue = values.First() as BarBaseValue<T>;
             DateTime nextBarTime = oldestValue.OpenTime + compressionInterval;
 
-            SummaryBarItem<T> summary = new(oldestValue.OpenTime, oldestValue.CloseTime, DefaultMax, DefaultMin, oldestValue.Min, oldestValue.LastValue);
+            SummaryBarItem<T> summary = new(oldestValue.OpenTime, oldestValue.CloseTime, DefaultMax, DefaultMin, oldestValue.FirstValue, oldestValue.LastValue);
             ProcessItem(oldestValue, summary);
 
             for (int i = 1; i < values.Count; ++i)
@@ -48,7 +48,7 @@ namespace HSMServer.Model.History
                 {
                     result.Add(Convert(summary, summary.Count != value.Count));
 
-                    summary = new(value.OpenTime, value.CloseTime, DefaultMax, DefaultMin, oldestValue.Min, oldestValue.LastValue);
+                    summary = new(value.OpenTime, value.CloseTime, DefaultMax, DefaultMin, oldestValue.FirstValue, oldestValue.LastValue);
                     ProcessItem(value, summary);
 
                     while (nextBarTime <= summary.CloseTime)
@@ -136,7 +136,7 @@ namespace HSMServer.Model.History
             AddValueToList(value);
 
             if (summary.Count == 0)
-                summary.FirstValue = value.Min;
+                summary.FirstValue = value.FirstValue;
 
             summary.LastValue = value.LastValue;
             summary.CloseTime = value.CloseTime;

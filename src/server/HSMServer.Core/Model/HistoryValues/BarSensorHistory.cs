@@ -17,6 +17,8 @@ namespace HSMServer.Core.Model.HistoryValues
 
         public string Mean { get; init; }
 
+        public string FirstValue { get; init; }
+
         public string LastValue { get; init; }
 
         public List<PercentileValue> Percentiles { get; init; }

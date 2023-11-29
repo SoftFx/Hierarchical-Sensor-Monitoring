@@ -21,6 +21,7 @@ namespace HSMServer.Model.History
                 Percentiles = summary.Percentiles,
                 Time = summary.CloseTime.ToUniversalTime(),
                 ReceivingTime = summary.CloseTime.ToUniversalTime(),
+                FirstValue = summary.FirstValue,
                 LastValue = summary.LastValue,
             };
 

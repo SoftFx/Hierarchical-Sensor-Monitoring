@@ -87,6 +87,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Min = RandomGenerator.GetRandomInt(),
                 Max = RandomGenerator.GetRandomInt(),
                 Mean = RandomGenerator.GetRandomInt(),
+                FirstValue = RandomGenerator.GetRandomInt(),
                 LastValue = RandomGenerator.GetRandomInt(),
                 Percentiles = GetPercentileValues(() => RandomGenerator.GetRandomInt()),
             };
@@ -103,6 +104,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Min = RandomGenerator.GetRandomDouble(),
                 Max = RandomGenerator.GetRandomDouble(),
                 Mean = RandomGenerator.GetRandomDouble(),
+                FirstValue = RandomGenerator.GetRandomDouble(),
                 LastValue = RandomGenerator.GetRandomDouble(),
                 Percentiles = GetPercentileValues(RandomGenerator.GetRandomDouble),
             };

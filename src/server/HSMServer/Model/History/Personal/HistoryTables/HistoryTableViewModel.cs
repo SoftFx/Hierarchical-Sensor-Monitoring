@@ -163,6 +163,7 @@ namespace HSMServer.Model.History
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
+                FirstValue = value.FirstValue.ToString(),
                 LastValue = value.LastValue.ToString(),
                 Time = value.Time.ToUniversalTime(),
                 Status = value.Status.ToClient(),

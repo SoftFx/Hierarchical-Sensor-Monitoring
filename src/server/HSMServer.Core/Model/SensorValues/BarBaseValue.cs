@@ -25,10 +25,12 @@ namespace HSMServer.Core.Model
 
         public T Mean { get; init; }
 
+        public T FirstValue { get; init; }
+
         public T LastValue { get; init; }
 
         public override string ShortInfo =>
-            $"Min = {Min}, Mean = {Mean}, Max = {Max}, Count = {Count}, Last = {LastValue}.";
+            $"Min = {Min}, Mean = {Mean}, Max = {Max}, Count = {Count}, First = {FirstValue}, Last = {LastValue}.";
 
 
         public override BaseValue TrySetValue(string str) => this;
@@ -37,13 +39,14 @@ namespace HSMServer.Core.Model
         {
             if (value is null)
                 return this;
-            
+
             var currValue = (BarBaseValue<T>)value;
             return this with
             {
                 Min = currValue.Min,
                 Max = currValue.Max,
                 Count = currValue.Count,
+                FirstValue = currValue.FirstValue,
                 LastValue = currValue.LastValue,
                 Mean = currValue.Mean,
             };
@@ -51,7 +54,7 @@ namespace HSMServer.Core.Model
 
         protected override bool IsEqual(BaseValue value) => false;
     }
-    
+
     public sealed record NotCompressedValue<T> : BarBaseValue<T> where T : INumber<T>
     {
         public bool IsCompressed { get; set; } = false;
@@ -68,6 +71,7 @@ namespace HSMServer.Core.Model
             CloseTime = value.CloseTime;
             IsTimeout = value.IsTimeout;
             Comment = value.Comment;
+            FirstValue = value.FirstValue;
             LastValue = value.LastValue;
             Percentiles = value.Percentiles;
             Status = value.Status;
