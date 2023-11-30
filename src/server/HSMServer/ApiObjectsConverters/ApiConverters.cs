@@ -182,7 +182,7 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
-                FirstValue = value.FirstValue.ToString(),
+                FirstValue = value.FirstValue?.ToString(),
                 LastValue = value.LastValue.ToString(),
             };
 
