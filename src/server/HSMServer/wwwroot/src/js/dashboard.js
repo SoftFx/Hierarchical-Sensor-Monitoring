@@ -372,7 +372,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             x: 0,
             y: -0.3,
             orientation: "h",
-            traceorder: "grouped"
+            traceorder: "normal"
         },
         xaxis: {
             title: {
