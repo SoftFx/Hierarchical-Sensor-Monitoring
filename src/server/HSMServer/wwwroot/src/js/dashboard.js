@@ -365,11 +365,13 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             l: 30,
             r: 30,
             t: 10,
-            b: 0,
+            b: 30,
         },
         showlegend: showlegend,
         legend: {
-            "orientation": "h",
+            x: 0,
+            y: -0.3,
+            orientation: "h",
             traceorder: "grouped"
         },
         xaxis: {
