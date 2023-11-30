@@ -14,7 +14,7 @@ public enum ColumnName
 
 public record Search(bool Regex, string Value);
 
-public record DataTableParameters(List<DataTableColumn> Columns, int Draw, int Length, List<DataTableOrder> Order, Search Search, int Start);
+public record DataTableParameters(List<DataTableColumn> Columns, int Draw, int Length, List<DataTableOrder> Order, Search Search, int Start, bool NeedSearchPath);
 
 public record DataTableColumn(int Data, string Name, bool Orderable, bool Searchable, Search Search);
 

@@ -25,7 +25,7 @@ public sealed class JournalRecordViewModel
     public string Initiator { get; set; }
 
     public string TimeAsString { get; set; }
-    
+
     public DateTime Time { get; set; }
 
     public string Value { get; set; }
