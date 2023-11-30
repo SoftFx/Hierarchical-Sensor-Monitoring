@@ -31,9 +31,10 @@ public class DatasourceViewModel
 
     public DatasourceViewModel() { }
 
-    public DatasourceViewModel(PanelDatasource dataSource)
+    public DatasourceViewModel(PanelDatasource dataSource, bool isEdit)
     {
-        var result = dataSource.Source.Initialize().GetAwaiter().GetResult();
+        var (from, to) = dataSource.GetFromTo();
+        var result = (isEdit ? dataSource.Source.Initialize() :dataSource.Source.Initialize(from ,to)).GetAwaiter().GetResult();
 
         Id = dataSource.Id;
         SensorId = dataSource.SensorId;

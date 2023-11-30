@@ -7,11 +7,9 @@ using HSMServer.Model.Dashboards;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Controllers
 {
@@ -38,7 +36,7 @@ namespace HSMServer.Controllers
         {
             _dashboardManager.TryGetValue(dashBoardId, out var dashboard);
             dashboard.Panels.TryGetValue(panelId, out var panel);
-            return View("AddDashboardPanel", new PanelViewModel(panel, dashboard.Id));
+            return View("AddDashboardPanel", new PanelViewModel(panel, dashboard.Id, true));
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}")]
