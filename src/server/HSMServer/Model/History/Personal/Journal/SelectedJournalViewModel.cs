@@ -3,7 +3,6 @@ using HSMServer.Controllers.DataTables;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Extensions;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using System;
@@ -41,7 +40,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
 
         if (_node is not null)
             _node.CheckJournalCount -= CheckJournalCount;
-        
+
         _node = baseNode;
         _node.CheckJournalCount += CheckJournalCount;
 
@@ -69,7 +68,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
                 requests.Add(Task.Run(() => Subscribe(subNode)));
 
             foreach (var (id, _) in product.Sensors)
-                requests.Add(Task.Run(() => LoadRecords(id))); 
+                requests.Add(Task.Run(() => LoadRecords(id)));
         }
 
         return Task.WhenAll(requests);
@@ -100,10 +99,10 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
 
         string FilterFunc(JournalRecordViewModel r, ColumnName type) => r[type];
         DateTime FilterByDate(JournalRecordViewModel r) => r.Time;
-        var records = GetOrderedRecords(filter.Search.Value);
+        var records = GetOrderedRecords(filter);
 
         IOrderedEnumerable<JournalRecordViewModel> Order(ColumnName type, bool asc) => type is ColumnName.Date ?
-            asc ? records.ThenBy(FilterByDate) : records.ThenByDescending(FilterByDate) : 
+            asc ? records.ThenBy(FilterByDate) : records.ThenByDescending(FilterByDate) :
             asc ? records.ThenBy(x => FilterFunc(x, type)) : records.ThenByDescending(x => FilterFunc(x, type));
 
         foreach (var order in filter.Order)
@@ -115,12 +114,13 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
         return (resultRecords.Skip(filter.Start).Take(filter.Length), resultRecords.Count);
     }
 
-    private IOrderedEnumerable<JournalRecordViewModel> GetOrderedRecords(string search)
+    private IOrderedEnumerable<JournalRecordViewModel> GetOrderedRecords(DataTableParameters parameters)
     {
-        bool Filter(JournalRecordViewModel record) => record.SearchValue.Contains(search, StringComparison.OrdinalIgnoreCase);
+        bool Search(string value) => value.Contains(parameters.Search.Value, StringComparison.OrdinalIgnoreCase);
+        bool Filter(JournalRecordViewModel record) => Search(record.SearchValue) || (parameters.NeedSearchPath && Search(record.Path));
         bool EmptyFilter(JournalRecordViewModel _) => true;
 
-        Func<JournalRecordViewModel, bool> filter = string.IsNullOrEmpty(search) ? EmptyFilter : Filter;
+        Func<JournalRecordViewModel, bool> filter = string.IsNullOrEmpty(parameters.Search.Value) ? EmptyFilter : Filter;
 
         return Values.SelectMany(x => x.Where(filter)).OrderBy(x => 1);
     }
@@ -143,7 +143,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
     private JournalRecordViewModel ToView(JournalRecordModel record) => new(record);
 
     private bool CheckJournalCount() => TotalSize == 0;
-    
+
     public void Dispose()
     {
         if (_journal is not null)
