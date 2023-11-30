@@ -66,4 +66,19 @@ namespace HSMDataCollector.Prototypes
             };
         }
     }
+
+
+    internal sealed class WindowsVersionPrototype : WindowsInfoMonitoringPrototype
+    {
+        protected override string SensorName => "Version & patch";
+
+
+        public WindowsVersionPrototype() : base()
+        {
+            Description = "Current version of the OS in the format: *ProductName DisplayVersion (Major.Minor.Build)*.";
+
+            Type = SensorType.StringSensor;
+            AggregateData = true;
+        }
+    }
 }

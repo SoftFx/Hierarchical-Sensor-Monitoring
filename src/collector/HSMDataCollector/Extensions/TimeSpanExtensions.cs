@@ -39,5 +39,13 @@ namespace HSMDataCollector.Extensions
 
             return string.IsNullOrEmpty(ans) ? DefaultEmptyTime : ans;
         }
+
+
+        public static DateTime Ceil(this DateTime time, TimeSpan span)
+        {
+            var roundTicks = span.Ticks;
+
+            return roundTicks == 0 ? time : new DateTime(time.Ticks / roundTicks * roundTicks + roundTicks, DateTimeKind.Utc);
+        }
     }
 }

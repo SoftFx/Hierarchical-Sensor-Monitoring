@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.DefaultSensors.Windows.Service;
+using HSMDataCollector.DefaultSensors.Windows.WindowsInfo;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using System;
@@ -162,8 +163,13 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsLastRestart(_prototype.WindowsLastRestart.Get(options)));
         }
 
+        public IWindowsCollection AddWindowsVersion(WindowsInfoSensorOptions options)
+        {
+            return ToWindows(new WindowsVersion(_prototype.WindowsVersion.Get(options)));
+        }
+
         public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions, InstantSensorOptions logsOptions) =>
-            AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddAllWindowsLogs(logsOptions);
+            AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
 
         public IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options) => AddErrorWindowsLogs(_prototype.WindowsErrorLogsPrototype.Get(options)).AddWarningWindowsLogs(_prototype.WindowsWarningLogsPrototype.Get(options));
 
