@@ -21,7 +21,10 @@ namespace HSMServer.Dashboards
         internal Panel(Dashboard board) : base()
         {
             _board = board;
-            Settings = new PanelSettingsEntity();
+            Settings = new PanelSettingsEntity
+            {
+                ShowLegend = true
+            };
         }
 
         internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
