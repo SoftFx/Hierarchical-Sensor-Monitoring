@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Numerics;
 
 namespace HSMServer.Core.Model
@@ -16,9 +15,6 @@ namespace HSMServer.Core.Model
 
     public abstract record BarBaseValue<T> : BarBaseValue where T : struct, INumber<T>
     {
-        public Dictionary<double, T> Percentiles { get; init; } = new();
-
-
         public T Min { get; init; }
 
         public T Max { get; init; }
@@ -73,7 +69,6 @@ namespace HSMServer.Core.Model
             Comment = value.Comment;
             FirstValue = value.FirstValue;
             LastValue = value.LastValue;
-            Percentiles = value.Percentiles;
             Status = value.Status;
             Time = time?.ToUniversalTime() ?? value.Time;
             ReceivingTime = value.ReceivingTime;

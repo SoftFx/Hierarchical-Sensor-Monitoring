@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Numerics;
 
 namespace HSMServer.Model.History
@@ -21,8 +20,6 @@ namespace HSMServer.Model.History
         public T? FirstValue { get; set; }
 
         public T LastValue { get; set; }
-
-        public Dictionary<double, T> Percentiles { get; set; }
 
 
         public SummaryBarItem(DateTime openTime, DateTime closeTime, T max, T min, T? firstValue, T lastValue)

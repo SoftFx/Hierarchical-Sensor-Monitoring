@@ -23,7 +23,6 @@ namespace HSMServer.Model.History
               Min = summary.Min,
               Max = summary.Max,
               Mean = summary.Mean,
-              Percentiles = summary.Percentiles,
               Time = summary.CloseTime.ToUniversalTime(),
               ReceivingTime = summary.CloseTime.ToUniversalTime(),
               FirstValue = summary.FirstValue,

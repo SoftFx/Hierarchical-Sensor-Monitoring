@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace HSMServer.Core.Model.HistoryValues
 {
@@ -20,15 +19,5 @@ namespace HSMServer.Core.Model.HistoryValues
         public string FirstValue { get; init; }
 
         public string LastValue { get; init; }
-
-        public List<PercentileValue> Percentiles { get; init; }
-    }
-
-
-    public sealed class PercentileValue
-    {
-        public string Value { get; init; }
-
-        public double Percentile { get; init; }
     }
 }

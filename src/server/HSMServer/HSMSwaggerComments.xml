@@ -175,14 +175,5 @@
             <param name="means"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountMedian">
-            <returns>median from the percentiles list</returns>
-        </member>
-        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountQ1">
-            <returns>Q1 from the percentiles list</returns>
-        </member>
-        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountQ3">
-            <returns>Q3 from the percentiles list</returns>
-        </member>
     </members>
 </doc>

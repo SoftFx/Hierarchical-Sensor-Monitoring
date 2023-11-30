@@ -25,13 +25,7 @@ namespace HSMSensorDataObjects.SensorValueRequests
 
         public T LastValue { get; set; }
 
-        [Obsolete("The property doesn't contain right values")]
+        [Obsolete("The property is not used in server calculations")]
         public Dictionary<double, T> Percentiles { get; set; }
-
-
-        public BarSensorValueBase()
-        {
-            Percentiles = new Dictionary<double, T>();
-        }
     }
 }

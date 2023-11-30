@@ -39,14 +39,12 @@ namespace HSMServer.Core.Tests.Infrastructure
                     var actualIntBar = actual as IntegerBarValue;
 
                     TestBarValue(expectedIntBar, actualIntBar);
-                    TestPercentiles(expectedIntBar, actualIntBar);
 
                     break;
                 case DoubleBarSensorValue expectedDoubleBar:
                     var actualDoubleBar = actual as DoubleBarValue;
 
                     TestBarValue(expectedDoubleBar, actualDoubleBar);
-                    TestPercentiles(expectedDoubleBar, actualDoubleBar);
 
                     break;
             }
@@ -73,20 +71,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Mean, actual.Mean);
             Assert.Equal(expected.FirstValue, actual.FirstValue);
             Assert.Equal(expected.LastValue, actual.LastValue);
-        }
-
-        private static void TestPercentiles(DoubleBarSensorValue expected, DoubleBarValue actual)
-        {
-            var expectedDict = expected.Percentiles ?? new();
-
-            Assert.Equal(expectedDict, actual.Percentiles);
-        }
-
-        private static void TestPercentiles(IntBarSensorValue expected, IntegerBarValue actual)
-        {
-            var expectedDict = expected.Percentiles ?? new();
-
-            Assert.Equal(expectedDict, actual.Percentiles);
         }
 
 

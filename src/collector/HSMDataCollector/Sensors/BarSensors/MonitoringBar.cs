@@ -77,10 +77,6 @@ namespace HSMDataCollector.DefaultSensors
                     Min = Round(Min);
                     Max = Round(Max);
                     Mean = Round(CountMean());
-
-                    Percentiles[0.25] = Round(CountAvr(Mean, Min));
-                    Percentiles[0.5] = Mean;
-                    Percentiles[0.75] = Round(CountAvr(Mean, Max));
                 }
 
                 return this;

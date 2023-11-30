@@ -9,7 +9,6 @@ namespace HSMServer.Model.History
     internal abstract class BarHistoryProcessor<T> : HistoryProcessorBase where T : struct, INumber<T>, IComparable
     {
         private readonly List<(T, int)> _meanList = new();
-        private readonly List<T> _percentilesList = new();
 
 
         protected abstract T DefaultMax { get; }
@@ -68,8 +67,6 @@ namespace HSMServer.Model.History
             try
             {
                 _meanList.Add((value.Mean, value.Count));
-                if (value.Percentiles != null && value.Percentiles.Count > 0)
-                    _percentilesList.AddRange(value.Percentiles.Select(p => p.Value));
             }
             catch { }
         }
@@ -81,38 +78,11 @@ namespace HSMServer.Model.History
         private void AddValueFromLists(SummaryBarItem<T> summary)
         {
             summary.Mean = CountMean(_meanList);
-            summary.Percentiles = new();
-
-            //Just add values that "seem to be fine" if there is no more data
-            if (_percentilesList.Count < 3)
-            {
-                summary.Percentiles.Add(0.5, summary.Mean);
-                summary.Percentiles.Add(0.25, summary.Min);
-                summary.Percentiles.Add(0.75, summary.Max);
-                return;
-            }
-
-            _percentilesList.Sort();
-
-            //Special case where Q1 and Q3 calculations may fail
-            if (_percentilesList.Count == 3)
-            {
-                summary.Percentiles.Add(0.5, _percentilesList[1]);
-                summary.Percentiles.Add(0.25, _percentilesList[0]);
-                summary.Percentiles.Add(0.75, _percentilesList[2]);
-                return;
-            }
-
-            //Calculate all percentiles normally
-            summary.Percentiles.Add(0.5, CountMedian());
-            summary.Percentiles.Add(0.25, CountQ1());
-            summary.Percentiles.Add(0.75, CountQ3());
         }
 
         private void ClearLists()
         {
             _meanList.Clear();
-            _percentilesList.Clear();
         }
 
         private BarBaseValue<T> Convert(SummaryBarItem<T> summary, bool isCompressed = true)
@@ -172,35 +142,6 @@ namespace HSMServer.Model.History
                 return default;
 
             return Convert(sum / commonCount);
-        }
-
-        /// <returns>median from the percentiles list</returns>
-        private T CountMedian()
-        {
-            var index = _percentilesList.Count - 1;
-
-            int left = index / 2;
-            int right = left + (index % 2);
-
-            return Average(_percentilesList[left], _percentilesList[right]);
-        }
-
-        /// <returns>Q1 from the percentiles list</returns>
-        private T CountQ1()
-        {
-            int left = _percentilesList.Count / 4;
-            int right = left + (_percentilesList.Count % 2);
-
-            return Average(_percentilesList[left], _percentilesList[right]);
-        }
-
-        /// <returns>Q3 from the percentiles list</returns>
-        private T CountQ3()
-        {
-            int left = (3 * _percentilesList.Count - 2) / 4;
-            int right = left + (_percentilesList.Count % 2);
-
-            return Average(_percentilesList[left], _percentilesList[right]);
         }
     }
 }
