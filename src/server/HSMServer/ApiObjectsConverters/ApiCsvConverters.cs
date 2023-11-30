@@ -30,6 +30,8 @@ namespace HSMServer.ApiObjectsConverters
 
         public string PropertyName { get; }
 
+        internal bool IsTime => PropertyName.Contains("time", StringComparison.InvariantCultureIgnoreCase);
+
 
         public Header(string displayName, string propertyName, Func<BaseValue, string> getPropFunc = null)
         {
@@ -144,7 +146,7 @@ namespace HSMServer.ApiObjectsConverters
 
             static string GetTransformedValue(Header column, BaseValue value, string propValue)
             {
-                if (column.PropertyName != nameof(BaseValue.Comment) && DateTime.TryParse(propValue, out var dateTime))
+                if ((column.IsTime || (value is TimeSpanValue && column.PropertyName == nameof(TimeSpanValue.Value))) && DateTime.TryParse(propValue, out var dateTime))
                     return dateTime.ToDefaultFormat();
 
                 if (value.IsTimeout && !_validProperties.TryGetValue(column.PropertyName, out _))
