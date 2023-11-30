@@ -364,7 +364,7 @@ export class BarPLot extends Plot {
             this.high.push(i.max);
             this.low.push(i.min);
 
-            this.open.push(i.firstValue);
+            this.open.push(i.firstValue === null ? i.min : i.firstValue);
             this.text.push(
                 'min: ' + i.min +
                 '<br>mean: ' + i.mean +

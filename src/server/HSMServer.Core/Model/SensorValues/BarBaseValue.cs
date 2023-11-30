@@ -14,7 +14,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract record BarBaseValue<T> : BarBaseValue where T : INumber<T>
+    public abstract record BarBaseValue<T> : BarBaseValue where T : struct, INumber<T>
     {
         public Dictionary<double, T> Percentiles { get; init; } = new();
 
@@ -25,7 +25,7 @@ namespace HSMServer.Core.Model
 
         public T Mean { get; init; }
 
-        public T FirstValue { get; init; }
+        public T? FirstValue { get; init; }
 
         public T LastValue { get; init; }
 
@@ -55,7 +55,7 @@ namespace HSMServer.Core.Model
         protected override bool IsEqual(BaseValue value) => false;
     }
 
-    public sealed record NotCompressedValue<T> : BarBaseValue<T> where T : INumber<T>
+    public sealed record NotCompressedValue<T> : BarBaseValue<T> where T : struct, INumber<T>
     {
         public bool IsCompressed { get; set; } = false;
 

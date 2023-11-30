@@ -13,7 +13,7 @@ namespace HSMSensorDataObjects.SensorValueRequests
     }
 
 
-    public abstract class BarSensorValueBase<T> : BarSensorValueBase
+    public abstract class BarSensorValueBase<T> : BarSensorValueBase where T : struct
     {
         public T Min { get; set; }
 
@@ -21,7 +21,7 @@ namespace HSMSensorDataObjects.SensorValueRequests
 
         public T Mean { get; set; }
 
-        public T FirstValue { get; set; }
+        public T? FirstValue { get; set; }
 
         public T LastValue { get; set; }
 

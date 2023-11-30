@@ -5,7 +5,7 @@ using System;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class MonitoringBarBase<T> : BarSensorValueBase<T>
+    public abstract class MonitoringBarBase<T> : BarSensorValueBase<T> where T : struct
     {
         private readonly object _lock = new object();
 
@@ -71,7 +71,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (Count > 0)
                 {
-                    FirstValue = Round(FirstValue);
+                    FirstValue = FirstValue.HasValue ? Round(FirstValue.Value) : FirstValue;
                     LastValue = Round(LastValue);
 
                     Min = Round(Min);
