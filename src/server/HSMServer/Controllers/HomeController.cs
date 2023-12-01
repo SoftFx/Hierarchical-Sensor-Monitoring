@@ -54,6 +54,7 @@ namespace HSMServer.Controllers
             _telegramChatsManager = telegramChatsManager;
         }
 
+        [HttpGet("/Home")]
         public IActionResult Index() => View();
 
         [HttpGet("/Home/{sensorId:guid}")]
