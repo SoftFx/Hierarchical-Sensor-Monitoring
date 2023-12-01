@@ -10,7 +10,7 @@ namespace HSMDataCollector.DefaultSensors
 {
     internal abstract class FreeDiskSpacePredictionBase : MonitoringSensorBase<TimeSpan>
     {
-        public const int DefaultSpaceCheckPeriodInSec = 15;
+        public const int DefaultSpaceCheckPeriodInSec = 30;
 
         private readonly TimeSpan _calculateSpeedDelay;
         private readonly IDiskInfo _diskInfo;
@@ -66,7 +66,10 @@ namespace HSMDataCollector.DefaultSensors
             if (IsCalibration)
                 return $"Calibration request ({_requestsCount}/{_calibrationRequests})";
 
-            return _isOffTime ? $"Free space increases by {-_currentChangeSpeed.BytesToMegabytes():F2} Mbytes/sec. Value cannot be calculated." : base.GetComment();
+            var mbPerSec = _currentChangeSpeed.BytesToMegabytes();
+
+            return _isOffTime ? $"Free space increases by {-mbPerSec:F4} Mbytes/sec. Value cannot be calculated." :
+                                $"Free space decreases by {mbPerSec:F4} Mbytes/sec.";
         }
 
         protected sealed override SensorStatus GetStatus() => IsCalibration || _isOffTime ? SensorStatus.OffTime : base.GetStatus();
