@@ -83,10 +83,11 @@
                     type:'delete',
                     url: window.location.pathname + '/' + id
                 }).done(function (response){
-                    Plotly.deleteTraces('multichart', model.id).then(function (){
-                        $('[id^="source"] li')[model.id].remove();
-                        updateCurrentPlotsIds(model.id, id)
-                    })
+                    Plotly.deleteTraces('multichart', model.id).then(
+                        (data) => {
+                            $('[id^="source"] li')[model.id].remove();
+                            updateCurrentPlotsIds(model.id, id)}
+                    )
                 }).fail(function (response){
                     showToast(response.responseText);
                 })
