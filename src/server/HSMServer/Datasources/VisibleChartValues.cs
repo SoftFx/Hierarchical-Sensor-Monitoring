@@ -47,4 +47,23 @@ namespace HSMServer.Datasources
             }
         }
     }
+
+    public sealed class TimeSpanValue : BaseChartValue
+    {
+        public TimeSpan Value { get; private set; }
+
+
+        public TimeSpanValue(BaseValue<TimeSpan> value)
+        {
+            Time = value.Time;
+            Value = value.Value;
+        }
+
+
+        internal override void Apply(BaseValue rawValue)
+        {
+            if (rawValue is BaseValue<TimeSpan> value)
+                Value = value.Value;
+        }
+    }
 }

@@ -32,7 +32,7 @@ namespace HSMServer.Datasources
         private bool _aggreagateValues;
 
 
-        protected abstract ChartType AggreatedType { get; }
+        protected abstract ChartType AggregatedType { get; }
 
         protected abstract ChartType NormalType { get; }
 
@@ -80,7 +80,7 @@ namespace HSMServer.Datasources
 
             return new()
             {
-                ChartType = _aggreagateValues ? AggreatedType : NormalType,
+                ChartType = _aggreagateValues ? AggregatedType : NormalType,
                 Values = _curValues.ToList(),
             };
         }
@@ -149,7 +149,7 @@ namespace HSMServer.Datasources
     {
         protected override ChartType NormalType => ChartType.Points;
 
-        protected override ChartType AggreatedType => ChartType.StackedBars;
+        protected override ChartType AggregatedType => ChartType.StackedBars;
 
 
         protected override BaseChartValue Convert(BaseValue baseValue)
@@ -163,7 +163,7 @@ namespace HSMServer.Datasources
     {
         protected override ChartType NormalType => ChartType.Bars;
 
-        protected override ChartType AggreatedType => ChartType.Bars;
+        protected override ChartType AggregatedType => ChartType.Bars;
 
 
         protected override BaseChartValue Convert(BaseValue baseValue)
@@ -177,10 +177,21 @@ namespace HSMServer.Datasources
     {
         protected override ChartType NormalType => ChartType.Line;
 
-        protected override ChartType AggreatedType => ChartType.Line;
+        protected override ChartType AggregatedType => ChartType.Line;
 
 
         protected override BaseChartValue Convert(BaseValue rawValue) =>
             rawValue is BaseValue<T> value ? new LineChartValue<T>(value) : null;
+    }
+
+    public sealed class TimespanDatasource : SensorDatasourceBase
+    {
+        protected override ChartType AggregatedType { get; } = ChartType.Line;
+
+        protected override ChartType NormalType { get; } = ChartType.Line;
+        
+
+        protected override BaseChartValue Convert(BaseValue baseValue) =>
+            baseValue is BaseValue<TimeSpan> value ? new TimeSpanValue(value) : null;
     }
 }
