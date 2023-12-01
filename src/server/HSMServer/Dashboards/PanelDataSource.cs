@@ -9,9 +9,6 @@ namespace HSMServer.Dashboards
 {
     public sealed class PanelDatasource
     {
-        private readonly BaseSensorModel _sensor;
-        private readonly Dashboard _board;
-
         public SensorDatasourceBase Source { get; }
 
         public Guid SensorId { get; }
@@ -22,24 +19,19 @@ namespace HSMServer.Dashboards
         public Color Color { get; set; }
 
         public string Label { get; set; }
-        
-        public TimeSpan DataPeriod { get; set; }
 
 
-        public PanelDatasource(BaseSensorModel sensor, Dashboard dashboard)
+        public PanelDatasource(BaseSensorModel sensor)
         {
-            _sensor = sensor;
-            _board = dashboard;
+            Label = sensor.DisplayName;
+            SensorId = sensor.Id;
 
-            Label = _sensor.DisplayName;
-            SensorId = _sensor.Id;
-
-            Source = DatasourceFactory.Build(_sensor.Type).AttachSensor(sensor);
+            Source = DatasourceFactory.Build(sensor.Type).AttachSensor(sensor);
             Color = Color.FromName(ColorExtensions.GenerateRandomColor());
             Id = Guid.NewGuid();
         }
 
-        public PanelDatasource(PanelSourceEntity entity, BaseSensorModel sensor, Dashboard dashboard) : this(sensor, dashboard)
+        public PanelDatasource(BaseSensorModel sensor, PanelSourceEntity entity) : this(sensor)
         {
             Id = new Guid(entity.Id);
             SensorId = new Guid(entity.SensorId);
@@ -48,8 +40,6 @@ namespace HSMServer.Dashboards
             Label = entity.Label;
         }
 
-
-        public (DateTime From, DateTime To) GetFromTo() => (DateTime.UtcNow.AddTicks(-_board.DataPeriod.Ticks), DateTime.UtcNow);
 
         public PanelSourceEntity ToEntity() =>
             new()

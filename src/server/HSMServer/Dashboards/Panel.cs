@@ -66,7 +66,7 @@ namespace HSMServer.Dashboards
         {
             if (_board.TryGetSensor(sensorId, out var sensor))
             {
-                var source = entity is null ? new PanelDatasource(sensor, _board) : new PanelDatasource(entity, sensor, _board);
+                var source = entity is null ? new PanelDatasource(sensor) : new PanelDatasource(sensor, entity);
 
                 return Sources.TryAdd(source.Id, source);
             }

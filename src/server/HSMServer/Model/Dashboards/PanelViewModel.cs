@@ -5,6 +5,7 @@ using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Model.Dashboards;
 
@@ -34,7 +35,7 @@ public sealed class PanelViewModel
 
     public PanelViewModel() { }
 
-    public PanelViewModel(Panel panel, Guid dashboardId, bool isEdit = false)
+    public PanelViewModel(Panel panel, Guid dashboardId)
     {
         Name = panel.Name ?? DefaultName;
         Description = panel.Description;
@@ -42,8 +43,17 @@ public sealed class PanelViewModel
         DashboardId = dashboardId;
         Settings = panel.Settings;
 
-        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Key, x => new DatasourceViewModel(x.Value, isEdit)));
+        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Key, x => new DatasourceViewModel(x.Value)));
     }
+
+
+    public async Task<PanelViewModel> InitPanelData(DateTime? from = null)
+    {
+        await Task.WhenAll(Sources.Values.Select(t => t.LoadDataFrom(from)));
+
+        return this;
+    }
+
 
     public bool TryAddSource(SensorNodeViewModel source, out string message)
     {

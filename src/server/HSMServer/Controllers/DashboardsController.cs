@@ -33,11 +33,13 @@ namespace HSMServer.Controllers
 
         [ApiExplorerSettings(IgnoreApi = true)]
         [Route("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public IActionResult AddDashboardPanel(Guid dashBoardId, Guid panelId)
+        public async Task<IActionResult> AddDashboardPanel(Guid dashBoardId, Guid panelId)
         {
             _dashboardManager.TryGetValue(dashBoardId, out var dashboard);
             dashboard.Panels.TryGetValue(panelId, out var panel);
-            return View("AddDashboardPanel", new PanelViewModel(panel, dashboard.Id, true));
+            var vm = new PanelViewModel(panel, dashboard.Id);
+
+            return View("AddDashboardPanel", await vm.InitPanelData());
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}")]
@@ -113,7 +115,7 @@ namespace HSMServer.Controllers
                         try
                         {
                             var sensorModel = _cache.GetSensor(sourceId);
-                            var datasource = new PanelDatasource(sensorModel, dashboard);
+                            var datasource = new PanelDatasource(sensorModel);
 
                             if (panel.Sources.TryAdd(datasource.Id, datasource) && (await _dashboardManager.TryUpdate(dashboard)))
                             {
@@ -197,11 +199,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}")]
-        public IActionResult EditDashboard(Guid dashboardId, bool isModify = false)
+        public async Task<IActionResult> EditDashboard(Guid dashboardId, bool isModify = false)
         {
             _dashboardManager.TryGetValue(dashboardId, out var dashboard);
 
-            return View(nameof(EditDashboard), new DashboardViewModel(dashboard, isModify));
+            var vm = new DashboardViewModel(dashboard, isModify);
+
+            return View(nameof(EditDashboard), await vm.InitDashboardData());
         }
 
         [HttpGet]
@@ -258,7 +262,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetPanel(Guid dashboardId)
+        public async Task<IActionResult> GetPanel(Guid dashboardId)
         {
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
@@ -266,10 +270,12 @@ namespace HSMServer.Controllers
 
                 dashboard.TryAddPanel(newPanel);
 
-                return PartialView("_Panel", new PanelViewModel(newPanel, dashboard.Id));
+                var vm = new PanelViewModel(newPanel, dashboard.Id);
+
+                return PartialView("_Panel", await vm.InitPanelData());
             }
 
-            return EditDashboard(dashboardId);
+            return await EditDashboard(dashboardId);
         }
     }
 }

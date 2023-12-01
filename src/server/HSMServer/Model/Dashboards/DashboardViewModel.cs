@@ -3,12 +3,16 @@ using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Model.Dashboards
 {
     public sealed class DashboardViewModel
     {
         private const string DefaultName = "New Dashboard";
+
+        private readonly Dashboard _dashboard;
+
 
         public List<PanelViewModel> Panels { get; set; } = new();
 
@@ -18,7 +22,7 @@ namespace HSMServer.Model.Dashboards
         public string Name { get; set; }
 
         public string Description { get; set; }
-        
+
         public TimeSpan FromPeriod { get; set; }
 
 
@@ -29,6 +33,8 @@ namespace HSMServer.Model.Dashboards
 
         public DashboardViewModel(Dashboard dashboard, bool isModify = true)
         {
+            _dashboard = dashboard;
+
             Id = dashboard.Id;
             Name = dashboard.Name;
             Description = dashboard.Description;
@@ -38,6 +44,15 @@ namespace HSMServer.Model.Dashboards
             IsModify = isModify;
         }
 
+
+        public async Task<DashboardViewModel> InitDashboardData()
+        {
+            var from = DateTime.UtcNow - _dashboard.DataPeriod;
+
+            await Task.WhenAll(Panels.Select(t => t.InitPanelData(from)));
+
+            return this;
+        }
 
         internal DashboardUpdate ToDashboardUpdate() =>
             new()
