@@ -54,15 +54,13 @@ namespace HSMServer.Controllers
             _telegramChatsManager = telegramChatsManager;
         }
 
-
-        [HttpGet("/Home/Index")]
-        public IActionResult FromIndexRedirect() => Redirect("/Home");
+        [Route("/Home/Index")]
+        public IActionResult HomeIndex() => Redirect("/Home");
         
-        [HttpGet("/Home")]
-        public IActionResult Index() => View();
-
-        [HttpGet("/Home/{sensorId:guid}")]
-        public IActionResult RedirectHome(Guid sensorId)
+        [Route("/")]
+        [Route("/Home")]
+        [Route("/Home/{sensorId:guid}")]
+        public IActionResult Index(Guid sensorId)
         {
             if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
             {
@@ -74,8 +72,8 @@ namespace HSMServer.Controllers
                     parent = node.Parent;
                 }
             }
-            
-            return View("Index");
+
+            return View();
         }
 
         [HttpPost]
