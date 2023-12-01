@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.DefaultSensors.Windows;
 using HSMSensorDataObjects.SensorRequests;
 using System.Collections.Generic;
 
@@ -8,7 +9,7 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
     {
         protected override string SensorNameTemplate => "Active time on {0} disk";
 
-        protected override string DescriptionPath => "% Disk Time";
+        protected override string DescriptionPath => WindowsActiveTimeDisk.Counter;
 
 
         public WindowsActiveTimeDiskPrototype() : base()
