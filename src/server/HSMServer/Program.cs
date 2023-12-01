@@ -91,10 +91,12 @@ try
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
 
     app.MapControllers();
+ 
     app.MapControllerRoute(
         name: "Account",
         pattern: "{controller=Account}/{action}",
         defaults: new { controller = "Account" });
+
     app.MapControllerRoute(
         name: "Home",
         pattern: "{controller=Home}/{action=Index}");
