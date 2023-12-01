@@ -86,11 +86,11 @@ namespace HSMDataCollector.DefaultSensors
 
             if (_currentChangeSpeed > 0.0)
             {
-                var newPreduction = TimeSpan.FromSeconds(curSpace / _currentChangeSpeed);
+                var newPrediction = TimeSpan.FromSeconds(curSpace / _currentChangeSpeed);
 
-                _prevPrediction = newPreduction;
+                _prevPrediction = newPrediction;
 
-                return newPreduction;
+                return newPrediction;
             }
 
             return _prevPrediction;

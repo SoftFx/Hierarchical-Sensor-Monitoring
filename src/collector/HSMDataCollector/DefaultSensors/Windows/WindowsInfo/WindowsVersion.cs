@@ -3,17 +3,17 @@ using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using System;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors.Windows.WindowsInfo
 {
     internal sealed class WindowsVersion : MonitoringSensorBase<string>
     {
-        private const string NotFindError = "OS version information not found";
-
-        protected override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
+        private const string NotFoundError = "OS version information not found";
 
         private string _lastVersion;
+
+
+        protected override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
 
 
         public WindowsVersion(WindowsInfoSensorOptions options) : base(options) { }
@@ -24,13 +24,12 @@ namespace HSMDataCollector.DefaultSensors.Windows.WindowsInfo
             var sb = new StringBuilder(1 << 5);
 
             sb.Append(RegistryInfo.GetCurrentWindowsProductName())
-              .Append(" ")
-              .Append(RegistryInfo.GetCurrentWindowsDisplayVersion())
+              .Append($" {RegistryInfo.GetCurrentWindowsDisplayVersion()}")
               .Append($" ({RegistryInfo.GetCurrentWindowsFullBuildVersion()})");
 
             _lastVersion = sb.ToString();
 
-            return _lastVersion.Trim() == "()" ? NotFindError : _lastVersion;
+            return _lastVersion.Trim() == "()" ? NotFoundError : _lastVersion;
         }
 
         protected override SensorStatus GetStatus() => string.IsNullOrEmpty(_lastVersion) ? SensorStatus.Error : SensorStatus.Ok;
