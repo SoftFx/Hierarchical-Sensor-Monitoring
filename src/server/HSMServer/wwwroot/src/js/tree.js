@@ -79,6 +79,9 @@ window.initializeTree = function () {
         }
     }).on('open_node.jstree', function (e, data) {
         collapseButton.reset();
+    }).on('dblclick.jstree', function (event){
+        let node = $(event.target).closest("li");
+        redirectToHome(node.attr('id'))
     });
 
     $("#search_tree").on('click', function () {

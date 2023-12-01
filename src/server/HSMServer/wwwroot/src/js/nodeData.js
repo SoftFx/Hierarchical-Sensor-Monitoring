@@ -9,7 +9,13 @@ window.initializeTreeNode = function () {
             selectNodeAjax(data.node.id);
         }
     }).on("state_ready.jstree", function () {
-        selectNodeAjax($(this).jstree('get_selected')[0]);
+        let selected = $(this).jstree('get_selected')[0];
+
+        let id = window.location.pathname.slice("/Home/".length)
+        if (id !== '' && id !== undefined)
+            selected = id;
+
+        selectNodeAjax(selected);
     });
 }
 
@@ -35,6 +41,8 @@ function selectNodeAjax(selectedId) {
         saveMetaData(selectedId);
     }
     else {
+        $('#jstree').jstree('deselect_all').jstree('select_node', selectedId);
+        window.history.replaceState( {} , document.title, `/Home/${selectedId}` )
         initSelectedNode(selectedId);
     }
 }
