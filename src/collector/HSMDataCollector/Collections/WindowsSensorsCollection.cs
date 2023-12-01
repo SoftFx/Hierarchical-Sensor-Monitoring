@@ -21,7 +21,8 @@ namespace HSMDataCollector.DefaultSensors
         public IWindowsCollection AddAllModuleSensors(Version productVersion)
         {
             var moduleCollection = (this as IWindowsCollection).AddProcessMonitoringSensors()
-                                                               .AddCollectorMonitoringSensors();
+                                                               .AddCollectorMonitoringSensors()
+                                                               .AddAllQueueDiagnosticSensors();
 
             if (productVersion != null)
             {

@@ -20,7 +20,8 @@ namespace HSMDataCollector.DefaultSensors
         public IUnixCollection AddAllModuleSensors(Version productVersion)
         {
             var moduleCollection = (this as IUnixCollection).AddProcessMonitoringSensors()
-                                                            .AddCollectorMonitoringSensors();
+                                                            .AddCollectorMonitoringSensors()
+                                                            .AddAllQueueDiagnosticSensors();
 
             if (productVersion != null)
             {
