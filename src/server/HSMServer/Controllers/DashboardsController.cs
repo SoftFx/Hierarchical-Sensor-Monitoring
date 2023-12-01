@@ -189,7 +189,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}")]
-        public IActionResult EditDashboard(Guid dashboardId, bool isModify = true)
+        public IActionResult EditDashboard(Guid dashboardId, bool isModify = false)
         {
             _dashboardManager.TryGetValue(dashboardId, out var dashboard);
 

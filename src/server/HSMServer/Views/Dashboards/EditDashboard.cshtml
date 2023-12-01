@@ -16,7 +16,7 @@
 
 <div class="d-flex flex-column w-100">
     <div class="m-2">
-        <div id="dashboardSettings" class="my-2 @(isModify ? string.Empty : "d-none")">
+        <div id="dashboardSettings" class="my-2 @(!isModify ? string.Empty : "d-none")">
             <div class="d-flex justify-content-between mb-1">
                 <h5 id="name">@Model.Name</h5>
 
@@ -30,7 +30,7 @@
             <div id="markdown_description">@Model.Description</div>
         </div>
 
-        <div id="editableDashboardSettings" class="my-2 @(isModify ? "d-none" : string.Empty)">
+        <div id="editableDashboardSettings" class="my-2 @(!isModify ? "d-none" : string.Empty)">
             <form id="saveDashBoardForm" method="post" asp-action="@nameof(DashboardsController.EditDashboard)">
                 <input class="d-none" asp-for="Id" value="@Model.Id"/>
 
@@ -62,7 +62,7 @@
                 <option value="06:00:00">last 6 hours</option>
             </select>
 
-            <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? "d-none" : string.Empty)" href="javascript:addPanel();">
+            <a id="addPanel" class="icon-link text-nowrap ms-2" href="javascript:addPanel();">
                 <i class="fa-solid fa-plus">
                     <use xlink:href="#box-seam">
                 </i> Add panel
@@ -105,7 +105,10 @@
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description');
         initDashboard();
-        disableDragAndResize();
+
+        if (!window.location.search.toLowerCase().includes('isModify=true'.toLowerCase()))
+            disableDragAndResize();
+
         if(change !== 0)
             targetNode.style.minHeight = change + "px";
 
