@@ -28,7 +28,7 @@ namespace HSMServer.Datasources
 
         internal LineChartValue(BaseValue<T> value)
         {
-            Time = value.ReceivingTime;
+            Time = value.Time;
             Value = value.Value;
         }
 
