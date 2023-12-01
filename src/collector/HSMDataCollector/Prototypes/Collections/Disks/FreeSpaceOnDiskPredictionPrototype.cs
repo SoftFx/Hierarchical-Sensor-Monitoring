@@ -1,9 +1,6 @@
-﻿using HSMDataCollector.Alerts;
-using HSMDataCollector.Options;
+﻿using HSMDataCollector.Options;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorRequests;
 using System;
-using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -11,19 +8,20 @@ namespace HSMDataCollector.Prototypes
     {
         private const string CalibrationInfo = "After the start of the sensor, it's calibrated during {0} requests that post with OffTime status.";
 
-        protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromHours(1);
+        protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromMinutes(5);
 
 
         public FreeSpaceOnDiskPredictionPrototype() : base()
         {
             Type = SensorType.TimeSpanSensor;
 
-            Alerts = new List<InstantAlertTemplate>()
-            {
-                AlertsFactory.IfValue(AlertOperation.LessThanOrEqual, TimeSpan.FromDays(2))
-                             .ThenSendNotification($"[$product] $sensor. Free disk space will run out in about $value")
-                             .AndSetSensorError().Build(),
-            };
+
+            //Alerts = new List<InstantAlertTemplate>()
+            //{
+            //    AlertsFactory.IfValue(AlertOperation.LessThanOrEqual, TimeSpan.FromDays(2))
+            //                 .ThenSendNotification($"[$product] $sensor. Free disk space will run out in about $value")
+            //                 .AndSetSensorError().Build(),
+            //};
         }
 
 

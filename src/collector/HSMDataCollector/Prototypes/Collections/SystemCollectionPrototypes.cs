@@ -1,4 +1,6 @@
 ﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.DefaultSensors.Windows;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
@@ -49,6 +51,28 @@ namespace HSMDataCollector.Prototypes
             {
                 AlertsFactory.IfMean(AlertOperation.GreaterThan, 50).ThenSendNotification("[$product]$path $property $operation $target%").AndSetIcon(AlertIcon.Warning).Build(),
             };
+        }
+    }
+
+
+    internal sealed class TimeInGCPrototype : SystemMonitoringPrototype
+    {
+        protected override string SensorName => "Time in GC";
+
+
+        public TimeInGCPrototype() : base()
+        {
+            SensorUnit = Unit.Percents;
+        }
+
+
+        public override BarSensorOptions Get(BarSensorOptions customOptions)
+        {
+            var options = base.Get(customOptions);
+
+            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView(), $"{WindowsTimeInGCBase.Category}/{WindowsTimeInGCBase.Counter}");
+
+            return options;
         }
     }
 }

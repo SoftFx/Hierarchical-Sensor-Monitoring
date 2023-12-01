@@ -25,21 +25,30 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         internal override Task<bool> Init()
         {
-            if (string.IsNullOrEmpty(InstanceName))
-                _performanceCounter = new PerformanceCounter(CategoryName, CounterName);
-            else
+            try
             {
-                var category = new PerformanceCounterCategory(CategoryName);
-                var instantName = category.GetInstanceNames().FirstOrDefault(u => u.Contains(InstanceName));
-
-                if (instantName == null)
+                if (string.IsNullOrEmpty(InstanceName))
+                    _performanceCounter = new PerformanceCounter(CategoryName, CounterName);
+                else
                 {
-                    ThrowException(new ArgumentNullException($"Performance counter: {CategoryName}/{CounterName} instance {InstanceName} not found"));
+                    var category = new PerformanceCounterCategory(CategoryName);
+                    var instantName = category.GetInstanceNames().FirstOrDefault(u => u.Contains(InstanceName));
 
-                    return Task.FromResult(false);
+                    if (instantName == null)
+                    {
+                        ThrowException(new ArgumentNullException($"Performance counter: {CategoryName}/{CounterName} instance {InstanceName} not found"));
+
+                        return Task.FromResult(false);
+                    }
+
+                    _performanceCounter = new PerformanceCounter(CategoryName, CounterName, instantName);
                 }
+            }
+            catch (Exception ex)
+            {
+                ThrowException(new Exception($"Error initializing performance counter: {CategoryName}/{CounterName} instance {InstanceName}: {ex}"));
 
-                _performanceCounter = new PerformanceCounter(CategoryName, CounterName, instantName);
+                return Task.FromResult(false);
             }
 
             return base.Init();

@@ -11,6 +11,8 @@ namespace HSMDataCollector.Options
 
         internal ProcessThreadCountPrototype ProcessThreadCount { get; }
 
+        internal ProcessTimeInGCPrototype ProcessTimeInGC { get; }
+
         internal ProcessMemoryPrototype ProcessMemory { get; }
 
         internal ProcessCpuPrototype ProcessCpu { get; }
@@ -19,6 +21,8 @@ namespace HSMDataCollector.Options
         internal FreeRamMemoryPrototype FreeRam { get; }
 
         internal TotalCPUPrototype TotalCPU { get; }
+
+        internal TimeInGCPrototype TimeInGC { get; }
 
         #endregion
 
@@ -46,6 +50,8 @@ namespace HSMDataCollector.Options
         internal WindowsLastRestartPrototype WindowsLastRestart { get; }
 
         internal WindowsLastUpdatePrototype WindowsLastUpdate { get; }
+
+        internal WindowsVersionPrototype WindowsVersion { get; }
 
         internal WindowsErrorLogsPrototype WindowsErrorLogsPrototype { get; }
 
@@ -96,10 +102,12 @@ namespace HSMDataCollector.Options
 
 
             ProcessThreadCount = Register<ProcessThreadCountPrototype>();
+            ProcessTimeInGC = Register<ProcessTimeInGCPrototype>();
             ProcessMemory = Register<ProcessMemoryPrototype>();
             ProcessCpu = Register<ProcessCpuPrototype>();
             FreeRam = Register<FreeRamMemoryPrototype>();
             TotalCPU = Register<TotalCPUPrototype>();
+            TimeInGC = Register<TimeInGCPrototype>();
 
             WindowsFreeSpaceOnDiskPrediction = Register<WindowsFreeSpaceOnDiskPredictionPrototype>();
             WindowsFreeSpaceOnDisk = Register<WindowsFreeSpaceOnDiskPrototype>();
@@ -111,8 +119,10 @@ namespace HSMDataCollector.Options
 
             WindowsLastRestart = Register<WindowsLastRestartPrototype>();
             WindowsLastUpdate = Register<WindowsLastUpdatePrototype>();
-            WindowsErrorLogsPrototype = Register<WindowsErrorLogsPrototype>();
+            WindowsVersion = Register<WindowsVersionPrototype>();
+
             WindowsWarningLogsPrototype = Register<WindowsWarningLogsPrototype>();
+            WindowsErrorLogsPrototype = Register<WindowsErrorLogsPrototype>();
 
             CollectorVersion = Register<CollectorVersionPrototype>();
             CollectorErrors = Register<CollectorErrorsPrototype>();
@@ -122,10 +132,10 @@ namespace HSMDataCollector.Options
             ProductVersion = Register<ProductVersionPrototype>();
             ServiceStatus = Register<ServiceStatusPrototype>();
 
-            QueueOverflow = Register<QueueOverflowPrototype>().ApplyOptions(options);
             PackageValuesCount = Register<PackageValuesCountPrototype>().ApplyOptions(options);
             PackageProcessTime = Register<PackageProcessTimePrototype>().ApplyOptions(options);
             PackageContentSize = Register<PackageContentSizePrototype>();
+            QueueOverflow = Register<QueueOverflowPrototype>().ApplyOptions(options);
         }
     }
 }

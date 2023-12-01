@@ -40,7 +40,8 @@ else
                         <th>Min</th>
                         <th>Mean</th>
                         <th>Max</th>
-                        <th>Last value</th>
+                        <th id="firstValue_header" class="d-none">First value</th>
+                        <th id="lastValue_header" class="d-none">Last value</th>
                         <th>Count</th>
                     }
                     else
@@ -86,7 +87,8 @@ else
                                 <td></td>
                                 <td></td>
                                 <td></td>
-                                <td></td>
+                                <td id="firstValue_value@(i)" class="d-none"></td>
+                                <td id="lastValue_value@(i)" class="d-none"></td>
                                 <td></td>
                                 <td></td>
                             }
@@ -95,7 +97,8 @@ else
                                 <td>@barValue.Min</td>
                                 <td>@barValue.Mean</td>
                                 <td>@barValue.Max</td>
-                                <td>@barValue.LastValue</td>
+                                <td id="firstValue_value@(i)" class="d-none">@barValue.FirstValue</td>
+                                <td id="lastValue_value@(i)" class="d-none">@barValue.LastValue</td>
                                 <td>@barValue.Count</td>
                                 <td>@value.Status.ToIconStatus()</td>
                             }

@@ -8,7 +8,7 @@ namespace HSMDataCollector.Prototypes.Collections
 {
     internal static class QueueDiagnosticCommon
     {
-        internal const string DiagnosticQueueInfo = "Queue stats";
+        internal const string DiagnosticQueueInfo = "Collector queue stats";
     }
 
 
@@ -39,7 +39,7 @@ namespace HSMDataCollector.Prototypes.Collections
         public QueueOverflowPrototype() : base()
         {
             Type = SensorType.IntegerBarSensor;
-            //unit count should be added
+            SensorUnit = Unit.Count;
         }
 
 
@@ -55,13 +55,13 @@ namespace HSMDataCollector.Prototypes.Collections
 
     internal sealed class PackageValuesCountPrototype : QueueDiagnosticBarPrototype
     {
-        protected override string SensorName => "Values count in package";
+        protected override string SensorName => "Items count in package";
 
 
         public PackageValuesCountPrototype() : base()
         {
             Type = SensorType.IntegerBarSensor;
-            //count unit count should be added
+            SensorUnit = Unit.Count;
         }
 
 

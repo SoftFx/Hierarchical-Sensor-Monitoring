@@ -21,7 +21,7 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class BarSensorPolicy<T, U> : Policy<T>
         where T : BarBaseValue<U>, new()
-        where U : INumber<U>
+        where U : struct, INumber<U>
     {
         protected abstract PolicyCondition<T, U> BasePolicyCondition { get; }
 

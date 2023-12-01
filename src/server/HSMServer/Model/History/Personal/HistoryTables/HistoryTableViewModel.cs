@@ -154,7 +154,7 @@ namespace HSMServer.Model.History
                 IsTimeout = value.IsTimeout
             };
 
-        private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : INumber<T> =>
+        private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : struct, INumber<T> =>
             new()
             {
                 OpenTime = value.OpenTime,
@@ -163,6 +163,7 @@ namespace HSMServer.Model.History
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
+                FirstValue = value.FirstValue?.ToString(),
                 LastValue = value.LastValue.ToString(),
                 Time = value.Time.ToUniversalTime(),
                 Status = value.Status.ToClient(),

@@ -380,7 +380,7 @@ window.DataTableColumnsNames = {
     Record: "Record"
 };
 
-window.JournalTemplate = (url) => {
+window.JournalTemplate = (url, type) => {
     return {
         bAutoWidth: false,
         pageLength: 50,
@@ -393,6 +393,7 @@ window.JournalTemplate = (url) => {
             contentType: "application/json; charset=utf-8",
             url: url,
             data: function (d) {
+                d.needSearchPath = type != NodeType.Sensor;
                 return JSON.stringify(d);
             },
             complete: function (response) {
@@ -426,7 +427,7 @@ window.initializeJournal = function (type) {
 
     JournalTable = $('[id^="journal_table_"]').DataTable({
         columns: type === NodeType.Node ? nodeColumns : sensorColumns,
-        ...JournalTemplate(getJournalPage)
+        ...JournalTemplate(getJournalPage, type)
     });
 }
 
