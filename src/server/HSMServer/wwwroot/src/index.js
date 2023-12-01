@@ -38,6 +38,7 @@ import '@fortawesome/fontawesome-free/css/all.min.css';
 import 'emojionearea/dist/emojionearea.min.css'
 import 'emojionearea/dist/emojionearea.min.js'
 
+import './js/interact.js'
 import './js/plots.js'
 import './js/accessKey.js';
 import './js/confirmation.js';
@@ -46,11 +47,14 @@ import './js/history.js';
 import './js/plotting.js';
 import './js/metaInfo.js';
 import './js/products.js';
+import './js/nodeData.js';
 import './js/tree.js';
 import './js/site.js';
 import './js/treeCollapse';
+import './js/dashboard.js'
 
 import './css/site.css';
 import './css/accessKey.css';
 import './css/home.css';
 import './css/product.css';
+import './css/dragging.css'

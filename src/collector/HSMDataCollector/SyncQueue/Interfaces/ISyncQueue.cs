@@ -1,5 +1,4 @@
-﻿using HSMDataCollector.Core;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.SyncQueue
@@ -8,6 +7,9 @@ namespace HSMDataCollector.SyncQueue
     {
         event Action<List<T>> NewValuesEvent;
         event Action<T> NewValueEvent;
+
+        event Action<string, int> OverflowCntEvent;
+
 
         void Push(T value);
 

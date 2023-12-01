@@ -16,6 +16,8 @@ namespace HSMDataCollector.DefaultSensors
 
         public string SensorPath => _metainfo.Path;
 
+        internal bool IsProiritySensor => _metainfo.IsPrioritySensor;
+
 
         internal event Func<PriorityRequest, Task<bool>> SensorCommandRequest;
         internal event Action<SensorValueBase> ReceiveSensorValue;

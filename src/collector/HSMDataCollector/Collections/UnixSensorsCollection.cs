@@ -2,6 +2,7 @@
 using HSMDataCollector.DefaultSensors.Unix;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using System;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -11,6 +12,30 @@ namespace HSMDataCollector.DefaultSensors
 
 
         internal UnixSensorsCollection(SensorsStorage storage, PrototypesCollection prototype) : base(storage, prototype) { }
+
+
+        public IUnixCollection AddAllComputerSensors() =>
+            (this as IUnixCollection).AddSystemMonitoringSensors().AddDiskMonitoringSensors();
+
+        public IUnixCollection AddAllModuleSensors(Version productVersion)
+        {
+            var moduleCollection = (this as IUnixCollection).AddProcessMonitoringSensors()
+                                                            .AddCollectorMonitoringSensors()
+                                                            .AddAllQueueDiagnosticSensors();
+
+            if (productVersion != null)
+            {
+                var versionOptions = new VersionSensorOptions(productVersion) { Version = productVersion };
+
+                moduleCollection.AddProductVersion(versionOptions);
+            }
+
+            return moduleCollection;
+        }
+
+        public IUnixCollection AddAllDefaultSensors(Version productVersion) => AddAllComputerSensors().AddAllModuleSensors(productVersion);
+
+
 
 
         #region Process
@@ -78,7 +103,25 @@ namespace HSMDataCollector.DefaultSensors
 
         public IUnixCollection AddCollectorVersion() => (IUnixCollection)AddCollectorVersionCommon();
 
+        public IUnixCollection AddCollectorErrors() => (IUnixCollection)AddCollectorErrorsCommon();
+
         public IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options) => (IUnixCollection)AddFullCollectorMonitoringCommon(options);
+
+        #endregion
+
+
+        #region Diagnostic
+
+        public IUnixCollection AddQueuePackageProcessTime(BarSensorOptions options = null) => (IUnixCollection)AddPackageProcessTimeCommon(options);
+
+        public IUnixCollection AddQueuePackageValuesCount(BarSensorOptions options = null) => (IUnixCollection)AddPackageValuesCountCommon(options);
+
+        public IUnixCollection AddQueuePackageContentSize(BarSensorOptions options = null) => (IUnixCollection)AddPackageContentSizeCommon(options);
+
+        public IUnixCollection AddQueueOverflow(BarSensorOptions options = null) => (IUnixCollection)AddQueueOverflowCommon(options);
+
+        public IUnixCollection AddAllQueueDiagnosticSensors(BarSensorOptions options = null) =>
+            AddQueueOverflow(options).AddQueuePackageValuesCount(options).AddQueuePackageContentSize(options).AddQueuePackageProcessTime(options);
 
         #endregion
 

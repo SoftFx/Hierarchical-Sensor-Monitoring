@@ -17,7 +17,7 @@ const SensorsStatus = {
     Error: 1
 }
 
-const Colors = {
+export const Colors = {
     defaultTrace: '#1f77b4',
     default: 'rgba(31, 119, 180, 1)',
     red: 'rgba(255,0,0,1)',
@@ -42,14 +42,20 @@ export class Plot {
     mode = '';
     showlegend = false;
     hovertemplate = "%{x}, %{customdata}<extra></extra>";
-    line = {
-        color: Colors.defaultTrace
-    }
 
     #customYaxisName = undefined;
-
-    constructor(data, customYaxisName = undefined) {
+    customColor = Colors.default;
+    
+    constructor(data, customYaxisName = undefined, customColor = Colors.default) {
         this.#customYaxisName = customYaxisName;
+        this.line = {
+            color: Colors.defaultTrace
+        }
+        
+        this.customColor = customColor;
+        if (customColor && customColor !== Colors.default){
+            this.line.color = customColor;
+        }
     }
 
     setUpData(data) { }
@@ -65,7 +71,7 @@ export class Plot {
                 autosize: true,
                 xaxis: {
                     title: {
-                        text: 'Time',
+                        //text: 'Time',
                         font: {
                             family: 'Courier New, monospace',
                             size: 18,
@@ -94,7 +100,7 @@ export class Plot {
             autosize: true,
             xaxis: {
                 title: {
-                    text: 'Time',
+                    //text: 'Time',
                     font: {
                         family: 'Courier New, monospace',
                         size: 18,
@@ -139,7 +145,7 @@ export class Plot {
         if (this.checkTtl(value))
             return Colors.TtlGrey
 
-        return Colors.default;
+        return this.customColor;
     }
 
     getMarkerSize(value) {
@@ -151,13 +157,10 @@ export class Plot {
 }
 
 class ErrorColorPlot extends Plot {
-    line = {
-        color: Colors.defaultTrace
-    }
     mode = "markers+lines";
 
-    constructor(data, unitType) {
-        super(data, unitType);
+    constructor(data, unitType, color) {
+        super(data, unitType, color);
     }
 
     markerColorCompareFunc(value) {
@@ -167,7 +170,7 @@ class ErrorColorPlot extends Plot {
         if (this.checkError(value))
             return Colors.red
 
-        return Colors.default;
+        return this.customColor;
     }
 
     getMarkerSize(value) {
@@ -182,8 +185,8 @@ class ErrorColorPlot extends Plot {
 }
 
 export class BoolPlot extends Plot {
-    constructor(data, unitType = undefined) {
-        super(data, unitType);
+    constructor(data, unitType = undefined, color = Colors.default) {
+        super(data, unitType, color);
         this.type = 'scatter';
         this.mode = 'markers';
         this.marker = {
@@ -248,8 +251,8 @@ export class BoolPlot extends Plot {
 }
 
 export class IntegerPlot extends ErrorColorPlot {
-    constructor(data, unitType = undefined) {
-        super(data, unitType);
+    constructor(data, unitType = undefined, color = Colors.default) {
+        super(data, unitType, color);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
@@ -281,8 +284,8 @@ export class IntegerPlot extends ErrorColorPlot {
 }
 
 export class DoublePlot extends ErrorColorPlot {
-    constructor(data, name, field = 'value', unitType = undefined) {
-        super(data, unitType);
+    constructor(data, name, field = 'value', unitType = undefined, color = Colors.default) {
+        super(data, unitType, color);
 
         this.type = 'scatter';
         this.name = name;
@@ -330,8 +333,8 @@ export class DoublePlot extends ErrorColorPlot {
 }
 
 export class BarPLot extends Plot {
-    constructor(data, name, unitType = undefined) {
-        super(data, unitType);
+    constructor(data, name, unitType = undefined, color = Colors.default) {
+        super(data, unitType, color);
 
         this.type = 'candlestick';
         this.name = 'bar';
@@ -361,8 +364,7 @@ export class BarPLot extends Plot {
             this.high.push(i.max);
             this.low.push(i.min);
 
-            /*this.open.push(i.firstValue === null ? i.min : i.firstValue);*/
-            this.open.push(i.min);
+            this.open.push(i.firstValue === null ? i.min : i.firstValue);
             this.text.push(
                 'min: ' + i.min +
                 '<br>mean: ' + i.mean +
@@ -379,8 +381,8 @@ export class BarPLot extends Plot {
 }
 
 export class TimeSpanPlot extends ErrorColorPlot {
-    constructor(data, unitType = undefined) {
-        super(data, unitType);
+    constructor(data, unitType = undefined, color = Colors.default) {
+        super(data, unitType, color);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';

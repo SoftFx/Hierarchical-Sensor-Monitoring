@@ -1,9 +1,11 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Core.Model
 {
@@ -36,7 +38,11 @@ namespace HSMServer.Core.Model
         Ticks = 1000,
         Milliseconds = 1010,
         Seconds = 1011,
-        Minutes = 1012
+        Minutes = 1012,
+
+        Count = 1100,
+        Requests = 1101,
+        Responses = 1102,
     }
 
 
@@ -113,7 +119,9 @@ namespace HSMServer.Core.Model
         public bool HasData => Storage.HasData;
 
 
-        public Action<SensorEntity> UpdateFromParentSettings;
+        internal Func<Guid, SensorHistoryRequest, ValueTask<List<BaseValue>>> ReadDataFromDb;
+        internal Action<SensorEntity> UpdateFromParentSettings;
+
         public Action<BaseValue> ReceivedNewValue;
 
 
@@ -126,6 +134,9 @@ namespace HSMServer.Core.Model
             IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
         }
+
+
+        public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask();
 
 
         protected override void UpdateTTL(PolicyUpdate update) => Policies.UpdateTTL(update);

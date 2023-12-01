@@ -53,13 +53,13 @@ namespace HSMServer.Controllers
             if (!results.IsValid)
             {
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-                return RedirectToAction("Index", "Home");
+                return Redirect("/Home");
             }
 
             TempData.Remove(TextConstants.TempDataErrorText);
             await Authenticate(model.Username, model.KeepLoggedIn);
 
-            return RedirectToAction("Index", "Home");
+            return Redirect("/Home");
         }
 
         #endregion
@@ -132,7 +132,7 @@ namespace HSMServer.Controllers
             //if (!string.IsNullOrEmpty(model.TicketId))
             //    _ticketManager.RemoveTicket(Guid.Parse(model.TicketId));
 
-            return RedirectToAction("Index", "Home");
+            return Redirect("/Home");
         }
 
         #endregion
@@ -197,7 +197,7 @@ namespace HSMServer.Controllers
             TempData.Remove(TextConstants.TempDataErrorText);
 
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Index", "Home");
+            return Redirect("/Home");
         }
 
 

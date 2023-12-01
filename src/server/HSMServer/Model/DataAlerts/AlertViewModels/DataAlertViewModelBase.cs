@@ -33,16 +33,7 @@ namespace HSMServer.Model.DataAlerts
             {
                 var firstConfition = Conditions.FirstOrDefault();
 
-                if (firstConfition?.Property == AlertProperty.TimeToLive)
-                {
-                    var displayValue = firstConfition.TimeToLive.DisplayValue;
-                    var neverInterval = TimeInterval.None.GetDisplayName();
-                    var isTtlNever = displayValue == TimeInterval.FromParent.ToFromParentDisplay(neverInterval) || displayValue == neverInterval;
-
-                    return !isTtlNever;
-                }
-
-                return true;
+                return firstConfition?.Property != AlertProperty.TimeToLive || firstConfition?.TimeToLive.DisplayValue != TimeInterval.None.GetDisplayName();
             }
         }
 

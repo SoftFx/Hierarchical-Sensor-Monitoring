@@ -32,6 +32,9 @@ namespace HSMServer.ConcurrentStorage
 
         protected abstract ModelType FromEntity(EntityType entity);
 
+
+        public List<ModelType> GetValues() => Values.ToList();
+
         public bool TryGetValueById(Guid? id, out ModelType model)
         {
             model = null;
@@ -39,7 +42,14 @@ namespace HSMServer.ConcurrentStorage
             return id is not null && TryGetValue(id.Value, out model);
         }
 
-        public List<ModelType> GetValues() => Values.ToList();
+
+        public virtual Task Initialize()
+        {
+            foreach (var entity in GetFromDb())
+                TryAdd(entity, out var _);
+
+            return Task.CompletedTask;
+        }
 
         public virtual bool TryAdd(EntityType entity, out ModelType model)
         {
@@ -100,12 +110,11 @@ namespace HSMServer.ConcurrentStorage
             return Task.FromResult(result);
         }
 
-        public virtual Task Initialize()
-        {
-            foreach (var entity in GetFromDb())
-                TryAdd(entity, out var _);
 
-            return Task.CompletedTask;
+        public virtual void Dispose()
+        {
+            foreach ((_, var value) in this)
+               value.Dispose();
         }
     }
 }

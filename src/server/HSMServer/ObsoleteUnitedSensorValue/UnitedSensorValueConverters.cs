@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Model;
 using System;
-using System.Linq;
 using System.Text.Json;
 using ApiSensorStatus = HSMSensorDataObjects.SensorStatus;
 
@@ -61,7 +60,6 @@ namespace HSMServer.ObsoleteUnitedSensorValue
                 Max = barData.Max,
                 Mean = barData.Mean,
                 LastValue = barData.LastValue,
-                Percentiles = barData.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
             };
         }
 
@@ -81,7 +79,6 @@ namespace HSMServer.ObsoleteUnitedSensorValue
                 Max = barData.Max,
                 Mean = barData.Mean,
                 LastValue = barData.LastValue,
-                Percentiles = barData.Percentiles?.ToDictionary(k => k.Percentile, v => v.Value) ?? new(),
             };
         }
 

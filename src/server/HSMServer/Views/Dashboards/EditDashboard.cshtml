@@ -1,0 +1,245 @@
+﻿@using HSMServer.Controllers
+@using HSMServer.Constants
+@using HSMServer.Model.Dashboards
+
+@model DashboardViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var isModify = Model.IsModify;
+    var isEmptyDashboard = Model.Panels.Count == 0;
+
+    ViewData["Title"] = "Dashboard";
+}
+
+
+<div class="d-flex flex-column w-100">
+    <div class="m-2">
+        <div id="dashboardSettings" class="my-2 @(!isModify ? string.Empty : "d-none")">
+            <div class="d-flex justify-content-between mb-1">
+                <h5 id="name">@Model.Name</h5>
+
+                <a class="icon-link text-nowrap" href="javascript:editDahsboardSettings();" title='edit dashboard settings'>
+                    <i class='fas fa-edit'>
+                        <use xlink:href="#box-seam">
+                    </i> Edit
+                </a>
+            </div>
+
+            <div id="markdown_description">@Model.Description</div>
+        </div>
+
+        <div id="editableDashboardSettings" class="my-2 @(!isModify ? "d-none" : string.Empty)">
+            <form id="saveDashBoardForm" method="post" asp-action="@nameof(DashboardsController.EditDashboard)">
+                <input class="d-none" asp-for="Id" value="@Model.Id"/>
+
+                <div class="d-flex justify-content-between mb-1">
+                    <input id="form_name" maxlength="30" class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
+
+                    <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
+                </div>
+
+                <textarea id='form_description' maxlength="250" class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
+            </form>
+        </div>
+
+        <div class="d-flex justify-content-end">
+            <div class="btn-group">
+                <button id="relayout_three" onclick="relayout(3)" class="btn d-flex pe-0">
+                    <img src="~/dist/columns.svg" style="width: 2rem;height: 2rem"/>
+                </button>
+                <button id="relayout_two" onclick="relayout(2)" class="btn d-flex ps-1">
+                    <img src="~/dist/two-columns.svg" style="width: 1.7rem;height: 2rem"/>
+                </button>
+            </div>
+
+
+            <select asp-for="FromPeriod" form="saveDashBoardForm" id="from_select" class="form-select" style="width: auto">
+                <option value="00:30:00">last 30 minutes</option>
+                <option value="01:00:00">last 1 hour</option>
+                <option value="03:00:00">last 3 hours</option>
+                <option value="06:00:00">last 6 hours</option>
+            </select>
+
+            <a id="addPanel" class="icon-link text-nowrap ms-2" href="javascript:addPanel();">
+                <i class="fa-solid fa-plus">
+                    <use xlink:href="#box-seam">
+                </i> Add panel
+            </a>
+        </div>
+    </div>
+
+    <div id="noPanels" class="d-flex justify-content-center align-items-end noData-label @(isEmptyDashboard ? string.Empty : "d-none")">
+        <label>No panels</label>
+    </div>
+
+    <div id="dashboardPanels" class="flex-grow-1 dashboard ms-3 me-2 @(isEmptyDashboard ? "d-none" : string.Empty)">
+        @foreach (var panel in Model.Panels)
+        {
+            @(await Html.PartialAsync("_Panel", panel))
+        }
+    </div>
+</div>
+
+
+<script>
+     let targetNode = $('#dashboardPanels')[0];
+     let change = 0;
+     let config = { attributes: true, childList: true, subtree: true};
+     let callback = function(mutationsList, observer) {
+         for(let mutation of mutationsList) {
+             if (mutation.target.classList.contains('js-plotly-plot') && mutation.type == 'childList'){
+                 let target = mutation.target.parentNode.getBoundingClientRect();
+                 if (target.bottom > targetNode.getBoundingClientRect().bottom){
+                     change = Math.max(change, target.bottom + target.height);
+                 }
+             }  
+         }
+     };
+
+     let observer = new MutationObserver(callback);
+
+     observer.observe(targetNode, config);
+
+    $(document).ready(() => {
+        replaceHtmlToMarkdown('markdown_description');
+        initDashboard();
+
+        if (!window.location.search.toLowerCase().includes('isModify=true'.toLowerCase()))
+            disableDragAndResize();
+
+        if(change !== 0)
+            targetNode.style.minHeight = change + "px";
+
+        let fromSelect = $('#from_select');
+        fromSelect.val('@Model.FromPeriod');
+        fromSelect.on('change', function (){
+            $('#saveDashBoardForm').submit();
+        })
+    });
+
+    $('#saveDashBoardForm').on('submit', function (e){
+        e.preventDefault();
+        e.stopPropagation();
+        let dashboard = $('#dashboardSettings');
+        let arr = $(this).serializeArray();
+        let dashboardPanels = $('#dashboardPanels');
+        let width = dashboardPanels.width();
+        let height = 1400;
+        let panels = {};
+        for (let i of dashboardPanels.children('div')){
+            let item = $(i);
+            let showlegend = item.find('.js-plotly-plot')[0].layout.showlegend;
+            panels[i.id] = {
+                width: Number((item.width() / width).toFixed(5)),
+                height: Number((item.height() / height).toFixed(5)),
+                x: Number((parseFloat(i.dataset.x || 0) / width).toFixed(5)),
+                y: Number((parseFloat(i.dataset.y || 0) / height).toFixed(5)),
+                showLegend: showlegend
+            };
+        }
+
+        let object = {};
+        arr.forEach((value, key) => object[value.name] = value.value);
+        object.panels = panels;
+        $.ajax({
+            type: 'post',
+            url: window.location.pathname,
+            contentType: 'application/json',
+            data: JSON.stringify(object)
+        }).done(function (response){
+            if (response.reload && response.reload === true)
+                 window.location.reload();   
+            else 
+            {
+                dashboard.find('h5#name').text(object.Name);
+                replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
+                disableEdit();
+            }
+        }).fail(function (response){
+            showToast(response.responseText)
+        })
+    })
+
+    function addPanel() {
+        $.ajax({
+            type: 'GET',
+            url: `@Html.Raw(Url.Action(nameof(DashboardsController.GetPanel), ViewConstants.DashboardsController))?dashboardId=@Model.Id`,
+            cache: false,
+            async: true,
+        }).done(function (viewData){
+            $('#dashboardPanels').append(viewData);
+            $('#dashboardPanels').removeClass("d-none");
+            $('#noPanels').addClass("d-none");
+        })
+    }
+    
+    function relayout(number){
+        $.ajax({
+            type: 'put',
+            url: window.location.pathname + `/Relayout?width=${number}`
+        }).done(function (response){
+            window.location.reload()  
+        }).fail(function (response){
+            showToast(response.responseText)  
+        })
+    }
+
+    function editDahsboardSettings() {
+        $('#dashboardSettings').addClass('d-none');
+
+        $('#addPanel').removeClass('d-none');
+        $('#editableDashboardSettings').removeClass('d-none');
+        enableDragAndResize();
+    }
+    
+    function disableEdit(){
+        $('#dashboardSettings').removeClass('d-none');
+
+        $('#addPanel').addClass('d-none');
+        $('#editableDashboardSettings').addClass('d-none');
+        disableDragAndResize();
+    }
+
+    $('.panel.resize-draggable').on('click', 'a.removePanel', function (){
+        let id = this.id.substring("remove_".length, this.id.length);
+        let name = $(`#${id}`).find('#panel_name').text();
+        showConfirmationModal(
+            `Removing '${name}' panel`,
+            `Do you really want to remove selected panel <strong>${name}</strong>?`,
+            function () {
+                $.ajax({
+                    type: 'DELETE',
+                    url: window.location.pathname + `/${id}`,
+                    cache: false,
+                    async: true,
+                }).done(function (){
+                    $(`#${id}`).remove();
+                }).fail(function (data){
+                    showToast(data.responseText)
+                })
+            }
+        );
+    }).on('click', 'a.toggle-legend', function (){
+        let id = this.id.substring("toggle_".length, this.id.length);
+        let showlegend = !$(`#panelChart_${id}`)[0].layout.showlegend;
+        let toggle = $(this);
+        $.ajax({
+            type: 'put',
+            url: window.location.pathname + `/${id}?showlegend=${showlegend}`
+        }).done(function (response){
+            Plotly.relayout(`panelChart_${id}`, {showlegend: showlegend}).then(
+                (success) => {
+                    toggle.text(showlegend ? "Hide legends" : "Show legends");
+                    showToast(response)
+                },
+                (error) => {
+                    showToast(error)
+                }
+            );
+        }).fail(function (response){
+            showToast(response.responseText)
+        })
+    })
+</script>

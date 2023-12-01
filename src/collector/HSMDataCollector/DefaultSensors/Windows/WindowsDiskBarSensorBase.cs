@@ -4,7 +4,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal abstract class WindowsDiskBarSensorBase : WindowsSensorBase
     {
-        public const string Category = "PhysicalDisk";
+        public const string Category = "LogicalDisk";
 
 
         protected override string CategoryName => Category;

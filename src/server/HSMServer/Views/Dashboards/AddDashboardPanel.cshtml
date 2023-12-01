@@ -1,0 +1,99 @@
+﻿@using HSMServer.Controllers
+@using System.Text.Json;
+@model HSMServer.Model.Dashboards.PanelViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    ViewData["Title"] = "Dashboard";
+    Layout = "~/Views/Tree/_Layout.cshtml";
+}
+
+<div class="w-100 overflow-y-auto m-2">
+    <div id="panelSettings" class="my-2">
+        <div id="editablePanelSettings" class="my-2">
+            <form method="post"  asp-action="@nameof(DashboardsController.SaveDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
+                <div class="d-flex justify-content-between mb-1">
+                    <input class="form-control" required maxlength="30" asp-for="Name" placeholder="@nameof(Model.Name)"/>
+
+                    <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
+                </div>
+
+                <textarea id='description' maxlength="250" class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
+            </form>
+        </div>
+    </div>
+    <div class="dropzone" style="max-width: 98%;min-width: 100%; width: 100%!important;">
+         <div id="multichart"></div>
+    </div>
+    <div id="plots" class="mt-1">
+        <ul id="sources" class="list-group">
+        </ul>
+    </div>
+    <div class="d-flex justify-content-center mt-2" style="color: grey; font-size: larger">
+        <span>Drag and drop sensor to the plot above</span>
+    </div>
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}))
+        initMultichart('multichart').then(
+            (dom) => {
+                window.dispatchEvent(new Event('resize'));
+                values.forEach(function (x) {
+                    addNewSourceHtml(x, 'multichart');
+                })
+            }
+        );
+        
+        $('#editablePanelSettings form').on('submit', function (event){
+            event.preventDefault();
+            event.stopPropagation();
+            let object = {};
+            $(this).serializeArray().forEach((value, key) => object[value.name] = value.value);
+            $.ajax({
+                type: 'post',
+                url: window.pathname,
+                contentType: 'application/json',
+                data: JSON.stringify(object)
+            }).done(function(id, status){
+                window.location.href = `/Dashboards/${id}`;
+            }).fail(function (response){
+                showToast(response.responseText);
+            })
+        })
+
+        $('[id^="source"]').on('input', '.form-control-color', function () {
+            $(this).attr('value', this.value);
+            let id = this.id.substring("color_".length, this.id.length);
+            
+            updateSource($(`#name_input_${id}`).val(), $(this).val(), id)
+        }).on('input', '.form-control', function () {
+            $(this).attr('value', this.value);
+            let id = this.id.substring("name_input_".length, this.id.length);
+                      
+            updateSource($(this).val(), $(`#color_${id}`).val(), id)
+        }).on('click', 'button',function (){
+            let id = this.id.substring("deletePlot_".length, this.id.length);
+            let model = getCurrentPlotInDashboard(id)
+            if (model !== undefined) {
+                $.ajax({
+                    type:'delete',
+                    url: window.location.pathname + '/' + id
+                }).done(function (response){
+                    Plotly.deleteTraces('multichart', model.id).then(function (){
+                        $('[id^="source"] li')[model.id].remove();
+                        updateCurrentPlotsIds(model.id, id)
+                    })
+                }).fail(function (response){
+                    showToast(response.responseText);
+                })
+            }
+        }).on('click', '.redirectToHome', function (){
+            let id = this.id.substring("redirectToHome_".length, this.id.length);
+            redirectToHome(id);
+        })
+    })
+</script>

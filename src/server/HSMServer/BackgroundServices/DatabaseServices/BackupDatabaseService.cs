@@ -32,42 +32,51 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ServiceAction()
         {
-            Backup();
-            DeleteOldBackups();
+            void EnvironmentBackup(string path) => _database.BackupEnvironment(path);
+
+            void DashboardsBackup(string path) => _database.Dashboards.Backup(path);
+
+
+            Backup(_dbSettings.EnvironmentDatabaseName, EnvironmentBackup);
+            DeleteOldBackups(_dbSettings.EnvironmentDatabaseName);
+
+            Backup(_dbSettings.ServerLayoutDatabaseName, DashboardsBackup);
+            DeleteOldBackups(_dbSettings.ServerLayoutDatabaseName);
+
 
             return Task.CompletedTask;
         }
 
-        private void Backup()
+        private void Backup(string dbName, Action<string> backupAction)
         {
             try
             {
-                var backupPath = Path.Combine(_dbSettings.DatabaseBackupsFolder, $"{_dbSettings.EnvironmentDatabaseName}_{DateTime.UtcNow.ToWindowsFormat()}");
+                var backupPath = Path.Combine(_dbSettings.DatabaseBackupsFolder, $"{dbName}_{DateTime.UtcNow.ToWindowsFormat()}");
                 var backupDb = Directory.CreateDirectory(backupPath);
 
-                _database.BackupEnvironment(backupDb.FullName);
+                backupAction(backupDb.FullName);
             }
             catch (Exception ex)
             {
-                _logger.Error($"Environment database backup error: {ex}");
+                _logger.Error($"{dbName} database backup error: {ex}");
             }
         }
 
-        private void DeleteOldBackups()
+        private void DeleteOldBackups(string dbName)
         {
             try
             {
                 var now = DateTime.UtcNow;
 
-                var environmentBackupsDirectories =
-                   Directory.GetDirectories(_dbSettings.DatabaseBackupsFolder, $"{_dbSettings.EnvironmentDatabaseName}*", SearchOption.TopDirectoryOnly)
+                var backupsDirectories =
+                   Directory.GetDirectories(_dbSettings.DatabaseBackupsFolder, $"{dbName}*", SearchOption.TopDirectoryOnly)
                             .Select(d => new BackupDirectory(d, Directory.GetCreationTimeUtc(d)))
                             .OrderBy(d => d.CreationTime)
                             .ToList();
 
-                for (int i = 0; i < environmentBackupsDirectories.Count - 1; ++i) // all backups except the last one
+                for (int i = 0; i < backupsDirectories.Count - 1; ++i) // all backups except the last one
                 {
-                    var backup = environmentBackupsDirectories[i];
+                    var backup = backupsDirectories[i];
 
                     try
                     {
@@ -84,7 +93,7 @@ namespace HSMServer.BackgroundServices
             }
             catch (Exception ex)
             {
-                _logger.Error($"Getting all environment database backups error: {ex}");
+                _logger.Error($"Getting all {dbName} database backups error: {ex}");
             }
         }
 

@@ -9,7 +9,7 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
     {
         protected override string SensorNameTemplate => "Active time on {0} disk";
 
-        protected override string DescriptionPath => $"{WindowsDiskBarSensorBase.Category}/% Disk Time";
+        protected override string DescriptionPath => WindowsActiveTimeDisk.Counter;
 
 
         public WindowsActiveTimeDiskPrototype() : base()

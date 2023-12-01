@@ -9,7 +9,7 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
     {
         protected override string SensorNameTemplate => "Disk queue length on {0} disk";
 
-        protected override string DescriptionPath => $"{WindowsDiskBarSensorBase.Category}/Avg. Disk Queue Length";
+        protected override string DescriptionPath => WindowsDiskQueueLength.Counter;
 
 
         public WindowsDiskQueueLengthPrototype() : base()

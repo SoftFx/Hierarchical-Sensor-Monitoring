@@ -37,7 +37,7 @@
         <span>@Model.Status</span>
         @if (!Model.IsMuted)
         {
-            <span onclick="loadEditSensorStatusModal()">
+            <span onclick="loadEditSensorStatusModal('@Model.EncodedId')">
                 <i class="fas fa-edit align-self-center ms-2" style="cursor: pointer"></i>
             </span>
         }
