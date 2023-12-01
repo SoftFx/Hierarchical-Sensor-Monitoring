@@ -17,7 +17,11 @@ namespace HSMSensorDataObjects.SensorRequests
         Ticks = 1000,
         Milliseconds = 1010,
         Seconds = 1011,
-        Minutes = 1012
+        Minutes = 1012,
+
+        Count = 1100,
+        Requests = 1101,
+        Responses = 1102,
     }
 
 

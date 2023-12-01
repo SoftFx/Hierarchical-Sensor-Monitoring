@@ -18,11 +18,11 @@ namespace HSMDataCollector.DefaultSensors
             _internalBar.AddValue(value);
         }
 
-        public void AddPartial(T min, T max, T mean, T _, T last, int count)
+        public void AddPartial(T min, T max, T mean, T first, T last, int count)
         {
             CheckCurrentBar();
 
-            _internalBar.AddPartial(min, max, mean, last, count);
+            _internalBar.AddPartial(min, max, mean, first, last, count);
         }
 
 

@@ -1,7 +1,7 @@
-﻿using System;
-using HSMSensorDataObjects.SensorValueRequests;
+﻿using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -29,6 +29,8 @@ namespace HSMServer.ApiObjectsConverters
         public string DisplayName { get; }
 
         public string PropertyName { get; }
+
+        internal bool IsTime => PropertyName.Contains("time", StringComparison.InvariantCultureIgnoreCase);
 
 
         public Header(string displayName, string propertyName, Func<BaseValue, string> getPropFunc = null)
@@ -80,7 +82,8 @@ namespace HSMServer.ApiObjectsConverters
             { new(nameof(IntBarSensorValue.Min)), ExportOptions.Simple },
             { new(nameof(IntBarSensorValue.Mean)), ExportOptions.Simple },
             { new(nameof(IntBarSensorValue.Max)), ExportOptions.Simple },
-            { new("Last value", nameof(IntBarSensorValue.LastValue)), ExportOptions.Simple },
+            { new("First value", nameof(IntBarSensorValue.FirstValue)), ExportOptions.Hidden },
+            { new("Last value", nameof(IntBarSensorValue.LastValue)), ExportOptions.Hidden },
             { new(nameof(IntBarSensorValue.Count)), ExportOptions.Simple },
             { new(nameof(SensorValueBase.Status)), ExportOptions.Simple },
             { new(nameof(SensorValueBase.Comment)), ExportOptions.Simple },
@@ -143,7 +146,7 @@ namespace HSMServer.ApiObjectsConverters
 
             static string GetTransformedValue(Header column, BaseValue value, string propValue)
             {
-                if (column.PropertyName != nameof(BaseValue.Comment) && DateTime.TryParse(propValue, out var dateTime)) 
+                if ((column.IsTime || (value is TimeSpanValue && column.PropertyName == nameof(TimeSpanValue.Value))) && DateTime.TryParse(propValue, out var dateTime))
                     return dateTime.ToDefaultFormat();
 
                 if (value.IsTimeout && !_validProperties.TryGetValue(column.PropertyName, out _))

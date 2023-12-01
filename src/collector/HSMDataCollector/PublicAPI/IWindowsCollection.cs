@@ -5,9 +5,18 @@ namespace HSMDataCollector.PublicInterface
 {
     public interface IWindowsCollection : IDisposable
     {
+        IWindowsCollection AddAllComputerSensors();
+
+        IWindowsCollection AddAllModuleSensors(Version productVersion = null);
+
+        IWindowsCollection AddAllDefaultSensors(Version productVersion = null);
+
+
         IWindowsCollection AddProcessCpu(BarSensorOptions options = null);
 
         IWindowsCollection AddProcessMemory(BarSensorOptions options = null);
+
+        IWindowsCollection AddProcessTimeInGC(BarSensorOptions options = null);
 
         IWindowsCollection AddProcessThreadCount(BarSensorOptions options = null);
 
@@ -17,6 +26,8 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddTotalCpu(BarSensorOptions options = null);
 
         IWindowsCollection AddFreeRamMemory(BarSensorOptions options = null);
+
+        IWindowsCollection AddGlobalTimeInGC(BarSensorOptions options = null);
 
         IWindowsCollection AddSystemMonitoringSensors(BarSensorOptions options = null);
 
@@ -45,6 +56,8 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options = null);
 
         IWindowsCollection AddWindowsLastRestart(WindowsInfoSensorOptions options = null);
+
+        IWindowsCollection AddWindowsVersion(WindowsInfoSensorOptions options = null);
 
         IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options = null);
 

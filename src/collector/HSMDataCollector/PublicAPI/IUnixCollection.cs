@@ -5,6 +5,13 @@ namespace HSMDataCollector.PublicInterface
 {
     public interface IUnixCollection : IDisposable
     {
+        IUnixCollection AddAllComputerSensors();
+
+        IUnixCollection AddAllModuleSensors(Version productVersion = null);
+
+        IUnixCollection AddAllDefaultSensors(Version productVersion = null);
+
+
         IUnixCollection AddProcessCpu(BarSensorOptions options = null);
 
         IUnixCollection AddProcessMemory(BarSensorOptions options = null);

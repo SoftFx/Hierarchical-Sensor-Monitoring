@@ -46,7 +46,7 @@ namespace HSMDataCollector.Options
     {
         public Version Version { get; set; }
 
-        public DateTime StartTime { get; set; }
+        public DateTime? StartTime { get; set; }
 
 
         public VersionSensorOptions() { }

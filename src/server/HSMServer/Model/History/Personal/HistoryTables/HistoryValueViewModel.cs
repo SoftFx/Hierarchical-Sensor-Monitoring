@@ -41,6 +41,8 @@ namespace HSMServer.Model.History
 
         public string Mean { get; init; }
 
+        public string FirstValue { get; init; }
+
         public string LastValue { get; init; }
     }
 }

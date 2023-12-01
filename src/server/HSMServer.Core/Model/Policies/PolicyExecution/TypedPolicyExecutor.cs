@@ -23,7 +23,7 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    internal sealed class PolicyExecutorNumber<T> : PolicyExecutorNumberBase<T> where T : INumber<T>
+    internal sealed class PolicyExecutorNumber<T> : PolicyExecutorNumberBase<T> where T : struct, INumber<T>
     {
         internal PolicyExecutorNumber(PolicyProperty property)
         {
