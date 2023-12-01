@@ -68,8 +68,8 @@ namespace HSMDataCollector.DefaultSensors
 
             var mbPerSec = _currentChangeSpeed.BytesToMegabytes();
 
-            return _isOffTime ? $"Free space increases by {-mbPerSec:F4} Mbytes/sec. Value cannot be calculated." :
-                                $"Free space decreases by {mbPerSec:F4} Mbytes/sec.";
+            return _isOffTime ? $"Free space increases by {-mbPerSec} Mbytes/sec. Value cannot be calculated." :
+                                $"Free space decreases by {mbPerSec} Mbytes/sec.";
         }
 
         protected sealed override SensorStatus GetStatus() => IsCalibration || _isOffTime ? SensorStatus.OffTime : base.GetStatus();
