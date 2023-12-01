@@ -1,14 +1,14 @@
+using HSMCommon.Collections;
+using HSMServer.Core.Model;
+using HSMServer.Dashboards;
+using HSMServer.Extensions;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Linq;
-using HSMServer.Core.Model;
-using HSMServer.Model.TreeViewModel;
-using HSMCommon.Collections;
-using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
-using HSMServer.Dashboards;
 
 namespace HSMServer.Model.Dashboards;
 
-public class PanelViewModel
+public sealed class PanelViewModel
 {
     private const string TypeError = "Can't plot using {0} sensor type";
     private const string UnitError = "Can't plot using {0} unit type";
@@ -18,18 +18,18 @@ public class PanelViewModel
 
 
     public Guid Id { get; set; } = Guid.NewGuid();
-    
+
     public Guid DashboardId { get; set; }
-    
+
     public string Name { get; set; }
-    
+
     public string Description { get; set; }
 
-    public SensorType? SensorType { get; set; }
+    public SensorType? MainSensorType { get; set; }
 
-    public Unit? UnitType { get; set; }
-    
-    public PanelSettingsEntity Settings { get; set; }
+    public Unit? MainUnit { get; set; }
+
+    public PanelSettings Settings { get; set; }
 
 
     public PanelViewModel() { }
@@ -47,10 +47,10 @@ public class PanelViewModel
 
     public bool TryAddSource(SensorNodeViewModel source, out string message)
     {
-        if (IsSuits(source.Type, source.SelectedUnit, out message))
+        if (IsSupported(source.Type, source.SelectedUnit, out message))
         {
-            SensorType = source.Type;
-            UnitType = source.SelectedUnit;
+            MainSensorType = source.Type;
+            MainUnit = source.SelectedUnit;
             message = string.Empty;
             return true;
         }
@@ -60,36 +60,31 @@ public class PanelViewModel
 
     public void UpdateSources(SensorNodeViewModel source)
     {
-        if (IsSuits(source.Type, source.SelectedUnit, out _))
-            Sources.TryAdd(source.Id, new DatasourceViewModel(){Id = Guid.NewGuid(), SensorId = source.Id});
+        if (IsSupported(source.Type, source.SelectedUnit, out _))
+            Sources.TryAdd(source.Id, new DatasourceViewModel() { Id = Guid.NewGuid(), SensorId = source.Id });
     }
 
 
-    public bool IsSuits(SensorType type, Unit? unit, out string errorMessage) =>
-        IsTypeSuits(type, out errorMessage) && IsUnitSuits(unit, out errorMessage);
+    public bool IsSupported(SensorType type, Unit? unit, out string error) => IsSupportedType(type, out error) && IsSupportedUnit(unit, out error);
 
-    public bool IsTypeSuits(SensorType type, out string message)
+
+    private bool IsSupportedType(SensorType type, out string message)
     {
-        var result = IsValidType(type) && (!SensorType.HasValue || SensorType.Value == type);
+        var result = IsSupportedType(type) && MainSensorType.IsNullOrEqual(type);
 
         message = !result ? string.Format(TypeError, type.ToString()) : string.Empty;
 
         return result;
     }
 
-    public bool IsUnitSuits(Unit? unit, out string message)
+    private bool IsSupportedUnit(Unit? unit, out string message)
     {
-        var result = !UnitType.HasValue || UnitType.Value == unit;
+        var result = MainUnit.IsNullOrEqual(unit);
+
         message = !result ? string.Format(UnitError, unit.ToString()) : string.Empty;
 
         return result;
     }
 
-    private bool IsValidType(SensorType type) => type != Core.Model.SensorType.File &&
-                                                 type != Core.Model.SensorType.Enum &&
-                                                 type != Core.Model.SensorType.String &&
-                                                 type != Core.Model.SensorType.DoubleBar &&
-                                                 type != Core.Model.SensorType.IntegerBar &&
-                                                 type != Core.Model.SensorType.Boolean &&
-                                                 type != Core.Model.SensorType.Version;
+    private static bool IsSupportedType(SensorType type) => type is SensorType.Integer or SensorType.Double or SensorType.TimeSpan;
 }

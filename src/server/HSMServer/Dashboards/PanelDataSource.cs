@@ -30,18 +30,17 @@ namespace HSMServer.Dashboards
         {
             _sensor = sensor;
             _board = dashboard;
+
             Label = _sensor.DisplayName;
+            SensorId = _sensor.Id;
 
             Source = DatasourceFactory.Build(_sensor.Type).AttachSensor(sensor);
             Color = Color.FromName(ColorExtensions.GenerateRandomColor());
-            SensorId = _sensor.Id;
             Id = Guid.NewGuid();
         }
 
         public PanelDatasource(PanelSourceEntity entity, BaseSensorModel sensor, Dashboard dashboard) : this(sensor, dashboard)
         {
-            _sensor = sensor;
-
             Id = new Guid(entity.Id);
             SensorId = new Guid(entity.SensorId);
 

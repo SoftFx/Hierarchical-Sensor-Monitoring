@@ -15,17 +15,18 @@ namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
-        private readonly ITreeValuesCache _cache;
         private readonly IDashboardManager _dashboardManager;
         private readonly TreeViewModel _treeViewModel;
+        private readonly ITreeValuesCache _cache;
 
 
         public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, ITreeValuesCache cache, TreeViewModel treeViewModel) : base(userManager)
         {
             _dashboardManager = dashboardManager;
-            _cache = cache;
             _treeViewModel = treeViewModel;
+            _cache = cache;
         }
+
 
         [HttpGet("Dashboards")]
         public IActionResult Index() => View(_dashboardManager.GetValues().Select(d => new DashboardViewModel(d)).OrderBy(d => d.Name).ToList());
@@ -52,9 +53,13 @@ namespace HSMServer.Controllers
                 return BadRequest("Description length is greater than 100 characters");
 
             _dashboardManager.TryGetValue(dashBoardId, out var dashboard);
-            dashboard.Panels.TryGetValue(panelId, out var panel);
-            panel?.Update(new PanelUpdate() { Id = panel.Id, Name = model.Name, Description = model.Description });
-            _dashboardManager.TryUpdate(dashboard);
+
+            if (dashboard.Panels.TryGetValue(panelId, out var panel))
+                panel.Update(new PanelUpdate(panel.Id)
+                {
+                    Name = model.Name,
+                    Description = model.Description
+                });
 
             return Ok(dashboard.Id);
         }
@@ -99,8 +104,8 @@ namespace HSMServer.Controllers
 
                     var viewModel = new PanelViewModel()
                     {
-                        SensorType = currentType,
-                        UnitType = currentUnitType,
+                        MainSensorType = currentType,
+                        MainUnit = currentUnitType,
                     };
 
                     if (_treeViewModel.Sensors.TryGetValue(sourceId, out var newSource) && viewModel.TryAddSource(newSource, out errorMessage))
@@ -132,7 +137,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPut("Dashboards/{dashboardId:guid}/Relayout")]
-        public async Task<IActionResult> Relayout(Guid dashboardId, [FromQuery]int width)
+        public async Task<IActionResult> Relayout(Guid dashboardId, [FromQuery] int width)
         {
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
@@ -148,10 +153,13 @@ namespace HSMServer.Controllers
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public async Task<IActionResult> UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
         {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
-                dashboard.Panels.TryGetValue(panelId, out var panel))
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) && dashboard.Panels.TryGetValue(panelId, out var panel))
             {
-                panel.Settings.ShowLegend = showlegend;
+                panel.Update(new PanelUpdate(panel.Id)
+                {
+                    ShowLegend = showlegend,
+                });
+
                 if (await _dashboardManager.TryUpdate(dashboard))
                     return Ok("Successfully updated");
             }
@@ -215,7 +223,7 @@ namespace HSMServer.Controllers
 
             if (editDashboard.Description.Length > 250)
                 return BadRequest("Description length is greater than 100 characters");
-            
+
             var isReload = false;
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
@@ -237,7 +245,7 @@ namespace HSMServer.Controllers
 
         [HttpDelete("Dashboards/{dashboardId:guid}")]
         public async Task RemoveDashboard(Guid dashboardId) => await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
-        
+
         [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public async Task<IActionResult> RemovePanel(Guid dashboardId, Guid panelId)
         {
@@ -252,12 +260,16 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetPanel(Guid dashboardId)
         {
-            _dashboardManager.TryGetValue(dashboardId, out var dashboard);
-            var newPanel = new Panel(dashboard);
-            dashboard.Panels.TryAdd(newPanel.Id, newPanel);
-            _dashboardManager.TryUpdate(dashboard);
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
+            {
+                var newPanel = new Panel(dashboard);
 
-            return PartialView("_Panel", new PanelViewModel(newPanel, dashboard.Id));
+                dashboard.TryAddPanel(newPanel);
+
+                return PartialView("_Panel", new PanelViewModel(newPanel, dashboard.Id));
+            }
+
+            return EditDashboard(dashboardId);
         }
     }
 }
