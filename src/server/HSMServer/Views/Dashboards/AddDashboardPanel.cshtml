@@ -85,6 +85,9 @@
                 }).done(function (response){
                     Plotly.deleteTraces('multichart', model.id).then(
                         (data) => {
+                            if (data.data.length === 0)
+                                Plotly.relayout('multichart', { 'xaxis.visible': false, 'yaxis.visible':false })
+
                             $('[id^="source"] li')[model.id].remove();
                             updateCurrentPlotsIds(model.id, id)}
                     )

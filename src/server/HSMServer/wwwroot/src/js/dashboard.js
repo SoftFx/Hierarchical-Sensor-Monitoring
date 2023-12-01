@@ -62,12 +62,20 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
+    
+    if (data.values.length === 0) {
+        plot.x = [null]
+        plot.y = [null];
+    }
+    
     plot.id = data.id;
     plot.name = data.label;
     plot.mode = 'lines';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
-    Plotly.addTraces(id, plot.getPlotData());
+    Plotly.addTraces(id, plot.getPlotData()).then(
+        (data) => Plotly.relayout(id, { 'xaxis.visible': true, 'yaxis.visible': true })
+    );
 
     let updateLayout = {
         'yaxis.title' : {
@@ -372,7 +380,8 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             x: 0,
             y: -0.3,
             orientation: "h",
-            traceorder: "normal"
+            traceorder: "normal",
+            visible: true
         },
         xaxis: {
             title: {
@@ -383,11 +392,13 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
                     color: '#7f7f7f'
                 }
             },
+            visible: false,
             rangeslider: {
                 visible: false
             }
         },
         yaxis: {
+            visible: false,
             automargin: 'width+right'
         }
     },
