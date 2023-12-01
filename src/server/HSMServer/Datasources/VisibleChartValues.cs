@@ -28,7 +28,7 @@ namespace HSMServer.Datasources
 
         internal LineChartValue(BaseValue<T> value)
         {
-            Time = value.ReceivingTime;
+            Time = value.Time;
             Value = value.Value;
         }
 
@@ -45,6 +45,25 @@ namespace HSMServer.Datasources
                 Value = T.CreateChecked(_totalSum / _countValues);
                 Tooltip = $"Aggregated ({_countValues}) values";
             }
+        }
+    }
+
+    public sealed class TimeSpanValue : BaseChartValue
+    {
+        public TimeSpan Value { get; private set; }
+
+
+        public TimeSpanValue(BaseValue<TimeSpan> value)
+        {
+            Time = value.Time;
+            Value = value.Value;
+        }
+
+
+        internal override void Apply(BaseValue rawValue)
+        {
+            if (rawValue is BaseValue<TimeSpan> value)
+                Value = value.Value;
         }
     }
 }

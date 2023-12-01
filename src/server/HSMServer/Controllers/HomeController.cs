@@ -54,8 +54,25 @@ namespace HSMServer.Controllers
             _telegramChatsManager = telegramChatsManager;
         }
 
-
+        [HttpGet("/Home")]
         public IActionResult Index() => View();
+
+        [HttpGet("/Home/{sensorId:guid}")]
+        public IActionResult RedirectHome(Guid sensorId)
+        {
+            if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
+            {
+                var parent = sensor.Parent;
+
+                while (parent is ProductNodeViewModel node)
+                {
+                    CurrentUser.Tree.AddOpenedNode(parent.Id);
+                    parent = node.Parent;
+                }
+            }
+            
+            return View("Index");
+        }
 
         [HttpPost]
         public async Task<PartialViewResult> SelectNode(string selectedId)

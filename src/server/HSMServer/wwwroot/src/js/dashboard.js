@@ -42,7 +42,7 @@ window.insertSourceHtml = function (data) {
                                                 <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
                                             </div>
                                             <div class="d-flex align-items-center">
-                                                <span id=${'redirectToHome_' + data.id} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
+                                                <span id=${'redirectToHome_' + data.sensorId} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
                                                     ${data.path}
                                                 </span>
                                             </div>
@@ -94,6 +94,26 @@ export function initDropzone(){
     window.interact('.dropzone').dropzone({
         overlap: 0.75,
 
+        checker: function (
+            dragEvent,         
+            event,             
+            dropped,           
+            dropzone,          
+            dropzoneElement,   
+            draggable,         
+            draggableElement
+        ) {
+            let dropzoneRect = dropzoneElement.getBoundingClientRect();
+            let targetRect = $(`#${dragEvent.target.id}.cloned`)[0].getBoundingClientRect();
+            
+            if (targetRect.x > dropzoneRect.x && targetRect.y > dropzoneRect.y &&
+                targetRect.width + targetRect.x < dropzoneRect.width + dropzoneRect.x &&
+                targetRect.height + targetRect.y < dropzoneRect.height + dropzoneRect.y)
+                return true;
+
+            return false;
+        },
+        
         ondropactivate: function (event) {
             event.target.classList.add('drop-active')
         },
@@ -127,12 +147,25 @@ export function initDropzone(){
 
     window.interact('.drag-drop')
         .draggable({
-            inertia: true,
+            inertia: false,
             modifiers: [],
             autoScroll: true,
             listeners: {
                 start (event) {
-                    event.target.style.position = "fixed";
+                    var interaction = event.interaction;
+                    if (interaction.pointerIsDown && !interaction.interacting() && event.currentTarget.getAttribute('clonable') != 'false') {
+                        var original = event.currentTarget;
+                        var clone = event.currentTarget.cloneNode(true);
+                        clone.setAttribute('clonable','false');
+                        clone.style.position = 'fixed';
+                        let rect = original.getBoundingClientRect();
+                        clone.style.left = rect.left + 'px';
+                        clone.style.top = rect.top + 'px';
+                        clone.classList.add('cloned');
+                        clone.classList.add('d-flex');
+
+                        document.body.append(clone);
+                    }
                 },
                 move: dragMoveListener,
                 end: showEventInfo
@@ -332,12 +365,14 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             l: 30,
             r: 30,
             t: 10,
-            b: 0,
+            b: 30,
         },
         showlegend: showlegend,
         legend: {
-            "orientation": "h",
-            traceorder: "grouped"
+            x: 0,
+            y: -0.3,
+            orientation: "h",
+            traceorder: "normal"
         },
         xaxis: {
             title: {
@@ -370,10 +405,8 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
 }
 
 function showEventInfo (event) {
-    event.target.style.transform = '';
-    event.target.style.position = 'relative';
-    event.target.removeAttribute('data-x')
-    event.target.removeAttribute('data-y')
+    let id = event.target.id;
+    $(`#${id}.cloned`).remove();
 }
 
 function updatePlotSource(name, color, id){
@@ -406,7 +439,8 @@ function getRandomColor() {
 }
 
 function dragMoveListener (event) {
-    var target = event.target
+    let id = event.target.id;
+    var target = $(`#${id}.cloned`)[0];
 
     var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
     var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy

@@ -16,7 +16,7 @@
 
 <div class="d-flex flex-column w-100">
     <div class="m-2">
-        <div id="dashboardSettings" class="my-2 @(isModify ? string.Empty : "d-none")">
+        <div id="dashboardSettings" class="my-2 @(!isModify ? string.Empty : "d-none")">
             <div class="d-flex justify-content-between mb-1">
                 <h5 id="name">@Model.Name</h5>
 
@@ -30,7 +30,7 @@
             <div id="markdown_description">@Model.Description</div>
         </div>
 
-        <div id="editableDashboardSettings" class="my-2 @(isModify ? "d-none" : string.Empty)">
+        <div id="editableDashboardSettings" class="my-2 @(!isModify ? "d-none" : string.Empty)">
             <form id="saveDashBoardForm" method="post" asp-action="@nameof(DashboardsController.EditDashboard)">
                 <input class="d-none" asp-for="Id" value="@Model.Id"/>
 
@@ -62,7 +62,7 @@
                 <option value="06:00:00">last 6 hours</option>
             </select>
 
-            <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? "d-none" : string.Empty)" href="javascript:addPanel();">
+            <a id="addPanel" class="icon-link text-nowrap ms-2" href="javascript:addPanel();">
                 <i class="fa-solid fa-plus">
                     <use xlink:href="#box-seam">
                 </i> Add panel
@@ -105,32 +105,18 @@
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description');
         initDashboard();
-        disableDragAndResize();
+
+        if (!window.location.search.toLowerCase().includes('isModify=true'.toLowerCase()))
+            disableDragAndResize();
+
         if(change !== 0)
             targetNode.style.minHeight = change + "px";
-        $('#from_select').val('@Model.FromPeriod');
-    });
 
-    $('#dashboardPanels').on('click', 'div.panel a.removePanel', function () {
-        let id = this.id.substring("remove_".length, this.id.length);
-        let name = $(`#${id}`).find('#panel_name').text();
-        showConfirmationModal(
-            `Removing '${name}' dashboard`,
-            `Do you really want to remove selected dashboard <strong>${name}</strong>?`,
-            function () {
-                $.ajax({
-                type: 'DELETE',
-                url: window.location.pathname + `/${id}`,
-                cache: false,
-                async: true,
-                }).done(function (){
-                    $(`#${id}`).remove();
-                })
-                .fail(function (data){
-                    showToast(data.responseText)
-                })
-            }
-        );
+        let fromSelect = $('#from_select');
+        fromSelect.val('@Model.FromPeriod');
+        fromSelect.on('change', function (){
+            $('#saveDashBoardForm').submit();
+        })
     });
 
     $('#saveDashBoardForm').on('submit', function (e){
@@ -215,10 +201,10 @@
         $('#editableDashboardSettings').addClass('d-none');
         disableDragAndResize();
     }
-    
+
     $('.panel.resize-draggable').on('click', 'a.removePanel', function (){
         let id = this.id.substring("remove_".length, this.id.length);
-        let name = this.name;
+        let name = $(`#${id}`).find('#panel_name').text();
         showConfirmationModal(
             `Removing '${name}' panel`,
             `Do you really want to remove selected panel <strong>${name}</strong>?`,
@@ -238,12 +224,14 @@
     }).on('click', 'a.toggle-legend', function (){
         let id = this.id.substring("toggle_".length, this.id.length);
         let showlegend = !$(`#panelChart_${id}`)[0].layout.showlegend;
+        let toggle = $(this);
         $.ajax({
             type: 'put',
             url: window.location.pathname + `/${id}?showlegend=${showlegend}`
         }).done(function (response){
             Plotly.relayout(`panelChart_${id}`, {showlegend: showlegend}).then(
                 (success) => {
+                    toggle.text(showlegend ? "Hide legends" : "Show legends");
                     showToast(response)
                 },
                 (error) => {

@@ -21,7 +21,10 @@ namespace HSMServer.Dashboards
         internal Panel(Dashboard board) : base()
         {
             _board = board;
-            Settings = new PanelSettingsEntity();
+            Settings = new PanelSettingsEntity
+            {
+                ShowLegend = true
+            };
         }
 
         internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
@@ -50,10 +53,10 @@ namespace HSMServer.Dashboards
             var layoutHeight = 0;
             var counter = 0;
             var layoutTakeSize = panels.Count - panels.Count % layerWidth;
-            var width = currentWidth - gap * (layerWidth - 1);
+            var width = currentWidth - gap * (layerWidth + 1);
 
             Relayout(panels.Take(layoutTakeSize), width / layerWidth);
-            Relayout(panels.TakeLast(panels.Count - layoutTakeSize), (currentWidth - gap * (panels.Count - layoutTakeSize - 1)) / (panels.Count - layoutTakeSize));
+            Relayout(panels.TakeLast(panels.Count - layoutTakeSize), (currentWidth - gap * (panels.Count - layoutTakeSize  + 1)) / (panels.Count - layoutTakeSize));
 
             void Relayout(IEnumerable<KeyValuePair<Guid, Panel>> panels, double width)
             {
@@ -61,7 +64,7 @@ namespace HSMServer.Dashboards
                 {
                     panel.Settings.Width = width;
                     panel.Settings.Height = height;
-                    panel.Settings.X = (width + gap) * counter;
+                    panel.Settings.X = width * counter + gap * (counter + 1);
                     panel.Settings.Y = translateY * layoutHeight;
 
                     if (counter == layerWidth - 1)

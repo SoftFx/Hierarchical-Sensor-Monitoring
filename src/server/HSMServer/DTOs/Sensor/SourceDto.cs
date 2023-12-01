@@ -12,6 +12,8 @@ namespace HSMServer.DTOs.Sensor;
 public class SourceDto
 {
     public Guid Id { get; set; }
+    
+    public Guid SensorId { get; set; }
 
     public string Label { get; set; }
 
@@ -31,6 +33,7 @@ public class SourceDto
         Color = source.Color.ToRGB();
         SensorInfo = new SensorInfoDto(sensor.Type, sensor.Type, sensor.SelectedUnit.ToString());
         Id = source.Id;
+        SensorId = sensor.Id;
         Label = sensor.Name;
         Path = sensor.Path;
         Values = chartResponse.Values.Cast<object>().ToList();

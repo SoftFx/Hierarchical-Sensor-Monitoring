@@ -34,7 +34,7 @@ public class PanelViewModel
 
     public PanelViewModel() { }
 
-    public PanelViewModel(Panel panel, Guid dashboardId)
+    public PanelViewModel(Panel panel, Guid dashboardId, bool isEdit = false)
     {
         Name = panel.Name ?? DefaultName;
         Description = panel.Description;
@@ -42,7 +42,7 @@ public class PanelViewModel
         DashboardId = dashboardId;
         Settings = panel.Settings;
 
-        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Key, x => new DatasourceViewModel(x.Value)));
+        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Key, x => new DatasourceViewModel(x.Value, isEdit)));
     }
 
     public bool TryAddSource(SensorNodeViewModel source, out string message)
