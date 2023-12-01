@@ -422,7 +422,8 @@ function updatePlotSource(name, color, id){
     }).done(function (){
         let update = {
             'hovertemplate': `${name}, %{customdata}<extra></extra>`,
-            'line.color': color
+            'line.color': color,
+            name: name
         }
 
         if (currentPanel[id] !== undefined)
