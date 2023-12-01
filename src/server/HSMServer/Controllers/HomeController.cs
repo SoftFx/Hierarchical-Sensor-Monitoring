@@ -54,6 +54,10 @@ namespace HSMServer.Controllers
             _telegramChatsManager = telegramChatsManager;
         }
 
+
+        [HttpGet("/Home/Index")]
+        public IActionResult FromIndexRedirect() => Redirect("/Home");
+        
         [HttpGet("/Home")]
         public IActionResult Index() => View();
 
