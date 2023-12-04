@@ -24,7 +24,8 @@
         </div>
     </div>
     <div class="dropzone" style="max-width: 98%;min-width: 100%; width: 100%!important;">
-         <div id="multichart"></div>
+        <span id="emptypanel" style="font-size: larger; position: fixed; z-index: 300; transform: translate(100px, 100px); color: rgb(128,128,128); display: none">Empty panel</span>
+        <div id="multichart"></div>
     </div>
     <div id="plots" class="mt-1">
         <ul id="sources" class="list-group">
@@ -41,13 +42,24 @@
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}))
         initMultichart('multichart').then(
             (dom) => {
-                window.dispatchEvent(new Event('resize'));
                 values.forEach(function (x) {
                     addNewSourceHtml(x, 'multichart');
                 })
+
+                $('#multichart').on('plotly_relayout', function (e, updateData){
+                    let rect = e.target.getBoundingClientRect();
+                    let emptypanel = $('#emptypanel');
+                    emptypanel.css('transform', `translate(${rect.width / 2 - emptypanel .width() / 2}px, ${rect.height / 2}px)`)
+                })
+
+                if (values.length === 0) {
+                    $('#emptypanel').show();
+                }
+
+                window.dispatchEvent(new Event('resize'));
             }
         );
-        
+
         $('#editablePanelSettings form').on('submit', function (event){
             event.preventDefault();
             event.stopPropagation();
@@ -86,7 +98,10 @@
                     Plotly.deleteTraces('multichart', model.id).then(
                         (data) => {
                             if (data.data.length === 0)
-                                Plotly.relayout('multichart', { 'xaxis.visible': false, 'yaxis.visible':false })
+                               {
+                                   Plotly.relayout('multichart', { 'xaxis.visible': false, 'yaxis.visible':false })
+                                   $('#emptypanel').show()
+                               }
 
                             $('[id^="source"] li')[model.id].remove();
                             updateCurrentPlotsIds(model.id, id)}
