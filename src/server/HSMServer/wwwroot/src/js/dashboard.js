@@ -373,12 +373,12 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             l: 30,
             r: 30,
             t: 10,
-            b: 30,
+            b: 40,
         },
         showlegend: showlegend,
         legend: {
             x: 0,
-            y: -0.3,
+            y: -0.2,
             orientation: "h",
             traceorder: "normal",
             visible: true
