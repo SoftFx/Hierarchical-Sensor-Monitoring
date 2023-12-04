@@ -94,10 +94,24 @@
     let config = { attributes: true, childList: true, subtree: true};
     let callback = function(mutationsList, observer) {
         for(let mutation of mutationsList) {
+            if (mutation.target.classList.contains('panel') && mutation.type == 'attributes' && (mutation.attributeName === 'data-y' || mutation.attributeName === 'data-x'))
+                {
+                    let target = mutation.target.getBoundingClientRect();
+                    console.log(target)
+                    console.log(targetNode.getBoundingClientRect())
+                    if (target.bottom > targetNode.getBoundingClientRect().bottom){
+                        change += change + target.height * 2;
+                        targetNode.style.minHeight = change + "px";
+                        console.log(change)
+                    }
+                }
+            
             if (mutation.target.classList.contains('js-plotly-plot') && mutation.type == 'childList'){
+                console.log(mutation.target.parentNode)
                 let target = mutation.target.parentNode.getBoundingClientRect();
                 if (target.bottom > targetNode.getBoundingClientRect().bottom){
-                    change = Math.max(change, target.bottom + target.height);
+                    change = change + target.height * 2;
+                    targetNode.style.minHeight = change + "px";
                 }
             }  
         }
