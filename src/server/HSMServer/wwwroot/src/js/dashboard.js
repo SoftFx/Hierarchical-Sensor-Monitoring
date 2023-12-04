@@ -32,8 +32,7 @@ window.insertSourceHtml = function (data) {
     let sources = $('#sources');
     let text = `<li id=${'source_' + data.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
                                     style="border-top-width: 1px;
-                                           border-radius: 5px;"
-                                    >
+                                           border-radius: 5px;">
                                     <div class="d-flex flex-grow-1">
                                         <div class="d-flex flex-column" style="flex-grow: 10">
                                             <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">

@@ -35,7 +35,10 @@
                 <input class="d-none" asp-for="Id" value="@Model.Id"/>
 
                 <div class="d-flex justify-content-between mb-1">
-                    <input id="form_name" maxlength="30" class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
+                    <div class="d-flex align-items-center flex-grow-1">
+                        <label asp-for="Name" class="me-2"></label>
+                        <input id="form_name" maxlength="30" class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
+                    </div>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>

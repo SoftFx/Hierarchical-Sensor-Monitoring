@@ -9,12 +9,15 @@
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
 
-<div class="w-100 overflow-y-auto m-2">
+<div class="w-100 overflow-y-auto p-2">
     <div id="panelSettings" class="my-2">
         <div id="editablePanelSettings" class="my-2">
             <form method="post"  asp-action="@nameof(DashboardsController.SaveDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
                 <div class="d-flex justify-content-between mb-1">
-                    <input class="form-control" required maxlength="30" asp-for="Name" placeholder="@nameof(Model.Name)"/>
+                    <div class="d-flex align-items-center flex-grow-1">
+                        <label asp-for="Name" class="me-2"></label>
+                        <input class="form-control" required maxlength="30" asp-for="Name" placeholder="@nameof(Model.Name)"/>
+                    </div>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>

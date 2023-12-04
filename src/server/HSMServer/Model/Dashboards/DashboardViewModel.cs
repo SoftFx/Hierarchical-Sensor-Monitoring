@@ -2,6 +2,7 @@
 using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace HSMServer.Model.Dashboards
@@ -15,6 +16,7 @@ namespace HSMServer.Model.Dashboards
 
         public Guid? Id { get; set; }
 
+        [Display(Name = "Dashboard:")]
         public string Name { get; set; }
 
         public string Description { get; set; }
