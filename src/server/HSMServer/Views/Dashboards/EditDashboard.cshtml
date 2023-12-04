@@ -87,24 +87,31 @@
 
 
 <script>
-     let targetNode = $('#dashboardPanels')[0];
-     let change = 0;
-     let config = { attributes: true, childList: true, subtree: true};
-     let callback = function(mutationsList, observer) {
-         for(let mutation of mutationsList) {
-             if (mutation.target.classList.contains('js-plotly-plot') && mutation.type == 'childList'){
-                 let target = mutation.target.parentNode.getBoundingClientRect();
-                 if (target.bottom > targetNode.getBoundingClientRect().bottom){
-                     change = Math.max(change, target.bottom + target.height);
-                 }
-             }  
-         }
-     };
+    var changesCounter = 0;
 
-     let observer = new MutationObserver(callback);
+    let targetNode = $('#dashboardPanels')[0];
+    let change = 0;
+    let config = { attributes: true, childList: true, subtree: true};
+    let callback = function(mutationsList, observer) {
+        for(let mutation of mutationsList) {
+            if (mutation.target.classList.contains('js-plotly-plot') && mutation.type == 'childList'){
+                let target = mutation.target.parentNode.getBoundingClientRect();
+                if (target.bottom > targetNode.getBoundingClientRect().bottom){
+                    change = Math.max(change, target.bottom + target.height);
+                }
+            }  
+        }
+    };
 
-     observer.observe(targetNode, config);
+    let observer = new MutationObserver(callback);
 
+    observer.observe(targetNode, config);
+
+    $(window).on('beforeunload', function (e){
+        if (changesCounter > 0)
+            return "Are you sure you want to leave? Data you changed wouldn't be saved";
+    })
+    
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description');
         initDashboard();
@@ -160,6 +167,7 @@
                 replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
                 disableEdit();
             }
+            changesCounter = 0;
         }).fail(function (response){
             showToast(response.responseText)
         })
@@ -176,6 +184,7 @@
             $('#dashboardPanels').removeClass("d-none");
             $('#noPanels').addClass("d-none");
             showToast('Empty panel added');
+            changesCounter += 1;
         })
     }
     

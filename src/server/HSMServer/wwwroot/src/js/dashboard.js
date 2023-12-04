@@ -315,6 +315,8 @@ function addResizable(interactable){
                 target.setAttribute('data-x', x)
                 target.setAttribute('data-y', y)
 
+                if (changesCounter === 0)
+                    changesCounter += 1;
 
                 var update = {
                     width: event.rect.width,
@@ -494,4 +496,7 @@ function dragMoveListenerPanel (event) {
 
     target.setAttribute('data-x', x)
     target.setAttribute('data-y', y)
+    
+    if (changesCounter === 0)
+        changesCounter += 1;
 }
