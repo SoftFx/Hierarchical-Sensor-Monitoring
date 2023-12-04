@@ -138,6 +138,12 @@ export class Plot {
             return;
         }
 
+        if (value.tooltip !== undefined && value.tooltip !== null)
+        {
+            this.customdata.push(customValue + '<br>' + value.tooltip);
+            return;
+        }
+        
         this.customdata.push(customValue);
     }
 
