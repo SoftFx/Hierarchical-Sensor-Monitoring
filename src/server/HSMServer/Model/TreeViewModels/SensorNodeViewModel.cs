@@ -20,7 +20,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public Integration Integration { get; private set; }
 
-        public StatisticsCalculation Options { get; private set; }
+        public StatisticsOptions Statistics { get; private set; }
 
         public string ShortStringValue { get; private set; }
 
@@ -61,7 +61,7 @@ namespace HSMServer.Model.TreeViewModel
 
             Type = model.Type;
             State = model.State;
-            Options = model.Options;
+            Statistics = model.Statistics;
             Integration = model.Integration;
             UpdateTime = model.LastUpdate;
             IsSingleton = model.IsSingleton;

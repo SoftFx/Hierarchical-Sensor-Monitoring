@@ -26,7 +26,7 @@ namespace HSMSensorDataObjects.SensorRequests
 
 
     [Flags]
-    public enum StatisticsCalculation : int
+    public enum StatisticsOptions : int
     {
         None = 0,
         EMA = 1,
@@ -65,7 +65,7 @@ namespace HSMSensorDataObjects.SensorRequests
         public long? TTL { get; set; }
 
 
-        public StatisticsCalculation Options { get; set; }
+        public StatisticsOptions Statistics { get; set; }
 
         public bool? IsSingletonSensor { get; set; }
 

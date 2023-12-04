@@ -47,7 +47,7 @@ namespace HSMDataCollector.Options
         public TimeSpan? TTL { get; set; }
 
 
-        public StatisticsCalculation Options { get; set; }
+        public StatisticsOptions Statistics { get; set; }
 
         public bool? EnableForGrafana { get; set; }
 

@@ -20,6 +20,6 @@
 
         public int Integration { get; init; }
 
-        public int Options { get; init; }
+        public int Statistics { get; init; }
     }
 }
