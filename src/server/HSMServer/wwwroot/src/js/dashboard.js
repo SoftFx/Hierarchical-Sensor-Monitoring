@@ -365,7 +365,7 @@ window.initMultyichartCordinates = function(settings, values, id){
     return new Promise(function(resolve, reject){
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
-        let height = dashboardPanels.height();
+        let height = dashboardPanels.height() > 1400 ? 1400 : dashboardPanels.height();
 
         let currWidth = Number((settings.width * width).toFixed(5))
         let currHeight = Number((settings.height * height).toFixed(5))
