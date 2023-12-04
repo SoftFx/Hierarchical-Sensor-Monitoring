@@ -65,7 +65,7 @@
                 <option value="06:00:00">last 6 hours</option>
             </select>
 
-            <a id="addPanel" class="icon-link text-nowrap ms-2" href="javascript:addPanel();">
+            <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? string.Empty : "d-none")" href="javascript:addPanel();">
                 <i class="fa-solid fa-plus">
                     <use xlink:href="#box-seam">
                 </i> Add panel
@@ -156,7 +156,7 @@
                  window.location.reload();   
             else 
             {
-                dashboard.find('h5#name').text(object.Name);
+                dashboard.find('h5#name').text("Dashboard: " + object.Name);
                 replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
                 disableEdit();
             }
