@@ -92,6 +92,8 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
                 jQuery.extend(layoutUpdate, plot.getLayout(y));
             }
             
+            $('#emptypanel').hide()
+            
             return Plotly.relayout(id, layoutUpdate);
         }
     );
