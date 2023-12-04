@@ -1,5 +1,6 @@
 import {convertToGraphData} from "./plotting";
 import {pan} from "plotly.js/src/fonts/ploticon";
+import {TimeSpanPlot} from "./plots";
 
 export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
@@ -61,7 +62,6 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
-    
     if (data.values.length === 0) {
         plot.x = [null]
         plot.y = [null];
@@ -73,7 +73,27 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
     Plotly.addTraces(id, plot.getPlotData()).then(
-        (data) => Plotly.relayout(id, { 'xaxis.visible': true, 'yaxis.visible': true })
+        (data) => {
+            let layoutUpdate = {
+                xaxis:{ visible: true}, 
+                yaxis:{ visible: true}
+            }
+            
+            if (plot instanceof TimeSpanPlot)
+            {
+                let y = [];
+                for (let i of $(`#${id}`)[0].data)
+                    y.push(...i.y);
+
+                y = y.filter(element => {
+                    return element !== null;
+                })
+                
+                jQuery.extend(layoutUpdate, plot.getLayout(y));
+            }
+            
+            return Plotly.relayout(id, layoutUpdate);
+        }
     );
 
     let updateLayout = {
@@ -377,7 +397,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         showlegend: showlegend,
         legend: {
             x: 0,
-            y: -0.1,
+            y: -0.2,
             orientation: "h",
             traceorder: "normal",
             visible: true
