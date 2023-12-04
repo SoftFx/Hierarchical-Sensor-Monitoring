@@ -47,6 +47,8 @@ namespace HSMDataCollector.Options
         public TimeSpan? TTL { get; set; }
 
 
+        public StatisticsCalculation Options { get; set; }
+
         public bool? EnableForGrafana { get; set; }
 
         public bool? IsSingletonSensor { get; set; }

@@ -20,6 +20,8 @@ namespace HSMServer.Model.ViewModel
 
         public bool IsMuted { get; }
 
+        public bool IsEMA { get; }
+
 
         public Unit? SelectedUnit { get; set; }
 
@@ -33,13 +35,25 @@ namespace HSMServer.Model.ViewModel
         {
             SensorType = sensor.Type;
             StatusComment = sensor.ValidationError;
-            HasGrafana = sensor.Integration.HasGrafana();
             IsMuted = sensor.State == SensorState.Muted;
+            HasGrafana = sensor.Integration.HasGrafana();
+            IsEMA = sensor.Options.HasFlag(StatisticsCalculation.EMA);
 
             IsSingleton = sensor.IsSingleton;
             SelectedUnit = sensor.SelectedUnit;
             AvailableUnits = sensor.AvailableUnits;
             AggregateValues = sensor.AggregateValues;
+        }
+
+
+        internal StatisticsCalculation GetOptions()
+        {
+            var options = StatisticsCalculation.None;
+
+            if (IsEMA)
+                options |= StatisticsCalculation.EMA;
+
+            return options;
         }
     }
 }

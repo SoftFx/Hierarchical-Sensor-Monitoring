@@ -19,5 +19,7 @@
         public long EndOfMuting { get; init; }
 
         public int Integration { get; init; }
+
+        public int Options { get; init; }
     }
 }

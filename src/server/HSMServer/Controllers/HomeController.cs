@@ -549,6 +549,7 @@ namespace HSMServer.Controllers
                 Policies = policyUpdates,
                 SelectedUnit = newModel.SelectedUnit,
                 AggregateValues = newModel.AggregateValues,
+                Options = newModel.GetOptions(),
                 Initiator = CurrentInitiator
             };
 
