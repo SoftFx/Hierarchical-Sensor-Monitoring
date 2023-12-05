@@ -5,8 +5,8 @@ import {Plot, TimeSpanPlot} from "./plots";
 window.getRangeDate = function (){
     let period = $('#from_select').val();
 
-    let currentDate = new Date();
-    let lastDate = currentDate.getTime()
+    let currentDate = new Date(new Date(Date.now()).toUTCString());
+    let lastDate = currentDate.toISOString()
     let newDate
     switch (period){
         case "00:30:00":
@@ -21,9 +21,11 @@ window.getRangeDate = function (){
         case "06:00:00":
             newDate = currentDate.setHours(currentDate.getHours() - 6)
             break
+        default:
+            newDate = currentDate.setHours(currentDate.getHours() - 6)
     }
     
-    return [newDate, lastDate]
+    return [new Date(newDate).toISOString(), lastDate]
 }
 
 export function getPlotSourceView(id) {
@@ -86,14 +88,17 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
-    let layoutUpdate = {
-        xaxis:{
+    let testhaha = {
+        'xaxis':{
             visible: true,
             type: "date",
-            autorange: true
         },
-        yaxis:{ visible: true}
+        'yaxis':{ visible: true}
     }
+    console.log('++++')
+    console.log(testhaha)
+    console.log('++++')
+
 
     if (data.values.length === 0) {
         plot.x = [null]
@@ -106,7 +111,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
 
-    jQuery.extend(layoutUpdate,{
+    jQuery.extend(testhaha,{
         yaxis: {
             title : {
                 text: data.sensorInfo.units,
@@ -131,23 +136,24 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
                     return element !== null;
                 })
                 
-                jQuery.extend(layoutUpdate, plot.getLayout(y));
+                jQuery.extend(testhaha, plot.getLayout(y));
             }
 
-            if (data.data.length < 2) {
-                layoutUpdate.xaxis.range = getRangeDate()
-                layoutUpdate.xaxis.autorange = $('#multichart').length !== 0;
-            }
-
+            // if (data.data.length < 2) {
+            //     layoutUpdate.xaxis.range = getRangeDate()
+            //     layoutUpdate.xaxis.autorange = $('#multichart').length !== 0;
+            // }
+            console.log(testhaha)
             $('#emptypanel').hide()
 
-            Plotly.relayout(id, layoutUpdate)
+            Plotly.relayout(id, testhaha).then((plot) => console.log(plot.layout))
         },
         (error) => {
-            Plotly.relayout(id, layoutUpdate)
+            Plotly.relayout(id, testhaha)
         }
     );
-
+    
+    console.log($(`#${id}`)[0].layout)
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
 }
 
@@ -279,9 +285,9 @@ window.initDashboard = function () {
                         customData.push(j.value);
                     }
 
-                    if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null){
-                        Plotly.update(plot, {x :[[]], y:[[]]}, {}, 0)
-                    }
+                    // if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null){
+                    //     Plotly.update(plot, {x :[[]], y:[[]]}, {}, 0)
+                    // }
                     
                     Plotly.extendTraces(plot, {
                         y: [y],
@@ -451,6 +457,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         },
         xaxis: {
             type: 'date',
+            autorange: false,
             range: getRangeDate(),
             title: {
                 //text: 'Time',
