@@ -1,6 +1,6 @@
 import {convertToGraphData} from "./plotting";
 import {pan} from "plotly.js/src/fonts/ploticon";
-import {TimeSpanPlot} from "./plots";
+import {Plot, TimeSpanPlot} from "./plots";
 
 window.getRangeDate = function (){
     let period = $('#from_select').val();
@@ -279,6 +279,10 @@ window.initDashboard = function () {
                         customData.push(j.value);
                     }
 
+                    if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null){
+                        Plotly.update(plot, {x :[[]], y:[[]]}, {}, 0)
+                    }
+                    
                     Plotly.extendTraces(plot, {
                         y: [y],
                         x: [x],
