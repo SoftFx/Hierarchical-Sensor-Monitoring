@@ -4,6 +4,7 @@ using HSMServer.Dashboards;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -22,13 +23,17 @@ public sealed class PanelViewModel
 
     public Guid DashboardId { get; set; }
 
+
+    [Display(Name = "Panel:")]
     public string Name { get; set; }
 
     public string Description { get; set; }
 
+
     public SensorType? MainSensorType { get; set; }
 
     public Unit? MainUnit { get; set; }
+
 
     public PanelSettings Settings { get; set; }
 

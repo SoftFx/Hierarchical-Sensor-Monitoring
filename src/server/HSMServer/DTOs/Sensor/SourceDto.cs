@@ -35,7 +35,7 @@ public class SourceDto
         Id = source.Id;
         SensorId = sensor.Id;
         Label = sensor.Name;
-        Path = sensor.Path;
+        Path = sensor.FullPath;
         Values = chartResponse.Values.Cast<object>().ToList();
     }
 }

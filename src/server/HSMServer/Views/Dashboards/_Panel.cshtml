@@ -37,6 +37,8 @@
             </div>
         </div>
     </div>
+    
+    <span id="emptypanel_@Model.Id" style="font-size: larger; position: fixed; z-index: 300; transform: translate(100px, 100px); color: rgb(128,128,128); display: none">Empty panel</span>
     <div id="panelChart_@Model.Id"></div>
 </div>
 
@@ -45,14 +47,27 @@
     $(document).ready(function () {
         let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
-
+        let dashboardpanels = $('#dashboardPanels');
         initMultyichartCordinates(settings, values, '@Model.Id').then(
-            (data) => initMultichart('panelChart_@Model.Id', Number((settings.height * $('#dashboardPanels').height()).toFixed(5)), settings.showLegend).then(
+            (data) => initMultichart('panelChart_@Model.Id', Number((settings.height * (dashboardpanels.height() > 1400 ? 1400 : dashboardpanels.height())).toFixed(5)), settings.showLegend).then(
                         (data) => {
                                 values.forEach(function (x) {
                                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')
                                 })
+
+                                $('#panelChart_@Model.Id').on('plotly_relayout', function (e, updateData){
+                                    let rect = e.target.getBoundingClientRect();
+                                    let emptypanel = $('#emptypanel_@Model.Id');
+                                    emptypanel.css('transform', `translate(${rect.width / 2 - emptypanel .width() / 2}px, ${rect.height / 2}px)`)
+                                })
+
+                                if (values.length === 0) {
+                                    $('#emptypanel_@Model.Id').show();
+                                }
+
                                 replaceHtmlToMarkdown('panel_description')
+
+                                window.dispatchEvent(new Event('resize'));
                             },
                         (error) => showToast(error)
             )

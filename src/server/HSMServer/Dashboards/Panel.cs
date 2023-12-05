@@ -86,8 +86,10 @@ namespace HSMServer.Dashboards
             var layoutTakeSize = panels.Count - panels.Count % layerWidth;
             var width = currentWidth - gap * (layerWidth + 1);
 
-            Relayout(panels.Take(layoutTakeSize), width / layerWidth);
-            Relayout(panels.TakeLast(panels.Count - layoutTakeSize), (currentWidth - gap * (panels.Count - layoutTakeSize + 1)) / (panels.Count - layoutTakeSize));
+            var sortedPanels = panels.GroupBy(x => x.Value.Name).SelectMany(x => x).ToList();
+            
+            Relayout(sortedPanels.Take(layoutTakeSize), width / layerWidth);
+            Relayout(sortedPanels.TakeLast(panels.Count - layoutTakeSize), (currentWidth - gap * (panels.Count - layoutTakeSize  + 1)) / (panels.Count - layoutTakeSize));
 
             void Relayout(IEnumerable<KeyValuePair<Guid, Panel>> panels, double width)
             {

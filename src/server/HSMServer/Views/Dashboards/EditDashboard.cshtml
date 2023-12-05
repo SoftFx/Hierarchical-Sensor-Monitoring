@@ -14,11 +14,11 @@
 }
 
 
-<div class="d-flex flex-column w-100">
-    <div class="m-2">
+<div class="d-flex flex-column w-100 px-3">
+    <div class="my-2 px-3">
         <div id="dashboardSettings" class="my-2 @(!isModify ? string.Empty : "d-none")">
             <div class="d-flex justify-content-between mb-1">
-                <h5 id="name">@Model.Name</h5>
+                <h5 id="name">Dashboard: @Model.Name</h5>
 
                 <a class="icon-link text-nowrap" href="javascript:editDahsboardSettings();" title='edit dashboard settings'>
                     <i class='fas fa-edit'>
@@ -35,7 +35,10 @@
                 <input class="d-none" asp-for="Id" value="@Model.Id"/>
 
                 <div class="d-flex justify-content-between mb-1">
-                    <input id="form_name" maxlength="30" class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
+                    <div class="d-flex align-items-center flex-grow-1">
+                        <label asp-for="Name" class="me-2"></label>
+                        <input id="form_name" maxlength="30" class="form-control" asp-for="Name" placeholder="@nameof(Model.Name)" required/>
+                    </div>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
@@ -46,10 +49,10 @@
 
         <div class="d-flex justify-content-end">
             <div class="btn-group">
-                <button id="relayout_three" onclick="relayout(3)" class="btn d-flex pe-0">
+                <button id="relayout_three" onclick="relayout(3)" title="Change layout where each row has 3 panels" class="btn d-flex pe-0">
                     <img src="~/dist/columns.svg" style="width: 2rem;height: 2rem"/>
                 </button>
-                <button id="relayout_two" onclick="relayout(2)" class="btn d-flex ps-1">
+                <button id="relayout_two" onclick="relayout(2)" title="Change layout where each row has 2 panels" class="btn d-flex ps-1">
                     <img src="~/dist/two-columns.svg" style="width: 1.7rem;height: 2rem"/>
                 </button>
             </div>
@@ -62,7 +65,7 @@
                 <option value="06:00:00">last 6 hours</option>
             </select>
 
-            <a id="addPanel" class="icon-link text-nowrap ms-2" href="javascript:addPanel();">
+            <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? string.Empty : "d-none")" href="javascript:addPanel();">
                 <i class="fa-solid fa-plus">
                     <use xlink:href="#box-seam">
                 </i> Add panel
@@ -84,24 +87,31 @@
 
 
 <script>
-     let targetNode = $('#dashboardPanels')[0];
-     let change = 0;
-     let config = { attributes: true, childList: true, subtree: true};
-     let callback = function(mutationsList, observer) {
-         for(let mutation of mutationsList) {
-             if (mutation.target.classList.contains('js-plotly-plot') && mutation.type == 'childList'){
-                 let target = mutation.target.parentNode.getBoundingClientRect();
-                 if (target.bottom > targetNode.getBoundingClientRect().bottom){
-                     change = Math.max(change, target.bottom + target.height);
-                 }
-             }  
-         }
-     };
+    var changesCounter = 0;
 
-     let observer = new MutationObserver(callback);
+    let targetNode = $('#dashboardPanels')[0];
+    let change = 0;
+    let config = { attributes: true, childList: true, subtree: true};
+    let callback = function(mutationsList, observer) {
+        for(let mutation of mutationsList) {
+            if (mutation.target.classList.contains('js-plotly-plot') && mutation.type == 'childList'){
+                let target = mutation.target.parentNode.getBoundingClientRect();
+                if (target.bottom > targetNode.getBoundingClientRect().bottom){
+                    change = Math.max(change, target.bottom + target.height);
+                }
+            }  
+        }
+    };
 
-     observer.observe(targetNode, config);
+    let observer = new MutationObserver(callback);
 
+    observer.observe(targetNode, config);
+
+    $(window).on('beforeunload', function (e){
+        if (changesCounter > 0)
+            return "Are you sure you want to leave? Data you changed wouldn't be saved";
+    })
+    
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description');
         initDashboard();
@@ -153,10 +163,11 @@
                  window.location.reload();   
             else 
             {
-                dashboard.find('h5#name').text(object.Name);
+                dashboard.find('h5#name').text("Dashboard: " + object.Name);
                 replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
                 disableEdit();
             }
+            changesCounter = 0;
         }).fail(function (response){
             showToast(response.responseText)
         })
@@ -172,6 +183,8 @@
             $('#dashboardPanels').append(viewData);
             $('#dashboardPanels').removeClass("d-none");
             $('#noPanels').addClass("d-none");
+            showToast('Empty panel added');
+            changesCounter += 1;
         })
     }
     
@@ -202,7 +215,7 @@
         disableDragAndResize();
     }
 
-    $('.panel.resize-draggable').on('click', 'a.removePanel', function (){
+    $(document).on('click', 'a.removePanel', function (){
         let id = this.id.substring("remove_".length, this.id.length);
         let name = $(`#${id}`).find('#panel_name').text();
         showConfirmationModal(
