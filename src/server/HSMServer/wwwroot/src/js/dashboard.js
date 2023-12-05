@@ -4,6 +4,7 @@ import {TimeSpanPlot} from "./plots";
 
 window.getRangeDate = function (){
     let period = $('#from_select').val();
+
     let currentDate = new Date();
     let lastDate = currentDate.getTime()
     let newDate
@@ -89,25 +90,35 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         xaxis:{
             visible: true,
             type: "date",
+            autorange: true
         },
         yaxis:{ visible: true}
     }
 
-
     if (data.values.length === 0) {
         plot.x = [null]
         plot.y = [null];
-
-        if ($(`#${id}`)[0].data.length === 0)
-            layoutUpdate.xaxis.range = getRangeDate()
     }
-    
+
     plot.id = data.id;
     plot.name = data.label;
     plot.mode = 'lines';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
-    
+
+    jQuery.extend(layoutUpdate,{
+        yaxis: {
+            title : {
+                text: data.sensorInfo.units,
+                font: {
+                    family: 'Courier New, monospace',
+                    size: 18,
+                    color: '#7f7f7f'
+                }
+            }
+        }
+    });
+
     Plotly.addTraces(id, plot.getPlotData()).then(
         (data) => {
             if (plot instanceof TimeSpanPlot)
@@ -123,23 +134,20 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
                 jQuery.extend(layoutUpdate, plot.getLayout(y));
             }
 
+            if (data.data.length < 2) {
+                layoutUpdate.xaxis.range = getRangeDate()
+                layoutUpdate.xaxis.autorange = $('#multichart').length !== 0;
+            }
+
             $('#emptypanel').hide()
-            
-            return Plotly.relayout(id, layoutUpdate);
+
+            Plotly.relayout(id, layoutUpdate)
+        },
+        (error) => {
+            Plotly.relayout(id, layoutUpdate)
         }
     );
 
-    let updateLayout = {
-        'yaxis.title' : {
-            text: data.sensorInfo.units,
-            font: {
-                family: 'Courier New, monospace',
-                size: 18,
-                color: '#7f7f7f'
-            }
-        }
-    }
-    Plotly.relayout(id, updateLayout)
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
 }
 
