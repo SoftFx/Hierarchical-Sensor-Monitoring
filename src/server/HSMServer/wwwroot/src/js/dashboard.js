@@ -2,6 +2,29 @@ import {convertToGraphData} from "./plotting";
 import {pan} from "plotly.js/src/fonts/ploticon";
 import {TimeSpanPlot} from "./plots";
 
+window.getRangeDate = function (){
+    let period = $('#from_select').val();
+    let currentDate = new Date();
+    let lastDate = currentDate.getTime()
+    let newDate
+    switch (period){
+        case "00:30:00":
+            newDate = currentDate.setMinutes(currentDate.getMinutes() - 30)
+            break
+        case "01:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 1)
+            break
+        case "03:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 3)
+            break
+        case "06:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 6)
+            break
+    }
+    
+    return [newDate, lastDate]
+}
+
 export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
         $.ajax({
@@ -62,9 +85,21 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
+    let layoutUpdate = {
+        xaxis:{
+            visible: true,
+            type: "date",
+        },
+        yaxis:{ visible: true}
+    }
+
+
     if (data.values.length === 0) {
         plot.x = [null]
         plot.y = [null];
+
+        if ($(`#${id}`)[0].data.length === 0)
+            layoutUpdate.xaxis.range = getRangeDate()
     }
     
     plot.id = data.id;
@@ -72,13 +107,9 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     plot.mode = 'lines';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
+    
     Plotly.addTraces(id, plot.getPlotData()).then(
         (data) => {
-            let layoutUpdate = {
-                xaxis:{ visible: true}, 
-                yaxis:{ visible: true}
-            }
-            
             if (plot instanceof TimeSpanPlot)
             {
                 let y = [];
@@ -91,7 +122,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
                 
                 jQuery.extend(layoutUpdate, plot.getLayout(y));
             }
-            
+
             $('#emptypanel').hide()
             
             return Plotly.relayout(id, layoutUpdate);
@@ -408,6 +439,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         },
         xaxis: {
             type: 'date',
+            range: getRangeDate(),
             title: {
                 //text: 'Time',
                 font: {

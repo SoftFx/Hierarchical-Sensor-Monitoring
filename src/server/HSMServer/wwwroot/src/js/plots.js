@@ -70,6 +70,7 @@ export class Plot {
                 dragmode: 'zoom',
                 autosize: true,
                 xaxis: {
+                    type: 'date',
                     title: {
                         //text: 'Time',
                         font: {
@@ -99,6 +100,7 @@ export class Plot {
             dragmode: 'zoom',
             autosize: true,
             xaxis: {
+                type: 'date',
                 title: {
                     //text: 'Time',
                     font: {
