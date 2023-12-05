@@ -88,18 +88,19 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
-    let testhaha = {
-        'xaxis':{
-            visible: true,
-            type: "date",
-        },
-        'yaxis':{ visible: true}
+    
+    let layoutUpdate = {
+        'xaxis.visible' : true,
+        'xaxis.type' : 'date',
+        'xaxis.autorange' : false,
+        'xaxis.range' : getRangeDate(),
+        'yaxis.visible' : true,
+        'yaxis.title.text' : data.sensorInfo.units,
+        'yaxis.title.font.family' : data.sensorInfo.units,
+        'yaxis.title.font.size' : 18,
+        'yaxis.title.font.color' : '#7f7f7f',
     }
-    console.log('++++')
-    console.log(testhaha)
-    console.log('++++')
-
-
+    
     if (data.values.length === 0) {
         plot.x = [null]
         plot.y = [null];
@@ -110,19 +111,6 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     plot.mode = 'lines';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
-
-    jQuery.extend(testhaha,{
-        yaxis: {
-            title : {
-                text: data.sensorInfo.units,
-                font: {
-                    family: 'Courier New, monospace',
-                    size: 18,
-                    color: '#7f7f7f'
-                }
-            }
-        }
-    });
 
     Plotly.addTraces(id, plot.getPlotData()).then(
         (data) => {
@@ -136,24 +124,28 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
                     return element !== null;
                 })
                 
-                jQuery.extend(testhaha, plot.getLayout(y));
+                jQuery.extend(layoutUpdate, plot.getLayout(y));
             }
 
-            // if (data.data.length < 2) {
-            //     layoutUpdate.xaxis.range = getRangeDate()
-            //     layoutUpdate.xaxis.autorange = $('#multichart').length !== 0;
-            // }
-            console.log(testhaha)
             $('#emptypanel').hide()
 
-            Plotly.relayout(id, testhaha).then((plot) => console.log(plot.layout))
-        },
-        (error) => {
-            Plotly.relayout(id, testhaha)
+            let autorange = false;
+            for(let i of $(`#${id}`)[0].data){
+                console.log(i)
+                if (i.x[0] !== null) {
+                    autorange = true;
+                    break;
+                }
+                else
+                    autorange = false;
+            }
+
+            layoutUpdate['xaxis.autorange'] = autorange;
+
+            Plotly.relayout(id, layoutUpdate)
         }
     );
     
-    console.log($(`#${id}`)[0].layout)
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
 }
 
