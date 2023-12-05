@@ -1,6 +1,30 @@
 import {convertToGraphData} from "./plotting";
 import {pan} from "plotly.js/src/fonts/ploticon";
-import {TimeSpanPlot} from "./plots";
+import {Plot, TimeSpanPlot} from "./plots";
+
+window.getRangeDate = function (){
+    let period = $('#from_select').val();
+
+    let currentDate = new Date();
+    let lastDate = currentDate.getTime()
+    let newDate
+    switch (period){
+        case "00:30:00":
+            newDate = currentDate.setMinutes(currentDate.getMinutes() - 30)
+            break
+        case "01:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 1)
+            break
+        case "03:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 3)
+            break
+        case "06:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 6)
+            break
+    }
+    
+    return [newDate, lastDate]
+}
 
 export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
@@ -62,23 +86,41 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
+    let layoutUpdate = {
+        xaxis:{
+            visible: true,
+            type: "date",
+            autorange: true
+        },
+        yaxis:{ visible: true}
+    }
+
     if (data.values.length === 0) {
         plot.x = [null]
         plot.y = [null];
     }
-    
+
     plot.id = data.id;
     plot.name = data.label;
     plot.mode = 'lines';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
+
+    jQuery.extend(layoutUpdate,{
+        yaxis: {
+            title : {
+                text: data.sensorInfo.units,
+                font: {
+                    family: 'Courier New, monospace',
+                    size: 18,
+                    color: '#7f7f7f'
+                }
+            }
+        }
+    });
+
     Plotly.addTraces(id, plot.getPlotData()).then(
         (data) => {
-            let layoutUpdate = {
-                xaxis:{ visible: true}, 
-                yaxis:{ visible: true}
-            }
-            
             if (plot instanceof TimeSpanPlot)
             {
                 let y = [];
@@ -91,24 +133,21 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
                 
                 jQuery.extend(layoutUpdate, plot.getLayout(y));
             }
-            
+
+            if (data.data.length < 2) {
+                layoutUpdate.xaxis.range = getRangeDate()
+                layoutUpdate.xaxis.autorange = $('#multichart').length !== 0;
+            }
+
             $('#emptypanel').hide()
-            
-            return Plotly.relayout(id, layoutUpdate);
+
+            Plotly.relayout(id, layoutUpdate)
+        },
+        (error) => {
+            Plotly.relayout(id, layoutUpdate)
         }
     );
 
-    let updateLayout = {
-        'yaxis.title' : {
-            text: data.sensorInfo.units,
-            font: {
-                family: 'Courier New, monospace',
-                size: 18,
-                color: '#7f7f7f'
-            }
-        }
-    }
-    Plotly.relayout(id, updateLayout)
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
 }
 
@@ -240,6 +279,10 @@ window.initDashboard = function () {
                         customData.push(j.value);
                     }
 
+                    if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null){
+                        Plotly.update(plot, {x :[[]], y:[[]]}, {}, 0)
+                    }
+                    
                     Plotly.extendTraces(plot, {
                         y: [y],
                         x: [x],
@@ -315,6 +358,8 @@ function addResizable(interactable){
                 target.setAttribute('data-x', x)
                 target.setAttribute('data-y', y)
 
+                if (changesCounter === 0)
+                    changesCounter += 1;
 
                 var update = {
                     width: event.rect.width,
@@ -363,7 +408,7 @@ window.initMultyichartCordinates = function(settings, values, id){
     return new Promise(function(resolve, reject){
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
-        let height = dashboardPanels.height();
+        let height = dashboardPanels.height() > 1400 ? 1400 : dashboardPanels.height();
 
         let currWidth = Number((settings.width * width).toFixed(5))
         let currHeight = Number((settings.height * height).toFixed(5))
@@ -405,6 +450,8 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             visible: true
         },
         xaxis: {
+            type: 'date',
+            range: getRangeDate(),
             title: {
                 //text: 'Time',
                 font: {
@@ -494,4 +541,7 @@ function dragMoveListenerPanel (event) {
 
     target.setAttribute('data-x', x)
     target.setAttribute('data-y', y)
+    
+    if (changesCounter === 0)
+        changesCounter += 1;
 }

@@ -70,6 +70,7 @@ export class Plot {
                 dragmode: 'zoom',
                 autosize: true,
                 xaxis: {
+                    type: 'date',
                     title: {
                         //text: 'Time',
                         font: {
@@ -99,6 +100,7 @@ export class Plot {
             dragmode: 'zoom',
             autosize: true,
             xaxis: {
+                type: 'date',
                 title: {
                     //text: 'Time',
                     font: {
@@ -138,6 +140,12 @@ export class Plot {
             return;
         }
 
+        if (value.tooltip !== undefined && value.tooltip !== null)
+        {
+            this.customdata.push(customValue + '<br>' + value.tooltip);
+            return;
+        }
+        
         this.customdata.push(customValue);
     }
 
