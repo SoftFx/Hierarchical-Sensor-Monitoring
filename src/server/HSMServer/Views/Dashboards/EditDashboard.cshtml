@@ -215,7 +215,7 @@
         disableDragAndResize();
     }
 
-    $('.panel.resize-draggable').on('click', 'a.removePanel', function (){
+    $(document).on('click', 'a.removePanel', function (){
         let id = this.id.substring("remove_".length, this.id.length);
         let name = $(`#${id}`).find('#panel_name').text();
         showConfirmationModal(

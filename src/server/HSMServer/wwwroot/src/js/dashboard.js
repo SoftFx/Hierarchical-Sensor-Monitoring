@@ -407,6 +407,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             visible: true
         },
         xaxis: {
+            type: 'date',
             title: {
                 //text: 'Time',
                 font: {
