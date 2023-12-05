@@ -37,7 +37,7 @@ namespace HSMServer.Model.ViewModel
             StatusComment = sensor.ValidationError;
             IsMuted = sensor.State == SensorState.Muted;
             HasGrafana = sensor.Integration.HasGrafana();
-            IsEMA = sensor.Statistics.HasFlag(StatisticsOptions.EMA);
+            IsEMA = sensor.Statistics.HasEma();
 
             IsSingleton = sensor.IsSingleton;
             SelectedUnit = sensor.SelectedUnit;

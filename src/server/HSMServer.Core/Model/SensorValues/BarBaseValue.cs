@@ -25,6 +25,16 @@ namespace HSMServer.Core.Model
 
         public T LastValue { get; init; }
 
+
+        public double? EmaMin { get; init; }
+
+        public double? EmaMax { get; init; }
+
+        public double? EmaMean { get; init; }
+
+        public double? EmaCount { get; init; }
+
+
         public override string ShortInfo =>
             $"Min = {Min}, Mean = {Mean}, Max = {Max}, Count = {Count}, First = {FirstValue}, Last = {LastValue}.";
 
