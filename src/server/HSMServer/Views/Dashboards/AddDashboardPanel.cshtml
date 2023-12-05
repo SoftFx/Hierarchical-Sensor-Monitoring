@@ -9,12 +9,15 @@
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
 
-<div class="w-100 overflow-y-auto m-2">
+<div class="w-100 overflow-y-auto p-2">
     <div id="panelSettings" class="my-2">
         <div id="editablePanelSettings" class="my-2">
             <form method="post"  asp-action="@nameof(DashboardsController.SaveDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
                 <div class="d-flex justify-content-between mb-1">
-                    <input class="form-control" required maxlength="30" asp-for="Name" placeholder="@nameof(Model.Name)"/>
+                    <div class="d-flex align-items-center flex-grow-1">
+                        <label asp-for="Name" class="me-2"></label>
+                        <input class="form-control" required maxlength="30" asp-for="Name" placeholder="@nameof(Model.Name)"/>
+                    </div>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
@@ -24,7 +27,8 @@
         </div>
     </div>
     <div class="dropzone" style="max-width: 98%;min-width: 100%; width: 100%!important;">
-         <div id="multichart"></div>
+        <span id="emptypanel" style="font-size: larger; position: fixed; z-index: 300; transform: translate(100px, 100px); color: rgb(128,128,128); display: none">Empty panel</span>
+        <div id="multichart"></div>
     </div>
     <div id="plots" class="mt-1">
         <ul id="sources" class="list-group">
@@ -41,13 +45,24 @@
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}))
         initMultichart('multichart').then(
             (dom) => {
-                window.dispatchEvent(new Event('resize'));
                 values.forEach(function (x) {
                     addNewSourceHtml(x, 'multichart');
                 })
+
+                $('#multichart').on('plotly_relayout', function (e, updateData){
+                    let rect = e.target.getBoundingClientRect();
+                    let emptypanel = $('#emptypanel');
+                    emptypanel.css('transform', `translate(${rect.width / 2 - emptypanel .width() / 2}px, ${rect.height / 2}px)`)
+                })
+
+                if (values.length === 0) {
+                    $('#emptypanel').show();
+                }
+
+                window.dispatchEvent(new Event('resize'));
             }
         );
-        
+
         $('#editablePanelSettings form').on('submit', function (event){
             event.preventDefault();
             event.stopPropagation();
@@ -85,6 +100,12 @@
                 }).done(function (response){
                     Plotly.deleteTraces('multichart', model.id).then(
                         (data) => {
+                            if (data.data.length === 0)
+                               {
+                                   Plotly.relayout('multichart', { 'xaxis.visible': false, 'yaxis.visible':false })
+                                   $('#emptypanel').show()
+                               }
+
                             $('[id^="source"] li')[model.id].remove();
                             updateCurrentPlotsIds(model.id, id)}
                     )

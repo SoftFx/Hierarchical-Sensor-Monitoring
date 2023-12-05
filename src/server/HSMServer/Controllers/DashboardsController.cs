@@ -210,12 +210,15 @@ namespace HSMServer.Controllers
             if (editDashboard is null)
                 return BadRequest();
 
+            if (string.IsNullOrEmpty(editDashboard.Name) || string.IsNullOrWhiteSpace(editDashboard.Name))
+                return BadRequest("Invalid name");
+
             if (editDashboard.Name.Length > 30)
                 return BadRequest("Name length is grater than 30 characters");
 
             if (editDashboard.Description.Length > 250)
                 return BadRequest("Description length is greater than 100 characters");
-            
+
             var isReload = false;
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {

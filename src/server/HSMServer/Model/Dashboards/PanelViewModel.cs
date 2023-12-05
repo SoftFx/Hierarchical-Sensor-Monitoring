@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
@@ -21,6 +22,7 @@ public class PanelViewModel
     
     public Guid DashboardId { get; set; }
     
+    [Display(Name = "Panel:")]
     public string Name { get; set; }
     
     public string Description { get; set; }

@@ -1,5 +1,6 @@
 import {convertToGraphData} from "./plotting";
 import {pan} from "plotly.js/src/fonts/ploticon";
+import {TimeSpanPlot} from "./plots";
 
 export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
@@ -32,8 +33,7 @@ window.insertSourceHtml = function (data) {
     let sources = $('#sources');
     let text = `<li id=${'source_' + data.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
                                     style="border-top-width: 1px;
-                                           border-radius: 5px;"
-                                    >
+                                           border-radius: 5px;">
                                     <div class="d-flex flex-grow-1">
                                         <div class="d-flex flex-column" style="flex-grow: 10">
                                             <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
@@ -62,12 +62,41 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
+    if (data.values.length === 0) {
+        plot.x = [null]
+        plot.y = [null];
+    }
+    
     plot.id = data.id;
     plot.name = data.label;
     plot.mode = 'lines';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
-    Plotly.addTraces(id, plot.getPlotData());
+    Plotly.addTraces(id, plot.getPlotData()).then(
+        (data) => {
+            let layoutUpdate = {
+                xaxis:{ visible: true}, 
+                yaxis:{ visible: true}
+            }
+            
+            if (plot instanceof TimeSpanPlot)
+            {
+                let y = [];
+                for (let i of $(`#${id}`)[0].data)
+                    y.push(...i.y);
+
+                y = y.filter(element => {
+                    return element !== null;
+                })
+                
+                jQuery.extend(layoutUpdate, plot.getLayout(y));
+            }
+            
+            $('#emptypanel').hide()
+            
+            return Plotly.relayout(id, layoutUpdate);
+        }
+    );
 
     let updateLayout = {
         'yaxis.title' : {
@@ -364,15 +393,16 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         margin: {
             l: 30,
             r: 30,
-            t: 10,
-            b: 30,
+            t: 30,
+            b: 40,
         },
         showlegend: showlegend,
         legend: {
             x: 0,
-            y: -0.3,
+            y: -0.2,
             orientation: "h",
-            traceorder: "normal"
+            traceorder: "normal",
+            visible: true
         },
         xaxis: {
             title: {
@@ -383,11 +413,13 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
                     color: '#7f7f7f'
                 }
             },
+            visible: false,
             rangeslider: {
                 visible: false
             }
         },
         yaxis: {
+            visible: false,
             automargin: 'width+right'
         }
     },
@@ -422,7 +454,8 @@ function updatePlotSource(name, color, id){
     }).done(function (){
         let update = {
             'hovertemplate': `${name}, %{customdata}<extra></extra>`,
-            'line.color': color
+            'line.color': color,
+            name: name
         }
 
         if (currentPanel[id] !== undefined)

@@ -462,12 +462,14 @@ export class TimeSpanPlot extends ErrorColorPlot {
         return timespan.days !== 0 ? `${timespan.days}d ` + text : text;
     }
 
-    getLayout() {
+    getLayout(y = []) {
+        y = y.length === 0 ? this.y : y;
+
         const MAX_TIME_POINTS = 10
 
-        let maxVal = Math.max(...this.y)
-        let minVal = Math.min(...this.y)
-        let step = Math.max((maxVal - minVal) / Math.min(MAX_TIME_POINTS, this.y.length), 1)
+        let maxVal = Math.max(...y)
+        let minVal = Math.min(...y)
+        let step = Math.max((maxVal - minVal) / Math.min(MAX_TIME_POINTS, y.length), 1)
 
         let tVals = []
         let tValsCustomData = []

@@ -54,9 +54,11 @@ namespace HSMServer.Controllers
             _telegramChatsManager = telegramChatsManager;
         }
 
+        [ApiExplorerSettings(IgnoreApi = true)]
         [Route("/Home/Index")]
         public IActionResult HomeIndex() => Redirect("/Home");
         
+        [ApiExplorerSettings(IgnoreApi = true)]
         [Route("/")]
         [Route("/Home")]
         [Route("/Home/{sensorId:guid}")]
