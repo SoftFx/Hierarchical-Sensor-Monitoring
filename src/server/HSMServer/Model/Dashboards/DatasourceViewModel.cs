@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using HSMServer.Core.Model;
 using HSMServer.Dashboards;
 using HSMServer.DTOs.SensorInfo;
@@ -10,6 +11,9 @@ namespace HSMServer.Model.Dashboards;
 
 public class DatasourceViewModel
 {
+    private readonly PanelDatasource _panelSource;
+
+
     public Guid Id { get; set; }
 
     public Guid SensorId { get; set; }
@@ -24,24 +28,30 @@ public class DatasourceViewModel
 
     public string Label { get; set; }
 
-    public List<object> Values { get; set; }
+    public List<object> Values { get; set; } = new();
 
     public SensorInfoDto SensorInfo { get; set; }
 
 
     public DatasourceViewModel() { }
 
-    public DatasourceViewModel(PanelDatasource dataSource, bool isEdit)
+    public DatasourceViewModel(PanelDatasource source)
     {
-        var (from, to) = dataSource.GetFromTo();
-        var result = (isEdit ? dataSource.Source.Initialize() :dataSource.Source.Initialize(from ,to)).GetAwaiter().GetResult();
+        _panelSource = source;
 
-        Id = dataSource.Id;
-        SensorId = dataSource.SensorId;
-        Color = dataSource.Color.ToRGB();
-        Label = dataSource.Label;
-        (Path, Type, Unit) = dataSource.Source.GetSourceInfo();
-        Values = result.Values.Cast<object>().ToList();
+        Id = source.Id;
+        SensorId = source.SensorId;
+        Color = source.Color.ToRGB();
+        Label = source.Label;
+        (Path, Type, Unit) = source.Source.GetSourceInfo();
         SensorInfo = new SensorInfoDto(Type, Type, Unit?.ToString());
+    }
+
+
+    public async Task LoadDataFrom(DateTime? from)
+    {
+        var task = from is null ? _panelSource.Source.Initialize() : _panelSource.Source.Initialize(from.Value, DateTime.UtcNow);
+
+        Values = (await task).Values.Cast<object>().ToList();
     }
 }

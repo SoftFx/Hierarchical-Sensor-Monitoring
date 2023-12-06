@@ -58,17 +58,22 @@ namespace HSMServer.Dashboards
             return TryAdd(dashboard);
         }
 
-        protected override Dashboard FromEntity(DashboardEntity entity) => new(entity, _cache.GetSensor);
+        protected override Dashboard FromEntity(DashboardEntity entity)
+        {
+            var newBoard = new Dashboard(entity, _cache.GetSensor);
+
+            AddDashboardSubscriptions(newBoard);
+
+            return newBoard;
+        }
 
 
         private void AddDashboardSubscriptions(Dashboard board)
         {
-            board.GetSensorModel ??= _cache.GetSensor;
+            board.Subscribe(_cache.GetSensor);
+            board.UpdatedEvent += () => TryUpdate(board);
         }
 
-        private void RemoveDashboardSubscriptions(Dashboard board, InitiatorInfo _)
-        {
-            board.GetSensorModel -= _cache.GetSensor;
-        }
+        private void RemoveDashboardSubscriptions(Dashboard board, InitiatorInfo _) => board.Unsubscribe();
     }
 }
