@@ -277,9 +277,9 @@ window.initDashboard = function () {
                         customData.push(j.value);
                     }
 
-                    // if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null){
-                    //     Plotly.update(plot, {x :[[]], y:[[]]}, {}, 0)
-                    // }
+                    if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null){
+                        Plotly.update(plot, {x :[[]], y:[[]]}, { 'xaxis.autorange' : true }, correctId)
+                    }
                     
                     Plotly.extendTraces(plot, {
                         y: [y],
