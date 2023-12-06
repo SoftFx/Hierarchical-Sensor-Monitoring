@@ -434,6 +434,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         autosize: true,
         height: height,
         margin: {
+            autoexpand: true,
             l: 30,
             r: 30,
             t: 30,
