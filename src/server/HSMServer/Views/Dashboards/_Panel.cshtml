@@ -49,7 +49,7 @@
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         let dashboardpanels = $('#dashboardPanels');
         initMultyichartCordinates(settings, values, '@Model.Id').then(
-            (data) =>{
+            (data) => {
                 containerHeight = Math.max(containerHeight, data);
                 return initMultichart('panelChart_@Model.Id', Number((settings.height * (dashboardpanels.height() > 1400 ? 1400 : dashboardpanels.height())).toFixed(5)), settings.showLegend).then(
                         (plot) => {
@@ -78,7 +78,8 @@
                                 window.dispatchEvent(new Event('resize'));
                             },
                         (error) => showToast(error)
-            );}
+                );
+            }
         )
     })
 

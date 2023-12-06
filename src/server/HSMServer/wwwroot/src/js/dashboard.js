@@ -100,7 +100,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         'yaxis.title.font.size' : 18,
         'yaxis.title.font.color' : '#7f7f7f',
     }
-    
+
     if (data.values.length === 0) {
         plot.x = [null]
         plot.y = [null];
@@ -144,7 +144,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
             Plotly.relayout(id, layoutUpdate)
         }
     );
-    
+
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
 }
 
