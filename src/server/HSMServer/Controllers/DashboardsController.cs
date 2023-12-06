@@ -232,6 +232,7 @@ namespace HSMServer.Controllers
                 return BadRequest("Description length is greater than 100 characters");
 
             var isReload = false;
+
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
                 isReload = dashboard.DataPeriod != editDashboard.FromPeriod;
@@ -239,11 +240,12 @@ namespace HSMServer.Controllers
                 foreach (var (id, settings) in editDashboard.Panels)
                 {
                     if (dashboard.Panels.TryGetValue(id, out var panel))
-                        panel.Settings = settings;
+                        panel.Update(settings.ToUpdate(panel.Id));
                 }
             }
 
             await _dashboardManager.TryUpdate(dashboard);
+
             return Ok(new
             {
                 reload = isReload,

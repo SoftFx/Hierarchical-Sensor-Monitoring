@@ -4,9 +4,39 @@ using System.Collections.Generic;
 
 namespace HSMServer.Model.Dashboards;
 
-public class EditDashBoardViewModel
+
+public sealed class PanelSettingsViewModel
 {
-    public Dictionary<Guid, PanelSettings> Panels { get; set; }
+    public double Width { get; set; }
+
+    public double Height { get; set; }
+
+
+    public double X { get; set; }
+
+    public double Y { get; set; }
+
+
+    public bool ShowLegend { get; set; }
+
+
+    public PanelUpdate ToUpdate(Guid panelId) =>
+        new(panelId)
+        {
+            Height = Height,
+            Width = Width,
+
+            X = X,
+            Y = Y,
+
+            ShowLegend = ShowLegend,
+        };
+}
+
+
+public sealed class EditDashBoardViewModel
+{
+    public Dictionary<Guid, PanelSettingsViewModel> Panels { get; set; }
 
 
     public Guid Id { get; set; }
