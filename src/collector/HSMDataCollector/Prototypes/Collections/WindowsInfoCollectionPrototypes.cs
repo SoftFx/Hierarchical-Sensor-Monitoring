@@ -88,7 +88,7 @@ namespace HSMDataCollector.Prototypes
         {
             Description = "Current version of the OS in the format: *ProductName DisplayVersion (Major.Minor.Build)*.";
 
-            Type = SensorType.StringSensor;
+            Type = SensorType.VersionSensor;
             AggregateData = true;
         }
     }
