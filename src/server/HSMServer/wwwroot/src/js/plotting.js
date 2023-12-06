@@ -91,6 +91,7 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
             layout = createLayoutFromZoomData(zoomData, plotLayout);
         }
     }
+    layout.xaxis.autorange = true;
 
     Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
     if (plot.name !== serviceAlivePlotName)

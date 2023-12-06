@@ -15,5 +15,7 @@ namespace HSMServer.Datasources
         public List<object> NewVisibleValues { get; init; }
 
         public long RemovedValuesCount { get; init; }
+
+        public bool IsTimeSpan { get; init; }
     }
 }

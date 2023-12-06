@@ -92,6 +92,7 @@ namespace HSMServer.Datasources
             {
                 NewVisibleValues = _newVisibleValues.Cast<object>().ToList(),
                 RemovedValuesCount = _removedValuesCnt,
+                IsTimeSpan = _sensor.Type is SensorType.TimeSpan
             };
 
 
