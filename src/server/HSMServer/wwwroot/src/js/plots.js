@@ -71,6 +71,8 @@ export class Plot {
                 autosize: true,
                 xaxis: {
                     type: 'date',
+                    autorange: false,
+                    range: getRangeDate(),
                     title: {
                         //text: 'Time',
                         font: {
@@ -101,6 +103,8 @@ export class Plot {
             autosize: true,
             xaxis: {
                 type: 'date',
+                autorange: false,
+                range: getRangeDate(),
                 title: {
                     //text: 'Time',
                     font: {

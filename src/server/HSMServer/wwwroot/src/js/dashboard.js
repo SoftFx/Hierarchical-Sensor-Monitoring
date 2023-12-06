@@ -5,8 +5,8 @@ import {Plot, TimeSpanPlot} from "./plots";
 window.getRangeDate = function (){
     let period = $('#from_select').val();
 
-    let currentDate = new Date();
-    let lastDate = currentDate.getTime()
+    let currentDate = new Date(new Date(Date.now()).toUTCString());
+    let lastDate = currentDate.toISOString()
     let newDate
     switch (period){
         case "00:30:00":
@@ -21,9 +21,11 @@ window.getRangeDate = function (){
         case "06:00:00":
             newDate = currentDate.setHours(currentDate.getHours() - 6)
             break
+        default:
+            newDate = currentDate.setHours(currentDate.getHours() - 6)
     }
     
-    return [newDate, lastDate]
+    return [new Date(newDate).toISOString(), lastDate]
 }
 
 export function getPlotSourceView(id) {
@@ -86,13 +88,17 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
+    
     let layoutUpdate = {
-        xaxis:{
-            visible: true,
-            type: "date",
-            autorange: true
-        },
-        yaxis:{ visible: true}
+        'xaxis.visible' : true,
+        'xaxis.type' : 'date',
+        'xaxis.autorange' : false,
+        'xaxis.range' : getRangeDate(),
+        'yaxis.visible' : true,
+        'yaxis.title.text' : data.sensorInfo.units,
+        'yaxis.title.font.family' : data.sensorInfo.units,
+        'yaxis.title.font.size' : 18,
+        'yaxis.title.font.color' : '#7f7f7f',
     }
 
     if (data.values.length === 0) {
@@ -105,19 +111,6 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     plot.mode = 'lines';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
-
-    jQuery.extend(layoutUpdate,{
-        yaxis: {
-            title : {
-                text: data.sensorInfo.units,
-                font: {
-                    family: 'Courier New, monospace',
-                    size: 18,
-                    color: '#7f7f7f'
-                }
-            }
-        }
-    });
 
     Plotly.addTraces(id, plot.getPlotData()).then(
         (data) => {
@@ -134,16 +127,20 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
                 jQuery.extend(layoutUpdate, plot.getLayout(y));
             }
 
-            if (data.data.length < 2) {
-                layoutUpdate.xaxis.range = getRangeDate()
-                layoutUpdate.xaxis.autorange = $('#multichart').length !== 0;
-            }
-
             $('#emptypanel').hide()
 
-            Plotly.relayout(id, layoutUpdate)
-        },
-        (error) => {
+            let autorange = false;
+            for(let i of $(`#${id}`)[0].data){
+                if (i.x[0] !== null) {
+                    autorange = true;
+                    break;
+                }
+                else
+                    autorange = false;
+            }
+
+            layoutUpdate['xaxis.autorange'] = autorange;
+
             Plotly.relayout(id, layoutUpdate)
         }
     );
@@ -280,7 +277,7 @@ window.initDashboard = function () {
                     }
 
                     if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null){
-                        Plotly.update(plot, {x :[[]], y:[[]]}, {}, 0)
+                        Plotly.update(plot, {x :[[]], y:[[]]}, { 'xaxis.autorange' : true }, correctId)
                     }
                     
                     Plotly.extendTraces(plot, {
@@ -415,17 +412,17 @@ window.initMultyichartCordinates = function(settings, values, id){
         let transitionX = settings.x * width;
         let transitionY = settings.y * height;
         let panel = $(`#${id}`);
-        
+
         if (panel.length === 0)
             reject();
-        
+
         panel.width(currWidth)
              .height(currHeight)
              .css('transform', 'translate(' + transitionX + 'px, ' + transitionY + 'px)')
              .attr('data-x', transitionX)
              .attr('data-y', transitionY);
-        
-        resolve();
+
+        resolve(transitionY + currHeight * 2);
     })
 }
 
@@ -436,6 +433,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         autosize: true,
         height: height,
         margin: {
+            autoexpand: true,
             l: 30,
             r: 30,
             t: 30,
@@ -443,14 +441,15 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         },
         showlegend: showlegend,
         legend: {
-            x: 0,
-            y: -0.2,
+            y: 0,
             orientation: "h",
-            traceorder: "normal",
-            visible: true
+            yanchor: "bottom",
+            yref: "container"
         },
         xaxis: {
             type: 'date',
+            autorange: false,
+            automargin: true,
             range: getRangeDate(),
             title: {
                 //text: 'Time',
