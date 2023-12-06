@@ -40,7 +40,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             if (TryLoadWindowsOsNode(out var node))
             {
-                int GetInt(string key) => (int)node.GetValue(key);
+                int GetInt(string key) => int.Parse(node.GetValue(key).ToString());
 
                 return new Version(GetInt("CurrentMajorVersionNumber"), GetInt("CurrentMinorVersionNumber"), GetInt("CurrentBuildNumber"));
             }
