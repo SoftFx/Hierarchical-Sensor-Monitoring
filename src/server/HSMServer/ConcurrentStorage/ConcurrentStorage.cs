@@ -103,6 +103,8 @@ namespace HSMServer.ConcurrentStorage
 
             if (result)
             {
+                model.Dispose();
+
                 RemoveFromDb(model);
                 Removed?.Invoke(model, remove.Initiator);
             }

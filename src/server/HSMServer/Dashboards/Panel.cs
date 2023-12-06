@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
-using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -15,36 +14,68 @@ namespace HSMServer.Dashboards
 
         public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
 
-        public PanelSettingsEntity Settings { get; set; }
+        public PanelSettings Settings { get; set; } = new();
+
+
+        internal event Action UpdatedEvent;
 
 
         internal Panel(Dashboard board) : base()
         {
             _board = board;
-            Settings = new PanelSettingsEntity
-            {
-                ShowLegend = true
-            };
         }
 
         internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
         {
             _board = board;
-            Settings = entity.Settings ?? new ();
+
+            if (entity.Settings is not null)
+                Settings.FromEntity(entity.Settings);
+
             foreach (var sourceEntity in entity.Sources)
-            {
-                var sensorId = new Guid(sourceEntity.SensorId);
-
-                if (TryGetSensor(sensorId, out var sensor))
-                {
-                    var panel = new PanelDatasource(sourceEntity, sensor, _board);
-
-                    Sources.TryAdd(panel.Id, panel);
-                }
-            }
+                TryAddSource(new Guid(sourceEntity.SensorId), sourceEntity);
         }
 
-        internal static void Relayout(ConcurrentDictionary<Guid,Panel> panels, int layerWidth)
+
+        public override void Update(PanelUpdate update)
+        {
+            base.Update(update);
+
+            Settings.Update(update);
+
+            UpdatedEvent?.Invoke();
+        }
+
+        public override DashboardPanelEntity ToEntity()
+        {
+            var entity = base.ToEntity();
+
+            entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
+            entity.Settings = Settings.ToEntity();
+
+            return entity;
+        }
+
+        public override void Dispose()
+        {
+            foreach ((_, var source) in Sources)
+                source.Source.Dispose();
+        }
+
+        public bool TryAddSource(Guid sensorId, PanelSourceEntity entity = null)
+        {
+            if (_board.TryGetSensor(sensorId, out var sensor))
+            {
+                var source = entity is null ? new PanelDatasource(sensor) : new PanelDatasource(sensor, entity);
+
+                return Sources.TryAdd(source.Id, source);
+            }
+
+            return false;
+        }
+
+
+        internal static void Relayout(ConcurrentDictionary<Guid, Panel> panels, int layerWidth)
         {
             const double height = 0.2D;
             const double translateY = 0.24D;
@@ -62,57 +93,26 @@ namespace HSMServer.Dashboards
 
             void Relayout(IEnumerable<KeyValuePair<Guid, Panel>> panels, double width)
             {
-                foreach (var (_, panel) in panels)
+                foreach (var (panelId, panel) in panels)
                 {
-                    panel.Settings.Width = width;
-                    panel.Settings.Height = height;
-                    panel.Settings.X = width * counter + gap * (counter + 1);
-                    panel.Settings.Y = translateY * layoutHeight;
+                    panel.Update(new PanelUpdate(panelId)
+                    {
+                        Height = height,
+                        Width = width,
+
+                        X = width * counter + gap * (counter + 1),
+                        Y = translateY * layoutHeight,
+                    });
 
                     if (counter == layerWidth - 1)
                     {
                         counter = 0;
                         layoutHeight++;
                     }
-                    else 
+                    else
                         counter++;
-                }  
+                }
             }
-        }
-
-        public bool TryAddSource(Guid sensorId)
-        {
-            if (TryGetSensor(sensorId, out var sensor))
-            {
-                var source = new PanelDatasource(sensor, _board);
-
-                return Sources.TryAdd(source.Id, source);
-            }
-
-            return false;
-        }
-
-        public override DashboardPanelEntity ToEntity()
-        {
-            var entity = base.ToEntity();
-
-            entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
-            entity.Settings = Settings;
-            return entity;
-        }
-
-
-        private bool TryGetSensor(Guid id, out BaseSensorModel sensor)
-        {
-            sensor = _board.GetSensorModel?.Invoke(id);
-
-            return sensor is not null;
-        }
-
-        public override void Dispose()
-        {
-            foreach ((_, var source) in Sources)
-                source.Source.Dispose();
         }
     }
 }
