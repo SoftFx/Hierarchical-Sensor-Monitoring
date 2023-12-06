@@ -297,7 +297,6 @@ window.initDashboard = function () {
                         }
                         else 
                         {
-                            console.log(j.value)
                             x.push(j.time);
                             y.push(j.value);
                             customData.push(j.value);
