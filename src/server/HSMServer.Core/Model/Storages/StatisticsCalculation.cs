@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using HSMServer.Core.Extensions;
+using System.Numerics;
 
 namespace HSMServer.Core.Model.Storages
 {
@@ -11,26 +12,26 @@ namespace HSMServer.Core.Model.Storages
             where T : BaseValue<U>
             where U : struct, INumber<U> => current with
             {
-                EmaValue = Calculate(previous?.Value, current.Value),
+                EmaValue = Calculate(previous?.EmaValue, current.Value),
             };
 
         internal static T CalculateBarEma<T, U>(T previous, T current)
             where T : BarBaseValue<U>
             where U : struct, INumber<U> => current with
             {
-                EmaMin = Calculate(previous?.Min, current.Min),
-                EmaMax = Calculate(previous?.Max, current.Max),
-                EmaMean = Calculate(previous?.Mean, current.Mean),
-                EmaCount = Calculate(previous?.Count, current.Count),
+                EmaMin = Calculate(previous?.EmaMin, current.Min),
+                EmaMax = Calculate(previous?.EmaMax, current.Max),
+                EmaMean = Calculate(previous?.EmaMean, current.Mean),
+                EmaCount = Calculate(previous?.EmaCount, current.Count),
             };
 
 
-        private static double Calculate<T>(T? previous, T current) where T : struct, INumber<T>
+        private static double Calculate<T>(double? previous, T current) where T : struct, INumber<T>
         {
             var currentValue = double.CreateChecked(current);
 
             return previous.HasValue
-                ? EmaCoeff * double.CreateChecked(previous.Value) + (1 - EmaCoeff) * currentValue
+                ? (EmaCoeff * double.CreateChecked(previous.Value) + (1 - EmaCoeff) * currentValue).Round()
                 : currentValue;
         }
     }
