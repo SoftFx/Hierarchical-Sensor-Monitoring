@@ -10,10 +10,12 @@ namespace HSMServer.Datasources
     }
 
 
-    public sealed record UpdateChartSourceResponse(bool IsTimeSpan)
+    public sealed record UpdateChartSourceResponse
     {
         public List<object> NewVisibleValues { get; init; }
 
         public long RemovedValuesCount { get; init; }
+
+        public bool IsTimeSpan { get; init; }
     }
 }
