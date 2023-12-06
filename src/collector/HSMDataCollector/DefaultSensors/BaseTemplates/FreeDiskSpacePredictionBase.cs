@@ -78,7 +78,11 @@ namespace HSMDataCollector.DefaultSensors
         protected sealed override TimeSpan GetValue()
         {
             if (IsCalibration)
+            {
                 _requestsCount++;
+
+                return TimeSpan.Zero;
+            }
 
             var curSpace = FreeSpace;
 
@@ -109,7 +113,9 @@ namespace HSMDataCollector.DefaultSensors
 
                 var curSpeed = (_lastAvailableSpace - curSpace) / (utc - _lastSpeedCheckTime).TotalSeconds;
 
-                Interlocked.Exchange(ref _currentChangeSpeed, _currentChangeSpeed * 0.9 + curSpeed * 0.1);
+                //Console.WriteLine($"Prev {_currentChangeSpeed} - cur {curSpeed}");
+
+                Interlocked.Exchange(ref _currentChangeSpeed, Math.Abs(_currentChangeSpeed) > 0.0 ? _currentChangeSpeed * 0.9 + curSpeed * 0.1 : curSpeed);
 
                 _lastAvailableSpace = curSpace;
                 _lastSpeedCheckTime = utc;

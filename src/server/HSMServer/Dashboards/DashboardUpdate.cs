@@ -31,4 +31,7 @@ namespace HSMServer.Dashboards
             Id = panelId;
         }
     }
+
+
+    public record PanelSourceUpdate(string Name, string Color);
 }

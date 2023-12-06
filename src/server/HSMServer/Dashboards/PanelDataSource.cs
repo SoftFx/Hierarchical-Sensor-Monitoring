@@ -16,9 +16,9 @@ namespace HSMServer.Dashboards
         public Guid Id { get; }
 
 
-        public Color Color { get; set; }
+        public Color Color { get; private set; }
 
-        public string Label { get; set; }
+        public string Label { get; private set; }
 
 
         public PanelDatasource(BaseSensorModel sensor)
@@ -38,6 +38,14 @@ namespace HSMServer.Dashboards
 
             Color = Color.FromName(entity.Color);
             Label = entity.Label;
+        }
+
+        public PanelDatasource Update(PanelSourceUpdate update)
+        {
+            Color = update.Color is not null ? Color.FromName(update.Color) : Color;
+            Label = !string.IsNullOrEmpty(update.Name) ? update.Name : Label;
+
+            return this;
         }
 
 
