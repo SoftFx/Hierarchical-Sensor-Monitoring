@@ -37,12 +37,19 @@ else
                     <th id="receivingTime_header" class="d-none text-nowrap">Receiving time</th>
                     @if (Model.IsBarSensor)
                     {
+                        <th id="firstValue_header" class="d-none">First value</th>
+                        <th id="lastValue_header" class="d-none">Last value</th>
                         <th>Min</th>
                         <th>Mean</th>
                         <th>Max</th>
-                        <th id="firstValue_header" class="d-none">First value</th>
-                        <th id="lastValue_header" class="d-none">Last value</th>
                         <th>Count</th>
+                        @if (Model.IsEma)
+                        {
+                            <th>EMA (Min)</th>
+                            <th>EMA (Mean)</th>
+                            <th>EMA (Max)</th>
+                            <th>EMA (Count)</th>
+                        }
                     }
                     else
                     {
@@ -88,21 +95,35 @@ else
                         {
                             @if (value.IsTimeout)
                             {
-                                <td></td>
-                                <td></td>
-                                <td></td>
                                 <td id="firstValue_value@(i)" class="d-none"></td>
                                 <td id="lastValue_value@(i)" class="d-none"></td>
                                 <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                @if (Model.IsEma)
+                                {
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                }
                             }
                             else
                             {
+                                <td id="firstValue_value@(i)" class="d-none">@barValue.FirstValue</td>
+                                <td id="lastValue_value@(i)" class="d-none">@barValue.LastValue</td>
                                 <td>@barValue.Min</td>
                                 <td>@barValue.Mean</td>
                                 <td>@barValue.Max</td>
-                                <td id="firstValue_value@(i)" class="d-none">@barValue.FirstValue</td>
-                                <td id="lastValue_value@(i)" class="d-none">@barValue.LastValue</td>
                                 <td>@barValue.Count</td>
+                                @if (Model.IsEma)
+                                {
+                                    <td>@barValue.EmaMin</td>
+                                    <td>@barValue.EmaMean</td>
+                                    <td>@barValue.EmaMax</td>
+                                    <td>@barValue.EmaCount</td>
+                                }
                             }
                         }
                         else

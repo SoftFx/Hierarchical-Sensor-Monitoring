@@ -43,6 +43,14 @@ namespace HSMServer.Model.History
 
         public string Mean { get; init; }
 
+        public string EmaMin { get; init; }
+
+        public string EmaMax { get; init; }
+
+        public string EmaMean { get; init; }
+
+        public string EmaCount { get; init; }
+
         public string FirstValue { get; init; }
 
         public string LastValue { get; init; }
