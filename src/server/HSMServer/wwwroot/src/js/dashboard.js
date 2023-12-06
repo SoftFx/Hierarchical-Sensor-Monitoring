@@ -123,8 +123,26 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
                 y = y.filter(element => {
                     return element !== null;
                 })
+                let timespanLayout = plot.getLayout(y);
                 
-                jQuery.extend(layoutUpdate, plot.getLayout(y));
+                timespanLayout.margin = {
+                    autoexpand: true,
+                    l: 30,
+                    r: 30,
+                    t: 30,
+                    b: 40,
+                };
+                
+                timespanLayout.legend = {
+                    y: 0,
+                    orientation: "h",
+                    yanchor: "bottom",
+                    yref: "container"
+                };
+                
+                timespanLayout.xaxis.automargin = true;
+                
+                Plotly.relayout(id, timespanLayout)
             }
 
             $('#emptypanel').hide()
@@ -270,7 +288,7 @@ window.initDashboard = function () {
                     for(let j of data.newVisibleValues){
                         if (lastTime > new Date(j.time))
                             continue;
- 
+
                         x.push(j.time);
                         y.push(j.value);
                         customData.push(j.value);
