@@ -215,8 +215,6 @@ export function initDropzone(){
             if (currentPanel[event.relatedTarget.id] !== undefined)
                 return;
 
-            let sources = $('#sources');
-            let color = getRandomColor();
             getPlotSourceView(event.relatedTarget.id).then(
                 (data) => addNewSourceHtml(data, 'multichart'),
                 (error) => showToast(error)
@@ -285,13 +283,26 @@ window.initDashboard = function () {
                     let x = [];
                     let y = [];
                     let customData = []
+                    let isTimeSpan = data.isTimeSpan !== undefined && data.isTimeSpan === true;
                     for(let j of data.newVisibleValues){
                         if (lastTime > new Date(j.time))
                             continue;
 
-                        x.push(j.time);
-                        y.push(j.value);
-                        customData.push(j.value);
+                        if (isTimeSpan) 
+                        {
+                            let timespanValue = TimeSpanPlot.getTimeSpanValue(j);
+                            customData.push(Plot.checkError(i) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, i) + '<br>' + i.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, i))
+                            x.push(j.time)
+                            y.push(timespanValue.totalMilliseconds())
+                        }
+                        else 
+                        {
+                            console.log(j.value)
+                            x.push(j.time);
+                            y.push(j.value);
+                            customData.push(j.value);
+                        }
+  
                     }
 
                     if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null){
@@ -302,11 +313,34 @@ window.initDashboard = function () {
                         y: [y],
                         x: [x],
                         customdata: [customData]
-                    }, [correctId])
+                    }, [correctId]).then(
+                        (data) => {
+                            if (isTimeSpan)
+                                TimespanRelayout(data);
+                        }
+                    )
                 }
             })
         }, 30000)
     }
+}
+
+function TimespanRelayout(data) {
+    let y = [];
+    for (let i of data.data)
+        y.push(...i.y)
+
+    y = y.filter(element => {
+        return element !== null;
+    })
+    
+    let layoutTicks = TimeSpanPlot.getLayoutTicks(y);
+    let layoutUpdate = {
+        'yaxis.ticktext' : layoutTicks[1],
+        'yaxis.tickvals' : layoutTicks[0]
+    }
+
+    Plotly.relayout(data.id, layoutUpdate)
 }
 
 window.disableDragAndResize = function () {
@@ -529,10 +563,6 @@ function updatePlotSource(name, color, id){
     }).fail(function (response){
         showToast(response.responseText)
     })
-}
-
-function getRandomColor() {
-    return '#' + (0x1000000 + Math.floor(Math.random() * 0x1000000)).toString(16).slice(1);
 }
 
 function dragMoveListener (event) {

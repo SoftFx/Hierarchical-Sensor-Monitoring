@@ -10,7 +10,7 @@ namespace HSMServer.Datasources
     }
 
 
-    public sealed record UpdateChartSourceResponse
+    public sealed record UpdateChartSourceResponse(bool IsTimeSpan)
     {
         public List<object> NewVisibleValues { get; init; }
 

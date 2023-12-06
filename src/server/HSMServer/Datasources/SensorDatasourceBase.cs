@@ -88,7 +88,7 @@ namespace HSMServer.Datasources
         public (string Path, SensorType Type, Unit? unit) GetSourceInfo() => (_sensor.FullPath, _sensor.Type, _sensor.OriginalUnit);
 
         public UpdateChartSourceResponse GetSourceUpdates() =>
-            new()
+            new(_sensor.Type is SensorType.TimeSpan)
             {
                 NewVisibleValues = _newVisibleValues.Cast<object>().ToList(),
                 RemovedValuesCount = _removedValuesCnt,
