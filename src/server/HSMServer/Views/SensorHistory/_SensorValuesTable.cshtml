@@ -48,6 +48,10 @@ else
                     {
                         <th id="aggregatedValuesCount_header" class="d-none">Aggregated values count</th>
                         <th>Value</th>
+                        @if (Model.IsEma)
+                        {
+                            <th>EMA (Value)</th>
+                        }
                     }
                     <th>Status</th>
                     <th>Comment</th>
@@ -90,7 +94,6 @@ else
                                 <td id="firstValue_value@(i)" class="d-none"></td>
                                 <td id="lastValue_value@(i)" class="d-none"></td>
                                 <td></td>
-                                <td></td>
                             }
                             else
                             {
@@ -100,7 +103,6 @@ else
                                 <td id="firstValue_value@(i)" class="d-none">@barValue.FirstValue</td>
                                 <td id="lastValue_value@(i)" class="d-none">@barValue.LastValue</td>
                                 <td>@barValue.Count</td>
-                                <td>@value.Status.ToIconStatus()</td>
                             }
                         }
                         else
@@ -109,15 +111,22 @@ else
                             {
                                 <td id="aggregatedValuesCount_value@(i)" class="d-none"></td>
                                 <td></td>
-                                <td></td>
+                                @if (Model.IsEma)
+                                {
+                                    <td></td>
+                                }
                             }
                             else
                             {
                                 <td id="aggregatedValuesCount_value@(i)" class="d-none">@simpleValue.AggregatedValuesCount</td>
                                 <td>@simpleValue.Value</td>
-                                <td>@value.Status.ToIconStatus()</td>
+                                @if (Model.IsEma)
+                                {
+                                    <td>@simpleValue.EmaValue</td>
+                                }
                             }
                         }
+                        <td>@value.Status.ToIconStatus()</td>
                         <td>@value.Comment</td>
                     </tr>
                 }

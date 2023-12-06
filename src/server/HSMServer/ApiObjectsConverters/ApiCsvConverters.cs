@@ -14,10 +14,10 @@ namespace HSMServer.ApiObjectsConverters
     [Flags]
     internal enum ExportOptions : byte
     {
-        Simple,
-        Hidden,
-        Aggregated,
-        Full
+        Simple = 0,
+        Hidden = 1,
+        Aggregated = 2,
+        EmaStatistics = 4,
     }
 
 
@@ -69,6 +69,7 @@ namespace HSMServer.ApiObjectsConverters
             { new("Receiving time", nameof(BaseValue.ReceivingTime)), ExportOptions.Hidden },
             { new("Aggregated values count", nameof(BaseValue.AggregatedValuesCount)), ExportOptions.Aggregated },
             { new(nameof(BoolSensorValue.Value)), ExportOptions.Simple },
+            { new(nameof(IntegerValue.EmaValue)), ExportOptions.EmaStatistics },
             { new(nameof(SensorValueBase.Status)), ExportOptions.Simple },
             { new(nameof(SensorValueBase.Comment)), ExportOptions.Simple }
         };
@@ -169,7 +170,7 @@ namespace HSMServer.ApiObjectsConverters
             return values[0] switch
             {
                 BooleanValue or IntegerValue or DoubleValue or StringValue or VersionValue or TimeSpanValue =>
-                    _simpleSensorHeader.Where(x => x.Value <= options).Select(x => x.Key).ToList(),
+                    _simpleSensorHeader.Where(x => options.HasFlag(x.Value)).Select(x => x.Key).ToList(),
                 IntegerBarValue or DoubleBarValue =>
                     _barSensorHeader.Where(x => x.Value <= options).Select(x => x.Key).ToList(),
                 FileValue => _fileSensorHeader,

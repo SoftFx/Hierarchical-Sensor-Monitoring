@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
@@ -20,8 +21,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public Integration Integration { get; private set; }
 
-        public StatisticsOptions Statistics { get; private set; }
-
         public string ShortStringValue { get; private set; }
 
         public string FileNameString { get; private set; }
@@ -35,6 +34,8 @@ namespace HSMServer.Model.TreeViewModel
         public bool AggregateValues { get; private set; }
 
         public bool IsSingleton { get; private set; }
+
+        public bool IsEma { get; private set; }
 
 
         public List<Unit> AvailableUnits { get; private set; }
@@ -61,7 +62,7 @@ namespace HSMServer.Model.TreeViewModel
 
             Type = model.Type;
             State = model.State;
-            Statistics = model.Statistics;
+            IsEma = model.Statistics.HasEma();
             Integration = model.Integration;
             UpdateTime = model.LastUpdate;
             IsSingleton = model.IsSingleton;

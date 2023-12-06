@@ -46,6 +46,8 @@ namespace HSMServer.Model.History
 
         public bool AggregateValues => _model.AggregateValues;
 
+        public bool IsEma => _model.Statistics.HasEma();
+
         public bool IsBarSensor => _model.Type.IsBar();
 
         public int LastIndex => Pages.Count - 1;
@@ -145,6 +147,7 @@ namespace HSMServer.Model.History
             new()
             {
                 Value = GetTableValue(value),
+                EmaValue = value.EmaValue?.ToString(),
                 Time = value.Time.ToUniversalTime(),
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,

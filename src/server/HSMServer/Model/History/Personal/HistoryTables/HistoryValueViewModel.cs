@@ -23,6 +23,8 @@ namespace HSMServer.Model.History
 
         public DateTime LastUpdateTime { get; init; }
 
+        public string EmaValue { get; init; }
+
         public string Value { get; init; }
     }
 
