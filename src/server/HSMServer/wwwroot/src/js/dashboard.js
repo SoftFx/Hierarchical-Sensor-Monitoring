@@ -413,17 +413,17 @@ window.initMultyichartCordinates = function(settings, values, id){
         let transitionX = settings.x * width;
         let transitionY = settings.y * height;
         let panel = $(`#${id}`);
-        
+
         if (panel.length === 0)
             reject();
-        
+
         panel.width(currWidth)
              .height(currHeight)
              .css('transform', 'translate(' + transitionX + 'px, ' + transitionY + 'px)')
              .attr('data-x', transitionX)
              .attr('data-y', transitionY);
-        
-        resolve();
+
+        resolve(transitionY + currHeight * 2);
     })
 }
 
@@ -442,15 +442,15 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         },
         showlegend: showlegend,
         legend: {
-            x: 0,
-            y: -0.2,
+            y: 0,
             orientation: "h",
-            traceorder: "normal",
-            visible: true
+            yanchor: "bottom",
+            yref: "container"
         },
         xaxis: {
             type: 'date',
             autorange: false,
+            automargin: true,
             range: getRangeDate(),
             title: {
                 //text: 'Time',
