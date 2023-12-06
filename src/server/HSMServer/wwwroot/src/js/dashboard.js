@@ -131,7 +131,6 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
 
             let autorange = false;
             for(let i of $(`#${id}`)[0].data){
-                console.log(i)
                 if (i.x[0] !== null) {
                     autorange = true;
                     break;
