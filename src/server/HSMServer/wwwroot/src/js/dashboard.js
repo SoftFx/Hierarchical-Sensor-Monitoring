@@ -312,7 +312,7 @@ window.initDashboard = function () {
                         y: [y],
                         x: [x],
                         customdata: [customData]
-                    }, [correctId]).then(
+                    }, [correctId], 100).then(
                         (data) => {
                             if (isTimeSpan)
                                 TimespanRelayout(data);
@@ -394,7 +394,8 @@ function addResizable(interactable){
                 var target = event.target
                 var x = (parseFloat(target.getAttribute('data-x')) || 0)
                 var y = (parseFloat(target.getAttribute('data-y')) || 0)
-
+                
+                console.log(event)
                 target.style.width = event.rect.width + 'px'
                 target.style.height = event.rect.height + 'px'
 
