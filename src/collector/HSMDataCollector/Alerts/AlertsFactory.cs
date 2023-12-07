@@ -58,6 +58,11 @@ namespace HSMDataCollector.Alerts
             return new BarAlertCondition().AndMin(operation, value);
         }
 
+        public static BarAlertCondition IfFirstValue<T>(AlertOperation operation, T value) where T : struct
+        {
+            return new BarAlertCondition().AndFirstValue(operation, value);
+        }
+
         public static BarAlertCondition IfLastValue<T>(AlertOperation operation, T value) where T : struct
         {
             return new BarAlertCondition().AndLastValue(operation, value);

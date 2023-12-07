@@ -313,6 +313,7 @@ namespace HSMServer.ApiObjectsConverters
                 AlertProperty.Max => PolicyProperty.Max,
                 AlertProperty.Mean => PolicyProperty.Mean,
                 AlertProperty.Count => PolicyProperty.Count,
+                AlertProperty.FirstValue => PolicyProperty.FirstValue,
                 AlertProperty.LastValue => PolicyProperty.LastValue,
                 AlertProperty.Length => PolicyProperty.Length,
                 AlertProperty.OriginalSize => PolicyProperty.OriginalSize,

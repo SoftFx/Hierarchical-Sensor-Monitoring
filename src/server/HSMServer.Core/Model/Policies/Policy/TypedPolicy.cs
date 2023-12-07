@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model.Policies
 
         protected override PolicyCondition GetCondition(PolicyProperty property) => property switch
         {
-            PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or PolicyProperty.LastValue or
+            PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or PolicyProperty.FirstValue or PolicyProperty.LastValue or
             PolicyProperty.Status or PolicyProperty.NewSensorData => BasePolicyCondition,
             PolicyProperty.Comment => new PolicyStringCondition<T>(),
             PolicyProperty.Count => new PolicyIntegerCondition<T>(),

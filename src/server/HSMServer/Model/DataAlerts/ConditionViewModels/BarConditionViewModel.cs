@@ -9,6 +9,7 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.Min,
             AlertProperty.Max,
             AlertProperty.Mean,
+            AlertProperty.FirstValue,
             AlertProperty.LastValue,
             AlertProperty.Count,
             AlertProperty.Status,

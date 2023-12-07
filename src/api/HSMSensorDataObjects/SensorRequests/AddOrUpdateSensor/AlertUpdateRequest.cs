@@ -37,6 +37,7 @@ namespace HSMSensorDataObjects.SensorRequests
         Mean = 103,
         Count = 104,
         LastValue = 105,
+        FirstValue = 106,
 
         Length = 120,
 

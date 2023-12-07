@@ -19,6 +19,7 @@ namespace HSMServer.Extensions
                 PolicyProperty.Max => AlertProperty.Max,
                 PolicyProperty.Mean => AlertProperty.Mean,
                 PolicyProperty.Count => AlertProperty.Count,
+                PolicyProperty.FirstValue => AlertProperty.FirstValue,
                 PolicyProperty.LastValue => AlertProperty.LastValue,
                 PolicyProperty.Length => AlertProperty.Length,
                 PolicyProperty.OriginalSize => AlertProperty.OriginalSize,
@@ -36,6 +37,7 @@ namespace HSMServer.Extensions
                 AlertProperty.Max => PolicyProperty.Max,
                 AlertProperty.Mean => PolicyProperty.Mean,
                 AlertProperty.Count => PolicyProperty.Count,
+                AlertProperty.FirstValue => PolicyProperty.FirstValue,
                 AlertProperty.LastValue => PolicyProperty.LastValue,
                 AlertProperty.Length => PolicyProperty.Length,
                 AlertProperty.OriginalSize => PolicyProperty.OriginalSize,
@@ -60,7 +62,7 @@ namespace HSMServer.Extensions
                 AlertProperty.Value when condition is StringConditionViewModel => new StringOperation(),
 
                 AlertProperty.Value or AlertProperty.Min or AlertProperty.Max or AlertProperty.Mean or AlertProperty.Count or
-                AlertProperty.LastValue or AlertProperty.Length or AlertProperty.OriginalSize => new NumericOperation(),
+                AlertProperty.FirstValue or AlertProperty.LastValue or AlertProperty.Length or AlertProperty.OriginalSize => new NumericOperation(),
 
                 _ => throw new NotSupportedException(),
             };

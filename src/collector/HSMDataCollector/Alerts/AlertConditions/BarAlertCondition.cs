@@ -25,6 +25,12 @@ namespace HSMDataCollector.Alerts
             return this;
         }
 
+        public BarAlertCondition AndFirstValue<T>(AlertOperation operation, T target) where T : struct
+        {
+            BuildConstCondition(AlertProperty.FirstValue, operation, target.ToString());
+            return this;
+        }
+
         public BarAlertCondition AndLastValue<T>(AlertOperation operation, T target) where T : struct
         {
             BuildConstCondition(AlertProperty.LastValue, operation, target.ToString());

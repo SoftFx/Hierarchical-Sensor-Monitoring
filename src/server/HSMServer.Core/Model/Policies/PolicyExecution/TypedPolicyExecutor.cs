@@ -33,6 +33,7 @@ namespace HSMServer.Core.Model.Policies
                 PolicyProperty.Min => v => ((BarBaseValue<T>)v).Min,
                 PolicyProperty.Max => v => ((BarBaseValue<T>)v).Max,
                 PolicyProperty.Mean => v => ((BarBaseValue<T>)v).Mean,
+                PolicyProperty.FirstValue => v => ((BarBaseValue<T>)v).FirstValue ?? ((BarBaseValue<T>)v).Min,
                 PolicyProperty.LastValue => v => ((BarBaseValue<T>)v).LastValue,
                 _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorNumber<T>)}")
             };
