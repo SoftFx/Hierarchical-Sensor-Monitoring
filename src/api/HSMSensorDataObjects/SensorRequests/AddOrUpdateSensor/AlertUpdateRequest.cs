@@ -31,6 +31,7 @@ namespace HSMSensorDataObjects.SensorRequests
         Comment = 1,
 
         Value = 20,
+        EmaValue = 21,
 
         Min = 101,
         Max = 102,
@@ -38,6 +39,11 @@ namespace HSMSensorDataObjects.SensorRequests
         Count = 104,
         LastValue = 105,
         FirstValue = 106,
+
+        EmaMin = 107,
+        EmaMax = 108,
+        EmaMean = 109,
+        EmaCount = 110,
 
         Length = 120,
 

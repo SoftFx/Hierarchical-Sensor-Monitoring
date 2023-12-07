@@ -66,6 +66,9 @@ namespace HSMServer.Core.Model.Policies
         [AlertVariable("$value", "Sensor Value")]
         public string ValueSingle { get; private set; }
 
+        [AlertVariable("$emaValue", "Sensor EMA (Value) value")]
+        public string EmaValueSingle { get; private set; }
+
 
         [AlertVariable("$min", "Bar sensor Min value")]
         public string MinValueBar { get; private set; }
@@ -84,6 +87,19 @@ namespace HSMServer.Core.Model.Policies
 
         [AlertVariable("$count", "Bar sensor Count value")]
         public string CountBar { get; private set; }
+
+
+        [AlertVariable("$emaMin", "Bar sensor EMA (Min) value")]
+        public string EmaMin { get; private set; }
+
+        [AlertVariable("$emaMax", "Bar sensor EMA (Max) value")]
+        public string EmaMax { get; private set; }
+
+        [AlertVariable("$emaMean", "Bar sensor EMA (Mean) value")]
+        public string EmaMean { get; private set; }
+
+        [AlertVariable("$emaCount", "Bar sensor EMA (Count) value")]
+        public string EmaCount { get; private set; }
 
 
         [AlertVariable("$property", "Alert property")]
@@ -157,8 +173,9 @@ namespace HSMServer.Core.Model.Policies
 
 
         public string BuildComment(string template = null) => string.Format(template ?? Template?.Text ?? string.Empty,
-            Product, Path, Sensor, Unit, Status, Time, Comment, PrevStatus, PrevComment, PrevValue, ValueSingle,
-            MinValueBar, MaxValueBar, MeanValueBar, FirstValueBar, LastValueBar, CountBar, Property, Operation, GetCorrectTarget());
+            Product, Path, Sensor, Unit, Status, Time, Comment, PrevStatus, PrevComment, PrevValue, ValueSingle, EmaValueSingle,
+            MinValueBar, MaxValueBar, MeanValueBar, FirstValueBar, LastValueBar, CountBar, EmaMin, EmaMax, EmaMean, EmaCount,
+            Property, Operation, GetCorrectTarget());
 
         public static AlertSystemTemplate BuildSystemTemplate(string raw)
         {
@@ -188,6 +205,7 @@ namespace HSMServer.Core.Model.Policies
             var state = BuildBase(value, sensor);
 
             state.ValueSingle = GetReadableValue(value);
+            state.EmaValueSingle = value?.EmaValue?.ToString();
 
             if (sensor.LastValue is BaseValue<T> lastValue)
                 state.PrevValue = GetReadableValue(lastValue);
@@ -206,6 +224,11 @@ namespace HSMServer.Core.Model.Policies
             state.FirstValueBar = value?.FirstValue?.ToString();
             state.LastValueBar = value?.LastValue.ToString();
             state.CountBar = value?.Count.ToString();
+
+            state.EmaMin = value?.EmaMin?.ToString();
+            state.EmaMax = value?.EmaMax?.ToString();
+            state.EmaMean = value?.EmaMean?.ToString();
+            state.EmaCount = value?.EmaCount?.ToString();
 
             return state;
         }

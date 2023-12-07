@@ -49,6 +49,8 @@ namespace HSMServer.Core.Model.Policies
         Comment = 1,
 
         Value = 20,
+        [Display(Name = "EMA (Value)")]
+        EmaValue = 21,
 
         Min = 101,
         Max = 102,
@@ -56,6 +58,15 @@ namespace HSMServer.Core.Model.Policies
         Count = 104,
         LastValue = 105,
         FirstValue = 106,
+
+        [Display(Name = "EMA (Min)")]
+        EmaMin = 107,
+        [Display(Name = "EMA (Max)")]
+        EmaMax = 108,
+        [Display(Name = "EMA (Mean)")]
+        EmaMean = 109,
+        [Display(Name = "EMA (Count)")]
+        EmaCount = 110,
 
         [Display(Name = "Value length")]
         Length = 120,

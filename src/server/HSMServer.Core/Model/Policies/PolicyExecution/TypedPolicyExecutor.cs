@@ -41,6 +41,25 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
+    internal sealed class PolicyExecutorNullableDouble<T> : PolicyMultiplePropertyExecutor<double?> where T : struct, INumber<T>
+    {
+        internal PolicyExecutorNullableDouble(PolicyProperty property)
+        {
+            _getCheckedValue = property switch
+            {
+                PolicyProperty.EmaValue => v => ((BaseValue<T>)v).EmaValue,
+                PolicyProperty.EmaMin => v => ((BarBaseValue<T>)v).EmaMin,
+                PolicyProperty.EmaMax => v => ((BarBaseValue<T>)v).EmaMax,
+                PolicyProperty.EmaMean => v => ((BarBaseValue<T>)v).EmaMean,
+                PolicyProperty.EmaCount => v => ((BarBaseValue<T>)v).EmaCount,
+                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorNullableDouble<T>)}")
+            };
+        }
+
+        protected override Func<double?, double?, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetNullableDoubleOperation(operation);
+    }
+
+
     internal sealed class PolicyExecutorLong : PolicyExecutorNumberBase<long>
     {
         internal PolicyExecutorLong(PolicyProperty property)

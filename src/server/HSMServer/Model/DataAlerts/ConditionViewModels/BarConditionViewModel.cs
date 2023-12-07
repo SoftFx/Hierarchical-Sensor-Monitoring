@@ -6,12 +6,16 @@ namespace HSMServer.Model.DataAlerts
     {
         protected override List<AlertProperty> Properties { get; } = new()
         {
-            AlertProperty.Min,
-            AlertProperty.Max,
-            AlertProperty.Mean,
             AlertProperty.FirstValue,
             AlertProperty.LastValue,
+            AlertProperty.Min,
+            AlertProperty.Mean,
+            AlertProperty.Max,
             AlertProperty.Count,
+            AlertProperty.EmaMin,
+            AlertProperty.EmaMean,
+            AlertProperty.EmaMax,
+            AlertProperty.EmaCount,
             AlertProperty.Status,
             AlertProperty.Comment,
             AlertProperty.NewSensorData,

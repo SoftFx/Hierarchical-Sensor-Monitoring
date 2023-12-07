@@ -42,5 +42,29 @@ namespace HSMDataCollector.Alerts
             BuildConstCondition(AlertProperty.Count, operation, target.ToString());
             return this;
         }
+
+        public BarAlertCondition AndEmaMin(AlertOperation operation, double target)
+        {
+            BuildConstCondition(AlertProperty.EmaMin, operation, target.ToString());
+            return this;
+        }
+
+        public BarAlertCondition AndEmaMax(AlertOperation operation, double target)
+        {
+            BuildConstCondition(AlertProperty.EmaMax, operation, target.ToString());
+            return this;
+        }
+
+        public BarAlertCondition AndEmaMean(AlertOperation operation, double target)
+        {
+            BuildConstCondition(AlertProperty.EmaMean, operation, target.ToString());
+            return this;
+        }
+
+        public BarAlertCondition AndEmaCount(AlertOperation operation, double target)
+        {
+            BuildConstCondition(AlertProperty.EmaCount, operation, target.ToString());
+            return this;
+        }
     }
 }
