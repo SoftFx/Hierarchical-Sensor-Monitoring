@@ -9,7 +9,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
     {
         private static readonly List<ColumnInfo> _simbleHistoryColumns = new()
         {
-            new(nameof(BaseValue.Time), "time"),
+            new(nameof(BaseValue.Time), TimeType),
             new(nameof(BooleanValue.Value)),
             new(nameof(BaseValue.Status)),
             new(nameof(BaseValue.Comment)),
