@@ -41,7 +41,7 @@ function selectNodeAjax(selectedId) {
         saveMetaData(selectedId);
     }
     else {
-        $('#jstree').jstree('deselect_all').jstree('select_node', selectedId);
+        //$('#jstree').jstree('deselect_all').jstree('select_node', selectedId);
         window.history.replaceState( {} , document.title, `/Home/${selectedId}` )
         initSelectedNode(selectedId);
     }

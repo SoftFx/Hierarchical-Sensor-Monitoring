@@ -394,8 +394,7 @@ function addResizable(interactable){
                 var target = event.target
                 var x = (parseFloat(target.getAttribute('data-x')) || 0)
                 var y = (parseFloat(target.getAttribute('data-y')) || 0)
-                
-                console.log(event)
+
                 target.style.width = event.rect.width + 'px'
                 target.style.height = event.rect.height + 'px'
 
@@ -410,12 +409,13 @@ function addResizable(interactable){
                 if (changesCounter === 0)
                     changesCounter += 1;
 
-
+                let item = $(target)
+                
                 var update = {
-                    width: event.rect.width,
-                    height: event.rect.height
+                    'width':  item.width(),
+                    'height': item.height() - item.children('div').first().height()
                 };
-
+                
                 Plotly.relayout(`panelChart_${event.target.id}`, update);
             }
         },
@@ -458,7 +458,7 @@ window.initMultyichartCordinates = function(settings, values, id){
     return new Promise(function(resolve, reject){
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
-        let height = dashboardPanels.height() > 1400 ? 1400 : dashboardPanels.height();
+        let height = 1400;
 
         let currWidth = Number((settings.width * width).toFixed(5))
         let currHeight = Number((settings.height * height).toFixed(5))
@@ -483,8 +483,8 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
     return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
         dragmode: 'zoom',
-        autosize: true,
-        height: height,
+        //autosize: true,
+       // height: height,
         margin: {
             autoexpand: true,
             l: 30,
@@ -581,7 +581,7 @@ function dragMoveListener (event) {
 
 function dragMoveListenerPanel (event) {
     var target = event.target.parentNode.parentElement;
-
+    console.log(target)
     var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
     var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy
 

@@ -39,7 +39,7 @@
     </div>
     
     <span id="emptypanel_@Model.Id" style="font-size: larger; position: fixed; z-index: 300; transform: translate(100px, 100px); color: rgb(128,128,128); display: none">Empty panel</span>
-    <div id="panelChart_@Model.Id"></div>
+    <div id="panelChart_@Model.Id" class="h-100 w-100"></div>
 </div>
 
 
@@ -48,11 +48,14 @@
         let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         let dashboardpanels = $('#dashboardPanels');
+        console.log(settings.height)
+        console.log(settings.width)
         initMultyichartCordinates(settings, values, '@Model.Id').then(
             (data) => {
                 containerHeight = Math.max(containerHeight, data);
-                return initMultichart('panelChart_@Model.Id', Number((settings.height * (dashboardpanels.height() > 1400 ? 1400 : dashboardpanels.height())).toFixed(5)), settings.showLegend).then(
+                return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)), settings.showLegend).then(
                         (plot) => {
+                            window.dispatchEvent(new Event('resize'));
                                 let autorange = false;
                                 values.forEach(function (x) {
                                     if (x.values.length !== 0)
