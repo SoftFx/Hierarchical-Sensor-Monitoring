@@ -76,6 +76,9 @@ namespace HSMServer.Core.Model.Policies
         [AlertVariable("$mean", "Bar sensor Mean value")]
         public string MeanValueBar { get; private set; }
 
+        [AlertVariable("$firstValue", "Bar sensor FirstValue value")]
+        public string FirstValueBar { get; private set; }
+
         [AlertVariable("$lastValue", "Bar sensor LastValue value")]
         public string LastValueBar { get; private set; }
 
@@ -155,7 +158,7 @@ namespace HSMServer.Core.Model.Policies
 
         public string BuildComment(string template = null) => string.Format(template ?? Template?.Text ?? string.Empty,
             Product, Path, Sensor, Unit, Status, Time, Comment, PrevStatus, PrevComment, PrevValue, ValueSingle,
-            MinValueBar, MaxValueBar, MeanValueBar, LastValueBar, CountBar, Property, Operation, GetCorrectTarget());
+            MinValueBar, MaxValueBar, MeanValueBar, FirstValueBar, LastValueBar, CountBar, Property, Operation, GetCorrectTarget());
 
         public static AlertSystemTemplate BuildSystemTemplate(string raw)
         {
@@ -200,6 +203,7 @@ namespace HSMServer.Core.Model.Policies
             state.MinValueBar = value?.Min.ToString();
             state.MaxValueBar = value?.Max.ToString();
             state.MeanValueBar = value?.Mean.ToString();
+            state.FirstValueBar = value?.FirstValue?.ToString();
             state.LastValueBar = value?.LastValue.ToString();
             state.CountBar = value?.Count.ToString();
 
