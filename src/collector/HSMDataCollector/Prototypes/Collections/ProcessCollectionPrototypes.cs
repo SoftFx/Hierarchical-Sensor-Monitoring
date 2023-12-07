@@ -4,6 +4,7 @@ using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 
@@ -22,6 +23,7 @@ namespace HSMDataCollector.Prototypes
             _processName = Process.GetCurrentProcess().ProcessName;
 
             Category = $"Process {_processName}";
+            Statistics = StatisticsOptions.EMA;
             Type = SensorType.DoubleBarSensor;
         }
     }
@@ -39,6 +41,7 @@ namespace HSMDataCollector.Prototypes
             " exhausted to process data and run various programs on a network device, " +
             "server, or computer at any given point. More info can be found [**here**](https://en.wikipedia.org/wiki/Central_processing_unit).";
 
+            Statistics = StatisticsOptions.None;
             SensorUnit = Unit.Percents;
         }
     }
@@ -60,7 +63,10 @@ namespace HSMDataCollector.Prototypes
 
             Alerts = new List<BarAlertTemplate>()
             {
-                AlertsFactory.IfMean(AlertOperation.GreaterThan, 30.GigobytesToMegabytes()).ThenSendNotification($"[$product]$path $property $operation $target {Unit.MB}").AndSetIcon(AlertIcon.Warning).Build(),
+                AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 30.GigobytesToMegabytes())
+                             .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
+                             .ThenSendNotification($"[$product]$path $property $operation $target {Unit.MB}")
+                             .AndSetIcon(AlertIcon.Warning).Build(),
             };
         }
     }
@@ -80,7 +86,10 @@ namespace HSMDataCollector.Prototypes
 
             Alerts = new List<BarAlertTemplate>()
             {
-                AlertsFactory.IfMean(AlertOperation.GreaterThan, 2000).ThenSendNotification("[$product]$path $property $operation $target").AndSetIcon(AlertIcon.Warning).Build(),
+                AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 2000)
+                             .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
+                             .ThenSendNotification("[$product]$path $property $operation $target")
+                             .AndSetIcon(AlertIcon.Warning).Build(),
             };
         }
     }
@@ -97,7 +106,10 @@ namespace HSMDataCollector.Prototypes
 
             Alerts = new List<BarAlertTemplate>()
             {
-                AlertsFactory.IfMean(AlertOperation.GreaterThan, 50).ThenSendNotification("[$product]$path $property $operation $target").AndSetIcon(AlertIcon.Warning).Build(),
+                AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 50)
+                             .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
+                             .ThenSendNotification("[$product]$path $property $operation $target")
+                             .AndSetIcon(AlertIcon.Warning).Build(),
             };
         }
 
