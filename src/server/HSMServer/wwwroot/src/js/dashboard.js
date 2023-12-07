@@ -410,6 +410,7 @@ function addResizable(interactable){
                 if (changesCounter === 0)
                     changesCounter += 1;
 
+                
                 var update = {
                     width: event.rect.width,
                     height: event.rect.height
