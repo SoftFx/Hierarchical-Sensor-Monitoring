@@ -87,24 +87,35 @@
 
 
 <script>
-     let targetNode = $('#dashboardPanels')[0];
-     let change = 0;
-     let config = { attributes: true, childList: true, subtree: true};
-     let callback = function(mutationsList, observer) {
-         for(let mutation of mutationsList) {
-             if (mutation.target.classList.contains('js-plotly-plot') && mutation.type == 'childList'){
-                 let target = mutation.target.parentNode.getBoundingClientRect();
-                 if (target.bottom > targetNode.getBoundingClientRect().bottom){
-                     change = Math.max(change, target.bottom + target.height);
-                 }
-             }  
-         }
-     };
+    var changesCounter = 0;
+    var containerHeight = 0;
 
-     let observer = new MutationObserver(callback);
+    let targetNode = $('#dashboardPanels')[0];
+    let change = 0;
+    let config = { attributes: true, childList: true, subtree: true};
+    let callback = function(mutationsList, observer) {
+        for(let mutation of mutationsList) {
+            if (mutation.target.classList.contains('panel') && mutation.type == 'attributes' && (mutation.attributeName === 'data-y' || mutation.attributeName === 'data-x'))
+            {
+                let target = mutation.target.getBoundingClientRect();
+                let parentTarget = targetNode.getBoundingClientRect()
+                if (target.bottom > parentTarget.bottom + 30)
+                {
+                    let height = (Number(targetNode.style.minHeight.slice(0,-2)) + (target.bottom - parentTarget.bottom));
+                    targetNode.style.minHeight = height + 30 + 'px';
+                    targetNode.scrollIntoView({ behavior: "instant", block: "end", inline: "nearest" });
+                }
+            }
+        }
+    }
 
-     observer.observe(targetNode, config);
+    let observer = new MutationObserver(callback);
 
+    $(window).on('beforeunload', function (e){
+        if (changesCounter > 0)
+            return "Are you sure you want to leave? Data you changed wouldn't be saved";
+    })
+    
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description');
         initDashboard();
@@ -112,8 +123,10 @@
         if (!window.location.search.toLowerCase().includes('isModify=true'.toLowerCase()))
             disableDragAndResize();
 
-        if(change !== 0)
-            targetNode.style.minHeight = change + "px";
+        if(containerHeight !== 0)
+            targetNode.style.minHeight = containerHeight + "px";
+
+        observer.observe(targetNode, config);
 
         let fromSelect = $('#from_select');
         fromSelect.val('@Model.FromPeriod');
@@ -160,6 +173,7 @@
                 replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
                 disableEdit();
             }
+            changesCounter = 0;
         }).fail(function (response){
             showToast(response.responseText)
         })
@@ -206,7 +220,7 @@
         disableDragAndResize();
     }
 
-    $('.panel.resize-draggable').on('click', 'a.removePanel', function (){
+    $(document).on('click', 'a.removePanel', function (){
         let id = this.id.substring("remove_".length, this.id.length);
         let name = $(`#${id}`).find('#panel_name').text();
         showConfirmationModal(

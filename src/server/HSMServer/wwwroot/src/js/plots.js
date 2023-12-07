@@ -70,6 +70,9 @@ export class Plot {
                 dragmode: 'zoom',
                 autosize: true,
                 xaxis: {
+                    type: 'date',
+                    autorange: false,
+                    range: getRangeDate(),
                     title: {
                         //text: 'Time',
                         font: {
@@ -99,6 +102,9 @@ export class Plot {
             dragmode: 'zoom',
             autosize: true,
             xaxis: {
+                type: 'date',
+                autorange: false,
+                range: getRangeDate(),
                 title: {
                     //text: 'Time',
                     font: {
@@ -114,42 +120,48 @@ export class Plot {
         }
     }
 
-    checkTtl(value) {
+    static checkTtl(value) {
         return !!value.isTimeout;
     }
 
-    checkError(value) {
+    static checkError(value) {
         return value.status === SensorsStatus.Error
     }
 
-    checkNaN(value) {
+    static checkNaN(value) {
         return value === "NaN";
     }
 
     addCustomData(value, compareFunc = null, customField = 'value') {
-        if (this.checkTtl(value)) {
+        if (Plot.checkTtl(value)) {
             this.customdata.push(value.comment);
             return;
         }
 
         let customValue = compareFunc === null ? value[customField] : compareFunc(value);
-        if (this.checkError(value)) {
+        if (Plot.checkError(value)) {
             this.customdata.push(customValue + '<br>' + value.comment);
             return;
         }
 
+        if (value.tooltip !== undefined && value.tooltip !== null)
+        {
+            this.customdata.push(customValue + '<br>' + value.tooltip);
+            return;
+        }
+        
         this.customdata.push(customValue);
     }
 
     markerColorCompareFunc(value) {
-        if (this.checkTtl(value))
+        if (Plot.checkTtl(value))
             return Colors.TtlGrey
 
         return this.customColor;
     }
 
     getMarkerSize(value) {
-        if (this.checkTtl(value))
+        if (Plot.checkTtl(value))
             return MarkerSize.Ttl;
 
         return MarkerSize.defaultLineSize;
@@ -164,20 +176,20 @@ class ErrorColorPlot extends Plot {
     }
 
     markerColorCompareFunc(value) {
-        if (this.checkTtl(value))
+        if (Plot.checkTtl(value))
             return Colors.TtlGrey
 
-        if (this.checkError(value))
+        if (Plot.checkError(value))
             return Colors.red
 
         return this.customColor;
     }
 
     getMarkerSize(value) {
-        if (this.checkTtl(value))
+        if (Plot.checkTtl(value))
             return MarkerSize.Ttl;
 
-        if (this.checkError(value))
+        if (Plot.checkError(value))
             return MarkerSize.Error;
 
         return MarkerSize.defaultLineSize;
@@ -205,7 +217,7 @@ export class BoolPlot extends Plot {
         for (let i of data) {
             this.x.push(i.time)
 
-            if (this.checkNaN(i.value))
+            if (Plot.checkNaN(i.value))
                 this.y.push(0)
             else
                 this.y.push(i.value === true ? 1 : 0)
@@ -223,7 +235,7 @@ export class BoolPlot extends Plot {
     }
 
     markerColorCompareFunc(value) {
-        if (this.checkTtl(value))
+        if (Plot.checkTtl(value))
             return Colors.TtlGrey;
 
         return this.customDataCompareFunc(value) ? Colors.blue : Colors.red;
@@ -243,7 +255,7 @@ export class BoolPlot extends Plot {
     }
 
     getMarkerSize(value) {
-        if (this.checkTtl(value))
+        if (Plot.checkTtl(value))
             return MarkerSize.Ttl;
 
         return MarkerSize.small;
@@ -272,7 +284,7 @@ export class IntegerPlot extends ErrorColorPlot {
     setUpData(data) {
         for (let i of data) {
             this.x.push(i.time)
-            if (this.checkNaN(i.value))
+            if (Plot.checkNaN(i.value))
                 this.y.push(0)
             else
                 this.y.push(i.value)
@@ -306,7 +318,7 @@ export class DoublePlot extends ErrorColorPlot {
         for (let i of data) {
             this.x.push(i.time)
 
-            if (this.checkNaN(i[customField]))
+            if (Plot.checkNaN(i[customField]))
                 this.y.push(0)
             else
                 this.y.push(i[customField])
@@ -416,9 +428,9 @@ export class TimeSpanPlot extends ErrorColorPlot {
         for (let i of uniqueData) {
             this.x.push(i.time);
 
-            let timespan = this.getTimeSpanValue(i);
+            let timespan = TimeSpanPlot.getTimeSpanValue(i);
             this.y.push(timespan.totalMilliseconds());
-            this.customdata.push(this.checkError(i) ? this.getTimeSpanCustomData(timespan, i) + '<br>' + i.comment : this.getTimeSpanCustomData(timespan, i))
+            this.customdata.push(Plot.checkError(i) ? TimeSpanPlot.getTimeSpanCustomData(timespan, i) + '<br>' + i.comment : TimeSpanPlot.getTimeSpanCustomData(timespan, i))
             this.marker.color.push(this.markerColorCompareFunc(i));
             this.marker.size.push(this.getMarkerSize(i));
         }
@@ -426,8 +438,8 @@ export class TimeSpanPlot extends ErrorColorPlot {
         this.hovertemplate = '%{customdata}<extra></extra>'
     }
 
-    getTimeSpanValue(value) {
-        if (this.checkNaN(value.value))
+    static getTimeSpanValue(value) {
+        if (Plot.checkNaN(value.value))
             return new TimeSpan.TimeSpan(0, 0, 0, 0, 0);
 
         let time = value.value.split(':');
@@ -446,14 +458,14 @@ export class TimeSpanPlot extends ErrorColorPlot {
         return new TimeSpan.TimeSpan(0, seconds, minutes, hours, days);
     }
 
-    getTimeSpanCustomData(timespan, value) {
-        if (this.checkTtl(value))
+    static getTimeSpanCustomData(timespan, value) {
+        if (Plot.checkTtl(value))
             return value.comment;
 
-        return this.getTimeSpanAsText(timespan);
+        return TimeSpanPlot.getTimeSpanAsText(timespan);
     }
 
-    getTimeSpanAsText(timespan) {
+    static getTimeSpanAsText(timespan) {
         if (timespan === undefined)
             return '0h 0m 0s';
 
@@ -463,8 +475,23 @@ export class TimeSpanPlot extends ErrorColorPlot {
     }
 
     getLayout(y = []) {
-        y = y.length === 0 ? this.y : y;
+        let layoutTicks = TimeSpanPlot.getLayoutTicks(y.length === 0 ? this.y : y);
 
+        return {
+            ...super.getLayout(),
+            yaxis: {
+                ticktext: layoutTicks[1],
+                tickvals: layoutTicks[0],
+                tickfont: {
+                    size: 10
+                },
+                automargin: "width+height"
+            },
+            autosize: true
+        };
+    }
+    
+    static getLayoutTicks(y){
         const MAX_TIME_POINTS = 10
 
         let maxVal = Math.max(...y)
@@ -477,22 +504,11 @@ export class TimeSpanPlot extends ErrorColorPlot {
         let cur = minVal;
         while (cur <= maxVal) {
             tVals.push(cur);
-            tValsCustomData.push(this.getTimeSpanAsText(new TimeSpan.TimeSpan(cur)))
+            tValsCustomData.push(TimeSpanPlot.getTimeSpanAsText(new TimeSpan.TimeSpan(cur)))
             cur += step;
         }
-
-        return {
-            ...super.getLayout(),
-            yaxis: {
-                ticktext: tValsCustomData,
-                tickvals: tVals,
-                tickfont: {
-                    size: 10
-                },
-                automargin: "width+height"
-            },
-            autosize: true
-        };
+        
+        return [tVals, tValsCustomData];
     }
 }
 
@@ -549,7 +565,7 @@ export class EnumPlot extends Plot {
                 this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? this.isBackgroundPlot ? 0.7 : 0.5 : 0)
             }
             else {
-                if (this.checkTtl(data[i])) {
+                if (Plot.checkTtl(data[i])) {
                     this.z.push(0);
                     this.customdata.push(`${ServiceStatus["8"][1]} <br>`)
                 } else {

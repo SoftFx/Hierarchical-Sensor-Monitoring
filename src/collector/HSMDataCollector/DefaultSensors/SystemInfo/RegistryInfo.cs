@@ -36,18 +36,13 @@ namespace HSMDataCollector.DefaultSensors
         internal static string GetCurrentWindowsDisplayVersion() =>
             TryLoadWindowsOsNode(out var node) ? $"{node.GetValue("DisplayVersion")}" : null;
 
-        internal static string GetCurrentWindowsFullBuildVersion()
+        internal static Version GetCurrentWindowsFullBuildVersion()
         {
             if (TryLoadWindowsOsNode(out var node))
             {
-                var sb = new StringBuilder(1 << 4);
+                int GetInt(string key) => int.Parse(node.GetValue(key).ToString());
 
-                return sb.Append(node.GetValue("CurrentMajorVersionNumber"))
-                         .Append('.')
-                         .Append(node.GetValue("CurrentMinorVersionNumber"))
-                         .Append('.')
-                         .Append(node.GetValue("CurrentBuildNumber"))
-                         .ToString();
+                return new Version(GetInt("CurrentMajorVersionNumber"), GetInt("CurrentMinorVersionNumber"), GetInt("CurrentBuildNumber"));
             }
 
             return null;

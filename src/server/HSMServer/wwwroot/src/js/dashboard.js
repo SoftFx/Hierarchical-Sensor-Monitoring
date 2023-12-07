@@ -1,6 +1,32 @@
 import {convertToGraphData} from "./plotting";
 import {pan} from "plotly.js/src/fonts/ploticon";
-import {TimeSpanPlot} from "./plots";
+import {Plot, TimeSpanPlot} from "./plots";
+
+window.getRangeDate = function (){
+    let period = $('#from_select').val();
+
+    let currentDate = new Date(new Date(Date.now()).toUTCString());
+    let lastDate = currentDate.toISOString()
+    let newDate
+    switch (period){
+        case "00:30:00":
+            newDate = currentDate.setMinutes(currentDate.getMinutes() - 30)
+            break
+        case "01:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 1)
+            break
+        case "03:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 3)
+            break
+        case "06:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 6)
+            break
+        default:
+            newDate = currentDate.setHours(currentDate.getHours() - 6)
+    }
+    
+    return [new Date(newDate).toISOString(), lastDate]
+}
 
 export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
@@ -62,23 +88,32 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
+    
+    let layoutUpdate = {
+        'xaxis.visible' : true,
+        'xaxis.type' : 'date',
+        'xaxis.autorange' : false,
+        'xaxis.range' : getRangeDate(),
+        'yaxis.visible' : true,
+        'yaxis.title.text' : data.sensorInfo.units,
+        'yaxis.title.font.family' : data.sensorInfo.units,
+        'yaxis.title.font.size' : 18,
+        'yaxis.title.font.color' : '#7f7f7f',
+    }
+
     if (data.values.length === 0) {
         plot.x = [null]
         plot.y = [null];
     }
-    
+
     plot.id = data.id;
     plot.name = data.label;
     plot.mode = 'lines';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
+
     Plotly.addTraces(id, plot.getPlotData()).then(
         (data) => {
-            let layoutUpdate = {
-                xaxis:{ visible: true}, 
-                yaxis:{ visible: true}
-            }
-            
             if (plot instanceof TimeSpanPlot)
             {
                 let y = [];
@@ -88,27 +123,46 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
                 y = y.filter(element => {
                     return element !== null;
                 })
+                let timespanLayout = plot.getLayout(y);
                 
-                jQuery.extend(layoutUpdate, plot.getLayout(y));
+                timespanLayout.margin = {
+                    autoexpand: true,
+                    l: 30,
+                    r: 30,
+                    t: 30,
+                    b: 40,
+                };
+                
+                timespanLayout.legend = {
+                    y: 0,
+                    orientation: "h",
+                    yanchor: "bottom",
+                    yref: "container"
+                };
+                
+                timespanLayout.xaxis.automargin = true;
+                
+                Plotly.relayout(id, timespanLayout)
             }
-            
+
             $('#emptypanel').hide()
-            
-            return Plotly.relayout(id, layoutUpdate);
+
+            let autorange = false;
+            for(let i of $(`#${id}`)[0].data){
+                if (i.x[0] !== null) {
+                    autorange = true;
+                    break;
+                }
+                else
+                    autorange = false;
+            }
+
+            layoutUpdate['xaxis.autorange'] = autorange;
+
+            Plotly.relayout(id, layoutUpdate)
         }
     );
 
-    let updateLayout = {
-        'yaxis.title' : {
-            text: data.sensorInfo.units,
-            font: {
-                family: 'Courier New, monospace',
-                size: 18,
-                color: '#7f7f7f'
-            }
-        }
-    }
-    Plotly.relayout(id, updateLayout)
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
 }
 
@@ -161,8 +215,6 @@ export function initDropzone(){
             if (currentPanel[event.relatedTarget.id] !== undefined)
                 return;
 
-            let sources = $('#sources');
-            let color = getRandomColor();
             getPlotSourceView(event.relatedTarget.id).then(
                 (data) => addNewSourceHtml(data, 'multichart'),
                 (error) => showToast(error)
@@ -231,24 +283,63 @@ window.initDashboard = function () {
                     let x = [];
                     let y = [];
                     let customData = []
+                    let isTimeSpan = data.isTimeSpan !== undefined && data.isTimeSpan === true;
                     for(let j of data.newVisibleValues){
                         if (lastTime > new Date(j.time))
                             continue;
- 
-                        x.push(j.time);
-                        y.push(j.value);
-                        customData.push(j.value);
+
+                        if (isTimeSpan) 
+                        {
+                            let timespanValue = TimeSpanPlot.getTimeSpanValue(j);
+                            customData.push(Plot.checkError(i) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, i) + '<br>' + i.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, i))
+                            x.push(j.time)
+                            y.push(timespanValue.totalMilliseconds())
+                        }
+                        else 
+                        {
+                            x.push(j.time);
+                            y.push(j.value);
+                            customData.push(j.value);
+                        }
+  
                     }
 
+                    if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null){
+                        Plotly.update(plot, {x :[[]], y:[[]]}, { 'xaxis.autorange' : true }, correctId)
+                    }
+                    
                     Plotly.extendTraces(plot, {
                         y: [y],
                         x: [x],
                         customdata: [customData]
-                    }, [correctId])
+                    }, [correctId], 100).then(
+                        (data) => {
+                            if (isTimeSpan)
+                                TimespanRelayout(data);
+                        }
+                    )
                 }
             })
         }, 30000)
     }
+}
+
+function TimespanRelayout(data) {
+    let y = [];
+    for (let i of data.data)
+        y.push(...i.y)
+
+    y = y.filter(element => {
+        return element !== null;
+    })
+    
+    let layoutTicks = TimeSpanPlot.getLayoutTicks(y);
+    let layoutUpdate = {
+        'yaxis.ticktext' : layoutTicks[1],
+        'yaxis.tickvals' : layoutTicks[0]
+    }
+
+    Plotly.relayout(data.id, layoutUpdate)
 }
 
 window.disableDragAndResize = function () {
@@ -303,7 +394,8 @@ function addResizable(interactable){
                 var target = event.target
                 var x = (parseFloat(target.getAttribute('data-x')) || 0)
                 var y = (parseFloat(target.getAttribute('data-y')) || 0)
-
+                
+                console.log(event)
                 target.style.width = event.rect.width + 'px'
                 target.style.height = event.rect.height + 'px'
 
@@ -314,6 +406,9 @@ function addResizable(interactable){
 
                 target.setAttribute('data-x', x)
                 target.setAttribute('data-y', y)
+
+                if (changesCounter === 0)
+                    changesCounter += 1;
 
 
                 var update = {
@@ -363,24 +458,24 @@ window.initMultyichartCordinates = function(settings, values, id){
     return new Promise(function(resolve, reject){
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
-        let height = dashboardPanels.height();
+        let height = dashboardPanels.height() > 1400 ? 1400 : dashboardPanels.height();
 
         let currWidth = Number((settings.width * width).toFixed(5))
         let currHeight = Number((settings.height * height).toFixed(5))
         let transitionX = settings.x * width;
         let transitionY = settings.y * height;
         let panel = $(`#${id}`);
-        
+
         if (panel.length === 0)
             reject();
-        
+
         panel.width(currWidth)
              .height(currHeight)
              .css('transform', 'translate(' + transitionX + 'px, ' + transitionY + 'px)')
              .attr('data-x', transitionX)
              .attr('data-y', transitionY);
-        
-        resolve();
+
+        resolve(transitionY + currHeight * 2);
     })
 }
 
@@ -391,6 +486,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         autosize: true,
         height: height,
         margin: {
+            autoexpand: true,
             l: 30,
             r: 30,
             t: 30,
@@ -398,13 +494,16 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         },
         showlegend: showlegend,
         legend: {
-            x: 0,
-            y: -0.2,
+            y: 0,
             orientation: "h",
-            traceorder: "normal",
-            visible: true
+            yanchor: "bottom",
+            yref: "container"
         },
         xaxis: {
+            type: 'date',
+            autorange: false,
+            automargin: true,
+            range: getRangeDate(),
             title: {
                 //text: 'Time',
                 font: {
@@ -467,10 +566,6 @@ function updatePlotSource(name, color, id){
     })
 }
 
-function getRandomColor() {
-    return '#' + (0x1000000 + Math.floor(Math.random() * 0x1000000)).toString(16).slice(1);
-}
-
 function dragMoveListener (event) {
     let id = event.target.id;
     var target = $(`#${id}.cloned`)[0];
@@ -494,4 +589,7 @@ function dragMoveListenerPanel (event) {
 
     target.setAttribute('data-x', x)
     target.setAttribute('data-y', y)
+    
+    if (changesCounter === 0)
+        changesCounter += 1;
 }

@@ -15,28 +15,31 @@ namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
-        private readonly ITreeValuesCache _cache;
         private readonly IDashboardManager _dashboardManager;
         private readonly TreeViewModel _treeViewModel;
+        private readonly ITreeValuesCache _cache;
 
 
         public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, ITreeValuesCache cache, TreeViewModel treeViewModel) : base(userManager)
         {
             _dashboardManager = dashboardManager;
-            _cache = cache;
             _treeViewModel = treeViewModel;
+            _cache = cache;
         }
+
 
         [HttpGet("Dashboards")]
         public IActionResult Index() => View(_dashboardManager.GetValues().Select(d => new DashboardViewModel(d)).OrderBy(d => d.Name).ToList());
 
         [ApiExplorerSettings(IgnoreApi = true)]
         [Route("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public IActionResult AddDashboardPanel(Guid dashBoardId, Guid panelId)
+        public async Task<IActionResult> AddDashboardPanel(Guid dashBoardId, Guid panelId)
         {
             _dashboardManager.TryGetValue(dashBoardId, out var dashboard);
             dashboard.Panels.TryGetValue(panelId, out var panel);
-            return View("AddDashboardPanel", new PanelViewModel(panel, dashboard.Id, true));
+            var vm = new PanelViewModel(panel, dashboard.Id);
+
+            return View("AddDashboardPanel", await vm.InitPanelData());
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}")]
@@ -52,9 +55,13 @@ namespace HSMServer.Controllers
                 return BadRequest("Description length is greater than 100 characters");
 
             _dashboardManager.TryGetValue(dashBoardId, out var dashboard);
-            dashboard.Panels.TryGetValue(panelId, out var panel);
-            panel?.Update(new PanelUpdate() { Id = panel.Id, Name = model.Name, Description = model.Description });
-            _dashboardManager.TryUpdate(dashboard);
+
+            if (dashboard.Panels.TryGetValue(panelId, out var panel))
+                panel.Update(new PanelUpdate(panel.Id)
+                {
+                    Name = model.Name,
+                    Description = model.Description
+                });
 
             return Ok(dashboard.Id);
         }
@@ -99,8 +106,8 @@ namespace HSMServer.Controllers
 
                     var viewModel = new PanelViewModel()
                     {
-                        SensorType = currentType,
-                        UnitType = currentUnitType,
+                        MainSensorType = currentType,
+                        MainUnit = currentUnitType,
                     };
 
                     if (_treeViewModel.Sensors.TryGetValue(sourceId, out var newSource) && viewModel.TryAddSource(newSource, out errorMessage))
@@ -108,7 +115,7 @@ namespace HSMServer.Controllers
                         try
                         {
                             var sensorModel = _cache.GetSensor(sourceId);
-                            var datasource = new PanelDatasource(sensorModel, dashboard);
+                            var datasource = new PanelDatasource(sensorModel);
 
                             if (panel.Sources.TryAdd(datasource.Id, datasource) && (await _dashboardManager.TryUpdate(dashboard)))
                             {
@@ -132,7 +139,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPut("Dashboards/{dashboardId:guid}/Relayout")]
-        public async Task<IActionResult> Relayout(Guid dashboardId, [FromQuery]int width)
+        public async Task<IActionResult> Relayout(Guid dashboardId, [FromQuery] int width)
         {
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
@@ -148,10 +155,13 @@ namespace HSMServer.Controllers
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public async Task<IActionResult> UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
         {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
-                dashboard.Panels.TryGetValue(panelId, out var panel))
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) && dashboard.Panels.TryGetValue(panelId, out var panel))
             {
-                panel.Settings.ShowLegend = showlegend;
+                panel.Update(new PanelUpdate(panel.Id)
+                {
+                    ShowLegend = showlegend,
+                });
+
                 if (await _dashboardManager.TryUpdate(dashboard))
                     return Ok("Successfully updated");
             }
@@ -160,14 +170,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
-        public async Task<IActionResult> UpdateSource([FromBody] UpdateSourceDto update, Guid dashboardId, Guid panelId, Guid sourceId)
+        public async Task<IActionResult> UpdateSource([FromBody] PanelSourceUpdate update, Guid dashboardId, Guid panelId, Guid sourceId)
         {
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
                 dashboard.Panels.TryGetValue(panelId, out var panel) &&
                 panel.Sources.TryGetValue(sourceId, out var source))
             {
-                source.Color = Color.FromName(update.Color);
-                source.Label = update.Name;
+                source.Update(update);
 
                 await _dashboardManager.TryUpdate(dashboard);
 
@@ -189,11 +198,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}")]
-        public IActionResult EditDashboard(Guid dashboardId, bool isModify = false)
+        public async Task<IActionResult> EditDashboard(Guid dashboardId, bool isModify = false)
         {
             _dashboardManager.TryGetValue(dashboardId, out var dashboard);
 
-            return View(nameof(EditDashboard), new DashboardViewModel(dashboard, isModify));
+            var vm = new DashboardViewModel(dashboard, isModify);
+
+            return View(nameof(EditDashboard), await vm.InitDashboardData());
         }
 
         [HttpGet]
@@ -220,6 +231,7 @@ namespace HSMServer.Controllers
                 return BadRequest("Description length is greater than 100 characters");
 
             var isReload = false;
+
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
                 isReload = dashboard.DataPeriod != editDashboard.FromPeriod;
@@ -227,11 +239,12 @@ namespace HSMServer.Controllers
                 foreach (var (id, settings) in editDashboard.Panels)
                 {
                     if (dashboard.Panels.TryGetValue(id, out var panel))
-                        panel.Settings = settings;
+                        panel.Update(settings.ToUpdate(panel.Id));
                 }
             }
 
             await _dashboardManager.TryUpdate(dashboard);
+
             return Ok(new
             {
                 reload = isReload,
@@ -240,7 +253,7 @@ namespace HSMServer.Controllers
 
         [HttpDelete("Dashboards/{dashboardId:guid}")]
         public async Task RemoveDashboard(Guid dashboardId) => await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
-        
+
         [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public async Task<IActionResult> RemovePanel(Guid dashboardId, Guid panelId)
         {
@@ -253,14 +266,20 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetPanel(Guid dashboardId)
+        public async Task<IActionResult> GetPanel(Guid dashboardId)
         {
-            _dashboardManager.TryGetValue(dashboardId, out var dashboard);
-            var newPanel = new Panel(dashboard);
-            dashboard.Panels.TryAdd(newPanel.Id, newPanel);
-            _dashboardManager.TryUpdate(dashboard);
+            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
+            {
+                var newPanel = new Panel(dashboard);
 
-            return PartialView("_Panel", new PanelViewModel(newPanel, dashboard.Id));
+                dashboard.TryAddPanel(newPanel);
+
+                var vm = new PanelViewModel(newPanel, dashboard.Id);
+
+                return PartialView("_Panel", await vm.InitPanelData());
+            }
+
+            return await EditDashboard(dashboardId);
         }
     }
 }

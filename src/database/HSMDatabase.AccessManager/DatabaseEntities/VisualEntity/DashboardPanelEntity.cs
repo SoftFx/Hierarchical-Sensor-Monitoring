@@ -12,16 +12,16 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 
     public record PanelSettingsEntity
     {
-        public double Width { get; set; } = 0.3;
+        public double Width { get; init; }
 
-        public double Height { get; set; } = 0.2;
-
-
-        public double X { get; set; }
-
-        public double Y { get; set; }
+        public double Height { get; init; }
 
 
-        public bool ShowLegend { get; set; }
+        public double X { get; init; }
+
+        public double Y { get; init; }
+
+
+        public bool ShowLegend { get; init; }
     }
 }

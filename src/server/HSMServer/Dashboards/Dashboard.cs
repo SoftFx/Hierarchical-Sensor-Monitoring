@@ -9,22 +9,23 @@ namespace HSMServer.Dashboards
 {
     public sealed class Dashboard : BaseServerModel<DashboardEntity, DashboardUpdate>
     {
-        private static readonly TimeSpan _defaultPeriod = new(0, 30, 0);
+        private static readonly TimeSpan _defaultDataPeriod = new(0, 30, 0);
+        private Func<Guid, BaseSensorModel> _getSensorModel;
 
 
         public ConcurrentDictionary<Guid, Panel> Panels { get; } = new();
 
-        public TimeSpan DataPeriod { get; private set; } = new(0, 30, 0);
+        public TimeSpan DataPeriod { get; private set; } = _defaultDataPeriod;
 
 
-        internal Func<Guid, BaseSensorModel> GetSensorModel;
+        internal event Action UpdatedEvent;
 
 
         internal Dashboard(DashboardAdd addModel) : base(addModel) { }
 
         internal Dashboard(DashboardEntity entity, Func<Guid, BaseSensorModel> getSensorModel) : base(entity)
         {
-            GetSensorModel += getSensorModel;
+            _getSensorModel += getSensorModel;
 
             Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), v => new Panel(v, this)));
             DataPeriod = GetPeriod(entity.DataPeriod);
@@ -33,8 +34,11 @@ namespace HSMServer.Dashboards
 
         public override void Update(DashboardUpdate update)
         {
-            DataPeriod = update.FromPeriod;
             base.Update(update);
+
+            DataPeriod = update.FromPeriod;
+
+            ThrowUpdateEvent();
         }
 
         public override DashboardEntity ToEntity()
@@ -47,7 +51,43 @@ namespace HSMServer.Dashboards
             return entity;
         }
 
+        public override void Dispose()
+        {
+            foreach (var (_, panel) in Panels)
+                panel.Dispose();
+        }
 
-        private static TimeSpan GetPeriod(TimeSpan entityPeriod) => entityPeriod == TimeSpan.Zero ? _defaultPeriod : entityPeriod;
+
+        public bool TryAddPanel(Panel panel)
+        {
+            var result = panel is not null && Panels.TryAdd(panel.Id, panel);
+
+            if (result)
+                panel.UpdatedEvent += ThrowUpdateEvent;
+
+            ThrowUpdateEvent();
+
+            return result;
+        }
+
+
+        internal void Subscribe(Func<Guid, BaseSensorModel> getSensorModel) => _getSensorModel ??= getSensorModel;
+
+        internal void Unsubscribe()
+        {
+            _getSensorModel = null;
+            UpdatedEvent = null;
+        }
+
+        internal bool TryGetSensor(Guid id, out BaseSensorModel sensor)
+        {
+            sensor = _getSensorModel?.Invoke(id);
+
+            return sensor is not null;
+        }
+
+        private static TimeSpan GetPeriod(TimeSpan entityPeriod) => entityPeriod == TimeSpan.Zero ? _defaultDataPeriod : entityPeriod;
+
+        private void ThrowUpdateEvent() => UpdatedEvent?.Invoke();
     }
 }
