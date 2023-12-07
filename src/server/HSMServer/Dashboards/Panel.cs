@@ -4,6 +4,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 
 namespace HSMServer.Dashboards
 {
@@ -43,7 +44,7 @@ namespace HSMServer.Dashboards
 
             Settings.Update(update);
 
-            UpdatedEvent?.Invoke();
+            ThrowUpdateEvent();
         }
 
         public override DashboardPanelEntity ToEntity()
@@ -62,17 +63,32 @@ namespace HSMServer.Dashboards
                 source.Source.Dispose();
         }
 
-        public bool TryAddSource(Guid sensorId, PanelSourceEntity entity = null)
+
+        public bool TryAddSource(Guid sensorId, PanelSourceEntity entity)
         {
             if (_board.TryGetSensor(sensorId, out var sensor))
             {
-                var source = entity is null ? new PanelDatasource(sensor) : new PanelDatasource(sensor, entity);
+                var source = new PanelDatasource(sensor, entity);
 
                 return Sources.TryAdd(source.Id, source);
             }
 
             return false;
         }
+
+        public bool TryAddSource(Guid sensorId, out PanelDatasource source)
+        {
+            source = _board.TryGetSensor(sensorId, out var sensor) ? new PanelDatasource(sensor) : null;
+
+            var result = source is not null && Sources.TryAdd(source.Id, source);
+
+            if (result)
+                UpdatedEvent?.Invoke();
+
+            return result;
+        }
+
+        private void ThrowUpdateEvent() => UpdatedEvent?.Invoke();
 
 
         internal static void Relayout(ConcurrentDictionary<Guid, Panel> panels, int layerWidth)
@@ -86,8 +102,8 @@ namespace HSMServer.Dashboards
             var layoutTakeSize = panels.Count - panels.Count % layerWidth;
             var width = currentWidth - gap * (layerWidth + 1);
 
-            var sortedPanels = panels.OrderBy(x => x.Value.Name.ToLower()).ToList();
-            
+            var sortedPanels = panels.OrderBy(x => x.Value.Name?.ToLower()).ToList();
+
             Relayout(sortedPanels.Take(layoutTakeSize), width / layerWidth);
             Relayout(sortedPanels.TakeLast(panels.Count - layoutTakeSize), (currentWidth - gap * (panels.Count - layoutTakeSize + 1)) / (panels.Count - layoutTakeSize));
 

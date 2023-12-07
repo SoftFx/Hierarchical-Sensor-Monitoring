@@ -1,5 +1,4 @@
 using HSMServer.Authentication;
-using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Dashboards;
 using HSMServer.DTOs.Sensor;
@@ -7,7 +6,6 @@ using HSMServer.Model.Dashboards;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -17,14 +15,12 @@ namespace HSMServer.Controllers
     {
         private readonly IDashboardManager _dashboardManager;
         private readonly TreeViewModel _treeViewModel;
-        private readonly ITreeValuesCache _cache;
 
 
-        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, ITreeValuesCache cache, TreeViewModel treeViewModel) : base(userManager)
+        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
         {
             _dashboardManager = dashboardManager;
             _treeViewModel = treeViewModel;
-            _cache = cache;
         }
 
 
@@ -67,7 +63,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}/SourceUpdate/{panelId:guid}/{sourceId:guid}")]
-        public async Task<IActionResult> Source(Guid dashboardId, Guid panelId, Guid sourceId)
+        public IActionResult Source(Guid dashboardId, Guid panelId, Guid sourceId)
         {
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
                 dashboard.Panels.TryGetValue(panelId, out var panel) &&
@@ -114,10 +110,7 @@ namespace HSMServer.Controllers
                     {
                         try
                         {
-                            var sensorModel = _cache.GetSensor(sourceId);
-                            var datasource = new PanelDatasource(sensorModel);
-
-                            if (panel.Sources.TryAdd(datasource.Id, datasource) && (await _dashboardManager.TryUpdate(dashboard)))
+                            if (panel.TryAddSource(sourceId, out var datasource))
                             {
                                 var response = await datasource.Source.Initialize();
 
@@ -153,7 +146,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public async Task<IActionResult> UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
+        public IActionResult UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
         {
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) && dashboard.Panels.TryGetValue(panelId, out var panel))
             {
@@ -162,8 +155,8 @@ namespace HSMServer.Controllers
                     ShowLegend = showlegend,
                 });
 
-                if (await _dashboardManager.TryUpdate(dashboard))
-                    return Ok("Successfully updated");
+                //if (await _dashboardManager.TryUpdate(dashboard)) //can remove update func?
+                return Ok("Successfully updated");
             }
 
             return BadRequest("Couldn't update panel");
@@ -252,7 +245,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpDelete("Dashboards/{dashboardId:guid}")]
-        public async Task RemoveDashboard(Guid dashboardId) => await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
+        public Task RemoveDashboard(Guid dashboardId) => _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
 
         [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public async Task<IActionResult> RemovePanel(Guid dashboardId, Guid panelId)

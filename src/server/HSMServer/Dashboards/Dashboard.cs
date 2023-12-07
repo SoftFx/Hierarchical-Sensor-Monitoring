@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using System;
@@ -27,7 +28,7 @@ namespace HSMServer.Dashboards
         {
             _getSensorModel += getSensorModel;
 
-            Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), v => new Panel(v, this)));
+            Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), AddPanel));
             DataPeriod = GetPeriod(entity.DataPeriod);
         }
 
@@ -60,12 +61,10 @@ namespace HSMServer.Dashboards
 
         public bool TryAddPanel(Panel panel)
         {
-            var result = panel is not null && Panels.TryAdd(panel.Id, panel);
+            var result = TrySaveAndSubscribePanel(panel);
 
             if (result)
-                panel.UpdatedEvent += ThrowUpdateEvent;
-
-            ThrowUpdateEvent();
+                ThrowUpdateEvent();
 
             return result;
         }
@@ -85,6 +84,27 @@ namespace HSMServer.Dashboards
 
             return sensor is not null;
         }
+
+
+        private Panel AddPanel(DashboardPanelEntity entity)
+        {
+            var panel = new Panel(entity, this);
+
+            TrySaveAndSubscribePanel(panel);
+
+            return panel;
+        }
+
+        private bool TrySaveAndSubscribePanel(Panel panel)
+        {
+            var result = panel is not null && Panels.TryAdd(panel.Id, panel);
+
+            if (result)
+                panel.UpdatedEvent += ThrowUpdateEvent;
+
+            return result;
+        }
+
 
         private static TimeSpan GetPeriod(TimeSpan entityPeriod) => entityPeriod == TimeSpan.Zero ? _defaultDataPeriod : entityPeriod;
 
