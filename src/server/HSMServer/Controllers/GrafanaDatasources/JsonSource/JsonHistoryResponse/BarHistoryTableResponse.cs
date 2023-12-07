@@ -15,9 +15,9 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             new(nameof(IntegerBarValue.Min), "number"),
             new(nameof(IntegerBarValue.Max), "number"),
             new(nameof(IntegerBarValue.Mean), "number"),
-            new(nameof(IntegerBarValue.Count), "number"),
             new(nameof(IntegerBarValue.FirstValue), "number"),
             new(nameof(IntegerBarValue.LastValue), "number"),
+            new(nameof(IntegerBarValue.Count), "number"),
             new(nameof(BaseValue.Status)),
             new(nameof(BaseValue.Comment)),
         };
