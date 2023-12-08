@@ -47,7 +47,7 @@ namespace HSMServer.Dashboards
                     var (_, source) = panel.Sources.FirstOrDefault(x => x.Value.SensorId == model.Id);
 
                     if (source is not null)
-                        panel.Sources.TryRemove(source.Id, out _);
+                        panel.TryRemoveSource(source.Id);
                 }
         }
 

@@ -3,6 +3,7 @@ using HSMServer.Core.Model;
 using HSMServer.Datasources;
 using HSMServer.Extensions;
 using System;
+using System.Diagnostics.Eventing.Reader;
 using System.Drawing;
 
 namespace HSMServer.Dashboards
@@ -20,6 +21,8 @@ namespace HSMServer.Dashboards
 
         public string Label { get; private set; }
 
+
+        internal event Action UpdateEvent;
 
 
         public PanelDatasource(BaseSensorModel sensor)
@@ -45,6 +48,8 @@ namespace HSMServer.Dashboards
         {
             Color = update.Color is not null ? Color.FromName(update.Color) : Color;
             Label = !string.IsNullOrEmpty(update.Name) ? update.Name : Label;
+
+            UpdateEvent?.Invoke();
 
             return this;
         }

@@ -61,6 +61,8 @@ namespace HSMServer.Dashboards
             {
                 var source = new PanelDatasource(sensor, entity);
 
+                source.UpdateEvent += ThrowUpdateEvent;
+
                 return Sources.TryAdd(source.Id, source);
             }
 
@@ -74,9 +76,25 @@ namespace HSMServer.Dashboards
             var result = source is not null && Sources.TryAdd(source.Id, source);
 
             if (result)
+            {
+                source.UpdateEvent += ThrowUpdateEvent;
                 ThrowUpdateEvent();
+            }
 
             return result;
+        }
+
+        public bool TryRemoveSource(Guid sourceId)
+        {
+            if (Sources.TryRemove(sourceId, out var source))
+            {
+                source.UpdateEvent -= ThrowUpdateEvent;
+                ThrowUpdateEvent();
+
+                return true;
+            }
+
+            return false;
         }
     }
 }

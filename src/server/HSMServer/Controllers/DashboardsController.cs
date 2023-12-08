@@ -162,8 +162,6 @@ namespace HSMServer.Controllers
             {
                 source.Update(update);
 
-                await _dashboardManager.TryUpdate(dashboard); //can remove?
-
                 return Ok();
             }
 
@@ -175,7 +173,7 @@ namespace HSMServer.Controllers
         {
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
                 dashboard.Panels.TryGetValue(panelId, out var panel) &&
-                panel.Sources.TryRemove(sourceId, out _))
+                panel.TryRemoveSource(sourceId))
                 return Ok();
 
             return NotFound("No source found to delete");
@@ -219,7 +217,9 @@ namespace HSMServer.Controllers
             if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
             {
                 isReload = dashboard.DataPeriod != editDashboard.FromPeriod;
+
                 dashboard.Update(editDashboard.ToUpdate());
+
                 foreach (var (id, settings) in editDashboard.Panels)
                 {
                     if (dashboard.Panels.TryGetValue(id, out var panel))

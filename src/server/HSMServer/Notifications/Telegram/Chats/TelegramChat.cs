@@ -11,6 +11,7 @@ namespace HSMServer.Notifications
     {
         [Display(Name = "direct")]
         TelegramPrivate = 0,
+
         [Display(Name = "group")]
         TelegramGroup = 1,
     }
