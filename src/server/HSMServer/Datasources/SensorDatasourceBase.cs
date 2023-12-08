@@ -5,7 +5,6 @@ using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using System.Threading.Tasks;
 
 namespace HSMServer.Datasources
@@ -85,8 +84,6 @@ namespace HSMServer.Datasources
             };
         }
 
-        public (string Path, SensorType Type, Unit? unit) GetSourceInfo() => (_sensor.FullPath, _sensor.Type, _sensor.OriginalUnit);
-
         public UpdateChartSourceResponse GetSourceUpdates() =>
             new()
             {
@@ -143,58 +140,5 @@ namespace HSMServer.Datasources
             while (_newVisibleValues.Count > MaxVisibleCnt)
                 _newVisibleValues.RemoveFirst();
         }
-    }
-
-
-    public sealed class PointDatasource : SensorDatasourceBase
-    {
-        protected override ChartType NormalType => ChartType.Points;
-
-        protected override ChartType AggregatedType => ChartType.StackedBars;
-
-
-        protected override BaseChartValue Convert(BaseValue baseValue)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-
-    public sealed class BarsDatasource : SensorDatasourceBase
-    {
-        protected override ChartType AggregatedType => ChartType.Bars;
-
-        protected override ChartType NormalType => ChartType.Bars;
-
-
-        protected override BaseChartValue Convert(BaseValue baseValue)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-
-    public sealed class LineDatasource<T> : SensorDatasourceBase where T : INumber<T>
-    {
-        protected override ChartType AggregatedType => ChartType.Line;
-
-        protected override ChartType NormalType => ChartType.Line;
-
-
-
-        protected override BaseChartValue Convert(BaseValue rawValue) =>
-            rawValue is BaseValue<T> value ? new LineChartValue<T>(value) : null;
-    }
-
-
-    public sealed class TimespanDatasource : SensorDatasourceBase
-    {
-        protected override ChartType AggregatedType { get; } = ChartType.Line;
-
-        protected override ChartType NormalType { get; } = ChartType.Line;
-
-
-        protected override BaseChartValue Convert(BaseValue baseValue) =>
-            baseValue is TimeSpanValue time ? new TimeSpanChartValue(time) : null;
     }
 }

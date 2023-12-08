@@ -48,8 +48,12 @@ namespace HSMServer.Datasources
         }
     }
 
+
     public sealed class TimeSpanChartValue : BaseChartValue
     {
+        private double _totalTicks = 0.0;
+
+
         public TimeSpan Value { get; private set; }
 
 
@@ -60,10 +64,18 @@ namespace HSMServer.Datasources
         }
 
 
-        internal override void Apply(BaseValue rawValue) //TODO aggr for time should be fixed
+        internal override void Apply(BaseValue rawValue)
         {
+            if (_countValues++ == 1)
+                _totalTicks += double.CreateChecked(Value.Ticks);
+
             if (rawValue is TimeSpanValue value)
-                Value = value.Value;
+            {
+                _totalTicks += double.CreateChecked(value.Value.Ticks);
+
+                Value = TimeSpan.FromTicks(long.CreateChecked(_totalTicks / _countValues));
+                Tooltip = $"Aggregated ({_countValues}) values";
+            }
         }
     }
 }

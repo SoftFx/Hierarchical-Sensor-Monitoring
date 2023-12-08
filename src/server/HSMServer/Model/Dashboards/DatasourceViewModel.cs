@@ -1,11 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using HSMServer.Dashboards;
 using HSMServer.DTOs.SensorInfo;
 using HSMServer.Extensions;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Model.Dashboards;
 
@@ -43,7 +43,13 @@ public class DatasourceViewModel
         SensorId = source.SensorId;
         Color = source.Color.ToRGB();
         Label = source.Label;
-        (Path, Type, Unit) = source.Source.GetSourceInfo();
+
+        var sensor = source.Sensor;
+
+        Path = sensor.FullPath;
+        Type = sensor.Type;
+        Unit = sensor.OriginalUnit;
+
         SensorInfo = new SensorInfoDto(Type, Type, Unit?.ToString());
     }
 
