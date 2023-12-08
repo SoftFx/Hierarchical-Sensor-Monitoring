@@ -14,11 +14,22 @@ namespace HSMServer.Model.DataAlerts
         Status,
         Comment,
         Value,
+        [Display(Name = "EMA (Value)")]
+        EmaValue,
         Min,
         Max,
         Mean,
         Count,
+        FirstValue,
         LastValue,
+        [Display(Name = "EMA (Min)")]
+        EmaMin,
+        [Display(Name = "EMA (Max)")]
+        EmaMax,
+        [Display(Name = "EMA (Mean)")]
+        EmaMean,
+        [Display(Name = "EMA (Count)")]
+        EmaCount,
         [Display(Name = "Value length")]
         Length,
         [Display(Name = "Size")]

@@ -4,6 +4,7 @@ using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
+using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
@@ -46,10 +47,14 @@ namespace HSMDataCollector.Prototypes
             "server, or computer at any given point. More info can be found [**here**](https://en.wikipedia.org/wiki/Central_processing_unit).";
 
             SensorUnit = Unit.Percents;
+            Statistics = StatisticsOptions.EMA;
 
             Alerts = new List<BarAlertTemplate>()
             {
-                AlertsFactory.IfMean(AlertOperation.GreaterThan, 50).ThenSendNotification("[$product]$path $property $operation $target%").AndSetIcon(AlertIcon.Warning).Build(),
+                AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 50)
+                             .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
+                             .ThenSendNotification("[$product]$path $property $operation $target%")
+                             .AndSetIcon(AlertIcon.Warning).Build(),
             };
         }
     }

@@ -324,7 +324,7 @@
         hiddenColumns.tablecellsIds.push("#receivingTime_header", '[id^="receivingTime_value"]')
 
         if ('@Model.AggregateValues' === 'True')
-            hiddenColumns.tablecellsIds.push("#aggregatedValuesCount_header", '[id^="aggregatedValuesCount_value"]')
+            hiddenColumns.tablecellsIds.push("#aggregatedValuesCount_header", '[id^="aggregatedValuesCount_value"]');
     });
     
     $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal(NodeType.Sensor));

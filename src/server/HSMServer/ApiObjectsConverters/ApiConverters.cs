@@ -236,6 +236,7 @@ namespace HSMServer.ApiObjectsConverters
                 Description = request.Description,
                 IsSingleton = request.IsSingletonSensor,
                 AggregateValues = request.AggregateData,
+                Statistics = request.Statistics.Convert(),
                 SelectedUnit = request.OriginalUnit?.Convert(),
                 Integration = request.EnableGrafana.HasValue ? request.EnableGrafana.Value ? Integration.Grafana : Integration.None : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
@@ -309,11 +310,17 @@ namespace HSMServer.ApiObjectsConverters
                 AlertProperty.Status => PolicyProperty.Status,
                 AlertProperty.Comment => PolicyProperty.Comment,
                 AlertProperty.Value => PolicyProperty.Value,
+                AlertProperty.EmaValue => PolicyProperty.EmaValue,
                 AlertProperty.Min => PolicyProperty.Min,
                 AlertProperty.Max => PolicyProperty.Max,
                 AlertProperty.Mean => PolicyProperty.Mean,
                 AlertProperty.Count => PolicyProperty.Count,
+                AlertProperty.FirstValue => PolicyProperty.FirstValue,
                 AlertProperty.LastValue => PolicyProperty.LastValue,
+                AlertProperty.EmaMin => PolicyProperty.EmaMin,
+                AlertProperty.EmaMax => PolicyProperty.EmaMax,
+                AlertProperty.EmaMean => PolicyProperty.EmaMean,
+                AlertProperty.EmaCount => PolicyProperty.EmaCount,
                 AlertProperty.Length => PolicyProperty.Length,
                 AlertProperty.OriginalSize => PolicyProperty.OriginalSize,
                 AlertProperty.NewSensorData => PolicyProperty.NewSensorData,
@@ -381,6 +388,15 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorRequests.Unit.Requests => Core.Model.Unit.Requests,
                 HSMSensorDataObjects.SensorRequests.Unit.Responses => Core.Model.Unit.Responses,
 
+                _ => throw new NotImplementedException(),
+            };
+
+
+        private static Core.Model.StatisticsOptions Convert(this HSMSensorDataObjects.SensorRequests.StatisticsOptions combination) =>
+            combination switch
+            {
+                HSMSensorDataObjects.SensorRequests.StatisticsOptions.None => Core.Model.StatisticsOptions.None,
+                HSMSensorDataObjects.SensorRequests.StatisticsOptions.EMA => Core.Model.StatisticsOptions.EMA,
                 _ => throw new NotImplementedException(),
             };
     }

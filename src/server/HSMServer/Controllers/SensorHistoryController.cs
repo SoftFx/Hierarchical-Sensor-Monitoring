@@ -1,8 +1,10 @@
-﻿using HSMSensorDataObjects.HistoryRequests;
+﻿using HSMCommon.Extensions;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.DTOs.SensorInfo;
 using HSMServer.Extensions;
 using HSMServer.Helpers;
 using HSMServer.Model.History;
@@ -15,8 +17,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMServer.DTOs.SensorInfo;
-using HSMCommon.Extensions;
 
 namespace HSMServer.Controllers
 {
@@ -155,7 +155,7 @@ namespace HSMServer.Controllers
                 : Task.FromResult(_emptyJsonResult);
         }
 
-        public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type, 
+        public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery] bool addHiddenColumns, [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
             if (!TryGetSensor(encodedId, out var sensor))
@@ -165,8 +165,7 @@ namespace HSMServer.Controllers
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
             var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount, RequestOptions.IncludeTtl);
-            _tree.Sensors.TryGetValue(Guid.Parse(encodedId), out var currentSensor);
-            var exportOptions = addHiddenColumns ? currentSensor.AggregateValues ? ExportOptions.Aggregated : ExportOptions.Hidden : ExportOptions.Simple;
+            var exportOptions = BuildExportOptions(encodedId, addHiddenColumns);
             var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(exportOptions));
 
             return File(content, fileName.GetContentType(), fileName);
@@ -211,5 +210,22 @@ namespace HSMServer.Controllers
 
         private bool TryGetSensor(string encodedId, out SensorNodeViewModel sensor) =>
             _tree.Sensors.TryGetValue(encodedId.ToGuid(), out sensor);
+
+        private ExportOptions BuildExportOptions(string sensorId, bool addHiddenColumns)
+        {
+            ExportOptions exportOptions = ExportOptions.Simple;
+
+            if (TryGetSensor(sensorId, out var sensor))
+            {
+                if (addHiddenColumns)
+                    exportOptions |= ExportOptions.Hidden;
+                if (sensor.AggregateValues)
+                    exportOptions |= ExportOptions.Aggregated;
+                if (sensor.IsEma)
+                    exportOptions |= ExportOptions.EmaStatistics;
+            }
+
+            return exportOptions;
+        }
     }
 }

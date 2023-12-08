@@ -47,6 +47,14 @@ namespace HSMServer.Core.Model
 
 
     [Flags]
+    public enum StatisticsOptions : int
+    {
+        None = 0,
+        EMA = 1,
+    }
+
+
+    [Flags]
     public enum DefaultAlertsOptions : long
     {
         None = 0,
@@ -79,6 +87,8 @@ namespace HSMServer.Core.Model
         public bool IsSingleton { get; private set; }
 
         public bool AggregateValues { get; private set; }
+
+        public StatisticsOptions Statistics { get; private set; }
 
         public Integration Integration { get; private set; }
 
@@ -130,6 +140,7 @@ namespace HSMServer.Core.Model
             State = (SensorState)entity.State;
             OriginalUnit = (Unit?)entity.OriginalUnit;
             Integration = (Integration)entity.Integration;
+            Statistics = (StatisticsOptions)entity.Statistics;
             AggregateValues = entity.AggregateValues;
             IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
@@ -157,6 +168,7 @@ namespace HSMServer.Core.Model
         {
             Update(update);
 
+            Statistics = UpdateProperty(Statistics, update.Statistics ?? Statistics, update.Initiator);
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
             IsSingleton = UpdateProperty(IsSingleton, update.IsSingleton ?? IsSingleton, update.Initiator, "Singleton");
@@ -192,6 +204,7 @@ namespace HSMServer.Core.Model
             CreationDate = CreationDate.Ticks,
             Type = (byte)Type,
             State = (byte)State,
+            Statistics = (int)Statistics,
             IsSingleton = IsSingleton,
             Integration = (int)Integration,
             OriginalUnit = (int?)OriginalUnit,

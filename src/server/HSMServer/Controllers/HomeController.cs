@@ -551,6 +551,7 @@ namespace HSMServer.Controllers
                 Policies = policyUpdates,
                 SelectedUnit = newModel.SelectedUnit,
                 AggregateValues = newModel.AggregateValues,
+                Statistics = newModel.GetOptions(),
                 Initiator = CurrentInitiator
             };
 
@@ -572,8 +573,8 @@ namespace HSMServer.Controllers
                 (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(entity),
                 (byte)SensorType.Version => new SingleDataAlertViewModel<VersionValue>(entity),
                 (byte)SensorType.TimeSpan => new SingleDataAlertViewModel<TimeSpanValue>(entity),
-                (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue>(entity),
-                (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue>(entity),
+                (byte)SensorType.Integer => new NumericDataAlertViewModel<IntegerValue>(entity),
+                (byte)SensorType.Double => new NumericDataAlertViewModel<DoubleValue>(entity),
                 (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue>(entity),
                 (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue>(entity),
                 TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(entity),
@@ -619,8 +620,8 @@ namespace HSMServer.Controllers
                 SensorType.Boolean => new CommonConditionViewModel(false),
                 SensorType.Version => new SingleConditionViewModel(false),
                 SensorType.TimeSpan => new SingleConditionViewModel(false),
-                SensorType.Integer => new SingleConditionViewModel(false),
-                SensorType.Double => new SingleConditionViewModel(false),
+                SensorType.Integer => new NumericConditionViewModel(false),
+                SensorType.Double => new NumericConditionViewModel(false),
                 SensorType.IntegerBar => new BarConditionViewModel(false),
                 SensorType.DoubleBar => new BarConditionViewModel(false),
                 _ => null,

@@ -32,6 +32,7 @@ namespace HSMDataCollector.Prototypes
 
                 IsSingletonSensor = customOptions?.IsSingletonSensor ?? defaultOptions.IsSingletonSensor,
                 AggregateData = customOptions?.AggregateData ?? defaultOptions.AggregateData,
+                Statistics = customOptions?.Statistics ?? defaultOptions.Statistics,
             };
 
 

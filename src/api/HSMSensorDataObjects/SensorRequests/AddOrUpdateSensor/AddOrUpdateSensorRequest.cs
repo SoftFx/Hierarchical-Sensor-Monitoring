@@ -26,6 +26,14 @@ namespace HSMSensorDataObjects.SensorRequests
 
 
     [Flags]
+    public enum StatisticsOptions : int
+    {
+        None = 0,
+        EMA = 1,
+    }
+
+
+    [Flags]
     public enum DefaultAlertsOptions : long
     {
         None = 0,
@@ -56,6 +64,8 @@ namespace HSMSensorDataObjects.SensorRequests
 
         public long? TTL { get; set; }
 
+
+        public StatisticsOptions Statistics { get; set; }
 
         public bool? IsSingletonSensor { get; set; }
 

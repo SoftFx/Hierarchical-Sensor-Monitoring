@@ -46,6 +46,7 @@ namespace HSMDataCollector.Converters
 
                 IsSingletonSensor = options.IsSingletonSensor | options.IsComputerSensor,
                 AggregateData = options.AggregateData,
+                Statistics = options.Statistics,
 
                 DefaultAlertsOptions = options.DefaultAlertsOptions,
                 IsForceUpdate = options.IsForceUpdate,

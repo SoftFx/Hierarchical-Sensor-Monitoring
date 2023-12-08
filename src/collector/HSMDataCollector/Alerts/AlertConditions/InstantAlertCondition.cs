@@ -13,6 +13,12 @@ namespace HSMDataCollector.Alerts
             return this;
         }
 
+        public InstantAlertCondition AndEmaValue(AlertOperation operation, double target)
+        {
+            BuildConstCondition(AlertProperty.EmaValue, operation, target.ToString());
+            return this;
+        }
+
         public InstantAlertCondition AndLength<T>(AlertOperation operation, T target)
         {
             BuildConstCondition(AlertProperty.Length, operation, target?.ToString());

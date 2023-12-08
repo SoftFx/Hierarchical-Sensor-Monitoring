@@ -38,7 +38,7 @@ namespace HSMServer.Core.Model.Policies
             {
                 _propertyName = value;
 
-                _executor = PolicyExecutorBuilder.BuildExecutor<U>(value);
+                _executor = PolicyExecutorBuilder.BuildExecutor<T, U>(value);
                 _executor.SetOperation(Operation);
 
                 SetTarget(Target);
