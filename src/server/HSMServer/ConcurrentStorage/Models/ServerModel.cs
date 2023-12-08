@@ -33,6 +33,9 @@ namespace HSMServer.ConcurrentStorage
         public string Description { get; private set; }
 
 
+        internal event Action UpdatedEvent;
+
+
         protected BaseServerModel()
         {
             Id = Guid.NewGuid();
@@ -57,11 +60,16 @@ namespace HSMServer.ConcurrentStorage
         }
 
 
-        public virtual void Update(UpdateType update)
+        public void Update(UpdateType update)
         {
             Name = update.Name ?? Name;
             Description = update.Description ?? Description;
+
+            UpdateCustom(update);
+            ThrowUpdateEvent();
         }
+
+        protected virtual void UpdateCustom(UpdateType update) { }
 
 
         public virtual EntityType ToEntity() => new()
@@ -75,5 +83,10 @@ namespace HSMServer.ConcurrentStorage
         };
 
         public virtual void Dispose() { }
+
+
+        protected void ThrowUpdateEvent() => UpdatedEvent?.Invoke();
+
+        protected void ClearSubscriptions() => UpdatedEvent = null;
     }
 }

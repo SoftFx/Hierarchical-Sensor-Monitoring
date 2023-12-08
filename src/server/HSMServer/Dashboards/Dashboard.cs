@@ -4,7 +4,6 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Dashboards
@@ -20,9 +19,6 @@ namespace HSMServer.Dashboards
         public TimeSpan DataPeriod { get; private set; } = _defaultDataPeriod;
 
 
-        internal event Action UpdatedEvent;
-
-
         internal Dashboard(DashboardAdd addModel) : base(addModel) { }
 
         internal Dashboard(DashboardEntity entity, Func<Guid, BaseSensorModel> getSensorModel) : base(entity)
@@ -34,13 +30,9 @@ namespace HSMServer.Dashboards
         }
 
 
-        public override void Update(DashboardUpdate update)
+        protected override void UpdateCustom(DashboardUpdate update)
         {
-            base.Update(update);
-
             DataPeriod = update.FromPeriod;
-
-            ThrowUpdateEvent();
         }
 
         public override DashboardEntity ToEntity()
@@ -86,7 +78,7 @@ namespace HSMServer.Dashboards
         internal void Unsubscribe()
         {
             _getSensorModel = null;
-            UpdatedEvent = null;
+            ClearSubscriptions();
         }
 
         internal bool TryGetSensor(Guid id, out BaseSensorModel sensor)
@@ -118,7 +110,5 @@ namespace HSMServer.Dashboards
 
 
         private static TimeSpan GetPeriod(TimeSpan entityPeriod) => entityPeriod == TimeSpan.Zero ? _defaultDataPeriod : entityPeriod;
-
-        private void ThrowUpdateEvent() => UpdatedEvent?.Invoke();
     }
 }

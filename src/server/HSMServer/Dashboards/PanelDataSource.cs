@@ -21,6 +21,7 @@ namespace HSMServer.Dashboards
         public string Label { get; private set; }
 
 
+
         public PanelDatasource(BaseSensorModel sensor)
         {
             Label = sensor.DisplayName;
