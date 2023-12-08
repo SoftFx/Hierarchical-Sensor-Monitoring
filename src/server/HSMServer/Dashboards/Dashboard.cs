@@ -47,6 +47,8 @@ namespace HSMServer.Dashboards
 
         public override void Dispose()
         {
+            Unsubscribe();
+
             foreach (var (_, panel) in Panels)
                 panel.Dispose();
         }
@@ -58,6 +60,19 @@ namespace HSMServer.Dashboards
 
             if (result)
                 ThrowUpdateEvent();
+
+            return result;
+        }
+
+        public bool TryRemovePanel(Guid id)
+        {
+            var result = Panels.TryRemove(id, out var panel);
+
+            if (result)
+            {
+                panel.Dispose();
+                ThrowUpdateEvent();
+            }
 
             return result;
         }

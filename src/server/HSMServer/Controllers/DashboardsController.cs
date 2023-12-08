@@ -129,14 +129,9 @@ namespace HSMServer.Controllers
         }
 
         [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public async Task<IActionResult> RemovePanel(Guid dashboardId, Guid panelId)
+        public IActionResult RemovePanel(Guid dashboardId, Guid panelId)
         {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
-                dashboard.Panels.TryRemove(panelId, out _) &&
-                await _dashboardManager.TryUpdate(dashboard))
-                return Ok();
-
-            return NotFound();
+            return TryGetBoard(dashboardId, out var dashboard) && dashboard.TryRemovePanel(panelId) ? Ok() : NotFound();
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}")]
@@ -162,10 +157,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpPut("Dashboards/{dashboardId:guid}/Relayout")]
-        public IActionResult Relayout(Guid dashboardId, [FromQuery] int width) =>
-            TryGetBoard(dashboardId, out var dashboard) && dashboard.AutofitPanels(width)
-            ? Ok("Successfully relayout")
-            : BadRequest("Couldn't relayout");
+        public IActionResult Relayout(Guid dashboardId, [FromQuery] int width)
+        {
+            return TryGetBoard(dashboardId, out var dashboard) && dashboard.AutofitPanels(width) ? Ok("Successfully relayout") : BadRequest("Couldn't relayout");
+        }
 
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public IActionResult UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
@@ -190,14 +185,7 @@ namespace HSMServer.Controllers
         [HttpGet("Dashboards/{dashboardId:guid}/SourceUpdate/{panelId:guid}/{sourceId:guid}")]
         public IActionResult Source(Guid dashboardId, Guid panelId, Guid sourceId)
         {
-            if (TryGetSource(dashboardId, panelId, sourceId, out var source))
-            {
-                var updates = source.Source.GetSourceUpdates();
-
-                return Json(updates);
-            }
-
-            return _emptyResult;
+            return TryGetSource(dashboardId, panelId, sourceId, out var source) ? Json(source.Source.GetSourceUpdates()) : _emptyResult;
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
@@ -268,10 +256,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
-        public IActionResult DeleteSource(Guid dashboardId, Guid panelId, Guid sourceId) =>
-            TryGetPanel(dashboardId, panelId, out var panel) && panel.TryRemoveSource(sourceId)
-            ? Ok()
-            : NotFound("No source found to delete");
+        public IActionResult DeleteSource(Guid dashboardId, Guid panelId, Guid sourceId)
+        {
+            return TryGetPanel(dashboardId, panelId, out var panel) && panel.TryRemoveSource(sourceId) ? Ok() : NotFound("No source found to delete");
+        }
 
         #endregion
 

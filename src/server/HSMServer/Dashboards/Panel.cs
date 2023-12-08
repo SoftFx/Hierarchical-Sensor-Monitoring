@@ -50,8 +50,10 @@ namespace HSMServer.Dashboards
 
         public override void Dispose()
         {
+            ClearSubscriptions();
+
             foreach ((_, var source) in Sources)
-                source.Source.Dispose();
+                source.Dispose();
         }
 
 
@@ -88,7 +90,7 @@ namespace HSMServer.Dashboards
         {
             if (Sources.TryRemove(sourceId, out var source))
             {
-                source.UpdateEvent -= ThrowUpdateEvent;
+                source.Dispose();
                 ThrowUpdateEvent();
 
                 return true;

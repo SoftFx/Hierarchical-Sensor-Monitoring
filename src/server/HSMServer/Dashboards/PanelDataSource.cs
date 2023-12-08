@@ -3,12 +3,11 @@ using HSMServer.Core.Model;
 using HSMServer.Datasources;
 using HSMServer.Extensions;
 using System;
-using System.Diagnostics.Eventing.Reader;
 using System.Drawing;
 
 namespace HSMServer.Dashboards
 {
-    public sealed class PanelDatasource
+    public sealed class PanelDatasource : IDisposable
     {
         public SensorDatasourceBase Source { get; }
 
@@ -64,5 +63,11 @@ namespace HSMServer.Dashboards
                 Color = Color.Name,
                 Label = Label,
             };
+
+        public void Dispose()
+        {
+            Source?.Dispose();
+            UpdateEvent = null;
+        }
     }
 }
