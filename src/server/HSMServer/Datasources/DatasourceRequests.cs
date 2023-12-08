@@ -4,7 +4,7 @@ namespace HSMServer.Datasources
 {
     public sealed record InitChartSourceResponse
     {
-        public List<BaseChartValue> Values { get; init; }
+        public List<object> Values { get; init; }
 
         public ChartType ChartType { get; init; }
     }

@@ -58,6 +58,6 @@ public class DatasourceViewModel
     {
         var task = from is null ? _panelSource.Source.Initialize() : _panelSource.Source.Initialize(from.Value, DateTime.UtcNow);
 
-        Values = (await task).Values.Cast<object>().ToList();
+        Values = (await task).Values;
     }
 }

@@ -80,7 +80,7 @@ namespace HSMServer.Datasources
             return new()
             {
                 ChartType = _aggreagateValues ? AggregatedType : NormalType,
-                Values = _curValues.ToList(),
+                Values = _curValues.Cast<object>().ToList(),
             };
         }
 
