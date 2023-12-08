@@ -4,6 +4,6 @@ namespace HSMServer.Extensions
 {
     public static class NullableExtensions
     {
-        public static bool IsNullOrEqual<T>([AllowNull] this T first, T second) => first is null || first.Equals(second);
+        public static bool IsNullOrEqual<T>([AllowNull] this T first, [AllowNull] T second) => first is null || second is null || first.Equals(second);
     }
 }

@@ -1,5 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
@@ -13,7 +15,12 @@ namespace HSMServer.Dashboards
 
         public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
 
-        public PanelSettings Settings { get; set; } = new();
+        public PanelSettings Settings { get; } = new();
+
+
+        public SensorType? MainSensorType { get; private set; }
+
+        public Unit? MainUnit { get; private set; }
 
 
         internal Panel(Dashboard board) : base()
@@ -59,29 +66,17 @@ namespace HSMServer.Dashboards
 
         public bool TryAddSource(Guid sensorId, PanelSourceEntity entity)
         {
-            if (_board.TryGetSensor(sensorId, out var sensor))
-            {
-                var source = new PanelDatasource(sensor, entity);
-
-                source.UpdateEvent += ThrowUpdateEvent;
-
-                return Sources.TryAdd(source.Id, source);
-            }
-
-            return false;
+            return _board.TryGetSensor(sensorId, out var sensor) ? TrySaveNewSource(new PanelDatasource(sensor, entity), out _) : false;
         }
 
-        public bool TryAddSource(Guid sensorId, out PanelDatasource source)
+        public bool TryAddSource(Guid sensorId, out PanelDatasource source, out string error)
         {
             source = _board.TryGetSensor(sensorId, out var sensor) ? new PanelDatasource(sensor) : null;
 
-            var result = source is not null && Sources.TryAdd(source.Id, source);
+            var result = TrySaveNewSource(source, out error);
 
             if (result)
-            {
-                source.UpdateEvent += ThrowUpdateEvent;
                 ThrowUpdateEvent();
-            }
 
             return result;
         }
@@ -98,5 +93,37 @@ namespace HSMServer.Dashboards
 
             return false;
         }
+
+        private bool TrySaveNewSource(PanelDatasource source, out string error)
+        {
+            error = string.Empty;
+
+            if (source is null)
+            {
+                error = "Source not found";
+                return false;
+            }
+
+            var sourceUnit = source.Sensor.OriginalUnit;
+            var sourceType = source.Sensor.Type;
+
+            if (!IsSupportedType(sourceType) || !MainSensorType.IsNullOrEqual(sourceType))
+                error = $"Can't plot using {sourceType} sensor type";
+            else if (!MainUnit.IsNullOrEqual(sourceUnit))
+                error = $"Can't plot using {sourceUnit} unit type";
+            else
+            {
+                Sources.TryAdd(source.Id, source);
+
+                MainSensorType = sourceType;
+                MainUnit = sourceUnit ?? MainUnit;
+
+                source.UpdateEvent += ThrowUpdateEvent;
+            }
+
+            return string.IsNullOrEmpty(error);
+        }
+
+        private static bool IsSupportedType(SensorType type) => type is SensorType.Integer or SensorType.Double or SensorType.TimeSpan;
     }
 }

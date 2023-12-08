@@ -11,6 +11,8 @@ namespace HSMServer.Dashboards
     {
         public SensorDatasourceBase Source { get; }
 
+        public BaseSensorModel Sensor { get; }
+
         public Guid SensorId { get; }
 
         public Guid Id { get; }
@@ -26,6 +28,8 @@ namespace HSMServer.Dashboards
 
         public PanelDatasource(BaseSensorModel sensor)
         {
+            Sensor = sensor;
+
             Label = sensor.DisplayName;
             SensorId = sensor.Id;
 

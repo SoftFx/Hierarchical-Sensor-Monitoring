@@ -13,19 +13,17 @@ namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
-        private readonly IDashboardManager _dashboardManager;
-        private readonly TreeViewModel _treeViewModel;
+        private readonly IDashboardManager _dashboards;
 
 
-        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
+        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager) : base(userManager)
         {
-            _dashboardManager = dashboardManager;
-            _treeViewModel = treeViewModel;
+            _dashboards = dashboardManager;
         }
 
 
         [HttpGet("Dashboards")]
-        public IActionResult Index() => View(_dashboardManager.GetValues().Select(d => new DashboardViewModel(d)).ToList());
+        public IActionResult Index() => View(_dashboards.GetValues().Select(d => new DashboardViewModel(d)).ToList());
 
 
         #region Dashboards
@@ -33,7 +31,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task<IActionResult> CreateDashboard()
         {
-            await _dashboardManager.TryAdd(DashboardViewModel.ToDashboardAdd(CurrentUser), out var dashboard);
+            await _dashboards.TryAdd(DashboardViewModel.ToDashboardAdd(CurrentUser), out var dashboard);
 
             return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id, isModify = true });
         }
@@ -81,7 +79,7 @@ namespace HSMServer.Controllers
                 }
             }
 
-            await _dashboardManager.TryUpdate(dashboard);
+            await _dashboards.TryUpdate(dashboard);
 
             return Ok(new
             {
@@ -90,7 +88,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpDelete("Dashboards/{dashboardId:guid}")]
-        public Task RemoveDashboard(Guid dashboardId) => _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
+        public Task RemoveDashboard(Guid dashboardId) => _dashboards.TryRemove(new(dashboardId, CurrentInitiator));
 
         #endregion
 
@@ -191,55 +189,23 @@ namespace HSMServer.Controllers
         [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
         public async Task<IActionResult> GetSource(Guid sourceId, Guid dashboardId, Guid panelId)
         {
-            string errorMessage = string.Empty;
+            var error = string.Empty;
 
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
+            try
             {
-                if (dashboard.Panels.TryGetValue(panelId, out var panel))
+                if (TryGetPanel(dashboardId, panelId, out var panel) && panel.TryAddSource(sourceId, out var datasource, out error))
                 {
-                    SensorType? currentType = null;
-                    Unit? currentUnitType = null;
+                    var response = await datasource.Source.Initialize();
 
-                    if (panel?.Sources != null)
-                        foreach (var (id, source) in panel.Sources)
-                        {
-                            if (source.SensorId == sourceId)
-                                return BadRequest("Source already exists");
-
-                            _treeViewModel.Sensors.TryGetValue(source.SensorId, out var sensorNodeViewModel);
-                            currentType = sensorNodeViewModel?.Type;
-                            currentUnitType = sensorNodeViewModel?.SelectedUnit ?? currentUnitType;
-                        }
-
-                    var viewModel = new PanelViewModel()
-                    {
-                        MainSensorType = currentType,
-                        MainUnit = currentUnitType,
-                    };
-
-                    if (_treeViewModel.Sensors.TryGetValue(sourceId, out var newSource) && viewModel.TryAddSource(newSource, out errorMessage))
-                    {
-                        try
-                        {
-                            if (panel.TryAddSource(sourceId, out var datasource))
-                            {
-                                var response = await datasource.Source.Initialize();
-
-                                return Json(new SourceDto(response, datasource, newSource));
-                            }
-                        }
-                        catch (Exception exception)
-                        {
-                            errorMessage = exception.Message;
-                        }
-                    }
+                    return Json(new SourceDto(response, datasource));
                 }
             }
-
-            return Json(new
+            catch (Exception ex)
             {
-                errorMessage
-            });
+                error = ex.Message;
+            }
+
+            return Json(new { error });
         }
 
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
@@ -264,7 +230,7 @@ namespace HSMServer.Controllers
         #endregion
 
 
-        private bool TryGetBoard(Guid id, out Dashboard board) => _dashboardManager.TryGetValue(id, out board);
+        private bool TryGetBoard(Guid id, out Dashboard board) => _dashboards.TryGetValue(id, out board);
 
         private bool TryGetPanel(Guid boardId, Guid id, out Panel panel)
         {
