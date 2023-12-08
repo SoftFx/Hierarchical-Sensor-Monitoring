@@ -155,7 +155,6 @@ namespace HSMServer.Controllers
                     ShowLegend = showlegend,
                 });
 
-                //if (await _dashboardManager.TryUpdate(dashboard)) //can remove update func?
                 return Ok("Successfully updated");
             }
 
@@ -171,7 +170,7 @@ namespace HSMServer.Controllers
             {
                 source.Update(update);
 
-                await _dashboardManager.TryUpdate(dashboard);
+                await _dashboardManager.TryUpdate(dashboard); //can remove?
 
                 return Ok();
             }
