@@ -132,18 +132,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpPut("Dashboards/{dashboardId:guid}/Relayout")]
-        public async Task<IActionResult> Relayout(Guid dashboardId, [FromQuery] int width)
-        {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
-            {
-                Panel.Relayout(dashboard.Panels, width);
-
-                if (await _dashboardManager.TryUpdate(dashboard))
-                    return Ok("Successfully relayout");
-            }
-
-            return BadRequest("Couldn't relayout");
-        }
+        public IActionResult Relayout(Guid dashboardId, [FromQuery] int width) =>
+            _dashboardManager.TryGetValue(dashboardId, out var dashboard) && dashboard.AutofitPanels(width)
+                ? Ok("Successfully relayout")
+                : BadRequest("Couldn't relayout");
 
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public IActionResult UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)

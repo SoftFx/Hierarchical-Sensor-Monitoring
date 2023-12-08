@@ -4,6 +4,7 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Dashboards
@@ -67,6 +68,16 @@ namespace HSMServer.Dashboards
                 ThrowUpdateEvent();
 
             return result;
+        }
+
+        public bool AutofitPanels(int panelsInRow)
+        {
+            var ok = PanelsLayout.RecalculatePanelSize(Panels, panelsInRow);
+
+            if (ok)
+                ThrowUpdateEvent();
+
+            return ok;
         }
 
 

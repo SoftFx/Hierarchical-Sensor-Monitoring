@@ -1,13 +1,16 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
-using System;
 
 namespace HSMServer.Dashboards
 {
     public sealed class PanelSettings
     {
-        public double Width { get; private set; } = 0.3;
+        internal const double DefaultHeight = 0.2;
+        internal const double DefaultWidth = 0.3;
 
-        public double Height { get; private set; } = 0.2;
+
+        public double Width { get; private set; } = DefaultWidth;
+
+        public double Height { get; private set; } = DefaultHeight;
 
 
         public double X { get; private set; }
