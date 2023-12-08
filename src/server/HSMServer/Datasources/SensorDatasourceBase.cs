@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Collections;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using System;
@@ -6,7 +7,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
-using HSMServer.Core.Cache;
 
 namespace HSMServer.Datasources
 {
@@ -162,9 +162,9 @@ namespace HSMServer.Datasources
 
     public sealed class BarsDatasource : SensorDatasourceBase
     {
-        protected override ChartType NormalType => ChartType.Bars;
-
         protected override ChartType AggregatedType => ChartType.Bars;
+
+        protected override ChartType NormalType => ChartType.Bars;
 
 
         protected override BaseChartValue Convert(BaseValue baseValue)
@@ -176,23 +176,25 @@ namespace HSMServer.Datasources
 
     public sealed class LineDatasource<T> : SensorDatasourceBase where T : INumber<T>
     {
+        protected override ChartType AggregatedType => ChartType.Line;
+
         protected override ChartType NormalType => ChartType.Line;
 
-        protected override ChartType AggregatedType => ChartType.Line;
 
 
         protected override BaseChartValue Convert(BaseValue rawValue) =>
             rawValue is BaseValue<T> value ? new LineChartValue<T>(value) : null;
     }
 
+
     public sealed class TimespanDatasource : SensorDatasourceBase
     {
         protected override ChartType AggregatedType { get; } = ChartType.Line;
 
         protected override ChartType NormalType { get; } = ChartType.Line;
-        
+
 
         protected override BaseChartValue Convert(BaseValue baseValue) =>
-            baseValue is BaseValue<TimeSpan> value ? new TimeSpanValue(value) : null;
+            baseValue is TimeSpanValue time ? new TimeSpanChartValue(time) : null;
     }
 }

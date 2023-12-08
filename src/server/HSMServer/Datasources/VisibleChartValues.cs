@@ -48,21 +48,21 @@ namespace HSMServer.Datasources
         }
     }
 
-    public sealed class TimeSpanValue : BaseChartValue
+    public sealed class TimeSpanChartValue : BaseChartValue
     {
         public TimeSpan Value { get; private set; }
 
 
-        public TimeSpanValue(BaseValue<TimeSpan> value)
+        public TimeSpanChartValue(TimeSpanValue value)
         {
             Time = value.Time;
             Value = value.Value;
         }
 
 
-        internal override void Apply(BaseValue rawValue)
+        internal override void Apply(BaseValue rawValue) //TODO aggr for time should be fixed
         {
-            if (rawValue is BaseValue<TimeSpan> value)
+            if (rawValue is TimeSpanValue value)
                 Value = value.Value;
         }
     }

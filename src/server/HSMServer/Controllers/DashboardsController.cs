@@ -205,7 +205,10 @@ namespace HSMServer.Controllers
                 error = ex.Message;
             }
 
-            return Json(new { error });
+            return Json(new 
+            { 
+                error 
+            });
         }
 
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
