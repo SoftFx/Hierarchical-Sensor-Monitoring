@@ -33,7 +33,7 @@ namespace HSMServer.ConcurrentStorage
         protected abstract ModelType FromEntity(EntityType entity);
 
 
-        public List<ModelType> GetValues() => Values.ToList();
+        public List<ModelType> GetValues() => Values.OrderBy(n => n.Name).ToList();
 
         public bool TryGetValueById(Guid? id, out ModelType model)
         {
@@ -116,7 +116,7 @@ namespace HSMServer.ConcurrentStorage
         public virtual void Dispose()
         {
             foreach ((_, var value) in this)
-               value.Dispose();
+                value.Dispose();
         }
     }
 }

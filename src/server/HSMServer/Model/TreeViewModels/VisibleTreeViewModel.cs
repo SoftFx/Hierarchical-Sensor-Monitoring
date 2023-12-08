@@ -11,6 +11,12 @@ using System.Linq;
 
 namespace HSMServer.Model.TreeViewModels;
 
+public class RemoveNodesRequestModel
+{
+    public Guid[] NodeIds { get; set; }
+}
+
+
 public sealed class VisibleTreeViewModel
 {
     private readonly ConcurrentDictionary<Guid, NodeShallowModel> _allTree = new();
