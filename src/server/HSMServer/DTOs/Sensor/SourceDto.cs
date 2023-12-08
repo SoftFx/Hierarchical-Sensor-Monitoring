@@ -41,6 +41,6 @@ public class SourceDto
         SensorId = sensor.Id;
         Label = sensor.DisplayName;
         Path = sensor.FullPath;
-        Values = chartResponse.Values.ToList();
+        Values = chartResponse.Values;
     }
 }
