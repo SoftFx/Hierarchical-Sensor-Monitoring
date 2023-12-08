@@ -1,9 +1,7 @@
 using HSMServer.Authentication;
-using HSMServer.Core.Model;
 using HSMServer.Dashboards;
 using HSMServer.DTOs.Sensor;
 using HSMServer.Model.Dashboards;
-using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Linq;
@@ -191,23 +189,16 @@ namespace HSMServer.Controllers
         {
             var error = string.Empty;
 
-            try
+            if (TryGetPanel(dashboardId, panelId, out var panel) && panel.TryAddSource(sourceId, out var datasource, out error))
             {
-                if (TryGetPanel(dashboardId, panelId, out var panel) && panel.TryAddSource(sourceId, out var datasource, out error))
-                {
-                    var response = await datasource.Source.Initialize();
+                var response = await datasource.Source.Initialize();
 
-                    return Json(new SourceDto(response, datasource));
-                }
-            }
-            catch (Exception ex)
-            {
-                error = ex.Message;
+                return Json(new SourceDto(response, datasource));
             }
 
-            return Json(new 
-            { 
-                error 
+            return Json(new
+            {
+                error
             });
         }
 
