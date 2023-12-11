@@ -34,10 +34,10 @@ export function getPlotSourceView(id) {
             type: 'GET',
             url: `${window.location.pathname}/${id}`
         }).done(function (data) {
-            if (data.errorMessage === undefined)
+            if (data.error === undefined)
                 return resolve(data);
             else
-                return reject(data.errorMessage)
+                return reject(data.error)
         }).fail(function (data){
             reject(data.responseText)
         })

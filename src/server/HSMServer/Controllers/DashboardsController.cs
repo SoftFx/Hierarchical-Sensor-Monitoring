@@ -5,17 +5,20 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
         private readonly IDashboardManager _dashboards;
+        private readonly TreeViewModel _treeViewModel;
 
 
-        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager) : base(userManager)
+        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
         {
             _dashboards = dashboardManager;
+            _treeViewModel = treeViewModel;
         }
 
 
@@ -43,7 +46,7 @@ namespace HSMServer.Controllers
                 return View(nameof(EditDashboard), await vm.InitDashboardData());
             }
 
-            return Redirect("Dashboard");
+            return Redirect("Dashboards");
         }
 
         [HttpPost("Dashboards/{dashboardId:guid?}")]
@@ -120,7 +123,7 @@ namespace HSMServer.Controllers
                 return View("AddDashboardPanel", await vm.InitPanelData());
             }
 
-            return Redirect("Dashboard");
+            return Redirect("Dashboards");
         }
 
         [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}")]

@@ -90,7 +90,6 @@ public sealed class VisibleTreeViewModel
         }
         : folder => !folder.IsEmpty || IsVisibleFolderForUser(folder.Id);
 
-        
         folderTree.AddRange(folders.Values.Where(filter));
         folderTree.AddRange(tree);
 
