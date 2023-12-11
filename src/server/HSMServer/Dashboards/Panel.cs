@@ -78,7 +78,7 @@ namespace HSMServer.Dashboards
         internal static void Relayout(ConcurrentDictionary<Guid, Panel> panels, int layerWidth)
         {
             const double height = 0.2D;
-            const double translateY = 0.24D;
+            const double translateY = 0.22D;
             const double currentWidth = 1.0D;
             const double gap = 0.01D;
             var layoutHeight = 0;
