@@ -186,12 +186,12 @@ namespace HSMServer.Controllers
             return TryGetSource(dashboardId, panelId, sourceId, out var source) ? Json(source.Source.GetSourceUpdates()) : _emptyResult;
         }
 
-        [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
-        public async Task<IActionResult> GetSource(Guid sourceId, Guid dashboardId, Guid panelId)
+        [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sensorId:guid}")]
+        public async Task<IActionResult> GetSource(Guid sensorId, Guid dashboardId, Guid panelId)
         {
             var error = string.Empty;
 
-            if (TryGetPanel(dashboardId, panelId, out var panel) && panel.TryAddSource(sourceId, out var datasource, out error))
+            if (TryGetPanel(dashboardId, panelId, out var panel) && panel.TryAddSource(sensorId, out var datasource, out error))
             {
                 var response = await datasource.Source.Initialize();
 
@@ -217,10 +217,10 @@ namespace HSMServer.Controllers
             return NotFound("No such source");
         }
 
-        [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
-        public IActionResult DeleteSource(Guid dashboardId, Guid panelId, Guid sourceId)
+        [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}/{sensorId:guid}")]
+        public IActionResult DeleteSource(Guid dashboardId, Guid panelId, Guid sensorId)
         {
-            return TryGetPanel(dashboardId, panelId, out var panel) && panel.TryRemoveSource(sourceId) ? Ok() : NotFound("No source found to delete");
+            return TryGetPanel(dashboardId, panelId, out var panel) && panel.TryRemoveSource(sensorId) ? Ok() : NotFound("No source found to delete");
         }
 
         #endregion

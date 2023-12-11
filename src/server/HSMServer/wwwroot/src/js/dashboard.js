@@ -74,7 +74,7 @@ window.insertSourceHtml = function (data) {
                                             </div>
                                         </div>
                                         <div class="d-flex justify-content-center">
-                                             <button id=${'deletePlot_' + data.id} class="btn" type="button" style="color: red">
+                                             <button id=${'deletePlot_' + data.sensorId} class="btn" type="button" style="color: red">
                                                 <i class="fa-solid fa-xmark"></i>
                                              </button>
                                         </div>
@@ -163,7 +163,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         }
     );
 
-    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
+    currentPanel[data.sensorId] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
 }
 
 window.addNewSourceHtml = function (data, id){

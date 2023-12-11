@@ -93,6 +93,7 @@
         }).on('click', 'button',function (){
             let id = this.id.substring("deletePlot_".length, this.id.length);
             let model = getCurrentPlotInDashboard(id)
+
             if (model !== undefined) {
                 $.ajax({
                     type:'delete',

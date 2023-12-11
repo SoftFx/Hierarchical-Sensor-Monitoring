@@ -81,9 +81,9 @@ namespace HSMServer.Dashboards
             return result;
         }
 
-        public bool TryRemoveSource(Guid sourceId)
+        public bool TryRemoveSource(Guid sensorId)
         {
-            if (Sources.TryRemove(sourceId, out var source))
+            if (Sources.TryRemove(sensorId, out var source))
             {
                 source.Dispose();
                 ThrowUpdateEvent();
@@ -111,10 +111,10 @@ namespace HSMServer.Dashboards
                 error = $"Can't plot using {sourceType} sensor type";
             else if (!MainUnit.IsNullOrEqual(sourceUnit))
                 error = $"Can't plot using {sourceUnit} unit type";
+            else if (!Sources.TryAdd(source.SensorId, source))
+                error = "Source already exists";
             else
             {
-                Sources.TryAdd(source.Id, source);
-
                 MainSensorType = sourceType;
                 MainUnit = sourceUnit ?? MainUnit;
 
