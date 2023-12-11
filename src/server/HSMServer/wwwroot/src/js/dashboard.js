@@ -483,8 +483,8 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
     return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
         dragmode: 'zoom',
-        //autosize: true,
-       // height: height,
+        autosize: true,
+        height: null,
         margin: {
             autoexpand: true,
             l: 30,
@@ -581,7 +581,7 @@ function dragMoveListener (event) {
 
 function dragMoveListenerPanel (event) {
     var target = event.target.parentNode.parentElement;
-    console.log(target)
+
     var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
     var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy
 

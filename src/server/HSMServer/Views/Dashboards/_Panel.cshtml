@@ -48,14 +48,12 @@
         let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         let dashboardpanels = $('#dashboardPanels');
-        console.log(settings.height)
-        console.log(settings.width)
+
         initMultyichartCordinates(settings, values, '@Model.Id').then(
             (data) => {
                 containerHeight = Math.max(containerHeight, data);
-                return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)), settings.showLegend).then(
+                return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend).then(
                         (plot) => {
-                            window.dispatchEvent(new Event('resize'));
                                 let autorange = false;
                                 values.forEach(function (x) {
                                     if (x.values.length !== 0)
@@ -70,7 +68,10 @@
                                     emptypanel.css('transform', `translate(${rect.width / 2 - emptypanel .width() / 2}px, ${rect.height / 2}px)`)
                                 })
 
-                                Plotly.relayout(plot.id, { 'xaxis.autorange': autorange })
+                                Plotly.relayout(plot.id, { 
+                                    'xaxis.autorange': autorange,
+                                    'height': Number((settings.height * 1400).toFixed(5)) - 46
+                                })
 
                                 if (values.length === 0) {
                                     $('#emptypanel_@Model.Id').show();
