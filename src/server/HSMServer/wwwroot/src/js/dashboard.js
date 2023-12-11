@@ -279,7 +279,10 @@ window.initDashboard = function () {
                         correctId += 1;
                     }
                     
-                    let lastTime = new Date(plot.data[correctId].x.at(-1));
+                    let lastTime = new Date(0);
+                    if (plot.data[correctId].length > 0)
+                        lastTime = new Date(plot.data[correctId].x.at(-1));
+                    
                     let x = [];
                     let y = [];
                     let customData = []
