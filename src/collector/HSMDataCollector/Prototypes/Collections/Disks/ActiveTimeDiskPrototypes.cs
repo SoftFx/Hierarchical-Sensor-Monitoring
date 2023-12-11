@@ -21,7 +21,7 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
             {
                 AlertsFactory.IfEmaMean(AlertOperation.GreaterThanOrEqual, 80)
                              .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
-                             .ThenSendNotification($"[$product]$path $property $operation $target{SensorUnit}")
+                             .ThenSendNotification($"[$product]$path $property $operation $target$unit")
                              .AndSetIcon(AlertIcon.Warning).Build()
             };
         }

@@ -65,7 +65,7 @@ namespace HSMDataCollector.Prototypes
             {
                 AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 30.GigobytesToMegabytes())
                              .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
-                             .ThenSendNotification($"[$product]$path $property $operation $target {Unit.MB}")
+                             .ThenSendNotification($"[$product]$path $property $operation $target $unit")
                              .AndSetIcon(AlertIcon.Warning).Build(),
             };
         }
@@ -79,7 +79,7 @@ namespace HSMDataCollector.Prototypes
 
         public ProcessThreadCountPrototype() : base()
         {
-            Description = $"This sensor sends information about **{_processName}** process threads count. \n" +
+            Description = $"This sensor sends information about **{_processName}** process threads count. \n" + 
             "A thread is the basic unit to which the operating system allocates processor time. A thread can execute any part of the process code, " +
             "including parts currently being executed by another thread.  \n" +
             "More information about processes and threads you can find [**here**](https://learn.microsoft.com/en-us/windows/win32/procthread/processes-and-threads).";

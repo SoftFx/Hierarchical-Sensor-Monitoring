@@ -53,7 +53,7 @@ namespace HSMDataCollector.Prototypes
             {
                 AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 50)
                              .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
-                             .ThenSendNotification("[$product]$path $property $operation $target%")
+                             .ThenSendNotification("[$product]$path $property $operation $target$unit")
                              .AndSetIcon(AlertIcon.Warning).Build(),
             };
         }
