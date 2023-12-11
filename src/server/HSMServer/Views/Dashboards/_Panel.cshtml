@@ -13,6 +13,7 @@
 
 <div id="@Model.Id" class="panel resize-draggable">
     <div class="d-flex flex-column">
+        <span id="emptypanel_@Model.Id" style="font-size: larger; position: fixed; z-index: 300; color: rgb(128,128,128); display: none">Empty panel</span>
         <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1 name-draggable">
             <div class="d-inline-block overflow-hidden">
                 <span class="fw-bold d-flex" title="@Model.Name" id="panel_name" style="white-space: nowrap">@Model.Name</span>
@@ -37,8 +38,7 @@
             </div>
         </div>
     </div>
-    
-    <span id="emptypanel_@Model.Id" style="font-size: larger; position: fixed; z-index: 300; transform: translate(100px, 100px); color: rgb(128,128,128); display: none">Empty panel</span>
+
     <div id="panelChart_@Model.Id" class="h-100 w-100"></div>
 </div>
 
@@ -63,9 +63,9 @@
                                 })
 
                                 $('#panelChart_@Model.Id').on('plotly_relayout', function (e, updateData){
-                                    let rect = e.target.getBoundingClientRect();
                                     let emptypanel = $('#emptypanel_@Model.Id');
-                                    emptypanel.css('transform', `translate(${rect.width / 2 - emptypanel .width() / 2}px, ${rect.height / 2}px)`)
+                                    let container = $('#@Model.Id');
+                                    emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
                                 })
 
                                 Plotly.relayout(plot.id, { 
