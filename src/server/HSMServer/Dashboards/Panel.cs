@@ -1,8 +1,9 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Dashboards
@@ -14,10 +15,12 @@ namespace HSMServer.Dashboards
 
         public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
 
-        public PanelSettings Settings { get; set; } = new();
+        public PanelSettings Settings { get; } = new();
 
 
-        internal event Action UpdatedEvent;
+        public SensorType? MainSensorType { get; private set; }
+
+        public Unit? MainUnit { get; private set; }
 
 
         internal Panel(Dashboard board) : base()
@@ -37,13 +40,9 @@ namespace HSMServer.Dashboards
         }
 
 
-        public override void Update(PanelUpdate update)
+        protected override void UpdateCustom(PanelUpdate update)
         {
-            base.Update(update);
-
             Settings.Update(update);
-
-            UpdatedEvent?.Invoke();
         }
 
         public override DashboardPanelEntity ToEntity()
@@ -58,61 +57,73 @@ namespace HSMServer.Dashboards
 
         public override void Dispose()
         {
+            ClearSubscriptions();
+
             foreach ((_, var source) in Sources)
-                source.Source.Dispose();
+                source.Dispose();
         }
 
-        public bool TryAddSource(Guid sensorId, PanelSourceEntity entity = null)
-        {
-            if (_board.TryGetSensor(sensorId, out var sensor))
-            {
-                var source = entity is null ? new PanelDatasource(sensor) : new PanelDatasource(sensor, entity);
 
-                return Sources.TryAdd(source.Id, source);
+        public bool TryAddSource(Guid sensorId, PanelSourceEntity entity)
+        {
+            return _board.TryGetSensor(sensorId, out var sensor) ? TrySaveNewSource(new PanelDatasource(sensor, entity), out _) : false;
+        }
+
+        public bool TryAddSource(Guid sensorId, out PanelDatasource source, out string error)
+        {
+            source = _board.TryGetSensor(sensorId, out var sensor) ? new PanelDatasource(sensor) : null;
+
+            var result = TrySaveNewSource(source, out error);
+
+            if (result)
+                ThrowUpdateEvent();
+
+            return result;
+        }
+
+        public bool TryRemoveSource(Guid sourceId)
+        {
+            if (Sources.TryRemove(sourceId, out var source))
+            {
+                source.Dispose();
+                ThrowUpdateEvent();
+
+                return true;
             }
 
             return false;
         }
 
-
-        internal static void Relayout(ConcurrentDictionary<Guid, Panel> panels, int layerWidth)
+        private bool TrySaveNewSource(PanelDatasource source, out string error)
         {
-            const double height = 0.2D;
-            const double translateY = 0.22D;
-            const double currentWidth = 1.0D;
-            const double gap = 0.01D;
-            var layoutHeight = 0;
-            var counter = 0;
-            var layoutTakeSize = panels.Count - panels.Count % layerWidth;
-            var width = currentWidth - gap * (layerWidth + 1);
+            error = string.Empty;
 
-            var sortedPanels = panels.OrderBy(x => x.Value.Name.ToLower()).ToList();
-            
-            Relayout(sortedPanels.Take(layoutTakeSize), width / layerWidth);
-            Relayout(sortedPanels.TakeLast(panels.Count - layoutTakeSize), (currentWidth - gap * (panels.Count - layoutTakeSize  + 1)) / (panels.Count - layoutTakeSize));
-
-            void Relayout(IEnumerable<KeyValuePair<Guid, Panel>> panels, double width)
+            if (source is null)
             {
-                foreach (var (panelId, panel) in panels)
-                {
-                    panel.Update(new PanelUpdate(panelId)
-                    {
-                        Height = height,
-                        Width = width,
-
-                        X = width * counter + gap * (counter + 1),
-                        Y = translateY * layoutHeight,
-                    });
-
-                    if (counter == layerWidth - 1)
-                    {
-                        counter = 0;
-                        layoutHeight++;
-                    }
-                    else
-                        counter++;
-                }
+                error = "Source not found";
+                return false;
             }
+
+            var sourceUnit = source.Sensor.OriginalUnit;
+            var sourceType = source.Sensor.Type;
+
+            if (!IsSupportedType(sourceType) || !MainSensorType.IsNullOrEqual(sourceType))
+                error = $"Can't plot using {sourceType} sensor type";
+            else if (!MainUnit.IsNullOrEqual(sourceUnit))
+                error = $"Can't plot using {sourceUnit} unit type";
+            else
+            {
+                Sources.TryAdd(source.Id, source);
+
+                MainSensorType = sourceType;
+                MainUnit = sourceUnit ?? MainUnit;
+
+                source.UpdateEvent += ThrowUpdateEvent;
+            }
+
+            return string.IsNullOrEmpty(error);
         }
+
+        private static bool IsSupportedType(SensorType type) => type is SensorType.Integer or SensorType.Double or SensorType.TimeSpan;
     }
 }

@@ -37,12 +37,19 @@ namespace HSMSensorDataObjects.SensorRequests
         Mean = 103,
         Count = 104,
         LastValue = 105,
+        FirstValue = 106,
 
         Length = 120,
 
         OriginalSize = 151,
 
         NewSensorData = 200,
+
+        EmaValue = 210,
+        EmaMin = 211,
+        EmaMax = 212,
+        EmaMean = 213,
+        EmaCount = 214,
     }
 
 

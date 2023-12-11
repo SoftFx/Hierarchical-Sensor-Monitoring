@@ -1,13 +1,8 @@
 using HSMServer.Authentication;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
 using HSMServer.Dashboards;
-using HSMServer.DTOs.Sensor;
 using HSMServer.Model.Dashboards;
-using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -15,204 +10,40 @@ namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
-        private readonly IDashboardManager _dashboardManager;
-        private readonly TreeViewModel _treeViewModel;
-        private readonly ITreeValuesCache _cache;
+        private readonly IDashboardManager _dashboards;
 
 
-        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, ITreeValuesCache cache, TreeViewModel treeViewModel) : base(userManager)
+        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager) : base(userManager)
         {
-            _dashboardManager = dashboardManager;
-            _treeViewModel = treeViewModel;
-            _cache = cache;
+            _dashboards = dashboardManager;
         }
 
 
         [HttpGet("Dashboards")]
-        public IActionResult Index() => View(_dashboardManager.GetValues().Select(d => new DashboardViewModel(d)).OrderBy(d => d.Name).ToList());
+        public IActionResult Index() => View(_dashboards.GetValues().Select(d => new DashboardViewModel(d)).ToList());
 
-        [ApiExplorerSettings(IgnoreApi = true)]
-        [Route("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public async Task<IActionResult> AddDashboardPanel(Guid dashBoardId, Guid panelId)
+
+        #region Dashboards
+
+        [HttpGet]
+        public async Task<IActionResult> CreateDashboard()
         {
-            _dashboardManager.TryGetValue(dashBoardId, out var dashboard);
-            dashboard.Panels.TryGetValue(panelId, out var panel);
-            var vm = new PanelViewModel(panel, dashboard.Id);
+            await _dashboards.TryAdd(DashboardViewModel.ToDashboardAdd(CurrentUser), out var dashboard);
 
-            return View("AddDashboardPanel", await vm.InitPanelData());
-        }
-
-        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public IActionResult SaveDashboardPanel(Guid dashBoardId, Guid panelId, [FromBody] PanelViewModel model)
-        {
-            if (string.IsNullOrEmpty(model.Name) || string.IsNullOrWhiteSpace(model.Name))
-                return BadRequest("Invalid Name");
-
-            if (model.Name.Length > 30)
-                return BadRequest("Name length is grater than 30 characters");
-
-            if (model.Description.Length > 250)
-                return BadRequest("Description length is greater than 100 characters");
-
-            _dashboardManager.TryGetValue(dashBoardId, out var dashboard);
-
-            if (dashboard.Panels.TryGetValue(panelId, out var panel))
-                panel.Update(new PanelUpdate(panel.Id)
-                {
-                    Name = model.Name,
-                    Description = model.Description
-                });
-
-            return Ok(dashboard.Id);
-        }
-
-        [HttpGet("Dashboards/{dashboardId:guid}/SourceUpdate/{panelId:guid}/{sourceId:guid}")]
-        public async Task<IActionResult> Source(Guid dashboardId, Guid panelId, Guid sourceId)
-        {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
-                dashboard.Panels.TryGetValue(panelId, out var panel) &&
-                panel.Sources.TryGetValue(sourceId, out var source))
-            {
-                var updates = source.Source.GetSourceUpdates();
-
-                return Json(updates);
-            }
-
-            return _emptyResult;
-        }
-
-        [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
-        public async Task<IActionResult> GetSource(Guid sourceId, Guid dashboardId, Guid panelId)
-        {
-            string errorMessage = string.Empty;
-
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
-            {
-                if (dashboard.Panels.TryGetValue(panelId, out var panel))
-                {
-                    SensorType? currentType = null;
-                    Unit? currentUnitType = null;
-
-                    if (panel?.Sources != null)
-                        foreach (var (id, source) in panel.Sources)
-                        {
-                            if (source.SensorId == sourceId)
-                                return BadRequest("Source already exists");
-
-                            _treeViewModel.Sensors.TryGetValue(source.SensorId, out var sensorNodeViewModel);
-                            currentType = sensorNodeViewModel?.Type;
-                            currentUnitType = sensorNodeViewModel?.SelectedUnit ?? currentUnitType;
-                        }
-
-                    var viewModel = new PanelViewModel()
-                    {
-                        MainSensorType = currentType,
-                        MainUnit = currentUnitType,
-                    };
-
-                    if (_treeViewModel.Sensors.TryGetValue(sourceId, out var newSource) && viewModel.TryAddSource(newSource, out errorMessage))
-                    {
-                        try
-                        {
-                            var sensorModel = _cache.GetSensor(sourceId);
-                            var datasource = new PanelDatasource(sensorModel);
-
-                            if (panel.Sources.TryAdd(datasource.Id, datasource) && (await _dashboardManager.TryUpdate(dashboard)))
-                            {
-                                var response = await datasource.Source.Initialize();
-
-                                return Json(new SourceDto(response, datasource, newSource));
-                            }
-                        }
-                        catch (Exception exception)
-                        {
-                            errorMessage = exception.Message;
-                        }
-                    }
-                }
-            }
-
-            return Json(new
-            {
-                errorMessage
-            });
-        }
-
-        [HttpPut("Dashboards/{dashboardId:guid}/Relayout")]
-        public async Task<IActionResult> Relayout(Guid dashboardId, [FromQuery] int width)
-        {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
-            {
-                Panel.Relayout(dashboard.Panels, width);
-
-                if (await _dashboardManager.TryUpdate(dashboard))
-                    return Ok("Successfully relayout");
-            }
-
-            return BadRequest("Couldn't relayout");
-        }
-
-        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public async Task<IActionResult> UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
-        {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) && dashboard.Panels.TryGetValue(panelId, out var panel))
-            {
-                panel.Update(new PanelUpdate(panel.Id)
-                {
-                    ShowLegend = showlegend,
-                });
-
-                if (await _dashboardManager.TryUpdate(dashboard))
-                    return Ok("Successfully updated");
-            }
-
-            return BadRequest("Couldn't update panel");
-        }
-
-        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
-        public async Task<IActionResult> UpdateSource([FromBody] PanelSourceUpdate update, Guid dashboardId, Guid panelId, Guid sourceId)
-        {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
-                dashboard.Panels.TryGetValue(panelId, out var panel) &&
-                panel.Sources.TryGetValue(sourceId, out var source))
-            {
-                source.Update(update);
-
-                await _dashboardManager.TryUpdate(dashboard);
-
-                return Ok();
-            }
-
-            return NotFound("No such source");
-        }
-
-        [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
-        public IActionResult DeleteSource(Guid dashboardId, Guid panelId, Guid sourceId)
-        {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
-                dashboard.Panels.TryGetValue(panelId, out var panel) &&
-                panel.Sources.TryRemove(sourceId, out _))
-                return Ok();
-
-            return NotFound("No source found to delete");
+            return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id, isModify = true });
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}")]
         public async Task<IActionResult> EditDashboard(Guid dashboardId, bool isModify = false)
         {
-            _dashboardManager.TryGetValue(dashboardId, out var dashboard);
+            if (TryGetBoard(dashboardId, out var dashboard))
+            {
+                var vm = new DashboardViewModel(dashboard, isModify);
 
-            var vm = new DashboardViewModel(dashboard, isModify);
+                return View(nameof(EditDashboard), await vm.InitDashboardData());
+            }
 
-            return View(nameof(EditDashboard), await vm.InitDashboardData());
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> CreateDashboard()
-        {
-            await _dashboardManager.TryAdd(DashboardViewModel.ToDashboardAdd(CurrentUser), out var dashboard);
-
-            return RedirectToAction(nameof(EditDashboard), new { dashboardId = dashboard.Id, isModify = true });
+            return Redirect("Dashboard");
         }
 
         [HttpPost("Dashboards/{dashboardId:guid?}")]
@@ -232,10 +63,12 @@ namespace HSMServer.Controllers
 
             var isReload = false;
 
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
+            if (TryGetBoard(dashboardId, out var dashboard))
             {
                 isReload = dashboard.DataPeriod != editDashboard.FromPeriod;
+
                 dashboard.Update(editDashboard.ToUpdate());
+
                 foreach (var (id, settings) in editDashboard.Panels)
                 {
                     if (dashboard.Panels.TryGetValue(id, out var panel))
@@ -243,7 +76,7 @@ namespace HSMServer.Controllers
                 }
             }
 
-            await _dashboardManager.TryUpdate(dashboard);
+            await _dashboards.TryUpdate(dashboard);
 
             return Ok(new
             {
@@ -252,34 +85,158 @@ namespace HSMServer.Controllers
         }
 
         [HttpDelete("Dashboards/{dashboardId:guid}")]
-        public async Task RemoveDashboard(Guid dashboardId) => await _dashboardManager.TryRemove(new(dashboardId, CurrentInitiator));
+        public Task RemoveDashboard(Guid dashboardId) => _dashboards.TryRemove(new(dashboardId, CurrentInitiator));
 
-        [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public async Task<IActionResult> RemovePanel(Guid dashboardId, Guid panelId)
-        {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard) &&
-                dashboard.Panels.TryRemove(panelId, out _) &&
-                await _dashboardManager.TryUpdate(dashboard))
-                return Ok();
+        #endregion
 
-            return NotFound();
-        }
+        #region Panels
 
         [HttpGet]
         public async Task<IActionResult> GetPanel(Guid dashboardId)
         {
-            if (_dashboardManager.TryGetValue(dashboardId, out var dashboard))
+            if (TryGetBoard(dashboardId, out var dashboard))
             {
                 var newPanel = new Panel(dashboard);
 
-                dashboard.TryAddPanel(newPanel);
+                if (dashboard.TryAddPanel(newPanel))
+                {
+                    var vm = new PanelViewModel(newPanel, dashboard.Id);
 
-                var vm = new PanelViewModel(newPanel, dashboard.Id);
-
-                return PartialView("_Panel", await vm.InitPanelData());
+                    return PartialView("_Panel", await vm.InitPanelData());
+                }
             }
 
             return await EditDashboard(dashboardId);
+        }
+
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [Route("Dashboards/{dashboardId:guid}/{panelId:guid}")]
+        public async Task<IActionResult> AddDashboardPanel(Guid dashboardId, Guid panelId)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+            {
+                var vm = new PanelViewModel(panel, dashboardId);
+
+                return View("AddDashboardPanel", await vm.InitPanelData());
+            }
+
+            return Redirect("Dashboard");
+        }
+
+        [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}")]
+        public IActionResult RemovePanel(Guid dashboardId, Guid panelId)
+        {
+            return TryGetBoard(dashboardId, out var dashboard) && dashboard.TryRemovePanel(panelId) ? Ok() : NotFound();
+        }
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}")]
+        public IActionResult SaveDashboardPanel(Guid dashboardId, Guid panelId, [FromBody] PanelViewModel model)
+        {
+            if (string.IsNullOrEmpty(model.Name) || string.IsNullOrWhiteSpace(model.Name))
+                return BadRequest("Invalid Name");
+
+            if (model.Name.Length > 30)
+                return BadRequest("Name length is grater than 30 characters");
+
+            if (model.Description.Length > 250)
+                return BadRequest("Description length is greater than 100 characters");
+
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+                panel.NotifyUpdate(new PanelUpdate(panel.Id)
+                {
+                    Name = model.Name,
+                    Description = model.Description
+                });
+
+            return Ok(dashboardId);
+        }
+
+        [HttpPut("Dashboards/{dashboardId:guid}/Relayout")]
+        public IActionResult Relayout(Guid dashboardId, [FromQuery] int width)
+        {
+            return TryGetBoard(dashboardId, out var dashboard) && dashboard.AutofitPanels(width) ? Ok("Successfully relayout") : BadRequest("Couldn't relayout");
+        }
+
+        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
+        public IActionResult UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+            {
+                panel.NotifyUpdate(new PanelUpdate(panel.Id)
+                {
+                    ShowLegend = showlegend,
+                });
+
+                return Ok("Successfully updated");
+            }
+
+            return BadRequest("Couldn't update panel");
+        }
+
+        #endregion
+
+        #region Sources
+
+        [HttpGet("Dashboards/{dashboardId:guid}/SourceUpdate/{panelId:guid}/{sourceId:guid}")]
+        public IActionResult Source(Guid dashboardId, Guid panelId, Guid sourceId)
+        {
+            return TryGetSource(dashboardId, panelId, sourceId, out var source) ? Json(source.Source.GetSourceUpdates()) : _emptyResult;
+        }
+
+        [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
+        public async Task<IActionResult> GetSource(Guid sourceId, Guid dashboardId, Guid panelId)
+        {
+            var error = string.Empty;
+
+            if (TryGetPanel(dashboardId, panelId, out var panel) && panel.TryAddSource(sourceId, out var datasource, out error))
+            {
+                var response = await datasource.Source.Initialize();
+
+                return Json(new SourceViewModel(response, datasource));
+            }
+
+            return Json(new
+            {
+                error
+            });
+        }
+
+        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
+        public IActionResult UpdateSource([FromBody] PanelSourceUpdate update, Guid dashboardId, Guid panelId, Guid sourceId)
+        {
+            if (TryGetSource(dashboardId, panelId, sourceId, out var source))
+            {
+                source.Update(update);
+
+                return Ok();
+            }
+
+            return NotFound("No such source");
+        }
+
+        [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
+        public IActionResult DeleteSource(Guid dashboardId, Guid panelId, Guid sourceId)
+        {
+            return TryGetPanel(dashboardId, panelId, out var panel) && panel.TryRemoveSource(sourceId) ? Ok() : NotFound("No source found to delete");
+        }
+
+        #endregion
+
+
+        private bool TryGetBoard(Guid id, out Dashboard board) => _dashboards.TryGetValue(id, out board);
+
+        private bool TryGetPanel(Guid boardId, Guid id, out Panel panel)
+        {
+            panel = null;
+
+            return TryGetBoard(boardId, out var board) && board.Panels.TryGetValue(id, out panel);
+        }
+
+        private bool TryGetSource(Guid boardId, Guid panelId, Guid id, out PanelDatasource source)
+        {
+            source = null;
+
+            return TryGetBoard(boardId, out var board) && board.Panels.TryGetValue(panelId, out var panel) && panel.Sources.TryGetValue(id, out source);
         }
     }
 }

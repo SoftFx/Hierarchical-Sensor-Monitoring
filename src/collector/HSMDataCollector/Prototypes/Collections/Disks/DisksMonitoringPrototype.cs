@@ -3,6 +3,7 @@ using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,6 +26,7 @@ namespace HSMDataCollector.Prototypes
 
         protected BarDisksMonitoringPrototype() : base()
         {
+            Statistics = StatisticsOptions.EMA;
             Type = SensorType.DoubleBarSensor;
             IsComputerSensor = true;
         }

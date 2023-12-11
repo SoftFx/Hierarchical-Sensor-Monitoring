@@ -16,7 +16,16 @@ namespace HSMServer.ConcurrentStorage
     }
 
 
-    public abstract class BaseServerModel<EntityType, UpdateType> : IServerModel<EntityType, UpdateType>
+    public interface INotifyServerModel<EntityType, UpdateType> : IServerModel<EntityType, UpdateType>
+    {
+        event Action UpdatedEvent;
+
+
+        void NotifyUpdate(UpdateType update);
+    }
+
+
+    public abstract class BaseServerModel<EntityType, UpdateType> : INotifyServerModel<EntityType, UpdateType>
         where EntityType : BaseServerEntity, new()
         where UpdateType : BaseUpdateRequest
     {
@@ -31,6 +40,9 @@ namespace HSMServer.ConcurrentStorage
         public string Name { get; private set; }
 
         public string Description { get; private set; }
+
+
+        public event Action UpdatedEvent;
 
 
         protected BaseServerModel()
@@ -57,11 +69,21 @@ namespace HSMServer.ConcurrentStorage
         }
 
 
-        public virtual void Update(UpdateType update)
+        public void Update(UpdateType update)
         {
             Name = update.Name ?? Name;
             Description = update.Description ?? Description;
+
+            UpdateCustom(update);
         }
+
+        public void NotifyUpdate(UpdateType update)
+        {
+            Update(update);
+            ThrowUpdateEvent();
+        }
+
+        protected virtual void UpdateCustom(UpdateType update) { }
 
 
         public virtual EntityType ToEntity() => new()
@@ -75,5 +97,10 @@ namespace HSMServer.ConcurrentStorage
         };
 
         public virtual void Dispose() { }
+
+
+        protected void ThrowUpdateEvent() => UpdatedEvent?.Invoke();
+
+        protected void ClearSubscriptions() => UpdatedEvent = null;
     }
 }

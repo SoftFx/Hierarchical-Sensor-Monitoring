@@ -10,7 +10,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
-using HSMServer.Model.Dashboards;
 
 namespace HSMServer.Model.Authentication
 {
@@ -37,7 +36,7 @@ namespace HSMServer.Model.Authentication
         public SelectedJournalViewModel Journal { get; } = new();
 
         public SelectedNodeViewModel SelectedNode { get; } = new();
-        
+
 
 
         public User(string userName) : this()
@@ -108,11 +107,5 @@ namespace HSMServer.Model.Authentication
         internal bool IsUserProduct(Guid productId) => ProductsRoles.Any(x => x.Item1 == productId);
 
         public void Dispose() { }
-    }
-
-
-    public class RemoveNodesRequestModel
-    {
-        public Guid[] NodeIds { get; set; }
     }
 }

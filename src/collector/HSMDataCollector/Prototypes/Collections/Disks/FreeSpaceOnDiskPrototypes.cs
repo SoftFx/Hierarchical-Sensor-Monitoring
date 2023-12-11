@@ -3,6 +3,7 @@ using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
+using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
@@ -11,6 +12,7 @@ namespace HSMDataCollector.Prototypes
     {
         public FreeSpaceOnDiskPrototype() : base()
         {
+            Statistics = StatisticsOptions.EMA;
             Type = SensorType.DoubleSensor;
             SensorUnit = Unit.MB;
         }
@@ -22,7 +24,8 @@ namespace HSMDataCollector.Prototypes
 
             options.Alerts = new List<InstantAlertTemplate>()
             {
-                AlertsFactory.IfValue(AlertOperation.LessThanOrEqual, 5.GigobytesToMegabytes())
+                AlertsFactory.IfEmaValue(AlertOperation.LessThanOrEqual, 5.GigobytesToMegabytes())
+                             .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
                              .ThenSendNotification($"[$product] {SensorName} is running out. Current free space is $value {options.SensorUnit}")
                              .AndSetIcon(AlertIcon.ArrowDown).AndSetSensorError().Build()
             };

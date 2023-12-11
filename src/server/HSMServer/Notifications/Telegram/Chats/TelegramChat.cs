@@ -11,6 +11,7 @@ namespace HSMServer.Notifications
     {
         [Display(Name = "direct")]
         TelegramPrivate = 0,
+
         [Display(Name = "group")]
         TelegramGroup = 1,
     }
@@ -59,10 +60,8 @@ namespace HSMServer.Notifications
         }
 
 
-        public override void Update(TelegramChatUpdate update)
+        protected override void UpdateCustom(TelegramChatUpdate update)
         {
-            base.Update(update);
-
             SendMessages = update.SendMessages ?? SendMessages;
             MessagesAggregationTimeSec = update.MessagesAggregationTimeSec ?? MessagesAggregationTimeSec;
         }

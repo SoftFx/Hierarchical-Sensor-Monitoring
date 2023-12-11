@@ -7,9 +7,11 @@ using System.Drawing;
 
 namespace HSMServer.Dashboards
 {
-    public sealed class PanelDatasource
+    public sealed class PanelDatasource : IDisposable
     {
         public SensorDatasourceBase Source { get; }
+
+        public BaseSensorModel Sensor { get; }
 
         public Guid SensorId { get; }
 
@@ -21,8 +23,13 @@ namespace HSMServer.Dashboards
         public string Label { get; private set; }
 
 
+        internal event Action UpdateEvent;
+
+
         public PanelDatasource(BaseSensorModel sensor)
         {
+            Sensor = sensor;
+
             Label = sensor.DisplayName;
             SensorId = sensor.Id;
 
@@ -45,6 +52,8 @@ namespace HSMServer.Dashboards
             Color = update.Color is not null ? Color.FromName(update.Color) : Color;
             Label = !string.IsNullOrEmpty(update.Name) ? update.Name : Label;
 
+            UpdateEvent?.Invoke();
+
             return this;
         }
 
@@ -58,5 +67,11 @@ namespace HSMServer.Dashboards
                 Color = Color.Name,
                 Label = Label,
             };
+
+        public void Dispose()
+        {
+            Source?.Dispose();
+            UpdateEvent = null;
+        }
     }
 }

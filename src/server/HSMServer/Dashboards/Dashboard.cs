@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using System;
@@ -18,27 +19,20 @@ namespace HSMServer.Dashboards
         public TimeSpan DataPeriod { get; private set; } = _defaultDataPeriod;
 
 
-        internal event Action UpdatedEvent;
-
-
         internal Dashboard(DashboardAdd addModel) : base(addModel) { }
 
         internal Dashboard(DashboardEntity entity, Func<Guid, BaseSensorModel> getSensorModel) : base(entity)
         {
             _getSensorModel += getSensorModel;
 
-            Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), v => new Panel(v, this)));
+            Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), AddPanel));
             DataPeriod = GetPeriod(entity.DataPeriod);
         }
 
 
-        public override void Update(DashboardUpdate update)
+        protected override void UpdateCustom(DashboardUpdate update)
         {
-            base.Update(update);
-
             DataPeriod = update.FromPeriod;
-
-            ThrowUpdateEvent();
         }
 
         public override DashboardEntity ToEntity()
@@ -53,6 +47,8 @@ namespace HSMServer.Dashboards
 
         public override void Dispose()
         {
+            Unsubscribe();
+
             foreach (var (_, panel) in Panels)
                 panel.Dispose();
         }
@@ -60,14 +56,35 @@ namespace HSMServer.Dashboards
 
         public bool TryAddPanel(Panel panel)
         {
-            var result = panel is not null && Panels.TryAdd(panel.Id, panel);
+            var result = TrySaveAndSubscribePanel(panel);
 
             if (result)
-                panel.UpdatedEvent += ThrowUpdateEvent;
-
-            ThrowUpdateEvent();
+                ThrowUpdateEvent();
 
             return result;
+        }
+
+        public bool TryRemovePanel(Guid id)
+        {
+            var result = Panels.TryRemove(id, out var panel);
+
+            if (result)
+            {
+                panel.Dispose();
+                ThrowUpdateEvent();
+            }
+
+            return result;
+        }
+
+        public bool AutofitPanels(int panelsInRow)
+        {
+            var ok = PanelsLayout.RecalculatePanelSize(Panels, panelsInRow);
+
+            if (ok)
+                ThrowUpdateEvent();
+
+            return ok;
         }
 
 
@@ -76,7 +93,7 @@ namespace HSMServer.Dashboards
         internal void Unsubscribe()
         {
             _getSensorModel = null;
-            UpdatedEvent = null;
+            ClearSubscriptions();
         }
 
         internal bool TryGetSensor(Guid id, out BaseSensorModel sensor)
@@ -86,8 +103,27 @@ namespace HSMServer.Dashboards
             return sensor is not null;
         }
 
-        private static TimeSpan GetPeriod(TimeSpan entityPeriod) => entityPeriod == TimeSpan.Zero ? _defaultDataPeriod : entityPeriod;
 
-        private void ThrowUpdateEvent() => UpdatedEvent?.Invoke();
+        private Panel AddPanel(DashboardPanelEntity entity)
+        {
+            var panel = new Panel(entity, this);
+
+            TrySaveAndSubscribePanel(panel);
+
+            return panel;
+        }
+
+        private bool TrySaveAndSubscribePanel(Panel panel)
+        {
+            var result = panel is not null && Panels.TryAdd(panel.Id, panel);
+
+            if (result)
+                panel.UpdatedEvent += ThrowUpdateEvent;
+
+            return result;
+        }
+
+
+        private static TimeSpan GetPeriod(TimeSpan entityPeriod) => entityPeriod == TimeSpan.Zero ? _defaultDataPeriod : entityPeriod;
     }
 }

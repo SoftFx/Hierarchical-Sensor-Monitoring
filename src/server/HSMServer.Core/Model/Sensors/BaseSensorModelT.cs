@@ -26,8 +26,11 @@ namespace HSMServer.Core.Model
                 return true;
             }
 
+            if (Statistics.HasEma() && value is T valueT)
+                value = Storage.CalculateStatistics(valueT);
+
             var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
-            var canStore = Policies.TryValidate(value, out var valueT, isLastValue);
+            var canStore = Policies.TryValidate(value, out valueT, isLastValue);
 
             if (canStore)
             {

@@ -66,7 +66,7 @@ namespace HSMDataCollector.DefaultSensors
             if (IsCalibration)
                 return $"Calibration request ({_requestsCount}/{_calibrationRequests})";
 
-            var mbPerSec = _currentChangeSpeed.BytesToMegabytes();
+            var mbPerSec = _currentChangeSpeed.BytesToMegabytesDouble();
 
             return _isOffTime ? $"Free space increases by {-mbPerSec} Mbytes/sec. Value cannot be calculated." :
                                 $"Free space decreases by {mbPerSec} Mbytes/sec.";
@@ -113,9 +113,10 @@ namespace HSMDataCollector.DefaultSensors
 
                 var curSpeed = (_lastAvailableSpace - curSpace) / (utc - _lastSpeedCheckTime).TotalSeconds;
 
-                //Console.WriteLine($"Prev {_currentChangeSpeed} - cur {curSpeed}");
+                //Console.WriteLine($"Free = {curSpace}, Prev {_currentChangeSpeed} - cur {curSpeed}");
 
-                Interlocked.Exchange(ref _currentChangeSpeed, Math.Abs(_currentChangeSpeed) > 0.0 ? _currentChangeSpeed * 0.9 + curSpeed * 0.1 : curSpeed);
+                if (curSpeed > 0.0)
+                    Interlocked.Exchange(ref _currentChangeSpeed, Math.Abs(_currentChangeSpeed) > 0.0 ? _currentChangeSpeed * 0.9 + curSpeed * 0.1 : curSpeed);
 
                 _lastAvailableSpace = curSpace;
                 _lastSpeedCheckTime = utc;

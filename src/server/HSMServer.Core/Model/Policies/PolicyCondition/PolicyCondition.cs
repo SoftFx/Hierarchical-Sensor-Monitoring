@@ -55,6 +55,7 @@ namespace HSMServer.Core.Model.Policies
         Mean = 103,
         Count = 104,
         LastValue = 105,
+        FirstValue = 106,
 
         [Display(Name = "Value length")]
         Length = 120,
@@ -64,6 +65,17 @@ namespace HSMServer.Core.Model.Policies
 
         [Display(Name = "New data")]
         NewSensorData = 200,
+
+        [Display(Name = "EMA (Value)")]
+        EmaValue = 210,
+        [Display(Name = "EMA (Min)")]
+        EmaMin = 211,
+        [Display(Name = "EMA (Max)")]
+        EmaMax = 212,
+        [Display(Name = "EMA (Mean)")]
+        EmaMean = 213,
+        [Display(Name = "EMA (Count)")]
+        EmaCount = 214,
     }
 
 

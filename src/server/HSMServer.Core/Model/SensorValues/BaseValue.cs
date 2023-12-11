@@ -102,6 +102,9 @@ namespace HSMServer.Core.Model
         public T Value { get; init; }
 
 
+        public double? EmaValue { get; init; }
+
+
         public override string ShortInfo => Value?.ToString();
 
         public override object RawValue => Value;

@@ -19,6 +19,11 @@ namespace HSMServer.Core.Model.Policies
         internal override double TargetConstConverter(string str) => double.Parse(str);
     }
 
+    internal class PolicyNullableDoubleCondition<T> : PolicyCondition<T, double?> where T : BaseValue
+    {
+        internal override double? TargetConstConverter(string str) => !string.IsNullOrEmpty(str) ? double.Parse(str) : null;
+    }
+
 
     internal class PolicyBooleanCondition<T> : PolicyCondition<T, bool> where T : BaseValue
     {

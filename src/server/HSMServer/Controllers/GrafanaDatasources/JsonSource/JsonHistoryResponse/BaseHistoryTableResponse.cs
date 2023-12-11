@@ -22,6 +22,10 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 
     public abstract class BaseHistoryTableResponse : BaseHistoryResponse
     {
+        protected const string TimeType = "time";
+        protected const string NumberType = "number";
+
+
         public List<List<object>> Rows { get; } = new();
 
 
