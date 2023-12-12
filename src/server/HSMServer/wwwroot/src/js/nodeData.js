@@ -41,7 +41,11 @@ function selectNodeAjax(selectedId) {
         saveMetaData(selectedId);
     }
     else {
-        //$('#jstree').jstree('deselect_all').jstree('select_node', selectedId);
+        if (window.localStorage.isDashboardRedirect && window.localStorage.isDashboardRedirect === 'true') 
+        {
+            $('#jstree').jstree('deselect_all').jstree('select_node', selectedId);
+            window.localStorage.isDashboardRedirect = false;
+        }
         window.history.replaceState( {} , document.title, `/Home/${selectedId}` )
         initSelectedNode(selectedId);
     }
