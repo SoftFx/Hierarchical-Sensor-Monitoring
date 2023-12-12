@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Extensions;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 
 namespace HSMServer.Core.Model.Policies
@@ -10,7 +11,6 @@ namespace HSMServer.Core.Model.Policies
         Hourly = 20,
         Dayly = 50,
         Weekly = 100,
-        Monthly = 150,
     }
 
 
@@ -32,6 +32,21 @@ namespace HSMServer.Core.Model.Policies
             RepeateMode = (AlertRepeateMode)entity.RepeateMode;
         }
 
+
+        internal DateTime GetSendTime()
+        {
+            if (RepeateMode == AlertRepeateMode.None)
+                return Time;
+
+            var shiftTime = RepeateMode switch
+            {
+                AlertRepeateMode.Hourly => TimeSpan.FromHours(1),
+                AlertRepeateMode.Dayly => TimeSpan.FromDays(1),
+                AlertRepeateMode.Weekly => TimeSpan.FromDays(7),
+            };
+
+            return Time.Ceil(shiftTime);
+        }
 
         internal PolicyScheduleEntity ToEntity() =>
             new()
