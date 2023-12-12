@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model
 
         public PolicyResult()
         {
-            Alerts = new();
+            Alerts = [];
         }
 
         internal PolicyResult(Guid sensorId) : this()

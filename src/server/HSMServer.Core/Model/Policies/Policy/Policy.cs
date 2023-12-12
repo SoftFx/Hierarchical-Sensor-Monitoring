@@ -41,6 +41,8 @@ namespace HSMServer.Core.Model.Policies
 
         public PolicyDestination Destination { get; set; } = new();
 
+        public PolicySchedule Schedule { get; set; } = new();
+
 
         public string Template
         {
@@ -146,6 +148,7 @@ namespace HSMServer.Core.Model.Policies
             Icon = entity.Icon;
 
             Destination = new PolicyDestination(entity.Destination);
+            Schedule = new PolicySchedule(entity.Schedule);
 
             UpdateConditions(entity.Conditions, Update);
         }
@@ -156,8 +159,10 @@ namespace HSMServer.Core.Model.Policies
 
             Conditions = Conditions?.Select(u => u.ToEntity()).ToList(),
 
-            ConfirmationPeriod = ConfirmationPeriod,
             Destination = Destination.ToEntity(),
+            Schedule = Schedule.ToEntity(),
+
+            ConfirmationPeriod = ConfirmationPeriod,
             SensorStatus = (byte)Status,
             IsDisabled = IsDisabled,
             Template = Template,
