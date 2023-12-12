@@ -249,13 +249,19 @@
             type: 'put',
             url: window.location.pathname + `/${id}?showlegend=${showlegend}`
         }).done(function (response){
-            Plotly.relayout(`panelChart_${id}`, {
-                'showlegend': showlegend
-            }).then(
+            let update = {
+                'showlegend': showlegend,
+                'margin.b': 40,
+                'margin.l': 30,
+                'margin.r': 30,
+                'margin.t': 30,
+                'margin.autoexpand' : showlegend
+            }
+
+            Plotly.relayout(`panelChart_${id}`, update).then(
                 (success) => {
                     toggle.text(showlegend ? "Hide legends" : "Show legends");
                     showToast(response)
-                    window.dispatchEvent(new Event('resize'));
                 },
                 (error) => {
                     showToast(error)

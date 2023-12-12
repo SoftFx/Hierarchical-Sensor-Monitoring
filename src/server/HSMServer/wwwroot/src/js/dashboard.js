@@ -487,7 +487,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         hovermode: 'x',
         dragmode: 'zoom',
         autosize: true,
-        height: null,
+        height: height,
         margin: {
             autoexpand: true,
             l: 30,
@@ -498,6 +498,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         showlegend: showlegend,
         legend: {
             y: 0,
+            x: 0,
             orientation: "h",
             yanchor: "bottom",
             yref: "container"
