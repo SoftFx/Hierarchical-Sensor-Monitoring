@@ -413,12 +413,12 @@ function addResizable(interactable){
                     changesCounter += 1;
 
                 let item = $(target)
-                
+
                 var update = {
                     'width':  item.width(),
                     'height': item.height() - item.children('div').first().height()
                 };
-                
+
                 Plotly.relayout(`panelChart_${event.target.id}`, update);
             }
         },
