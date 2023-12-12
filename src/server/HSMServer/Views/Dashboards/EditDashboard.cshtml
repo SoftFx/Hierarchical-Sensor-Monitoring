@@ -147,6 +147,7 @@
         for (let i of dashboardPanels.children('div')){
             let item = $(i);
             let showlegend = item.find('.js-plotly-plot')[0].layout.showlegend;
+
             panels[i.id] = {
                 width: Number((item.width() / width).toFixed(5)),
                 height: Number((item.height() / height).toFixed(5)),
@@ -247,7 +248,12 @@
             type: 'put',
             url: window.location.pathname + `/${id}?showlegend=${showlegend}`
         }).done(function (response){
-            Plotly.relayout(`panelChart_${id}`, {showlegend: showlegend}).then(
+            let update = {
+                'showlegend': showlegend,
+                'margin.autoexpand' : showlegend
+            }
+
+            Plotly.relayout(`panelChart_${id}`, update).then(
                 (success) => {
                     toggle.text(showlegend ? "Hide legends" : "Show legends");
                     showToast(response)

@@ -8,7 +8,7 @@ namespace HSMServer.Dashboards
     internal static class PanelsLayout
     {
         private const double TotalWidthRow = 1.0 - PanelPadding; //remove right margin
-        private const double DefaultYCoef = 0.24; // coef for start point of Y coord for every row
+        private const double DefaultYCoef = 0.22; // coef for start point of Y coord for every row
         private const double PanelPadding = 0.01;
 
 

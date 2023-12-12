@@ -4,6 +4,6 @@ namespace HSMServer.Core.Model
 {
     public sealed class IntegerBarValuesStorage : BarValuesStorage<IntegerBarValue>
     {
-        internal override IntegerBarValue CalculateStatistics(IntegerBarValue value) => StatisticsCalculation.CalculateBarEma<IntegerBarValue, int>(LastDbValue, value);
+        internal override IntegerBarValue CalculateStatistics(IntegerBarValue value) => StatisticsCalculation.CalculateBarEma<IntegerBarValue, int>(GetLastBar(value), value);
     }
 }

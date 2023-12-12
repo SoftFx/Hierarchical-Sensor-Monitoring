@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Dashboards;
-using HSMServer.DTOs.SensorInfo;
 using HSMServer.Extensions;
 using System;
 using System.Collections.Generic;
@@ -30,7 +29,7 @@ public class DatasourceViewModel
 
     public List<object> Values { get; set; } = new();
 
-    public SensorInfoDto SensorInfo { get; set; }
+    public SensorInfoViewModel SensorInfo { get; set; }
 
 
     public DatasourceViewModel() { }
@@ -50,7 +49,7 @@ public class DatasourceViewModel
         Type = sensor.Type;
         Unit = sensor.OriginalUnit;
 
-        SensorInfo = new SensorInfoDto(Type, Type, Unit?.ToString());
+        SensorInfo = new SensorInfoViewModel(Type, Type, Unit?.ToString());
     }
 
 
