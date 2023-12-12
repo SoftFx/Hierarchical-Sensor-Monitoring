@@ -41,7 +41,7 @@ namespace HSMServer.Core.Confirmation
                     }
                 }
 
-                ThrowAlertResults(sensorId, [.. newAlerts.Values]);
+                SendAlertMessage(sensorId, [.. newAlerts.Values]);
             }
             catch (Exception ex)
             {
@@ -50,7 +50,7 @@ namespace HSMServer.Core.Confirmation
         }
 
 
-        internal void FlushStorage()
+        internal override void FlushMessages()
         {
             try
             {
@@ -89,7 +89,7 @@ namespace HSMServer.Core.Confirmation
                     if (sensorAlerts.IsEmpty)
                         _tree.TryRemove(sensorId, out _);
 
-                    ThrowAlertResults(sensorId, thrownAlerts);
+                    SendAlertMessage(sensorId, thrownAlerts);
                 }
             }
             catch (Exception ex)

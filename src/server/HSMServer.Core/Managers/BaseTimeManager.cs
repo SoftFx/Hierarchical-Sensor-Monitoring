@@ -10,13 +10,19 @@ namespace HSMServer.Core.Managers
         protected readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
 
-        internal event Action<Guid, List<AlertResult>> ThrowAlertResultsEvent;
+        internal event Action<AlertMessage> NewMessageEvent;
 
 
-        protected void ThrowAlertResults(Guid sensorId, List<AlertResult> alertResults)
+        internal abstract void FlushMessages();
+
+
+        protected void SendAlertMessage(AlertMessage message)
         {
-            if (alertResults.Count > 0)
-                ThrowAlertResultsEvent?.Invoke(sensorId, alertResults);
+            if (!message.IsEmpty)
+                NewMessageEvent?.Invoke(message);
         }
+
+        protected void SendAlertMessage(Guid sensorId, List<AlertResult> alerts) =>
+            SendAlertMessage(new AlertMessage(sensorId, alerts));
     }
 }

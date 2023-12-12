@@ -17,7 +17,7 @@ namespace HSMServer.Core.Managers
             var utcTime = DateTime.UtcNow;
             var (notApplyAlerts, applyAlerts) = totalAlerts.SplitByCondition(u => u.SendTime <= utcTime);
 
-            ThrowAlertResults(sensorId, notApplyAlerts);
+            SendAlertMessage(sensorId, notApplyAlerts);
 
             foreach (var alert in applyAlerts)
             {
@@ -25,10 +25,23 @@ namespace HSMServer.Core.Managers
                 var grouppedAlerts = _storage[alert.SendTime];
 
                 if (!grouppedAlerts.ContainsKey(grouppingDate))
-                    grouppedAlerts.TryAdd(grouppingDate, new ScheduleAlertMessage(alert.BuildDate));
+                    grouppedAlerts.TryAdd(grouppingDate, new ScheduleAlertMessage(sensorId, alert.BuildDate));
 
                 grouppedAlerts[grouppingDate].Alerts.Add(alert);
             }
+        }
+
+
+        internal override void FlushMessages()
+        {
+            foreach (var (sendTime, branch) in _storage)
+                if (sendTime < DateTime.UtcNow && _storage.TryRemove(sendTime, out _))
+                {
+                    foreach (var (_, message) in branch)
+                        SendAlertMessage(message);
+
+                    branch.Clear();
+                }
         }
     }
 }

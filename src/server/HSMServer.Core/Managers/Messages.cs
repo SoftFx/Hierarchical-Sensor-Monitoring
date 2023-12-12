@@ -7,9 +7,26 @@ namespace HSMServer.Core.Managers
 {
     public class AlertMessage
     {
-        public List<AlertResult> Alerts { get; }
+        public List<AlertResult> Alerts { get; } = [];
+
+        public Guid SensorId { get; }
+
 
         public Guid FolderId { get; private set; }
+
+
+        public bool IsEmpty => Alerts.Count == 0;
+
+
+        internal AlertMessage(Guid sensorId)
+        {
+            SensorId = sensorId;
+        }
+
+        internal AlertMessage(Guid sensorId, List<AlertResult> alerts) : this(sensorId)
+        {
+            Alerts = alerts;
+        }
 
 
         public AlertMessage ApplyFolder(ProductModel product)
@@ -26,9 +43,9 @@ namespace HSMServer.Core.Managers
         public DateTime MessageDate { get; }
 
 
-        public ScheduleAlertMessage() { }
+        public ScheduleAlertMessage() : base(Guid.Empty) { }
 
-        internal ScheduleAlertMessage(DateTime messageDate) 
+        internal ScheduleAlertMessage(Guid sensorId, DateTime messageDate) : base(sensorId)
         {
             MessageDate = messageDate;
         }

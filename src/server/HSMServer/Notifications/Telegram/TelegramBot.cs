@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Cache;
+using HSMServer.Core.Managers;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Folders;
 using HSMServer.ServerConfiguration;
@@ -50,7 +51,7 @@ namespace HSMServer.Notifications
             _config = config;
             _cache = cache;
 
-            _cache.ThrowAlertResultsEvent += StoreMessage;
+            _cache.NewAlertMessageEvent += StoreMessage;
 
             _updateHandler = new(_chatsManager, _cache, _folderManager, config);
         }
@@ -145,12 +146,12 @@ namespace HSMServer.Notifications
             return string.Empty;
         }
 
-        private void StoreMessage(List<AlertResult> result, Guid folderId)
+        private void StoreMessage(AlertMessage message)
         {
             try
             {
-                if (CanSendNotifications && _folderManager.TryGetValue(folderId, out var folder))
-                    foreach (var alert in result)
+                if (CanSendNotifications && _folderManager.TryGetValue(message.FolderId, out var folder))
+                    foreach (var alert in message.Alerts)
                     {
                         var chatIds = alert.Destination.AllChats ? folder.TelegramChats : alert.Destination.Chats;
 

@@ -7,6 +7,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Confirmation;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
+using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
@@ -38,7 +39,9 @@ namespace HSMServer.Core.Cache
         private readonly CGuidDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
+
         private readonly ConfirmationManager _confirmationManager = new();
+        private readonly ScheduleManager _scheduleManager = new();
 
         private readonly ITreeStateSnapshot _snapshot;
         private readonly IUpdatesQueue _updatesQueue;
@@ -49,7 +52,8 @@ namespace HSMServer.Core.Cache
         public event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
-        public event Action<List<AlertResult>, Guid> ThrowAlertResultsEvent;
+
+        public event Action<AlertMessage> NewAlertMessageEvent;
 
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue, IJournalService journalService)
@@ -61,7 +65,8 @@ namespace HSMServer.Core.Cache
             _journalService = journalService;
 
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
-            _confirmationManager.ThrowAlertResultsEvent += ThrowAlertResults;
+
+            _confirmationManager.NewMessageEvent += SendAlertMessage;
 
             Initialize();
         }
@@ -76,7 +81,7 @@ namespace HSMServer.Core.Cache
 
         public void Dispose()
         {
-            _confirmationManager.ThrowAlertResultsEvent -= ThrowAlertResults;
+            _confirmationManager.NewMessageEvent -= SendAlertMessage;
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
 
             _updatesQueue.Dispose();
@@ -481,14 +486,16 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public void ThrowAlertResults(Guid sensorId, List<AlertResult> alertResults)
+        public void SendAlertMessage(AlertMessage message)
         {
+            var sensorId = message.SensorId;
+
             if (_sensors.TryGetValue(sensorId, out var sensor) && sensor.CanSendNotifications)
             {
                 var product = GetProductByName(sensor.RootProductName);
 
                 if (product.FolderId.HasValue)
-                    ThrowAlertResultsEvent?.Invoke(alertResults, product.FolderId.Value);
+                    NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
             }
         }
 
@@ -1132,7 +1139,8 @@ namespace HSMServer.Core.Cache
 
         public void UpdateCacheState()
         {
-            _confirmationManager.FlushStorage();
+            _confirmationManager.FlushMessages();
+            _scheduleManager.FlushMessages();
 
             foreach (var sensor in GetSensors())
                 sensor.CheckTimeout();
