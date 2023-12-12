@@ -85,6 +85,12 @@ namespace HSMServer.Dashboards
         {
             if (Sources.TryRemove(sensorId, out var source))
             {
+                if (Sources.IsEmpty)
+                {
+                    MainSensorType = null;
+                    MainUnit = null;
+                }
+
                 source.Dispose();
                 ThrowUpdateEvent();
 
