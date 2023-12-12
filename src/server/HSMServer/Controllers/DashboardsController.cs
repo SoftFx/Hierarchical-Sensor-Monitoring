@@ -12,13 +12,11 @@ namespace HSMServer.Controllers
     public class DashboardsController : BaseController
     {
         private readonly IDashboardManager _dashboards;
-        private readonly TreeViewModel _treeViewModel;
 
 
-        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
+        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, TreeViewModel _) : base(userManager)
         {
             _dashboards = dashboardManager;
-            _treeViewModel = treeViewModel;
         }
 
 
