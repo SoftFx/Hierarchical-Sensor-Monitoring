@@ -60,6 +60,10 @@ This is a part of Multichart entity, which describes how to plot different senso
 * **First value** and **Last value** columns are hidden by default.
 * **EMA** columns have been added. They are visible only if **EMA statistics** setting is switched on.
 
+## Tree search
+* **Clear** button has been added.
+* **Autoupdate** by search string after 1 sec has been added.
+
 ## Other
 * Names of nodes have been added to confirmation dialog for **Multi removing** logic.
 * View for **TimeSpan zero** value has been fixed (now it is 0 seconds).
@@ -93,6 +97,9 @@ This is a part of Multichart entity, which describes how to plot different senso
 * New setting **Statistics** has been added. You can swith on server side EMA calculations.
 
 ## Alert API
+* New conditions for **EMAvalue** has been added for instant alerts.
+* New conditions for **EMAmin**, **EMAmax**, , **EMAmean**, **EMAcount** have been added for Bar alerts.
+* New conditions for **FirstValue** has been added for Bar alerts.
 
 ## Bugfixing
 * **Windows Info/Last Update** and **Windows Info/Last restart** sensors have been fixed.
