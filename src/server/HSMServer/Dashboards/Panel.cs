@@ -66,7 +66,7 @@ namespace HSMServer.Dashboards
 
         public bool TryAddSource(Guid sensorId, PanelSourceEntity entity)
         {
-            return _board.TryGetSensor(sensorId, out var sensor) ? TrySaveNewSource(new PanelDatasource(sensor, entity), out _) : false;
+            return _board.TryGetSensor(sensorId, out var sensor) && TrySaveNewSource(new PanelDatasource(sensor, entity), out _);
         }
 
         public bool TryAddSource(Guid sensorId, out PanelDatasource source, out string error)
@@ -124,6 +124,7 @@ namespace HSMServer.Dashboards
                 MainSensorType = sourceType;
                 MainUnit = sourceUnit ?? MainUnit;
 
+                source.Source.AttachSensor(source.Sensor); //enable subscription
                 source.UpdateEvent += ThrowUpdateEvent;
             }
 
