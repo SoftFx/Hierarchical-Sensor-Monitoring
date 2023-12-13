@@ -1,8 +1,6 @@
 ﻿using HSMCommon.Collections;
 using HSMCommon.Extensions;
-using HSMServer.Core.Model.Policies;
 using System;
-using System.Collections.Generic;
 
 namespace HSMServer.Core.Managers
 {
@@ -12,10 +10,12 @@ namespace HSMServer.Core.Managers
         private readonly TimeSpan _grouppingPeriod = TimeSpan.FromHours(1);
 
 
-        internal void ReceiveNewAlerts(Guid sensorId, List<AlertResult> totalAlerts)
+        internal void ProcessMessage(AlertMessage message)
         {
+            var sensorId = message.SensorId;
             var utcTime = DateTime.UtcNow;
-            var (notApplyAlerts, applyAlerts) = totalAlerts.SplitByCondition(u => u.SendTime <= utcTime);
+
+            var (notApplyAlerts, applyAlerts) = message.Alerts.SplitByCondition(u => u.SendTime <= utcTime);
 
             SendAlertMessage(sensorId, notApplyAlerts);
 
