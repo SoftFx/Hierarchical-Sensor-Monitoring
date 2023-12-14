@@ -73,7 +73,7 @@ namespace HSMDataCollector.Prototypes
             {
                 AlertsFactory.IfValue(AlertOperation.GreaterThan, TimeSpan.FromDays(90))
                              .ThenSendNotification($"[$product] $sensor. Windows hasn't been updated for $value")
-                             .AndSetSensorError().Build()
+                             .AndSetIcon(AlertIcon.Warning).Build()
             };
         }
     }

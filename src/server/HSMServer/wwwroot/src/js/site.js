@@ -101,5 +101,6 @@ window.replaceHtmlToMarkdownJquery = function (jqueryElement) {
 }
 
 window.redirectToHome = function (id){
+    window.localStorage.isDashboardRedirect = true;
     window.location.href = `/Home/${id}`;
 }

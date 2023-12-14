@@ -191,6 +191,11 @@ div.form-switch input.form-check-input:checked {
     color: grey;
 }
 
+.navbar-nav .nav-link.active, .navbar-nav .nav-link.show {
+    color: var(--bs-navbar-active-color);
+    font-weight: 500;
+}
+
 /* Wrappers
 -------------------------------------------------- */
 

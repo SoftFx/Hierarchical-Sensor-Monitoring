@@ -10,6 +10,8 @@ const AjaxPost = {
     async: true
 };
 
+var searchInterval = 1000; // 1 sec
+
 
 window.initializeTree = function () {
     initDropzone()
@@ -96,6 +98,10 @@ window.initializeTree = function () {
         if ($(this).val() === '') {
             $('#search_field').val($(this).val());
             $('#jstree').jstree(true).refresh(true);
+        }
+        else {
+            clearTimeout(refreshTreeTimeoutId);
+            refreshTreeTimeoutId = setTimeout(() => search($(this).val()), searchInterval);
         }
     });
 

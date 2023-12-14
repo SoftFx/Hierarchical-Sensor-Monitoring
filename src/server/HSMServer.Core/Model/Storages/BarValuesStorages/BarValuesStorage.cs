@@ -23,7 +23,7 @@ namespace HSMServer.Core.Model
         {
             if (!value.IsTimeout)
             {
-                var canStore = PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime;
+                var canStore = IsNewBar(value);
 
                 if (canStore)
                 {
@@ -72,5 +72,10 @@ namespace HSMServer.Core.Model
             if (PartialLastValue?.ReceivingTime <= to)
                 PartialLastValue = null;
         }
+
+
+        protected T GetLastBar(T value) => IsNewBar(value) ? LastValue : LastDbValue;
+
+        private bool IsNewBar(T value) => PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime;
     }
 }
