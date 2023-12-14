@@ -106,9 +106,9 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         plot.y = [null];
     }
 
-    plot.id = data.id;
+    plot.id = data.sensorId;
     plot.name = data.label;
-    plot.mode = 'lines';
+    plot.mode = 'lines+markers';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
 
@@ -270,6 +270,7 @@ window.initDashboard = function () {
                 
                 if (data.newVisibleValues.length > 0) {
                     let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
+
                     let correctId = 0;
 
                     for(let j of plot.data){
@@ -280,7 +281,8 @@ window.initDashboard = function () {
                     }
                     
                     let lastTime = new Date(0);
-                    if (plot.data[correctId].length > 0)
+
+                    if (plot.data[correctId] !== undefined && plot.data[correctId].length > 0)
                         lastTime = new Date(plot.data[correctId].x.at(-1));
                     
                     let x = [];
@@ -489,7 +491,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         autosize: true,
         height: height,
         margin: {
-            autoexpand: showlegend,
+            autoexpand: true,
             l: 30,
             r: 30,
             t: 30,
@@ -501,7 +503,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             x: 0,
             orientation: "h",
             yanchor: "bottom",
-            yref: "container"
+            yref: "container",
         },
         xaxis: {
             type: 'date',
