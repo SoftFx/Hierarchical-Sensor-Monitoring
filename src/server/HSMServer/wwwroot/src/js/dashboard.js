@@ -108,7 +108,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
 
     plot.id = data.sensorId;
     plot.name = data.label;
-    plot.mode = 'lines';
+    plot.mode = 'lines+markers';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
 
