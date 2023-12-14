@@ -97,9 +97,15 @@ This is a part of Multichart entity, which describes how to plot different senso
 * New setting **Statistics** has been added. You can swith on server side EMA calculations.
 
 ## Alert API
-* New conditions for **EMAvalue** has been added for instant alerts.
-* New conditions for **EMAmin**, **EMAmax**, , **EMAmean**, **EMAcount** have been added for Bar alerts.
+* New conditions for **EmaValue** has been added for instant alerts.
+* New conditions for **EmaMin**, **EmaMax**, , **EmaMean**, **EmaCount** have been added for Bar alerts.
 * New conditions for **FirstValue** has been added for Bar alerts.
 
 ## Bugfixing
 * **Windows Info/Last Update** and **Windows Info/Last restart** sensors have been fixed.
+
+# HSM Datacollector v.3.1.1
+
+* New unit types **Count**, **Requests**, **Responses** have been added.
+* New sensor setting **Statistics** have been added. Possible values are **None**, **EMA**.
+* New propertires for alert condition **FirstValue**, **EmaMin**, **EmaMax**, , **EmaMean**, **EmaCount** have been added. 
