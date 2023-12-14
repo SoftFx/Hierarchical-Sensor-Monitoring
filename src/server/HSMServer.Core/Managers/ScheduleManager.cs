@@ -6,8 +6,7 @@ namespace HSMServer.Core.Managers
 {
     internal sealed class ScheduleManager : BaseTimeManager
     {
-        private readonly CTimeDict<CTimeDict<ScheduleAlertMessage>> _storage = new();
-        private readonly TimeSpan _grouppingPeriod = TimeSpan.FromHours(1);
+        private readonly CTimeDict<CGuidDict<ScheduleAlertMessage>> _storage = new();
 
 
         internal void ProcessMessage(AlertMessage message)
@@ -21,13 +20,12 @@ namespace HSMServer.Core.Managers
 
             foreach (var alert in applyAlerts)
             {
-                var grouppingDate = alert.BuildDate.Floor(_grouppingPeriod);
                 var grouppedAlerts = _storage[alert.SendTime];
 
-                if (!grouppedAlerts.ContainsKey(grouppingDate))
-                    grouppedAlerts.TryAdd(grouppingDate, new ScheduleAlertMessage(sensorId, alert.BuildDate));
+                if (!grouppedAlerts.ContainsKey(sensorId))
+                    grouppedAlerts.TryAdd(sensorId, new ScheduleAlertMessage(sensorId));
 
-                grouppedAlerts[grouppingDate].Alerts.Add(alert);
+                grouppedAlerts[sensorId].Alerts.Add(alert);
             }
         }
 

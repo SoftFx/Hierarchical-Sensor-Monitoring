@@ -40,14 +40,8 @@ namespace HSMServer.Core.Managers
 
     public class ScheduleAlertMessage : AlertMessage
     {
-        public DateTime MessageDate { get; }
-
-
         public ScheduleAlertMessage() : base(Guid.Empty) { }
 
-        internal ScheduleAlertMessage(Guid sensorId, DateTime messageDate) : base(sensorId)
-        {
-            MessageDate = messageDate;
-        }
+        internal ScheduleAlertMessage(Guid sensorId) : base(sensorId) { }
     }
 }

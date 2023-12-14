@@ -1,10 +1,9 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Managers;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Folders;
+using HSMServer.Notifications.Telegram.AddressBook;
 using HSMServer.ServerConfiguration;
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
@@ -158,10 +157,12 @@ namespace HSMServer.Notifications
                         foreach (var chatId in chatIds)
                             if (_chatsManager.TryGetValue(chatId, out var chat) && chat.SendMessages)
                             {
+                                IMessageBuilder builder = message is ScheduleAlertMessage ? chat.ScheduleMessageBuilder : chat.MessageBuilder;
+
                                 if (chat.MessagesAggregationTimeSec == 0)
                                     SendMessage(chat.ChatId, alert.ToString());
                                 else
-                                    chat.MessageBuilder.AddMessage(alert);
+                                    builder.AddMessage(alert);
                             }
                     }
             }
@@ -181,16 +182,15 @@ namespace HSMServer.Notifications
                     {
                         try
                         {
-                            var messagesDelay = chat.MessagesAggregationTimeSec;
-
-                            if (messagesDelay > 0 && chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
+                            if (chat.ShouldSendNotification)
                             {
-                                var message = chat.MessageBuilder.GetAggregateMessage(messagesDelay);
-
-                                if (_tokenSource.IsCancellationRequested)
-                                    break;
-
-                                SendMessage(chat.ChatId, message);
+                                foreach (var notification in chat.GetNotifications())
+                                {
+                                    if (_tokenSource.IsCancellationRequested)
+                                        break;
+                                    else
+                                        SendMessage(chat.ChatId, notification);
+                                }
                             }
                         }
                         catch (Exception ex)

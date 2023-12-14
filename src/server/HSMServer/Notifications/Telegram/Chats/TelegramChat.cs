@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Extensions;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Notifications.Telegram.AddressBook;
 using System;
@@ -23,8 +24,13 @@ namespace HSMServer.Notifications
         private const bool DefaultSendMessages = true;
         private const int DefaultMessagesAggregationTimeSec = 60;
 
+        private DateTime _nextSendMessageTime;
 
-        internal HashSet<Guid> Folders { get; } = new();
+
+        internal HashSet<Guid> Folders { get; } = [];
+
+
+        internal ScheduleBuilder ScheduleMessageBuilder { get; } = new();
 
         internal MessageBuilder MessageBuilder { get; } = new();
 
@@ -36,12 +42,15 @@ namespace HSMServer.Notifications
         public DateTime AuthorizationTime { get; init; }
 
 
-        public bool SendMessages { get; private set; }
-
         public int MessagesAggregationTimeSec { get; private set; }
+
+        public bool SendMessages { get; private set; }
 
 
         public string Author { get; set; }
+
+
+        public bool ShouldSendNotification => MessagesAggregationTimeSec > 0 && _nextSendMessageTime <= DateTime.UtcNow;
 
 
         public TelegramChat() : base()
@@ -78,6 +87,15 @@ namespace HSMServer.Notifications
             entity.MessagesAggregationTimeSec = MessagesAggregationTimeSec;
 
             return entity;
+        }
+
+
+        internal IEnumerable<string> GetNotifications()
+        {
+            yield return MessageBuilder.GetAggregateMessage();
+            yield return ScheduleMessageBuilder.GetReport();
+
+            _nextSendMessageTime = DateTime.UtcNow.Ceil(TimeSpan.FromSeconds(MessagesAggregationTimeSec));
         }
     }
 }

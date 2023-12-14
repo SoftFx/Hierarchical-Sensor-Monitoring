@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Collections;
-using HSMCommon.Extensions;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Concurrent;
@@ -7,15 +6,19 @@ using System.Text;
 
 namespace HSMServer.Notifications.Telegram.AddressBook
 {
-    internal sealed class MessageBuilder
+    internal interface IMessageBuilder
+    {
+        void AddMessage(AlertResult alert);
+    }
+
+
+    internal sealed class MessageBuilder : IMessageBuilder
     {
         private readonly CDict<CDict<ConcurrentDictionary<Guid, AlertResult>>> _alertsTree = new(); //template -> policyId -> Message as string -> AlertResult
         private readonly AlertsGrouper _grouper = new();
 
-        internal DateTime ExpectedSendingTime { get; private set; } = DateTime.UtcNow;
 
-
-        internal void AddMessage(AlertResult alert)
+        public void AddMessage(AlertResult alert)
         {
             var mapComment = alert.IsStatusIsChangeResult ? string.Empty : alert.LastComment;
             var branch = _alertsTree[alert.Template][mapComment];
@@ -26,7 +29,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook
                 branch.TryAdd(alert.PolicyId, alert with { });
         }
 
-        internal string GetAggregateMessage(int delay)
+        internal string GetAggregateMessage()
         {
             foreach (var (_, sensorAlerts) in _alertsTree)
             {
@@ -47,8 +50,6 @@ namespace HSMServer.Notifications.Telegram.AddressBook
 
             foreach (var line in _grouper.GetGroups())
                 builder.AppendLine(line);
-
-            ExpectedSendingTime = DateTime.UtcNow.Ceil(TimeSpan.FromSeconds(delay));
 
             return builder.ToString();
         }
