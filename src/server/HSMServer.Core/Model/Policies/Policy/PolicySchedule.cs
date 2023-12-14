@@ -23,6 +23,12 @@ namespace HSMServer.Core.Model.Policies
 
         internal PolicySchedule() { }
 
+        public PolicySchedule(DateTime? time, AlertRepeateMode alertRepeatMode)
+        {
+            Time = time ?? DateTime.MinValue;
+            RepeateMode = alertRepeatMode;
+        }
+
         internal PolicySchedule(PolicyScheduleEntity entity)
         {
             if (entity is null)

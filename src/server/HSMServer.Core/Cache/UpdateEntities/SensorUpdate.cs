@@ -38,6 +38,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public List<PolicyConditionUpdate> Conditions { get; init; }
 
         public PolicyDestinationUpdate Destination { get; init; }
+        
+        public PolicySchedule Schedule { get; init; }
 
         public long? ConfirmationPeriod { get; init; }
 

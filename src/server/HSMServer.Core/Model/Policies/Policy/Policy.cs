@@ -118,6 +118,7 @@ namespace HSMServer.Core.Model.Policies
 
                 Destination.Update(update.Destination);
                 ConfirmationPeriod = update.ConfirmationPeriod;
+                Schedule = update.Schedule;
                 IsDisabled = update.IsDisabled;
                 Template = update.Template;
                 Status = update.Status;
