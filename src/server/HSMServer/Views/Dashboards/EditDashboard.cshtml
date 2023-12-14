@@ -248,20 +248,39 @@
             type: 'put',
             url: window.location.pathname + `/${id}?showlegend=${showlegend}`
         }).done(function (response){
-            let update = {
-                'showlegend': showlegend,
-                'margin.autoexpand' : showlegend
-            }
+            let plotId = `panelChart_${id}`;
 
-            Plotly.relayout(`panelChart_${id}`, update).then(
-                (success) => {
-                    toggle.text(showlegend ? "Hide legends" : "Show legends");
-                    showToast(response)
-                },
-                (error) => {
-                    showToast(error)
-                }
-            );
+            if (showlegend)
+            {
+                Plotly.relayout(plotId, {
+                    'legend.yref': "container",
+                    'showlegend': showlegend,
+                }).then(
+                    (success) => {
+                        toggle.text(showlegend ? "Hide legends" : "Show legends");
+                        showToast(response)
+                    },
+                    (error) => {
+                        showToast(error)
+                    }
+                );
+            }
+            else 
+            {
+                Plotly.relayout(plotId, {
+                    'legend.yref': "paper",
+                    'showlegend': true,
+                }).then(
+                    (success) => {
+                        Plotly.relayout(plotId, {'showlegend' : showlegend})
+                        toggle.text(showlegend ? "Hide legends" : "Show legends");
+                        showToast(response)
+                    },
+                    (error) => {
+                        showToast(error)
+                    }
+                );
+            }
         }).fail(function (response){
             showToast(response.responseText)
         })
