@@ -257,7 +257,7 @@
                     'showlegend': showlegend,
                 }).then(
                     (success) => {
-                        toggle.text(showlegend ? "Hide legends" : "Show legends");
+                        toggle.text("Hide legends");
                         showToast(response)
                     },
                     (error) => {
@@ -273,7 +273,7 @@
                 }).then(
                     (success) => {
                         Plotly.relayout(plotId, {'showlegend' : showlegend})
-                        toggle.text(showlegend ? "Hide legends" : "Show legends");
+                        toggle.text("Show legends");
                         showToast(response)
                     },
                     (error) => {
