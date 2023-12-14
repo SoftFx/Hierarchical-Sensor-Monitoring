@@ -1,12 +1,11 @@
 ﻿using HSMCommon.Collections;
 using HSMCommon.Extensions;
 using HSMServer.Core.Model.Policies;
-using HSMServer.Notifications.Telegram.AddressBook.MessageBuilder;
 using System;
 using System.Collections.Concurrent;
 using System.Text;
 
-namespace HSMServer.Notifications
+namespace HSMServer.Notifications.Telegram.AddressBook
 {
     internal sealed class MessageBuilder
     {
