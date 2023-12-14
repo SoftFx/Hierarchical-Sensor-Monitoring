@@ -139,6 +139,10 @@ export class Plot {
         }
 
         let customValue = Number(compareFunc === null ? value[customField] : compareFunc(value));
+        
+        if (Number.POSITIVE_INFINITY === customValue)
+            customValue = Number.MAX_VALUE;
+        
         if (Plot.checkError(value)) {
             this.customdata.push(customValue + '<br>' + value.comment);
             return;
@@ -150,7 +154,7 @@ export class Plot {
             return;
         }
         
-        this.customdata.push(customValue);
+        this.customdata.push(`${customValue}`);
     }
 
     markerColorCompareFunc(value) {
@@ -229,6 +233,28 @@ export class BoolPlot extends Plot {
 
         this.hovertemplate = "%{x}, %{customdata}<extra></extra>";
     }
+    
+    addCustomData(value, compareFunc = null, customField = 'value') {
+        if (Plot.checkTtl(value)) {
+            this.customdata.push(value.comment);
+            return;
+        }
+
+        let customValue = compareFunc === null ? value[customField] : compareFunc(value);
+
+        if (Plot.checkError(value)) {
+            this.customdata.push(customValue + '<br>' + value.comment);
+            return;
+        }
+
+        if (value.tooltip !== undefined && value.tooltip !== null)
+        {
+            this.customdata.push(customValue + '<br>' + value.tooltip);
+            return;
+        }
+
+        this.customdata.push(customValue);
+    }
 
     customDataCompareFunc(value) {
         return value.value === true;
@@ -287,7 +313,7 @@ export class IntegerPlot extends ErrorColorPlot {
             if (Plot.checkNaN(i.value))
                 this.y.push(0)
             else
-                this.y.push(i.value)
+                this.y.push(Number(i.value) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i.value))
             this.addCustomData(i);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
@@ -321,7 +347,7 @@ export class DoublePlot extends ErrorColorPlot {
             if (Plot.checkNaN(i[customField]))
                 this.y.push(0)
             else
-                this.y.push(i[customField])
+                this.y.push(Number(i[customField]) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i[customField]))
 
             this.addCustomData(i, checkNotCompressedCount, customField);
             this.marker.size.push(this.getMarkerSize(i));
