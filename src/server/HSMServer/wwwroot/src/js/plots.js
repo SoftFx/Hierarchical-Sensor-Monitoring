@@ -138,8 +138,10 @@ export class Plot {
             return;
         }
 
-        let customValue = Number(compareFunc === null ? value[customField] : compareFunc(value));
-        
+        let val = compareFunc === null ? value[customField] : compareFunc(value);
+
+        let customValue = Plot.checkNaN(`${Number(val)}`) ? val : Number(val);
+
         if (Number.POSITIVE_INFINITY === customValue)
             customValue = Number.MAX_VALUE;
         
