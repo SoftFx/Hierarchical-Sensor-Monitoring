@@ -138,7 +138,7 @@ export class Plot {
             return;
         }
 
-        let customValue = compareFunc === null ? value[customField].toFixed(5) : compareFunc(value);
+        let customValue = Number(compareFunc === null ? value[customField] : compareFunc(value));
         if (Plot.checkError(value)) {
             this.customdata.push(customValue + '<br>' + value.comment);
             return;
@@ -334,12 +334,12 @@ export class DoublePlot extends ErrorColorPlot {
 
         function checkNotCompressedCount(value) {
             if (customField === 'count' && value.isCompressed === undefined)
-                return `${name}=${value[customField].toFixed(5)} (aggregated value)`;
+                return `${name}=${value[customField]} (aggregated value)`;
 
             if (customField === 'min' || customField === 'max' || customField === 'mean' || customField === 'count')
-                return `${name}=${value[customField].toFixed(5)}`;
+                return `${name}=${value[customField]}`;
 
-            return value[customField].toFixed(5);
+            return value[customField];
         }
     }
 }

@@ -4,6 +4,8 @@ using HSMServer.Dashboards;
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace HSMServer.Model.Dashboards;
@@ -53,5 +55,18 @@ public sealed class PanelViewModel
         await Task.WhenAll(Sources.Values.Select(t => t.LoadDataFrom(from)));
 
         return this;
+    }
+}
+
+public class DoubleConverter : JsonConverter<double>
+{
+    public override double Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return reader.GetDouble();
+    }
+
+    public override void Write(Utf8JsonWriter writer, double value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value.ToString("0.#####"));
     }
 }
