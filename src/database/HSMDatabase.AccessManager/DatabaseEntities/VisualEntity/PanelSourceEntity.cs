@@ -9,7 +9,8 @@
 
         public string Color { get; init; }
 
-
         public string Label { get; init; }
+
+        public byte Property { get; init; }
     }
 }

@@ -124,7 +124,7 @@ namespace HSMServer.Dashboards
                 MainSensorType = sourceType;
                 MainUnit = sourceUnit ?? MainUnit;
 
-                source.Source.AttachSensor(source.Sensor); //enable subscription
+                source.BuildSource();
                 source.UpdateEvent += ThrowUpdateEvent;
             }
 

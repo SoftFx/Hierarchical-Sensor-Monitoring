@@ -11,7 +11,6 @@ namespace HSMServer.Datasources
         protected override ChartType NormalType => ChartType.Line;
 
 
-
         protected override BaseChartValue Convert(BaseValue rawValue) =>
             rawValue is BaseValue<T> value ? new LineChartValue<T>(value) : null;
     }
@@ -27,6 +26,7 @@ namespace HSMServer.Datasources
         protected override BaseChartValue Convert(BaseValue baseValue) =>
             baseValue is TimeSpanValue time ? new TimeSpanChartValue(time) : null;
     }
+
 
     public sealed class PointDatasource : SensorDatasourceBase
     {
