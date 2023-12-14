@@ -4,6 +4,7 @@ using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -33,11 +34,16 @@ namespace HSMServer.Core.Model
         MB = 3,
         GB = 4,
 
+        [Display(Name = "%")]
         Percents = 100,
 
+        [Display(Name = "ticks")]
         Ticks = 1000,
+        [Display(Name = "ms")]
         Milliseconds = 1010,
+        [Display(Name = "sec")]
         Seconds = 1011,
+        [Display(Name = "min")]
         Minutes = 1012,
 
         Count = 1100,

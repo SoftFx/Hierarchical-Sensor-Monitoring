@@ -34,10 +34,10 @@ export function getPlotSourceView(id) {
             type: 'GET',
             url: `${window.location.pathname}/${id}`
         }).done(function (data) {
-            if (data.errorMessage === undefined)
+            if (data.error === undefined)
                 return resolve(data);
             else
-                return reject(data.errorMessage)
+                return reject(data.error)
         }).fail(function (data){
             reject(data.responseText)
         })
@@ -74,7 +74,7 @@ window.insertSourceHtml = function (data) {
                                             </div>
                                         </div>
                                         <div class="d-flex justify-content-center">
-                                             <button id=${'deletePlot_' + data.id} class="btn" type="button" style="color: red">
+                                             <button id=${'deletePlot_' + data.sensorId} class="btn" type="button" style="color: red">
                                                 <i class="fa-solid fa-xmark"></i>
                                              </button>
                                         </div>
@@ -106,9 +106,9 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         plot.y = [null];
     }
 
-    plot.id = data.id;
+    plot.id = data.sensorId;
     plot.name = data.label;
-    plot.mode = 'lines';
+    plot.mode = 'lines+markers';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
 
@@ -163,7 +163,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         }
     );
 
-    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
+    currentPanel[data.sensorId] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
 }
 
 window.addNewSourceHtml = function (data, id){
@@ -270,6 +270,7 @@ window.initDashboard = function () {
                 
                 if (data.newVisibleValues.length > 0) {
                     let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
+
                     let correctId = 0;
 
                     for(let j of plot.data){
@@ -279,7 +280,11 @@ window.initDashboard = function () {
                         correctId += 1;
                     }
                     
-                    let lastTime = new Date(plot.data[correctId].x.at(-1));
+                    let lastTime = new Date(0);
+
+                    if (plot.data[correctId] !== undefined && plot.data[correctId].length > 0)
+                        lastTime = new Date(plot.data[correctId].x.at(-1));
+                    
                     let x = [];
                     let y = [];
                     let customData = []
@@ -394,8 +399,7 @@ function addResizable(interactable){
                 var target = event.target
                 var x = (parseFloat(target.getAttribute('data-x')) || 0)
                 var y = (parseFloat(target.getAttribute('data-y')) || 0)
-                
-                console.log(event)
+
                 target.style.width = event.rect.width + 'px'
                 target.style.height = event.rect.height + 'px'
 
@@ -410,10 +414,11 @@ function addResizable(interactable){
                 if (changesCounter === 0)
                     changesCounter += 1;
 
+                let item = $(target)
 
                 var update = {
-                    width: event.rect.width,
-                    height: event.rect.height
+                    'width':  item.width(),
+                    'height': item.height() - item.children('div').first().height()
                 };
 
                 Plotly.relayout(`panelChart_${event.target.id}`, update);
@@ -458,7 +463,7 @@ window.initMultyichartCordinates = function(settings, values, id){
     return new Promise(function(resolve, reject){
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
-        let height = dashboardPanels.height() > 1400 ? 1400 : dashboardPanels.height();
+        let height = 1400;
 
         let currWidth = Number((settings.width * width).toFixed(5))
         let currHeight = Number((settings.height * height).toFixed(5))
@@ -495,9 +500,10 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         showlegend: showlegend,
         legend: {
             y: 0,
+            x: 0,
             orientation: "h",
             yanchor: "bottom",
-            yref: "container"
+            yref: "container",
         },
         xaxis: {
             type: 'date',

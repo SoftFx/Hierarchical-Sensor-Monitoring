@@ -33,7 +33,7 @@ namespace HSMServer.Dashboards
             Label = sensor.DisplayName;
             SensorId = sensor.Id;
 
-            Source = DatasourceFactory.Build(sensor.Type).AttachSensor(sensor);
+            Source = DatasourceFactory.Build(sensor.Type);
             Color = Color.FromName(ColorExtensions.GenerateRandomColor());
             Id = Guid.NewGuid();
         }
