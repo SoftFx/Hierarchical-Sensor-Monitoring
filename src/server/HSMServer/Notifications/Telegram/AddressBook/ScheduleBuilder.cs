@@ -36,7 +36,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook
                     sb.AppendLine(curDate.ToString(DayTempalte));
                 }
 
-                sb.AppendLine($"{time.Hour}:{time.Minute}-{time.Hour + 1}:{time.Minute}");
+                sb.AppendLine($"{time.Hour}:{time.Minute}-{time.Hour + 1}:{time.Minute} (UTC)");
                 sb.AppendLine(part.GetAggregateMessage());
             }
 

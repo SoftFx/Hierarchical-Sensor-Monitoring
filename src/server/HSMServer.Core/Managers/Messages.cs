@@ -38,7 +38,7 @@ namespace HSMServer.Core.Managers
     }
 
 
-    public class ScheduleAlertMessage : AlertMessage
+    public sealed class ScheduleAlertMessage : AlertMessage
     {
         public ScheduleAlertMessage() : base(Guid.Empty) { }
 
