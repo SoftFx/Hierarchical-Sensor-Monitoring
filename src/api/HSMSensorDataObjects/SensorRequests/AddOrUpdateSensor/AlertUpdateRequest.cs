@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HSMSensorDataObjects.SensorRequests
 {
@@ -82,6 +83,11 @@ namespace HSMSensorDataObjects.SensorRequests
         public long? ConfirmationPeriod { get; set; }
 
         public bool IsDisabled { get; set; }
+        
+        
+        public DateTime? ScheduledNotificationTime { get; set; }
+        
+        public byte ScheduledRepeatMode { get; set; }
     }
 
 

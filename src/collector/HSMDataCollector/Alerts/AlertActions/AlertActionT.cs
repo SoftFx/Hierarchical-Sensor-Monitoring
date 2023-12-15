@@ -19,6 +19,15 @@ namespace HSMDataCollector.Alerts
         Hourglass = 101,
     }
 
+    public enum AlertRepeatMode : byte
+    {
+        None = 0,
+
+        Hourly = 20,
+        Dayly = 50,
+        Weekly = 100,
+    }
+
 
     public class AlertAction<T> where T : AlertBaseTemplate, new()
     {
@@ -27,6 +36,10 @@ namespace HSMDataCollector.Alerts
 
         public TimeSpan? ConfirmationPeriod { get; }
 
+
+        public DateTime? ScheduledNotificationTime { get; private set; }
+        
+        public AlertRepeatMode ScheduledRepeatMode { get; private set; }
 
         public SensorStatus Status { get; private set; } = SensorStatus.Ok;
 
@@ -74,6 +87,20 @@ namespace HSMDataCollector.Alerts
             return this;
         }
 
+        public AlertAction<T> ScheduleNotificationTime(DateTime? time)
+        {
+            ScheduledNotificationTime = time;
+            
+            return this;
+        }
+        
+        public AlertAction<T> ScheduleRepeatMode(AlertRepeatMode repeatMode)
+        {
+            ScheduledRepeatMode = repeatMode;
+            
+            return this;
+        }
+
         public T BuildAndDisable()
         {
             IsDisabled = true;
@@ -89,6 +116,9 @@ namespace HSMDataCollector.Alerts
             Template = Template,
             Status = Status,
             Icon = Icon,
+
+            ScheduledRepeatMode = ScheduledRepeatMode,
+            ScheduledNotificationTime = ScheduledNotificationTime,
 
             IsDisabled = IsDisabled
         };

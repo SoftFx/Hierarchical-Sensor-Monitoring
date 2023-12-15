@@ -24,6 +24,10 @@ namespace HSMDataCollector.Alerts
 
 
         public TimeSpan? ConfirmationPeriod { get; set; }
+        
+        public DateTime? ScheduledNotificationTime { get; set; }
+        
+        public AlertRepeatMode ScheduledRepeatMode { get; set; }
 
         public string Template { get; set; }
 
