@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using HSMServer.Core.Cache.UpdateEntities;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -18,16 +19,10 @@ namespace HSMServer.Core.Model.Policies
     {
         public DateTime Time { get; private set; }
 
-        public AlertRepeateMode RepeateMode { get; private set; }
+        public AlertRepeateMode RepeatMode { get; private set; }
 
 
         internal PolicySchedule() { }
-
-        public PolicySchedule(DateTime? time, AlertRepeateMode alertRepeatMode)
-        {
-            Time = time ?? DateTime.MinValue;
-            RepeateMode = alertRepeatMode;
-        }
 
         internal PolicySchedule(PolicyScheduleEntity entity)
         {
@@ -35,16 +30,26 @@ namespace HSMServer.Core.Model.Policies
                 return;
 
             Time = new DateTime(entity.TimeTicks);
-            RepeateMode = (AlertRepeateMode)entity.RepeateMode;
+            RepeatMode = (AlertRepeateMode)entity.RepeateMode;
+        }
+
+
+        internal void Update(PolicyScheduleUpdate update)
+        {
+            if (update is null)
+                return;
+
+            Time = update.Time ?? DateTime.MinValue;
+            RepeatMode = update.RepeatMode;
         }
 
 
         internal DateTime GetSendTime()
         {
-            if (RepeateMode == AlertRepeateMode.None)
+            if (RepeatMode == AlertRepeateMode.None)
                 return Time;
 
-            var shiftTime = RepeateMode switch
+            var shiftTime = RepeatMode switch
             {
                 AlertRepeateMode.Hourly => TimeSpan.FromHours(1),
                 AlertRepeateMode.Dayly => TimeSpan.FromDays(1),
@@ -58,7 +63,7 @@ namespace HSMServer.Core.Model.Policies
             new()
             {
                 TimeTicks = Time.Ticks,
-                RepeateMode = (byte)RepeateMode,
+                RepeateMode = (byte)RepeatMode,
             };
     }
 }
