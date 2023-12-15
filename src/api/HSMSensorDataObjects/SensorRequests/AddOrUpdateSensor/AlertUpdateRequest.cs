@@ -3,6 +3,15 @@ using System.Collections.Generic;
 
 namespace HSMSensorDataObjects.SensorRequests
 {
+    public enum AlertRepeatMode : byte
+    {
+        None = 0,
+
+        Hourly = 20,
+        Dayly = 50,
+        Weekly = 100,
+    }
+
     public enum AlertOperation : byte
     {
         LessThanOrEqual = 0,

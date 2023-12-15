@@ -5,6 +5,8 @@ using HSMServer.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMSensorDataObjects.SensorRequests;
+using TargetType = HSMServer.Core.Model.Policies.TargetType;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -26,7 +28,7 @@ namespace HSMServer.Model.DataAlerts
         
         public DateTime? ScheduledNotificationTime { get; set; }
         
-        public AlertRepeateMode ScheduledRepeatMode { get; set; }
+        public AlertRepeatMode ScheduledRepeatMode { get; set; }
 
         public List<string> Chats { get; set; }
 

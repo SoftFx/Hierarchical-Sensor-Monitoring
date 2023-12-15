@@ -3,6 +3,7 @@ using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
+using AlertRepeatMode = HSMSensorDataObjects.SensorRequests.AlertRepeatMode;
 
 namespace HSMServer.Core.Cache.UpdateEntities
 {
@@ -89,5 +90,5 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
     public sealed record PolicyScheduleUpdate(
         DateTime? Time, 
-        AlertRepeateMode RepeatMode);
+        AlertRepeatMode RepeatMode);
 }

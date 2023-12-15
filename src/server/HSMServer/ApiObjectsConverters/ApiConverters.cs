@@ -255,6 +255,8 @@ namespace HSMServer.ApiObjectsConverters
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
             Destination = new(),
 
+            Schedule = new PolicyScheduleUpdate(request.ScheduledNotificationTime, (AlertRepeatMode)request.ScheduledRepeatMode),
+            
             Id = Guid.Empty,
             Status = request.Status.Convert(),
             Template = request.Template,

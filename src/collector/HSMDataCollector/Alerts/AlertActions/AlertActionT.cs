@@ -2,6 +2,7 @@
 using HSMSensorDataObjects;
 using System;
 using System.Collections.Generic;
+using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMDataCollector.Alerts
 {
@@ -17,15 +18,6 @@ namespace HSMDataCollector.Alerts
 
         Clock = 100,
         Hourglass = 101,
-    }
-
-    public enum AlertRepeatMode : byte
-    {
-        None = 0,
-
-        Hourly = 20,
-        Dayly = 50,
-        Weekly = 100,
     }
 
 

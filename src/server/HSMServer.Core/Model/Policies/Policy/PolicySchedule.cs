@@ -1,25 +1,16 @@
 ﻿using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using HSMSensorDataObjects.SensorRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public enum AlertRepeateMode : byte
-    {
-        None = 0,
-
-        Hourly = 20,
-        Dayly = 50,
-        Weekly = 100,
-    }
-
-
     public sealed class PolicySchedule
     {
         public DateTime Time { get; private set; }
 
-        public AlertRepeateMode RepeatMode { get; private set; }
+        public AlertRepeatMode RepeatMode { get; private set; }
 
 
         internal PolicySchedule() { }
@@ -30,7 +21,7 @@ namespace HSMServer.Core.Model.Policies
                 return;
 
             Time = new DateTime(entity.TimeTicks);
-            RepeatMode = (AlertRepeateMode)entity.RepeateMode;
+            RepeatMode = (AlertRepeatMode)entity.RepeateMode;
         }
 
 
@@ -46,14 +37,14 @@ namespace HSMServer.Core.Model.Policies
 
         internal DateTime GetSendTime()
         {
-            if (RepeatMode == AlertRepeateMode.None)
+            if (RepeatMode == AlertRepeatMode.None)
                 return Time;
 
             var shiftTime = RepeatMode switch
             {
-                AlertRepeateMode.Hourly => TimeSpan.FromHours(1),
-                AlertRepeateMode.Dayly => TimeSpan.FromDays(1),
-                AlertRepeateMode.Weekly => TimeSpan.FromDays(7),
+                AlertRepeatMode.Hourly => TimeSpan.FromHours(1),
+                AlertRepeatMode.Dayly => TimeSpan.FromDays(1),
+                AlertRepeatMode.Weekly => TimeSpan.FromDays(7),
             };
 
             return Time.Ceil(shiftTime);
