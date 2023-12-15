@@ -24,9 +24,9 @@ namespace HSMServer.Model.DataAlerts
 
         public TimeSpan? ConfirmationPeriod { get; set; }
         
-        public DateTime? Time { get; set; }
+        public DateTime? ScheduledNotificationTime { get; set; }
         
-        public AlertRepeateMode AlertRepeat { get; set; }
+        public AlertRepeateMode ScheduledRepeatMode { get; set; }
 
         public List<string> Chats { get; set; }
 
@@ -50,8 +50,8 @@ namespace HSMServer.Model.DataAlerts
             Template = policy.Template;
             ConfirmationPeriod = policy.ConfirmationPeriod.HasValue ? new TimeSpan(policy.ConfirmationPeriod.Value) : null;
             IsDisabled = policy.IsDisabled;
-            Time = policy.Schedule.Time == DateTime.MinValue ? null : policy.Schedule.Time;
-            AlertRepeat = policy.Schedule.RepeatMode;
+            ScheduledNotificationTime = policy.Schedule.Time == DateTime.MinValue ? null : policy.Schedule.Time;
+            ScheduledRepeatMode = policy.Schedule.RepeatMode;
 
             if (!policy.Destination.AllChats)
             {
@@ -74,7 +74,7 @@ namespace HSMServer.Model.DataAlerts
                 Template = Template,
                 IsDisabled = IsDisabled,
                 ConfirmationPeriod = ConfirmationPeriod?.Ticks,
-                Schedule = new PolicyScheduleUpdate(Time, AlertRepeat),
+                Schedule = new PolicyScheduleUpdate(ScheduledNotificationTime, ScheduledRepeatMode),
                 Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
                 Destination = Chats is null
                     ? new PolicyDestinationUpdate(allChats: true)
