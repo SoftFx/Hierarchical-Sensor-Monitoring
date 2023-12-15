@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Dashboards;
+using HSMServer.Datasources;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
@@ -20,8 +21,8 @@ public class DatasourceViewModel
     private readonly List<PlottedProperty> _barSensorProperties =
     [
         PlottedProperty.Min,
-        PlottedProperty.Max,
         PlottedProperty.Mean,
+        PlottedProperty.Max,
         PlottedProperty.Count
     ];
 
@@ -71,6 +72,11 @@ public class DatasourceViewModel
 
         AvailableProperties = GetAvailableProperties(sensor);
         Property = source.Property;
+    }
+
+    public DatasourceViewModel(InitChartSourceResponse chartResponse, PanelDatasource source) : this(source)
+    {
+        Values = chartResponse.Values;
     }
 
 
