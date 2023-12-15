@@ -1,30 +1,28 @@
 ﻿using HSMServer.Core.Model;
 using System;
-using System.Numerics;
 
 namespace HSMServer.Datasources
 {
-    public sealed class LineDatasource<T> : SensorDatasourceBase where T : INumber<T>
-    {
-        protected override ChartType AggregatedType => ChartType.Line;
-
-        protected override ChartType NormalType => ChartType.Line;
-
-
-        protected override BaseChartValue Convert(BaseValue rawValue) =>
-            rawValue is BaseValue<T> value ? new LineChartValue<T>(value) : null;
-    }
-
-
-    public sealed class TimespanDatasource : SensorDatasourceBase
+    public sealed class TimespanDatasource : BaseLineDatasource<TimeSpanValue, TimeSpan, long>
     {
         protected override ChartType AggregatedType { get; } = ChartType.Line;
 
         protected override ChartType NormalType { get; } = ChartType.Line;
 
+        //protected override void AddVisibleValue(BaseValue baseValue)
+        //{
+        //    throw new NotImplementedException();
+        //}
 
-        protected override BaseChartValue Convert(BaseValue baseValue) =>
-            baseValue is TimeSpanValue time ? new TimeSpanChartValue(time) : null;
+        //protected override void ApplyToLast(BaseValue newValue)
+        //{
+        //    throw new NotImplementedException();
+        //}
+
+        protected override long GetTargetValue(TimeSpanValue value) => value.Value.Ticks;
+
+        //protected override BaseChartValue Convert(BaseValue baseValue) =>
+        //    baseValue is TimeSpanValue time ? new TimeSpanChartValue(time) : null;
     }
 
 
@@ -35,7 +33,12 @@ namespace HSMServer.Datasources
         protected override ChartType NormalType => ChartType.Points;
 
 
-        protected override BaseChartValue Convert(BaseValue baseValue)
+        protected override void AddVisibleValue(BaseValue baseValue)
+        {
+            throw new NotImplementedException();
+        }
+
+        protected override void ApplyToLast(BaseValue newValue)
         {
             throw new NotImplementedException();
         }
@@ -49,7 +52,12 @@ namespace HSMServer.Datasources
         protected override ChartType NormalType => ChartType.Bars;
 
 
-        protected override BaseChartValue Convert(BaseValue baseValue)
+        protected override void AddVisibleValue(BaseValue baseValue)
+        {
+            throw new NotImplementedException();
+        }
+
+        protected override void ApplyToLast(BaseValue newValue)
         {
             throw new NotImplementedException();
         }

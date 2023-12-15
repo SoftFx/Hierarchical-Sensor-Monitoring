@@ -11,19 +11,19 @@ namespace HSMServer.Datasources
         {
             SensorDatasourceBase source = sensor.Type switch
             {
-                SensorType.Integer when property.IsInstantView() => new LineDatasource<int>(),
+                SensorType.Integer when property.IsInstantView() => new IntLineDatasource<int>(),
 
-                SensorType.Double when property.IsInstantView() => new LineDatasource<double>(),
+                SensorType.Double when property.IsInstantView() => new DoubleLineDatasource<double>(),
 
                 SensorType.TimeSpan when property.IsInstantView() => new TimespanDatasource(),
 
                 SensorType.IntegerBar when property.IsBarView() => new BarsDatasource(),
-                SensorType.IntegerBar when property.IsBarLine() => new LineDatasource<int>(),
-                SensorType.IntegerBar when property.IsBarIntLine() => new LineDatasource<int>(),
+                SensorType.IntegerBar when property.IsBarLine() => new IntBarLineDatasource<int>(),
+                SensorType.IntegerBar when property.IsBarIntLine() => new IntBarLineDatasource<int>(),
 
                 SensorType.DoubleBar when property.IsBarView() => new BarsDatasource(),
-                SensorType.DoubleBar when property.IsBarLine() => new LineDatasource<double>(),
-                SensorType.DoubleBar when property.IsBarIntLine() => new LineDatasource<int>(),
+                SensorType.DoubleBar when property.IsBarLine() => new DoubleBarLineDatasource<double>(),
+                SensorType.DoubleBar when property.IsBarIntLine() => new DoubleBarLineDatasource<int>(),
 
                 SensorType.Boolean => new PointDatasource(),
 
@@ -48,7 +48,8 @@ namespace HSMServer.Datasources
         public static Func<BaseValue, int> GetIntValueFactory<T>(PlottedProperty property) where T : struct, INumber<T> =>
             property switch
             {
-                PlottedProperty.Count => v => ((BarBaseValue<T>)v).Count
+                PlottedProperty.Count => v => ((BarBaseValue<T>)v).Count,
+                _ => throw BuildException<T>(property)
             };
 
 
@@ -62,6 +63,6 @@ namespace HSMServer.Datasources
         private static bool IsBarIntLine(this PlottedProperty property) => property is PlottedProperty.Count;
 
 
-        private static Exception BuildException<T>(PlottedProperty property) => new Exception($"Invalid property {property} for {typeof(T).FullName}");
+        private static Exception BuildException<T>(PlottedProperty property) => new($"Invalid property {property} for {typeof(T).FullName}");
     }
 }

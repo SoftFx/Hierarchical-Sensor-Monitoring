@@ -68,7 +68,7 @@ namespace HSMServer.Dashboards
         public PanelDatasource BuildSource()
         {
             Source?.Dispose(); // unsubscribe prev version
-            Source = DatasourceFactory.Build(Sensor, Property).AttachSensor(Sensor, Property);
+            Source = DatasourceFactory.Build(Sensor, Property);
 
             return this;
         }
