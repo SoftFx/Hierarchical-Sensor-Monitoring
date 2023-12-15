@@ -5,6 +5,7 @@ using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
+using HSMServer.Core.Model.Policies;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -46,6 +47,8 @@ namespace HSMServer.Model.DataAlerts
 
 
         public List<SelectListItem> Actions { get; }
+
+        public PolicySchedule Schedule { get; set; }
 
         public NodeViewModel Node { get; }
 

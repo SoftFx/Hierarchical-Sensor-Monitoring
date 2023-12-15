@@ -18,7 +18,7 @@ namespace HSMServer.Core.Managers
 
         protected void SendAlertMessage(AlertMessage message)
         {
-            if (!message.IsEmpty)
+            if (!message.IsEmpty) 
                 NewMessageEvent?.Invoke(message);
         }
 

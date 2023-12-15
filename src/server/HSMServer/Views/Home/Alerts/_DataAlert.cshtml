@@ -137,7 +137,7 @@
                         @await Html.PartialAsync("~/Views/Home/Alerts/_ActionBlock.cshtml", action)
                     }
                 </div>
-
+                <a class="addSchedule"><i class="fa-solid fa-calendar alert-add-schedule-button"></i></a>
                 <a class="addAction"><i class="fa-solid fa-plus alert-add-button"></i></a>
             </div>
         </div>
@@ -185,7 +185,19 @@
                 actionsBlock.append(viewData);
             });
         });
+        
+        $("a.addSchedule").off("click").on("click", function () {
+            let element = $(this).parents("div.fullAction:first");
 
+            $.ajax({
+                url: `@Url.Action(nameof(HomeController.AddScheduleAlertBlock), ViewConstants.HomeController)?entityId=@Model.EntityId`,
+                cache: false
+            }).done(function (viewData) {
+                var actionsBlock = element.find($(`div[name='actionsBlock']`));
+                actionsBlock.append(viewData);
+            });
+        });
+        
         $("a.deleteRow").off("click").on("click", function () {
             if ($(this).parents("#dataAlertsList_@TimeToLiveAlertViewModel.AlertKey").length > 0) {
                 $('#addTtlAlert').removeClass('disabled');
