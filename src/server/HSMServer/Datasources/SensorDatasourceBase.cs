@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Dashboards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,6 +31,8 @@ namespace HSMServer.Datasources
         private long _removedValuesCnt, _aggrValuesStep;
         private bool _aggreagateValues;
 
+        protected PlottedProperty _plotProperty;
+
 
         protected abstract ChartType AggregatedType { get; }
 
@@ -39,9 +42,11 @@ namespace HSMServer.Datasources
         protected abstract BaseChartValue Convert(BaseValue baseValue);
 
 
-        public SensorDatasourceBase AttachSensor(BaseSensorModel sensor)
+        public SensorDatasourceBase AttachSensor(BaseSensorModel sensor, PlottedProperty plotProperty)
         {
+            _plotProperty = plotProperty;
             _sensor = sensor;
+
             _sensor.ReceivedNewValue += AddNewValue;
 
             return this;
