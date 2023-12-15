@@ -65,7 +65,7 @@ namespace HSMDataCollector.Prototypes
             {
                 AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 30.GigobytesToMegabytes())
                              .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
-                             .ThenSendNotification($"[$product]$path $property $operation $target {Unit.MB}")
+                             .ThenSendNotification($"[$product]$path $property $operation $target $unit")
                              .AndSetIcon(AlertIcon.Warning).Build(),
             };
         }

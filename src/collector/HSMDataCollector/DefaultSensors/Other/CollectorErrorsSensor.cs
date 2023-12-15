@@ -8,6 +8,6 @@ namespace HSMDataCollector.DefaultSensors.Other
         public CollectorErrorsSensor(SensorOptions options) : base(options) { }
 
 
-        public void SendCollectorError(string error) => SendValue(error, SensorStatus.Error);
+        public void SendCollectorError(string error) => SendValue(error);
     }
 }

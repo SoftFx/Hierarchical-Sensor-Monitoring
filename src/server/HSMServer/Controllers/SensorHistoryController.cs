@@ -4,7 +4,6 @@ using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
-using HSMServer.DTOs.SensorInfo;
 using HSMServer.Extensions;
 using HSMServer.Helpers;
 using HSMServer.Model.History;
@@ -17,6 +16,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HSMServer.Model.Dashboards;
 
 namespace HSMServer.Controllers
 {
@@ -83,10 +83,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public ActionResult<SensorInfoDto> GetSensorPlotInfo([FromQuery] Guid id)
+        public ActionResult<SensorInfoViewModel> GetSensorPlotInfo([FromQuery] Guid id)
         {
             if (_tree.Sensors.TryGetValue(id, out var sensorNodeViewModel))
-                return new SensorInfoDto(sensorNodeViewModel.Type, sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type, sensorNodeViewModel.SelectedUnit.ToString());
+                return new SensorInfoViewModel(sensorNodeViewModel.Type, sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type, sensorNodeViewModel.SelectedUnit.ToString());
 
             return _emptyJsonResult;
         }

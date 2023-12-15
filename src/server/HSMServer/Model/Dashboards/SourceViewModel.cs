@@ -1,14 +1,13 @@
 using HSMServer.Dashboards;
 using HSMServer.Datasources;
-using HSMServer.DTOs.SensorInfo;
-using HSMServer.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Extensions;
 
-namespace HSMServer.DTOs.Sensor;
+namespace HSMServer.Model.Dashboards;
 
-public class SourceDto
+public class SourceViewModel
 {
     public Guid SensorId { get; set; }
 
@@ -25,18 +24,18 @@ public class SourceDto
 
     public List<object> Values { get; set; }
 
-    public SensorInfoDto SensorInfo { get; set; }
+    public SensorInfoViewModel SensorInfo { get; set; }
 
     
 
-    public SourceDto() { }
+    public SourceViewModel() { }
 
-    public SourceDto(InitChartSourceResponse chartResponse, PanelDatasource source)
+    public SourceViewModel(InitChartSourceResponse chartResponse, PanelDatasource source)
     {
         var sensor = source.Sensor;
 
         Color = source.Color.ToRGB();
-        SensorInfo = new SensorInfoDto(sensor.Type, sensor.Type, sensor.OriginalUnit.ToString());
+        SensorInfo = new SensorInfoViewModel(sensor.Type, sensor.Type, sensor.OriginalUnit.ToString());
         Id = source.Id;
         SensorId = sensor.Id;
         Label = sensor.DisplayName;

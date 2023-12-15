@@ -66,7 +66,8 @@ namespace HSMServer.Core.Cache
 
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
 
-            _confirmationManager.NewMessageEvent += SendAlertMessage;
+            _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
+            _scheduleManager.NewMessageEvent += SendAlertMessage;
 
             Initialize();
         }
@@ -81,7 +82,9 @@ namespace HSMServer.Core.Cache
 
         public void Dispose()
         {
-            _confirmationManager.NewMessageEvent -= SendAlertMessage;
+            _confirmationManager.NewMessageEvent -= _scheduleManager.ProcessMessage;
+            _scheduleManager.NewMessageEvent -= SendAlertMessage;
+
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
 
             _updatesQueue.Dispose();

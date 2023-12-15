@@ -66,7 +66,7 @@ namespace HSMServer.Dashboards
 
         public bool TryAddSource(Guid sensorId, PanelSourceEntity entity)
         {
-            return _board.TryGetSensor(sensorId, out var sensor) ? TrySaveNewSource(new PanelDatasource(sensor, entity), out _) : false;
+            return _board.TryGetSensor(sensorId, out var sensor) && TrySaveNewSource(new PanelDatasource(sensor, entity), out _);
         }
 
         public bool TryAddSource(Guid sensorId, out PanelDatasource source, out string error)
@@ -81,10 +81,16 @@ namespace HSMServer.Dashboards
             return result;
         }
 
-        public bool TryRemoveSource(Guid sourceId)
+        public bool TryRemoveSource(Guid sensorId)
         {
-            if (Sources.TryRemove(sourceId, out var source))
+            if (Sources.TryRemove(sensorId, out var source))
             {
+                if (Sources.IsEmpty)
+                {
+                    MainSensorType = null;
+                    MainUnit = null;
+                }
+
                 source.Dispose();
                 ThrowUpdateEvent();
 
@@ -111,13 +117,14 @@ namespace HSMServer.Dashboards
                 error = $"Can't plot using {sourceType} sensor type";
             else if (!MainUnit.IsNullOrEqual(sourceUnit))
                 error = $"Can't plot using {sourceUnit} unit type";
+            else if (!Sources.TryAdd(source.SensorId, source))
+                error = "Source already exists";
             else
             {
-                Sources.TryAdd(source.Id, source);
-
                 MainSensorType = sourceType;
                 MainUnit = sourceUnit ?? MainUnit;
 
+                source.Source.AttachSensor(source.Sensor); //enable subscription
                 source.UpdateEvent += ThrowUpdateEvent;
             }
 
