@@ -10,24 +10,23 @@ namespace HSMServer.Datasources
         {
             SensorDatasourceBase source = sensor.Type switch
             {
-                SensorType.Integer when property.IsInstantView() => new IntLineDatasource<int>(),
-                SensorType.Integer when property.IsInstantDoubleLine() => new IntLineDatasource<double>(),
+                SensorType.Integer when property.IsInstantView() => new IntLineDatasource(),
+                SensorType.Integer when property.IsInstantDoubleLine() => new IntToNullDoubleLineDatasource(),
 
-                SensorType.Double when property.IsInstantView() => new DoubleLineDatasource<double>(),
-                SensorType.Double when property.IsInstantDoubleLine() => new DoubleLineDatasource<double>(),
+                SensorType.Double when property.IsInstantView() => new DoubleLineDatasource(),
+                SensorType.Double when property.IsInstantDoubleLine() => new DoubleToNullDoubleDatasource(),
 
-                SensorType.TimeSpan when property.IsInstantView() => new TimespanDatasource(),
-                //SensorType.TimeSpan when property.IsInstantView() => new TimespanDatasource(), //EMA for timespan
+                SensorType.TimeSpan when property.IsInstantView() => new TimespanLineDatasource(),
 
                 SensorType.IntegerBar when property.IsBarView() => new BarsDatasource(),
-                SensorType.IntegerBar when property.IsBarLine() => new IntBarLineDatasource<int>(),
-                SensorType.IntegerBar when property.IsBarIntLine() => new IntBarLineDatasource<int>(),
-                SensorType.IntegerBar when property.IsBarDoubleLine() => new IntBarLineDatasource<double>(),
+                SensorType.IntegerBar when property.IsBarLine() => new IntBarLineDatasource(),
+                SensorType.IntegerBar when property.IsBarIntLine() => new IntBarIntLineSource(),
+                SensorType.IntegerBar when property.IsBarDoubleLine() => new IntBarNullDoubleSource(),
 
                 SensorType.DoubleBar when property.IsBarView() => new BarsDatasource(),
-                SensorType.DoubleBar when property.IsBarLine() => new DoubleBarLineDatasource<double>(),
-                SensorType.DoubleBar when property.IsBarIntLine() => new DoubleBarLineDatasource<int>(),
-                SensorType.DoubleBar when property.IsBarDoubleLine() => new DoubleBarLineDatasource<double>(),
+                SensorType.DoubleBar when property.IsBarLine() => new DoubleBarLineDatasource(),
+                SensorType.DoubleBar when property.IsBarIntLine() => new DoubleBarIntLineSource(),
+                SensorType.DoubleBar when property.IsBarDoubleLine() => new DoubleBarNullDoubleSource(),
 
                 SensorType.Boolean => new PointDatasource(),
 
@@ -47,11 +46,9 @@ namespace HSMServer.Datasources
 
         private static bool IsBarLine(this PlottedProperty property) => property is PlottedProperty.Min or PlottedProperty.Mean or PlottedProperty.Max;
 
-        private static bool IsBarIntLine(this PlottedProperty property) => property is PlottedProperty.Count or PlottedProperty.EmaCount;
+        private static bool IsBarIntLine(this PlottedProperty property) => property is PlottedProperty.Count;
 
-        private static bool IsBarDoubleLine(this PlottedProperty property) => property is PlottedProperty.EmaMin or PlottedProperty.Mean or PlottedProperty.Max;
-
-
-        private static Exception BuildException<T>(PlottedProperty property) => new($"Invalid property {property} for {typeof(T).FullName}");
+        private static bool IsBarDoubleLine(this PlottedProperty property) => property is PlottedProperty.EmaMin or 
+            PlottedProperty.EmaMean or PlottedProperty.EmaMax or PlottedProperty.EmaCount;
     }
 }
