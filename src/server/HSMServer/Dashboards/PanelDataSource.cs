@@ -16,7 +16,15 @@ namespace HSMServer.Dashboards
         Min = 51,
         Mean = 52,
         Max = 53,
-        Count = 54,
+        FirstValue = 54,
+        LastValue = 55,
+        Count = 56,
+
+        EmaValue = 200,
+        EmaMin = 201,
+        EmaMean = 202,
+        EmaMax = 203,
+        EmaCount = 204,
     }
 
 

@@ -83,30 +83,45 @@ namespace HSMServer.Datasources
     }
 
 
+    public abstract class BarBaseNullLineDatasource<TSensor, TBase> : BaseLineDatasource<TSensor, double?, double>
+        where TSensor : BarBaseValue
+        where TBase : struct, INumber<TBase>
+    {
+        internal BarBaseNullLineDatasource()
+        {
+            _valueFactory = _plotProperty switch
+            {
+                PlottedProperty.EmaMin => v => v.EmaMin,
+                PlottedProperty.EmaMax => v => v.EmaMax,
+                PlottedProperty.EmaMean => v => v.EmaMean,
+                PlottedProperty.EmaCount => v => v.EmaCount,
+
+                _ => throw BuildException(),
+            };
+        }
+    }
+
+
+
     public sealed class IntLineDatasource<TProp> : InstantBaseLineDatasource<IntegerValue, int, TProp>
         where TProp : INumber<TProp>
-    {
-
-    }
+    { }
 
 
     public sealed class DoubleLineDatasource<TProp> : InstantBaseLineDatasource<DoubleValue, double, TProp>
         where TProp : INumber<TProp>
-    {
-
-    }
+    { }
 
 
     public sealed class IntBarLineDatasource<TProp> : BarBaseLineDatasource<IntegerBarValue, int, TProp>
         where TProp : INumber<TProp>
-    {
-
-    }
+    { }  
 
 
     public sealed class DoubleBarLineDatasource<TProp> : BarBaseLineDatasource<DoubleBarValue, double, TProp>
         where TProp : INumber<TProp>
-    {
+    { }
 
-    }
+
+    public sealed class IntBarNullDoubleSource : BarBaseLineDatasource<IntegerBarValue, int, double?> { }
 }
