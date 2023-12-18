@@ -13,7 +13,7 @@
                 <input id='name_input_@Model.Id' class="form-control" asp-for="Label" type="text" oninput="javascript:realtimeUpdate('@Model.Id', '@Model.SensorId')" />
 
                 <label class="ms-2 me-1">Property:</label>
-                <select class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties"></select>
+                <select id="property_@Model.Id" class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties" onchange="javascript:realtimeUpdate('@Model.Id', '@Model.SensorId')"></select>
 
                 <input id='color_@Model.Id' type="color" asp-for="Color" class="form-control form-control-color mx-1" oninput="javascript:realtimeUpdate('@Model.Id', '@Model.SensorId')" />
             </div>
@@ -34,7 +34,7 @@
 
 <script>
     function realtimeUpdate(id, sensorId) {
-        updateSource($(`#name_input_${id}`).val(), $(`#color_${id}`).val(), sensorId);
+        updateSource($(`#name_input_${id}`).val(), $(`#color_${id}`).val(), $(`#property_${id}`).val(), sensorId);
     }
 
     function deletePlot(sensorId) {

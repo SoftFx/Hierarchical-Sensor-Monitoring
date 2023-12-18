@@ -422,14 +422,14 @@ function addResizable(interactable){
     })
 }
 
-window.updateSource = function (name, color, id){
+window.updateSource = function (name, color, property, id){
     if (currentPanel[id] === undefined)
         return;
 
     if (currentPanel[id].updateTimeout !== undefined)
         clearTimeout(currentPanel[id].updateTimeout);
 
-    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, id);
+    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, id);
 }
 
 window.getCurrentPlotInDashboard = function (id) {
@@ -532,7 +532,7 @@ function showEventInfo (event) {
     $(`#${id}.cloned`).remove();
 }
 
-function updatePlotSource(name, color, id){
+function updatePlotSource(name, color, property, id){
     $.ajax({
         processData: false,
         type: 'put',
@@ -540,7 +540,8 @@ function updatePlotSource(name, color, id){
         url: window.location.pathname + '/' + id,
         data: JSON.stringify({
             name: name,
-            color: color
+            color: color,
+            property: property
         })
     }).done(function (){
         let update = {
