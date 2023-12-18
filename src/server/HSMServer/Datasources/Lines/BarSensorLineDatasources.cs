@@ -11,7 +11,7 @@ namespace HSMServer.Datasources
     {
         internal BarBaseLineDatasource()
         {
-            _valueFactory = _plotProperty switch
+            _getPropertyFactory = _plotProperty switch
             {
                 PlottedProperty.Min => v => v.Min,
                 PlottedProperty.Max => v => v.Max,
@@ -24,8 +24,7 @@ namespace HSMServer.Datasources
             };
         }
 
-
-        protected override TChart GetTargetValue(TValue value) => TChart.CreateChecked(_valueFactory(value));
+        protected override TChart ConvertToChartType(TProp value) => TChart.CreateChecked(value);
     }
 
     public sealed class IntBarLineDatasource : BarBaseLineDatasource<IntegerBarValue, int, int> { }
@@ -38,7 +37,7 @@ namespace HSMServer.Datasources
     {
         internal BarBaseNullDoubleLineDatasource()
         {
-            _valueFactory = _plotProperty switch
+            _getPropertyFactory = _plotProperty switch
             {
                 PlottedProperty.EmaMin => v => v.EmaMin,
                 PlottedProperty.EmaMax => v => v.EmaMax,
@@ -49,7 +48,7 @@ namespace HSMServer.Datasources
             };
         }
 
-        protected override double GetTargetValue(TValue value) => _valueFactory(value) ?? 0.0;
+        protected override double ConvertToChartType(double? value) => value ?? 0.0;
     }
 
     public sealed class IntBarNullDoubleSource : BarBaseNullDoubleLineDatasource<IntegerBarValue> { }
@@ -62,7 +61,7 @@ namespace HSMServer.Datasources
     {
         internal BarBaseIntLineDatasource()
         {
-            _valueFactory = _plotProperty switch
+            _getPropertyFactory = _plotProperty switch
             {
                 PlottedProperty.Count => v => v.Count,
 
@@ -70,7 +69,7 @@ namespace HSMServer.Datasources
             };
         }
 
-        protected override int GetTargetValue(TValue value) => _valueFactory(value);
+        protected override int ConvertToChartType(int value) => value;
     }
 
     public sealed class IntBarIntLineSource : BarBaseIntLineDatasource<IntegerBarValue> { }

@@ -9,7 +9,7 @@ namespace HSMServer.Datasources
         where TChart : INumber<TChart>
     {
         private BaseChartValue<TChart> _lastVisibleValue;
-        protected Func<TValue, TProp> _valueFactory;
+        protected Func<TValue, TProp> _getPropertyFactory;
 
 
         protected override ChartType AggregatedType => ChartType.Line;
@@ -21,7 +21,7 @@ namespace HSMServer.Datasources
         {
             if (rawValue is TValue value)
             {
-                _lastVisibleValue = new LineChartValue<TChart>(rawValue, GetTargetValue(value));
+                _lastVisibleValue = new LineChartValue<TChart>(rawValue, ToChartValue(value));
 
                 AddVisibleToLast(_lastVisibleValue);
             }
@@ -30,12 +30,15 @@ namespace HSMServer.Datasources
         protected override void ApplyToLast(BaseValue rawValue)
         {
             if (rawValue is TValue value)
-                _lastVisibleValue.Apply(GetTargetValue(value));
+                _lastVisibleValue.Apply(ToChartValue(value));
         }
 
 
-        protected abstract TChart GetTargetValue(TValue value);
+        protected abstract TChart ConvertToChartType(TProp value);
 
         protected Exception BuildException() => new($"Unsupport cast property for {typeof(TValue).Name} {_plotProperty} from {typeof(TProp).Name} to {typeof(TChart).Name}");
+
+
+        private TChart ToChartValue(TValue value) => ConvertToChartType(_getPropertyFactory(value));
     }
 }

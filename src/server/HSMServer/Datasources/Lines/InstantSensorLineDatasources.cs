@@ -11,7 +11,7 @@ namespace HSMServer.Datasources
     {
         internal InstantBaseLineDatasource()
         {
-            _valueFactory = _plotProperty switch
+            _getPropertyFactory = _plotProperty switch
             {
                 PlottedProperty.Value => v => v.Value,
 
@@ -22,17 +22,17 @@ namespace HSMServer.Datasources
 
     public sealed class IntLineDatasource : InstantBaseLineDatasource<IntegerValue, int, int>
     {
-        protected override int GetTargetValue(IntegerValue value) => _valueFactory(value);
+        protected override int ConvertToChartType(int value) => value;
     }
 
     public sealed class DoubleLineDatasource : InstantBaseLineDatasource<DoubleValue, double, double>
     {
-        protected override double GetTargetValue(DoubleValue value) => _valueFactory(value);
+        protected override double ConvertToChartType(double value) => value;
     }
 
     public sealed class TimespanLineDatasource : InstantBaseLineDatasource<TimeSpanValue, TimeSpan, long>
     {
-        protected override long GetTargetValue(TimeSpanValue value) => value.Value.Ticks;
+        protected override long ConvertToChartType(TimeSpan value) => value.Ticks;
     }
 
 
@@ -41,7 +41,7 @@ namespace HSMServer.Datasources
     {
         internal InstantBaseNullDoubleLineDatasource()
         {
-            _valueFactory = _plotProperty switch
+            _getPropertyFactory = _plotProperty switch
             {
                 PlottedProperty.EmaValue => v => v.EmaValue,
 
@@ -50,7 +50,7 @@ namespace HSMServer.Datasources
         }
 
 
-        protected override double GetTargetValue(TValue value) => _valueFactory(value) ?? 0.0;
+        protected override double ConvertToChartType(double? value) => value ?? 0.0;
     }
 
     public sealed class IntToNullDoubleLineDatasource : InstantBaseNullDoubleLineDatasource<IntegerValue> { }
