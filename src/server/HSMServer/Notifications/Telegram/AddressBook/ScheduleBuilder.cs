@@ -8,7 +8,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook
 {
     internal sealed class ScheduleBuilder : IMessageBuilder
     {
-        private const string DayTempalte = "d MMM (dddd)";
+        private const string DayTempalte = "d MMMM (dddd)";
 
         private readonly CTimeDict<MessageBuilder> _scheduleParts = new();
         private readonly TimeSpan _grouppingPeriod = TimeSpan.FromHours(1);
@@ -36,9 +36,11 @@ namespace HSMServer.Notifications.Telegram.AddressBook
                     sb.AppendLine(curDate.ToString(DayTempalte));
                 }
 
-                sb.AppendLine($"{time.Hour}:{time.Minute}-{time.Hour + 1}:{time.Minute} (UTC)");
+                sb.AppendLine($"{time.Hour}:00-{time.Hour + 1}:00 (UTC)");
                 sb.AppendLine(part.GetAggregateMessage());
             }
+
+            _scheduleParts.Clear();
 
             return sb.ToString();
         }
