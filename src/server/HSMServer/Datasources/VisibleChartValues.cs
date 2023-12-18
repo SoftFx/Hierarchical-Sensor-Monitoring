@@ -49,27 +49,27 @@ namespace HSMServer.Datasources
     }
 
 
-    public sealed class TimeSpanChartValue : BaseChartValue<TimeSpan>
-    {
-        private double _totalTicks = 0.0;
+    //public sealed class TimeSpanChartValue : BaseChartValue<TimeSpan>
+    //{
+    //    private double _totalTicks = 0.0;
 
 
-        public TimeSpanChartValue(TimeSpanValue value)
-        {
-            Time = value.Time;
-            Value = value.Value;
-        }
+    //    public TimeSpanChartValue(TimeSpanValue value)
+    //    {
+    //        Time = value.Time;
+    //        Value = value.Value;
+    //    }
 
 
-        internal override void Apply(TimeSpan value)
-        {
-            if (_countValues++ == 1)
-                _totalTicks += double.CreateChecked(Value.Ticks);
+    //    internal override void Apply(TimeSpan value)
+    //    {
+    //        if (_countValues++ == 1)
+    //            _totalTicks += double.CreateChecked(Value.Ticks);
 
-            _totalTicks += double.CreateChecked(value.Ticks);
+    //        _totalTicks += double.CreateChecked(value.Ticks);
 
-            Value = TimeSpan.FromTicks(long.CreateChecked(_totalTicks / _countValues));
-            Tooltip = $"Aggregated ({_countValues}) values";
-        }
-    }
+    //        Value = TimeSpan.FromTicks(long.CreateChecked(_totalTicks / _countValues));
+    //        Tooltip = $"Aggregated ({_countValues}) values";
+    //    }
+    //}
 }
