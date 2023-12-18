@@ -14,7 +14,7 @@ namespace HSMServer.Core.Managers
             var sensorId = message.SensorId;
             var utcTime = DateTime.UtcNow;
 
-            var (notApplyAlerts, applyAlerts) = message.Alerts.SplitByCondition(u => u.SendTime <= utcTime);
+            var (notApplyAlerts, applyAlerts) = message.Alerts.SplitByCondition(u => u.SendTime > utcTime);
             
             SendAlertMessage(sensorId, notApplyAlerts);
 
