@@ -1,6 +1,8 @@
-﻿@using HSMServer.Extensions
+﻿@using HSMSensorDataObjects.SensorRequests
+@using HSMServer.Extensions
 @using HSMServer.Notifications
 @using HSMServer.Model.DataAlerts
+@using Microsoft.AspNetCore.Mvc.TagHelpers
 
 @model ActionViewModel
 
@@ -14,6 +16,7 @@
 
     var isSendAction = action == ActionType.SendNotification;
     var isShowAction = action == ActionType.ShowIcon;
+    var isScheduleAction = action == ActionType.Schedule;
 
     var isSecondaryCondition = !Model.IsMain;
 
@@ -59,7 +62,16 @@
         <div name="emoji" class="target-input">@Model.Icon</div>
     </div>
 
-    <a class="deleteAction"><i class="@isSecondaryCondition.ToVisibility() fa-solid fa-xmark alert-delete-button"></i></a>
+    <div name="schedule" class="@isScheduleAction.ToVisibility() align-items-center">
+        <input class="me-2" type="datetime-local" id="schedule" asp-for="Schedule.Time" style="flex-shrink: 0.3">
+        <div class="alert-text-block operation-select">for repeat</div>
+        <select class="alert-block alert-select property-select" asp-for="Schedule.RepeatMode" asp-items="Html.GetEnumSelectList<AlertRepeatMode>()">
+        </select>
+    </div>
+
+    <a class="deleteAction">
+        <i class="@isSecondaryCondition.ToVisibility() fa-solid fa-xmark alert-delete-button"></i>
+    </a>
 </div>
 
 
@@ -92,6 +104,7 @@
 
         let send = actionBlock.find($(`div[name='sendNotificationAction']`));
         let show = actionBlock.find($(`div[name='showIconAction']`));
+        let schedule = actionBlock.find($(`div[name='schedule']`));
 
         let commentInput = send.find($(`input[name='Comment']`));
 
@@ -101,17 +114,25 @@
 
             commentInput.attr('required', true);
             send.removeClass("d-none").addClass('d-flex');
+            schedule.hide();
         }
         else if (action === '@ActionType.ShowIcon') {
             commentInput.attr('required', false);
             send.removeClass("d-flex").addClass('d-none');
 
             show.removeClass("d-none").addClass('d-flex');
+            schedule.hide();
         }
         else if (action === '@ActionType.SetStatus') {
             commentInput.attr('required', false);
             send.removeClass("d-flex").addClass('d-none');
             show.removeClass("d-flex").addClass('d-none');
+            schedule.removeClass("d-flex").addClass('d-none');
+        }
+        else if (action === '@ActionType.Schedule') {
+            send.removeClass("d-flex").addClass('d-none');
+            show.removeClass("d-flex").addClass('d-none');
+            schedule.removeClass('d-none').addClass("d-flex");
         }
     });
 

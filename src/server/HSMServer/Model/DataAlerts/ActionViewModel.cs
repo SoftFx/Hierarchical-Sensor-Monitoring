@@ -14,6 +14,7 @@ namespace HSMServer.Model.DataAlerts
         SendNotification,
         ShowIcon,
         SetStatus,
+        Schedule
     }
 
 
@@ -43,6 +44,7 @@ namespace HSMServer.Model.DataAlerts
             { ActionType.SendNotification, "send notification" },
             { ActionType.ShowIcon, "show icon" },
             { ActionType.SetStatus, SetErrorStatus },
+            { ActionType.Schedule, "schedule on" },
         };
 
 

@@ -26,6 +26,7 @@
     "emojionearea": "3.4.2",
     "interactjs": "1.10.19",
     "jquery": "3.6.3",
+    "jquery-validation": "^1.20.0",
     "jstree": "3.3.12",
     "marked": "4.3.0",
     "moment": "2.29.4",

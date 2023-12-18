@@ -591,10 +591,6 @@ namespace HSMServer.Controllers
         public IActionResult AddAlertAction(Guid entityId) => TryGetSelectedNode(entityId, out var entity)
             ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity))
             : _emptyResult;
-        
-        public IActionResult AddScheduleAlertBlock(Guid entityId) => TryGetSelectedNode(entityId, out var entity)
-            ? PartialView("~/Views/Home/Alerts/_AlertScheduleBlock.cshtml", new ActionViewModel(false, entity))
-            : _emptyResult;
 
         public IActionResult GetOperation(Guid sensorId, AlertProperty property)
         {
