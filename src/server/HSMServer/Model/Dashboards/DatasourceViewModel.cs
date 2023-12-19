@@ -33,7 +33,6 @@ public class DatasourceViewModel
 
     public List<object> Values { get; set; } = new();
 
-
     public PlottedProperty Property { get; set; }
 
     public SensorType Type { get; set; }
@@ -49,6 +48,8 @@ public class DatasourceViewModel
     public Unit? Unit { get; set; }
 
     public Guid Id { get; set; }
+
+    public ChartType ChartType { get; set; }
 
 
     public DatasourceViewModel() { }
@@ -76,6 +77,7 @@ public class DatasourceViewModel
 
     public DatasourceViewModel(InitChartSourceResponse chartResponse, PanelDatasource source) : this(source)
     {
+        ChartType = chartResponse.ChartType;
         Values = chartResponse.Values;
     }
 

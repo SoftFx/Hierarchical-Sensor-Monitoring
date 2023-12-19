@@ -87,9 +87,9 @@ namespace HSMServer.Dashboards
             Color = update.Color is not null ? Color.FromName(update.Color) : Color;
             Label = !string.IsNullOrEmpty(update.Name) ? update.Name : Label;
 
-            if (Enum.TryParse<PlottedProperty>(update.Property, out var property) && Property != property)
+            if (Enum.TryParse<PlottedProperty>(update.Property, out var newProperty) && Property != newProperty)
             {
-                Property = property;
+                Property = newProperty;
                 BuildSource();
             }
 
@@ -105,6 +105,7 @@ namespace HSMServer.Dashboards
                 Id = Id.ToByteArray(),
                 SensorId = SensorId.ToByteArray(),
 
+                Property = (byte)Property,
                 Color = Color.Name,
                 Label = Label,
             };

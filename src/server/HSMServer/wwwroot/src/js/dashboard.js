@@ -73,7 +73,7 @@ window.insertSourceHtml = function (data) {
 }
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
-    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
+    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.chartType == 1);
     
     let layoutUpdate = {
         'xaxis.visible' : true,
