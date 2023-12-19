@@ -31,7 +31,7 @@ namespace HSMDataCollector.Alerts
 
         public DateTime? ScheduledNotificationTime { get; private set; }
 
-        public AlertRepeatMode ScheduledRepeatMode { get; private set; }
+        public AlertRepeatMode? ScheduledRepeatMode { get; private set; }
 
         public SensorStatus Status { get; private set; } = SensorStatus.Ok;
 
@@ -58,7 +58,7 @@ namespace HSMDataCollector.Alerts
             return this;
         }
 
-        public AlertAction<T> AndSendScheduledNotification(string template, DateTime? time, AlertRepeatMode repeatMode)
+        public AlertAction<T> AndSendScheduledNotification(string template, DateTime time, AlertRepeatMode repeatMode)
         {
             Template = template;
             ScheduledNotificationTime = time;

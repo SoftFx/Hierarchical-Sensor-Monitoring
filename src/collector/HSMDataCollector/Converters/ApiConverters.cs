@@ -59,10 +59,10 @@ namespace HSMDataCollector.Converters
                 Conditions = alert.Conditions?.Select(u => u.ToApi()).ToList(),
 
                 ConfirmationPeriod = alert.ConfirmationPeriod?.Ticks,
-                
+
                 ScheduledNotificationTime = alert.ScheduledNotificationTime,
-                ScheduledRepeatMode = (byte)alert.ScheduledRepeatMode,
-                
+                ScheduledRepeatMode = alert.ScheduledRepeatMode,
+
                 Template = alert.Template,
                 Status = alert.Status,
                 Icon = alert.Icon,

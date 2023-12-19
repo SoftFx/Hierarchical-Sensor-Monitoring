@@ -255,8 +255,9 @@ namespace HSMServer.ApiObjectsConverters
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
             Destination = new(),
 
-            Schedule = new PolicyScheduleUpdate(request.ScheduledNotificationTime, (AlertRepeatMode)request.ScheduledRepeatMode),
-            
+            Schedule = new PolicyScheduleUpdate(request.ScheduledNotificationTime ?? DateTime.MinValue,
+                                                request.ScheduledRepeatMode.HasValue ? request.ScheduledRepeatMode.Value.Convert() : Core.Model.Policies.AlertRepeatMode.None),
+
             Id = Guid.Empty,
             Status = request.Status.Convert(),
             Template = request.Template,
@@ -399,6 +400,16 @@ namespace HSMServer.ApiObjectsConverters
             {
                 HSMSensorDataObjects.SensorRequests.StatisticsOptions.None => Core.Model.StatisticsOptions.None,
                 HSMSensorDataObjects.SensorRequests.StatisticsOptions.EMA => Core.Model.StatisticsOptions.EMA,
+                _ => throw new NotImplementedException(),
+            };
+
+
+        private static Core.Model.Policies.AlertRepeatMode Convert(this HSMSensorDataObjects.SensorRequests.AlertRepeatMode repeatMode) =>
+            repeatMode switch
+            {
+                HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Hourly => Core.Model.Policies.AlertRepeatMode.Hourly,
+                HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Daily => Core.Model.Policies.AlertRepeatMode.Daily,
+                HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Weekly => Core.Model.Policies.AlertRepeatMode.Weekly,
                 _ => throw new NotImplementedException(),
             };
     }

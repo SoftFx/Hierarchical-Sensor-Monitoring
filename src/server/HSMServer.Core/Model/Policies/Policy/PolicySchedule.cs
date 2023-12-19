@@ -1,11 +1,20 @@
 ﻿using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMSensorDataObjects.SensorRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
 
 namespace HSMServer.Core.Model.Policies
 {
+    public enum AlertRepeatMode
+    {
+        None = 0,
+
+        Hourly = 20,
+        Daily = 50,
+        Weekly = 100,
+    }
+
+
     public sealed class PolicySchedule
     {
         public DateTime Time { get; private set; }
@@ -43,7 +52,7 @@ namespace HSMServer.Core.Model.Policies
             var shiftTime = RepeatMode switch
             {
                 AlertRepeatMode.Hourly => TimeSpan.FromHours(1),
-                AlertRepeatMode.Dayly => TimeSpan.FromDays(1),
+                AlertRepeatMode.Daily => TimeSpan.FromDays(1),
                 AlertRepeatMode.Weekly => TimeSpan.FromDays(7),
             };
 

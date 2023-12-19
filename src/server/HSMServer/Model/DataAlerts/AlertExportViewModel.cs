@@ -1,5 +1,4 @@
-﻿using HSMSensorDataObjects.SensorRequests;
-using HSMServer.Core.Cache.UpdateEntities;
+﻿using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;

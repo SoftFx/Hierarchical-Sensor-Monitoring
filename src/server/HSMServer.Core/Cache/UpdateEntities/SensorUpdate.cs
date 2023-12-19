@@ -3,7 +3,6 @@ using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
-using AlertRepeatMode = HSMSensorDataObjects.SensorRequests.AlertRepeatMode;
 
 namespace HSMServer.Core.Cache.UpdateEntities
 {
@@ -39,7 +38,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public List<PolicyConditionUpdate> Conditions { get; init; }
 
         public PolicyDestinationUpdate Destination { get; init; }
-        
+
         public PolicyScheduleUpdate Schedule { get; init; }
 
         public long? ConfirmationPeriod { get; init; }
@@ -89,6 +88,6 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
 
     public sealed record PolicyScheduleUpdate(
-        DateTime? Time, 
+        DateTime? Time,
         AlertRepeatMode? RepeatMode);
 }
