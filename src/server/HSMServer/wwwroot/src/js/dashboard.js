@@ -57,32 +57,18 @@ export function Model(id, panelId, dashboardId) {
 
 window.insertSourceHtml = function (data) {
     let sources = $('#sources');
-    let text = `<li id=${'source_' + data.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
-                                    style="border-top-width: 1px;
-                                           border-radius: 5px;">
-                                    <div class="d-flex flex-grow-1">
-                                        <div class="d-flex flex-column" style="flex-grow: 10">
-                                            <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
-                                                <label class="me-1">Label:</label>
-                                                <input id=${'name_input_' + data.id} class="form-control" value="${data.label}" type="text" style="flex-grow: 10"></input>
-                                                <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <span id=${'redirectToHome_' + data.sensorId} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
-                                                    ${data.path}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div class="d-flex justify-content-center">
-                                             <button id=${'deletePlot_' + data.sensorId} class="btn" type="button" style="color: red">
-                                                <i class="fa-solid fa-xmark"></i>
-                                             </button>
-                                        </div>
-                                    </div>
-                                </li>`
 
-    sources.html(function(n, origText) {
-        return origText + text;
+    $.ajax({
+        type: 'POST',
+        url: getSourceSettings,
+        data: JSON.stringify(data),
+        contentType: 'application/json',
+        cache: false,
+        async: true
+    }).done(function (result) {
+        sources.html(function (n, origText) {
+            return origText + result;
+        });
     });
 }
 
@@ -436,14 +422,14 @@ function addResizable(interactable){
     })
 }
 
-window.updateSource = function (name, color, id){
+window.updateSource = function (name, color, property, id){
     if (currentPanel[id] === undefined)
         return;
 
     if (currentPanel[id].updateTimeout !== undefined)
         clearTimeout(currentPanel[id].updateTimeout);
 
-    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, id);
+    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, id);
 }
 
 window.getCurrentPlotInDashboard = function (id) {
@@ -546,7 +532,7 @@ function showEventInfo (event) {
     $(`#${id}.cloned`).remove();
 }
 
-function updatePlotSource(name, color, id){
+function updatePlotSource(name, color, property, id){
     $.ajax({
         processData: false,
         type: 'put',
@@ -554,7 +540,8 @@ function updatePlotSource(name, color, id){
         url: window.location.pathname + '/' + id,
         data: JSON.stringify({
             name: name,
-            color: color
+            color: color,
+            property: property
         })
     }).done(function (){
         let update = {

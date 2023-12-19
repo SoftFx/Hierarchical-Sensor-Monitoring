@@ -193,7 +193,7 @@ namespace HSMServer.Controllers
             {
                 var response = await datasource.Source.Initialize();
 
-                return Json(new SourceViewModel(response, datasource));
+                return Json(new DatasourceViewModel(response, datasource));
             }
 
             return Json(new
@@ -220,6 +220,9 @@ namespace HSMServer.Controllers
         {
             return TryGetPanel(dashboardId, panelId, out var panel) && panel.TryRemoveSource(sensorId) ? Ok() : NotFound("No source found to delete");
         }
+
+        [HttpPost]
+        public IActionResult GetSourceSettings([FromBody] DatasourceViewModel datasource) => PartialView("_SourceSettings", datasource);
 
         #endregion
 

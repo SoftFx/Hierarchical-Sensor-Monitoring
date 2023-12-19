@@ -131,6 +131,7 @@ namespace HSMServer.Dashboards
             return string.IsNullOrEmpty(error);
         }
 
-        private static bool IsSupportedType(SensorType type) => type is SensorType.Integer or SensorType.Double or SensorType.TimeSpan;
+        private static bool IsSupportedType(SensorType type) =>
+            type is SensorType.Integer or SensorType.Double or SensorType.TimeSpan or SensorType.IntegerBar or SensorType.DoubleBar;
     }
 }

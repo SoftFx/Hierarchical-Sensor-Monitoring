@@ -33,5 +33,5 @@ namespace HSMServer.Dashboards
     }
 
 
-    public record PanelSourceUpdate(string Name, string Color, PlottedProperty? Property);
+    public record PanelSourceUpdate(string Name, string Color, string Property);
 }
