@@ -5,7 +5,6 @@ using HSMServer.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using TargetType = HSMServer.Core.Model.Policies.TargetType;
 
 namespace HSMServer.Model.DataAlerts
 {

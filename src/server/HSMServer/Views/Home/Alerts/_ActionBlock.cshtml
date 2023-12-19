@@ -2,7 +2,6 @@
 @using HSMServer.Extensions
 @using HSMServer.Notifications
 @using HSMServer.Model.DataAlerts
-@using Microsoft.AspNetCore.Mvc.TagHelpers
 
 @model ActionViewModel
 
@@ -16,7 +15,6 @@
 
     var isSendAction = action == ActionType.SendNotification;
     var isShowAction = action == ActionType.ShowIcon;
-    var isScheduleAction = action == ActionType.Schedule;
 
     var isSecondaryCondition = !Model.IsMain;
 
@@ -35,7 +33,7 @@
 
     <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions" disabled="@(Model.IsMain ? true : false)"></select>
 
-    <div name="sendNotificationAction" class="@isSendAction.ToVisibility()">
+    <div name="sendNotificationAction" class="@isSendAction.ToVisibility() align-items-center">
         <input type="text" class="alert-block target-input target-comment" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)">
         <div class="alert-text-block operation-select">to</div>
         <select class="selectpicker" name="Chats" multiple
@@ -56,17 +54,19 @@
                 <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
             }
         </select>
+
+        <a class="addSchedule"><i class="fa-solid fa-calendar alert-add-schedule-button"></i></a>
+
+        <div name="schedule" class="d-flex align-items-center">
+            <div class="alert-text-block operation-select">scheduled every</div>
+            <select class="alert-block alert-select target-input" asp-for="Schedule.RepeatMode" asp-items="Html.GetEnumSelectList<AlertRepeatMode>()"></select>
+            <div class="alert-text-block operation-select">starting at</div>
+            <input class="alert-block target-input" type="datetime-local" id="schedule" asp-for="Schedule.Time">
+        </div>
     </div>
 
     <div name="showIconAction" class="@isShowAction.ToVisibility() alert-block">
         <div name="emoji" class="target-input">@Model.Icon</div>
-    </div>
-
-    <div name="schedule" class="@isScheduleAction.ToVisibility() align-items-center">
-        <input class="me-2" type="datetime-local" id="schedule" asp-for="Schedule.Time" style="flex-shrink: 0.3">
-        <div class="alert-text-block operation-select">for repeat</div>
-        <select class="alert-block alert-select property-select" asp-for="Schedule.RepeatMode" asp-items="Html.GetEnumSelectList<AlertRepeatMode>()">
-        </select>
     </div>
 
     <a class="deleteAction">
@@ -104,7 +104,6 @@
 
         let send = actionBlock.find($(`div[name='sendNotificationAction']`));
         let show = actionBlock.find($(`div[name='showIconAction']`));
-        let schedule = actionBlock.find($(`div[name='schedule']`));
 
         let commentInput = send.find($(`input[name='Comment']`));
 
@@ -114,25 +113,17 @@
 
             commentInput.attr('required', true);
             send.removeClass("d-none").addClass('d-flex');
-            schedule.hide();
         }
         else if (action === '@ActionType.ShowIcon') {
             commentInput.attr('required', false);
             send.removeClass("d-flex").addClass('d-none');
 
             show.removeClass("d-none").addClass('d-flex');
-            schedule.hide();
         }
         else if (action === '@ActionType.SetStatus') {
             commentInput.attr('required', false);
             send.removeClass("d-flex").addClass('d-none');
             show.removeClass("d-flex").addClass('d-none');
-            schedule.removeClass("d-flex").addClass('d-none');
-        }
-        else if (action === '@ActionType.Schedule') {
-            send.removeClass("d-flex").addClass('d-none');
-            show.removeClass("d-flex").addClass('d-none');
-            schedule.removeClass('d-none').addClass("d-flex");
         }
     });
 

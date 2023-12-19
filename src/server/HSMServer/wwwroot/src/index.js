@@ -1,5 +1,6 @@
 ﻿import $ from 'jquery';
 import 'jquery-validation'
+
 import * as bootstrap from 'bootstrap';
 window.bootstrap = bootstrap;
 bootstrap.Toast.Default.delay = 3000;

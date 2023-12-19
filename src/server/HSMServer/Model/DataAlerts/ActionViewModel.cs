@@ -1,11 +1,11 @@
 ﻿using HSMCommon.Extensions;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
-using HSMServer.Core.Model.Policies;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -14,7 +14,6 @@ namespace HSMServer.Model.DataAlerts
         SendNotification,
         ShowIcon,
         SetStatus,
-        Schedule
     }
 
 
@@ -44,7 +43,6 @@ namespace HSMServer.Model.DataAlerts
             { ActionType.SendNotification, "send notification" },
             { ActionType.ShowIcon, "show icon" },
             { ActionType.SetStatus, SetErrorStatus },
-            { ActionType.Schedule, "schedule on" },
         };
 
 

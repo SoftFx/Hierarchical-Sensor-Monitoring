@@ -120,39 +120,11 @@
         });
     })
 
-    // $('#editMetaInfo_form').validate({
-    //     // ignore: '.d-none',
-    //     submitHandler: function (form){
-    //         var formData = new FormData(form);
-    //         console.log(123)
-    //         collectAlerts(formData);
-    //         console.log(formData)
-    //         $.ajax({
-    //             url: $("#editMetaInfo_form").attr("action"),
-    //             type: 'POST',
-    //             data: formData,
-    //             processData: false,
-    //             contentType: false,
-    //             async: true,
-    //             success: (viewData) => {
-    //                 console.log('request')
-    //                 displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
-    //
-    //                 if ($(".field-validation-error").length !== 0)
-    //                     editInfoButtonClick()
-    //             }
-    //         });
-    //        
-    //         return false;
-    //     }
-    // })
-
     $(document).on("submit", "#editMetaInfo_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        console.log(321)
+
         var formData = new FormData(this);
-        console.log(formData)
         collectAlerts(formData);
 
         $.ajax({
