@@ -9,15 +9,12 @@ namespace HSMServer.Datasources
             where TValue : BaseValue<TProp>
             where TChart : INumber<TChart>
     {
-        internal InstantBaseLineDatasource()
+        protected override Func<TValue, TProp> GetPropertyFactory() => _plotProperty switch
         {
-            _getPropertyFactory = _plotProperty switch
-            {
-                PlottedProperty.Value => v => v.Value,
+            PlottedProperty.Value => v => v.Value,
 
-                _ => throw BuildException(),
-            };
-        }
+            _ => throw BuildException(),
+        };
     }
 
     public sealed class IntLineDatasource : InstantBaseLineDatasource<IntegerValue, int, int>
@@ -39,16 +36,12 @@ namespace HSMServer.Datasources
     public abstract class InstantBaseNullDoubleLineDatasource<TValue> : BaseLineDatasource<TValue, double?, double>
        where TValue : BaseInstantValue
     {
-        internal InstantBaseNullDoubleLineDatasource()
+        protected override Func<TValue, double?> GetPropertyFactory() => _plotProperty switch
         {
-            _getPropertyFactory = _plotProperty switch
-            {
-                PlottedProperty.EmaValue => v => v.EmaValue,
+            PlottedProperty.EmaValue => v => v.EmaValue,
 
-                _ => throw BuildException(),
-            };
-        }
-
+            _ => throw BuildException(),
+        };
 
         protected override double ConvertToChartType(double? value) => value ?? 0.0;
     }

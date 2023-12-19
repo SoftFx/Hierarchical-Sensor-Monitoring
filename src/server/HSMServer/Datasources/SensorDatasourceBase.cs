@@ -44,7 +44,7 @@ namespace HSMServer.Datasources
         protected abstract void ApplyToLast(BaseValue newValue);
 
 
-        public SensorDatasourceBase AttachSensor(BaseSensorModel sensor, PlottedProperty plotProperty)
+        internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, PlottedProperty plotProperty)
         {
             _plotProperty = plotProperty;
             _sensor = sensor;

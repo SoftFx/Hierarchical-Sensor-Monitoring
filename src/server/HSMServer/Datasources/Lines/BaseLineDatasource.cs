@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Dashboards;
 using System;
 using System.Numerics;
 
@@ -15,6 +16,16 @@ namespace HSMServer.Datasources
         protected override ChartType AggregatedType => ChartType.Line;
 
         protected override ChartType NormalType => ChartType.Line;
+
+
+        internal override SensorDatasourceBase AttachSensor(BaseSensorModel sensor, PlottedProperty plotProperty)
+        {
+            base.AttachSensor(sensor, plotProperty);
+
+            _getPropertyFactory = GetPropertyFactory();
+
+            return this;
+        }
 
 
         protected override void AddVisibleValue(BaseValue rawValue)
@@ -34,7 +45,10 @@ namespace HSMServer.Datasources
         }
 
 
+        protected abstract Func<TValue, TProp> GetPropertyFactory();
+
         protected abstract TChart ConvertToChartType(TProp value);
+
 
         protected Exception BuildException() => new($"Unsupport cast property for {typeof(TValue).Name} {_plotProperty} from {typeof(TProp).Name} to {typeof(TChart).Name}");
 
