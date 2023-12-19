@@ -1,8 +1,8 @@
 ﻿using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using System;
 using HSMSensorDataObjects.SensorRequests;
 using HSMServer.Core.Cache.UpdateEntities;
+using System;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -30,8 +30,8 @@ namespace HSMServer.Core.Model.Policies
             if (update is null)
                 return;
 
-            Time = update.Time ?? DateTime.MinValue;
-            RepeatMode = update.RepeatMode;
+            Time = update.Time ?? Time;
+            RepeatMode = update.RepeatMode ?? RepeatMode;
         }
 
 

@@ -35,7 +35,6 @@ namespace HSMServer.Controllers
         private static readonly JsonSerializerOptions _deserializeOptions = new()
         {
             AllowTrailingCommas = true,
-            Converters = { new DateTimeConverter() }
         };
 
         private readonly ITelegramChatsManager _telegram;

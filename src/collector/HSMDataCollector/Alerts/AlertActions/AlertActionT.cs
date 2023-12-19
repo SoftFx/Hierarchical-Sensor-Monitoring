@@ -1,8 +1,8 @@
 ﻿using HSMDataCollector.Extensions;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
-using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMDataCollector.Alerts
 {
@@ -30,7 +30,7 @@ namespace HSMDataCollector.Alerts
 
 
         public DateTime? ScheduledNotificationTime { get; private set; }
-        
+
         public AlertRepeatMode ScheduledRepeatMode { get; private set; }
 
         public SensorStatus Status { get; private set; } = SensorStatus.Ok;
@@ -58,6 +58,15 @@ namespace HSMDataCollector.Alerts
             return this;
         }
 
+        public AlertAction<T> AndSendScheduledNotification(string template, DateTime? time, AlertRepeatMode repeatMode)
+        {
+            Template = template;
+            ScheduledNotificationTime = time;
+            ScheduledRepeatMode = repeatMode;
+
+            return this;
+        }
+
         public AlertAction<T> AndSetIcon(string icon)
         {
             Icon = icon;
@@ -76,20 +85,6 @@ namespace HSMDataCollector.Alerts
         {
             Status = SensorStatus.Error;
 
-            return this;
-        }
-
-        public AlertAction<T> ScheduleNotificationTime(DateTime? time)
-        {
-            ScheduledNotificationTime = time;
-            
-            return this;
-        }
-        
-        public AlertAction<T> ScheduleRepeatMode(AlertRepeatMode repeatMode)
-        {
-            ScheduledRepeatMode = repeatMode;
-            
             return this;
         }
 

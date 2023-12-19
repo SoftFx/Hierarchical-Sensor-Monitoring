@@ -1,11 +1,11 @@
-﻿using HSMServer.Core.Cache.UpdateEntities;
+﻿using HSMSensorDataObjects.SensorRequests;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using HSMSensorDataObjects.SensorRequests;
 using TargetType = HSMServer.Core.Model.Policies.TargetType;
 
 namespace HSMServer.Model.DataAlerts
@@ -25,10 +25,10 @@ namespace HSMServer.Model.DataAlerts
         public SensorStatus Status { get; set; }
 
         public TimeSpan? ConfirmationPeriod { get; set; }
-        
-        public DateTime? ScheduledNotificationTime { get; set; }
-        
-        public AlertRepeatMode ScheduledRepeatMode { get; set; }
+
+        public string ScheduledNotificationTime { get; set; }
+
+        public AlertRepeatMode? ScheduledRepeatMode { get; set; }
 
         public List<string> Chats { get; set; }
 
@@ -52,8 +52,8 @@ namespace HSMServer.Model.DataAlerts
             Template = policy.Template;
             ConfirmationPeriod = policy.ConfirmationPeriod.HasValue ? new TimeSpan(policy.ConfirmationPeriod.Value) : null;
             IsDisabled = policy.IsDisabled;
-            ScheduledNotificationTime = policy.Schedule.Time == DateTime.MinValue ? null : policy.Schedule.Time;
-            ScheduledRepeatMode = policy.Schedule.RepeatMode;
+            ScheduledNotificationTime = policy.Schedule.Time == DateTime.MinValue ? null : policy.Schedule.Time.ToDefaultFormat();
+            ScheduledRepeatMode = policy.Schedule.RepeatMode; // TODO: null if None or Immediatly?
 
             if (!policy.Destination.AllChats)
             {
@@ -68,20 +68,26 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats) =>
-            new()
+        internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats)
+        {
+            DateTime? scheduledTime = ScheduledNotificationTime is null
+                ? DateTime.MinValue
+                : DateTime.TryParse(ScheduledNotificationTime, out var time) ? time : null;
+
+            return new()
             {
                 Icon = Icon,
                 Status = Status,
                 Template = Template,
                 IsDisabled = IsDisabled,
                 ConfirmationPeriod = ConfirmationPeriod?.Ticks,
-                Schedule = new PolicyScheduleUpdate(ScheduledNotificationTime, ScheduledRepeatMode),
+                Schedule = new PolicyScheduleUpdate(scheduledTime, ScheduledRepeatMode),
                 Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
                 Destination = Chats is null
                     ? new PolicyDestinationUpdate(allChats: true)
                     : new PolicyDestinationUpdate(Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
             };
+        }
     }
 
 
