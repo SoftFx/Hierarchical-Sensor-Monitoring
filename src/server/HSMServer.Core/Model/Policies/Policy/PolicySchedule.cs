@@ -5,7 +5,7 @@ using System;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public enum AlertRepeatMode
+    public enum AlertRepeatMode : byte
     {
         None = 0,
 
