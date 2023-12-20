@@ -56,6 +56,25 @@ namespace HSMServer.Extensions
             };
 
 
+        public static ScheduleRepeatMode? ToClient(this AlertRepeatMode repeatMode) =>
+            repeatMode switch
+            {
+                AlertRepeatMode.Hourly => ScheduleRepeatMode.Hourly,
+                AlertRepeatMode.Daily => ScheduleRepeatMode.Daily,
+                AlertRepeatMode.Weekly => ScheduleRepeatMode.Weekly,
+                _ => null,
+            };
+
+        public static AlertRepeatMode ToCore(this ScheduleRepeatMode? repeatMode) =>
+            repeatMode switch
+            {
+                ScheduleRepeatMode.Hourly => AlertRepeatMode.Hourly,
+                ScheduleRepeatMode.Daily => AlertRepeatMode.Daily,
+                ScheduleRepeatMode.Weekly => AlertRepeatMode.Weekly,
+                _ => AlertRepeatMode.None,
+            };
+
+
         public static OperationViewModel GetOperations(this ConditionViewModel condition)
         {
             var viewModel = condition.GetOperations(condition.Property);

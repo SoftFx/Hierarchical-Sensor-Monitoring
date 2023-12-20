@@ -142,6 +142,8 @@ namespace HSMServer.Model.DataAlerts
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
                 DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template,
+                ScheduleStartTime = policy.Schedule.Time,
+                ScheduleRepeatMode = policy.Schedule.RepeatMode.ToClient(),
                 Chats = policy.Destination.AllChats
                     ? new HashSet<Guid>() { ActionViewModel.AllChatsId }
                     : new HashSet<Guid>(policy.Destination.Chats.Keys),

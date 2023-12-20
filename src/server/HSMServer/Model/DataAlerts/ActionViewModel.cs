@@ -1,11 +1,11 @@
 ﻿using HSMCommon.Extensions;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -17,10 +17,25 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
+    public enum ScheduleRepeatMode
+    {
+        [Display(Name = "Hour")]
+        Hourly,
+        [Display(Name = "Day")]
+        Daily,
+        [Display(Name = "Week")]
+        Weekly,
+    }
+
+
     public class AlertActionBase
     {
         public ActionType Action { get; set; }
 
+
+        public ScheduleRepeatMode? ScheduleRepeatMode { get; set; }
+
+        public DateTime? ScheduleStartTime { get; set; }
 
         public HashSet<Guid> Chats { get; set; } = new();
 
@@ -48,8 +63,6 @@ namespace HSMServer.Model.DataAlerts
 
         public List<SelectListItem> Actions { get; }
 
-        public PolicySchedule Schedule { get; set; }
-
         public NodeViewModel Node { get; }
 
         public bool IsMain { get; }
@@ -62,6 +75,9 @@ namespace HSMServer.Model.DataAlerts
             Node = node;
 
             Action = ActionType.SendNotification;
+
+            var now = DateTime.UtcNow;
+            ScheduleStartTime = now.AddMilliseconds(-now.Millisecond).AddSeconds(-now.Second).AddMinutes(-now.Minute).AddHours(1);
         }
 
 

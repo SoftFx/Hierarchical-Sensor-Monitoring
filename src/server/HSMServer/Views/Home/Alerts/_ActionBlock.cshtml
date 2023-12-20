@@ -1,4 +1,4 @@
-﻿@using HSMServer.Core.Model.Policies
+﻿@using HSMCommon.Extensions
 @using HSMServer.Extensions
 @using HSMServer.Notifications
 @using HSMServer.Model.DataAlerts
@@ -61,10 +61,10 @@
             <a class="removeSchedule"><i class="fa-regular fa-calendar-minus alert-schedule-button"></i></a>
 
             <div class="alert-text-block operation-select">scheduled every</div>
-            <select class="alert-block alert-select target-input" asp-for="Schedule.RepeatMode" asp-items="Html.GetEnumSelectList<AlertRepeatMode>()"></select>
+            <select class="alert-block alert-select target-input" asp-for="ScheduleRepeatMode" asp-items="Enum.GetValues<ScheduleRepeatMode>().ToSelectedItems(k => k.GetDisplayName())"></select>
 
             <div class="alert-text-block operation-select">starting at</div>
-            <input class="alert-block target-input" type="datetime-local" id="schedule" asp-for="Schedule.Time">
+            <input class="alert-block target-input" type="datetime-local" id="schedule" asp-for="ScheduleStartTime">
         </div>
     </div>
 
