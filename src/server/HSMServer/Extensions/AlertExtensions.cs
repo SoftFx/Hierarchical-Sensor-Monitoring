@@ -75,6 +75,11 @@ namespace HSMServer.Extensions
             };
 
 
+        public static DateTime? ToClientScheduleTime(this DateTime time) => time == DateTime.MinValue ? DateTime.UtcNow.Ceil() : time;
+
+        public static DateTime ToCoreScheduleTime(this DateTime? time) => time ?? DateTime.MinValue;
+
+
         public static OperationViewModel GetOperations(this ConditionViewModel condition)
         {
             var viewModel = condition.GetOperations(condition.Property);

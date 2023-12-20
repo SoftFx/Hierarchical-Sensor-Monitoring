@@ -180,6 +180,12 @@
                 if (sendBlock.hasClass('d-flex')) {
                     setFormDataAlertsListProperty(formData, type, i, j, sendBlock, "Actions", "input", "Comment");
                     setFormDataAlertsSendNotificationChats(formData, type, i, j, sendBlock);
+
+                    let scheduleBlock = sendBlock.find('div[name="schedule"]');
+                    if (scheduleBlock.hasClass('d-flex')) {
+                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "select", "ScheduleRepeatMode");
+                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "input", "ScheduleStartTime");
+                    }
                 }
 
                 let showBlock = $(this).find('div[name="showIconAction"]');

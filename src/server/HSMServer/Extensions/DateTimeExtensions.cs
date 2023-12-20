@@ -49,5 +49,10 @@ namespace HSMServer.Extensions
         internal static DateTime RoundToMin(this DateTime time) => time.AddSeconds(-time.Second).AddMicroseconds(-time.Millisecond);
 
         internal static long ToUnixMilliseconds(this DateTime time) => new DateTimeOffset(time).ToUnixTimeMilliseconds();
+
+
+        internal static DateTime Ceil(this DateTime time) =>
+            time.AddMilliseconds(-time.Millisecond).AddSeconds(-time.Second).AddMinutes(-time.Minute).AddHours(1);
+
     }
 }

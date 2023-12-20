@@ -75,9 +75,7 @@ namespace HSMServer.Model.DataAlerts
             Node = node;
 
             Action = ActionType.SendNotification;
-
-            var now = DateTime.UtcNow;
-            ScheduleStartTime = now.AddMilliseconds(-now.Millisecond).AddSeconds(-now.Second).AddMinutes(-now.Minute).AddHours(1);
+            ScheduleStartTime = DateTime.UtcNow.Ceil();
         }
 
 

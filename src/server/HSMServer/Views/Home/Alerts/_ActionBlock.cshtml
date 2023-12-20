@@ -15,6 +15,7 @@
 
     var isSendAction = action == ActionType.SendNotification;
     var isShowAction = action == ActionType.ShowIcon;
+    var hasSchedule = Model.ScheduleRepeatMode is not null;
 
     var isSecondaryCondition = !Model.IsMain;
 
@@ -55,9 +56,9 @@
             }
         </select>
 
-        <a class="addSchedule"><i class="fa-regular fa-calendar-plus alert-schedule-button"></i></a>
+        <a class="addSchedule @(hasSchedule ? "d-none" : string.Empty)"><i class="fa-regular fa-calendar-plus alert-schedule-button"></i></a>
 
-        <div name="schedule" class="d-none align-items-center">
+        <div name="schedule" class="align-items-center @hasSchedule.ToVisibility()">
             <a class="removeSchedule"><i class="fa-regular fa-calendar-minus alert-schedule-button"></i></a>
 
             <div class="alert-text-block operation-select">scheduled every</div>
