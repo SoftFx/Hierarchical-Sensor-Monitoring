@@ -45,7 +45,9 @@ namespace HSMServer.Core.Model.Policies
                 AlertRepeateMode.Weekly => TimeSpan.FromDays(7),
             };
 
-            return Time.Ceil(shiftTime);
+            var curTime = DateTime.UtcNow;
+
+            return curTime <= Time ? Time : new DateTime((curTime - Time).Ticks).Ceil(shiftTime);
         }
 
         internal PolicyScheduleEntity ToEntity() =>
