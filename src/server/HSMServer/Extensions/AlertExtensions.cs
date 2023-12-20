@@ -71,7 +71,7 @@ namespace HSMServer.Extensions
                 ScheduleRepeatMode.Hourly => AlertRepeatMode.Hourly,
                 ScheduleRepeatMode.Daily => AlertRepeatMode.Daily,
                 ScheduleRepeatMode.Weekly => AlertRepeatMode.Weekly,
-                _ => AlertRepeatMode.None,
+                _ => AlertRepeatMode.Immediately,
             };
 
 

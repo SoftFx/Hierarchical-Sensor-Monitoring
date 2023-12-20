@@ -7,7 +7,7 @@ namespace HSMServer.Core.Model.Policies
 {
     public enum AlertRepeatMode : byte
     {
-        None = 0,
+        Immediately = 0,
 
         Hourly = 20,
         Daily = 50,
@@ -46,7 +46,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal DateTime GetSendTime()
         {
-            if (RepeatMode == AlertRepeatMode.None)
+            if (RepeatMode == AlertRepeatMode.Immediately)
                 return Time;
 
             var shiftTime = RepeatMode switch

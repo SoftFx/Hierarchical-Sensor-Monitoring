@@ -70,7 +70,7 @@
                     chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch]));
 
                 if (action.ScheduleRepeatMode is not null)
-                    schedule = $" scheduled every {action.ScheduleRepeatMode.GetDisplayName()} starting at {action.ScheduleStartTime}";
+                    schedule = $" scheduled every {action.ScheduleRepeatMode.GetDisplayName()} starting at {action.ScheduleStartTime?.ToDefaultFormat()}";
 
                 actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: {color};'>{chats}</span>{schedule}"));
             }
