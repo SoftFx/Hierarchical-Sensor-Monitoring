@@ -58,6 +58,9 @@ namespace HSMServer.Core.Model
         internal override bool HasData => !_cache.IsEmpty;
 
 
+        internal virtual T CalculateStatistics(T value) => value;
+
+
         internal virtual void AddValue(T value) => AddValueBase(value);
 
         internal virtual void AddValueBase(T value)

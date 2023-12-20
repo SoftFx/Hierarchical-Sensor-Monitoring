@@ -23,7 +23,7 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    internal sealed class PolicyExecutorNumber<T> : PolicyExecutorNumberBase<T> where T : INumber<T>
+    internal sealed class PolicyExecutorNumber<T> : PolicyExecutorNumberBase<T> where T : struct, INumber<T>
     {
         internal PolicyExecutorNumber(PolicyProperty property)
         {
@@ -33,10 +33,30 @@ namespace HSMServer.Core.Model.Policies
                 PolicyProperty.Min => v => ((BarBaseValue<T>)v).Min,
                 PolicyProperty.Max => v => ((BarBaseValue<T>)v).Max,
                 PolicyProperty.Mean => v => ((BarBaseValue<T>)v).Mean,
+                PolicyProperty.FirstValue => v => ((BarBaseValue<T>)v).FirstValue ?? ((BarBaseValue<T>)v).Min,
                 PolicyProperty.LastValue => v => ((BarBaseValue<T>)v).LastValue,
                 _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorNumber<T>)}")
             };
         }
+    }
+
+
+    internal sealed class PolicyExecutorNullableDouble<T> : PolicyMultiplePropertyExecutor<double?> where T : struct, INumber<T>
+    {
+        internal PolicyExecutorNullableDouble(PolicyProperty property)
+        {
+            _getCheckedValue = property switch
+            {
+                PolicyProperty.EmaValue => v => ((BaseValue<T>)v).EmaValue,
+                PolicyProperty.EmaMin => v => ((BarBaseValue<T>)v).EmaMin,
+                PolicyProperty.EmaMax => v => ((BarBaseValue<T>)v).EmaMax,
+                PolicyProperty.EmaMean => v => ((BarBaseValue<T>)v).EmaMean,
+                PolicyProperty.EmaCount => v => ((BarBaseValue<T>)v).EmaCount,
+                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorNullableDouble<T>)}")
+            };
+        }
+
+        protected override Func<double?, double?, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetNullableDoubleOperation(operation);
     }
 
 

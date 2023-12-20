@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
@@ -34,6 +35,8 @@ namespace HSMServer.Model.TreeViewModel
 
         public bool IsSingleton { get; private set; }
 
+        public bool IsEma { get; private set; }
+
 
         public List<Unit> AvailableUnits { get; private set; }
 
@@ -59,6 +62,7 @@ namespace HSMServer.Model.TreeViewModel
 
             Type = model.Type;
             State = model.State;
+            IsEma = model.Statistics.HasEma();
             Integration = model.Integration;
             UpdateTime = model.LastUpdate;
             IsSingleton = model.IsSingleton;
@@ -104,8 +108,8 @@ namespace HSMServer.Model.TreeViewModel
             BooleanPolicy p => new DataAlertViewModel<BooleanValue>(p, this),
             VersionPolicy p => new SingleDataAlertViewModel<VersionValue>(p, this),
             TimeSpanPolicy p => new SingleDataAlertViewModel<TimeSpanValue>(p, this),
-            IntegerPolicy p => new SingleDataAlertViewModel<IntegerValue>(p, this),
-            DoublePolicy p => new SingleDataAlertViewModel<DoubleValue>(p, this),
+            IntegerPolicy p => new NumericDataAlertViewModel<IntegerValue>(p, this),
+            DoublePolicy p => new NumericDataAlertViewModel<DoubleValue>(p, this),
             IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue>(p, this),
             DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue>(p, this),
             _ => null,

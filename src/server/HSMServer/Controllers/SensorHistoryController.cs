@@ -1,4 +1,5 @@
-﻿using HSMSensorDataObjects.HistoryRequests;
+﻿using HSMCommon.Extensions;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
@@ -15,7 +16,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMServer.DTOs.SensorInfo;
+using HSMServer.Model.Dashboards;
 
 namespace HSMServer.Controllers
 {
@@ -40,7 +41,7 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public Task<IActionResult> TabelHistoryLatest([FromBody] GetSensorHistoryModel model)
+        public Task<IActionResult> TabelHistoryLatest([FromBody] GetSensorHistoryRequest model)
         {
             if (model == null)
                 return Task.FromResult(_emptyResult as IActionResult);
@@ -49,7 +50,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> TableHistory([FromBody] GetSensorHistoryModel model)
+        public async Task<IActionResult> TableHistory([FromBody] GetSensorHistoryRequest model)
         {
             if (model == null)
                 return _emptyResult;
@@ -73,7 +74,7 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public Task<JsonResult> ChartHistoryLatest([FromBody] GetSensorHistoryModel model)
+        public Task<JsonResult> ChartHistoryLatest([FromBody] GetSensorHistoryRequest model)
         {
             if (model == null)
                 return Task.FromResult(_emptyJsonResult);
@@ -82,16 +83,16 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public ActionResult<SensorInfoDTO> GetSensorPlotInfo([FromQuery] Guid id)
+        public ActionResult<SensorInfoViewModel> GetSensorPlotInfo([FromQuery] Guid id)
         {
             if (_tree.Sensors.TryGetValue(id, out var sensorNodeViewModel))
-                return new SensorInfoDTO(sensorNodeViewModel.Type, sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type, sensorNodeViewModel.SelectedUnit.ToString());
+                return new SensorInfoViewModel(sensorNodeViewModel.Type, sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type, sensorNodeViewModel.SelectedUnit.ToString());
 
             return _emptyJsonResult;
         }
 
         [HttpPost]
-        public async Task<JsonResult> ChartHistory([FromBody] GetSensorHistoryModel model)
+        public async Task<JsonResult> ChartHistory([FromBody] GetSensorHistoryRequest model)
         {
             if (model == null || !TryGetSensor(model.EncodedId, out var sensor))
                 return _emptyJsonResult;
@@ -110,7 +111,7 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public void ReloadHistoryRequest([FromBody] GetSensorHistoryModel model)
+        public void ReloadHistoryRequest([FromBody] GetSensorHistoryRequest model)
         {
             StoredUser.History.Reload(model);
         }
@@ -139,7 +140,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model, [FromQuery] bool isStatusService = false)
+        public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryRequest model, [FromQuery] bool isStatusService = false)
         {
             var currentId = SensorPathHelper.DecodeGuid(model.EncodedId);
 
@@ -154,7 +155,7 @@ namespace HSMServer.Controllers
                 : Task.FromResult(_emptyJsonResult);
         }
 
-        public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type, 
+        public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery] bool addHiddenColumns, [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
             if (!TryGetSensor(encodedId, out var sensor))
@@ -164,8 +165,7 @@ namespace HSMServer.Controllers
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
             var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount, RequestOptions.IncludeTtl);
-            _tree.Sensors.TryGetValue(Guid.Parse(encodedId), out var currentSensor);
-            var exportOptions = addHiddenColumns ? currentSensor.AggregateValues ? ExportOptions.Aggregated : ExportOptions.Hidden : ExportOptions.Simple;
+            var exportOptions = BuildExportOptions(encodedId, addHiddenColumns);
             var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(exportOptions));
 
             return File(content, fileName.GetContentType(), fileName);
@@ -183,7 +183,7 @@ namespace HSMServer.Controllers
             return _cache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from, to, count, options).Flatten();
         }
 
-        private GetSensorHistoryModel SpecifyLatestHistoryModel(GetSensorHistoryModel model)
+        private GetSensorHistoryRequest SpecifyLatestHistoryModel(GetSensorHistoryRequest model)
         {
             if (!TryGetSensor(model.EncodedId, out var sensor))
                 return null;
@@ -210,5 +210,22 @@ namespace HSMServer.Controllers
 
         private bool TryGetSensor(string encodedId, out SensorNodeViewModel sensor) =>
             _tree.Sensors.TryGetValue(encodedId.ToGuid(), out sensor);
+
+        private ExportOptions BuildExportOptions(string sensorId, bool addHiddenColumns)
+        {
+            ExportOptions exportOptions = ExportOptions.Simple;
+
+            if (TryGetSensor(sensorId, out var sensor))
+            {
+                if (addHiddenColumns)
+                    exportOptions |= ExportOptions.Hidden;
+                if (sensor.AggregateValues)
+                    exportOptions |= ExportOptions.Aggregated;
+                if (sensor.IsEma)
+                    exportOptions |= ExportOptions.EmaStatistics;
+            }
+
+            return exportOptions;
+        }
     }
 }

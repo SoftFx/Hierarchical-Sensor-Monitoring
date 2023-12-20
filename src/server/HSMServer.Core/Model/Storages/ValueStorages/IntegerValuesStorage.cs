@@ -1,4 +1,9 @@
-﻿namespace HSMServer.Core.Model
+﻿using HSMServer.Core.Model.Storages;
+
+namespace HSMServer.Core.Model
 {
-    public sealed class IntegerValuesStorage : ValuesStorage<IntegerValue> { }
+    public sealed class IntegerValuesStorage : ValuesStorage<IntegerValue>
+    {
+        internal override IntegerValue CalculateStatistics(IntegerValue value) => StatisticsCalculation.CalculateEma<IntegerValue, int>(LastValue, value);
+    }
 }

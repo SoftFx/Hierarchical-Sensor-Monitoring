@@ -8,7 +8,7 @@ namespace HSMServer.Model.History
 {
     public sealed class SelectedSensorHistoryViewModel
     {
-        private GetSensorHistoryModel _request;
+        private GetSensorHistoryRequest _request;
         private BaseSensorModel _sensor;
         private BarBaseValue _lastBar;
 
@@ -31,7 +31,7 @@ namespace HSMServer.Model.History
         }
 
 
-        public Task Reload(ITreeValuesCache cache, GetSensorHistoryModel request)
+        public Task Reload(ITreeValuesCache cache, GetSensorHistoryRequest request)
         {
             Reload(request);
 
@@ -40,7 +40,7 @@ namespace HSMServer.Model.History
             return Table.Reload(cache, request);
         }
 
-        public void Reload(GetSensorHistoryModel request)
+        public void Reload(GetSensorHistoryRequest request)
         {
             _request = request;
         }

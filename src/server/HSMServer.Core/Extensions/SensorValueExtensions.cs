@@ -9,17 +9,21 @@ namespace HSMServer.Core.Extensions
 {
     public static class SensorValueExtensions
     {
-        private static readonly JsonSerializerOptions _options = new () 
-        { 
+        private const int RoundPrecision = 2;
+
+
+        private static readonly JsonSerializerOptions _options = new()
+        {
             NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
         };
-        
-        
+
+
         public static BaseValue ToValue<T>(this byte[] bytes) where T : BaseValue
         {
             return bytes == null ? null : (BaseValue)JsonSerializer.Deserialize<T>(bytes, _options);
         }
 
+        public static double Round(this double value) => Math.Round(value, RoundPrecision, MidpointRounding.AwayFromZero);
 
         public static bool InRange<T>(this T value, DateTime from, DateTime to) where T : BaseValue
         {
@@ -28,7 +32,7 @@ namespace HSMServer.Core.Extensions
 
         public static FileValue CompressContent(this FileValue file)
         {
-            if (file.Value == null) 
+            if (file.Value == null)
                 return file;
 
             using var output = new MemoryStream();

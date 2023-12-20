@@ -1,9 +1,17 @@
 ﻿using HSMDataCollector.Options;
+using System;
 
 namespace HSMDataCollector.PublicInterface
 {
-    public interface IUnixCollection
+    public interface IUnixCollection : IDisposable
     {
+        IUnixCollection AddAllComputerSensors();
+
+        IUnixCollection AddAllModuleSensors(Version productVersion = null);
+
+        IUnixCollection AddAllDefaultSensors(Version productVersion = null);
+
+
         IUnixCollection AddProcessCpu(BarSensorOptions options = null);
 
         IUnixCollection AddProcessMemory(BarSensorOptions options = null);
@@ -31,9 +39,22 @@ namespace HSMDataCollector.PublicInterface
 
         IUnixCollection AddCollectorVersion();
 
+        IUnixCollection AddCollectorErrors();
+
         IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options = null);
 
 
         IUnixCollection AddProductVersion(VersionSensorOptions options = null);
+
+
+        IUnixCollection AddQueuePackageContentSize(BarSensorOptions options = null);
+
+        IUnixCollection AddQueuePackageProcessTime(BarSensorOptions options = null);
+
+        IUnixCollection AddQueuePackageValuesCount(BarSensorOptions options = null);
+
+        IUnixCollection AddQueueOverflow(BarSensorOptions options = null);
+
+        IUnixCollection AddAllQueueDiagnosticSensors(BarSensorOptions barOptions = null);
     }
 }

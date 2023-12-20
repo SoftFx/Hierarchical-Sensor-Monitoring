@@ -5,7 +5,7 @@ using System;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class MonitoringBarBase<T> : BarSensorValueBase<T>
+    public abstract class MonitoringBarBase<T> : BarSensorValueBase<T> where T : struct
     {
         private readonly object _lock = new object();
 
@@ -27,6 +27,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (Count == 0)
                 {
+                    FirstValue = value;
                     Mean = value;
                     Min = value;
                     Max = value;
@@ -41,7 +42,7 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        internal void AddPartial(T min, T max, T mean, T last, int count)
+        internal void AddPartial(T min, T max, T mean, T first, T last, int count)
         {
             lock (_lock)
             {
@@ -50,6 +51,7 @@ namespace HSMDataCollector.DefaultSensors
 
                 if (Count == 0)
                 {
+                    FirstValue = first;
                     Mean = mean;
                     Min = min;
                     Max = max;
@@ -69,15 +71,12 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (Count > 0)
                 {
+                    FirstValue = FirstValue.HasValue ? Round(FirstValue.Value) : FirstValue;
                     LastValue = Round(LastValue);
 
                     Min = Round(Min);
                     Max = Round(Max);
                     Mean = Round(CountMean());
-
-                    Percentiles[0.25] = Round(CountAvr(Mean, Min));
-                    Percentiles[0.5] = Mean;
-                    Percentiles[0.75] = Round(CountAvr(Mean, Max));
                 }
 
                 return this;

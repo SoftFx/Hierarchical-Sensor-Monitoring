@@ -1,0 +1,68 @@
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.Authentication
+@using HSMServer.Model.UserTreeShallowCopy
+@using HSMServer.Model.ViewModel
+
+@model NodeShallowModel
+
+@{
+    var user = User as User;
+    var data = Model.Data;
+
+    var showIcons = user.TreeFilter.ByVisibility.Icons.Value;
+    var showErrorsCount = user.TreeFilter.ByVisibility.ErrorsCount.Value;
+    var showSensorsCount = user.TreeFilter.ByVisibility.SensorsCount.Value;
+
+    var arrowIcon = Model.VisibleSubtreeSensorsCount > 0 || Model.Data.Nodes.Count > 0 ? "jstree-closed" : string.Empty;
+}
+
+
+<li class="@arrowIcon" id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
+    <span class="@(Model.IsMutedState ? "muted-state-text" : "")">
+        @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", new AlertIconsViewModel(data.AlertIcons))
+        @Html.Raw(data.Name.GetShortNodeName())
+    </span>
+
+    @if (!data.IsEmpty && !Model.IsMutedState && showIcons)
+    {
+        @if (Model.IsGrafanaEnabled && !(Model.Parent?.IsGrafanaEnabled ?? false))
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" title="Grafana"/>
+            </span>
+        }
+    }
+
+    @if (showSensorsCount)
+    {
+        <span class="tree-sensors-count">@Model.SensorsCountString</span>
+    }
+
+    @if (showErrorsCount && Model.ErrorsCount > 0)
+    {
+        <span class="tree-errors-count">@Model.Errors</span>
+    }
+
+    @foreach (var child in Model.RenderedNodes)
+    {
+        <ul>@await Html.PartialAsync("~/Views/Tree/_TreeNode.cshtml", child)</ul>
+    }
+
+    @if (Model.RenderedSensors.Count > 0)
+    {
+        <ul>
+            @foreach (var sensor in Model.RenderedSensors)
+            {
+                @await Html.PartialAsync("~/Views/Tree/_TreeSensor.cshtml", sensor)
+            }
+        </ul>
+    }
+    @if (Model.RenderWidthDifference > 0)
+    {
+        <ul>
+            <li class="jstree-last jstree-no-icons noHover" id='disabled_@data.EncodedId' data-jstree='@BaseShallowModel.GetDisabledJSTree()'>
+                <span>... and @Model.RenderWidthDifference more</span>
+            </li>
+        </ul>
+    }
+</li>

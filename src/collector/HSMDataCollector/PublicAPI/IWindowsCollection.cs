@@ -1,12 +1,22 @@
 ﻿using HSMDataCollector.Options;
+using System;
 
 namespace HSMDataCollector.PublicInterface
 {
-    public interface IWindowsCollection
+    public interface IWindowsCollection : IDisposable
     {
+        IWindowsCollection AddAllComputerSensors();
+
+        IWindowsCollection AddAllModuleSensors(Version productVersion = null);
+
+        IWindowsCollection AddAllDefaultSensors(Version productVersion = null);
+
+
         IWindowsCollection AddProcessCpu(BarSensorOptions options = null);
 
         IWindowsCollection AddProcessMemory(BarSensorOptions options = null);
+
+        IWindowsCollection AddProcessTimeInGC(BarSensorOptions options = null);
 
         IWindowsCollection AddProcessThreadCount(BarSensorOptions options = null);
 
@@ -16,6 +26,8 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddTotalCpu(BarSensorOptions options = null);
 
         IWindowsCollection AddFreeRamMemory(BarSensorOptions options = null);
+
+        IWindowsCollection AddGlobalTimeInGC(BarSensorOptions options = null);
 
         IWindowsCollection AddSystemMonitoringSensors(BarSensorOptions options = null);
 
@@ -31,7 +43,7 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddActiveDiskTime(DiskBarSensorOptions options = null);
 
         IWindowsCollection AddActiveDisksTime(DiskBarSensorOptions options = null);
-        
+
         IWindowsCollection AddDiskQueueLength(DiskBarSensorOptions options = null);
 
         IWindowsCollection AddDisksQueueLength(DiskBarSensorOptions options = null);
@@ -44,6 +56,8 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options = null);
 
         IWindowsCollection AddWindowsLastRestart(WindowsInfoSensorOptions options = null);
+
+        IWindowsCollection AddWindowsVersion(WindowsInfoSensorOptions options = null);
 
         IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options = null);
 
@@ -58,10 +72,23 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddCollectorVersion();
 
+        IWindowsCollection AddCollectorErrors();
+
         IWindowsCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options = null);
 
 
         IWindowsCollection AddProductVersion(VersionSensorOptions options);
+
+
+        IWindowsCollection AddQueuePackageContentSize(BarSensorOptions options = null);
+
+        IWindowsCollection AddQueuePackageProcessTime(BarSensorOptions options = null);
+
+        IWindowsCollection AddQueuePackageValuesCount(BarSensorOptions options = null);
+
+        IWindowsCollection AddQueueOverflow(BarSensorOptions options = null);
+
+        IWindowsCollection AddAllQueueDiagnosticSensors(BarSensorOptions barOptions = null);
 
 
         IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);

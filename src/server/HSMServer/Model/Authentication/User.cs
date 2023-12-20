@@ -38,6 +38,7 @@ namespace HSMServer.Model.Authentication
         public SelectedNodeViewModel SelectedNode { get; } = new();
 
 
+
         public User(string userName) : this()
         {
             Name = userName;
@@ -104,11 +105,7 @@ namespace HSMServer.Model.Authentication
             (FoldersRoles.TryGetValue(folderId, out var role) && role == ProductRoleEnum.ProductManager);
 
         internal bool IsUserProduct(Guid productId) => ProductsRoles.Any(x => x.Item1 == productId);
-    }
 
-
-    public class RemoveNodesRequestModel
-    {
-        public Guid[] NodeIds { get; set; }
+        public void Dispose() { }
     }
 }

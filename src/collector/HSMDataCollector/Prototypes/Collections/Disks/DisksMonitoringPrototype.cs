@@ -1,24 +1,21 @@
 ﻿using HSMDataCollector.DefaultSensors.SystemInfo;
+using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using HSMDataCollector.DefaultSensors.Windows;
-using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Prototypes
 {
     internal abstract class BarDisksMonitoringPrototype : BarSensorOptionsPrototype<DiskBarSensorOptions>
     {
-        private const string BaseDescription = "The sensor sends information about {0} with a period of {1} and aggregated into bars of {2}. The information is read using " +
-                                                "[**Performance counter**](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.performancecounter?view=netframework-4.7.2) by path *{3}*";
-
-
         private string _sensorName;
 
 
-        protected abstract string DescriptionPath { get;}
+        protected abstract string DescriptionPath { get; }
 
         protected override string Category => DisksMonitoringPrototype.DiskCategory;
 
@@ -29,6 +26,7 @@ namespace HSMDataCollector.Prototypes
 
         protected BarDisksMonitoringPrototype() : base()
         {
+            Statistics = StatisticsOptions.EMA;
             Type = SensorType.DoubleBarSensor;
             IsComputerSensor = true;
         }

@@ -9,14 +9,15 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
     {
         private static readonly List<ColumnInfo> _barHistoryColumns = new()
         {
-            new(nameof(BaseValue.Time), "time"),
-            new(nameof(IntegerBarValue.OpenTime), "time"),
-            new(nameof(IntegerBarValue.CloseTime), "time"),
-            new(nameof(IntegerBarValue.Min), "number"),
-            new(nameof(IntegerBarValue.Max), "number"),
-            new(nameof(IntegerBarValue.Mean), "number"),
-            new(nameof(IntegerBarValue.Count), "number"),
-            new(nameof(IntegerBarValue.LastValue), "number"),
+            new(nameof(BaseValue.Time), TimeType),
+            new(nameof(IntegerBarValue.OpenTime), TimeType),
+            new(nameof(IntegerBarValue.CloseTime), TimeType),
+            new(nameof(IntegerBarValue.Min), NumberType),
+            new(nameof(IntegerBarValue.Max), NumberType),
+            new(nameof(IntegerBarValue.Mean), NumberType),
+            new(nameof(IntegerBarValue.FirstValue), NumberType),
+            new(nameof(IntegerBarValue.LastValue), NumberType),
+            new(nameof(IntegerBarValue.Count), NumberType),
             new(nameof(BaseValue.Status)),
             new(nameof(BaseValue.Comment)),
         };
@@ -44,16 +45,18 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
                         historyRow.AddFluent(intBar.Min)
                                   .AddFluent(intBar.Max)
                                   .AddFluent(intBar.Mean)
-                                  .AddFluent(intBar.Count)
-                                  .AddFluent(intBar.LastValue);
+                                  .AddFluent(intBar.FirstValue)
+                                  .AddFluent(intBar.LastValue)
+                                  .AddFluent(intBar.Count);
                     }
                     else if (bar is DoubleBarValue doubleBar)
                     {
                         historyRow.AddFluent(doubleBar.Min)
                                   .AddFluent(doubleBar.Max)
                                   .AddFluent(doubleBar.Mean)
-                                  .AddFluent(doubleBar.Count)
-                                  .AddFluent(doubleBar.LastValue);
+                                  .AddFluent(doubleBar.FirstValue)
+                                  .AddFluent(doubleBar.LastValue)
+                                  .AddFluent(doubleBar.Count);
                     }
 
                     Rows.Add(historyRow.AddFluent($"{bar.Status}")

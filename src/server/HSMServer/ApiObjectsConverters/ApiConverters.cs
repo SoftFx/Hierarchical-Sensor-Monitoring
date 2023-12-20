@@ -106,8 +106,8 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min,
                 Max = value.Max,
                 Mean = value.Mean,
+                FirstValue = value.FirstValue,
                 LastValue = value.LastValue,
-                Percentiles = value.Percentiles ?? new(),
             };
 
 
@@ -123,8 +123,8 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min,
                 Max = value.Max,
                 Mean = value.Mean,
+                FirstValue = value.FirstValue,
                 LastValue = value.LastValue,
-                Percentiles = value.Percentiles ?? new(),
             };
 
 
@@ -170,7 +170,7 @@ namespace HSMServer.ApiObjectsConverters
         }
 
 
-        public static BarSensorHistory Convert<T>(this BarBaseValue<T> value) where T : INumber<T> =>
+        public static BarSensorHistory Convert<T>(this BarBaseValue<T> value) where T : struct, INumber<T> =>
             new()
             {
                 Comment = value.Comment,
@@ -182,8 +182,8 @@ namespace HSMServer.ApiObjectsConverters
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
+                FirstValue = value.FirstValue?.ToString(),
                 LastValue = value.LastValue.ToString(),
-                Percentiles = value.Percentiles?.Select(p => new PercentileValue { Percentile = p.Key, Value = p.Value.ToString() }).ToList() ?? new(),
             };
 
 
@@ -236,6 +236,7 @@ namespace HSMServer.ApiObjectsConverters
                 Description = request.Description,
                 IsSingleton = request.IsSingletonSensor,
                 AggregateValues = request.AggregateData,
+                Statistics = request.Statistics.Convert(),
                 SelectedUnit = request.OriginalUnit?.Convert(),
                 Integration = request.EnableGrafana.HasValue ? request.EnableGrafana.Value ? Integration.Grafana : Integration.None : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
@@ -309,11 +310,17 @@ namespace HSMServer.ApiObjectsConverters
                 AlertProperty.Status => PolicyProperty.Status,
                 AlertProperty.Comment => PolicyProperty.Comment,
                 AlertProperty.Value => PolicyProperty.Value,
+                AlertProperty.EmaValue => PolicyProperty.EmaValue,
                 AlertProperty.Min => PolicyProperty.Min,
                 AlertProperty.Max => PolicyProperty.Max,
                 AlertProperty.Mean => PolicyProperty.Mean,
                 AlertProperty.Count => PolicyProperty.Count,
+                AlertProperty.FirstValue => PolicyProperty.FirstValue,
                 AlertProperty.LastValue => PolicyProperty.LastValue,
+                AlertProperty.EmaMin => PolicyProperty.EmaMin,
+                AlertProperty.EmaMax => PolicyProperty.EmaMax,
+                AlertProperty.EmaMean => PolicyProperty.EmaMean,
+                AlertProperty.EmaCount => PolicyProperty.EmaCount,
                 AlertProperty.Length => PolicyProperty.Length,
                 AlertProperty.OriginalSize => PolicyProperty.OriginalSize,
                 AlertProperty.NewSensorData => PolicyProperty.NewSensorData,
@@ -369,11 +376,27 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorRequests.Unit.KB => Core.Model.Unit.KB,
                 HSMSensorDataObjects.SensorRequests.Unit.MB => Core.Model.Unit.MB,
                 HSMSensorDataObjects.SensorRequests.Unit.GB => Core.Model.Unit.GB,
+
                 HSMSensorDataObjects.SensorRequests.Unit.Percents => Core.Model.Unit.Percents,
+
                 HSMSensorDataObjects.SensorRequests.Unit.Ticks => Core.Model.Unit.Ticks,
                 HSMSensorDataObjects.SensorRequests.Unit.Milliseconds => Core.Model.Unit.Milliseconds,
                 HSMSensorDataObjects.SensorRequests.Unit.Seconds => Core.Model.Unit.Seconds,
                 HSMSensorDataObjects.SensorRequests.Unit.Minutes => Core.Model.Unit.Minutes,
+
+                HSMSensorDataObjects.SensorRequests.Unit.Count => Core.Model.Unit.Count,
+                HSMSensorDataObjects.SensorRequests.Unit.Requests => Core.Model.Unit.Requests,
+                HSMSensorDataObjects.SensorRequests.Unit.Responses => Core.Model.Unit.Responses,
+
+                _ => throw new NotImplementedException(),
+            };
+
+
+        private static Core.Model.StatisticsOptions Convert(this HSMSensorDataObjects.SensorRequests.StatisticsOptions combination) =>
+            combination switch
+            {
+                HSMSensorDataObjects.SensorRequests.StatisticsOptions.None => Core.Model.StatisticsOptions.None,
+                HSMSensorDataObjects.SensorRequests.StatisticsOptions.EMA => Core.Model.StatisticsOptions.EMA,
                 _ => throw new NotImplementedException(),
             };
     }

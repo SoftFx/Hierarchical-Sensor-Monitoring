@@ -1,14 +1,16 @@
 ﻿using HSMDataCollector.Core;
+using HSMDataCollector.SyncQueue.BaseQueue;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Xml.Schema;
 
 namespace HSMDataCollector.SyncQueue
 {
     internal abstract class SyncQueue<T> : SyncQueue, ISyncQueue<T>
     {
-        private protected readonly ConcurrentQueue<T> _valuesQueue = new ConcurrentQueue<T>();
-        private protected readonly ConcurrentQueue<T> _failedQueue = new ConcurrentQueue<T>();
+        private protected readonly ConcurrentQueue<SyncQueueItem<T>> _valuesQueue = new ConcurrentQueue<SyncQueueItem<T>>();
+        private protected readonly ConcurrentQueue<SyncQueueItem<T>> _failedQueue = new ConcurrentQueue<SyncQueueItem<T>>();
 
         private readonly int _maxValuesInPackage;
         private readonly int _maxQueueSize;
@@ -37,12 +39,16 @@ namespace HSMDataCollector.SyncQueue
                 while (packagesCount-- > 0)
                 {
                     var dataList = new List<T>(_maxValuesInPackage);
+                    var sumTimeInQueue = 0.0;
 
-                    Dequeue(_failedQueue, dataList);
-                    Dequeue(_valuesQueue, dataList);
+                    Dequeue(_failedQueue, dataList, ref sumTimeInQueue);
+                    Dequeue(_valuesQueue, dataList, ref sumTimeInQueue);
 
                     if (dataList.Count > 0)
+                    {
                         NewValuesEvent?.Invoke(dataList);
+                        ThrowPackageInfo(new PackageInfo(sumTimeInQueue, dataList.Count));
+                    }
                     else
                         break;
                 }
@@ -62,22 +68,34 @@ namespace HSMDataCollector.SyncQueue
 
         protected void InvokeNewValue(T value) => NewValueEvent?.Invoke(value);
 
-        protected void Enqueue(ConcurrentQueue<T> queue, T value)
+        protected void Enqueue(ConcurrentQueue<SyncQueueItem<T>> queue, T value)
         {
             if (IsStopped)
                 return;
 
-            queue.Enqueue(value);
+            queue.Enqueue(new SyncQueueItem<T>(value));
+
+            var overflowCnt = 0;
 
             while (queue.Count > _maxQueueSize)
-                queue.TryDequeue(out _);
+            {
+                if (queue.TryDequeue(out _))
+                    overflowCnt++;
+                else
+                    break;
+            }
+
+            ThrowQueueOverflowCount(overflowCnt);
         }
 
-        protected List<T> Dequeue(ConcurrentQueue<T> queue, List<T> dataList)
+        protected List<T> Dequeue(ConcurrentQueue<SyncQueueItem<T>> queue, List<T> dataList, ref double sumTime)
         {
-            while (dataList.Count < _maxValuesInPackage && queue.TryDequeue(out var value))
-                if (IsSendValue(value))
-                    dataList.Add(value);
+            while (dataList.Count < _maxValuesInPackage && queue.TryDequeue(out var item))
+                if (IsSendValue(item.Value))
+                {
+                    dataList.Add(item.Value);
+                    sumTime += (DateTime.UtcNow - item.BuildDate).TotalSeconds;
+                }
 
             return dataList;
         }

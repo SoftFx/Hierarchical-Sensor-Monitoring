@@ -1,0 +1,98 @@
+﻿@using System.Text.Json
+@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.JsonConverters
+
+@model HSMServer.Model.Dashboards.PanelViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var jsonOptions = new JsonSerializerOptions()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new PlotlyDoubleConverter() }
+    };
+    var legendsTitle = @Model.Settings.ShowLegend ? "Hide legends" : "Show legends";
+}
+
+<div id="@Model.Id" class="panel resize-draggable">
+    <div class="d-flex flex-column">
+        <span id="emptypanel_@Model.Id" style="font-size: larger; position: fixed; z-index: 300; color: rgb(128,128,128); display: none">Empty panel</span>
+        <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1 name-draggable">
+            <div class="d-inline-block overflow-hidden">
+                <span class="fw-bold d-flex" title="@Model.Name" id="panel_name" style="white-space: nowrap">@Model.Name</span>
+                @if (string.IsNullOrEmpty(Model.Description))
+                {
+                    <div style="height: 1.5rem"></div>
+                }
+                else
+                {
+                    <span class="fw-lighter d-flex" id="panel_description" title="@Model.Description" style="color: grey; white-space: nowrap;">@Model.Description</span>
+                }
+            </div>
+            <div class="align-self-start">
+                <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                    <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                    <a id="toggle_@Model.Id" class="toggle-legend dropdown-item text-decoration-none fw-normal button-link">@legendsTitle</a>
+                    <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
+                    <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="panelChart_@Model.Id"></div>
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
+        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
+        let dashboardpanels = $('#dashboardPanels');
+
+        initMultyichartCordinates(settings, values, '@Model.Id').then(
+            (data) => {
+                containerHeight = Math.max(containerHeight, data);
+                return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend).then(
+                        (plot) => {
+                                let autorange = false;
+                                values.forEach(function (x) {
+                                    if (x.values.length !== 0)
+                                        autorange = true;
+
+                                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')
+                                })
+
+                                $('#panelChart_@Model.Id').on('plotly_relayout', function (e, updateData){
+                                    let emptypanel = $('#emptypanel_@Model.Id');
+                                    let container = $('#@Model.Id');
+                                    emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
+                                })
+
+                                Plotly.relayout(plot.id, { 
+                                    'xaxis.autorange': autorange,
+                                    'height': Number((settings.height * 1400).toFixed(5)) - 46
+                                })
+
+                                if (values.length === 0) {
+                                    $('#emptypanel_@Model.Id').show();
+                                }
+
+                                replaceHtmlToMarkdown('panel_description')
+
+                                window.dispatchEvent(new Event('resize'));
+                            },
+                        (error) => showToast(error)
+                );
+            }
+        )
+    })
+
+    $('#panelChart_@Model.Id').on('plotly_legendclick', function (data){
+        return false;
+    })
+</script>

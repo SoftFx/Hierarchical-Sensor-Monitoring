@@ -1,6 +1,7 @@
 ﻿using FluentValidation.AspNetCore;
 using HSMCommon.Constants;
 using HSMServer.Authentication;
+using HSMServer.ConcurrentStorage;
 using HSMServer.Folders;
 using HSMServer.Middleware;
 using HSMServer.Notifications;
@@ -18,6 +19,7 @@ using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.FileSystemGlobbing.Internal.Patterns;
 
 const string NLogConfigFileName = "nlog.config";
 
@@ -84,20 +86,24 @@ try
 {
     var app = builder.Build();
 
-    await app.Services.GetRequiredService<IUserManager>().Initialize();
-    await app.Services.GetRequiredService<IFolderManager>().Initialize();
-    await app.Services.GetRequiredService<ITelegramChatsManager>().Initialize();
+    await app.Services.InitStorages();
 
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
 
     app.MapControllers();
+ 
     app.MapControllerRoute(
         name: "Account",
         pattern: "{controller=Account}/{action}",
         defaults: new { controller = "Account" });
+
     app.MapControllerRoute(
         name: "Home",
         pattern: "{controller=Home}/{action=Index}");
+
+    app.MapControllerRoute(
+        name: "DashboardsPanelEdit",
+        pattern: "{controller=Dashboards}/{dashboardId?}/{panelId?}");
 
     app.Run();
 }

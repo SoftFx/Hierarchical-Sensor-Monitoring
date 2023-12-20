@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
@@ -40,9 +41,19 @@ namespace HSMDataCollector.Prototypes
 
         public WindowsLastRestartPrototype() : base()
         {
-            Description = "This sensor sends information about the time of the last OS restart.";
-
             Type = SensorType.TimeSpanSensor;
+        }
+
+        public override WindowsInfoSensorOptions Get(WindowsInfoSensorOptions customOptions)
+        {
+            var options = base.Get(customOptions);
+
+            options.Description = $"This sensor sends information about the time of the last OS restart. " +
+                $"The information is read using [**Performance counter**](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.performancecounter?view=netframework-4.7.2) by path " +
+                $"*{WindowsLastRestart.CategoryName}/{WindowsLastRestart.CounterName}* " +
+                $"The system check is carried out every {options.PostDataPeriod.ToReadableView()}";
+
+            return options;
         }
     }
 
@@ -62,8 +73,23 @@ namespace HSMDataCollector.Prototypes
             {
                 AlertsFactory.IfValue(AlertOperation.GreaterThan, TimeSpan.FromDays(90))
                              .ThenSendNotification($"[$product] $sensor. Windows hasn't been updated for $value")
-                             .AndSetSensorError().Build()
+                             .AndSetIcon(AlertIcon.Warning).Build()
             };
+        }
+    }
+
+
+    internal sealed class WindowsVersionPrototype : WindowsInfoMonitoringPrototype
+    {
+        protected override string SensorName => "Version & patch";
+
+
+        public WindowsVersionPrototype() : base()
+        {
+            Description = "Current version of the OS in the format: *ProductName DisplayVersion (Major.Minor.Build)*.";
+
+            Type = SensorType.VersionSensor;
+            AggregateData = true;
         }
     }
 }

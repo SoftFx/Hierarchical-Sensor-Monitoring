@@ -37,7 +37,7 @@
         <span>@Model.Status</span>
         @if (!Model.IsMuted)
         {
-            <span onclick="loadEditSensorStatusModal()">
+            <span onclick="loadEditSensorStatusModal('@Model.EncodedId')">
                 <i class="fas fa-edit align-self-center ms-2" style="cursor: pointer"></i>
             </span>
         }
@@ -93,5 +93,18 @@
             <input id="saveOnlyUniqueValuesSwitch" class="form-check-input" type="checkbox" role="switch" asp-for="AggregateValues" disabled>
         </div>
         <i class='fas fa-question-circle' title='The option helps to optimize the database storage. If the option is switched on, only unique sensor values are stored in the database. A sensor value is unique if the previous value has a different Value, Status or Comment.'></i>
+    </div>
+}
+
+@if (Model.SensorType is (SensorType.IntegerBar or SensorType.DoubleBar or SensorType.Double or SensorType.Integer))
+{
+    <div class="d-flex justify-content-start align-items-center">
+        <div class="d-flex ms-3 text-nowrap">
+            <span style="min-width: 9rem">EMA statistics:</span>
+        </div>
+        <div class="d-flex form-check form-switch m-0">
+            <input id="emaStatisticsSwitch" class="form-check-input" type="checkbox" role="switch" asp-for="IsEMA" disabled>
+        </div>
+        <i class='fas fa-question-circle' title='If the option is switched on, EMA statistics is calculated. The option is available only for Integer and Double sensors (property Value), IntegerBar and DoubleBar sensors (properties Min, Mean, Max, Count). EMA statistics formula is Current EMA = 0.9 * Last EMA Value + 0.1 * Current Value.'></i>
     </div>
 }

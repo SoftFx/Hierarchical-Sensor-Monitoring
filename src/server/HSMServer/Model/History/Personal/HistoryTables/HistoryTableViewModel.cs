@@ -46,6 +46,8 @@ namespace HSMServer.Model.History
 
         public bool AggregateValues => _model.AggregateValues;
 
+        public bool IsEma => _model.Statistics.HasEma();
+
         public bool IsBarSensor => _model.Type.IsBar();
 
         public int LastIndex => Pages.Count - 1;
@@ -62,7 +64,7 @@ namespace HSMServer.Model.History
         }
 
 
-        public async Task Reload(ITreeValuesCache cache, GetSensorHistoryModel request)
+        public async Task Reload(ITreeValuesCache cache, GetSensorHistoryRequest request)
         {
             Reset();
 
@@ -145,6 +147,7 @@ namespace HSMServer.Model.History
             new()
             {
                 Value = GetTableValue(value),
+                EmaValue = value.EmaValue?.ToString(),
                 Time = value.Time.ToUniversalTime(),
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
@@ -154,7 +157,7 @@ namespace HSMServer.Model.History
                 IsTimeout = value.IsTimeout
             };
 
-        private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : INumber<T> =>
+        private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : struct, INumber<T> =>
             new()
             {
                 OpenTime = value.OpenTime,
@@ -163,6 +166,11 @@ namespace HSMServer.Model.History
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
+                EmaMin = value.EmaMin?.ToString(),
+                EmaMax = value.EmaMax?.ToString(),
+                EmaMean = value.EmaMean?.ToString(),
+                EmaCount = value.EmaCount?.ToString(),
+                FirstValue = value.FirstValue?.ToString(),
                 LastValue = value.LastValue.ToString(),
                 Time = value.Time.ToUniversalTime(),
                 Status = value.Status.ToClient(),

@@ -1,9 +1,12 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Core.Model
 {
@@ -31,12 +34,29 @@ namespace HSMServer.Core.Model
         MB = 3,
         GB = 4,
 
+        [Display(Name = "%")]
         Percents = 100,
 
+        [Display(Name = "ticks")]
         Ticks = 1000,
+        [Display(Name = "ms")]
         Milliseconds = 1010,
+        [Display(Name = "sec")]
         Seconds = 1011,
-        Minutes = 1012
+        [Display(Name = "min")]
+        Minutes = 1012,
+
+        Count = 1100,
+        Requests = 1101,
+        Responses = 1102,
+    }
+
+
+    [Flags]
+    public enum StatisticsOptions : int
+    {
+        None = 0,
+        EMA = 1,
     }
 
 
@@ -73,6 +93,8 @@ namespace HSMServer.Core.Model
         public bool IsSingleton { get; private set; }
 
         public bool AggregateValues { get; private set; }
+
+        public StatisticsOptions Statistics { get; private set; }
 
         public Integration Integration { get; private set; }
 
@@ -113,7 +135,9 @@ namespace HSMServer.Core.Model
         public bool HasData => Storage.HasData;
 
 
-        public Action<SensorEntity> UpdateFromParentSettings;
+        internal Func<Guid, SensorHistoryRequest, ValueTask<List<BaseValue>>> ReadDataFromDb;
+        internal Action<SensorEntity> UpdateFromParentSettings;
+
         public Action<BaseValue> ReceivedNewValue;
 
 
@@ -122,10 +146,14 @@ namespace HSMServer.Core.Model
             State = (SensorState)entity.State;
             OriginalUnit = (Unit?)entity.OriginalUnit;
             Integration = (Integration)entity.Integration;
+            Statistics = (StatisticsOptions)entity.Statistics;
             AggregateValues = entity.AggregateValues;
             IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
         }
+
+
+        public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask();
 
 
         protected override void UpdateTTL(PolicyUpdate update) => Policies.UpdateTTL(update);
@@ -146,6 +174,7 @@ namespace HSMServer.Core.Model
         {
             Update(update);
 
+            Statistics = UpdateProperty(Statistics, update.Statistics ?? Statistics, update.Initiator);
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
             IsSingleton = UpdateProperty(IsSingleton, update.IsSingleton ?? IsSingleton, update.Initiator, "Singleton");
@@ -181,6 +210,7 @@ namespace HSMServer.Core.Model
             CreationDate = CreationDate.Ticks,
             Type = (byte)Type,
             State = (byte)State,
+            Statistics = (int)Statistics,
             IsSingleton = IsSingleton,
             Integration = (int)Integration,
             OriginalUnit = (int?)OriginalUnit,

@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseSettings;
 using HSMDatabase.Extensions;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
@@ -26,6 +27,8 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly IDatabaseSettings _settings;
 
+
+        public IDashboardCollection Dashboards { get; }
 
         public ISnapshotDatabase Snapshots { get; }
 
@@ -60,6 +63,8 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_settings.PathToEnvironmentDb);
             _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_settings);
             _journalValuesDatabases = new JournalValuesDatabaseDictionary(_settings);
+
+            Dashboards = new DashboardCollection(_settings.PathToServerLayoutDb);
             Snapshots = new SnapshotsDatabase(_settings.PathToSnaphotsDb);
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");

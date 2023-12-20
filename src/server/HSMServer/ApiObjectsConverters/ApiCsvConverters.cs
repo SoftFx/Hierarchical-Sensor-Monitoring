@@ -1,7 +1,7 @@
-﻿using System;
-using HSMSensorDataObjects.SensorValueRequests;
+﻿using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -14,10 +14,10 @@ namespace HSMServer.ApiObjectsConverters
     [Flags]
     internal enum ExportOptions : byte
     {
-        Simple,
-        Hidden,
-        Aggregated,
-        Full
+        Simple = 0,
+        Hidden = 1,
+        Aggregated = 2,
+        EmaStatistics = 4,
     }
 
 
@@ -29,6 +29,8 @@ namespace HSMServer.ApiObjectsConverters
         public string DisplayName { get; }
 
         public string PropertyName { get; }
+
+        internal bool IsTime => PropertyName.Contains("time", StringComparison.InvariantCultureIgnoreCase);
 
 
         public Header(string displayName, string propertyName, Func<BaseValue, string> getPropFunc = null)
@@ -67,6 +69,7 @@ namespace HSMServer.ApiObjectsConverters
             { new("Receiving time", nameof(BaseValue.ReceivingTime)), ExportOptions.Hidden },
             { new("Aggregated values count", nameof(BaseValue.AggregatedValuesCount)), ExportOptions.Aggregated },
             { new(nameof(BoolSensorValue.Value)), ExportOptions.Simple },
+            { new(nameof(IntegerValue.EmaValue)), ExportOptions.EmaStatistics },
             { new(nameof(SensorValueBase.Status)), ExportOptions.Simple },
             { new(nameof(SensorValueBase.Comment)), ExportOptions.Simple }
         };
@@ -77,11 +80,16 @@ namespace HSMServer.ApiObjectsConverters
             { new("Last update time", nameof(DoubleBarValue.Time)), ExportOptions.Hidden },
             { new("Close time", nameof(DoubleBarValue.CloseTime)), ExportOptions.Hidden },
             { new("Receiving time", nameof(BaseValue.ReceivingTime)), ExportOptions.Hidden },
+            { new("First value", nameof(IntBarSensorValue.FirstValue)), ExportOptions.Hidden },
+            { new("Last value", nameof(IntBarSensorValue.LastValue)), ExportOptions.Hidden },
             { new(nameof(IntBarSensorValue.Min)), ExportOptions.Simple },
             { new(nameof(IntBarSensorValue.Mean)), ExportOptions.Simple },
             { new(nameof(IntBarSensorValue.Max)), ExportOptions.Simple },
             { new(nameof(IntBarSensorValue.Count)), ExportOptions.Simple },
-            { new("Last value", nameof(IntBarSensorValue.LastValue)), ExportOptions.Simple },
+            { new(nameof(IntegerBarValue.EmaMin)), ExportOptions.EmaStatistics },
+            { new(nameof(IntegerBarValue.EmaMean)), ExportOptions.EmaStatistics },
+            { new(nameof(IntegerBarValue.EmaMax)), ExportOptions.EmaStatistics },
+            { new(nameof(IntegerBarValue.EmaCount)), ExportOptions.EmaStatistics },
             { new(nameof(SensorValueBase.Status)), ExportOptions.Simple },
             { new(nameof(SensorValueBase.Comment)), ExportOptions.Simple },
         };
@@ -143,7 +151,7 @@ namespace HSMServer.ApiObjectsConverters
 
             static string GetTransformedValue(Header column, BaseValue value, string propValue)
             {
-                if (column.PropertyName != nameof(BaseValue.Comment) && DateTime.TryParse(propValue, out var dateTime)) 
+                if ((column.IsTime || (value is TimeSpanValue && column.PropertyName == nameof(TimeSpanValue.Value))) && DateTime.TryParse(propValue, out var dateTime))
                     return dateTime.ToDefaultFormat();
 
                 if (value.IsTimeout && !_validProperties.TryGetValue(column.PropertyName, out _))
@@ -166,9 +174,9 @@ namespace HSMServer.ApiObjectsConverters
             return values[0] switch
             {
                 BooleanValue or IntegerValue or DoubleValue or StringValue or VersionValue or TimeSpanValue =>
-                    _simpleSensorHeader.Where(x => x.Value <= options).Select(x => x.Key).ToList(),
+                    _simpleSensorHeader.Where(x => options.HasFlag(x.Value)).Select(x => x.Key).ToList(),
                 IntegerBarValue or DoubleBarValue =>
-                    _barSensorHeader.Where(x => x.Value <= options).Select(x => x.Key).ToList(),
+                    _barSensorHeader.Where(x => options.HasFlag(x.Value)).Select(x => x.Key).ToList(),
                 FileValue => _fileSensorHeader,
                 _ => new List<Header>()
             };

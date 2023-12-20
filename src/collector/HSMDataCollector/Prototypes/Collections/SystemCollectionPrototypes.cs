@@ -1,7 +1,10 @@
 ﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.DefaultSensors.Windows;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
+using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
@@ -44,11 +47,37 @@ namespace HSMDataCollector.Prototypes
             "server, or computer at any given point. More info can be found [**here**](https://en.wikipedia.org/wiki/Central_processing_unit).";
 
             SensorUnit = Unit.Percents;
+            Statistics = StatisticsOptions.EMA;
 
             Alerts = new List<BarAlertTemplate>()
             {
-                AlertsFactory.IfMean(AlertOperation.GreaterThan, 50).ThenSendNotification("[$product]$path $property $operation $target%").AndSetIcon(AlertIcon.Warning).Build(),
+                AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 50)
+                             .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
+                             .ThenSendNotification("[$product]$path $property $operation $target$unit")
+                             .AndSetIcon(AlertIcon.Warning).Build(),
             };
+        }
+    }
+
+
+    internal sealed class TimeInGCPrototype : SystemMonitoringPrototype
+    {
+        protected override string SensorName => "Time in GC";
+
+
+        public TimeInGCPrototype() : base()
+        {
+            SensorUnit = Unit.Percents;
+        }
+
+
+        public override BarSensorOptions Get(BarSensorOptions customOptions)
+        {
+            var options = base.Get(customOptions);
+
+            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView(), $"{WindowsTimeInGCBase.Category}/{WindowsTimeInGCBase.Counter}");
+
+            return options;
         }
     }
 }

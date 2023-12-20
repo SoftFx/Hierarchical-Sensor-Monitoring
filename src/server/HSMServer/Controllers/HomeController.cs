@@ -54,10 +54,28 @@ namespace HSMServer.Controllers
             _telegramChatsManager = telegramChatsManager;
         }
 
-
-        public IActionResult Index()
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [Route("/Home/Index")]
+        public IActionResult HomeIndex() => Redirect("/Home");
+        
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [Route("/")]
+        [Route("/Home")]
+        [Route("/Home/{sensorId:guid}")]
+        public IActionResult Index(Guid sensorId)
         {
-            return View(_treeViewModel);
+            if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
+            {
+                var parent = sensor.Parent;
+
+                while (parent is ProductNodeViewModel node)
+                {
+                    CurrentUser.Tree.AddOpenedNode(parent.Id);
+                    parent = node.Parent;
+                }
+            }
+
+            return View();
         }
 
         [HttpPost]
@@ -96,7 +114,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetNode(string id) =>
             _treeViewModel.Nodes.TryGetValue(id.ToGuid(), out var node)
-                ? PartialView("_TreeNode", CurrentUser.Tree.LoadNode(node))
+                ? PartialView("~/Views/Tree/_TreeNode.cshtml", CurrentUser.Tree.LoadNode(node))
                 : NotFound();
 
         [HttpPut]
@@ -120,7 +138,7 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         public IActionResult RefreshTree(string searchParameter) =>
-            PartialView("_Tree", CurrentUser.Tree.GetUserTree(searchParameter));
+            PartialView("~/Views/Tree/_Tree.cshtml", CurrentUser.Tree.GetUserTree(searchParameter));
 
         [HttpGet]
         public IActionResult ApplyFilter(UserFilterViewModel viewModel)
@@ -207,7 +225,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetEditAlertsPartialView() => PartialView("_AlertsModal", new EditAlertsViewModel());
+        public IActionResult GetEditAlertsPartialView() => PartialView("~/Views/Tree/_MultiEditModal.cshtml", new EditAlertsViewModel());
 
         [HttpPost]
         public async Task<IActionResult> EditAlerts(EditAlertsViewModel model)
@@ -265,7 +283,8 @@ namespace HSMServer.Controllers
                     };
 
                     if (!expectedUpdate)
-                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live",
+                            TimeInterval.FromParent);
                     else
                     {
                         toastViewModel.AddItem(product);
@@ -322,7 +341,7 @@ namespace HSMServer.Controllers
             else if (_folderManager.TryGetValue(decodedId, out var folder))
                 viewModel = new IgnoreNotificationsViewModel(folder);
 
-            return PartialView("_IgnoreNotificationsModal", viewModel);
+            return PartialView("~/Views/Tree/_IgnoreNotificationsModal.cshtml", viewModel);
         }
 
         [HttpPost]
@@ -471,11 +490,14 @@ namespace HSMServer.Controllers
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
         private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) =>
-            (ticks == default ? GetFileSensorValue(encodedId) : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks)).DecompressContent();
+            (ticks == default
+                ? GetFileSensorValue(encodedId)
+                : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
+            .DecompressContent();
 
         private async Task<HistoryTableViewModel> GetFileHistory(string encodedId)
         {
-            var request = new GetSensorHistoryModel()
+            var request = new GetSensorHistoryRequest()
             {
                 EncodedId = encodedId,
                 Count = -20,
@@ -514,7 +536,9 @@ namespace HSMServer.Controllers
             var availableChats = sensor.GetAvailableChats(_telegramChatsManager);
 
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
-            var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list) ? list.Select(a => a.ToUpdate(availableChats)).ToList() : new();
+            var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
+                ? list.Select(a => a.ToUpdate(availableChats)).ToList()
+                : new();
 
             var update = new SensorUpdate
             {
@@ -527,6 +551,7 @@ namespace HSMServer.Controllers
                 Policies = policyUpdates,
                 SelectedUnit = newModel.SelectedUnit,
                 AggregateValues = newModel.AggregateValues,
+                Statistics = newModel.GetOptions(),
                 Initiator = CurrentInitiator
             };
 
@@ -548,8 +573,8 @@ namespace HSMServer.Controllers
                 (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(entity),
                 (byte)SensorType.Version => new SingleDataAlertViewModel<VersionValue>(entity),
                 (byte)SensorType.TimeSpan => new SingleDataAlertViewModel<TimeSpanValue>(entity),
-                (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue>(entity),
-                (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue>(entity),
+                (byte)SensorType.Integer => new NumericDataAlertViewModel<IntegerValue>(entity),
+                (byte)SensorType.Double => new NumericDataAlertViewModel<DoubleValue>(entity),
                 (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue>(entity),
                 (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue>(entity),
                 TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(entity),
@@ -595,8 +620,8 @@ namespace HSMServer.Controllers
                 SensorType.Boolean => new CommonConditionViewModel(false),
                 SensorType.Version => new SingleConditionViewModel(false),
                 SensorType.TimeSpan => new SingleConditionViewModel(false),
-                SensorType.Integer => new SingleConditionViewModel(false),
-                SensorType.Double => new SingleConditionViewModel(false),
+                SensorType.Integer => new NumericConditionViewModel(false),
+                SensorType.Double => new NumericConditionViewModel(false),
                 SensorType.IntegerBar => new BarConditionViewModel(false),
                 SensorType.DoubleBar => new BarConditionViewModel(false),
                 _ => null,
@@ -631,12 +656,13 @@ namespace HSMServer.Controllers
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
             _treeViewModel.Sensors.TryGetValue(sensorId, out var sensorNodeViewModel);
-            var isAccessKeyExist = GetKeyOrDefaultWithPermissions(sensorNodeViewModel?.RootProduct.Id ?? Guid.Empty, KeyPermissions.CanSendSensorData) is not null;
+            var isAccessKeyExist =
+                GetKeyOrDefaultWithPermissions(sensorNodeViewModel?.RootProduct.Id ?? Guid.Empty, KeyPermissions.CanSendSensorData) is not null;
 
             if (!isAccessKeyExist)
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
 
-            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
+            return PartialView("~/Views/Tree/_EditSensorStatusModal.cshtml", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
         }
 
         [HttpPost]

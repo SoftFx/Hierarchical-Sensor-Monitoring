@@ -73,14 +73,15 @@
         {
             <label class="col-form-label py-0" id='markdown_span_description'>@Model.Description</label>
         }
-        <div class="ps-3">
+        <div>
             <textarea id='description' class="form-control w-100 d-none"  type='text' asp-for="Description" value='@Model.Description'></textarea>
         </div>
+
+        @await Html.PartialAsync("~/Views/Home/Alerts/_Alerts.cshtml", Model)
 
         <div class="collapse" id="metaInfoCollapse">
             @await Html.PartialAsync("_GeneralInfo", Model)
             @await Html.PartialAsync("_CleanupSettings", Model)
-            @await Html.PartialAsync("~/Views/Home/Alerts/_Alerts.cshtml", Model)
         </div>
 
         <button class="btn btn-outline-secondary w-100 border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1"
@@ -102,10 +103,6 @@
     <hr id="metainfo_separator" class="d-none"/>
 </div>
 
-@if (Model is SensorInfoViewModel sensor)
-{
-    @await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal())
-}
 
 <script>
     $(document).ready(() => {
@@ -248,23 +245,5 @@
             $('#headline_metainfo').removeClass('d-none');
             $('#markdown_span_description').addClass('ms-3');
         }
-    }
-    
-    function openEditSensorStatusModal() {
-        $('#editSensorStatus_modal').modal('show');
-    }
-    
-    function loadEditSensorStatusModal() {
-        $.ajax({
-            url: '@Url.Action(nameof(HomeController.GetSensorEditModal))?sensorId=@Model.EncodedId',
-            type: 'GET',
-            datatype: 'json',
-            async: true,
-            success: (viewData) => {
-                $('#editSensorStatus_form').replaceWith(viewData);
-            }
-        }).done(function (){
-            openEditSensorStatusModal();
-        });
     }
 </script>

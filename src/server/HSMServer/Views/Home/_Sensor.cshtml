@@ -318,12 +318,13 @@
         hiddenColumns.clear();
         
         if ('@(Model.Type is SensorType.DoubleBar or SensorType.IntegerBar)' === 'True')
-            hiddenColumns.tablecellsIds.push("#lastUpdateTime_header", "#closeTime_header", '[id^="lastUpdateTime_value"]', '[id^="closeTime_value"]');
+            hiddenColumns.tablecellsIds.push("#lastUpdateTime_header", "#closeTime_header", '[id^="lastUpdateTime_value"]', '[id^="closeTime_value"]',
+                                             "#firstValue_header", "#lastValue_header", '[id^="firstValue_value"]', '[id^="lastValue_value"]');
 
-            hiddenColumns.tablecellsIds.push("#receivingTime_header", '[id^="receivingTime_value"]')
+        hiddenColumns.tablecellsIds.push("#receivingTime_header", '[id^="receivingTime_value"]')
 
         if ('@Model.AggregateValues' === 'True')
-            hiddenColumns.tablecellsIds.push("#aggregatedValuesCount_header", '[id^="aggregatedValuesCount_value"]')
+            hiddenColumns.tablecellsIds.push("#aggregatedValuesCount_header", '[id^="aggregatedValuesCount_value"]');
     });
     
     $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal(NodeType.Sensor));

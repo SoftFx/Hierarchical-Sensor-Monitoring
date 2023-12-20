@@ -29,6 +29,8 @@ namespace HSMDataCollector.Options
 
         internal bool IsComputerSensor { get; set; }
 
+        internal bool IsPrioritySensor { get; set; }
+
 
         public SpecialAlertTemplate TtlAlert { get; set; }
 
@@ -44,6 +46,8 @@ namespace HSMDataCollector.Options
 
         public TimeSpan? TTL { get; set; }
 
+
+        public StatisticsOptions Statistics { get; set; }
 
         public bool? EnableForGrafana { get; set; }
 

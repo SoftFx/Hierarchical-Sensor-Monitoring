@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Alerts;
 using HSMDataCollector.DefaultSensors.Windows;
 using HSMSensorDataObjects.SensorRequests;
+using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes.Collections.Disks
@@ -9,7 +10,7 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
     {
         protected override string SensorNameTemplate => "Active time on {0} disk";
 
-        protected override string DescriptionPath => $"{WindowsDiskBarSensorBase.Category}/% Disk Time";
+        protected override string DescriptionPath => WindowsActiveTimeDisk.Counter;
 
 
         public WindowsActiveTimeDiskPrototype() : base()
@@ -18,8 +19,9 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
 
             Alerts = new List<BarAlertTemplate>()
             {
-                AlertsFactory.IfMean(AlertOperation.GreaterThanOrEqual, 80)
-                             .ThenSendNotification($"[$product]$path $property $operation $target{SensorUnit}")
+                AlertsFactory.IfEmaMean(AlertOperation.GreaterThanOrEqual, 80)
+                             .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
+                             .ThenSendNotification($"[$product]$path $property $operation $target$unit")
                              .AndSetIcon(AlertIcon.Warning).Build()
             };
         }
