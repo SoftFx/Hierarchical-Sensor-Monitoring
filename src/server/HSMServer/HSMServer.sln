@@ -39,8 +39,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMPingModule", "..\..\modu
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Modules", "Modules", "{98F0E59D-1A22-4F8B-969E-08FDA6CB9DB2}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDataCollector", "..\..\collector\HSMDataCollector\HSMDataCollector.csproj", "{F483D0CE-6E6E-4F64-8B1B-C8B67A7F2856}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -99,10 +97,6 @@ Global
 		{477D951F-1F60-4203-ADE5-3F2437C375AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{477D951F-1F60-4203-ADE5-3F2437C375AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{477D951F-1F60-4203-ADE5-3F2437C375AA}.Release|Any CPU.Build.0 = Release|Any CPU
-		{F483D0CE-6E6E-4F64-8B1B-C8B67A7F2856}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{F483D0CE-6E6E-4F64-8B1B-C8B67A7F2856}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F483D0CE-6E6E-4F64-8B1B-C8B67A7F2856}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F483D0CE-6E6E-4F64-8B1B-C8B67A7F2856}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
