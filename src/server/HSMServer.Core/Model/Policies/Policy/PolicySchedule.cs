@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Extensions;
 using System;
 
 namespace HSMServer.Core.Model.Policies
@@ -65,5 +66,9 @@ namespace HSMServer.Core.Model.Policies
                 TimeTicks = Time.Ticks,
                 RepeateMode = (byte)RepeatMode,
             };
+
+        public override string ToString() => RepeatMode is AlertRepeatMode.Immediately
+            ? string.Empty
+            : $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}";
     }
 }

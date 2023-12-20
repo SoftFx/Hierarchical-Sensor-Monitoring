@@ -229,6 +229,9 @@ namespace HSMServer.Core.Model.Policies
             if (Destination is not null)
                 actions.Add(Destination.ToString());
 
+            if (Schedule is not null)
+                actions.Add(Schedule.ToString());
+
             if (!string.IsNullOrEmpty(Icon))
                 actions.Add($"show icon={Icon}");
 
