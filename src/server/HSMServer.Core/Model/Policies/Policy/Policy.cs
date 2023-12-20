@@ -118,6 +118,7 @@ namespace HSMServer.Core.Model.Policies
 
                 Destination.Update(update.Destination);
                 ConfirmationPeriod = update.ConfirmationPeriod;
+                Schedule.Update(update.Schedule);
                 IsDisabled = update.IsDisabled;
                 Template = update.Template;
                 Status = update.Status;
@@ -227,6 +228,9 @@ namespace HSMServer.Core.Model.Policies
 
             if (Destination is not null)
                 actions.Add(Destination.ToString());
+
+            if (Schedule is not null)
+                actions.Add(Schedule.ToString());
 
             if (!string.IsNullOrEmpty(Icon))
                 actions.Add($"show icon={Icon}");

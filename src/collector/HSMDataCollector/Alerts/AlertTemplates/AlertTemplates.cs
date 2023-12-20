@@ -1,4 +1,5 @@
 ﻿using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
 
@@ -24,6 +25,10 @@ namespace HSMDataCollector.Alerts
 
 
         public TimeSpan? ConfirmationPeriod { get; set; }
+
+        public DateTime? ScheduledNotificationTime { get; set; }
+
+        public AlertRepeatMode? ScheduledRepeatMode { get; set; }
 
         public string Template { get; set; }
 
