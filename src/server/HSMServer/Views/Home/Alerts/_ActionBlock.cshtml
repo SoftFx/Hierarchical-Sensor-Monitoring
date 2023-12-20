@@ -55,11 +55,14 @@
             }
         </select>
 
-        <a class="addSchedule"><i class="fa-solid fa-calendar alert-add-schedule-button"></i></a>
+        <a class="addSchedule"><i class="fa-regular fa-calendar-plus alert-schedule-button"></i></a>
 
-        <div name="schedule" class="d-flex align-items-center">
+        <div name="schedule" class="d-none align-items-center">
+            <a class="removeSchedule"><i class="fa-regular fa-calendar-minus alert-schedule-button"></i></a>
+
             <div class="alert-text-block operation-select">scheduled every</div>
             <select class="alert-block alert-select target-input" asp-for="Schedule.RepeatMode" asp-items="Html.GetEnumSelectList<AlertRepeatMode>()"></select>
+
             <div class="alert-text-block operation-select">starting at</div>
             <input class="alert-block target-input" type="datetime-local" id="schedule" asp-for="Schedule.Time">
         </div>
@@ -129,5 +132,22 @@
 
     $("a.deleteAction").off("click").on("click", function () {
         $(this).parents("div[name='alertAction']:first").remove();
+    });
+
+    $("a.addSchedule").off("click").on("click", function () {
+        let sendNotificationBlock = $(this).parents("div[name='sendNotificationAction']:first");
+        let schedule = sendNotificationBlock.find($(`div[name='schedule']`));
+
+        schedule.removeClass("d-none").addClass("d-flex");
+        $(this).addClass("d-none");
+    });
+
+    $("a.removeSchedule").off("click").on("click", function () {
+        let sendNotificationBlock = $(this).parents("div[name='sendNotificationAction']:first");
+        let schedule = sendNotificationBlock.find($(`div[name='schedule']`));
+        let addschedule = sendNotificationBlock.find($(`a.addSchedule`));
+
+        addschedule.removeClass("d-none");
+        schedule.removeClass("d-flex").addClass("d-none");
     });
 </script>
