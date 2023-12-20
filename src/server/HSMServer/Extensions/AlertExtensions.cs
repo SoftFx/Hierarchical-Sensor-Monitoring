@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model.Policies;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Model.DataAlerts;
 using System;
 
@@ -75,7 +76,7 @@ namespace HSMServer.Extensions
             };
 
 
-        public static DateTime? ToClientScheduleTime(this DateTime time) => time == DateTime.MinValue ? DateTime.UtcNow.Ceil() : time;
+        public static DateTime? ToClientScheduleTime(this DateTime time) => time == DateTime.MinValue ? DateTime.UtcNow.Ceil(TimeSpan.FromHours(1)) : time;
 
         public static DateTime ToCoreScheduleTime(this DateTime? time) => time ?? DateTime.MinValue;
 

@@ -1,5 +1,4 @@
 ﻿import $ from 'jquery';
-import 'jquery-validation'
 
 import * as bootstrap from 'bootstrap';
 window.bootstrap = bootstrap;
