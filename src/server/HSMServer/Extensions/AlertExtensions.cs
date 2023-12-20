@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model.Policies;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Model.DataAlerts;
 using System;
 
@@ -54,6 +55,30 @@ namespace HSMServer.Extensions
                 AlertProperty.NewSensorData => PolicyProperty.NewSensorData,
                 _ => throw new NotImplementedException()
             };
+
+
+        public static ScheduleRepeatMode? ToClient(this AlertRepeatMode repeatMode) =>
+            repeatMode switch
+            {
+                AlertRepeatMode.Hourly => ScheduleRepeatMode.Hourly,
+                AlertRepeatMode.Daily => ScheduleRepeatMode.Daily,
+                AlertRepeatMode.Weekly => ScheduleRepeatMode.Weekly,
+                _ => null,
+            };
+
+        public static AlertRepeatMode ToCore(this ScheduleRepeatMode? repeatMode) =>
+            repeatMode switch
+            {
+                ScheduleRepeatMode.Hourly => AlertRepeatMode.Hourly,
+                ScheduleRepeatMode.Daily => AlertRepeatMode.Daily,
+                ScheduleRepeatMode.Weekly => AlertRepeatMode.Weekly,
+                _ => AlertRepeatMode.Immediately,
+            };
+
+
+        public static DateTime? ToClientScheduleTime(this DateTime time) => time == DateTime.MinValue ? DateTime.UtcNow.Ceil(TimeSpan.FromHours(1)) : time;
+
+        public static DateTime ToCoreScheduleTime(this DateTime? time) => time ?? DateTime.MinValue;
 
 
         public static OperationViewModel GetOperations(this ConditionViewModel condition)

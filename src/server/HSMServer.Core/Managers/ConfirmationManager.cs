@@ -1,7 +1,7 @@
 ﻿using HSMCommon.Collections;
+using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
-using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -9,14 +9,10 @@ using System.Linq;
 
 namespace HSMServer.Core.Confirmation
 {
-    internal sealed class ConfirmationManager
+    internal sealed class ConfirmationManager : BaseTimeManager
     {
         private readonly CGuidDict<CGuidDict<CPriorityQueue<AlertResult, DateTime>>> _tree = new(); //sensorId -> alertId -> alertResult
         private readonly ConcurrentDictionary<Guid, AlertResult> _lastStatusUpdates = new();
-
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-
-        public event Action<Guid, List<AlertResult>> ThrowAlertResultsEvent;
 
 
         internal void SaveOrSendPolicies(PolicyResult policyResult)
@@ -45,8 +41,7 @@ namespace HSMServer.Core.Confirmation
                     }
                 }
 
-                if (newAlerts.Count > 0)
-                    ThrowAlertResultsEvent?.Invoke(sensorId, newAlerts.Values.ToList());
+                SendAlertMessage(sensorId, [.. newAlerts.Values]);
             }
             catch (Exception ex)
             {
@@ -55,7 +50,7 @@ namespace HSMServer.Core.Confirmation
         }
 
 
-        internal void FlushStorage()
+        internal override void FlushMessages()
         {
             try
             {
@@ -94,8 +89,7 @@ namespace HSMServer.Core.Confirmation
                     if (sensorAlerts.IsEmpty)
                         _tree.TryRemove(sensorId, out _);
 
-                    if (thrownAlerts.Count > 0)
-                        ThrowAlertResultsEvent?.Invoke(sensorId, thrownAlerts);
+                    SendAlertMessage(sensorId, thrownAlerts);
                 }
             }
             catch (Exception ex)

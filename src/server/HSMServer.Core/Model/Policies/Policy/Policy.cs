@@ -41,6 +41,8 @@ namespace HSMServer.Core.Model.Policies
 
         public PolicyDestination Destination { get; set; } = new();
 
+        public PolicySchedule Schedule { get; set; } = new();
+
 
         public string Template
         {
@@ -116,6 +118,7 @@ namespace HSMServer.Core.Model.Policies
 
                 Destination.Update(update.Destination);
                 ConfirmationPeriod = update.ConfirmationPeriod;
+                Schedule.Update(update.Schedule);
                 IsDisabled = update.IsDisabled;
                 Template = update.Template;
                 Status = update.Status;
@@ -146,6 +149,7 @@ namespace HSMServer.Core.Model.Policies
             Icon = entity.Icon;
 
             Destination = new PolicyDestination(entity.Destination);
+            Schedule = new PolicySchedule(entity.Schedule);
 
             UpdateConditions(entity.Conditions, Update);
         }
@@ -156,8 +160,10 @@ namespace HSMServer.Core.Model.Policies
 
             Conditions = Conditions?.Select(u => u.ToEntity()).ToList(),
 
-            ConfirmationPeriod = ConfirmationPeriod,
             Destination = Destination.ToEntity(),
+            Schedule = Schedule.ToEntity(),
+
+            ConfirmationPeriod = ConfirmationPeriod,
             SensorStatus = (byte)Status,
             IsDisabled = IsDisabled,
             Template = Template,
@@ -222,6 +228,9 @@ namespace HSMServer.Core.Model.Policies
 
             if (Destination is not null)
                 actions.Add(Destination.ToString());
+
+            if (Schedule is not null)
+                actions.Add(Schedule.ToString());
 
             if (!string.IsNullOrEmpty(Icon))
                 actions.Add($"show icon={Icon}");

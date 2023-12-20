@@ -1,7 +1,16 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HSMSensorDataObjects.SensorRequests
 {
+    public enum AlertRepeatMode : byte
+    {
+        Hourly = 20,
+        Daily = 50,
+        Weekly = 100,
+    }
+
+
     public enum AlertOperation : byte
     {
         LessThanOrEqual = 0,
@@ -82,6 +91,11 @@ namespace HSMSensorDataObjects.SensorRequests
         public long? ConfirmationPeriod { get; set; }
 
         public bool IsDisabled { get; set; }
+
+
+        public DateTime? ScheduledNotificationTime { get; set; }
+
+        public AlertRepeatMode? ScheduledRepeatMode { get; set; }
     }
 
 

@@ -61,42 +61,45 @@ namespace HSMServer.Model.DataAlerts
                 conditions.Add(new PolicyConditionUpdate(condition.Operation.Value, condition.Property.ToCore(), target));
             }
 
-            (var status, var destination, var comment, var icon) = GetActions(availavleChats);
+            var actions = GetActions(availavleChats);
 
             return new()
             {
                 Id = Id,
                 Conditions = conditions,
                 ConfirmationPeriod = confirmationPeriod?.Ticks,
-                Status = status.ToCore(),
-                Template = comment,
-                Icon = icon,
+                Status = actions.Status.ToCore(),
+                Template = actions.Comment,
+                Icon = actions.Icon,
                 IsDisabled = IsDisabled,
-                Destination = destination,
+                Schedule = actions.Schedule,
+                Destination = actions.Destination,
             };
         }
 
         internal PolicyUpdate ToTimeToLiveUpdate(InitiatorInfo initiator, Dictionary<Guid, string> availavleChats)
         {
-            (var status, var destination, var comment, var icon) = GetActions(availavleChats);
+            var actions = GetActions(availavleChats);
 
             return new()
             {
                 Id = Id,
-                Status = status.ToCore(),
-                Template = comment,
-                Icon = icon,
+                Status = actions.Status.ToCore(),
+                Template = actions.Comment,
+                Icon = actions.Icon,
                 IsDisabled = IsDisabled,
-                Destination = destination,
+                Destination = actions.Destination,
+                Schedule = actions.Schedule,
                 Initiator = initiator,
             };
         }
 
 
-        private (SensorStatus status, PolicyDestinationUpdate destination, string comment, string icon) GetActions(Dictionary<Guid, string> availavleChats)
+        private ActionProperties GetActions(Dictionary<Guid, string> availavleChats)
         {
             PolicyDestinationUpdate destination = null;
             SensorStatus status = SensorStatus.Ok;
+            PolicyScheduleUpdate schedule = null;
             string comment = null;
             string icon = null;
 
@@ -109,6 +112,7 @@ namespace HSMServer.Model.DataAlerts
                         ? new(0)
                         : action.Chats?.ToDictionary(k => k, v => availavleChats[v]) ?? new(0);
 
+                    schedule = new PolicyScheduleUpdate(action.ScheduleStartTime.ToCoreScheduleTime(), action.ScheduleRepeatMode.ToCore());
                     destination = new PolicyDestinationUpdate(chats, allChats);
                     comment = action.Comment;
                 }
@@ -118,8 +122,16 @@ namespace HSMServer.Model.DataAlerts
                     status = SensorStatus.Error;
             }
 
-            return (status, destination, comment, icon);
+            return new(comment, destination, schedule, status, icon);
         }
+
+
+        private record ActionProperties(
+            string Comment,
+            PolicyDestinationUpdate Destination,
+            PolicyScheduleUpdate Schedule,
+            SensorStatus Status,
+            string Icon);
     }
 
 
@@ -142,6 +154,8 @@ namespace HSMServer.Model.DataAlerts
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
                 DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template,
+                ScheduleStartTime = policy.Schedule.Time.ToClientScheduleTime(),
+                ScheduleRepeatMode = policy.Schedule.RepeatMode.ToClient(),
                 Chats = policy.Destination.AllChats
                     ? new HashSet<Guid>() { ActionViewModel.AllChatsId }
                     : new HashSet<Guid>(policy.Destination.Chats.Keys),
