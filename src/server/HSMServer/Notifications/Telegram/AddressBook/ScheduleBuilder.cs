@@ -42,7 +42,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook
 
             _scheduleParts.Clear();
 
-            return sb.ToString();
+            return sb.Length == 0 ? string.Empty : $"Scheduled:{Environment.NewLine}{sb}";
         }
     }
 }

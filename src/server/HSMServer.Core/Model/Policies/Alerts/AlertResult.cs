@@ -26,6 +26,8 @@ namespace HSMServer.Core.Model.Policies
 
         public bool IsStatusIsChangeResult { get; }
 
+        public bool IsScheduleAlert { get; }
+
 
         public AlertState LastState { get; private set; }
 
@@ -50,6 +52,7 @@ namespace HSMServer.Core.Model.Policies
             Icon = policy.Icon;
 
             IsStatusIsChangeResult = policy.Conditions.IsStatusChangeResult();
+            IsScheduleAlert = policy.Schedule.RepeatMode is not AlertRepeatMode.Immediately;
 
             AddPolicyResult(policy);
         }

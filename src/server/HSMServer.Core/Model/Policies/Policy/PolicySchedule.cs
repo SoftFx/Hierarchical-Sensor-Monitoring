@@ -59,7 +59,9 @@ namespace HSMServer.Core.Model.Policies
 
             var curTime = DateTime.UtcNow;
 
-            return curTime <= Time ? Time : new DateTime((curTime - Time).Ticks).Ceil(shiftTime);
+            //shiftTime = TimeSpan.FromMinutes(5);
+
+            return curTime <= Time ? Time : Time + (curTime - Time).Ceil(shiftTime);
         }
 
         internal PolicyScheduleEntity ToEntity() =>

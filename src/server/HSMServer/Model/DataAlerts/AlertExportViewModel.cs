@@ -66,26 +66,20 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats)
-        {
-            DateTime? scheduledTime = ScheduledNotificationTime is null
-                ? DateTime.MinValue
-                : DateTime.TryParse(ScheduledNotificationTime, out var time) ? time : null;
-
-            return new()
+        internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats) =>
+            new()
             {
                 Icon = Icon,
                 Status = Status,
                 Template = Template,
                 IsDisabled = IsDisabled,
                 ConfirmationPeriod = ConfirmationPeriod?.Ticks,
-                Schedule = new PolicyScheduleUpdate(scheduledTime, ScheduledRepeatMode),
+                Schedule = new PolicyScheduleUpdate(ScheduledNotificationTime.ParseFromDefault(), ScheduledRepeatMode),
                 Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
                 Destination = Chats is null
                     ? new PolicyDestinationUpdate(allChats: true)
                     : new PolicyDestinationUpdate(Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
             };
-        }
     }
 
 
