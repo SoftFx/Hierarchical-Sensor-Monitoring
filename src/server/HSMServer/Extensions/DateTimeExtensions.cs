@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 
 namespace HSMServer.Extensions
 {
@@ -12,6 +13,9 @@ namespace HSMServer.Extensions
 
         public static string ToDefaultFormat(this DateTime dateTime, string minValueString) =>
             dateTime == DateTime.MinValue ? minValueString : dateTime.ToDefaultFormat();
+
+        public static DateTime ParseFromDefault(this string str) =>
+            DateTime.TryParseExact(str, DateTimeDefaultFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time) ? time : DateTime.MinValue;
 
         public static string ToWindowsFormat(this DateTime dateTime) => dateTime.ToString(DateTimeWindowsFormat);
 

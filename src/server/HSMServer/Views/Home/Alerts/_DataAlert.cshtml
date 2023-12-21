@@ -56,6 +56,7 @@
             @if (action.Action == ActionType.SendNotification)
             {
                 string chats = null;
+                string schedule = null;
                 string color = "#0366d6";
 
                 if (action.Chats.Contains(ActionViewModel.AllChatsId))
@@ -68,7 +69,10 @@
                 else
                     chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch]));
 
-                actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: {color};'>{chats}</span>"));
+                if (action.ScheduleRepeatMode is not null)
+                    schedule = $" scheduled every {action.ScheduleRepeatMode.GetDisplayName()} starting at {action.ScheduleStartTime?.ToDefaultFormat()}";
+
+                actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: {color};'>{chats}</span>{schedule}"));
             }
             else if (action.Action == ActionType.ShowIcon)
             {

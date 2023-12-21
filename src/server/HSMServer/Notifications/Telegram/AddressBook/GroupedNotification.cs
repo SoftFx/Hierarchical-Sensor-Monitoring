@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Model.Policies;
 using System.Collections.Concurrent;
 
-namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
+namespace HSMServer.Notifications.Telegram.AddressBook
 {
     internal sealed class GroupedNotification
     {

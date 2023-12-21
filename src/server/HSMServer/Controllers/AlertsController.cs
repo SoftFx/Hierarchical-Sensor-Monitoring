@@ -93,18 +93,21 @@ namespace HSMServer.Controllers
             try
             {
                 var importList = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _deserializeOptions);
+                var newAlerts = new CGuidDict<List<PolicyUpdate>>();
 
                 foreach (var importGroup in importList)
                 {
                     if (importGroup.Products is null)
-                        ImportAlertsToProduct(targetId, importGroup, toast);
+                        ImportAlertsToProduct(targetId, importGroup, newAlerts, toast);
                     else
                     {
                         foreach (var productName in importGroup.Products)
                             if (_cache.TryGetProductByName(productName, out var product))
-                                ImportAlertsToProduct(product.Id, importGroup, toast);
+                                ImportAlertsToProduct(product.Id, importGroup, newAlerts, toast);
                     }
                 }
+
+                SendAlertUpdates(newAlerts, toast);
             }
             catch (Exception ex)
             {
@@ -115,12 +118,10 @@ namespace HSMServer.Controllers
         }
 
 
-        private void ImportAlertsToProduct(Guid nodeId, AlertExportViewModel importGroup, ImportAlertsToastViewModel toast)
+        private void ImportAlertsToProduct(Guid nodeId, AlertExportViewModel importGroup, CGuidDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
         {
             if (_tree.Nodes.TryGetValue(nodeId, out var targetNode))
             {
-                var newSensorAlerts = new CGuidDict<List<PolicyUpdate>>();
-
                 var availableChats = targetNode.GetAvailableChats(_telegram).ToDictionary(k => k.Value, v => v.Key);
                 var productName = targetNode.RootProduct.Name;
 
@@ -132,26 +133,30 @@ namespace HSMServer.Controllers
                     {
                         var newAlert = importGroup.ToUpdate(sensor.Id, availableChats);
 
-                        newSensorAlerts[sensor.Id].Add(newAlert);
+                        newAlerts[sensor.Id].Add(newAlert);
                     }
                     else
                         toast.AddError("Sensor by path not found", $"{productName}{fullSensorPath}");
                 }
-
-                foreach (var (sensorId, alertUpdates) in newSensorAlerts)
-                {
-                    var update = new SensorUpdate()
-                    {
-                        Id = sensorId,
-                        Policies = alertUpdates,
-                        Initiator = CurrentInitiator,
-                    };
-
-                    if (!_cache.TryUpdateSensor(update, out var error))
-                        toast.AddError(error, _tree.Sensors[sensorId].Name);
-                }
             }
         }
+
+        private void SendAlertUpdates(CGuidDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
+        {
+            foreach (var (sensorId, alertUpdates) in newAlerts)
+            {
+                var update = new SensorUpdate()
+                {
+                    Id = sensorId,
+                    Policies = alertUpdates,
+                    Initiator = CurrentInitiator,
+                };
+
+                if (!_cache.TryUpdateSensor(update, out var error))
+                    toast.AddError(error, _tree.Sensors[sensorId].Name);
+            }
+        }
+
 
         private PolicyExportGroup AddNodeAlertsToGroup(PolicyExportGroup exportGroup, Guid nodeId)
         {

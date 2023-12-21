@@ -69,6 +69,7 @@ This is a part of Multichart entity, which describes how to plot different senso
 * View for **TimeSpan zero** value has been fixed (now it is 0 seconds).
 * All items **Delete** have been renamed to **Remove**.
 * Searching by **Path** column has been added in Journal.
+* Importing alerts with different templates to the same sensor has been fixed.
 
 # HSM Datacollector v.3.2.4
 

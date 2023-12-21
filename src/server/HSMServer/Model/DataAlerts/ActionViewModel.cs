@@ -5,6 +5,7 @@ using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -16,10 +17,25 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
+    public enum ScheduleRepeatMode
+    {
+        [Display(Name = "Hour")]
+        Hourly,
+        [Display(Name = "Day")]
+        Daily,
+        [Display(Name = "Week")]
+        Weekly,
+    }
+
+
     public class AlertActionBase
     {
         public ActionType Action { get; set; }
 
+
+        public ScheduleRepeatMode? ScheduleRepeatMode { get; set; }
+
+        public DateTime? ScheduleStartTime { get; set; }
 
         public HashSet<Guid> Chats { get; set; } = new();
 
@@ -59,6 +75,7 @@ namespace HSMServer.Model.DataAlerts
             Node = node;
 
             Action = ActionType.SendNotification;
+            ScheduleStartTime = DateTime.UtcNow.Ceil(TimeSpan.FromHours(1));
         }
 
 

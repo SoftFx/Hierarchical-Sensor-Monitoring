@@ -56,6 +56,13 @@ namespace HSMCommon.Extensions
             return roundTicks == 0 ? time : new DateTime(time.Ticks / roundTicks * roundTicks + roundTicks, DateTimeKind.Utc);
         }
 
+        public static TimeSpan Ceil(this TimeSpan time, TimeSpan span)
+        {
+            var roundTicks = span.Ticks;
+
+            return roundTicks == 0 ? time : TimeSpan.FromTicks(time.Ticks / roundTicks * roundTicks + roundTicks);
+        }
+
         public static DateTime Floor(this DateTime time, TimeSpan span)
         {
             var roundTicks = span.Ticks;

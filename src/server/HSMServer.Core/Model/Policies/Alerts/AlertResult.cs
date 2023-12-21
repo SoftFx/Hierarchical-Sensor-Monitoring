@@ -14,12 +14,19 @@ namespace HSMServer.Core.Model.Policies
 
         public long? ConfirmationPeriod { get; }
 
+        public DateTime BuildDate { get; }
+
+        public DateTime SendTime { get; }
+
+
         public string Template { get; }
 
         public string Icon { get; }
 
 
         public bool IsStatusIsChangeResult { get; }
+
+        public bool IsScheduleAlert { get; }
 
 
         public AlertState LastState { get; private set; }
@@ -37,11 +44,15 @@ namespace HSMServer.Core.Model.Policies
             Destination = new(policy.Destination.AllChats, new HashSet<Guid>(policy.Destination.Chats.Keys));
 
             ConfirmationPeriod = policy.ConfirmationPeriod;
+            SendTime = policy.Schedule.GetSendTime();
+            BuildDate = DateTime.UtcNow;
+
             Template = policy.Template;
             PolicyId = policy.Id;
             Icon = policy.Icon;
 
             IsStatusIsChangeResult = policy.Conditions.IsStatusChangeResult();
+            IsScheduleAlert = policy.Schedule.RepeatMode is not AlertRepeatMode.Immediately;
 
             AddPolicyResult(policy);
         }
