@@ -2,6 +2,7 @@
 using HSMCommon.Extensions;
 using HSMServer.Core.Model.Policies;
 using System;
+using System.Linq;
 using System.Text;
 
 namespace HSMServer.Notifications.Telegram.AddressBook
@@ -26,7 +27,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook
             var sb = new StringBuilder(1 << 10);
             var lastDate = new DateOnly();
 
-            foreach (var (time, part) in _scheduleParts)
+            foreach (var (time, part) in _scheduleParts.OrderBy(u => u.Key).ToList())
             {
                 var curDate = DateOnly.FromDateTime(time);
 
@@ -42,7 +43,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook
 
             _scheduleParts.Clear();
 
-            return sb.Length == 0 ? string.Empty : $"Scheduled:{Environment.NewLine}{sb}";
+            return sb.ToString();
         }
     }
 }
