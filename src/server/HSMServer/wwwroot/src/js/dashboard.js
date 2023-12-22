@@ -325,7 +325,7 @@ window.initDashboard = function () {
                     )
                 }
             })
-        }, 3000)
+        }, 30000)
     }
 }
 
