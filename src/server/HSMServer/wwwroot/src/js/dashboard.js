@@ -282,7 +282,7 @@ window.initDashboard = function () {
                     
                     let lastTime = new Date(0);
 
-                    if (plot.data[correctId] !== undefined && plot.data[correctId].length > 0)
+                    if (plot.data[correctId] !== undefined && plot.data[correctId].x.length > 0)
                         lastTime = new Date(plot.data[correctId].x.at(-1));
                     
                     let x = [];
@@ -290,7 +290,7 @@ window.initDashboard = function () {
                     let customData = []
                     let isTimeSpan = data.isTimeSpan !== undefined && data.isTimeSpan === true;
                     for(let j of data.newVisibleValues){
-                        if (lastTime > new Date(j.time))
+                        if (lastTime >= new Date(j.time))
                             continue;
 
                         if (isTimeSpan) 
@@ -325,7 +325,7 @@ window.initDashboard = function () {
                     )
                 }
             })
-        }, 30000)
+        }, 3000)
     }
 }
 
