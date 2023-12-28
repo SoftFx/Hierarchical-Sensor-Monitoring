@@ -86,7 +86,9 @@ public class DatasourceViewModel
     {
         var task = from is null ? _panelSource.Source.Initialize() : _panelSource.Source.Initialize(from.Value, DateTime.UtcNow);
 
-        Values = (await task).Values;
+        var response = await task;
+        Values = response.Values;
+        ChartType = response.ChartType;
     }
 
 
