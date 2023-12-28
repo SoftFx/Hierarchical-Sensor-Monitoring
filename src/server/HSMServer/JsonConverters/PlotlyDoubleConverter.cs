@@ -13,6 +13,6 @@ public class PlotlyDoubleConverter: JsonConverter<double>
 
     public override void Write(Utf8JsonWriter writer, double value, JsonSerializerOptions options)
     {
-        writer.WriteStringValue(value.ToString("0.#####"));
+        writer.WriteStringValue(value.ToString("0.#####", System.Globalization.CultureInfo.InvariantCulture));
     }
 }
