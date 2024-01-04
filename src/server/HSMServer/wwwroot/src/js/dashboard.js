@@ -544,15 +544,26 @@ function updatePlotSource(name, color, property, id){
             color: color,
             property: property
         })
-    }).done(function (){
-        let update = {
+    }).done(function (response){
+        if (response !== ''){
+            Plotly.deleteTraces('multichart', currentPanel[id].id).then(
+                (data) => {
+                    insertSourcePlot(response, 'multichart');
+                },
+            )
+            
+            return;
+        }
+        
+        let layoutUpdate = {
             'hovertemplate': `${name}, %{customdata}<extra></extra>`,
             'line.color': color,
+            'marker.color': color,
             name: name
         }
 
         if (currentPanel[id] !== undefined)
-            Plotly.restyle('multichart', update, currentPanel[id].id)
+            Plotly.restyle('multichart', layoutUpdate, currentPanel[id].id)
 
         currentPanel[id].updateTimeout = undefined;
     }).fail(function (response){
