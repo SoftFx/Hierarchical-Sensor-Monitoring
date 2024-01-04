@@ -49,6 +49,7 @@ export const plotColorDelay = 1000;
 
 export function Model(id, panelId, dashboardId, sensorId) {
     this.id = id;
+    this.oldIndex = id;
     this.sensorId = sensorId;
     this.panelId = panelId;
     this.dashboardId = dashboardId;
@@ -67,9 +68,7 @@ window.insertSourceHtml = function (data) {
         cache: false,
         async: true
     }).done(function (result) {
-        sources.html(function (n, origText) {
-            return origText + result;
-        });
+        sources.append(result);
     });
 }
 
@@ -150,7 +149,10 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         }
     );
 
-    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId);
+    if (currentPanel[data.id] === undefined)
+        currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId);
+    else 
+        currentPanel[data.id].id = $(`#${id}`)[0].data.length - 1;
 }
 
 window.addNewSourceHtml = function (data, id){
@@ -434,12 +436,23 @@ window.getCurrentPlotInDashboard = function (id) {
     return currentPanel[id]
 }
 
-window.updateCurrentPlotsIds = function (idToCompare, id) {
-    delete currentPanel[id];
+window.updateCurrentPlotsIds = function (idToCompare, id, indexToCompare, isToDelete = true) {
+    if (isToDelete)
+        delete currentPanel[id];
+    else
+    {
+        currentPanel[id].id = null;
+        return;
+    }
     
     for (let item in currentPanel) {
-        if (currentPanel[item].id >= idToCompare)
+        if (currentPanel[item].oldIndex >= idToCompare) {
+            currentPanel[item].oldIndex = currentPanel[item].oldIndex - 1;
+        }
+
+        if (currentPanel[item].id >= indexToCompare) {
             currentPanel[item].id = currentPanel[item].id - 1;
+        }
     }
 }
 
@@ -543,13 +556,11 @@ function updatePlotSource(name, color, property, id){
         })
     }).done(function (response){
         if (response !== ''){
-            Plotly.deleteTraces('multichart', currentPanel[id].id).then(
-                (data) => {
-                    insertSourcePlot(response, 'multichart');
-                },
-            )
+            Plotly.deleteTraces('multichart', currentPanel[id].id);
             
-            return;
+            updateCurrentPlotsIds(currentPanel[id].oldIndex, id, currentPanel[id].id, false)
+            
+            insertSourcePlot(response, 'multichart');
         }
         
         let layoutUpdate = {
