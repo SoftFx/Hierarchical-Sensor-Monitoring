@@ -1,5 +1,4 @@
 ﻿using HSMServer.Core.Model;
-using System;
 
 namespace HSMServer.Datasources
 {
@@ -12,7 +11,7 @@ namespace HSMServer.Datasources
             SensorType.TimeSpan => new TimespanDatasource(),
             SensorType.Boolean => new PointDatasource(),
             SensorType.DoubleBar or SensorType.IntegerBar => new BarsDatasource(),
-            _ => throw new Exception($"History visualization for {type} sensor is not supported")
+            _ => new PointDatasource()
         };
     }
 }
