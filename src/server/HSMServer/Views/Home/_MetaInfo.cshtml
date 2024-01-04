@@ -50,6 +50,13 @@
             }
 
             <h5 id="nodeHeader" class="d-flex my-1">@Html.Raw(Model.Header)</h5>
+
+            @if (hasUserRights)
+            {
+                <a id="editButtonMetaInfo" class="d-flex px-2 icon-link" href="#" title='edit meta info'>
+                    <i class='fas fa-edit align-self-center'></i>
+                </a>
+            }
         </div>
 
         <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
@@ -60,13 +67,6 @@
 
         <div id="headline_metainfo" class="d-none d-flex" style="height: 2rem;">
             <label id="description_title" class="col-form-label fw-bold">Description:</label>
-
-            @if (hasUserRights)
-            {
-                <div class="d-flex my-1 ms-auto align-items-baseline">
-                    <a id="editButtonMetaInfo" class="d-none d-flex px-2 pb-2" href="#" title='edit meta info'><i class='fas fa-edit align-self-center'></i> Edit</a>
-                </div>
-            }
         </div>
 
         @if (!string.IsNullOrEmpty(Model.Description))
@@ -110,7 +110,15 @@
         replaceHtmlToMarkdown('markdown_status_comment');
 
         $('#editButtonMetaInfo').on('click', function (){
+            let icon = getAdvancedInfoButtonIcon();
+            if (!isAdvancedInfoVisible(icon)) {
+                $('#meta_info_collapse').click();
+                showAdvancedInfo(icon);
+            }
+
             editInfoButtonClick();
+
+            $('#editButtonMetaInfo').addClass('d-none');
         });
         
         $('#revertInfo').on('click', function (){
@@ -135,6 +143,7 @@
             contentType: false,
             async: true,
             success: (viewData) => {
+                $('#editButtonMetaInfo').removeClass('d-none');
                 displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
 
                 if ($(".field-validation-error").length !== 0)
@@ -232,24 +241,38 @@
         }
     }
 
+    function getAdvancedInfoButtonIcon() {
+        return $('#collapse_icon')[0];
+    }
+    
+    function isAdvancedInfoVisible(icon) {
+        return icon.classList.contains('fa-caret-up');
+    }
+
     function collapseChangeTextContent() {
-        let icon = $('#collapse_icon')[0];
+        let icon = getAdvancedInfoButtonIcon();
 
         if (icon.classList.contains('fa-caret-up')) {
-            icon.classList.toggle('fa-caret-down')
-            $('#meta_info_collapse').attr('title', 'Show more info...');
-            $('#editButtonMetaInfo').addClass('d-none');
-            $('#description_title').addClass('d-none');
-            $('#headline_metainfo').addClass('d-none');
-            $('#markdown_span_description').removeClass('ms-3');
+            hideAdvancedInfo(icon);
         }
         else {
-            icon.classList.toggle('fa-caret-up')
-            $('#meta_info_collapse').attr('title', 'Hide info...');
-            $('#editButtonMetaInfo').removeClass('d-none');
-            $('#description_title').removeClass('d-none');
-            $('#headline_metainfo').removeClass('d-none');
-            $('#markdown_span_description').addClass('ms-3');
+            showAdvancedInfo(icon);
         }
+    }
+
+    function showAdvancedInfo(icon) {
+        icon.classList.toggle('fa-caret-up')
+        $('#meta_info_collapse').attr('title', 'Hide info...');
+        $('#description_title').removeClass('d-none');
+        $('#headline_metainfo').removeClass('d-none');
+        $('#markdown_span_description').addClass('ms-3');
+    }
+
+    function hideAdvancedInfo(icon) {
+        icon.classList.toggle('fa-caret-down')
+        $('#meta_info_collapse').attr('title', 'Show more info...');
+        $('#description_title').addClass('d-none');
+        $('#headline_metainfo').addClass('d-none');
+        $('#markdown_span_description').removeClass('ms-3');
     }
 </script>

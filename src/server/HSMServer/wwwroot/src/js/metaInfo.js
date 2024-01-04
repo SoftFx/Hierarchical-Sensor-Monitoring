@@ -8,7 +8,6 @@
 window.editInfoButtonClick = function () {
     $('#saveInfo').removeAttr("hidden");
     $('#revertInfo').removeAttr("hidden");
-    $('#editButtonMetaInfo').addClass('d-none');
 
     $('#editMetaInfo_form').children('div').each(function () {
         $(this).removeClass('d-none');
