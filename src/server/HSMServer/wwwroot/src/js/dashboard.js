@@ -199,9 +199,6 @@ export function initDropzone(){
             event.relatedTarget.classList.remove('can-drop')
         },
         ondrop: function (event) {
-            // if (currentPanel[event.relatedTarget.id] !== undefined)
-            //     return;
-
             getPlotSourceView(event.relatedTarget.id).then(
                 (data) => addNewSourceHtml(data, 'multichart'),
                 (error) => showToast(error)
