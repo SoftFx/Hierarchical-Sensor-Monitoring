@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Model;
 using HSMServer.Dashboards;
 using HSMServer.Datasources;
 using HSMServer.Extensions;
@@ -69,7 +70,7 @@ public class DatasourceViewModel
         Type = sensor.Type;
         Unit = sensor.OriginalUnit;
 
-        SensorInfo = new SensorInfoViewModel(Type, Type, Unit?.ToString());
+        SensorInfo = new SensorInfoViewModel(Type, Type, Unit?.GetDisplayName());
 
         AvailableProperties = GetAvailableProperties(sensor);
         Property = source.Property;

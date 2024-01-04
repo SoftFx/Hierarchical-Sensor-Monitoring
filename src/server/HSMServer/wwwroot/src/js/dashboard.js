@@ -83,8 +83,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         'xaxis.range' : getRangeDate(),
         'yaxis.visible' : true,
         'yaxis.title.text' : data.sensorInfo.units,
-        'yaxis.title.font.family' : data.sensorInfo.units,
-        'yaxis.title.font.size' : 18,
+        'yaxis.title.font.size' : 14,
         'yaxis.title.font.color' : '#7f7f7f',
     }
 
