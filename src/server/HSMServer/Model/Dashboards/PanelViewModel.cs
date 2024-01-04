@@ -44,7 +44,7 @@ public sealed class PanelViewModel
         DashboardId = dashboardId;
         Settings = panel.Settings;
 
-        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Key, x => new DatasourceViewModel(x.Value)));
+        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x => new DatasourceViewModel(x.Value)));
     }
 
 

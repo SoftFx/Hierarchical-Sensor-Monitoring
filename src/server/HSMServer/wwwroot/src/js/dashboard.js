@@ -47,8 +47,9 @@ export function getPlotSourceView(id) {
 export const currentPanel = {};
 export const plotColorDelay = 1000;
 
-export function Model(id, panelId, dashboardId) {
+export function Model(id, panelId, dashboardId, sensorId) {
     this.id = id;
+    this.sensorId = sensorId;
     this.panelId = panelId;
     this.dashboardId = dashboardId;
     this.updateTimeout = undefined;
@@ -92,7 +93,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         plot.y = [null];
     }
 
-    plot.id = data.sensorId;
+    plot.id = data.id;
     plot.name = data.label;
     plot.mode = 'lines+markers';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
@@ -149,7 +150,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         }
     );
 
-    currentPanel[data.sensorId] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
+    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId);
 }
 
 window.addNewSourceHtml = function (data, id){
@@ -198,8 +199,8 @@ export function initDropzone(){
             event.relatedTarget.classList.remove('can-drop')
         },
         ondrop: function (event) {
-            if (currentPanel[event.relatedTarget.id] !== undefined)
-                return;
+            // if (currentPanel[event.relatedTarget.id] !== undefined)
+            //     return;
 
             getPlotSourceView(event.relatedTarget.id).then(
                 (data) => addNewSourceHtml(data, 'multichart'),
@@ -282,7 +283,7 @@ window.initDashboard = function () {
                         if (isTimeSpan) 
                         {
                             let timespanValue = TimeSpanPlot.getTimeSpanValue(j);
-                            customData.push(Plot.checkError(i) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, i) + '<br>' + i.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, i))
+                            customData.push(Plot.checkError(j) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, j) + '<br>' + j.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, j))
                             x.push(j.time)
                             y.push(timespanValue.totalMilliseconds())
                         }

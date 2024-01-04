@@ -236,11 +236,11 @@ namespace HSMServer.Controllers
             return TryGetBoard(boardId, out var board) && board.Panels.TryGetValue(id, out panel);
         }
 
-        private bool TryGetSource(Guid boardId, Guid panelId, Guid id, out PanelDatasource source)
+        private bool TryGetSource(Guid boardId, Guid panelId, Guid sourceId, out PanelDatasource source)
         {
             source = null;
 
-            return TryGetBoard(boardId, out var board) && board.Panels.TryGetValue(panelId, out var panel) && panel.Sources.TryGetValue(id, out source);
+            return TryGetBoard(boardId, out var board) && board.Panels.TryGetValue(panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out source);
         }
     }
 }

@@ -35,7 +35,7 @@ namespace HSMServer.Dashboards
             Added += AddDashboardSubscriptions;
             Removed -= RemoveDashboardSubscriptions;
 
-            _cache.ChangeSensorEvent += ChangeSensorHandler;
+            _cache.ChangeSensorEvent += ChangeSensorHandler; //Change delete handler to source id delete
         }
 
 
