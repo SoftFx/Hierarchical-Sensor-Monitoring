@@ -1,6 +1,6 @@
 import {convertToGraphData} from "./plotting";
 import {pan} from "plotly.js/src/fonts/ploticon";
-import {Plot, TimeSpanPlot} from "./plots";
+import {Colors, Plot, TimeSpanPlot} from "./plots";
 
 window.getRangeDate = function (){
     let period = $('#from_select').val();
@@ -97,6 +97,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     plot.mode = 'lines+markers';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
+    plot['marker']['color'] = data.color;
 
     Plotly.addTraces(id, plot.getPlotData()).then(
         (data) => {
@@ -265,7 +266,7 @@ window.initDashboard = function () {
                     
                     let lastTime = new Date(0);
 
-                    if (plot.data[correctId] !== undefined && plot.data[correctId].length > 0)
+                    if (plot.data[correctId] !== undefined && plot.data[correctId].x.length > 0)
                         lastTime = new Date(plot.data[correctId].x.at(-1));
                     
                     let x = [];
