@@ -10,12 +10,12 @@
         <div class="d-flex flex-column" style="flex-grow: 10">
             <div class="d-flex mx-1 align-items-center">
                 <label class="me-1">Label:</label>
-                <input id='name_input_@Model.Id' class="form-control" asp-for="Label" type="text" oninput="javascript:realtimeUpdate('@Model.Id', '@Model.SensorId')" />
+                <input id='name_input_@Model.Id' class="form-control" asp-for="Label" type="text" oninput="javascript:realtimeUpdate('@Model.Id')" />
 
                 <label class="ms-2 me-1">Property:</label>
-                <select id="property_@Model.Id" class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties" onchange="javascript:realtimeUpdate('@Model.Id', '@Model.SensorId')"></select>
+                <select id="property_@Model.Id" class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties" onchange="javascript:realtimeUpdate('@Model.Id')"></select>
 
-                <input id='color_@Model.Id' type="color" asp-for="Color" class="form-control form-control-color mx-1" oninput="javascript:realtimeUpdate('@Model.Id', '@Model.SensorId')" />
+                <input id='color_@Model.Id' type="color" asp-for="Color" class="form-control form-control-color mx-1" oninput="javascript:realtimeUpdate('@Model.Id')" />
             </div>
             <div class="d-flex align-items-center">
                 <span class="ms-1" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;" onclick="javascript:redirectToHome('@Model.SensorId')">
@@ -24,7 +24,7 @@
             </div>
         </div>
         <div class="d-flex justify-content-center">
-            <button class="btn" type="button" style="color: red" onclick="javascript:deletePlot('@Model.SensorId')">
+            <button class="btn" type="button" style="color: red" onclick="javascript:deletePlot('@Model.Id')">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
@@ -33,17 +33,17 @@
 
 
 <script>
-    function realtimeUpdate(id, sensorId) {
-        updateSource($(`#name_input_${id}`).val(), $(`#color_${id}`).val(), $(`#property_${id}`).val(), sensorId);
+    function realtimeUpdate(id) {
+        updateSource($(`#name_input_${id}`).val(), $(`#color_${id}`).val(), $(`#property_${id}`).val(), id);
     }
 
-    function deletePlot(sensorId) {
-        let model = getCurrentPlotInDashboard(sensorId)
+    function deletePlot(sourceId) {
+        let model = getCurrentPlotInDashboard(sourceId)
 
         if (model !== undefined) {
             $.ajax({
                 type: 'delete',
-                url: window.location.pathname + '/' + sensorId
+                url: window.location.pathname + '/' + sourceId
             }).done(function (response) {
                 Plotly.deleteTraces('multichart', model.id).then(
                     (data) => {
@@ -53,7 +53,7 @@
                         }
 
                         $('[id^="source"] li')[model.id].remove();
-                        updateCurrentPlotsIds(model.id, sensorId);
+                        updateCurrentPlotsIds(model.id, sourceId);
                     }
                 )
             }).fail(function (response) {
