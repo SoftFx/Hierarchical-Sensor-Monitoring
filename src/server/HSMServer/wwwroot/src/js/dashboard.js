@@ -149,10 +149,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         }
     );
 
-    if (currentPanel[data.id] === undefined)
-        currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId);
-    else 
-        currentPanel[data.id].id = $(`#${id}`)[0].data.length - 1;
+    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId);
 }
 
 window.addNewSourceHtml = function (data, id){
@@ -436,23 +433,16 @@ window.getCurrentPlotInDashboard = function (id) {
     return currentPanel[id]
 }
 
-window.updateCurrentPlotsIds = function (idToCompare, id, indexToCompare, isToDelete = true) {
-    if (isToDelete)
-        delete currentPanel[id];
-    else
-    {
-        currentPanel[id].id = null;
-        return;
-    }
+window.syncIndexes = function(){
+    let sources = $('#sources li');
+    let plot = $('#multichart')[0].data;
     
-    for (let item in currentPanel) {
-        if (currentPanel[item].oldIndex >= idToCompare) {
-            currentPanel[item].oldIndex = currentPanel[item].oldIndex - 1;
-        }
+    for (let i = 0 ;i < sources.length; i++) {
+        currentPanel[`${sources[i].id.substring('source_'.length, sources[i].id.length)}`].oldIndex = i;
+    }
 
-        if (currentPanel[item].id >= indexToCompare) {
-            currentPanel[item].id = currentPanel[item].id - 1;
-        }
+    for (let i = 0 ;i < plot.length; i++) {
+        currentPanel[`${plot[i].id}`].id = i;
     }
 }
 
@@ -557,10 +547,8 @@ function updatePlotSource(name, color, property, id){
     }).done(function (response){
         if (response !== ''){
             Plotly.deleteTraces('multichart', currentPanel[id].id);
-            
-            updateCurrentPlotsIds(currentPanel[id].oldIndex, id, currentPanel[id].id, false)
-            
             insertSourcePlot(response, 'multichart');
+            syncIndexes();
         }
         
         let layoutUpdate = {

@@ -53,7 +53,7 @@
                         }
 
                         $('[id^="source"] li')[model.oldIndex].remove();
-                        updateCurrentPlotsIds(model.oldIndex, sourceId, model.id);
+                        syncIndexes();
                     }
                 )
             }).fail(function (response) {
