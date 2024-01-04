@@ -25,7 +25,7 @@ public sealed record UpdateSensorValueRequestModel
     public string Environment => ChangeLast ? "Change last value" : "Added new value";
 
 
-    public (string oldValue, string newValue) GetValues(BaseValue oldValue, BaseValue newValue) => oldValue is not FileValue ? (oldValue.RawValue?.ToString(), newValue.RawValue?.ToString()) : (null, null);
+    public (string oldValue, string newValue) GetValues(BaseValue oldValue, BaseValue newValue) => oldValue is not FileValue ? (oldValue?.RawValue?.ToString(), newValue.RawValue?.ToString()) : (null, null);
 
     public string BuildComment(SensorStatus? status = null, string comment = null, string value = null)
     {
