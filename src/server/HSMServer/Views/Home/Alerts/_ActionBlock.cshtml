@@ -65,7 +65,7 @@
             <select class="alert-block alert-select target-input" asp-for="ScheduleRepeatMode" asp-items="Enum.GetValues<ScheduleRepeatMode>().ToSelectedItems(k => k.GetDisplayName())"></select>
 
             <div class="alert-text-block operation-select">starting at</div>
-            <input class="alert-block target-input" type="datetime-local" id="schedule" asp-for="ScheduleStartTime">
+            <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
         </div>
     </div>
 
