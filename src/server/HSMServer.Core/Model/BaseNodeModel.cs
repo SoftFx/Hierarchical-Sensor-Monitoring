@@ -111,7 +111,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        protected T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "", bool? forced = null)
+        protected T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "", bool? forced = null, SensorUpdate update = null, BaseSensorModel oldModel = null)
         {
             var infoNode = ChangeTable.Properties[propName];
             var forceUpdate = forced ?? initiator.IsForceUpdate;
@@ -124,8 +124,8 @@ namespace HSMServer.Core.Model
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
                     Enviroment = "General info update",
-                    OldValue = $"{oldValue}",
-                    NewValue = $"{newValue}",
+                    OldValue = GetSpecificValue(oldValue),
+                    NewValue = GetSpecificValue(newValue),
 
                     PropertyName = propName,
                     Path = FullPath,
@@ -135,6 +135,18 @@ namespace HSMServer.Core.Model
             }
 
             return newValue ?? oldValue;
+
+            string GetSpecificValue(T value)
+            {
+                if (update is null || oldModel is null)
+                    return value.ToString();
+                
+                return value switch
+                {
+                    SensorState state => state is SensorState.Muted ? $"{state.ToString()} until {update.EndOfMutingPeriod ?? oldModel.EndOfMuting}" : state.ToString(),
+                    _ => value.ToString()
+                };
+            }
         }
     }
 }
