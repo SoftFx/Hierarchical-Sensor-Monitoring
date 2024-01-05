@@ -34,7 +34,7 @@ namespace HSMServer.Model.Dashboards
 
         public Guid? Id { get; set; }
 
-        [Display(Name = "Dashboard:")] 
+        [Display(Name = "Dashboard:")]
         public string Name { get; set; }
 
         public string Description { get; set; }
