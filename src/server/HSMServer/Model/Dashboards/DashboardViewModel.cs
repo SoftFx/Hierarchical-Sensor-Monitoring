@@ -18,14 +18,14 @@ namespace HSMServer.Model.Dashboards
 
         public static readonly List<SelectListItem> Periods =
         [
-            new SelectListItem("last 30 minutes", "00:30:00"),
-            new SelectListItem("last 1 hour", "01:00:00"),
-            new SelectListItem("last 3 hours", "03:00:00"),
-            new SelectListItem("last 6 hours", "06:00:00"),
-            new SelectListItem("last 12 hours", "12:00:00"),
-            new SelectListItem("last 1 day", "1.00:90:00"),
-            new SelectListItem("last 3 day", "3.00:00:00"),
-            new SelectListItem("last 7 day", "7.00:00:00")
+            new SelectListItem("last 30 minutes", TimeSpan.FromMinutes(30).ToString()),
+            new SelectListItem("last 1 hour", TimeSpan.FromHours(1).ToString()),
+            new SelectListItem("last 3 hours", TimeSpan.FromHours(3).ToString()),
+            new SelectListItem("last 6 hours", TimeSpan.FromHours(6).ToString()),
+            new SelectListItem("last 12 hours", TimeSpan.FromHours(12).ToString()),
+            new SelectListItem("last 1 day", TimeSpan.FromDays(1).ToString()),
+            new SelectListItem("last 3 day", TimeSpan.FromDays(3).ToString()),
+            new SelectListItem("last 7 day", TimeSpan.FromDays(7).ToString())
         ];
 
 
