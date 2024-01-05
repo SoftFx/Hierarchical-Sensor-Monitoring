@@ -104,11 +104,11 @@ public class DatasourceViewModel
 
     private List<SelectListItem> GetAvailableProperties(BaseSensorModel sensor)
     {
-        var properties = sensor switch
+        var properties = new List<PlottedProperty>(sensor switch
         {
             IntegerBarSensorModel or DoubleBarSensorModel => _barSensorProperties,
             _ => _singleSensorProperties
-        };
+        });
         
         if (sensor.Statistics.HasEma())
             properties.AddRange(_barEmaSensorProperties);
