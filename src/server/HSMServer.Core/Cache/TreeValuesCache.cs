@@ -323,7 +323,7 @@ namespace HSMServer.Core.Cache
             var sensor = GetSensor(request.Id);
             var lastValue = sensor.LastValue;
 
-            if (request.Comment is not null && lastValue is not null)
+            if (request.Comment is not null && (!request.ChangeLast || lastValue is not null))
             {
                 var value = request.BuildNewValue(sensor.Storage.GetEmptyValue(), lastValue);
 
@@ -336,7 +336,7 @@ namespace HSMServer.Core.Cache
                         PropertyName = request.PropertyName,
                         Enviroment = request.Environment,
                         Path = sensor.FullPath,
-                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, oldValue),
+                        OldValue = request.BuildComment(lastValue?.Status, lastValue?.Comment, oldValue),
                         NewValue = request.BuildComment(value: newValue)
                     });
 
