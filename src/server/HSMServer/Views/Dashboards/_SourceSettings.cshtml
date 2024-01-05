@@ -52,8 +52,8 @@
                             $('#emptypanel').show();
                         }
 
-                        $('[id^="source"] li')[model.id].remove();
-                        updateCurrentPlotsIds(model.id, sourceId);
+                        $('[id^="source"] li')[model.oldIndex].remove();
+                        syncIndexes();
                     }
                 )
             }).fail(function (response) {

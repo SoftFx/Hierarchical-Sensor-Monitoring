@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using HSMCommon.Extensions;
+using HSMServer.Core;
 
 namespace HSMServer.Model.Dashboards;
 
@@ -14,17 +16,25 @@ public class DatasourceViewModel
 {
     private readonly PanelDatasource _panelSource;
 
-    private readonly List<PlottedProperty> _singleSensorProperties =
+    private static readonly List<PlottedProperty> _singleSensorProperties =
     [
         PlottedProperty.Value
     ];
 
-    private readonly List<PlottedProperty> _barSensorProperties =
+    private static readonly List<PlottedProperty> _barSensorProperties =
     [
         PlottedProperty.Min,
         PlottedProperty.Mean,
         PlottedProperty.Max,
-        PlottedProperty.Count
+        PlottedProperty.Count,
+    ];
+    
+    private static readonly List<PlottedProperty> _barEmaSensorProperties =
+    [
+        PlottedProperty.EmaMin,
+        PlottedProperty.EmaMean,
+        PlottedProperty.EmaMax,
+        PlottedProperty.EmaCount,
     ];
 
 
@@ -95,12 +105,15 @@ public class DatasourceViewModel
 
     private List<SelectListItem> GetAvailableProperties(BaseSensorModel sensor)
     {
-        var properties = sensor switch
+        var properties = new List<PlottedProperty>(sensor switch
         {
             IntegerBarSensorModel or DoubleBarSensorModel => _barSensorProperties,
             _ => _singleSensorProperties
-        };
+        });
+        
+        if (sensor.Statistics.HasEma())
+            properties.AddRange(_barEmaSensorProperties);
 
-        return properties.ToSelectedItems();
+        return properties.ToSelectedItems(k => k.GetDisplayName());
     }
 }

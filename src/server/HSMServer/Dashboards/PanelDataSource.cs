@@ -4,6 +4,7 @@ using HSMServer.Core.Model;
 using HSMServer.Datasources;
 using HSMServer.Extensions;
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Drawing;
 
 namespace HSMServer.Dashboards
@@ -21,9 +22,13 @@ namespace HSMServer.Dashboards
         Count = 56,
 
         EmaValue = 200,
+        [Display(Name = "EMA (Min)")]
         EmaMin = 201,
+        [Display(Name = "EMA (Mean)")]
         EmaMean = 202,
+        [Display(Name = "EMA (Max)")]
         EmaMax = 203,
+        [Display(Name = "EMA (Count)")]
         EmaCount = 204,
     }
 

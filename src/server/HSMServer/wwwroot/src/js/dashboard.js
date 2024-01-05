@@ -1,6 +1,6 @@
 import {convertToGraphData} from "./plotting";
 import {pan} from "plotly.js/src/fonts/ploticon";
-import {Plot, TimeSpanPlot} from "./plots";
+import {Colors, Plot, TimeSpanPlot} from "./plots";
 
 window.getRangeDate = function (){
     let period = $('#from_select').val();
@@ -49,6 +49,7 @@ export const plotColorDelay = 1000;
 
 export function Model(id, panelId, dashboardId, sensorId) {
     this.id = id;
+    this.oldIndex = id;
     this.sensorId = sensorId;
     this.panelId = panelId;
     this.dashboardId = dashboardId;
@@ -67,9 +68,7 @@ window.insertSourceHtml = function (data) {
         cache: false,
         async: true
     }).done(function (result) {
-        sources.html(function (n, origText) {
-            return origText + result;
-        });
+        sources.append(result);
     });
 }
 
@@ -97,6 +96,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     plot.mode = 'lines+markers';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
+    plot['marker']['color'] = data.color;
 
     Plotly.addTraces(id, plot.getPlotData()).then(
         (data) => {
@@ -433,12 +433,16 @@ window.getCurrentPlotInDashboard = function (id) {
     return currentPanel[id]
 }
 
-window.updateCurrentPlotsIds = function (idToCompare, id) {
-    delete currentPanel[id];
+window.syncIndexes = function(){
+    let sources = $('#sources li');
+    let plot = $('#multichart')[0].data;
     
-    for (let item in currentPanel) {
-        if (currentPanel[item].id >= idToCompare)
-            currentPanel[item].id = currentPanel[item].id - 1;
+    for (let i = 0 ;i < sources.length; i++) {
+        currentPanel[`${sources[i].id.substring('source_'.length, sources[i].id.length)}`].oldIndex = i;
+    }
+
+    for (let i = 0 ;i < plot.length; i++) {
+        currentPanel[`${plot[i].id}`].id = i;
     }
 }
 
@@ -542,13 +546,9 @@ function updatePlotSource(name, color, property, id){
         })
     }).done(function (response){
         if (response !== ''){
-            Plotly.deleteTraces('multichart', currentPanel[id].id).then(
-                (data) => {
-                    insertSourcePlot(response, 'multichart');
-                },
-            )
-            
-            return;
+            Plotly.deleteTraces('multichart', currentPanel[id].id);
+            insertSourcePlot(response, 'multichart');
+            syncIndexes();
         }
         
         let layoutUpdate = {
