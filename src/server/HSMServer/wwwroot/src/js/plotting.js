@@ -138,7 +138,7 @@ function getPreviousZoomData(graphElementId) {
     return window.sessionStorage.getItem(graphElementId);
 }
 
-export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default) {
+export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, asLine = false) {
     let escapedData = JSON.parse(graphData);
 
     switch (sensorInfo.plotType) {
@@ -149,9 +149,11 @@ export function convertToGraphData(graphData, sensorInfo, graphName, color = Col
         case 2:
             return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color);
         case 4:
-            return new BarPLot(escapedData, graphName, sensorInfo.units, color);
+            return asLine ? new IntegerPlot(escapedData, sensorInfo.units, color)
+                          : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 5:
-            return new BarPLot(escapedData, graphName, sensorInfo.units, color);
+            return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color) 
+                          : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 7:
             return new TimeSpanPlot(escapedData, sensorInfo.units, color);
         case 9:

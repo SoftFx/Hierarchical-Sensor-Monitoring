@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Dashboards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,18 +31,24 @@ namespace HSMServer.Datasources
         private long _removedValuesCnt, _aggrValuesStep;
         private bool _aggreagateValues;
 
+        protected PlottedProperty _plotProperty;
+
 
         protected abstract ChartType AggregatedType { get; }
 
         protected abstract ChartType NormalType { get; }
 
 
-        protected abstract BaseChartValue Convert(BaseValue baseValue);
+        protected abstract void AddVisibleValue(BaseValue baseValue);
+
+        protected abstract void ApplyToLast(BaseValue newValue);
 
 
-        public SensorDatasourceBase AttachSensor(BaseSensorModel sensor)
+        internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, PlottedProperty plotProperty)
         {
+            _plotProperty = plotProperty;
             _sensor = sensor;
+
             _sensor.ReceivedNewValue += AddNewValue;
 
             return this;
@@ -99,6 +106,12 @@ namespace HSMServer.Datasources
         }
 
 
+        protected void AddVisibleToLast(BaseChartValue value)
+        {
+            _curValues.AddLast(value);
+            _newVisibleValues.AddLast(value);
+        }
+
         private void BuildInitialValues(List<BaseValue> rawList, SensorHistoryRequest request)
         {
             rawList.Reverse();
@@ -113,23 +126,15 @@ namespace HSMServer.Datasources
 
         private void AddNewValue(BaseValue value)
         {
-            void AddVisibleValue()
-            {
-                var newVisibleValue = Convert(value);
-
-                _curValues.AddLast(newVisibleValue);
-                _newVisibleValues.AddLast(newVisibleValue);
-            }
-
             if (_aggreagateValues && _aggrValuesStep > 0)
             {
                 if (_curValues.Count == 0 || _curValues.Last.Value.Time.Ticks + _aggrValuesStep < value.Time.Ticks)
-                    AddVisibleValue();
+                    AddVisibleValue(value);
                 else
-                    _curValues.Last.Value.Apply(value);
+                    ApplyToLast(value);
             }
             else
-                AddVisibleValue();
+                AddVisibleValue(value);
 
             while (_curValues.Count > MaxVisibleCnt)
             {

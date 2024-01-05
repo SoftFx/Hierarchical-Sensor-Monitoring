@@ -76,8 +76,7 @@ export class Plot {
                     title: {
                         //text: 'Time',
                         font: {
-                            family: 'Courier New, monospace',
-                            size: 18,
+                            size: 14,
                             color: '#7f7f7f'
                         }
                     },
@@ -89,8 +88,7 @@ export class Plot {
                     title: {
                         text: this.#customYaxisName,
                         font: {
-                            family: 'Courier New, monospace',
-                            size: 18,
+                            size: 14,
                             color: '#7f7f7f'
                         }
                     },
