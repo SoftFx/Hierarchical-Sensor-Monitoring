@@ -124,8 +124,6 @@
         observer.observe(targetNode, config);
 
         let fromSelect = $('#from_select');
-        console.log(fromSelect.val())
-        console.log('@Model.FromPeriod');
         fromSelect.val('@Model.FromPeriod');
         fromSelect.on('change', function (){
             $('#saveDashBoardForm').submit();
