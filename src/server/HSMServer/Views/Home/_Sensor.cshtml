@@ -336,7 +336,8 @@
 
         let savedPlots = localStorage.getItem(`graph_@sensorId`);
         if (savedPlots) {
-            let plots = savedPlots.split(',');
+            let plots = savedPlots.split(',').filter((value, index, array) => array.indexOf(value) === index);
+            localStorage.setItem(`graph_@sensorId`, plots);
             let jqueryPlots = $('[id^="plot_"]');
             jqueryPlots.each(x => {
                 jqueryPlots[x].checked = plots.includes(jqueryPlots[x].id.substring("plot_".length));
