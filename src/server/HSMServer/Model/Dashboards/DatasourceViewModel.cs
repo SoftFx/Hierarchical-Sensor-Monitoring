@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using HSMCommon.Extensions;
 using HSMServer.Core;
 
 namespace HSMServer.Model.Dashboards;
@@ -112,6 +113,6 @@ public class DatasourceViewModel
         if (sensor.Statistics.HasEma())
             properties.AddRange(_barEmaSensorProperties);
 
-        return properties.ToSelectedItems();
+        return properties.ToSelectedItems(k => k.GetDisplayName());
     }
 }

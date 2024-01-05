@@ -151,8 +151,6 @@
             panels[i.id] = {
                 width: Number((item.width() / width).toFixed(5)),
                 height: Number((item.height() / height).toFixed(5)),
-                // x: Number((parseFloat((i.dataset.x === 'NaN' ? 0 : i.dataset.x) || 0) / width).toFixed(5)),
-                // y: Number((parseFloat((i.dataset.y === 'NaN' ? 0 : i.dataset.y) || 0) / height).toFixed(5)),
                 x: Number((parseFloat(i.dataset.x || 0) / width).toFixed(5)),
                 y: Number((parseFloat(i.dataset.y || 0) / height).toFixed(5)),
                 showLegend: showlegend
