@@ -15,12 +15,12 @@ public class DatasourceViewModel
 {
     private readonly PanelDatasource _panelSource;
 
-    private readonly List<PlottedProperty> _singleSensorProperties =
+    private static readonly List<PlottedProperty> _singleSensorProperties =
     [
         PlottedProperty.Value
     ];
 
-    private readonly List<PlottedProperty> _barSensorProperties =
+    private static readonly List<PlottedProperty> _barSensorProperties =
     [
         PlottedProperty.Min,
         PlottedProperty.Mean,
@@ -28,7 +28,7 @@ public class DatasourceViewModel
         PlottedProperty.Count,
     ];
     
-    private readonly List<PlottedProperty> _barEmaSensorProperties =
+    private static readonly List<PlottedProperty> _barEmaSensorProperties =
     [
         PlottedProperty.EmaMin,
         PlottedProperty.EmaMean,
