@@ -5,7 +5,7 @@ window.getFromAndTo = function (encodedId) {
     let to = $(`#to_${encodedId}`).val();
 
     if (to == "") {
-        to = new Date().getTime() + 60000;
+        to = new Date().AddDays(1);
         $(`#to_${encodedId}`).val(datetimeLocal(to));
     }
 
@@ -15,6 +15,11 @@ window.getFromAndTo = function (encodedId) {
     }
 
     return {from, to};
+}
+
+window.setFromAndTo = function (encodedId, from, to) {
+    $(`#from_${encodedId}`).val(datetimeLocal(from));
+    $(`#to_${encodedId}`).val(datetimeLocal(to));
 }
 
 var millisecondsInHour = 1000 * 3600;
@@ -120,7 +125,7 @@ function requestGraph() {
     const {from, to} = getFromAndTo(encodedId);
     
     showBarsCount(encodedId);
-    enableFromTo()
+    enableHistoryPeriod()
     GetSensortInfo(encodedId).done(function (types){
         if (Object.keys(types).length === 0)
             return;
@@ -135,7 +140,7 @@ function requestTable() {
     const {from, to} = getFromAndTo(encodedId);
 
     hideBarsCount(encodedId);
-    enableFromTo()
+    enableHistoryPeriod()
     GetSensortInfo(encodedId).done(function (types){
         if (Object.keys(types).length === 0)
             return;
@@ -417,7 +422,7 @@ let sensorColumns = [
 ]
 
 window.initializeJournal = function (type) {
-    disableFromTo()
+    disableHistoryPeriod()
     hideBarsCount();
 
     if (JournalTable) {
@@ -432,15 +437,36 @@ window.initializeJournal = function (type) {
 }
 
 window.disableFromTo = function () {
-    changeVisibility('datePickerFromTo', true)
+    changeFromToVisibility(true);
 }
 
 window.enableFromTo = function () {
-    changeVisibility('datePickerFromTo');
+    changeFromToVisibility(false);
 }
 
-function changeVisibility(containerId, disable = false) {
-    for (let el of $(`#${containerId} label, #${containerId} input, #${containerId} button`)) {
+window.disableHistoryPeriod = function () {
+    changeHistoryPeriodVisibility(true);
+}
+
+window.enableHistoryPeriod = function () {
+    changeHistoryPeriodVisibility(false);
+
+    if ($('#history_period').val() === 'Custom')
+        enableFromTo();
+    else
+        disableFromTo();
+}
+
+function changeFromToVisibility(disable) {
+    changeVisibility(`#datePickerFromTo [id^='from_'], #datePickerFromTo [id^='to_']`, disable);
+}
+
+function changeHistoryPeriodVisibility(disable) {
+    changeVisibility(`#datePickerFromTo label, #datePickerFromTo input, #datePickerFromTo button, #datePickerFromTo select`, disable);
+}
+
+function changeVisibility(elements, disable) {
+    for (let el of $(elements)) {
         el.disabled = disable;
         el.style.opacity = disable ? "0.5" : "1";
     }

@@ -1,4 +1,5 @@
-﻿@using HSMServer.Controllers
+﻿@using HSMCommon.Extensions
+@using HSMServer.Controllers
 @using HSMServer.Core.Model
 @using HSMServer.Core
 @using HSMServer.Extensions
@@ -142,10 +143,18 @@
             <div id='historyDataPanel' class='pt-3 text-break hidden_element'>
                 <div class="d-flex justify-content-between">
                     <div id="datePickerFromTo">
-                        <label class="me-1" for="from_@sensorId">From:</label>
+                        <label class="me-1">Period:</label>
+                        <select id="history_period" class="me-2">
+                            @foreach (var period in Enum.GetValues<HistoryPeriod>())
+                            {
+                                <option value="@period" selected="@(period is HistoryPeriod.Custom ? "selected" : string.Empty)">@period.GetDisplayName()</option>
+                            }
+                        </select>
+
+                        <label class="me-1" id="from_@(sensorId)_label" for="from_@sensorId">From:</label>
                         <input class="me-2" type="datetime-local" id="from_@sensorId" name="from">
 
-                        <label class="me-1" for="to_@sensorId">To:</label>
+                        <label class="me-1" id="to_@(sensorId)_label" for="to_@sensorId">To:</label>
                         <input class="me-2" type="datetime-local" id="to_@sensorId" name="to">
 
                         @if (Model.Type.IsBar())
@@ -316,7 +325,7 @@
 
     $(document).ready(function () {
         hiddenColumns.clear();
-        
+
         if ('@(Model.Type is SensorType.DoubleBar or SensorType.IntegerBar)' === 'True')
             hiddenColumns.tablecellsIds.push("#lastUpdateTime_header", "#closeTime_header", '[id^="lastUpdateTime_value"]', '[id^="closeTime_value"]',
                                              "#firstValue_header", "#lastValue_header", '[id^="firstValue_value"]', '[id^="lastValue_value"]');
@@ -328,6 +337,42 @@
     });
     
     $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal(NodeType.Sensor));
+
+    $('#history_period').off('change').on('change', function () {
+        let period = this.value;
+
+        if (period === '@HistoryPeriod.Custom') {
+            enableFromTo(false);
+            return;
+        }
+
+        disableFromTo(false);
+
+        let now = new Date();
+        let to = now.AddDays(1);
+        let from;
+
+        switch (period) {
+            case '@HistoryPeriod.Hour':
+                from = now.AddHours(-1);
+                break;
+            case '@HistoryPeriod.Day':
+                from = now.AddDays(-1);
+                break;
+            case '@HistoryPeriod.ThreeDays':
+                from = now.AddDays(-3);
+                break;
+            case '@HistoryPeriod.Week':
+                from = now.AddDays(-7);
+                break;
+            case '@HistoryPeriod.Month':
+                from = now.AddDays(-30);
+                break;
+        }
+
+        setFromAndTo('@Model.EncodedId', from, to);
+        searchHistory('@Model.EncodedId');
+    });
 
     $(document).ready(function () {
         if ('@(Model.Type is SensorType.File)' === 'True') {
