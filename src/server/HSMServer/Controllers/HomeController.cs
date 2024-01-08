@@ -524,6 +524,17 @@ namespace HSMServer.Controllers
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
+        [HttpGet]
+        public IActionResult RefreshHistoryInfo([FromQuery(Name = "Id")] string encodedId)
+        {
+            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor))
+                return _emptyResult;
+
+            sensor.HistoryStatistic.Update(_treeValuesCache.GetSensorHistoryInfo(sensor.Id));
+
+            return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
+        }
+
         [HttpPost]
         public IActionResult UpdateSensorInfo(SensorInfoViewModel newModel)
         {
@@ -537,8 +548,7 @@ namespace HSMServer.Controllers
 
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
-                ? list.Select(a => a.ToUpdate(availableChats)).ToList()
-                : new();
+                ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
 
             var update = new SensorUpdate
             {

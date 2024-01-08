@@ -10,6 +10,8 @@ namespace HSMServer.Model.ViewModel
         public List<Unit> AvailableUnits { get; }
 
 
+        public SensorHistoryStatisticViewModel HistoryStatistic { get; }
+
         public SensorType SensorType { get; }
 
         public string StatusComment { get; }
@@ -33,6 +35,7 @@ namespace HSMServer.Model.ViewModel
 
         internal SensorInfoViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
+            HistoryStatistic = sensor.HistoryStatistic;
             SensorType = sensor.Type;
             StatusComment = sensor.ValidationError;
             IsMuted = sensor.State == SensorState.Muted;
