@@ -72,6 +72,8 @@ namespace HSMServer.Core.DataLayer
 
         List<SensorEntity> GetAllSensors();
 
+        (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId);
+
         #endregion
 
         #region Policies

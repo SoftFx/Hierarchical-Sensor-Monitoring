@@ -170,6 +170,26 @@ namespace HSMDatabase.DatabaseWorkCore
                     db.RemoveSensorValues(fromBytes, toBytes);
         }
 
+        public (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId)
+        {
+            var fromKey = BuildSensorValueKey(sensorId, DateTime.MinValue.Ticks);
+            var toKey = BuildSensorValueKey(sensorId, DateTime.MaxValue.Ticks);
+
+            var totalDataCnt = 0L;
+            var totalKeySize = 0L;
+            var totalValueSize = 0L;
+
+            foreach (var db in _sensorValuesDatabases)
+                foreach (var (keyBytes, valueBytes) in db.GetKeysValuesTo(fromKey, toKey))
+                {
+                    totalKeySize += keyBytes.Length;
+                    totalValueSize += valueBytes.Length;
+                    totalDataCnt++;
+                }
+
+            return (totalDataCnt, totalKeySize, totalValueSize);
+        }
+
         public void RemoveSensorWithMetadata(string sensorId)
         {
             _environmentDatabase.RemoveSensor(sensorId);
@@ -251,6 +271,10 @@ namespace HSMDatabase.DatabaseWorkCore
 
             yield return result;
         }
+
+
+        private static byte[] BuildSensorValueKey(Guid sensorId, long time) =>
+            BuildSensorValueKey(sensorId.ToString(), time);
 
         // "D19" string format is for inserting leading zeros (long.MaxValue has 19 symbols)
         private static byte[] BuildSensorValueKey(string sensorId, long time) =>
