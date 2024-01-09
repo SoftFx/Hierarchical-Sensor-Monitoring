@@ -29,6 +29,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Core.TableOfChanges;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
@@ -205,7 +206,7 @@ namespace HSMServer.Controllers
                         continue;
                     }
 
-                    _treeValuesCache.RemoveProduct(node.Id);
+                    _treeValuesCache.RemoveProduct(node.Id, InitiatorInfo.AsUser(CurrentUser.Name));
                     model.AddItem(node);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
