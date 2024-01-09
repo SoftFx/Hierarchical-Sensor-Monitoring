@@ -436,37 +436,16 @@ window.initializeJournal = function (type) {
     });
 }
 
-window.disableFromTo = function () {
-    changeFromToVisibility(true);
-}
-
-window.enableFromTo = function () {
-    changeFromToVisibility(false);
-}
-
 window.disableHistoryPeriod = function () {
-    changeHistoryPeriodVisibility(true);
+    changeVisibility(true);
 }
 
 window.enableHistoryPeriod = function () {
-    changeHistoryPeriodVisibility(false);
-
-    if ($('#history_period').val() === 'Custom')
-        enableFromTo();
-    else
-        disableFromTo();
+    changeVisibility(false);
 }
 
-function changeFromToVisibility(disable) {
-    changeVisibility(`#datePickerFromTo [id^='from_'], #datePickerFromTo [id^='to_']`, disable);
-}
-
-function changeHistoryPeriodVisibility(disable) {
-    changeVisibility(`#datePickerFromTo label, #datePickerFromTo input, #datePickerFromTo button, #datePickerFromTo select`, disable);
-}
-
-function changeVisibility(elements, disable) {
-    for (let el of $(elements)) {
+function changeVisibility(disable) {
+    for (let el of $(`#datePickerFromTo label, #datePickerFromTo input, #datePickerFromTo button, #datePickerFromTo select`)) {
         el.disabled = disable;
         el.style.opacity = disable ? "0.5" : "1";
     }

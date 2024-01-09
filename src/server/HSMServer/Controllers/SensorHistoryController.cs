@@ -23,14 +23,14 @@ namespace HSMServer.Controllers
 {
     public enum HistoryPeriod
     {
-        [Display(Name = "Last hour")]
-        Hour,
         [Display(Name = "Last day")]
         Day,
         [Display(Name = "Last 3 days")]
         ThreeDays,
         [Display(Name = "Last week")]
         Week,
+        [Display(Name = "Last 2 weeks")]
+        TwoWeeks,
         [Display(Name = "Last month")]
         Month,
         Custom,

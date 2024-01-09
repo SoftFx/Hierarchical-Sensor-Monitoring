@@ -338,24 +338,26 @@
     
     $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal(NodeType.Sensor));
 
+    $('input[id^="from_"]').off('change').on('change', function () {
+        $('#history_period').val('@HistoryPeriod.Custom');
+    });
+
+    $('input[id^="to_"]').off('change').on('change', function () {
+        $('#history_period').val('@HistoryPeriod.Custom');
+    });
+
     $('#history_period').off('change').on('change', function () {
         let period = this.value;
 
         if (period === '@HistoryPeriod.Custom') {
-            enableFromTo(false);
             return;
         }
-
-        disableFromTo(false);
 
         let now = new Date();
         let to = now.AddDays(1);
         let from;
 
         switch (period) {
-            case '@HistoryPeriod.Hour':
-                from = now.AddHours(-1);
-                break;
             case '@HistoryPeriod.Day':
                 from = now.AddDays(-1);
                 break;
@@ -364,6 +366,9 @@
                 break;
             case '@HistoryPeriod.Week':
                 from = now.AddDays(-7);
+                break;
+            case '@HistoryPeriod.TwoWeeks':
+                from = now.AddDays(-14);
                 break;
             case '@HistoryPeriod.Month':
                 from = now.AddDays(-30);
