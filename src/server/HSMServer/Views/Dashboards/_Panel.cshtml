@@ -68,6 +68,10 @@
                                     let container = $('#@Model.Id');
                                     emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
                                 })
+                                
+                                $('#panelChart_@Model.Id').on('plotly_doubleclick', function(){
+                                    customReset($('#panelChart_@Model.Id')[0], getRangeDate())
+                                })
 
                                 if (values.length === 0) {
                                     $('#emptypanel_@Model.Id').show();

@@ -13,6 +13,25 @@
 export const serviceAlivePlotName  = "ServiceAlive";
 export const serviceStatusPlotName  = "ServiceStatus";
 
+window.customReset =  function (plot = undefined, range = undefined){
+    let currentPlot;
+    plot.data.forEach(function (x){
+        if (x.type !== 'heatmap')
+            currentPlot = x;
+    })
+
+    if (currentPlot === undefined)
+        return;
+
+    let isPanelChart = plot.id.startsWith('panelChart_');
+    
+    Plotly.relayout(plot, {
+        'xaxis.range': range,
+        'xaxis.autorange': !isPanelChart,
+        'yaxis.autorange': true
+    });
+}
+
 window.graphData = {
     plot: undefined,
     plotData: [],
@@ -77,8 +96,11 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
             'pan2d',
             'select2d',
             'autoScale2d',
-        ]
+            'resetScale2d'
+        ],
+        doubleClick: false
     }
+    
     let layout;
     if (sensorInfo.plotType === 9 || sensorInfo.plotType === 7)
         layout = plot.getLayout();
@@ -122,6 +144,11 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
         function (eventData) {
             window.sessionStorage.setItem(graphElementId, JSON.stringify(eventData));
         });
+
+    graphDiv.on('plotly_doubleclick', function(){
+        let date = getFromAndTo(graphName);
+        customReset(graphDiv, [date.from, date.to])
+    })
 }
 
 function createLayoutFromZoomData(zoomData, layout) {
@@ -202,6 +229,16 @@ function getModeBarButtons(id, graphId){
             modeBarButtons.push(addPlotButton(id, heartBeatButtonName, false, ServiceAliveIcon, graphId, alive[0].id, alive[0].path))
         }
     });
+
+    modeBarButtons.push({
+        name: 'resetaxes',
+        _cat: 'resetscale',
+        title: 'Reset axes',
+        attr: 'zoom',
+        val: 'reset',
+        icon: Plotly.Icons.home,
+        click: (plot) => customReset(plot)
+    })
 
     return modeBarButtons;
 }

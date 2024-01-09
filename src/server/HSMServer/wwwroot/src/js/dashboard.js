@@ -146,6 +146,9 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
 
             $('#emptypanel').hide()
 
+            if (id === 'multichart')
+                layoutUpdate['xaxis.autorange'] = true;
+            
             Plotly.relayout(id, layoutUpdate)
         }
     );
@@ -319,7 +322,7 @@ window.initDashboard = function () {
                     )
                 }
             })
-        }, 3000)
+        }, 30000)
     }
 }
 
@@ -490,7 +493,7 @@ window.initMultyichartCordinates = function(settings, values, id){
     })
 }
 
-window.initMultichart = function (chartId, height = 300, showlegend = true) {
+window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false) {
     return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
         dragmode: 'zoom',
@@ -513,7 +516,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         },
         xaxis: {
             type: 'date',
-            autorange: false,
+            autorange: autorange,
             automargin: true,
             range: getRangeDate(),
             title: {
@@ -543,7 +546,9 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             'pan2d',
             'select2d',
             'autoScale2d',
-        ]
+            'autoScale2d',
+        ],
+        doubleClick: autorange ? 'reset+autosize' : autorange
     });
 }
 

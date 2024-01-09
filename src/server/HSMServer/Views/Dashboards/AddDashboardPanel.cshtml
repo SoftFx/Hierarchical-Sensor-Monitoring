@@ -44,7 +44,7 @@
 <script>
     $(document).ready(function () {
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}))
-        initMultichart('multichart').then(
+        initMultichart('multichart', 300, true, true).then(
             (dom) => {
                 values.forEach(function (x) {
                     addNewSourceHtml(x, 'multichart');
