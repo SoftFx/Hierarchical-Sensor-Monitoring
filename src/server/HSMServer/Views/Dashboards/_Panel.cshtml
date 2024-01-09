@@ -59,11 +59,7 @@
                 containerHeight = Math.max(containerHeight, data);
                 return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend).then(
                         (plot) => {
-                                let autorange = false;
                                 values.forEach(function (x) {
-                                    if (x.values.length !== 0)
-                                        autorange = true;
-
                                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')
                                 })
 
@@ -73,22 +69,16 @@
                                     emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
                                 })
 
-                                Plotly.relayout(plot.id, { 
-                                    'xaxis.autorange': autorange,
-                                    'height': Number((settings.height * 1400).toFixed(5)) - 46
-                                })
-
                                 if (values.length === 0) {
                                     $('#emptypanel_@Model.Id').show();
                                 }
 
                                 replaceHtmlToMarkdown('panel_description')
-
-                                window.dispatchEvent(new Event('resize'));
                             },
                         (error) => showToast(error)
                 );
-            }
+            },
+            (error) => showToast(error)
         )
     })
 

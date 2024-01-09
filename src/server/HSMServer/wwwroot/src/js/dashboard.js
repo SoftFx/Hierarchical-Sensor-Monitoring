@@ -87,7 +87,7 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.chartType == 1);
-    
+
     let layoutUpdate = {
         'xaxis.visible' : true,
         'xaxis.type' : 'date',
@@ -145,18 +145,6 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
             }
 
             $('#emptypanel').hide()
-
-            let autorange = false;
-            for(let i of $(`#${id}`)[0].data){
-                if (i.x[0] !== null) {
-                    autorange = true;
-                    break;
-                }
-                else
-                    autorange = false;
-            }
-
-            layoutUpdate['xaxis.autorange'] = autorange;
 
             Plotly.relayout(id, layoutUpdate)
         }
@@ -251,10 +239,18 @@ export function initDropzone(){
 }
 
 window.initDashboard = function () {
+    const currentRange = getRangeDate();
+    const layoutUpdate = {
+        'xaxis.range': currentRange
+    }
+    for (let i of $('[id^="panelChart_"]'))
+        Plotly.relayout(i, layoutUpdate)
+
     const interactPanelResize = window.interact('.resize-draggable')
     const interactPanelDrag = window.interact('.name-draggable')
     addDraggable(interactPanelDrag)
     addResizable(interactPanelResize)
+
     for (let i in currentPanel){
         currentPanel[i].requestTimeout = setInterval(function() {
             $.ajax({
@@ -317,11 +313,13 @@ window.initDashboard = function () {
                         (data) => {
                             if (isTimeSpan)
                                 TimespanRelayout(data);
+                            else
+                                DefaultRelayout(data);
                         }
                     )
                 }
             })
-        }, 30000)
+        }, 3000)
     }
 }
 
@@ -338,6 +336,14 @@ function TimespanRelayout(data) {
     let layoutUpdate = {
         'yaxis.ticktext' : layoutTicks[1],
         'yaxis.tickvals' : layoutTicks[0]
+    }
+
+    Plotly.relayout(data.id, layoutUpdate)
+}
+
+function DefaultRelayout(data){
+    let layoutUpdate = {
+        'xaxis.range' : getRangeDate(),
     }
 
     Plotly.relayout(data.id, layoutUpdate)
