@@ -147,7 +147,7 @@
                         <select id="history_period" class="me-2">
                             @foreach (var period in Enum.GetValues<HistoryPeriod>())
                             {
-                                <option value="@period" selected="@(period is HistoryPeriod.Custom ? "selected" : string.Empty)">@period.GetDisplayName()</option>
+                                <option value="@period" @(period is HistoryPeriod.Default ? "selected" : string.Empty)>@period.GetDisplayName()</option>
                             }
                         </select>
 
@@ -350,6 +350,10 @@
         let period = this.value;
 
         if (period === '@HistoryPeriod.Custom') {
+            return;
+        }
+        else if (period === '@HistoryPeriod.Default') {
+            InitializeHistory();
             return;
         }
 

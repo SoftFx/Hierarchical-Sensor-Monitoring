@@ -64,6 +64,31 @@ window.searchHistory = function (encodedId) {
     })
 }
 
+window.InitializeHistory = function () {
+    let info = ($('[id^=meta_info_]')).attr('id');
+    if (info === undefined)
+        return;
+
+    let encodedId = info.substring("meta_info_".length)
+    let date = new Date();
+
+    GetSensortInfo(encodedId).done(function (sensorInfo) {
+        if (Object.keys(sensorInfo).length === 0)
+            return;
+
+        if (isFileSensor(sensorInfo.realPlot))
+            return;
+
+        if (isGraphAvailable(sensorInfo.realType)) {
+            initializeGraph(encodedId, rawHistoryLatestAction, sensorInfo, Data(date, date, sensorInfo.realType, encodedId), true);
+        }
+        else if (isTableAvailable(sensorInfo.realType)) {
+            initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true);
+        }
+    });
+}
+
+
 function initializeSensorAccordion() {
     InitializeHistory();
     InitializePeriodRequests();
@@ -89,30 +114,6 @@ function viewFile() {
     let fileType = document.getElementById('fileType_' + encodedId).value;
 
     openFileInBrowser(encodedId, fileType, viewFileAction);
-}
-
-function InitializeHistory() {
-    let info = ($('[id^=meta_info_]')).attr('id');
-    if (info === undefined)
-        return;
-
-    let encodedId = info.substring("meta_info_".length)
-    let date = new Date();
-
-    GetSensortInfo(encodedId).done(function (sensorInfo) {
-        if (Object.keys(sensorInfo).length === 0)
-            return;
-
-        if (isFileSensor(sensorInfo.realPlot))
-            return;
-
-        if (isGraphAvailable(sensorInfo.realType)) {
-            initializeGraph(encodedId, rawHistoryLatestAction, sensorInfo, Data(date, date, sensorInfo.realType, encodedId), true);
-        } 
-        else if (isTableAvailable(sensorInfo.realType)) {
-            initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true);
-        }
-    });
 }
 
 function initializeTabLinksRequests() {

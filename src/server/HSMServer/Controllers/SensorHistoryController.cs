@@ -23,6 +23,8 @@ namespace HSMServer.Controllers
 {
     public enum HistoryPeriod
     {
+        [Display(Name = "Default (300 items)")]
+        Default,
         [Display(Name = "Last day")]
         Day,
         [Display(Name = "Last 3 days")]
