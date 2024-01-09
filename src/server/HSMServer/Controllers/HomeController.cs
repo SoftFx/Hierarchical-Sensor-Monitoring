@@ -525,14 +525,14 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult RefreshHistoryInfo([FromQuery(Name = "Id")] string encodedId)
+        public string RefreshHistoryInfo(string id)
         {
-            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor))
-                return _emptyResult;
+            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(id), out var sensor))
+                return "Unknown";
 
             sensor.HistoryStatistic.Update(_treeValuesCache.GetSensorHistoryInfo(sensor.Id));
 
-            return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
+            return sensor.HistoryStatistic.TotalInfo;
         }
 
         [HttpPost]

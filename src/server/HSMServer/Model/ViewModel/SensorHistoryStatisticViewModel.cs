@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Core.StatisticInfo;
 using System;
+using System.Drawing;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -18,6 +19,8 @@ namespace HSMServer.Model.ViewModel
 
         public bool IsEmpty => LastUpdate == DateTime.MinValue;
 
+        public string TotalInfo { get; private set; }
+
 
         public SensorHistoryStatisticViewModel() { }
 
@@ -25,9 +28,11 @@ namespace HSMServer.Model.ViewModel
         {
             LastUpdate = DateTime.UtcNow;
 
-            KeyValueBalance = $"{historyInfo.ValuesSizeBytes / historyInfo.TotalSizeBytes * 100}% values";
+            KeyValueBalance = $"{(double)historyInfo.ValuesSizeBytes / historyInfo.TotalSizeBytes * 100:F2}% values";
             TotalSize = historyInfo.TotalSizeBytes.ToReadableMemoryFormat();
             DataCount = historyInfo.DataCount;
+
+            TotalInfo = $"Count - {DataCount}, Size - {TotalSize} ({KeyValueBalance})";
 
             return this;
         }
