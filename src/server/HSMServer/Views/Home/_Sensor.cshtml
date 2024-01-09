@@ -340,47 +340,60 @@
 
     $('input[id^="from_"]').off('change').on('change', function () {
         $('#history_period').val('@HistoryPeriod.Custom');
+        $('#history_period').trigger('change');
     });
 
     $('input[id^="to_"]').off('change').on('change', function () {
         $('#history_period').val('@HistoryPeriod.Custom');
+        $('#history_period').trigger('change');
     });
 
     $('#history_period').off('change').on('change', function () {
         let period = this.value;
 
+        if (period === '@HistoryPeriod.Default')
+            localStorage.removeItem(`historyPeriod_@sensorId`);
+        else
+            localStorage.setItem(`historyPeriod_@sensorId`, period);
+
         if (period === '@HistoryPeriod.Custom') {
-            return;
+            localStorage.setItem(`historyFrom_@sensorId`, $(`#from_@sensorId`).val());
+            localStorage.setItem(`historyTo_@sensorId`, $(`#to_@sensorId`).val());
         }
-        else if (period === '@HistoryPeriod.Default') {
+        else {
+            localStorage.removeItem(`historyFrom_@sensorId`);
+            localStorage.removeItem(`historyTo_@sensorId`);
+        }
+
+        if (period === '@HistoryPeriod.Default') {
             InitializeHistory();
-            return;
         }
+        else if (period != '@HistoryPeriod.Custom') {
+            let now = new Date();
+            let to = now.AddDays(1);
+            let from;
 
-        let now = new Date();
-        let to = now.AddDays(1);
-        let from;
+            switch (period) {
+                case '@HistoryPeriod.Day':
+                    from = now.AddDays(-1);
+                    break;
+                case '@HistoryPeriod.ThreeDays':
+                    from = now.AddDays(-3);
+                    break;
+                case '@HistoryPeriod.Week':
+                    from = now.AddDays(-7);
+                    break;
+                case '@HistoryPeriod.TwoWeeks':
+                    from = now.AddDays(-14);
+                    break;
+                case '@HistoryPeriod.Month':
+                    from = now.AddDays(-30);
+                    break;
+            }
 
-        switch (period) {
-            case '@HistoryPeriod.Day':
-                from = now.AddDays(-1);
-                break;
-            case '@HistoryPeriod.ThreeDays':
-                from = now.AddDays(-3);
-                break;
-            case '@HistoryPeriod.Week':
-                from = now.AddDays(-7);
-                break;
-            case '@HistoryPeriod.TwoWeeks':
-                from = now.AddDays(-14);
-                break;
-            case '@HistoryPeriod.Month':
-                from = now.AddDays(-30);
-                break;
+            setFromAndTo('@sensorId', from, to);
+            searchHistory('@sensorId');
         }
-
-        setFromAndTo('@Model.EncodedId', from, to);
-        searchHistory('@Model.EncodedId');
     });
 
     $(document).ready(function () {

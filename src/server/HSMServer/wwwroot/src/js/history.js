@@ -72,20 +72,40 @@ window.InitializeHistory = function () {
     let encodedId = info.substring("meta_info_".length)
     let date = new Date();
 
-    GetSensortInfo(encodedId).done(function (sensorInfo) {
-        if (Object.keys(sensorInfo).length === 0)
-            return;
+    let historyPeriod = window.localStorage.getItem(`historyPeriod_${encodedId}`);
 
-        if (isFileSensor(sensorInfo.realPlot))
-            return;
+    if (historyPeriod != null) {
+        $('#history_period').val(historyPeriod);
 
-        if (isGraphAvailable(sensorInfo.realType)) {
-            initializeGraph(encodedId, rawHistoryLatestAction, sensorInfo, Data(date, date, sensorInfo.realType, encodedId), true);
+        if (historyPeriod === 'Custom') {
+            let historyFrom = window.localStorage.getItem(`historyFrom_${encodedId}`);
+            let from = isNaN(Date.parse(historyFrom)) ? date.AddDays(-1) : new Date(historyFrom + 'Z');
+
+            let historyTo = new Date(window.localStorage.getItem(`historyTo_${encodedId}`));
+            let to = isNaN(Date.parse(historyTo)) ? date.AddDays(1) : new Date(historyTo + 'Z');
+
+            setFromAndTo(encodedId, from, to);
+            searchHistory(encodedId);
         }
-        else if (isTableAvailable(sensorInfo.realType)) {
-            initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true);
-        }
-    });
+        else
+            $('#history_period').trigger('change');
+    }
+    else {
+        GetSensortInfo(encodedId).done(function (sensorInfo) {
+            if (Object.keys(sensorInfo).length === 0)
+                return;
+
+            if (isFileSensor(sensorInfo.realPlot))
+                return;
+
+            if (isGraphAvailable(sensorInfo.realType)) {
+                initializeGraph(encodedId, rawHistoryLatestAction, sensorInfo, Data(date, date, sensorInfo.realType, encodedId), true);
+            }
+            else if (isTableAvailable(sensorInfo.realType)) {
+                initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true);
+            }
+        });
+    }
 }
 
 
@@ -204,21 +224,21 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
         if (noValuesElement != null) {
             $('#history_' + encodedId).hide();
             $('#no_data_' + encodedId).show();
-            return;
         }
+        else {
+            $('#history_' + encodedId).show();
+            $('#no_data_' + encodedId).hide();
 
-        $('#history_' + encodedId).show();
-        $('#no_data_' + encodedId).hide();
+            if (needFillFromTo) {
+                let to = getToDate();
+                let from = new Date($(`#oldest_date_${encodedId}`).val());
 
-        if (needFillFromTo) {
-            let to = getToDate();
-            let from = new Date($(`#oldest_date_${encodedId}`).val());
-            
-            from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
-            $(`#from_${encodedId}`).val(datetimeLocal(from));
-            $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+                from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
+                $(`#from_${encodedId}`).val(datetimeLocal(from));
+                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
 
-            reloadHistoryRequest(from, to, body);
+                reloadHistoryRequest(from, to, body);
+            }
         }
 
         $("#sensorHistorySpinner").addClass("d-none");
@@ -239,25 +259,26 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         $("#tableHistoryRefreshButton").addClass("d-none");
         $('#allColumnsButton').addClass("d-none");
         let parsedData = JSON.parse(data);
+
         if (parsedData.length === 0) {
             $('#history_' + encodedId).hide();
             $('#no_data_' + encodedId).show();
-            return;
         }
+        else {
+            $('#history_' + encodedId).show();
+            $('#no_data_' + encodedId).hide();
 
-        $('#history_' + encodedId).show();
-        $('#no_data_' + encodedId).hide();
+            if (needFillFromTo) {
+                let from = new Date(parsedData[0].receivingTime);
+                let to = getToDate();
 
-        if (needFillFromTo) {
-            let from = new Date(parsedData[0].receivingTime);
-            let to = getToDate();
+                $(`#from_${encodedId}`).val(datetimeLocal(from));
+                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
 
-            $(`#from_${encodedId}`).val(datetimeLocal(from));
-            $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
-
-            reloadHistoryRequest(from, to, body);
+                reloadHistoryRequest(from, to, body);
+            }
+            displayGraph(data, sensorInfo, `graph_${encodedId}`, encodedId);
         }
-        displayGraph(data, sensorInfo, `graph_${encodedId}`, encodedId);
 
         $("#sensorHistorySpinner").addClass("d-none");
         $('#historyDataPanel').removeClass('hidden_element');
