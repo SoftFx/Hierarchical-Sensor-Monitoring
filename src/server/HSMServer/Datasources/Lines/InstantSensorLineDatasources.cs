@@ -29,7 +29,7 @@ namespace HSMServer.Datasources
 
     public sealed class TimespanLineDatasource : InstantBaseLineDatasource<TimeSpanValue, TimeSpan, long>
     {
-        protected override long ConvertToChartType(TimeSpan value) => value.Ticks;
+        protected override long ConvertToChartType(TimeSpan value) => value.Ticks / TimeSpan.TicksPerMillisecond;
     }
 
 

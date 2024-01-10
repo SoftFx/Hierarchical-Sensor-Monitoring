@@ -21,6 +21,19 @@ window.getRangeDate = function (){
         case "06:00:00":
             newDate = currentDate.setHours(currentDate.getHours() - 6)
             break
+        case "12:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 12)
+            break
+        case "1.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 1)
+            break
+        case "3.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 3)
+            break
+        case "7.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 7)
+            break
+        
         default:
             newDate = currentDate.setHours(currentDate.getHours() - 6)
     }
@@ -74,7 +87,7 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.chartType == 1);
-    
+
     let layoutUpdate = {
         'xaxis.visible' : true,
         'xaxis.type' : 'date',
@@ -133,18 +146,9 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
 
             $('#emptypanel').hide()
 
-            let autorange = false;
-            for(let i of $(`#${id}`)[0].data){
-                if (i.x[0] !== null) {
-                    autorange = true;
-                    break;
-                }
-                else
-                    autorange = false;
-            }
-
-            layoutUpdate['xaxis.autorange'] = autorange;
-
+            if (id === 'multichart')
+                layoutUpdate['xaxis.autorange'] = true;
+            
             Plotly.relayout(id, layoutUpdate)
         }
     );
@@ -238,10 +242,18 @@ export function initDropzone(){
 }
 
 window.initDashboard = function () {
+    const currentRange = getRangeDate();
+    const layoutUpdate = {
+        'xaxis.range': currentRange
+    }
+    for (let i of $('[id^="panelChart_"]'))
+        Plotly.relayout(i, layoutUpdate)
+
     const interactPanelResize = window.interact('.resize-draggable')
     const interactPanelDrag = window.interact('.name-draggable')
     addDraggable(interactPanelDrag)
     addResizable(interactPanelResize)
+
     for (let i in currentPanel){
         currentPanel[i].requestTimeout = setInterval(function() {
             $.ajax({
@@ -304,6 +316,8 @@ window.initDashboard = function () {
                         (data) => {
                             if (isTimeSpan)
                                 TimespanRelayout(data);
+                            else
+                                DefaultRelayout(data);
                         }
                     )
                 }
@@ -325,6 +339,14 @@ function TimespanRelayout(data) {
     let layoutUpdate = {
         'yaxis.ticktext' : layoutTicks[1],
         'yaxis.tickvals' : layoutTicks[0]
+    }
+
+    Plotly.relayout(data.id, layoutUpdate)
+}
+
+function DefaultRelayout(data){
+    let layoutUpdate = {
+        'xaxis.range' : getRangeDate(),
     }
 
     Plotly.relayout(data.id, layoutUpdate)
@@ -471,7 +493,7 @@ window.initMultyichartCordinates = function(settings, values, id){
     })
 }
 
-window.initMultichart = function (chartId, height = 300, showlegend = true) {
+window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false) {
     return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
         dragmode: 'zoom',
@@ -494,7 +516,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         },
         xaxis: {
             type: 'date',
-            autorange: false,
+            autorange: autorange,
             automargin: true,
             range: getRangeDate(),
             title: {
@@ -524,7 +546,9 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             'pan2d',
             'select2d',
             'autoScale2d',
-        ]
+            'autoScale2d',
+        ],
+        doubleClick: autorange ? 'reset+autosize' : autorange
     });
 }
 
