@@ -159,8 +159,12 @@
 
                         @if (Model.Type.IsBar())
                         {
-                            <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId">Bars count:</label>
-                            <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000">
+                            <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId"
+                                   title="The maximum count of bars displayed on the chart. If the actual count of bars is greater than the 'Bars count' value, then the bars are aggregated.">
+                                Bars count:
+                            </label>
+                            <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000"
+                                   title="The maximum count of bars displayed on the chart. If the actual count of bars is greater than the 'Bars count' value, then the bars are aggregated.">
                         }
 
                         <button onclick="searchHistory('@sensorId')" type="button" class="btn btn-secondary">
