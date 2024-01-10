@@ -38,6 +38,9 @@ namespace HSMServer.Model.ViewModel
 
         public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; set; } = [];
 
+        public SensorHistoryStatisticViewModel HistoryStatistic { get; }
+
+
         public string EncodedId { get; set; }
 
         public string Description { get; set; }
@@ -68,6 +71,8 @@ namespace HSMServer.Model.ViewModel
             ExpectedUpdateInterval = new(model.TTL, PredefinedIntervals.ForFolderTimeout);
             SavedHistoryPeriod = new(model.KeepHistory, PredefinedIntervals.ForKeepHistory);
             SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
+
+            HistoryStatistic = model.HistoryStatistic;
 
             AlertIcons = model.AlertIcons;
             HasTimeToLive = model.TTL.TimeInterval is not TimeInterval.None;

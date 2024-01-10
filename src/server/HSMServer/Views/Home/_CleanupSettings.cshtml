@@ -40,16 +40,13 @@
     <span class="meta-info-label">History database info</span>
 
     <span id="labelHistoryStat" class="meta-info-value">
-        @if (@Model is SensorInfoViewModel sensor)
+        @if (@Model.HistoryStatistic.IsEmpty)
         {
-            if (sensor.HistoryStatistic.IsEmpty)
-            {
-                <span>Unknown</span>
-            }
-            else
-            {
-                <span>@sensor.HistoryStatistic.TotalInfo</span>
-            }
+            <span>Unknown</span>
+        }
+        else
+        {
+            <span>@Model.HistoryStatistic.TotalInfo</span>
         }
     </span>
 
@@ -70,12 +67,13 @@
     function refreshDbInfo() {
         $.ajax({
             type: 'GET',
-            url: `@Url.Action(nameof(HomeController.RefreshHistoryInfo))?id=@(Model.EncodedId)`,
+            //url: `@Url.Action(nameof(HomeController.RefreshHistoryInfo))?id=@(Model.EncodedId)`,
+            url: `@Url.Action(nameof(HomeController.RefreshAllHistory))`,
             cache: false,
             async: true,
-            success: function (viewdata) {
-                $('#labelHistoryStat').empty().replaceWith(viewdata);
-            }
+            // success: function (viewdata) {
+            //     $('#labelHistoryStat').empty().replaceWith(viewdata);
+            // }
         });
     }
 </script>

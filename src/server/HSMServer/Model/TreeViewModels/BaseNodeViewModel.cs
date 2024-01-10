@@ -1,5 +1,6 @@
 ﻿using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
+using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -15,6 +16,8 @@ namespace HSMServer.Model.TreeViewModel
         public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; protected set; } = new();
 
         public ConcurrentDictionary<string, int> AlertIcons { get; } = new();
+
+        public SensorHistoryStatisticViewModel HistoryStatistic { get; } = new();
 
 
         public TimeIntervalViewModel KeepHistory { get; protected set; }

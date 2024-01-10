@@ -27,8 +27,8 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ServiceAction()
         {
-            RunAction(RunSelfDestroy);
-            RunAction(RunClearHistory);
+            //RunAction(RunSelfDestroy);
+            //RunAction(RunClearHistory);
 
             return Task.CompletedTask;
         }

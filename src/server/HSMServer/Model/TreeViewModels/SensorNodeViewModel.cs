@@ -3,7 +3,6 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
-using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -42,9 +41,6 @@ namespace HSMServer.Model.TreeViewModel
         public List<Unit> AvailableUnits { get; private set; }
 
         public Unit? SelectedUnit { get; private set; }
-
-
-        public SensorHistoryStatisticViewModel HistoryStatistic { get; } = new();
 
 
         public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
