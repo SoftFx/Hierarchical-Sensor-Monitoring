@@ -7,6 +7,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Confirmation;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
+using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
@@ -38,7 +39,9 @@ namespace HSMServer.Core.Cache
         private readonly CGuidDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
+
         private readonly ConfirmationManager _confirmationManager = new();
+        private readonly ScheduleManager _scheduleManager = new();
 
         private readonly ITreeStateSnapshot _snapshot;
         private readonly IUpdatesQueue _updatesQueue;
@@ -49,7 +52,8 @@ namespace HSMServer.Core.Cache
         public event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
-        public event Action<List<AlertResult>, Guid> ThrowAlertResultsEvent;
+
+        public event Action<AlertMessage> NewAlertMessageEvent;
 
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue, IJournalService journalService)
@@ -61,7 +65,9 @@ namespace HSMServer.Core.Cache
             _journalService = journalService;
 
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
-            _confirmationManager.ThrowAlertResultsEvent += ThrowAlertResults;
+
+            _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
+            _scheduleManager.NewMessageEvent += SendAlertMessage;
 
             Initialize();
         }
@@ -76,7 +82,9 @@ namespace HSMServer.Core.Cache
 
         public void Dispose()
         {
-            _confirmationManager.ThrowAlertResultsEvent -= ThrowAlertResults;
+            _confirmationManager.NewMessageEvent -= _scheduleManager.ProcessMessage;
+            _scheduleManager.NewMessageEvent -= SendAlertMessage;
+
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
 
             _updatesQueue.Dispose();
@@ -109,7 +117,7 @@ namespace HSMServer.Core.Cache
             NotifyAboutProductChange(product);
         }
 
-        public void RemoveProduct(Guid productId)
+        public void RemoveProduct(Guid productId, InitiatorInfo initiator = null)
         {
             void RemoveProduct(Guid productId)
             {
@@ -120,7 +128,7 @@ namespace HSMServer.Core.Cache
                     RemoveProduct(subProductId);
 
                 foreach (var (sensorId, _) in product.Sensors)
-                    RemoveSensor(sensorId);
+                    RemoveSensor(sensorId, initiator, parentId: product.Parent?.Id);
 
                 RemoveBaseNodeSubscription(product);
 
@@ -315,7 +323,7 @@ namespace HSMServer.Core.Cache
             var sensor = GetSensor(request.Id);
             var lastValue = sensor.LastValue;
 
-            if (request.Comment is not null && lastValue is not null)
+            if (request.Comment is not null && (!request.ChangeLast || lastValue is not null))
             {
                 var value = request.BuildNewValue(sensor.Storage.GetEmptyValue(), lastValue);
 
@@ -328,7 +336,7 @@ namespace HSMServer.Core.Cache
                         PropertyName = request.PropertyName,
                         Enviroment = request.Environment,
                         Path = sensor.FullPath,
-                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, oldValue),
+                        OldValue = request.BuildComment(lastValue?.Status, lastValue?.Comment, oldValue),
                         NewValue = request.BuildComment(value: newValue)
                     });
 
@@ -337,19 +345,19 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null)
+        public void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null)
         {
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
 
             RemoveSensorPolicies(sensor); // should be before removing from parent
 
-            if (sensor.Parent is not null && _tree.TryGetValue(sensor.Parent.Id, out var parent))
+            if (sensor.Parent is not null && (_tree.TryGetValue(sensor.Parent.Id, out var parent) || parentId is not null))
             {
-                parent.RemoveSensor(sensorId);
-                _journalService.RemoveRecords(sensorId, parent.Id);
+                parent?.RemoveSensor(sensorId);
+                _journalService.RemoveRecords(sensorId, parentId ?? parent.Id);
 
-                _journalService.AddRecord(new JournalRecordModel(parent.Id, initiator)
+                _journalService.AddRecord(new JournalRecordModel(parentId ?? parent.Id, initiator)
                 {
                     Enviroment = "Remove sensor",
                     Path = sensor.FullPath,
@@ -481,14 +489,16 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public void ThrowAlertResults(Guid sensorId, List<AlertResult> alertResults)
+        public void SendAlertMessage(AlertMessage message)
         {
+            var sensorId = message.SensorId;
+
             if (_sensors.TryGetValue(sensorId, out var sensor) && sensor.CanSendNotifications)
             {
                 var product = GetProductByName(sensor.RootProductName);
 
                 if (product.FolderId.HasValue)
-                    ThrowAlertResultsEvent?.Invoke(alertResults, product.FolderId.Value);
+                    NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
             }
         }
 
@@ -1242,7 +1252,8 @@ namespace HSMServer.Core.Cache
 
         public void UpdateCacheState()
         {
-            _confirmationManager.FlushStorage();
+            _confirmationManager.FlushMessages();
+            _scheduleManager.FlushMessages();
 
             foreach (var sensor in GetSensors())
                 sensor.CheckTimeout();

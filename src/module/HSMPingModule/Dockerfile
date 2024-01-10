@@ -2,7 +2,7 @@ FROM ghcr.io/bubuntux/nordvpn
 
 RUN apt-get update
 RUN apt-get install sudo
-RUN apt-get install -y dotnet-sdk-7.0
+RUN apt-get install -y dotnet-sdk-8.0
 
 COPY . /HSMPingModuleSrc
 

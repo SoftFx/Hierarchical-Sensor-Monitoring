@@ -1,3 +1,4 @@
+@using HSMCommon.Extensions
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Extensions
@@ -50,6 +51,11 @@
             }
 
             <h5 id="nodeHeader" class="d-flex my-1">@Html.Raw(Model.Header)</h5>
+
+            @if (Model is SensorInfoViewModel sensor && sensor.SelectedUnit.HasValue)
+            {
+                <h5 class="ms-1 my-1">(@sensor.SelectedUnit.GetDisplayName())</h5>
+            }
 
             @if (hasUserRights)
             {
@@ -145,7 +151,7 @@
             success: (viewData) => {
                 $('#editButtonMetaInfo').removeClass('d-none');
                 displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
-                
+
                 if ($(".field-validation-error").length !== 0)
                     editInfoButtonClick()
             }
@@ -189,6 +195,12 @@
                 if (sendBlock.hasClass('d-flex')) {
                     setFormDataAlertsListProperty(formData, type, i, j, sendBlock, "Actions", "input", "Comment");
                     setFormDataAlertsSendNotificationChats(formData, type, i, j, sendBlock);
+
+                    let scheduleBlock = sendBlock.find('div[name="schedule"]');
+                    if (scheduleBlock.hasClass('d-flex')) {
+                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "select", "ScheduleRepeatMode");
+                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "input", "ScheduleStartTime");
+                    }
                 }
 
                 let showBlock = $(this).find('div[name="showIconAction"]');

@@ -1,6 +1,6 @@
 import {convertToGraphData} from "./plotting";
 import {pan} from "plotly.js/src/fonts/ploticon";
-import {Plot, TimeSpanPlot} from "./plots";
+import {Colors, Plot, TimeSpanPlot} from "./plots";
 
 window.getRangeDate = function (){
     let period = $('#from_select').val();
@@ -21,6 +21,19 @@ window.getRangeDate = function (){
         case "06:00:00":
             newDate = currentDate.setHours(currentDate.getHours() - 6)
             break
+        case "12:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 12)
+            break
+        case "1.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 1)
+            break
+        case "3.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 3)
+            break
+        case "7.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 7)
+            break
+        
         default:
             newDate = currentDate.setHours(currentDate.getHours() - 6)
     }
@@ -47,8 +60,10 @@ export function getPlotSourceView(id) {
 export const currentPanel = {};
 export const plotColorDelay = 1000;
 
-export function Model(id, panelId, dashboardId) {
+export function Model(id, panelId, dashboardId, sensorId) {
     this.id = id;
+    this.oldIndex = id;
+    this.sensorId = sensorId;
     this.panelId = panelId;
     this.dashboardId = dashboardId;
     this.updateTimeout = undefined;
@@ -57,38 +72,22 @@ export function Model(id, panelId, dashboardId) {
 
 window.insertSourceHtml = function (data) {
     let sources = $('#sources');
-    let text = `<li id=${'source_' + data.id} class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between"
-                                    style="border-top-width: 1px;
-                                           border-radius: 5px;">
-                                    <div class="d-flex flex-grow-1">
-                                        <div class="d-flex flex-column" style="flex-grow: 10">
-                                            <div class="d-flex mx-1 align-items-center" style="flex-grow: 10">
-                                                <label class="me-1">Label:</label>
-                                                <input id=${'name_input_' + data.id} class="form-control" value="${data.label}" type="text" style="flex-grow: 10"></input>
-                                                <input id=${'color_' + data.id} type="color" value=${data.color} class="form-control form-control-color mx-1 ="></input>
-                                            </div>
-                                            <div class="d-flex align-items-center">
-                                                <span id=${'redirectToHome_' + data.sensorId} class="ms-1 redirectToHome" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;">
-                                                    ${data.path}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div class="d-flex justify-content-center">
-                                             <button id=${'deletePlot_' + data.sensorId} class="btn" type="button" style="color: red">
-                                                <i class="fa-solid fa-xmark"></i>
-                                             </button>
-                                        </div>
-                                    </div>
-                                </li>`
 
-    sources.html(function(n, origText) {
-        return origText + text;
+    $.ajax({
+        type: 'POST',
+        url: getSourceSettings,
+        data: JSON.stringify(data),
+        contentType: 'application/json',
+        cache: false,
+        async: true
+    }).done(function (result) {
+        sources.append(result);
     });
 }
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
-    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color);
-    
+    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.chartType == 1);
+
     let layoutUpdate = {
         'xaxis.visible' : true,
         'xaxis.type' : 'date',
@@ -96,8 +95,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         'xaxis.range' : getRangeDate(),
         'yaxis.visible' : true,
         'yaxis.title.text' : data.sensorInfo.units,
-        'yaxis.title.font.family' : data.sensorInfo.units,
-        'yaxis.title.font.size' : 18,
+        'yaxis.title.font.size' : 14,
         'yaxis.title.font.color' : '#7f7f7f',
     }
 
@@ -106,11 +104,12 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         plot.y = [null];
     }
 
-    plot.id = data.sensorId;
+    plot.id = data.id;
     plot.name = data.label;
     plot.mode = 'lines+markers';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
+    plot['marker']['color'] = data.color;
 
     Plotly.addTraces(id, plot.getPlotData()).then(
         (data) => {
@@ -147,23 +146,14 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
 
             $('#emptypanel').hide()
 
-            let autorange = false;
-            for(let i of $(`#${id}`)[0].data){
-                if (i.x[0] !== null) {
-                    autorange = true;
-                    break;
-                }
-                else
-                    autorange = false;
-            }
-
-            layoutUpdate['xaxis.autorange'] = autorange;
-
+            if (id === 'multichart')
+                layoutUpdate['xaxis.autorange'] = true;
+            
             Plotly.relayout(id, layoutUpdate)
         }
     );
 
-    currentPanel[data.sensorId] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId);
+    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId);
 }
 
 window.addNewSourceHtml = function (data, id){
@@ -212,9 +202,6 @@ export function initDropzone(){
             event.relatedTarget.classList.remove('can-drop')
         },
         ondrop: function (event) {
-            if (currentPanel[event.relatedTarget.id] !== undefined)
-                return;
-
             getPlotSourceView(event.relatedTarget.id).then(
                 (data) => addNewSourceHtml(data, 'multichart'),
                 (error) => showToast(error)
@@ -255,10 +242,18 @@ export function initDropzone(){
 }
 
 window.initDashboard = function () {
+    const currentRange = getRangeDate();
+    const layoutUpdate = {
+        'xaxis.range': currentRange
+    }
+    for (let i of $('[id^="panelChart_"]'))
+        Plotly.relayout(i, layoutUpdate)
+
     const interactPanelResize = window.interact('.resize-draggable')
     const interactPanelDrag = window.interact('.name-draggable')
     addDraggable(interactPanelDrag)
     addResizable(interactPanelResize)
+
     for (let i in currentPanel){
         currentPanel[i].requestTimeout = setInterval(function() {
             $.ajax({
@@ -296,7 +291,7 @@ window.initDashboard = function () {
                         if (isTimeSpan) 
                         {
                             let timespanValue = TimeSpanPlot.getTimeSpanValue(j);
-                            customData.push(Plot.checkError(i) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, i) + '<br>' + i.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, i))
+                            customData.push(Plot.checkError(j) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, j) + '<br>' + j.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, j))
                             x.push(j.time)
                             y.push(timespanValue.totalMilliseconds())
                         }
@@ -321,6 +316,8 @@ window.initDashboard = function () {
                         (data) => {
                             if (isTimeSpan)
                                 TimespanRelayout(data);
+                            else
+                                DefaultRelayout(data);
                         }
                     )
                 }
@@ -342,6 +339,14 @@ function TimespanRelayout(data) {
     let layoutUpdate = {
         'yaxis.ticktext' : layoutTicks[1],
         'yaxis.tickvals' : layoutTicks[0]
+    }
+
+    Plotly.relayout(data.id, layoutUpdate)
+}
+
+function DefaultRelayout(data){
+    let layoutUpdate = {
+        'xaxis.range' : getRangeDate(),
     }
 
     Plotly.relayout(data.id, layoutUpdate)
@@ -436,26 +441,30 @@ function addResizable(interactable){
     })
 }
 
-window.updateSource = function (name, color, id){
+window.updateSource = function (name, color, property, id){
     if (currentPanel[id] === undefined)
         return;
 
     if (currentPanel[id].updateTimeout !== undefined)
         clearTimeout(currentPanel[id].updateTimeout);
 
-    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, id);
+    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, id);
 }
 
 window.getCurrentPlotInDashboard = function (id) {
     return currentPanel[id]
 }
 
-window.updateCurrentPlotsIds = function (idToCompare, id) {
-    delete currentPanel[id];
+window.syncIndexes = function(){
+    let sources = $('#sources li');
+    let plot = $('#multichart')[0].data;
     
-    for (let item in currentPanel) {
-        if (currentPanel[item].id >= idToCompare)
-            currentPanel[item].id = currentPanel[item].id - 1;
+    for (let i = 0 ;i < sources.length; i++) {
+        currentPanel[`${sources[i].id.substring('source_'.length, sources[i].id.length)}`].oldIndex = i;
+    }
+
+    for (let i = 0 ;i < plot.length; i++) {
+        currentPanel[`${plot[i].id}`].id = i;
     }
 }
 
@@ -484,7 +493,7 @@ window.initMultyichartCordinates = function(settings, values, id){
     })
 }
 
-window.initMultichart = function (chartId, height = 300, showlegend = true) {
+window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false) {
     return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
         dragmode: 'zoom',
@@ -507,7 +516,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         },
         xaxis: {
             type: 'date',
-            autorange: false,
+            autorange: autorange,
             automargin: true,
             range: getRangeDate(),
             title: {
@@ -537,7 +546,9 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             'pan2d',
             'select2d',
             'autoScale2d',
-        ]
+            'autoScale2d',
+        ],
+        doubleClick: autorange ? 'reset+autosize' : autorange
     });
 }
 
@@ -546,7 +557,7 @@ function showEventInfo (event) {
     $(`#${id}.cloned`).remove();
 }
 
-function updatePlotSource(name, color, id){
+function updatePlotSource(name, color, property, id){
     $.ajax({
         processData: false,
         type: 'put',
@@ -554,17 +565,25 @@ function updatePlotSource(name, color, id){
         url: window.location.pathname + '/' + id,
         data: JSON.stringify({
             name: name,
-            color: color
+            color: color,
+            property: property
         })
-    }).done(function (){
-        let update = {
+    }).done(function (response){
+        if (response !== ''){
+            Plotly.deleteTraces('multichart', currentPanel[id].id);
+            insertSourcePlot(response, 'multichart');
+            syncIndexes();
+        }
+        
+        let layoutUpdate = {
             'hovertemplate': `${name}, %{customdata}<extra></extra>`,
             'line.color': color,
+            'marker.color': color,
             name: name
         }
 
         if (currentPanel[id] !== undefined)
-            Plotly.restyle('multichart', update, currentPanel[id].id)
+            Plotly.restyle('multichart', layoutUpdate, currentPanel[id].id)
 
         currentPanel[id].updateTimeout = undefined;
     }).fail(function (response){

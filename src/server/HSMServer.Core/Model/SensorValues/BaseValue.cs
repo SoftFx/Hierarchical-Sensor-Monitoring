@@ -97,12 +97,15 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract record BaseValue<T> : BaseValue
+    public abstract record BaseInstantValue : BaseValue
+    {
+        public double? EmaValue { get; init; }
+    }
+
+
+    public abstract record BaseValue<T> : BaseInstantValue
     {
         public T Value { get; init; }
-
-
-        public double? EmaValue { get; init; }
 
 
         public override string ShortInfo => Value?.ToString();

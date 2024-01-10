@@ -40,6 +40,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public PolicyDestinationUpdate Destination { get; init; }
 
+        public PolicyScheduleUpdate Schedule { get; init; }
+
         public long? ConfirmationPeriod { get; init; }
 
 
@@ -101,4 +103,9 @@ namespace HSMServer.Core.Cache.UpdateEntities
             Chats = chats;
         }
     }
+
+
+    public sealed record PolicyScheduleUpdate(
+        DateTime? Time,
+        AlertRepeatMode? RepeatMode);
 }

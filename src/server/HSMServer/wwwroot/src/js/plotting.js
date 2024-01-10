@@ -13,6 +13,25 @@
 export const serviceAlivePlotName  = "ServiceAlive";
 export const serviceStatusPlotName  = "ServiceStatus";
 
+window.customReset =  function (plot = undefined, range = undefined){
+    let currentPlot;
+    plot.data.forEach(function (x){
+        if (x.type !== 'heatmap')
+            currentPlot = x;
+    })
+
+    if (currentPlot === undefined)
+        return;
+
+    let isPanelChart = plot.id.startsWith('panelChart_');
+    
+    Plotly.relayout(plot, {
+        'xaxis.range': range,
+        'xaxis.autorange': !isPanelChart,
+        'yaxis.autorange': true
+    });
+}
+
 window.graphData = {
     plot: undefined,
     plotData: [],
@@ -77,8 +96,11 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
             'pan2d',
             'select2d',
             'autoScale2d',
-        ]
+            'resetScale2d'
+        ],
+        doubleClick: false
     }
+    
     let layout;
     if (sensorInfo.plotType === 9 || sensorInfo.plotType === 7)
         layout = plot.getLayout();
@@ -122,6 +144,11 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
         function (eventData) {
             window.sessionStorage.setItem(graphElementId, JSON.stringify(eventData));
         });
+
+    graphDiv.on('plotly_doubleclick', function(){
+        let date = getFromAndTo(graphName);
+        customReset(graphDiv, [date.from, date.to])
+    })
 }
 
 function createLayoutFromZoomData(zoomData, layout) {
@@ -138,7 +165,7 @@ function getPreviousZoomData(graphElementId) {
     return window.sessionStorage.getItem(graphElementId);
 }
 
-export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default) {
+export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, asLine = false) {
     let escapedData = JSON.parse(graphData);
 
     switch (sensorInfo.plotType) {
@@ -149,9 +176,11 @@ export function convertToGraphData(graphData, sensorInfo, graphName, color = Col
         case 2:
             return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color);
         case 4:
-            return new BarPLot(escapedData, graphName, sensorInfo.units, color);
+            return asLine ? new IntegerPlot(escapedData, sensorInfo.units, color)
+                          : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 5:
-            return new BarPLot(escapedData, graphName, sensorInfo.units, color);
+            return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color) 
+                          : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 7:
             return new TimeSpanPlot(escapedData, sensorInfo.units, color);
         case 9:
@@ -200,6 +229,16 @@ function getModeBarButtons(id, graphId){
             modeBarButtons.push(addPlotButton(id, heartBeatButtonName, false, ServiceAliveIcon, graphId, alive[0].id, alive[0].path))
         }
     });
+
+    modeBarButtons.push({
+        name: 'resetaxes',
+        _cat: 'resetscale',
+        title: 'Reset axes',
+        attr: 'zoom',
+        val: 'reset',
+        icon: Plotly.Icons.home,
+        click: (plot) => customReset(plot)
+    })
 
     return modeBarButtons;
 }
