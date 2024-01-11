@@ -65,7 +65,7 @@ namespace HSMSensorDataObjects.SensorRequests
         public long? TTL { get; set; }
 
 
-        public StatisticsOptions Statistics { get; set; }
+        public StatisticsOptions? Statistics { get; set; }
 
         public bool? IsSingletonSensor { get; set; }
 
