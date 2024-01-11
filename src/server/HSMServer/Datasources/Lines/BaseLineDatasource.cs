@@ -41,7 +41,7 @@ namespace HSMServer.Datasources
         protected override void ApplyToLast(BaseValue rawValue)
         {
             if (rawValue is TValue value)
-                _lastVisibleValue.Apply(ToChartValue(value));
+                _lastVisibleValue.Apply(ToChartValue(value), value.Time);
         }
 
 
