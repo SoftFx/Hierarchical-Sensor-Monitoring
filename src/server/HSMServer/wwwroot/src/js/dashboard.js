@@ -302,6 +302,12 @@ window.initDashboard = function () {
                     if (plot.data[correctId] !== undefined && plot.data[correctId].x.length > 0)
                         lastTime = new Date(plot.data[correctId].x.at(-1));
                     
+                    let prevData = plot.data[correctId];
+                    let prevId = prevData.ids !== undefined && prevData.ids?.length !== 0? prevData.ids.at(-1) : undefined;
+                    if (prevData.ids === undefined)
+                        prevData.ids = [];
+                    let redraw = false;
+                    
                     let x = [];
                     let y = [];
                     let customData = []
@@ -319,9 +325,16 @@ window.initDashboard = function () {
                         }
                         else 
                         {
+                            if (prevId !== undefined && j.id === prevId)
+                            {
+                                redraw = true;
+                                prevData.x.pop();
+                                prevData.y.pop();
+                                prevData.customdata.pop();
+                            }
                             x.push(j.time);
                             y.push(j.value);
-
+                            prevData.ids.push(j.id)
                             let custom = j.value;
                             if (j.tooltip !== null)
                                 custom += `<br>${j.tooltip}`;
@@ -335,18 +348,29 @@ window.initDashboard = function () {
                         Plotly.update(plot, {x :[[]], y:[[]]}, { 'xaxis.autorange' : true }, correctId)
                     }
                     
-                    Plotly.extendTraces(plot, {
-                        y: [y],
-                        x: [x],
-                        customdata: [customData]
-                    }, [correctId], 100).then(
-                        (data) => {
-                            if (isTimeSpan)
-                                TimespanRelayout(data);
-                            else
-                                DefaultRelayout(data);
-                        }
-                    )
+                    if (redraw)
+                    {
+                        prevData.x.push(...x)
+                        prevData.y.push(...y)
+                        prevData.customdata.push(...customData)
+                        Plotly.deleteTraces(plot, correctId);
+                        Plotly.addTraces(plot, prevData);
+                        DefaultRelayout(data);
+                    }
+                    else {
+                        Plotly.extendTraces(plot, {
+                            y: [y],
+                            x: [x],
+                            customdata: [customData]
+                        }, [correctId], 100).then(
+                            (data) => {
+                                if (isTimeSpan)
+                                    TimespanRelayout(data);
+                                else
+                                    DefaultRelayout(data);
+                            }
+                        )
+                    }
                 }
             })
         }, 30000)
