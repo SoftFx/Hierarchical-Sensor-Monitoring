@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Controllers
 @using HSMServer.Model.ViewModel
+@using HSMServer.Model.Folders.ViewModels
 
 @model NodeInfoBaseViewModel
 
@@ -36,35 +37,38 @@
     <span asp-validation-for="SelfDestroyPeriod"></span>
 </div>
 
-<div class="d-flex flex-row text-nowrap align-items-center ms-3 mt-1">
-    <span class="meta-info-label">Database memory usage</span>
+@if (Model is not FolderInfoViewModel)
+{
+    <div class="d-flex flex-row text-nowrap align-items-center ms-3 mt-1">
+        <span class="meta-info-label">Database memory usage</span>
 
-    <div id="historyStatistics" class="d-flex flex-row">
-        <span id="labelHistoryStat">
-            @if (!Model.HistoryStatistic.IsEmpty)
-            {
-                <span>@Model.HistoryStatistic.TotalInfo</span>
-            }
-        </span>
+        <div id="historyStatistics" class="d-flex flex-row">
+            <span id="labelHistoryStat">
+                @if (!Model.HistoryStatistic.IsEmpty)
+                {
+                    <span>@Model.HistoryStatistic.TotalInfo</span>
+                }
+            </span>
 
-        <a class="icon-link" href="javascript:refreshDbInfo()" title='Refresh database memory usage information'>
-            <span id="calculateDbInfo" class="@(Model.HistoryStatistic.IsEmpty ? string.Empty : "d-none")">Calculate</span>
-            <i id="refreshDbInfo" class="ms-2 fa-solid fa-arrow-rotate-right @(Model.HistoryStatistic.IsEmpty ? "d-none" : string.Empty)"></i>
-        </a>
-
-        @if (Model is not SensorInfoViewModel)
-        {
-            <a id="moreMemoryUsageDetails" class="ms-4 @(Model.HistoryStatistic.IsEmpty ? "d-none" : string.Empty)"
-               asp-action="@nameof(HomeController.SaveHistoryInfo)" asp-route-id="@Model.EncodedId" title='Save detailed information to csv file'>
-                save more to CSV
+            <a class="icon-link" href="javascript:refreshDbInfo()" title='Refresh database memory usage information'>
+                <span id="calculateDbInfo" class="@(Model.HistoryStatistic.IsEmpty ? string.Empty : "d-none")">Calculate</span>
+                <i id="refreshDbInfo" class="ms-2 fa-solid fa-arrow-rotate-right @(Model.HistoryStatistic.IsEmpty ? "d-none" : string.Empty)"></i>
             </a>
-        }
-    </div>
 
-    <div id="calculatingProgress" class="progress-bar d-none">
-        <div class="progress-bar-value"></div>
+            @if (Model is not SensorInfoViewModel)
+            {
+                <a id="moreMemoryUsageDetails" class="ms-4 @(Model.HistoryStatistic.IsEmpty ? "d-none" : string.Empty)"
+                asp-action="@nameof(HomeController.SaveHistoryInfo)" asp-route-id="@Model.EncodedId" title='Save detailed information to csv file'>
+                    save more to CSV
+                </a>
+            }
+        </div>
+
+        <div id="calculatingProgress" class="progress-bar d-none">
+            <div class="progress-bar-value"></div>
+        </div>
     </div>
-</div>
+}
 
 
 <script>
