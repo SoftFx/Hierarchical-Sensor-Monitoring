@@ -52,7 +52,7 @@ namespace HSMServer.Datasources
             Value = T.CreateChecked(_totalSum / _countValues);
             Time = new DateTime(_totalTime / _countValues);
 
-            Tooltip = $"Aggregated ({_countValues}) values";
+            Tooltip = _countValues > 1 ? $"Aggregated ({_countValues}) values" : string.Empty;
         }
 
         internal override void ReapplyLast(T value, DateTime lastCollectedValue)
