@@ -236,7 +236,7 @@ namespace HSMServer.ApiObjectsConverters
                 Description = request.Description,
                 IsSingleton = request.IsSingletonSensor,
                 AggregateValues = request.AggregateData,
-                Statistics = request.Statistics.Convert(),
+                Statistics = request.Statistics?.Convert(),
                 SelectedUnit = request.OriginalUnit?.Convert(),
                 Integration = request.EnableGrafana.HasValue ? request.EnableGrafana.Value ? Integration.Grafana : Integration.None : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),

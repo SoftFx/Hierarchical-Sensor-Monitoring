@@ -321,7 +321,12 @@ window.initDashboard = function () {
                         {
                             x.push(j.time);
                             y.push(j.value);
-                            customData.push(j.value);
+
+                            let custom = j.value;
+                            if (j.tooltip !== null)
+                                custom += `<br>${j.tooltip}`;
+
+                            customData.push(custom);
                         }
   
                     }
