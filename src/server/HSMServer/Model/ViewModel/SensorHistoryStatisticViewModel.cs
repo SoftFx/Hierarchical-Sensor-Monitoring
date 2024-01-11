@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Core.StatisticInfo;
+using HSMServer.Extensions;
 using System;
 
 namespace HSMServer.Model.ViewModel
@@ -42,7 +43,7 @@ namespace HSMServer.Model.ViewModel
             TotalSize = Size.ToReadableMemoryFormat();
             DataCount = historyInfo.DataCount;
 
-            TotalInfo = $"Count - {DataCount}, Size - {TotalSize} ({KeyValueBalance})";
+            RefreshTotalInfo();
 
             return this;
         }
@@ -78,9 +79,14 @@ namespace HSMServer.Model.ViewModel
             TotalSize = (totalKeysSizeCount + totalValuesSizeCount).ToReadableMemoryFormat();
             DataCount = totalData;
 
-            TotalInfo = $"Count - {DataCount}, Size - {TotalSize} ({KeyValueBalance})";
+            RefreshTotalInfo();
 
             return this;
+        }
+
+        private void RefreshTotalInfo()
+        {
+            TotalInfo = $"{TotalSize} ({KeyValueBalance} from {DataCount} records) updated at {LastUpdate.ToDefaultFormat()}";
         }
     }
 }

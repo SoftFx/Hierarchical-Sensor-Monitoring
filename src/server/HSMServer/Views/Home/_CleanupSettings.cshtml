@@ -37,43 +37,47 @@
 </div>
 
 <div class="d-flex flex-row text-nowrap align-items-center ms-3 mt-1">
-    <span class="meta-info-label">History database info</span>
+    <span class="meta-info-label">Database memory usage</span>
 
-    <span id="labelHistoryStat" class="meta-info-value">
-        @if (@Model.HistoryStatistic.IsEmpty)
-        {
-            <span>Unknown</span>
-        }
-        else
-        {
-            <span>@Model.HistoryStatistic.TotalInfo</span>
-        }
-    </span>
+    <div id="historyStatistics" class="d-flex flex-row">
+        <span id="labelHistoryStat">
+            @if (@Model.HistoryStatistic.IsEmpty)
+            {
+                <span>Unknown</span>
+            }
+            else
+            {
+                <span>@Model.HistoryStatistic.TotalInfo</span>
+            }
+        </span>
 
-    <a id="refreshDbInfo" class="mx-2 icon-link" onclick="javascript:refreshDbInfo()" title='Refresh DB info'>
-        <i class='fas fa-arrows-rotate'></i>
-    </a>
-
-    @* <div id="partialSelfDestroySelect" class="d-none meta-info-interval">
-        <partial name="_TimeIntervalSelect" for="SelfDestroyPeriod" />
+        <a id="refreshDbInfo" class="mx-2 icon-link" onclick="javascript:refreshDbInfo()" title='Refresh DB info'>
+            <i class="fa-solid fa-arrow-rotate-right"></i>
+        </a>
     </div>
 
-    <i class='fas fa-question-circle mx-2' title='Time format: dd.hh:mm:ss (min value 01:00:00). If the sensor does not receive values ​​within the specified period, the sensor is deleted'></i>
-    <span asp-validation-for="SelfDestroyPeriod"></span> *@
+    <div id="calculatingProgress" class="progress-bar d-none">
+        <div class="progress-bar-value"></div>
+    </div>
 </div>
 
 
 <script>
     function refreshDbInfo() {
+        $('#historyStatistics').addClass("d-none");
+        $('#calculatingProgress').removeClass("d-none");
+
         $.ajax({
             type: 'GET',
-            //url: `@Url.Action(nameof(HomeController.RefreshHistoryInfo))?id=@(Model.EncodedId)`,
-            url: `@Url.Action(nameof(HomeController.RefreshAllHistory))`,
+            url: `@Url.Action(nameof(HomeController.RefreshHistoryInfo))?id=@(Model.EncodedId)`,
             cache: false,
             async: true,
-            // success: function (viewdata) {
-            //     $('#labelHistoryStat').empty().replaceWith(viewdata);
-            // }
+            success: function (viewdata) {
+                $('#labelHistoryStat').empty().replaceWith(viewdata);
+
+                $('#calculatingProgress').addClass("d-none");
+                $('#historyStatistics').removeClass("d-none");
+            }
         });
     }
 </script>
