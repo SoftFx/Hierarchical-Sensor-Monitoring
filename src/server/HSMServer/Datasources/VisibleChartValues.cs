@@ -25,8 +25,8 @@ namespace HSMServer.Datasources
 
     public sealed class LineChartValue<T> : BaseChartValue<T> where T : INumber<T>
     {
-        private double _totalSum;
-        private long _totalTime;
+        private double _totalValueSum;
+        private double _totalTimeSum;
 
         private double _lastValue;
         private long _lastTime;
@@ -45,12 +45,12 @@ namespace HSMServer.Datasources
             _lastValue = double.CreateChecked(value);
             _lastTime = lastCollectedValue.Ticks;
 
-            _totalSum += _lastValue;
-            _totalTime += _lastTime;
+            _totalValueSum += _lastValue;
+            _totalTimeSum += _lastTime;
             _countValues++;
 
-            Value = T.CreateChecked(_totalSum / _countValues);
-            Time = new DateTime(_totalTime / _countValues);
+            Value = T.CreateChecked(_totalValueSum / _countValues);
+            Time = new DateTime((long)(_totalTimeSum / _countValues));
 
             Tooltip = _countValues > 1 ? $"Aggregated ({_countValues}) values" : string.Empty;
         }
@@ -59,8 +59,8 @@ namespace HSMServer.Datasources
         {
             if (_countValues > 0)
             {
-                _totalTime -= _lastTime;
-                _totalSum -= _lastValue;
+                _totalValueSum -= _lastValue;
+                _totalTimeSum -= _lastTime;
                 _countValues--;
             }
 
