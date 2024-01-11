@@ -14,7 +14,7 @@ namespace HSMServer.Datasources
     {
         public List<object> NewVisibleValues { get; init; }
 
-        public object LastVisibleValue { get; init; }
+        //public object LastVisibleValue { get; init; }
 
         public long RemovedValuesCount { get; init; }
 

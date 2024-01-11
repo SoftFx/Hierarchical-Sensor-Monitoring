@@ -6,6 +6,11 @@ namespace HSMServer.Datasources
 {
     public abstract class BaseChartValue
     {
+        private static long _idCounter = 0L;
+
+
+        public long Id { get; } = _idCounter++;
+
         public DateTime Time { get; protected set; }
 
         public string Tooltip { get; protected set; }
