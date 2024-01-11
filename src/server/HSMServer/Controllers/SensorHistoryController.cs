@@ -14,12 +14,31 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
 {
+    public enum HistoryPeriod
+    {
+        [Display(Name = "Default (300 items)")]
+        Default,
+        [Display(Name = "Last day")]
+        Day,
+        [Display(Name = "Last 3 days")]
+        ThreeDays,
+        [Display(Name = "Last week")]
+        Week,
+        [Display(Name = "Last 2 weeks")]
+        TwoWeeks,
+        [Display(Name = "Last month")]
+        Month,
+        Custom,
+    }
+
+
     [Authorize]
     public class SensorHistoryController : BaseController
     {
