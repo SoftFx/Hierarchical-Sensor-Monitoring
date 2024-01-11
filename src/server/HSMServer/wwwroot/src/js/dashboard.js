@@ -346,7 +346,8 @@ function TimespanRelayout(data) {
 
 function DefaultRelayout(data){
     let layoutUpdate = {
-        'xaxis.range' : getRangeDate(),
+        'xaxis.range': getRangeDate(),
+        'yaxis.autorange': true,
     }
 
     Plotly.relayout(data.id, layoutUpdate)
