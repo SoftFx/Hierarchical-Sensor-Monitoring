@@ -11,7 +11,6 @@ using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
-using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
@@ -30,6 +29,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -61,7 +61,7 @@ namespace HSMServer.Controllers
         [ApiExplorerSettings(IgnoreApi = true)]
         [Route("/Home/Index")]
         public IActionResult HomeIndex() => Redirect("/Home");
-        
+
         [ApiExplorerSettings(IgnoreApi = true)]
         [Route("/")]
         [Route("/Home")]
@@ -529,11 +529,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public async Task RefreshAllHistory()
+        public void RefreshAllHistory()
         {
             if (!_run)
             {
-                
                 var logger = LogManager.GetLogger(GetType().Name);
 
                 _run = true;
@@ -544,7 +543,7 @@ namespace HSMServer.Controllers
                 foreach (var root in _treeViewModel.GetRootProducts())
                 {
                     logger.Warn($"Starting calculate {root.Name}");
-                    await RefreshHistoryInfo(root.Id.ToString());
+                    RefreshHistoryInfo(root.Id);
                     logger.Warn($"Stop calculate {root.Name}");
                 }
 
@@ -554,44 +553,18 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public async Task<string> RefreshHistoryInfo(string id)
+        public string RefreshHistoryInfo(Guid id)
         {
-            if (_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(id), out var sensor))
+            if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
             {
                 sensor.HistoryStatistic.Update(_treeValuesCache.GetSensorHistoryInfo(sensor.Id));
 
                 return sensor.HistoryStatistic.TotalInfo;
             }
 
-            if (_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(id), out var node))
+            if (_treeViewModel.Nodes.TryGetValue(id, out var node))
             {
-                //node.HistoryStatistic.Update(nodeStat);
-
                 UpdateStats(node, _treeValuesCache.GetNodeHistoryInfo(node.Id));
-
-                var filePath = Path.Combine(Environment.CurrentDirectory, "DBstats.csv");
-                var fi = new FileInfo(filePath);
-
-                using (var sw = new StreamWriter(filePath, true))
-                {
-                    if (!fi.Exists || fi.Length == 0L)
-                        await sw.WriteLineAsync("PATH;COUNT;SIZE_bytes;%VALUES");
-
-                    async Task WriteFile(ProductNodeViewModel model)
-                    {
-                        foreach (var (_, sensor) in model.Sensors)
-                        {
-                            var stat = sensor.HistoryStatistic;
-
-                            await sw.WriteLineAsync($"{sensor.FullPath};{stat.DataCount};{stat.Size};{stat.Percent:F4}");
-                        }
-
-                        foreach (var (_, subNode) in model.Nodes)
-                            await WriteFile(subNode);
-                    }
-
-                    await WriteFile(node);
-                }
 
                 return node.HistoryStatistic.TotalInfo;
             }
@@ -610,6 +583,39 @@ namespace HSMServer.Controllers
             foreach (var (subnodeId, subnodeInfo) in nodeInfo.SubnodesInfo)
                 if (_treeViewModel.Nodes.TryGetValue(subnodeId, out var node))
                     UpdateStats(node, subnodeInfo);
+        }
+
+        public FileResult SaveHistoryInfo(Guid id)
+        {
+            string nodePath = null;
+            var content = new StringBuilder(1 << 10);
+
+            content.AppendLine("PATH;COUNT;SIZE_bytes;%VALUES");
+
+            if (_treeViewModel.Nodes.TryGetValue(id, out var node))
+            {
+                nodePath = node.FullPath;
+
+                void BuildContent(ProductNodeViewModel model)
+                {
+                    foreach (var (_, sensor) in model.Sensors)
+                    {
+                        var stat = sensor.HistoryStatistic;
+
+                        content.AppendLine($"{sensor.FullPath};{stat.DataCount};{stat.Size};{stat.Percent:F4}");
+                    }
+
+                    foreach (var (_, subNode) in model.Nodes)
+                        BuildContent(subNode);
+                }
+
+                BuildContent(node);
+            }
+
+            var fileName = $"{nodePath.Replace('/', '_')}_DBstats.csv";
+            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
+
+            return File(Encoding.UTF8.GetBytes(content.ToString()), fileName.GetContentType(), fileName);
         }
 
         [HttpPost]

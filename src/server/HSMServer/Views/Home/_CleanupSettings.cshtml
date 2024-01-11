@@ -51,9 +51,17 @@
             }
         </span>
 
-        <a id="refreshDbInfo" class="mx-2 icon-link" onclick="javascript:refreshDbInfo()" title='Refresh DB info'>
+        <a id="refreshDbInfo" class="mx-2 icon-link" onclick="javascript:refreshDbInfo()" title='Refresh database memory usage information'>
             <i class="fa-solid fa-arrow-rotate-right"></i>
         </a>
+
+        @if (Model is not SensorInfoViewModel)
+        {
+            <a id="moreMemoryUsageDetails" class="mx-4 @(@Model.HistoryStatistic.IsEmpty ? "d-none" : string.Empty)"
+               asp-action="@nameof(HomeController.SaveHistoryInfo)" asp-route-id="@Model.EncodedId" title='Save detailed information to csv file'>
+                more details
+            </a>
+        }
     </div>
 
     <div id="calculatingProgress" class="progress-bar d-none">
@@ -75,9 +83,20 @@
             success: function (viewdata) {
                 $('#labelHistoryStat').empty().replaceWith(viewdata);
 
+                if (document.getElementById('moreMemoryUsageDetails') != null) {
+                    if (viewdata == "Unknown")
+                        $("#moreMemoryUsageDetails").addClass("d-none");
+                    else
+                        $("#moreMemoryUsageDetails").removeClass("d-none");
+                }
+
                 $('#calculatingProgress').addClass("d-none");
                 $('#historyStatistics').removeClass("d-none");
             }
         });
+    }
+
+    function saveDetailedInfo() {
+        window.location.href = "@Url.Action(nameof(HomeController.SaveHistoryInfo))?id=@Model.EncodedId";
     }
 </script>
