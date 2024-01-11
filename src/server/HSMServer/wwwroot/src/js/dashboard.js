@@ -41,6 +41,28 @@ window.getRangeDate = function (){
     return [new Date(newDate).toISOString(), lastDate]
 }
 
+function defaultLabelUpdate(id, name){
+    let sources = $('#sources');
+    if (sources.length <= id)
+        return name;
+    
+    let row = sources[id];
+    let label = $(row).find('input[id^="name_input"]')
+    let property = $(row).find(':selected');
+    let sensorNameDefault = $(row).find('input[id^="name_default"]').val();
+    
+    if (label.length === 0)
+        return name;
+    
+    if (label.val().startsWith(sensorNameDefault)){
+        label.val(sensorNameDefault + ` (${property.text()})`)
+        
+        return label.val();
+    }
+    
+    return name;
+}
+
 export function getPlotSourceView(id) {
     return new Promise(function (resolve, reject) {
         $.ajax({
@@ -299,7 +321,12 @@ window.initDashboard = function () {
                         {
                             x.push(j.time);
                             y.push(j.value);
-                            customData.push(j.value);
+
+                            let custom = j.value;
+                            if (j.tooltip !== null)
+                                custom += `<br>${j.tooltip}`;
+
+                            customData.push(custom);
                         }
   
                     }
@@ -346,7 +373,8 @@ function TimespanRelayout(data) {
 
 function DefaultRelayout(data){
     let layoutUpdate = {
-        'xaxis.range' : getRangeDate(),
+        'xaxis.range': getRangeDate(),
+        'yaxis.autorange': true,
     }
 
     Plotly.relayout(data.id, layoutUpdate)
@@ -558,13 +586,15 @@ function showEventInfo (event) {
 }
 
 function updatePlotSource(name, color, property, id){
+    let updatedName = defaultLabelUpdate(currentPanel[id].oldIndex, name)
+
     $.ajax({
         processData: false,
         type: 'put',
         contentType: 'application/json',
         url: window.location.pathname + '/' + id,
         data: JSON.stringify({
-            name: name,
+            name: updatedName,
             color: color,
             property: property
         })
@@ -574,12 +604,12 @@ function updatePlotSource(name, color, property, id){
             insertSourcePlot(response, 'multichart');
             syncIndexes();
         }
-        
+
         let layoutUpdate = {
-            'hovertemplate': `${name}, %{customdata}<extra></extra>`,
+            'hovertemplate': `${updatedName}, %{customdata}<extra></extra>`,
             'line.color': color,
             'marker.color': color,
-            name: name
+            name: updatedName
         }
 
         if (currentPanel[id] !== undefined)

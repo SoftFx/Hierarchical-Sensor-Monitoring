@@ -6,6 +6,7 @@ using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using System;
 using System.Runtime.CompilerServices;
+using HSMServer.Core.Extensions;
 
 namespace HSMServer.Core.Model
 {
@@ -143,7 +144,7 @@ namespace HSMServer.Core.Model
                 
                 return value switch
                 {
-                    SensorState state => state is SensorState.Muted ? $"{state.ToString()} until {update.EndOfMutingPeriod ?? oldModel.EndOfMuting}" : state.ToString(),
+                    SensorState state => state is SensorState.Muted ? $"{state.ToString()} until {(update.EndOfMutingPeriod ?? oldModel.EndOfMuting)?.ToDefaultFormat()}" : state.ToString(),
                     _ => value.ToString()
                 };
             }

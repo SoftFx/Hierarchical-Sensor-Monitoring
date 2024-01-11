@@ -23,11 +23,8 @@ window.customReset =  function (plot = undefined, range = undefined){
     if (currentPlot === undefined)
         return;
 
-    let isPanelChart = plot.id.startsWith('panelChart_');
-    
     Plotly.relayout(plot, {
         'xaxis.range': range,
-        'xaxis.autorange': !isPanelChart,
         'yaxis.autorange': true
     });
 }
@@ -113,7 +110,7 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
             layout = createLayoutFromZoomData(zoomData, plotLayout);
         }
     }
-    layout.xaxis.autorange = true;
+    layout.xaxis.range = getCurrentFromTo(graphName);
 
     Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
     if (plot.name !== serviceAlivePlotName)
@@ -146,9 +143,12 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
         });
 
     graphDiv.on('plotly_doubleclick', function(){
-        let date = getFromAndTo(graphName);
-        customReset(graphDiv, [date.from, date.to])
+        customReset(graphDiv, getCurrentFromTo(graphName))
     })
+}
+
+function getCurrentFromTo(id){
+    return [$(`#from_${id}`).val(), $(`#to_${id}`).val()]
 }
 
 function createLayoutFromZoomData(zoomData, layout) {

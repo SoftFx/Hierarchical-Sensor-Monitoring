@@ -73,6 +73,11 @@
                                     customReset($('#panelChart_@Model.Id')[0], getRangeDate())
                                 })
 
+                                Plotly.relayout(plot.id, { 
+                                    'xaxis.autorange': false,
+                                    'height': Number((settings.height * 1400).toFixed(5)) - 46
+                                })
+
                                 if (values.length === 0) {
                                     $('#emptypanel_@Model.Id').show();
                                 }
