@@ -59,6 +59,8 @@ public class DatasourceViewModel
     public string Color { get; set; }
 
     public string Path { get; set; }
+    
+    public string SensorName { get; set; }
 
     public Unit? Unit { get; set; }
 
@@ -81,6 +83,7 @@ public class DatasourceViewModel
         var sensor = source.Sensor;
 
         Path = sensor.FullPath;
+        SensorName = sensor.DisplayName;
         Type = sensor.Type;
         Unit = sensor.OriginalUnit;
 
