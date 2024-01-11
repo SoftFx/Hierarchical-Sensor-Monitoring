@@ -46,8 +46,11 @@ namespace HSMServer.Core.Model
         [Display(Name = "min")]
         Minutes = 1012,
 
+        [Display(Name = "count")]
         Count = 1100,
+        [Display(Name = "requests")]
         Requests = 1101,
+        [Display(Name = "responses")]
         Responses = 1102,
     }
 
