@@ -41,25 +41,22 @@
 
     <div id="historyStatistics" class="d-flex flex-row">
         <span id="labelHistoryStat">
-            @if (@Model.HistoryStatistic.IsEmpty)
-            {
-                <span>Unknown</span>
-            }
-            else
+            @if (!Model.HistoryStatistic.IsEmpty)
             {
                 <span>@Model.HistoryStatistic.TotalInfo</span>
             }
         </span>
 
-        <a id="refreshDbInfo" class="mx-2 icon-link" onclick="javascript:refreshDbInfo()" title='Refresh database memory usage information'>
-            <i class="fa-solid fa-arrow-rotate-right"></i>
+        <a class="icon-link" href="javascript:refreshDbInfo()" title='Refresh database memory usage information'>
+            <span id="calculateDbInfo" class="@(Model.HistoryStatistic.IsEmpty ? string.Empty : "d-none")">Calculate</span>
+            <i id="refreshDbInfo" class="ms-2 fa-solid fa-arrow-rotate-right @(Model.HistoryStatistic.IsEmpty ? "d-none" : string.Empty)"></i>
         </a>
 
         @if (Model is not SensorInfoViewModel)
         {
-            <a id="moreMemoryUsageDetails" class="mx-4 @(@Model.HistoryStatistic.IsEmpty ? "d-none" : string.Empty)"
+            <a id="moreMemoryUsageDetails" class="ms-4 @(Model.HistoryStatistic.IsEmpty ? "d-none" : string.Empty)"
                asp-action="@nameof(HomeController.SaveHistoryInfo)" asp-route-id="@Model.EncodedId" title='Save detailed information to csv file'>
-                more details
+                save more to CSV
             </a>
         }
     </div>
@@ -81,13 +78,26 @@
             cache: false,
             async: true,
             success: function (viewdata) {
-                $('#labelHistoryStat').empty().replaceWith(viewdata);
+                let unknownData = "Unknown";
+
+                $('#labelHistoryStat').empty();
+                if (viewdata != unknownData)
+                    $('#labelHistoryStat').replaceWith(viewdata);
 
                 if (document.getElementById('moreMemoryUsageDetails') != null) {
-                    if (viewdata == "Unknown")
+                    if (viewdata == unknownData)
                         $("#moreMemoryUsageDetails").addClass("d-none");
                     else
                         $("#moreMemoryUsageDetails").removeClass("d-none");
+                }
+
+                if (viewdata == unknownData) {
+                    $('#refreshDbInfo').addClass('d-none');
+                    $('#calculateDbInfo').removeClass('d-none');
+                }
+                else {
+                    $('#calculateDbInfo').addClass('d-none');
+                    $('#refreshDbInfo').removeClass('d-none');
                 }
 
                 $('#calculatingProgress').addClass("d-none");

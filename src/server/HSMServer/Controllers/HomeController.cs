@@ -602,7 +602,7 @@ namespace HSMServer.Controllers
                     {
                         var stat = sensor.HistoryStatistic;
 
-                        content.AppendLine($"{sensor.FullPath};{stat.DataCount};{stat.Size};{stat.Percent:F4}");
+                        content.AppendLine($"\"{sensor.FullPath}\";{stat.DataCount};{stat.Size};{stat.Percent:F4}");
                     }
 
                     foreach (var (_, subNode) in model.Nodes)
