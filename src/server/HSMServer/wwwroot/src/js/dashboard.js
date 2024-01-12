@@ -42,7 +42,7 @@ window.getRangeDate = function (){
 }
 
 function defaultLabelUpdate(id, name){
-    let sources = $('#sources');
+    let sources = $('#sources').find('li');
     if (sources.length <= id)
         return name;
     
