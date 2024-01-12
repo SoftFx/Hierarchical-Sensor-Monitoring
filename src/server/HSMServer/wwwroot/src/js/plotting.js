@@ -164,8 +164,8 @@ function getCurrentFromTo(id){
 function createLayoutFromZoomData(zoomData, layout) {
     let processedData = Object.values(JSON.parse(zoomData));
 
-    layout.xaxis.range = [processedData[0], processedData[1]];
-    layout.yaxis.range = [processedData[2], processedData[3]];
+    layout.xaxis.range = processedData[0];
+    layout.yaxis.range = processedData[1];
     layout.autosize = true;
 
     return layout;
