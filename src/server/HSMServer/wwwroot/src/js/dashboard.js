@@ -355,7 +355,7 @@ window.initDashboard = function () {
                         prevData.customdata.push(...customData)
                         Plotly.deleteTraces(plot, correctId);
                         Plotly.addTraces(plot, prevData);
-                        DefaultRelayout(data);
+                        DefaultRelayout(plot);
                     }
                     else {
                         Plotly.extendTraces(plot, {
