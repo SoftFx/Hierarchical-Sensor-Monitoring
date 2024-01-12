@@ -599,7 +599,18 @@ window.initMultichart = function (chartId, height = 300, showlegend = true, auto
             'select2d',
             'autoScale2d',
             'autoScale2d',
+            'resetScale2d'
         ],
+        modeBarButtonsToAdd: [
+        {
+            name: 'resetaxes',
+            _cat: 'resetscale',
+            title: 'Reset axes',
+            attr: 'zoom',
+            val: 'reset',
+            icon: Plotly.Icons.home,
+            click: (plot) => customReset(plot, getRangeDate())
+        }],
         doubleClick: autorange ? 'reset+autosize' : autorange
     });
 }
