@@ -23,10 +23,19 @@ window.customReset =  function (plot = undefined, range = undefined){
     if (currentPlot === undefined)
         return;
 
+    let isPanelChart = plot.id.startsWith('panelChart');
+    
     Plotly.relayout(plot, {
-        'xaxis.range': range,
+        'xaxis.range': [range[0], !isPanelChart ? getMinRangeTo() : range[1]],
         'yaxis.autorange': true
     });
+    
+    function getMinRangeTo(){
+        if (currentPlot.x.length === 0)
+            return range[1];
+
+        return new Date(1000000 + Math.min(new Date(range[1]), new Date(currentPlot.x.at(-1)))).toISOString();
+    }
 }
 
 window.graphData = {
@@ -110,9 +119,10 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
             layout = createLayoutFromZoomData(zoomData, plotLayout);
         }
     }
-    layout.xaxis.range = getCurrentFromTo(graphName);
-
+    
     Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
+    customReset($(`#${graphElementId}`)[0], getCurrentFromTo(graphName))
+    
     if (plot.name !== serviceAlivePlotName)
         config.modeBarButtonsToAdd.forEach(x => {
             if(x.name === "Show/Hide service alive plot")
@@ -237,7 +247,7 @@ function getModeBarButtons(id, graphId){
         attr: 'zoom',
         val: 'reset',
         icon: Plotly.Icons.home,
-        click: (plot) => customReset(plot)
+        click: (plot) => customReset(plot, getCurrentFromTo(id))
     })
 
     return modeBarButtons;

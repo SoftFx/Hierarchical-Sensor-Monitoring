@@ -32,6 +32,9 @@ namespace HSMServer.Datasources
         {
             if (rawValue is TValue value)
             {
+                if (_isBarSensor)
+                    _lastBarValue = rawValue as BarBaseValue;
+
                 _lastVisibleValue = new LineChartValue<TChart>(rawValue, ToChartValue(value));
 
                 AddVisibleToLast(_lastVisibleValue);
@@ -41,7 +44,14 @@ namespace HSMServer.Datasources
         protected override void ApplyToLast(BaseValue rawValue)
         {
             if (rawValue is TValue value)
-                _lastVisibleValue.Apply(ToChartValue(value));
+            {
+                var chartValue = ToChartValue(value);
+
+                if (IsPartialValueUpdate(value))
+                    _lastVisibleValue.ReapplyLast(chartValue, value.Time);
+                else
+                    _lastVisibleValue.Apply(chartValue, value.Time);
+            }
         }
 
 

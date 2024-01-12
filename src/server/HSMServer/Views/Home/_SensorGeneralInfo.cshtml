@@ -20,11 +20,10 @@
         }
     </div>
     @{
-        SensorType type;
+        var type = Model.SensorType;
+
         if (Model.Header.Split('/')[^1] == "Service status")
             type = SensorType.Enum;
-        else
-            type = Model.SensorType;
     }
     <input id='sensor_type_@Model.EncodedId' value='@((int)type)' style='display: none' />
 </div>
