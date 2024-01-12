@@ -2,27 +2,27 @@
 
 ## Dashboards
 
-* Supporting for plot Properties of bar sensors have been added.
-* Plotted properties for datasource have been added. **Value**, **EMA (Value)** for Instanse sensors. **Min**, **Mean**, **Max**, **Count**, **EMA (Min)**, **EMA (Mean)**, **EMA (Max)**, **EMA (Count)** for Bar sensors.
+* Supporting of plotting bar sensors properties has been added.
+* Plotted properties for datasource have been added. **Value**, **EMA (Value)** for simple sensors. **Min**, **Mean**, **Max**, **Count**, **EMA (Min)**, **EMA (Mean)**, **EMA (Max)**, **EMA (Count)** for bar sensors.
 * New time periods have been added: **12 hours**, **1 day**, **3 days**, **7 days**.
 * **Label** autoupdate has been added after change **Property** parameter.
-* **Color** and **Label** update for datasource has been fixed.
+* **Color** and **Label** updating for datasource has been fixed.
 * Multiline realtime update after a few hours has been fixed.
 * Plot for double charts with NaN values has been fixed.
 
 
 ## Alerts
-* **Schedule** logic has been added. Available periods are: **1 hour**, **1 day**, **1 week**. All notifications are grouped by time and sent according to a set setting. 
+* **Schedule** logic has been added. Available periods are: **1 hour**, **1 day**, **1 week**. All notifications are grouped by time and sent according to setting. 
 * **Add alert** logic - priority check has been added. New alerts cannot be added if alert with highest priority is exists.
 
 ## History
-* **Predifined periods** for fast searching have been added. Available values: **Default (300 items)**, **Last day**, **Last 3 days**, **Last week**, **Last 2 weeks**, **Last month**.
+* **Predefined periods** for fast searching have been added. Available values: **Default (300 items)**, **Last day**, **Last 3 days**, **Last week**, **Last 2 weeks**, **Last month**, **Custom**.
 * All old search logic has been moved to **Custom** item.
-* Persistanse for history search has been added. State is saved to browser Local storage.
-* Tooltip with help for **Bars count** parametr has been added.
+* Persistanse for history search has been added. State is saved to browser local storage.
+* Tooltip with help for **Bars count** setting has been added.
 
 ## Sensor
-* **Edit** link has been moved to icon and moved to sensor path.
+* **Edit** link has been moved to icon and moved next to sensor path.
 * **Unit** info has been added after path for selected sensor.
 * More readable dispaly values for **Units** have been added.
 * **EMA** - description in help has been improved.
@@ -30,7 +30,7 @@
 * **Change status** for empty sensor has been fixed.
 
 ## Charts
-* Multiple plot for Bar properties has been fixed.
+* Multiple plotting for Bar properties has been fixed.
 * **Reset** button behavior with long **Service alive** value has been fixed.
 
 ## Journal
@@ -40,7 +40,7 @@
 ## Tree
 * Context menu style for empty sensors has been fixed.
 * Context menu for node without sensors has been fixed.
-* **Tree reload** on **Home** page after double click on node has been fixed.
+* **Tree reloading** on **Home** page after double click on node has been fixed.
 * **Scroll** to selected item after search cleaning has been added.
 
 ## Alert constructor
