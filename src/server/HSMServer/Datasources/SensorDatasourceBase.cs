@@ -101,7 +101,6 @@ namespace HSMServer.Datasources
             new()
             {
                 NewVisibleValues = _newVisibleValues.Cast<object>().ToList(),
-                //LastVisibleValue = _newVisibleValues.Count == 0 ? _curVisibleValues.LastOrDefault() : null,
 
                 RemovedValuesCount = _removedValuesCnt,
                 IsTimeSpan = _sensor.Type is SensorType.TimeSpan

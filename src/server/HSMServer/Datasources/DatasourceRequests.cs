@@ -14,10 +14,8 @@ namespace HSMServer.Datasources
     {
         public List<object> NewVisibleValues { get; init; }
 
-        //public object LastVisibleValue { get; init; }
+        public long RemovedValuesCount { get; init; } //todo: can be removed
 
-        public long RemovedValuesCount { get; init; }
-
-        public bool IsTimeSpan { get; init; }
+        public bool IsTimeSpan { get; init; } //todo: should be moved to InitChartSourceResponse
     }
 }
