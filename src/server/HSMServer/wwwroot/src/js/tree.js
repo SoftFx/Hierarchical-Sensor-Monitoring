@@ -79,6 +79,10 @@ window.initializeTree = function () {
             $('#jstreeSpinner').addClass('d-none');
             searchRefresh = false;
         }
+
+        let selectedIds = $('#jstree').jstree('get_selected');
+        if (selectedIds.length > 0)
+            $(`#${selectedIds[0]}`)[0].scrollIntoView();
     }).on('open_node.jstree', function (e, data) {
         collapseButton.reset();
     }).on('dblclick.jstree', function (event) {
