@@ -11,7 +11,7 @@ const AjaxPost = {
 };
 
 var searchInterval = 1000; // 1 sec
-
+var emptySearch = false;
 
 window.initializeTree = function () {
     initDropzone()
@@ -80,9 +80,14 @@ window.initializeTree = function () {
             searchRefresh = false;
         }
 
-        let selectedIds = $('#jstree').jstree('get_selected');
-        if (selectedIds.length > 0)
-            $(`#${selectedIds[0]}`)[0].scrollIntoView();
+        if (emptySearch !== undefined && emptySearch === true)
+        {
+            let selectedIds = $('#jstree').jstree('get_selected');
+            if (selectedIds.length > 0)
+                $(`#${selectedIds[0]}`)[0].scrollIntoView();
+
+            emptySearch = false;
+        }
     }).on('open_node.jstree', function (e, data) {
         collapseButton.reset();
     }).on('dblclick.jstree', function (event) {
@@ -103,6 +108,7 @@ window.initializeTree = function () {
     }).on('input', function () {
         if ($(this).val() === '') {
             $('#search_field').val($(this).val());
+            emptySearch  = true;
             $('#jstree').jstree(true).refresh(true);
         }
         else {
