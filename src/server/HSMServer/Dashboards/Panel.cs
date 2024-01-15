@@ -5,6 +5,7 @@ using HSMServer.Extensions;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using HSMServer.Core;
 
 namespace HSMServer.Dashboards
 {
@@ -81,9 +82,9 @@ namespace HSMServer.Dashboards
             return result;
         }
 
-        public bool TryRemoveSource(Guid sensorId)
+        public bool TryRemoveSource(Guid sourceId)
         {
-            if (Sources.TryRemove(sensorId, out var source))
+            if (Sources.TryRemove(sourceId, out var source))
             {
                 if (Sources.IsEmpty)
                 {
@@ -117,20 +118,28 @@ namespace HSMServer.Dashboards
                 error = $"Can't plot using {sourceType} sensor type";
             else if (!MainUnit.IsNullOrEqual(sourceUnit))
                 error = $"Can't plot using {sourceUnit} unit type";
-            else if (!Sources.TryAdd(source.SensorId, source))
+            else if (!TryAddNewSource(source))
                 error = "Source already exists";
             else
             {
                 MainSensorType = sourceType;
                 MainUnit = sourceUnit ?? MainUnit;
 
-                source.Source.AttachSensor(source.Sensor); //enable subscription
+                source.BuildSource();
                 source.UpdateEvent += ThrowUpdateEvent;
             }
 
             return string.IsNullOrEmpty(error);
+
+            bool TryAddNewSource(PanelDatasource source)
+            {
+                var existingSource = Sources.FirstOrDefault(x => x.Key != source.Id && x.Value.SensorId == source.SensorId).Value;
+
+                return (existingSource is null || existingSource.Sensor.Type.IsBar()) && Sources.TryAdd(source.Id, source);
+            }
         }
 
-        private static bool IsSupportedType(SensorType type) => type is SensorType.Integer or SensorType.Double or SensorType.TimeSpan;
+        private static bool IsSupportedType(SensorType type) =>
+            type is SensorType.Integer or SensorType.Double or SensorType.TimeSpan or SensorType.IntegerBar or SensorType.DoubleBar;
     }
 }

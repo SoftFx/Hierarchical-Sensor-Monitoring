@@ -1,4 +1,5 @@
-﻿@using HSMServer.Model.ViewModel
+﻿@using HSMCommon.Extensions
+@using HSMServer.Model.ViewModel
 @using HSMServer.Extensions
 @using HSMServer.Core.Model
 
@@ -19,11 +20,10 @@
         }
     </div>
     @{
-        SensorType type;
+        var type = Model.SensorType;
+
         if (Model.Header.Split('/')[^1] == "Service status")
             type = SensorType.Enum;
-        else
-            type = Model.SensorType;
     }
     <input id='sensor_type_@Model.EncodedId' value='@((int)type)' style='display: none' />
 </div>
@@ -78,7 +78,7 @@
             <span style="min-width: 9rem">Unit:</span>
         </div>
         <div class="d-flex w-100">
-            <span id="markdown_status_comment">@Model.SelectedUnit</span>
+            <span id="markdown_status_comment">@Model.SelectedUnit.GetDisplayName()</span>
         </div>
     </div>
 }
@@ -105,6 +105,6 @@
         <div class="d-flex form-check form-switch m-0">
             <input id="emaStatisticsSwitch" class="form-check-input" type="checkbox" role="switch" asp-for="IsEMA" disabled>
         </div>
-        <i class='fas fa-question-circle' title='If the option is switched on, EMA statistics is calculated. The option is available only for Integer and Double sensors (property Value), IntegerBar and DoubleBar sensors (properties Min, Mean, Max, Count). EMA statistics formula is Current EMA = 0.9 * Last EMA Value + 0.1 * Current Value.'></i>
+        <i class='fas fa-question-circle' title='Exponential Moving Average (EMA). If the option is switched on, EMA statistics is calculated. The option is available only for Integer and Double sensors (property Value), IntegerBar and DoubleBar sensors (properties Min, Mean, Max, Count). EMA statistics formula is Current EMA = 0.9 * Last EMA Value + 0.1 * Current Value.'></i>
     </div>
 }

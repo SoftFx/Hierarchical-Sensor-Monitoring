@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace HSMServer.Model.Dashboards
 {
@@ -13,6 +14,19 @@ namespace HSMServer.Model.Dashboards
         private const string DefaultName = "New Dashboard";
 
         private readonly Dashboard _dashboard;
+
+
+        public static readonly List<SelectListItem> Periods =
+        [
+            new SelectListItem("last 30 minutes", TimeSpan.FromMinutes(30).ToString()),
+            new SelectListItem("last 1 hour", TimeSpan.FromHours(1).ToString()),
+            new SelectListItem("last 3 hours", TimeSpan.FromHours(3).ToString()),
+            new SelectListItem("last 6 hours", TimeSpan.FromHours(6).ToString()),
+            new SelectListItem("last 12 hours", TimeSpan.FromHours(12).ToString()),
+            new SelectListItem("last 1 day", TimeSpan.FromDays(1).ToString()),
+            new SelectListItem("last 3 day", TimeSpan.FromDays(3).ToString()),
+            new SelectListItem("last 7 day", TimeSpan.FromDays(7).ToString())
+        ];
 
 
         public List<PanelViewModel> Panels { get; set; } = new();
@@ -71,6 +85,5 @@ namespace HSMServer.Model.Dashboards
                 Name = DefaultName,
                 AuthorId = author.Id,
             };
-
     }
 }

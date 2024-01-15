@@ -3,6 +3,7 @@ using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace HSMServer.Core.Cache.UpdateEntities
 {
@@ -39,6 +40,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public PolicyDestinationUpdate Destination { get; init; }
 
+        public PolicyScheduleUpdate Schedule { get; init; }
+
         public long? ConfirmationPeriod { get; init; }
 
 
@@ -59,11 +62,28 @@ namespace HSMServer.Core.Cache.UpdateEntities
     }
 
 
-    public sealed record PolicyConditionUpdate(
-        PolicyOperation Operation,
-        PolicyProperty Property,
-        TargetValue Target,
-        PolicyCombination Combination = PolicyCombination.And);
+    public sealed record PolicyConditionUpdate
+    {
+        public required PolicyOperation Operation { get; init; }
+
+        public required PolicyProperty Property { get; init; }
+
+        public required TargetValue Target { get; init; }
+
+        public PolicyCombination Combination { get; init; }
+
+
+        public PolicyConditionUpdate() { }
+
+        [SetsRequiredMembers]
+        public PolicyConditionUpdate(PolicyOperation operation, PolicyProperty property, TargetValue target, PolicyCombination combination = PolicyCombination.And)
+        {
+            Operation = operation;
+            Property = property;
+            Target = target;
+            Combination = combination;
+        }
+    }
 
 
     public sealed record PolicyDestinationUpdate
@@ -83,4 +103,9 @@ namespace HSMServer.Core.Cache.UpdateEntities
             Chats = chats;
         }
     }
+
+
+    public sealed record PolicyScheduleUpdate(
+        DateTime? Time,
+        AlertRepeatMode? RepeatMode);
 }

@@ -1,4 +1,5 @@
-﻿@using HSMServer.Controllers
+﻿@using HSMCommon.Extensions
+@using HSMServer.Controllers
 @using HSMServer.Core.Model
 @using HSMServer.Core
 @using HSMServer.Extensions
@@ -142,16 +143,28 @@
             <div id='historyDataPanel' class='pt-3 text-break hidden_element'>
                 <div class="d-flex justify-content-between">
                     <div id="datePickerFromTo">
-                        <label class="me-1" for="from_@sensorId">From:</label>
+                        <label class="me-1">Period:</label>
+                        <select id="history_period" class="me-2">
+                            @foreach (var period in Enum.GetValues<HistoryPeriod>())
+                            {
+                                <option value="@period" @(period is HistoryPeriod.Default ? "selected" : string.Empty)>@period.GetDisplayName()</option>
+                            }
+                        </select>
+
+                        <label class="me-1" id="from_@(sensorId)_label" for="from_@sensorId">From:</label>
                         <input class="me-2" type="datetime-local" id="from_@sensorId" name="from">
 
-                        <label class="me-1" for="to_@sensorId">To:</label>
+                        <label class="me-1" id="to_@(sensorId)_label" for="to_@sensorId">To:</label>
                         <input class="me-2" type="datetime-local" id="to_@sensorId" name="to">
 
                         @if (Model.Type.IsBar())
                         {
-                            <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId">Bars count:</label>
-                            <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000">
+                            <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId"
+                                   title="The maximum count of bars displayed on the chart. If the actual count of bars is greater than the 'Bars count' value, then the bars are aggregated.">
+                                Bars count:
+                            </label>
+                            <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000"
+                                   title="The maximum count of bars displayed on the chart. If the actual count of bars is greater than the 'Bars count' value, then the bars are aggregated.">
                         }
 
                         <button onclick="searchHistory('@sensorId')" type="button" class="btn btn-secondary">
@@ -316,7 +329,7 @@
 
     $(document).ready(function () {
         hiddenColumns.clear();
-        
+
         if ('@(Model.Type is SensorType.DoubleBar or SensorType.IntegerBar)' === 'True')
             hiddenColumns.tablecellsIds.push("#lastUpdateTime_header", "#closeTime_header", '[id^="lastUpdateTime_value"]', '[id^="closeTime_value"]',
                                              "#firstValue_header", "#lastValue_header", '[id^="firstValue_value"]', '[id^="lastValue_value"]');
@@ -329,6 +342,64 @@
     
     $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal(NodeType.Sensor));
 
+    $('input[id^="from_"]').off('change').on('change', function () {
+        $('#history_period').val('@HistoryPeriod.Custom');
+        $('#history_period').trigger('change');
+    });
+
+    $('input[id^="to_"]').off('change').on('change', function () {
+        $('#history_period').val('@HistoryPeriod.Custom');
+        $('#history_period').trigger('change');
+    });
+
+    $('#history_period').off('change').on('change', function () {
+        let period = this.value;
+
+        if (period === '@HistoryPeriod.Default')
+            localStorage.removeItem(`historyPeriod_@sensorId`);
+        else
+            localStorage.setItem(`historyPeriod_@sensorId`, period);
+
+        if (period === '@HistoryPeriod.Custom') {
+            localStorage.setItem(`historyFrom_@sensorId`, $(`#from_@sensorId`).val());
+            localStorage.setItem(`historyTo_@sensorId`, $(`#to_@sensorId`).val());
+        }
+        else {
+            localStorage.removeItem(`historyFrom_@sensorId`);
+            localStorage.removeItem(`historyTo_@sensorId`);
+        }
+
+        if (period === '@HistoryPeriod.Default') {
+            InitializeHistory();
+        }
+        else if (period != '@HistoryPeriod.Custom') {
+            let now = new Date();
+            let to = now.AddDays(1);
+            let from;
+
+            switch (period) {
+                case '@HistoryPeriod.Day':
+                    from = now.AddDays(-1);
+                    break;
+                case '@HistoryPeriod.ThreeDays':
+                    from = now.AddDays(-3);
+                    break;
+                case '@HistoryPeriod.Week':
+                    from = now.AddDays(-7);
+                    break;
+                case '@HistoryPeriod.TwoWeeks':
+                    from = now.AddDays(-14);
+                    break;
+                case '@HistoryPeriod.Month':
+                    from = now.AddDays(-30);
+                    break;
+            }
+
+            setFromAndTo('@sensorId', from, to);
+            searchHistory('@sensorId');
+        }
+    });
+
     $(document).ready(function () {
         if ('@(Model.Type is SensorType.File)' === 'True') {
             setContentPreview('@Model.EncodedId');
@@ -336,7 +407,8 @@
 
         let savedPlots = localStorage.getItem(`graph_@sensorId`);
         if (savedPlots) {
-            let plots = savedPlots.split(',');
+            let plots = savedPlots.split(',').filter((value, index, array) => array.indexOf(value) === index);
+            localStorage.setItem(`graph_@sensorId`, plots);
             let jqueryPlots = $('[id^="plot_"]');
             jqueryPlots.each(x => {
                 jqueryPlots[x].checked = plots.includes(jqueryPlots[x].id.substring("plot_".length));

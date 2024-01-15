@@ -10,6 +10,15 @@ namespace HSMServer.Core.Model
         public DateTime OpenTime { get; init; }
 
         public DateTime CloseTime { get; init; }
+
+
+        public double? EmaMin { get; init; }
+
+        public double? EmaMax { get; init; }
+
+        public double? EmaMean { get; init; }
+
+        public double? EmaCount { get; init; }
     }
 
 
@@ -24,15 +33,6 @@ namespace HSMServer.Core.Model
         public T? FirstValue { get; init; }
 
         public T LastValue { get; init; }
-
-
-        public double? EmaMin { get; init; }
-
-        public double? EmaMax { get; init; }
-
-        public double? EmaMean { get; init; }
-
-        public double? EmaCount { get; init; }
 
 
         public override string ShortInfo =>

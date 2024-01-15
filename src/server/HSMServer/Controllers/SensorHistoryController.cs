@@ -6,6 +6,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Helpers;
+using HSMServer.Model.Dashboards;
 using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
 using HSMServer.Model.TreeViewModel;
@@ -13,13 +14,31 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMServer.Model.Dashboards;
 
 namespace HSMServer.Controllers
 {
+    public enum HistoryPeriod
+    {
+        [Display(Name = "Default (300 items)")]
+        Default,
+        [Display(Name = "Last day")]
+        Day,
+        [Display(Name = "Last 3 days")]
+        ThreeDays,
+        [Display(Name = "Last week")]
+        Week,
+        [Display(Name = "Last 2 weeks")]
+        TwoWeeks,
+        [Display(Name = "Last month")]
+        Month,
+        Custom,
+    }
+
+
     [Authorize]
     public class SensorHistoryController : BaseController
     {
@@ -86,7 +105,7 @@ namespace HSMServer.Controllers
         public ActionResult<SensorInfoViewModel> GetSensorPlotInfo([FromQuery] Guid id)
         {
             if (_tree.Sensors.TryGetValue(id, out var sensorNodeViewModel))
-                return new SensorInfoViewModel(sensorNodeViewModel.Type, sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type, sensorNodeViewModel.SelectedUnit.ToString());
+                return new SensorInfoViewModel(sensorNodeViewModel.Type, sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type, sensorNodeViewModel.SelectedUnit?.GetDisplayName());
 
             return _emptyJsonResult;
         }

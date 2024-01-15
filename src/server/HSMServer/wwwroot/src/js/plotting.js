@@ -13,6 +13,31 @@
 export const serviceAlivePlotName  = "ServiceAlive";
 export const serviceStatusPlotName  = "ServiceStatus";
 
+window.customReset =  function (plot = undefined, range = undefined){
+    let currentPlot;
+    plot.data.forEach(function (x){
+        if (x.type !== 'heatmap')
+            currentPlot = x;
+    })
+
+    if (currentPlot === undefined)
+        return;
+
+    let isPanelChart = plot.id.startsWith('panelChart');
+    
+    Plotly.relayout(plot, {
+        'xaxis.range': [range[0], !isPanelChart ? getMinRangeTo() : range[1]],
+        'yaxis.autorange': true
+    });
+    
+    function getMinRangeTo(){
+        if (currentPlot.x.length === 0)
+            return range[1];
+
+        return new Date(1000000 + Math.min(new Date(range[1]), new Date(currentPlot.x.at(-1)))).toISOString();
+    }
+}
+
 window.graphData = {
     plot: undefined,
     plotData: [],
@@ -77,8 +102,11 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
             'pan2d',
             'select2d',
             'autoScale2d',
-        ]
+            'resetScale2d'
+        ],
+        doubleClick: false
     }
+    
     let layout;
     if (sensorInfo.plotType === 9 || sensorInfo.plotType === 7)
         layout = plot.getLayout();
@@ -91,9 +119,10 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
             layout = createLayoutFromZoomData(zoomData, plotLayout);
         }
     }
-    layout.xaxis.autorange = true;
-
+    
     Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
+    customReset($(`#${graphElementId}`)[0], getCurrentFromTo(graphName))
+    
     if (plot.name !== serviceAlivePlotName)
         config.modeBarButtonsToAdd.forEach(x => {
             if(x.name === "Show/Hide service alive plot")
@@ -122,13 +151,21 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
         function (eventData) {
             window.sessionStorage.setItem(graphElementId, JSON.stringify(eventData));
         });
+
+    graphDiv.on('plotly_doubleclick', function(){
+        customReset(graphDiv, getCurrentFromTo(graphName))
+    })
+}
+
+function getCurrentFromTo(id){
+    return [$(`#from_${id}`).val(), $(`#to_${id}`).val()]
 }
 
 function createLayoutFromZoomData(zoomData, layout) {
     let processedData = Object.values(JSON.parse(zoomData));
 
-    layout.xaxis.range = [processedData[0], processedData[1]];
-    layout.yaxis.range = [processedData[2], processedData[3]];
+    layout.xaxis.range = processedData[0];
+    layout.yaxis.range = processedData[1];
     layout.autosize = true;
 
     return layout;
@@ -138,7 +175,7 @@ function getPreviousZoomData(graphElementId) {
     return window.sessionStorage.getItem(graphElementId);
 }
 
-export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default) {
+export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, asLine = false) {
     let escapedData = JSON.parse(graphData);
 
     switch (sensorInfo.plotType) {
@@ -149,9 +186,11 @@ export function convertToGraphData(graphData, sensorInfo, graphName, color = Col
         case 2:
             return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color);
         case 4:
-            return new BarPLot(escapedData, graphName, sensorInfo.units, color);
+            return asLine ? new IntegerPlot(escapedData, sensorInfo.units, color)
+                          : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 5:
-            return new BarPLot(escapedData, graphName, sensorInfo.units, color);
+            return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color) 
+                          : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 7:
             return new TimeSpanPlot(escapedData, sensorInfo.units, color);
         case 9:
@@ -200,6 +239,16 @@ function getModeBarButtons(id, graphId){
             modeBarButtons.push(addPlotButton(id, heartBeatButtonName, false, ServiceAliveIcon, graphId, alive[0].id, alive[0].path))
         }
     });
+
+    modeBarButtons.push({
+        name: 'resetaxes',
+        _cat: 'resetscale',
+        title: 'Reset axes',
+        attr: 'zoom',
+        val: 'reset',
+        icon: Plotly.Icons.home,
+        click: (plot) => customReset(plot, getCurrentFromTo(id))
+    })
 
     return modeBarButtons;
 }

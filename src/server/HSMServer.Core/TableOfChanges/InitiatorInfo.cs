@@ -7,6 +7,7 @@ namespace HSMServer.Core.TableOfChanges
     {
         System = 0,
         DataCollector = 10,
+        ServerMigration = 20,
         User = 100,
     }
 
@@ -42,6 +43,10 @@ namespace HSMServer.Core.TableOfChanges
 
         public static InitiatorInfo AsSystemForce() => new(InitiatorType.System, isForce: true);
 
+        public static InitiatorInfo AsSystemInfo(string info) => new (InitiatorType.System, info);
+
+        public static InitiatorInfo AsSystemMigrator() => new(InitiatorType.ServerMigration, isForce: true);
+
         public static InitiatorInfo AsUser(string username) => new(InitiatorType.User, username);
 
         public static InitiatorInfo AsCollector(string key, bool isForce) => new(InitiatorType.DataCollector, key, isForce);
@@ -59,7 +64,7 @@ namespace HSMServer.Core.TableOfChanges
 
             sb.Append(Type.ToString());
 
-            if (Type is not InitiatorType.System)
+            if (Type is not InitiatorType.System || Info is not null)
                 sb.Append($" ({Info})");
 
             return sb.ToString();

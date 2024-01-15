@@ -1,7 +1,7 @@
 ﻿using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableOfChanges;
 using System;
@@ -24,14 +24,14 @@ namespace HSMServer.Core.Cache
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
 
-        event Action<List<AlertResult>, Guid> ThrowAlertResultsEvent;
+        event Action<AlertMessage> NewAlertMessageEvent;
 
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();
 
         ProductModel AddProduct(string productName, Guid authorId);
         void UpdateProduct(ProductUpdate product);
-        void RemoveProduct(Guid id);
+        void RemoveProduct(Guid id, InitiatorInfo initiator = null);
         ProductModel GetProduct(Guid id);
         ProductModel GetProductByName(string name);
         bool TryGetProductByName(string name, out ProductModel product);
@@ -54,7 +54,7 @@ namespace HSMServer.Core.Cache
         bool TryUpdateSensor(SensorUpdate updatedSensor, out string error);
         bool TryGetSensorByPath(string product, string path, out BaseSensorModel sensor);
         void UpdateSensorValue(UpdateSensorValueRequestModel request);
-        void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null);
+        void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null);
         void UpdateMutedSensorState(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
         void ClearSensorHistory(ClearHistoryRequest request);
         void CheckSensorHistory(Guid sensorId);

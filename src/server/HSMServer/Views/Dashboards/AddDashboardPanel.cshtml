@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Controllers
 @using System.Text.Json;
+@using System.Text.Json.Serialization
 @model HSMServer.Model.Dashboards.PanelViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -8,6 +9,7 @@
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Tree/_Layout.cshtml";
 }
+
 
 <div class="w-100 overflow-y-auto p-2">
     <div id="panelSettings" class="my-2">
@@ -42,8 +44,12 @@
 
 <script>
     $(document).ready(function () {
-        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions(){ PropertyNamingPolicy = JsonNamingPolicy.CamelCase}))
-        initMultichart('multichart').then(
+        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions()
+                     {
+                         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                         NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+                     }))
+        initMultichart('multichart', 300, true, true).then(
             (dom) => {
                 values.forEach(function (x) {
                     addNewSourceHtml(x, 'multichart');
@@ -78,45 +84,6 @@
             }).fail(function (response){
                 showToast(response.responseText);
             })
-        })
-
-        $('[id^="source"]').on('input', '.form-control-color', function () {
-            $(this).attr('value', this.value);
-            let id = this.id.substring("color_".length, this.id.length);
-            
-            updateSource($(`#name_input_${id}`).val(), $(this).val(), id)
-        }).on('input', '.form-control', function () {
-            $(this).attr('value', this.value);
-            let id = this.id.substring("name_input_".length, this.id.length);
-                      
-            updateSource($(this).val(), $(`#color_${id}`).val(), id)
-        }).on('click', 'button',function (){
-            let id = this.id.substring("deletePlot_".length, this.id.length);
-            let model = getCurrentPlotInDashboard(id)
-
-            if (model !== undefined) {
-                $.ajax({
-                    type:'delete',
-                    url: window.location.pathname + '/' + id
-                }).done(function (response){
-                    Plotly.deleteTraces('multichart', model.id).then(
-                        (data) => {
-                            if (data.data.length === 0)
-                               {
-                                   Plotly.relayout('multichart', { 'xaxis.visible': false, 'yaxis.visible':false })
-                                   $('#emptypanel').show()
-                               }
-
-                            $('[id^="source"] li')[model.id].remove();
-                            updateCurrentPlotsIds(model.id, id)}
-                    )
-                }).fail(function (response){
-                    showToast(response.responseText);
-                })
-            }
-        }).on('click', '.redirectToHome', function (){
-            let id = this.id.substring("redirectToHome_".length, this.id.length);
-            redirectToHome(id);
         })
     })
     

@@ -236,7 +236,7 @@ namespace HSMServer.ApiObjectsConverters
                 Description = request.Description,
                 IsSingleton = request.IsSingletonSensor,
                 AggregateValues = request.AggregateData,
-                Statistics = request.Statistics.Convert(),
+                Statistics = request.Statistics?.Convert(),
                 SelectedUnit = request.OriginalUnit?.Convert(),
                 Integration = request.EnableGrafana.HasValue ? request.EnableGrafana.Value ? Integration.Grafana : Integration.None : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
@@ -254,6 +254,9 @@ namespace HSMServer.ApiObjectsConverters
         {
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
             Destination = new(),
+
+            Schedule = new PolicyScheduleUpdate(request.ScheduledNotificationTime ?? DateTime.MinValue,
+                                                request.ScheduledRepeatMode.HasValue ? request.ScheduledRepeatMode.Value.Convert() : Core.Model.Policies.AlertRepeatMode.Immediately),
 
             Id = Guid.Empty,
             Status = request.Status.Convert(),
@@ -397,6 +400,16 @@ namespace HSMServer.ApiObjectsConverters
             {
                 HSMSensorDataObjects.SensorRequests.StatisticsOptions.None => Core.Model.StatisticsOptions.None,
                 HSMSensorDataObjects.SensorRequests.StatisticsOptions.EMA => Core.Model.StatisticsOptions.EMA,
+                _ => throw new NotImplementedException(),
+            };
+
+
+        private static Core.Model.Policies.AlertRepeatMode Convert(this HSMSensorDataObjects.SensorRequests.AlertRepeatMode repeatMode) =>
+            repeatMode switch
+            {
+                HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Hourly => Core.Model.Policies.AlertRepeatMode.Hourly,
+                HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Daily => Core.Model.Policies.AlertRepeatMode.Daily,
+                HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Weekly => Core.Model.Policies.AlertRepeatMode.Weekly,
                 _ => throw new NotImplementedException(),
             };
     }

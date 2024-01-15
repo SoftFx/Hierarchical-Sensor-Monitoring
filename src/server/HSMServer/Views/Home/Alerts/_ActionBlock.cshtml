@@ -1,4 +1,5 @@
-﻿@using HSMServer.Extensions
+﻿@using HSMCommon.Extensions
+@using HSMServer.Extensions
 @using HSMServer.Notifications
 @using HSMServer.Model.DataAlerts
 
@@ -14,6 +15,7 @@
 
     var isSendAction = action == ActionType.SendNotification;
     var isShowAction = action == ActionType.ShowIcon;
+    var hasSchedule = Model.ScheduleRepeatMode is not null;
 
     var isSecondaryCondition = !Model.IsMain;
 
@@ -32,7 +34,7 @@
 
     <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions" disabled="@(Model.IsMain ? true : false)"></select>
 
-    <div name="sendNotificationAction" class="@isSendAction.ToVisibility()">
+    <div name="sendNotificationAction" class="@isSendAction.ToVisibility() align-items-center">
         <input type="text" class="alert-block target-input target-comment" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)">
         <div class="alert-text-block operation-select">to</div>
         <select class="selectpicker" name="Chats" multiple
@@ -53,13 +55,27 @@
                 <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
             }
         </select>
+
+        <a class="addSchedule @(hasSchedule ? "d-none" : string.Empty)"><i class="fa-regular fa-calendar-plus alert-schedule-button"></i></a>
+
+        <div name="schedule" class="align-items-center @hasSchedule.ToVisibility()">
+            <a class="removeSchedule"><i class="fa-regular fa-calendar-minus alert-schedule-button"></i></a>
+
+            <div class="alert-text-block operation-select">scheduled every</div>
+            <select class="alert-block alert-select target-input" asp-for="ScheduleRepeatMode" asp-items="Enum.GetValues<ScheduleRepeatMode>().ToSelectedItems(k => k.GetDisplayName())"></select>
+
+            <div class="alert-text-block operation-select">starting at</div>
+            <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
+        </div>
     </div>
 
     <div name="showIconAction" class="@isShowAction.ToVisibility() alert-block">
         <div name="emoji" class="target-input">@Model.Icon</div>
     </div>
 
-    <a class="deleteAction"><i class="@isSecondaryCondition.ToVisibility() fa-solid fa-xmark alert-delete-button"></i></a>
+    <a class="deleteAction">
+        <i class="@isSecondaryCondition.ToVisibility() fa-solid fa-xmark alert-delete-button"></i>
+    </a>
 </div>
 
 
@@ -117,5 +133,22 @@
 
     $("a.deleteAction").off("click").on("click", function () {
         $(this).parents("div[name='alertAction']:first").remove();
+    });
+
+    $("a.addSchedule").off("click").on("click", function () {
+        let sendNotificationBlock = $(this).parents("div[name='sendNotificationAction']:first");
+        let schedule = sendNotificationBlock.find($(`div[name='schedule']`));
+
+        schedule.removeClass("d-none").addClass("d-flex");
+        $(this).addClass("d-none");
+    });
+
+    $("a.removeSchedule").off("click").on("click", function () {
+        let sendNotificationBlock = $(this).parents("div[name='sendNotificationAction']:first");
+        let schedule = sendNotificationBlock.find($(`div[name='schedule']`));
+        let addschedule = sendNotificationBlock.find($(`a.addSchedule`));
+
+        addschedule.removeClass("d-none");
+        schedule.removeClass("d-flex").addClass("d-none");
     });
 </script>

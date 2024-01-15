@@ -25,11 +25,21 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     }
 
 
+    public sealed record PolicyScheduleEntity
+    {
+        public long TimeTicks { get; init; }
+
+        public byte RepeateMode { get; init; }
+    }
+
+
     public sealed record PolicyEntity
     {
         public List<PolicyConditionEntity> Conditions { get; init; }
 
         public PolicyDestinationEntity Destination { get; init; }
+
+        public PolicyScheduleEntity Schedule { get; init; }
 
 
         public byte[] Id { get; init; }

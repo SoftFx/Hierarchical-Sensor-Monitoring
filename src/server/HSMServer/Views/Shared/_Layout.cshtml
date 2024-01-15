@@ -24,7 +24,7 @@
                 <div id="navbar">
                     @if (Context.User is User)
                     {
-                        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow" style=" background-color: #edf0f5;">
+                        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow" style="background-color: #edf0f5;">
                             <div class="container-fluid">
                                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                                         aria-expanded="false" aria-label="Toggle navigation">
@@ -34,7 +34,7 @@
                                 <div class="collapse navbar-collapse d-sm-inline-flex justify-content-between" id="nabarNav">
                                     <ul class="navbar-nav flex-grow-1">
                                         <li class="nav-item">
-                                            <a class="nav-link @Html.ActiveClass(ViewConstants.HomeController)" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.HomeController)">
+                                            <a id="nav_link_Home" class="nav-link @Html.ActiveClass(ViewConstants.HomeController)" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.HomeController)">
                                                 Home
                                             </a>
                                         </li>
@@ -152,7 +152,7 @@
         <footer class="border-top footer text-muted content">
             <div class="d-flex justify-content-between align-items-center mx-3 my-2">
                 <div>
-                    &copy; 2023 - Soft-FX Current version: @ServerConfig.Version
+                    &copy; 2024 - Soft-FX Current version: @ServerConfig.Version
                 </div>
                 <div>
                     <div id="updateTime"></div>

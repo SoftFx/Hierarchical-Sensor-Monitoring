@@ -5,7 +5,7 @@ window.getFromAndTo = function (encodedId) {
     let to = $(`#to_${encodedId}`).val();
 
     if (to == "") {
-        to = new Date().getTime() + 60000;
+        to = new Date().AddDays(1);
         $(`#to_${encodedId}`).val(datetimeLocal(to));
     }
 
@@ -15,6 +15,11 @@ window.getFromAndTo = function (encodedId) {
     }
 
     return {from, to};
+}
+
+window.setFromAndTo = function (encodedId, from, to) {
+    $(`#from_${encodedId}`).val(datetimeLocal(from));
+    $(`#to_${encodedId}`).val(datetimeLocal(to));
 }
 
 var millisecondsInHour = 1000 * 3600;
@@ -59,6 +64,51 @@ window.searchHistory = function (encodedId) {
     })
 }
 
+window.InitializeHistory = function () {
+    let info = ($('[id^=meta_info_]')).attr('id');
+    if (info === undefined)
+        return;
+
+    let encodedId = info.substring("meta_info_".length)
+    let date = new Date();
+
+    let historyPeriod = window.localStorage.getItem(`historyPeriod_${encodedId}`);
+
+    if (historyPeriod != null) {
+        $('#history_period').val(historyPeriod);
+
+        if (historyPeriod === 'Custom') {
+            let historyFrom = window.localStorage.getItem(`historyFrom_${encodedId}`);
+            let from = isNaN(Date.parse(historyFrom)) ? date.AddDays(-1) : new Date(historyFrom + 'Z');
+
+            let historyTo = new Date(window.localStorage.getItem(`historyTo_${encodedId}`));
+            let to = isNaN(Date.parse(historyTo)) ? date.AddDays(1) : new Date(historyTo + 'Z');
+
+            setFromAndTo(encodedId, from, to);
+            searchHistory(encodedId);
+        }
+        else
+            $('#history_period').trigger('change');
+    }
+    else {
+        GetSensortInfo(encodedId).done(function (sensorInfo) {
+            if (Object.keys(sensorInfo).length === 0)
+                return;
+
+            if (isFileSensor(sensorInfo.realPlot))
+                return;
+
+            if (isGraphAvailable(sensorInfo.realType)) {
+                initializeGraph(encodedId, rawHistoryLatestAction, sensorInfo, Data(date, date, sensorInfo.realType, encodedId), true);
+            }
+            else if (isTableAvailable(sensorInfo.realType)) {
+                initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true);
+            }
+        });
+    }
+}
+
+
 function initializeSensorAccordion() {
     InitializeHistory();
     InitializePeriodRequests();
@@ -86,30 +136,6 @@ function viewFile() {
     openFileInBrowser(encodedId, fileType, viewFileAction);
 }
 
-function InitializeHistory() {
-    let info = ($('[id^=meta_info_]')).attr('id');
-    if (info === undefined)
-        return;
-
-    let encodedId = info.substring("meta_info_".length)
-    let date = new Date();
-
-    GetSensortInfo(encodedId).done(function (sensorInfo) {
-        if (Object.keys(sensorInfo).length === 0)
-            return;
-
-        if (isFileSensor(sensorInfo.realPlot))
-            return;
-
-        if (isGraphAvailable(sensorInfo.realType)) {
-            initializeGraph(encodedId, rawHistoryLatestAction, sensorInfo, Data(date, date, sensorInfo.realType, encodedId), true);
-        } 
-        else if (isTableAvailable(sensorInfo.realType)) {
-            initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true);
-        }
-    });
-}
-
 function initializeTabLinksRequests() {
     $('[id^="link_graph_"]').off("click").on("click", requestGraph);
     $('[id^="link_table_"]').off("click").on("click", requestTable);
@@ -120,7 +146,7 @@ function requestGraph() {
     const {from, to} = getFromAndTo(encodedId);
     
     showBarsCount(encodedId);
-    enableFromTo()
+    enableHistoryPeriod()
     GetSensortInfo(encodedId).done(function (types){
         if (Object.keys(types).length === 0)
             return;
@@ -135,7 +161,7 @@ function requestTable() {
     const {from, to} = getFromAndTo(encodedId);
 
     hideBarsCount(encodedId);
-    enableFromTo()
+    enableHistoryPeriod()
     GetSensortInfo(encodedId).done(function (types){
         if (Object.keys(types).length === 0)
             return;
@@ -198,21 +224,21 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
         if (noValuesElement != null) {
             $('#history_' + encodedId).hide();
             $('#no_data_' + encodedId).show();
-            return;
         }
+        else {
+            $('#history_' + encodedId).show();
+            $('#no_data_' + encodedId).hide();
 
-        $('#history_' + encodedId).show();
-        $('#no_data_' + encodedId).hide();
+            if (needFillFromTo) {
+                let to = getToDate();
+                let from = new Date($(`#oldest_date_${encodedId}`).val());
 
-        if (needFillFromTo) {
-            let to = getToDate();
-            let from = new Date($(`#oldest_date_${encodedId}`).val());
-            
-            from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
-            $(`#from_${encodedId}`).val(datetimeLocal(from));
-            $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+                from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
+                $(`#from_${encodedId}`).val(datetimeLocal(from));
+                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
 
-            reloadHistoryRequest(from, to, body);
+                reloadHistoryRequest(from, to, body);
+            }
         }
 
         $("#sensorHistorySpinner").addClass("d-none");
@@ -233,25 +259,26 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         $("#tableHistoryRefreshButton").addClass("d-none");
         $('#allColumnsButton').addClass("d-none");
         let parsedData = JSON.parse(data);
+
         if (parsedData.length === 0) {
             $('#history_' + encodedId).hide();
             $('#no_data_' + encodedId).show();
-            return;
         }
+        else {
+            $('#history_' + encodedId).show();
+            $('#no_data_' + encodedId).hide();
 
-        $('#history_' + encodedId).show();
-        $('#no_data_' + encodedId).hide();
+            if (needFillFromTo) {
+                let from = new Date(parsedData[0].receivingTime);
+                let to = getToDate();
 
-        if (needFillFromTo) {
-            let from = new Date(parsedData[0].receivingTime);
-            let to = getToDate();
+                $(`#from_${encodedId}`).val(datetimeLocal(from));
+                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
 
-            $(`#from_${encodedId}`).val(datetimeLocal(from));
-            $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
-
-            reloadHistoryRequest(from, to, body);
+                reloadHistoryRequest(from, to, body);
+            }
+            displayGraph(data, sensorInfo, `graph_${encodedId}`, encodedId);
         }
-        displayGraph(data, sensorInfo, `graph_${encodedId}`, encodedId);
 
         $("#sensorHistorySpinner").addClass("d-none");
         $('#historyDataPanel').removeClass('hidden_element');
@@ -417,7 +444,7 @@ let sensorColumns = [
 ]
 
 window.initializeJournal = function (type) {
-    disableFromTo()
+    disableHistoryPeriod()
     hideBarsCount();
 
     if (JournalTable) {
@@ -431,16 +458,16 @@ window.initializeJournal = function (type) {
     });
 }
 
-window.disableFromTo = function () {
-    changeVisibility('datePickerFromTo', true)
+window.disableHistoryPeriod = function () {
+    changeVisibility(true);
 }
 
-window.enableFromTo = function () {
-    changeVisibility('datePickerFromTo');
+window.enableHistoryPeriod = function () {
+    changeVisibility(false);
 }
 
-function changeVisibility(containerId, disable = false) {
-    for (let el of $(`#${containerId} label, #${containerId} input, #${containerId} button`)) {
+function changeVisibility(disable) {
+    for (let el of $(`#datePickerFromTo label, #datePickerFromTo input, #datePickerFromTo button, #datePickerFromTo select`)) {
         el.disabled = disable;
         el.style.opacity = disable ? "0.5" : "1";
     }

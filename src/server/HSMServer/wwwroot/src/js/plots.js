@@ -76,8 +76,7 @@ export class Plot {
                     title: {
                         //text: 'Time',
                         font: {
-                            family: 'Courier New, monospace',
-                            size: 18,
+                            size: 14,
                             color: '#7f7f7f'
                         }
                     },
@@ -89,8 +88,7 @@ export class Plot {
                     title: {
                         text: this.#customYaxisName,
                         font: {
-                            family: 'Courier New, monospace',
-                            size: 18,
+                            size: 14,
                             color: '#7f7f7f'
                         }
                     },
@@ -467,6 +465,9 @@ export class TimeSpanPlot extends ErrorColorPlot {
     }
 
     static getTimeSpanValue(value) {
+        if (!isNaN(Number(value.value)))
+            return new TimeSpan.TimeSpan(value.value, 0, 0, 0, 0);
+        
         if (Plot.checkNaN(value.value))
             return new TimeSpan.TimeSpan(0, 0, 0, 0, 0);
 

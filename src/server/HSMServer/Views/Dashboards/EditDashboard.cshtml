@@ -58,12 +58,7 @@
             </div>
 
 
-            <select asp-for="FromPeriod" form="saveDashBoardForm" id="from_select" class="form-select" style="width: auto">
-                <option value="00:30:00">last 30 minutes</option>
-                <option value="01:00:00">last 1 hour</option>
-                <option value="03:00:00">last 3 hours</option>
-                <option value="06:00:00">last 6 hours</option>
-            </select>
+            <select asp-for="FromPeriod" asp-items="DashboardViewModel.Periods" form="saveDashBoardForm" id="from_select" class="form-select" style="width: auto"></select>
 
             <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? string.Empty : "d-none")" href="javascript:addPanel();">
                 <i class="fa-solid fa-plus">

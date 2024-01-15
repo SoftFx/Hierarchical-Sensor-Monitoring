@@ -6,76 +6,70 @@ namespace HSMServer.Datasources
 {
     public abstract class BaseChartValue
     {
-        protected long _countValues = 1;
+        private static long _idCounter = 0L;
 
+
+        public long Id { get; } = _idCounter++;
 
         public DateTime Time { get; protected set; }
 
         public string Tooltip { get; protected set; }
-
-
-        internal abstract void Apply(BaseValue value);
     }
 
 
-    public sealed class LineChartValue<T> : BaseChartValue where T : INumber<T>
+    public abstract class BaseChartValue<T> : BaseChartValue
     {
-        private double _totalSum = 0.0;
+        public T Value { get; protected set; }
 
 
-        public T Value { get; private set; }
+        internal abstract void ReapplyLast(T value, DateTime lastCollectedValue);
 
-
-        internal LineChartValue(BaseValue<T> value)
-        {
-            Time = value.Time;
-            Value = value.Value;
-        }
-
-
-        internal override void Apply(BaseValue rawValue)
-        {
-            if (_countValues++ == 1)
-                _totalSum += double.CreateChecked(Value);
-
-            if (rawValue is BaseValue<T> value)
-            {
-                _totalSum += double.CreateChecked(value.Value);
-
-                Value = T.CreateChecked(_totalSum / _countValues);
-                Tooltip = $"Aggregated ({_countValues}) values";
-            }
-        }
+        internal abstract void Apply(T value, DateTime lastCollectedValue);
     }
 
 
-    public sealed class TimeSpanChartValue : BaseChartValue
+    public sealed class LineChartValue<T> : BaseChartValue<T> where T : INumber<T>
     {
-        private double _totalTicks = 0.0;
+        private double _totalValueSum;
+        private double _totalTimeSum;
+
+        private double _lastValue;
+        private long _lastTime;
+
+        private long _countValues;
 
 
-        public TimeSpan Value { get; private set; }
-
-
-        public TimeSpanChartValue(TimeSpanValue value)
+        internal LineChartValue(BaseValue data, T value)
         {
-            Time = value.Time;
-            Value = value.Value;
+            Apply(value, data.Time);
         }
 
 
-        internal override void Apply(BaseValue rawValue)
+        internal override void Apply(T value, DateTime lastCollectedValue)
         {
-            if (_countValues++ == 1)
-                _totalTicks += double.CreateChecked(Value.Ticks);
+            _lastValue = double.CreateChecked(value);
+            _lastTime = lastCollectedValue.Ticks;
 
-            if (rawValue is TimeSpanValue value)
+            _totalValueSum += _lastValue;
+            _totalTimeSum += _lastTime;
+            _countValues++;
+
+            Value = T.CreateChecked(_totalValueSum / _countValues);
+            Time = new DateTime((long)(_totalTimeSum / _countValues));
+
+            Tooltip = _countValues > 1 ? $"Aggregated ({_countValues}) values" : string.Empty;
+        }
+
+        internal override void ReapplyLast(T value, DateTime lastCollectedValue)
+        {
+            if (_countValues > 0)
             {
-                _totalTicks += double.CreateChecked(value.Value.Ticks);
-
-                Value = TimeSpan.FromTicks(long.CreateChecked(_totalTicks / _countValues));
-                Tooltip = $"Aggregated ({_countValues}) values";
+                _totalValueSum -= _lastValue;
+                _totalTimeSum -= _lastTime;
+                _countValues--;
             }
+
+            Apply(value, lastCollectedValue);
         }
     }
 }
