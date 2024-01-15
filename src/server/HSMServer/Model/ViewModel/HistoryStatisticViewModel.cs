@@ -5,22 +5,13 @@ using System;
 
 namespace HSMServer.Model.ViewModel
 {
-
-
-
-    public class SensorHistoryStatisticViewModel
+    public sealed class HistoryStatisticViewModel
     {
         public DateTime LastUpdate { get; private set; } = DateTime.MinValue;
 
-        public long Size { get; private set; }
-
         public double Percent { get; private set; }
 
-
-        public string KeyValueBalance { get; private set; }
-
-        public string TotalSize { get; private set; }
-
+        public long TotalSize { get; private set; }
 
         public long DataCount { get; private set; }
 
@@ -30,17 +21,15 @@ namespace HSMServer.Model.ViewModel
         public string TotalInfo { get; private set; }
 
 
-        public SensorHistoryStatisticViewModel() { }
+        public HistoryStatisticViewModel() { }
 
-        public SensorHistoryStatisticViewModel Update(SensorHistoryInfo historyInfo)
+        public HistoryStatisticViewModel Update(SensorHistoryInfo historyInfo)
         {
             LastUpdate = DateTime.UtcNow;
 
-            Percent = (double)historyInfo.ValuesSizeBytes / historyInfo.TotalSizeBytes * 100;
-            Size = historyInfo.TotalSizeBytes;
+            TotalSize = historyInfo.TotalSizeBytes;
+            Percent = (double)historyInfo.ValuesSizeBytes / TotalSize * 100;
 
-            KeyValueBalance = $"{Percent:F2}% values";
-            TotalSize = Size.ToReadableMemoryFormat();
             DataCount = historyInfo.DataCount;
 
             RefreshTotalInfo();
@@ -48,7 +37,7 @@ namespace HSMServer.Model.ViewModel
             return this;
         }
 
-        public SensorHistoryStatisticViewModel Update(NodeHistoryInfo historyInfo)
+        public HistoryStatisticViewModel Update(NodeHistoryInfo historyInfo)
         {
             var totalValuesSizeCount = 0L;
             var totalKeysSizeCount = 0L;
@@ -72,21 +61,21 @@ namespace HSMServer.Model.ViewModel
 
             CalculateTotal(historyInfo);
 
-            Percent = (double)totalValuesSizeCount / (totalKeysSizeCount + totalValuesSizeCount) * 100;
-            Size = totalKeysSizeCount + totalValuesSizeCount;
-
-            KeyValueBalance = $"{Percent:F2}% values";
-            TotalSize = (totalKeysSizeCount + totalValuesSizeCount).ToReadableMemoryFormat();
             DataCount = totalData;
+            TotalSize = totalKeysSizeCount + totalValuesSizeCount;
+            Percent = (double)totalValuesSizeCount / TotalSize * 100;
 
             RefreshTotalInfo();
 
             return this;
         }
 
+
+        internal string ToCsvFormat(string path) => $"\"{path}\";{DataCount};{TotalSize};{Percent:F4}";
+
         private void RefreshTotalInfo()
         {
-            TotalInfo = $"{TotalSize} ({KeyValueBalance} from {DataCount} records) updated at {LastUpdate.ToDefaultFormat()}";
+            TotalInfo = $"{TotalSize.ToReadableMemoryFormat()} ({Percent:F2}% values from {DataCount} records) updated at {LastUpdate.ToDefaultFormat()}";
         }
     }
 }

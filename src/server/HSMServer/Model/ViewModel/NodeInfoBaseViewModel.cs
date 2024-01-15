@@ -38,7 +38,7 @@ namespace HSMServer.Model.ViewModel
 
         public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; set; } = [];
 
-        public SensorHistoryStatisticViewModel HistoryStatistic { get; }
+        public HistoryStatisticViewModel HistoryStatistic { get; }
 
 
         public string EncodedId { get; set; }

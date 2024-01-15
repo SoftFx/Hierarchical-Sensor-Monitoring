@@ -2,7 +2,6 @@
 using HSMServer.Helpers;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
-using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Model.TreeViewModel
 {

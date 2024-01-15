@@ -7,6 +7,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.StatisticInfo;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
@@ -23,7 +24,6 @@ using HSMServer.Model.ViewModel;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -31,7 +31,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMServer.Core.TableOfChanges;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
@@ -46,8 +45,6 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
 
-
-        private static bool _run;
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
                               IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager) : base(userManager)
@@ -529,33 +526,23 @@ namespace HSMServer.Controllers
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
-        [HttpGet]
-        public void RefreshAllHistory()
-        {
-            if (!_run)
-            {
-                var logger = LogManager.GetLogger(GetType().Name);
-
-                _run = true;
-
-                System.IO.File.Delete(Path.Combine(Environment.CurrentDirectory, "DBstats.csv"));
-
-                logger.Warn("Start calculating");
-                foreach (var root in _treeViewModel.GetRootProducts())
-                {
-                    logger.Warn($"Starting calculate {root.Name}");
-                    RefreshHistoryInfo(root.Id);
-                    logger.Warn($"Stop calculate {root.Name}");
-                }
-
-                logger.Warn("All products is calculated!!!");
-                _run = false;
-            }
-        }
 
         [HttpGet]
         public string RefreshHistoryInfo(Guid id)
         {
+            void UpdateStats(ProductNodeViewModel vm, NodeHistoryInfo nodeInfo)
+            {
+                vm.HistoryStatistic.Update(nodeInfo);
+
+                foreach (var (sensorId, sensorInfo) in nodeInfo.SensorsInfo)
+                    if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
+                        sensor.HistoryStatistic.Update(sensorInfo);
+
+                foreach (var (subnodeId, subnodeInfo) in nodeInfo.SubnodesInfo)
+                    if (_treeViewModel.Nodes.TryGetValue(subnodeId, out var node))
+                        UpdateStats(node, subnodeInfo);
+            }
+
             if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
             {
                 sensor.HistoryStatistic.Update(_treeValuesCache.GetSensorHistoryInfo(sensor.Id));
@@ -573,19 +560,7 @@ namespace HSMServer.Controllers
             return "Unknown";
         }
 
-        private void UpdateStats(ProductNodeViewModel vm, NodeHistoryInfo nodeInfo)
-        {
-            vm.HistoryStatistic.Update(nodeInfo);
-
-            foreach (var (sensorId, sensorInfo) in nodeInfo.SensorsInfo)
-                if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
-                    sensor.HistoryStatistic.Update(sensorInfo);
-
-            foreach (var (subnodeId, subnodeInfo) in nodeInfo.SubnodesInfo)
-                if (_treeViewModel.Nodes.TryGetValue(subnodeId, out var node))
-                    UpdateStats(node, subnodeInfo);
-        }
-
+        [HttpGet]
         public FileResult SaveHistoryInfo(Guid id)
         {
             string nodePath = null;
@@ -600,11 +575,7 @@ namespace HSMServer.Controllers
                 void BuildContent(ProductNodeViewModel model)
                 {
                     foreach (var (_, sensor) in model.Sensors)
-                    {
-                        var stat = sensor.HistoryStatistic;
-
-                        content.AppendLine($"\"{sensor.FullPath}\";{stat.DataCount};{stat.Size};{stat.Percent:F4}");
-                    }
+                        content.AppendLine(sensor.HistoryStatistic.ToCsvFormat(sensor.FullPath));
 
                     foreach (var (_, subNode) in model.Nodes)
                         BuildContent(subNode);

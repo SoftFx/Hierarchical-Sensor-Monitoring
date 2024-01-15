@@ -17,7 +17,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public ConcurrentDictionary<string, int> AlertIcons { get; } = new();
 
-        public SensorHistoryStatisticViewModel HistoryStatistic { get; } = new();
+        public HistoryStatisticViewModel HistoryStatistic { get; } = new();
 
 
         public TimeIntervalViewModel KeepHistory { get; protected set; }
