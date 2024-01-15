@@ -2,6 +2,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Core.TableOfChanges;
 
 namespace HSMServer.BackgroundServices
 {
@@ -44,7 +45,7 @@ namespace HSMServer.BackgroundServices
 
                 _logger.Info("Start removing: {id} {product}/{path}", id, sensor.RootProductName, sensor.Path);
 
-                _cache.RemoveSensor(id);
+                _cache.RemoveSensor(id, InitiatorInfo.AsSystemInfo("Clean up"));
 
                 _logger.Info("Stop removing: {id} {product}/{path}", id, sensor.RootProductName, sensor.Path);
             }

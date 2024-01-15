@@ -33,13 +33,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestLevelDB", "..\..\sandbo
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDatabase.LevelDB.Tests", "..\..\tests\HSMDatabase.LevelDB.Tests\HSMDatabase.LevelDB.Tests.csproj", "{04411C26-84E6-4178-B8DB-DE86EBCA7062}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMSensorDataObjects", "..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj", "{0860D59C-086B-4134-8498-4C070BDBA8C4}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMPingModule", "..\..\module\HSMPingModule\HSMPingModule.csproj", "{477D951F-1F60-4203-ADE5-3F2437C375AA}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Modules", "Modules", "{98F0E59D-1A22-4F8B-969E-08FDA6CB9DB2}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDataCollector", "..\..\collector\HSMDataCollector\HSMDataCollector.csproj", "{69E7410A-3C8E-4A6F-984A-F26A4A8EFC49}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -91,18 +87,10 @@ Global
 		{04411C26-84E6-4178-B8DB-DE86EBCA7062}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{04411C26-84E6-4178-B8DB-DE86EBCA7062}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{04411C26-84E6-4178-B8DB-DE86EBCA7062}.Release|Any CPU.Build.0 = Release|Any CPU
-		{0860D59C-086B-4134-8498-4C070BDBA8C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0860D59C-086B-4134-8498-4C070BDBA8C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0860D59C-086B-4134-8498-4C070BDBA8C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0860D59C-086B-4134-8498-4C070BDBA8C4}.Release|Any CPU.Build.0 = Release|Any CPU
 		{477D951F-1F60-4203-ADE5-3F2437C375AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{477D951F-1F60-4203-ADE5-3F2437C375AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{477D951F-1F60-4203-ADE5-3F2437C375AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{477D951F-1F60-4203-ADE5-3F2437C375AA}.Release|Any CPU.Build.0 = Release|Any CPU
-		{69E7410A-3C8E-4A6F-984A-F26A4A8EFC49}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{69E7410A-3C8E-4A6F-984A-F26A4A8EFC49}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{69E7410A-3C8E-4A6F-984A-F26A4A8EFC49}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{69E7410A-3C8E-4A6F-984A-F26A4A8EFC49}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

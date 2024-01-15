@@ -21,6 +21,7 @@ namespace HSMServer.Dashboards
         LastValue = 55,
         Count = 56,
 
+        [Display(Name = "EMA (Value)")]
         EmaValue = 200,
         [Display(Name = "EMA (Min)")]
         EmaMin = 201,

@@ -11,6 +11,7 @@
             <div class="d-flex mx-1 align-items-center">
                 <label class="me-1">Label:</label>
                 <input id='name_input_@Model.Id' class="form-control" asp-for="Label" type="text" oninput="javascript:realtimeUpdate('@Model.Id')" />
+                <input id='name_default_@Model.Id' class="d-none" value="@Model.SensorName">
 
                 <label class="ms-2 me-1">Property:</label>
                 <select id="property_@Model.Id" class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties" onchange="javascript:realtimeUpdate('@Model.Id')"></select>

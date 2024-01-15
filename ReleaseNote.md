@@ -1,112 +1,63 @@
 # HSM Server
 
-## New entity Dashboard has been added
-New entity for HSM server. Every Dashboard includes a several Multichart panels that update in real time. Dashboard consists of:
-1. Name
-1. Description *(Markdown is supported)*
-1. TimePeriod (for what period data on charts displays)
-1. List of Multichart panels
+## Dashboards
 
-Also some key points about Dashboards:
-* New tab **Dashboards** has been added
-* Dashbord can include data from different products and folders
-* Dashboard saves Multichart panels positions
-* You can **resize** all Multichart panels as you like
-* Multichart panels are uploaded every **30 seconds**
-* Dashboards are saved in a special database called **Server layout**
-* Every Dashboard has **Autofitting** logic and can sort all your charts 2 or 3 per column automatically
-* You can **View/Hide legend** for every Multichart panel
+* Supporting of plotting bar sensors properties has been added.
+* Plotted properties for datasource have been added. **Value**, **EMA (Value)** for simple sensors. **Min**, **Mean**, **Max**, **Count**, **EMA (Min)**, **EMA (Mean)**, **EMA (Max)**, **EMA (Count)** for bar sensors.
+* New time periods have been added: **12 hours**, **1 day**, **3 days**, **7 days**.
+* **Label** autoupdate has been added after change **Property** parameter.
+* **Color** and **Label** updating for datasource has been fixed.
+* Multiline realtime update after a few hours has been fixed.
+* Plot for double charts with NaN values has been fixed.
 
-## New entity Multichart has been added 
-This is a special chart that supports a several sources at once. Can be created only as a part of Dashboard. Supports only line graphics (like Integer, Double and TimeSpan sensors). Also current chart supports aggregation data logic with a special tooltip. Every Multichart consists of:
-1. Name
-1. Description *(Markdown is supported)*
-1. DashboardId
-1. List of data sourses
-
-Also some key points about Multichart panels:
-* Max number of visible data is 100 points per datasource. If current count of data is greater than 100, all points are aggregated.
-* Datasources support **Drap and Drop** logic from Tree
-
-## New entity Datasource has been added
-This is a part of Multichart entity, which describes how to plot different sensor data. That entity consists of:
-1. Label - how to label data on a chart
-1. Color
-1. SensorId - from which sensor data for line rendering should be taken
-
-## Database
-* **Shapshot database** has been renamed to **Snapshot database**.
-* **Server layout** database has been added in backup logic.
-
-## Sensor info
-* **Alerts** have been added to View mode by default.
-* **TTL FromParent (Never)** has been restored as visible alert.
-* **EMA statistics** toggle switch has been added.
-
-## Sensor settings
-* EMA calculation for sensors have been added. **EMA (Value)** for Integer and Double sensors and **EMA (Min)**, **EMA (Mean)**, **EMA (Max)** and **EMA (Count)** for DoubleBar and IntegerBar sensors.
-* New units **Requests**, **Responses** and **Count** have been added.
 
 ## Alerts
-* View for alerts with empty notifications has been improved.
-* New **EMA (Value)** property for instant sensors has been added.
-* New **EMA (Min)**, **EMA (Mean)**, **EMA (Max)** and **EMA (Count)** properties for DoubleBar and IntegerBar sensors have been added.
-* New **FirstValue** property for bar sensors have been added.
-* Template variables for new properties have been added.
+* **Schedule** logic has been added. Available periods are: **1 hour**, **1 day**, **1 week**. All notifications are grouped by time and sent according to setting. 
+* **Add alert** logic - priority check has been added. New alerts cannot be added if alert with highest priority is exists.
 
-## Table history
-* **Last value** and **Count** columns have been swapped.
-* **First value** column for bar sensors has been added.
-* **First value** and **Last value** columns are hidden by default.
-* **EMA** columns have been added. They are visible only if **EMA statistics** setting is switched on.
+## History
+* **Predefined periods** for fast searching have been added. Available values: **Default (300 items)**, **Last day**, **Last 3 days**, **Last week**, **Last 2 weeks**, **Last month**, **Custom**.
+* All old search logic has been moved to **Custom** item.
+* Persistanse for history search has been added. State is saved to browser local storage.
+* Tooltip with help for **Bars count** setting has been added.
 
-## Tree search
-* **Clear** button has been added.
-* **Autoupdate** by search string after 1 sec has been added.
+## Sensor
+* **Edit** link has been moved to icon and moved next to sensor path.
+* **Unit** info has been added after path for selected sensor.
+* More readable dispaly values for **Units** have been added.
+* **EMA** - description in help has been improved.
+* **EMA** update via REST API has been fixed.
+* **Change status** for empty sensor has been fixed.
+
+## Charts
+* Multiple plotting for Bar properties has been fixed.
+* **Reset** button behavior with long **Service alive** value has been fixed.
+
+## Journal
+* Removing **reason** has been added (Cleanup, Manual remove).
+* Mute period has been added for journal record.
+
+## Tree
+* Context menu style for empty sensors has been fixed.
+* Context menu for node without sensors has been fixed.
+* **Tree reloading** on **Home** page after double click on node has been fixed.
+* **Scroll** to selected item after search cleaning has been added.
+
+## Alert constructor
+* New block for setting scheduled alerts **scheduled every** with values **Hour**, **Day**, **Week** have been added.
+* New block for setting scheduled alerts **starting at** with calendar has been added. Default value - next hour after current date.
+
+## Alert import/export
+* New properties for Scheduled alerts have been added.
 
 ## Other
-* Names of nodes have been added to confirmation dialog for **Multi removing** logic.
-* View for **TimeSpan zero** value has been fixed (now it is 0 seconds).
-* All items **Delete** have been renamed to **Remove**.
-* Searching by **Path** column has been added in Journal.
-* Importing alerts with different templates to the same sensor has been fixed.
+* .NET version has been increased to .NET8
+* All alerts for default sensors have been migrated to EMA version (for **Value**, **Min**, **Mean**, **Max**, **Count** properties).
+* Copyright has been increased to 2024.
 
-# HSM Datacollector v.3.2.4
+# HSM Datacollector v.3.2.5
+* **AndSendScheduledNotification** method has been added for Alerts API.
 
-## New default group **Diagnostic sensors** has been added
-* **Package content size** sensor has been added in *.module/Collector queue stats*. This sensor calculates a body size for each package in Collector messages queue.
-* **Package process time** sensor has been added in *.module/Collector queue stats*. This sensor calculates an average process time for each value in package in Collector messages queue.
-* **Values count in package** sensor has been added in *.module/Collector queue stats*. This sensor calculates a total count of values in each package in Collector messages queue.
-* **Queue overflow** sensor has been added in *.module/Collector queue stats*. This sensor calculates a total count of values which have been removed from Collector messages queue without sending to Server.
-
-## Default sensors
-* New facade for all sensors **AddAllDefaultSensors** has been added.
-* New facade for all module sensors **AddAllModuleSensors** has been added.
-* New facade for all computer sensors **AddAllComputerSensors** has been added.
-* **Collector errors** sensor has been added in *.module*. Sends all collector errors and exceptions to the server.
-* New default sensors **Windows OS info/Version & patch** have been added.
-* **Time in GC** - new computer default sensor has been added (total computer time).
-* New process default sensor **Process time in GC** has been added.
-
-## Sensors changes
-* Default prediction logic for **Free disk space prediction** has been changed. Now it uses speed EMA. Default alerts have been removed.
-* Preformance counter category for all disks sensors have been changed from **Physical Disk** to **Logical disk**.
-* All bar alerts have been changed from **Mean** to **EMA (Mean)** with 5 min **Confirmation period**.
-
-## Sensors settings
-* New setting **IsPrioritySensor** has been added. If **IsPrioritySensor** is true, then data skip global message queue and send directly to a HSM server.
-* New setting **Statistics** has been added. You can swith on server side EMA calculations.
-
-## Alert API
-* New conditions for **EmaValue** has been added for instant alerts.
-* New conditions for **EmaMin**, **EmaMax**, , **EmaMean**, **EmaCount** have been added for Bar alerts.
-* New conditions for **FirstValue** has been added for Bar alerts.
-
-## Bugfixing
-* **Windows Info/Last Update** and **Windows Info/Last restart** sensors have been fixed.
-
-# HSM Datacollector v.3.1.1
-
-* New unit types **Count**, **Requests**, **Responses** have been added.
-* New sensor setting **Statistics** have been added. Possible values are **None**, **EMA**.
-* New propertires for alert condition **FirstValue**, **EmaMin**, **EmaMax**, , **EmaMean**, **EmaCount** have been added. 
+# HSM Datacollector v.3.1.2
+* New properties for Scheduled alerts to **AlertUpdateRequest** have been added.
+* New enum **AlertRepeatMode** (Hourly, Daily, Weekly) has been added.

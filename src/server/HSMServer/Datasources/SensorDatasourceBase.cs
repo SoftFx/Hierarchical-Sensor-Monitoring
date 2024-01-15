@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Collections;
+using HSMServer.Core;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
@@ -24,12 +25,15 @@ namespace HSMServer.Datasources
         private const int MaxVisibleCnt = 100;
 
         private readonly CLinkedList<BaseChartValue> _newVisibleValues = new();
-        private readonly CLinkedList<BaseChartValue> _curValues = new();
+        private readonly CLinkedList<BaseChartValue> _curVisibleValues = new();
 
         private BaseSensorModel _sensor;
 
         private long _removedValuesCnt, _aggrValuesStep;
         private bool _aggreagateValues;
+
+        protected BarBaseValue _lastBarValue; //TODO move to special derived class
+        protected bool _isBarSensor;
 
         protected PlottedProperty _plotProperty;
 
@@ -48,6 +52,8 @@ namespace HSMServer.Datasources
         {
             _plotProperty = plotProperty;
             _sensor = sensor;
+
+            _isBarSensor = sensor.Type.IsBar();
 
             _sensor.ReceivedNewValue += AddNewValue;
 
@@ -87,7 +93,7 @@ namespace HSMServer.Datasources
             return new()
             {
                 ChartType = _aggreagateValues ? AggregatedType : NormalType,
-                Values = _curValues.Cast<object>().ToList(),
+                Values = _curVisibleValues.Cast<object>().ToList(),
             };
         }
 
@@ -95,6 +101,7 @@ namespace HSMServer.Datasources
             new()
             {
                 NewVisibleValues = _newVisibleValues.Cast<object>().ToList(),
+
                 RemovedValuesCount = _removedValuesCnt,
                 IsTimeSpan = _sensor.Type is SensorType.TimeSpan
             };
@@ -106,9 +113,16 @@ namespace HSMServer.Datasources
         }
 
 
+        protected bool IsPartialValueUpdate(BaseValue newValue)
+        {
+            return _isBarSensor && newValue is BarBaseValue barValue &&
+                   _lastBarValue?.OpenTime == barValue?.OpenTime &&
+                   _lastBarValue.CloseTime == barValue?.CloseTime;
+        }
+
         protected void AddVisibleToLast(BaseChartValue value)
         {
-            _curValues.AddLast(value);
+            _curVisibleValues.AddLast(value);
             _newVisibleValues.AddLast(value);
         }
 
@@ -118,7 +132,7 @@ namespace HSMServer.Datasources
 
             _aggreagateValues = rawList.Count > MaxVisibleCnt;
             _aggrValuesStep = _aggreagateValues ? (request.To - request.From).Ticks / MaxVisibleCnt : 0L;
-            _curValues.Clear();
+            _curVisibleValues.Clear();
 
             foreach (var raw in rawList)
                 AddNewValue(raw);
@@ -126,9 +140,11 @@ namespace HSMServer.Datasources
 
         private void AddNewValue(BaseValue value)
         {
-            if (_aggreagateValues && _aggrValuesStep > 0)
+            if (IsPartialValueUpdate(value))
+                ApplyToLast(value);
+            else if (_aggreagateValues && _aggrValuesStep > 0)
             {
-                if (_curValues.Count == 0 || _curValues.Last.Value.Time.Ticks + _aggrValuesStep < value.Time.Ticks)
+                if (_curVisibleValues.Count == 0 || _curVisibleValues.Last.Value.Time.Ticks + _aggrValuesStep < value.Time.Ticks)
                     AddVisibleValue(value);
                 else
                     ApplyToLast(value);
@@ -136,9 +152,9 @@ namespace HSMServer.Datasources
             else
                 AddVisibleValue(value);
 
-            while (_curValues.Count > MaxVisibleCnt)
+            while (_curVisibleValues.Count > MaxVisibleCnt)
             {
-                _curValues.RemoveFirst();
+                _curVisibleValues.RemoveFirst();
                 _removedValuesCnt = Math.Min(++_removedValuesCnt, MaxVisibleCnt);
             }
 

@@ -118,7 +118,7 @@ namespace HSMServer.Core.Cache
             NotifyAboutProductChange(product);
         }
 
-        public void RemoveProduct(Guid productId)
+        public void RemoveProduct(Guid productId, InitiatorInfo initiator = null)
         {
             void RemoveProduct(Guid productId)
             {
@@ -129,7 +129,7 @@ namespace HSMServer.Core.Cache
                     RemoveProduct(subProductId);
 
                 foreach (var (sensorId, _) in product.Sensors)
-                    RemoveSensor(sensorId);
+                    RemoveSensor(sensorId, initiator, parentId: product.Parent?.Id);
 
                 RemoveBaseNodeSubscription(product);
 
@@ -346,19 +346,19 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null)
+        public void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null)
         {
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
 
             RemoveSensorPolicies(sensor); // should be before removing from parent
 
-            if (sensor.Parent is not null && _tree.TryGetValue(sensor.Parent.Id, out var parent))
+            if (sensor.Parent is not null && (_tree.TryGetValue(sensor.Parent.Id, out var parent) || parentId is not null))
             {
-                parent.RemoveSensor(sensorId);
-                _journalService.RemoveRecords(sensorId, parent.Id);
+                parent?.RemoveSensor(sensorId);
+                _journalService.RemoveRecords(sensorId, parentId ?? parent.Id);
 
-                _journalService.AddRecord(new JournalRecordModel(parent.Id, initiator)
+                _journalService.AddRecord(new JournalRecordModel(parentId ?? parent.Id, initiator)
                 {
                     Enviroment = "Remove sensor",
                     Path = sensor.FullPath,

@@ -465,6 +465,9 @@ export class TimeSpanPlot extends ErrorColorPlot {
     }
 
     static getTimeSpanValue(value) {
+        if (!isNaN(Number(value.value)))
+            return new TimeSpan.TimeSpan(value.value, 0, 0, 0, 0);
+        
         if (Plot.checkNaN(value.value))
             return new TimeSpan.TimeSpan(0, 0, 0, 0, 0);
 

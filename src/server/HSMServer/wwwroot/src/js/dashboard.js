@@ -1,14 +1,14 @@
-import {convertToGraphData} from "./plotting";
-import {pan} from "plotly.js/src/fonts/ploticon";
-import {Colors, Plot, TimeSpanPlot} from "./plots";
+import { convertToGraphData } from "./plotting";
+import { pan } from "plotly.js/src/fonts/ploticon";
+import { Colors, Plot, TimeSpanPlot } from "./plots";
 
-window.getRangeDate = function (){
+window.getRangeDate = function () {
     let period = $('#from_select').val();
 
     let currentDate = new Date(new Date(Date.now()).toUTCString());
     let lastDate = currentDate.toISOString()
     let newDate
-    switch (period){
+    switch (period) {
         case "00:30:00":
             newDate = currentDate.setMinutes(currentDate.getMinutes() - 30)
             break
@@ -21,11 +21,46 @@ window.getRangeDate = function (){
         case "06:00:00":
             newDate = currentDate.setHours(currentDate.getHours() - 6)
             break
+        case "12:00:00":
+            newDate = currentDate.setHours(currentDate.getHours() - 12)
+            break
+        case "1.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 1)
+            break
+        case "3.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 3)
+            break
+        case "7.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 7)
+            break
+
         default:
             newDate = currentDate.setHours(currentDate.getHours() - 6)
     }
-    
+
     return [new Date(newDate).toISOString(), lastDate]
+}
+
+function defaultLabelUpdate(id, name) {
+    let sources = $('#sources').find('li');
+    if (sources.length <= id)
+        return name;
+
+    let row = sources[id];
+    let label = $(row).find('input[id^="name_input"]')
+    let property = $(row).find(':selected');
+    let sensorNameDefault = $(row).find('input[id^="name_default"]').val();
+
+    if (label.length === 0)
+        return name;
+
+    if (label.val().startsWith(sensorNameDefault)) {
+        label.val(sensorNameDefault + ` (${property.text()})`)
+
+        return label.val();
+    }
+
+    return name;
 }
 
 export function getPlotSourceView(id) {
@@ -38,7 +73,7 @@ export function getPlotSourceView(id) {
                 return resolve(data);
             else
                 return reject(data.error)
-        }).fail(function (data){
+        }).fail(function (data) {
             reject(data.responseText)
         })
     })
@@ -74,16 +109,16 @@ window.insertSourceHtml = function (data) {
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.chartType == 1);
-    
+
     let layoutUpdate = {
-        'xaxis.visible' : true,
-        'xaxis.type' : 'date',
-        'xaxis.autorange' : false,
-        'xaxis.range' : getRangeDate(),
-        'yaxis.visible' : true,
-        'yaxis.title.text' : data.sensorInfo.units,
-        'yaxis.title.font.size' : 14,
-        'yaxis.title.font.color' : '#7f7f7f',
+        'xaxis.visible': true,
+        'xaxis.type': 'date',
+        'xaxis.autorange': false,
+        'xaxis.range': getRangeDate(),
+        'yaxis.visible': true,
+        'yaxis.title.text': data.sensorInfo.units,
+        'yaxis.title.font.size': 14,
+        'yaxis.title.font.color': '#7f7f7f',
     }
 
     if (data.values.length === 0) {
@@ -100,8 +135,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
 
     Plotly.addTraces(id, plot.getPlotData()).then(
         (data) => {
-            if (plot instanceof TimeSpanPlot)
-            {
+            if (plot instanceof TimeSpanPlot) {
                 let y = [];
                 for (let i of $(`#${id}`)[0].data)
                     y.push(...i.y);
@@ -110,7 +144,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
                     return element !== null;
                 })
                 let timespanLayout = plot.getLayout(y);
-                
+
                 timespanLayout.margin = {
                     autoexpand: true,
                     l: 30,
@@ -118,32 +152,23 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
                     t: 30,
                     b: 40,
                 };
-                
+
                 timespanLayout.legend = {
                     y: 0,
                     orientation: "h",
                     yanchor: "bottom",
                     yref: "container"
                 };
-                
+
                 timespanLayout.xaxis.automargin = true;
-                
+
                 Plotly.relayout(id, timespanLayout)
             }
 
             $('#emptypanel').hide()
 
-            let autorange = false;
-            for(let i of $(`#${id}`)[0].data){
-                if (i.x[0] !== null) {
-                    autorange = true;
-                    break;
-                }
-                else
-                    autorange = false;
-            }
-
-            layoutUpdate['xaxis.autorange'] = autorange;
+            if (id === 'multichart')
+                layoutUpdate['xaxis.autorange'] = true;
 
             Plotly.relayout(id, layoutUpdate)
         }
@@ -152,29 +177,29 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId);
 }
 
-window.addNewSourceHtml = function (data, id){
+window.addNewSourceHtml = function (data, id) {
     insertSourceHtml(data);
     insertSourcePlot(data, id);
 }
 
-export function initDropzone(){
+export function initDropzone() {
     window.dragMoveListener = dragMoveListener
-    
+
     window.interact('.dropzone').dropzone({
         overlap: 0.75,
 
         checker: function (
-            dragEvent,         
-            event,             
-            dropped,           
-            dropzone,          
-            dropzoneElement,   
-            draggable,         
+            dragEvent,
+            event,
+            dropped,
+            dropzone,
+            dropzoneElement,
+            draggable,
             draggableElement
         ) {
             let dropzoneRect = dropzoneElement.getBoundingClientRect();
             let targetRect = $(`#${dragEvent.target.id}.cloned`)[0].getBoundingClientRect();
-            
+
             if (targetRect.x > dropzoneRect.x && targetRect.y > dropzoneRect.y &&
                 targetRect.width + targetRect.x < dropzoneRect.width + dropzoneRect.x &&
                 targetRect.height + targetRect.y < dropzoneRect.height + dropzoneRect.y)
@@ -182,7 +207,7 @@ export function initDropzone(){
 
             return false;
         },
-        
+
         ondropactivate: function (event) {
             event.target.classList.add('drop-active')
         },
@@ -215,12 +240,12 @@ export function initDropzone(){
             modifiers: [],
             autoScroll: true,
             listeners: {
-                start (event) {
+                start(event) {
                     var interaction = event.interaction;
                     if (interaction.pointerIsDown && !interaction.interacting() && event.currentTarget.getAttribute('clonable') != 'false') {
                         var original = event.currentTarget;
                         var clone = event.currentTarget.cloneNode(true);
-                        clone.setAttribute('clonable','false');
+                        clone.setAttribute('clonable', 'false');
                         clone.style.position = 'fixed';
                         let rect = original.getBoundingClientRect();
                         clone.style.left = rect.left + 'px';
@@ -238,74 +263,109 @@ export function initDropzone(){
 }
 
 window.initDashboard = function () {
+    const currentRange = getRangeDate();
+    const layoutUpdate = {
+        'xaxis.range': currentRange
+    }
+    for (let i of $('[id^="panelChart_"]'))
+        Plotly.relayout(i, layoutUpdate)
+
     const interactPanelResize = window.interact('.resize-draggable')
     const interactPanelDrag = window.interact('.name-draggable')
     addDraggable(interactPanelDrag)
     addResizable(interactPanelResize)
-    for (let i in currentPanel){
-        currentPanel[i].requestTimeout = setInterval(function() {
+
+    for (let i in currentPanel) {
+        currentPanel[i].requestTimeout = setInterval(function () {
             $.ajax({
                 type: 'get',
                 url: window.location.pathname + '/SourceUpdate' + `/${currentPanel[i].panelId}/${i}`,
-            }).done(function(data){
+            }).done(function (data) {
                 if (!$.trim(data))
                     return;
-                
+
                 if (data.newVisibleValues.length > 0) {
                     let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
 
                     let correctId = 0;
 
-                    for(let j of plot.data){
+                    for (let j of plot.data) {
                         if (j.id === i)
                             break;
 
                         correctId += 1;
                     }
-                    
+
                     let lastTime = new Date(0);
 
                     if (plot.data[correctId] !== undefined && plot.data[correctId].x.length > 0)
                         lastTime = new Date(plot.data[correctId].x.at(-1));
-                    
+
+                    let prevData = plot.data[correctId];
+                    let prevId = prevData.ids !== undefined && prevData.ids?.length !== 0 ? prevData.ids.at(-1) : undefined;
+                    if (prevData.ids === undefined)
+                        prevData.ids = [];
+                    let redraw = false;
+
                     let x = [];
                     let y = [];
                     let customData = []
                     let isTimeSpan = data.isTimeSpan !== undefined && data.isTimeSpan === true;
-                    for(let j of data.newVisibleValues){
+                    for (let j of data.newVisibleValues) {
                         if (lastTime >= new Date(j.time))
                             continue;
 
-                        if (isTimeSpan) 
-                        {
+                        if (isTimeSpan) {
                             let timespanValue = TimeSpanPlot.getTimeSpanValue(j);
                             customData.push(Plot.checkError(j) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, j) + '<br>' + j.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, j))
                             x.push(j.time)
                             y.push(timespanValue.totalMilliseconds())
                         }
-                        else 
-                        {
+                        else {
+                            if (prevId !== undefined && j.id === prevId) {
+                                redraw = true;
+                                prevData.x.pop();
+                                prevData.y.pop();
+                                prevData.customdata.pop();
+                            }
                             x.push(j.time);
                             y.push(j.value);
-                            customData.push(j.value);
+                            prevData.ids.push(j.id)
+                            let custom = j.value;
+                            if (j.tooltip !== null)
+                                custom += `<br>${j.tooltip}`;
+
+                            customData.push(custom);
                         }
-  
+
                     }
 
-                    if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null){
-                        Plotly.update(plot, {x :[[]], y:[[]]}, { 'xaxis.autorange' : true }, correctId)
+                    if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null) {
+                        Plotly.update(plot, { x: [[]], y: [[]] }, { 'xaxis.autorange': true }, correctId)
                     }
-                    
-                    Plotly.extendTraces(plot, {
-                        y: [y],
-                        x: [x],
-                        customdata: [customData]
-                    }, [correctId], 100).then(
-                        (data) => {
-                            if (isTimeSpan)
-                                TimespanRelayout(data);
-                        }
-                    )
+
+                    if (redraw) {
+                        prevData.x.push(...x)
+                        prevData.y.push(...y)
+                        prevData.customdata.push(...customData)
+                        Plotly.deleteTraces(plot, correctId);
+                        Plotly.addTraces(plot, prevData);
+                        DefaultRelayout(plot);
+                    }
+                    else {
+                        Plotly.extendTraces(plot, {
+                            y: [y],
+                            x: [x],
+                            customdata: [customData]
+                        }, [correctId], 100).then(
+                            (data) => {
+                                if (isTimeSpan)
+                                    TimespanRelayout(data);
+                                else
+                                    DefaultRelayout(data);
+                            }
+                        )
+                    }
                 }
             })
         }, 30000)
@@ -320,11 +380,20 @@ function TimespanRelayout(data) {
     y = y.filter(element => {
         return element !== null;
     })
-    
+
     let layoutTicks = TimeSpanPlot.getLayoutTicks(y);
     let layoutUpdate = {
-        'yaxis.ticktext' : layoutTicks[1],
-        'yaxis.tickvals' : layoutTicks[0]
+        'yaxis.ticktext': layoutTicks[1],
+        'yaxis.tickvals': layoutTicks[0]
+    }
+
+    Plotly.relayout(data.id, layoutUpdate)
+}
+
+function DefaultRelayout(data) {
+    let layoutUpdate = {
+        'xaxis.range': getRangeDate(),
+        'yaxis.autorange': true,
     }
 
     Plotly.relayout(data.id, layoutUpdate)
@@ -352,7 +421,7 @@ function addDraggable(interactable) {
                     interact.snappers.grid({ x: 5, y: 5 })
                 ],
                 range: Infinity,
-                relativePoints: [ { x: 0, y: 0 } ]
+                relativePoints: [{ x: 0, y: 0 }]
             }),
         ],
         autoScroll: true,
@@ -373,7 +442,7 @@ function addDraggable(interactable) {
     })
 }
 
-function addResizable(interactable){
+function addResizable(interactable) {
     interactable.resizable({
         edges: { left: true, right: true, bottom: true, top: true },
 
@@ -400,7 +469,7 @@ function addResizable(interactable){
                 let item = $(target)
 
                 var update = {
-                    'width':  item.width(),
+                    'width': item.width(),
                     'height': item.height() - item.children('div').first().height()
                 };
 
@@ -419,7 +488,7 @@ function addResizable(interactable){
     })
 }
 
-window.updateSource = function (name, color, property, id){
+window.updateSource = function (name, color, property, id) {
     if (currentPanel[id] === undefined)
         return;
 
@@ -433,21 +502,21 @@ window.getCurrentPlotInDashboard = function (id) {
     return currentPanel[id]
 }
 
-window.syncIndexes = function(){
+window.syncIndexes = function () {
     let sources = $('#sources li');
     let plot = $('#multichart')[0].data;
-    
-    for (let i = 0 ;i < sources.length; i++) {
+
+    for (let i = 0; i < sources.length; i++) {
         currentPanel[`${sources[i].id.substring('source_'.length, sources[i].id.length)}`].oldIndex = i;
     }
 
-    for (let i = 0 ;i < plot.length; i++) {
+    for (let i = 0; i < plot.length; i++) {
         currentPanel[`${plot[i].id}`].id = i;
     }
 }
 
-window.initMultyichartCordinates = function(settings, values, id){
-    return new Promise(function(resolve, reject){
+window.initMultyichartCordinates = function (settings, values, id) {
+    return new Promise(function (resolve, reject) {
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
         let height = 1400;
@@ -462,16 +531,16 @@ window.initMultyichartCordinates = function(settings, values, id){
             reject();
 
         panel.width(currWidth)
-             .height(currHeight)
-             .css('transform', 'translate(' + transitionX + 'px, ' + transitionY + 'px)')
-             .attr('data-x', transitionX)
-             .attr('data-y', transitionY);
+            .height(currHeight)
+            .css('transform', 'translate(' + transitionX + 'px, ' + transitionY + 'px)')
+            .attr('data-x', transitionX)
+            .attr('data-y', transitionY);
 
         resolve(transitionY + currHeight * 2);
     })
 }
 
-window.initMultichart = function (chartId, height = 300, showlegend = true) {
+window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false) {
     return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
         dragmode: 'zoom',
@@ -494,7 +563,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
         },
         xaxis: {
             type: 'date',
-            autorange: false,
+            autorange: autorange,
             automargin: true,
             range: getRangeDate(),
             title: {
@@ -524,50 +593,65 @@ window.initMultichart = function (chartId, height = 300, showlegend = true) {
             'pan2d',
             'select2d',
             'autoScale2d',
-        ]
+            'autoScale2d',
+            'resetScale2d'
+        ],
+        modeBarButtonsToAdd: [
+        {
+            name: 'resetaxes',
+            _cat: 'resetscale',
+            title: 'Reset axes',
+            attr: 'zoom',
+            val: 'reset',
+            icon: Plotly.Icons.home,
+            click: (plot) => customReset(plot, getRangeDate())
+        }],
+        doubleClick: autorange ? 'reset+autosize' : autorange
     });
 }
 
-function showEventInfo (event) {
+function showEventInfo(event) {
     let id = event.target.id;
     $(`#${id}.cloned`).remove();
 }
 
-function updatePlotSource(name, color, property, id){
+function updatePlotSource(name, color, property, id) {
+    let updatedName = defaultLabelUpdate(currentPanel[id].oldIndex, name)
+
     $.ajax({
         processData: false,
         type: 'put',
         contentType: 'application/json',
         url: window.location.pathname + '/' + id,
         data: JSON.stringify({
-            name: name,
+            name: updatedName,
             color: color,
             property: property
         })
-    }).done(function (response){
-        if (response !== ''){
+    }).done(function (response) {
+        if (response !== '') {
             Plotly.deleteTraces('multichart', currentPanel[id].id);
             insertSourcePlot(response, 'multichart');
             syncIndexes();
         }
-        
+
         let layoutUpdate = {
-            'hovertemplate': `${name}, %{customdata}<extra></extra>`,
+            'hovertemplate': `${updatedName}, %{customdata}<extra></extra>`,
             'line.color': color,
             'marker.color': color,
-            name: name
+            name: updatedName
         }
 
         if (currentPanel[id] !== undefined)
             Plotly.restyle('multichart', layoutUpdate, currentPanel[id].id)
 
         currentPanel[id].updateTimeout = undefined;
-    }).fail(function (response){
+    }).fail(function (response) {
         showToast(response.responseText)
     })
 }
 
-function dragMoveListener (event) {
+function dragMoveListener(event) {
     let id = event.target.id;
     var target = $(`#${id}.cloned`)[0];
 
@@ -580,7 +664,7 @@ function dragMoveListener (event) {
     target.setAttribute('data-y', y)
 }
 
-function dragMoveListenerPanel (event) {
+function dragMoveListenerPanel(event) {
     var target = event.target.parentNode.parentElement;
 
     var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
@@ -590,7 +674,7 @@ function dragMoveListenerPanel (event) {
 
     target.setAttribute('data-x', x)
     target.setAttribute('data-y', y)
-    
+
     if (changesCounter === 0)
         changesCounter += 1;
 }

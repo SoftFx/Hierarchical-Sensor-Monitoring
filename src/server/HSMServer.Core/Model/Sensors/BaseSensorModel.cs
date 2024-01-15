@@ -46,8 +46,11 @@ namespace HSMServer.Core.Model
         [Display(Name = "min")]
         Minutes = 1012,
 
+        [Display(Name = "count")]
         Count = 1100,
+        [Display(Name = "requests")]
         Requests = 1101,
+        [Display(Name = "responses")]
         Responses = 1102,
     }
 
@@ -180,7 +183,7 @@ namespace HSMServer.Core.Model
             IsSingleton = UpdateProperty(IsSingleton, update.IsSingleton ?? IsSingleton, update.Initiator, "Singleton");
             AggregateValues = UpdateProperty(AggregateValues, update.AggregateValues ?? AggregateValues, update.Initiator, "Aggregate values");
 
-            State = UpdateProperty(State, update.State ?? State, update.Initiator, forced: true);
+            State = UpdateProperty(State, update.State ?? State, update.Initiator, forced: true, update: update, oldModel: this);
             EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting", true);
 
             if (State == SensorState.Available)
