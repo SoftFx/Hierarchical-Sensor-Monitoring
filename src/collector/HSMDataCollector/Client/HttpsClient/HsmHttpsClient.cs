@@ -10,6 +10,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Client.HttpsClient.Polly;
 
 namespace HSMDataCollector.Client
 {
@@ -20,7 +21,7 @@ namespace HSMDataCollector.Client
         private readonly ILoggerManager _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
-
+        private readonly PollyStrategy _polly;
 
         internal CommandHandler Commands { get; }
 
@@ -49,6 +50,9 @@ namespace HSMDataCollector.Client
 
             Data = new DataHandlers(queue.Data, _endpoints, _logger);
             Data.InvokeRequest += RequestToServer;
+
+            _polly = new PollyStrategy();
+            _polly.Log += LogErrorRetry;
         }
 
 
@@ -87,13 +91,25 @@ namespace HSMDataCollector.Client
             _logger.Debug($"{nameof(RequestToServer)}: {json}");
 
             var data = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await _client.PostAsync(uri, data, _tokenSource.Token);
-            _queueManager.ThrowPackageSensingInfo(new PackageSendingInfo(json.Length, response));
 
-            if (!response.IsSuccessStatusCode)
-                _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
+            HttpResponseMessage response;
+            response = await _polly.Pipeline.ExecuteAsync<HttpResponseMessage>(async token =>
+            {
+               response = await _client.PostAsync(uri, data, token);
+               _queueManager.ThrowPackageSensingInfo(new PackageSendingInfo(json.Length, response));
+
+               if (!response.IsSuccessStatusCode)
+                   _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
+
+               return response;
+            }, _tokenSource.Token);
 
             return response;
+        }
+
+        private void LogErrorRetry(string message)
+        {
+            _logger.Error($"Failed to send data. Error={message}.");
         }
     }
 }
