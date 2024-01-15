@@ -86,7 +86,7 @@ namespace HSMDataCollector.Client
 
         private async Task<HttpResponseMessage> RequestToServer(object value, string uri)
         {
-            string json = JsonConvert.SerializeObject(value);
+            var json = JsonConvert.SerializeObject(value);
 
             _logger.Debug($"{nameof(RequestToServer)}: {json}");
 
@@ -96,7 +96,7 @@ namespace HSMDataCollector.Client
             response = await _polly.Pipeline.ExecuteAsync<HttpResponseMessage>(async token =>
             {
                response = await _client.PostAsync(uri, data, token);
-               _queueManager.ThrowPackageSensingInfo(new PackageSendingInfo(json.Length, response));
+               _queueManager.ThrowPackageSendingInfo(new PackageSendingInfo(json.Length, response));
 
                if (!response.IsSuccessStatusCode)
                    _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
