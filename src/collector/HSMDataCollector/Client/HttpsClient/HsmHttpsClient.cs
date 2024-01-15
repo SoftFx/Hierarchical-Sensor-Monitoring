@@ -42,6 +42,7 @@ namespace HSMDataCollector.Client
             });
 
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
+            _client.DefaultRequestHeaders.Add(nameof(BaseRequest.ClientName), options.ClientName);
 
             Commands = new CommandHandler(queue.Commands, _endpoints, _logger);
             Commands.InvokeRequest += RequestToServer;
@@ -87,7 +88,6 @@ namespace HSMDataCollector.Client
 
             var data = new StringContent(json, Encoding.UTF8, "application/json");
             var response = await _client.PostAsync(uri, data, _tokenSource.Token);
-
             _queueManager.ThrowPackageSensingInfo(new PackageSendingInfo(json.Length, response));
 
             if (!response.IsSuccessStatusCode)
