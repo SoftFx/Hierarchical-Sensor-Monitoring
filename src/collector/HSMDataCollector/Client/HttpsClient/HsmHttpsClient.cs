@@ -52,7 +52,6 @@ namespace HSMDataCollector.Client
             Data.InvokeRequest += RequestToServer;
 
             _polly = new PollyStrategy();
-            _polly.Log += LogErrorRetry;
         }
 
 
@@ -92,24 +91,30 @@ namespace HSMDataCollector.Client
 
             var data = new StringContent(json, Encoding.UTF8, "application/json");
 
-            HttpResponseMessage response;
-            response = await _polly.Pipeline.ExecuteAsync<HttpResponseMessage>(async token =>
-            {
-               response = await _client.PostAsync(uri, data, token);
-               _queueManager.ThrowPackageSendingInfo(new PackageSendingInfo(json.Length, response));
-
-               if (!response.IsSuccessStatusCode)
-                   _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
-
-               return response;
-            }, _tokenSource.Token);
+            var response = await _polly.Pipeline.ExecuteAsync<HttpResponseMessage>(async token => await PostAsync(uri, data, json, token), _tokenSource.Token);
 
             return response;
         }
 
-        private void LogErrorRetry(string message)
+        private async Task<HttpResponseMessage> PostAsync(string uri, HttpContent data, string json, CancellationToken token)
         {
-            _logger.Error($"Failed to send data. Error={message}.");
+            HttpResponseMessage response;
+            
+            try
+            {
+                response = await _client.PostAsync(uri, data, token);
+
+                _queueManager.ThrowPackageSendingInfo(new PackageSendingInfo(json.Length, response));
+                if (!response.IsSuccessStatusCode)
+                    _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
+            }
+            catch (Exception exception)
+            {
+                _logger.Error($"Failed to send data. Error={exception.Message}. Data={json}.");
+                throw;
+            }
+
+            return response;
         }
     }
 }

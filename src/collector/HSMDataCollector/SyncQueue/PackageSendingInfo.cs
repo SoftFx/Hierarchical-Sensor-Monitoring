@@ -12,12 +12,16 @@ namespace HSMDataCollector.SyncQueue
         public string Error { get; }
 
 
-        public PackageSendingInfo(double contentSize, HttpResponseMessage response)
+        public PackageSendingInfo(double contentSize, HttpResponseMessage response, Exception exception = null)
         {
             ContentSize = contentSize;
-            IsSuccess = response.IsSuccessStatusCode;
 
-            Error = !IsSuccess ? $"Code: {response.StatusCode}. {response.Content}" : null;
+            IsSuccess = response?.IsSuccessStatusCode ?? false;
+
+            if (exception != null && response is null)
+                Error = $"Error: {exception.Message}";
+            else
+                Error = !IsSuccess ? $"Code: {response.StatusCode}. {response.Content}" : null;
         }
     }
 }

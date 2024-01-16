@@ -12,14 +12,11 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
         private static readonly TimeSpan _startDelay = TimeSpan.FromSeconds(2);
 
 
-        private readonly PredicateBuilder<HttpResponseMessage> _predicateBuilder = new PredicateBuilder<HttpResponseMessage>()
+        private readonly PredicateBuilder<HttpResponseMessage> _fallbackHandle = new PredicateBuilder<HttpResponseMessage>()
             .Handle<HttpRequestException>()
             .HandleResult(r => r.StatusCode.CheckForCodeToRetry());
-        
+
         internal ResiliencePipeline<HttpResponseMessage> Pipeline { get; }
-
-
-        public event Action<string> Log;
 
 
         public PollyStrategy()
@@ -27,13 +24,7 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
             var retryStrategyOptions = new RetryStrategyOptions<HttpResponseMessage>()
             {
                 MaxRetryAttempts = 10,
-                ShouldHandle = arguments =>
-                {
-                    if (arguments.Outcome.Exception != null)
-                        Log?.Invoke(arguments.Outcome.Exception.Message);
-                    
-                    return new ValueTask<bool>(arguments.Outcome.Result?.StatusCode.CheckForCodeToRetry() ?? true);
-                },
+                ShouldHandle = arguments => new ValueTask<bool>(arguments.Outcome.Result?.StatusCode.CheckForCodeToRetry() ?? true),
                 DelayGenerator = args =>
                 {
                     var delay = TimeSpan.FromSeconds((long)Math.Pow(_startDelay.Seconds, args.AttemptNumber));
@@ -44,17 +35,10 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
 
             var fallbackStrategyOptions = new FallbackStrategyOptions<HttpResponseMessage>()
             {
-                ShouldHandle = _predicateBuilder,
-                FallbackAction = args =>
-                {
-                    if (args.Outcome.Result != null)
-                    {
-                        Log?.Invoke(args.Outcome.Result.ReasonPhrase);
-                        return Outcome.FromResultAsValueTask(args.Outcome.Result);
-                    }
-
-                    return Outcome.FromExceptionAsValueTask<HttpResponseMessage>(args.Outcome.Exception);
-                },
+                ShouldHandle = _fallbackHandle,
+                FallbackAction = args => args.Outcome.Result != null 
+                    ? Outcome.FromResultAsValueTask(args.Outcome.Result) 
+                    : Outcome.FromExceptionAsValueTask<HttpResponseMessage>(args.Outcome.Exception),
             };
 
             Pipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
