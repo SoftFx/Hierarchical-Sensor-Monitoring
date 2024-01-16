@@ -105,6 +105,8 @@ namespace HSMServer.Notifications
 
             try
             {
+                System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
+
                 await _bot.GetMeAsync(_tokenSource.Token);
             }
             catch (Exception exc)
