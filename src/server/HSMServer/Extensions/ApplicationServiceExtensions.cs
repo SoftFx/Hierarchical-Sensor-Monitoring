@@ -167,7 +167,6 @@ public static class ApplicationServiceExtensions
             options.UseHttps(portOptions =>
             {
                 portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-                //portOptions.SslProtocols = SslProtocols.None;
                 portOptions.ServerCertificate = config.Certificate;
             });
         };
