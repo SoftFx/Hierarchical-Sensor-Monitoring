@@ -110,6 +110,11 @@ namespace HSMDataCollector.DefaultSensors
         {
             return ToWindows(new WindowsDiskQueueLength(_prototype.WindowsDiskQueueLength.Get(options)));
         }
+        
+        public IWindowsCollection AddDiskAverageWriteSpeed(DiskBarSensorOptions options)
+        {
+            return ToWindows(new WindowsAverageDiskWriteSpeed(_prototype.WindowsAverageDiskWriteSpeed.Get(options)));
+        }
 
         public IWindowsCollection AddFreeDisksSpace(DiskSensorOptions options)
         {
@@ -143,11 +148,19 @@ namespace HSMDataCollector.DefaultSensors
             return this;
         }
 
+        public IWindowsCollection AddDisksAverageWriteSpeed(DiskBarSensorOptions options = null)
+        {
+            foreach (var diskOptions in _prototype.WindowsAverageDiskWriteSpeed.GetAllDisksOptions(options))
+                ToWindows(new WindowsAverageDiskWriteSpeed(diskOptions));
+
+            return this;
+        }
+
         public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null) =>
-            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskBarOptions).AddDiskQueueLength(diskBarOptions);
+            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskBarOptions).AddDiskQueueLength(diskBarOptions).AddDiskAverageWriteSpeed(diskBarOptions);
 
         public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null) =>
-            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(diskBarOptions).AddDisksQueueLength(diskBarOptions);
+            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(diskBarOptions).AddDisksQueueLength(diskBarOptions).AddDisksAverageWriteSpeed(diskBarOptions);
 
         #endregion
 
