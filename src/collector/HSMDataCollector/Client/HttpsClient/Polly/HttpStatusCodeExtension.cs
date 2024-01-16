@@ -6,17 +6,23 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
 {
     public static class HttpStatusCodeExtension
     {
-        private static readonly HashSet<HttpStatusCode> _invalidCodes = new HashSet<HttpStatusCode>()
+        private static readonly HashSet<int> _invalidCodes = new HashSet<int>()
         {
-            RequestTimeout,
-            Conflict,
-            Gone,
-            InternalServerError,
-            BadGateway,
-            GatewayTimeout,
+            (int)RequestTimeout,
+            (int)Conflict,
+            (int)Gone,
+            421, // MisdirectedRequest
+            423, // Locked
+            429, // TooManyRequests
+            (int)InternalServerError,
+            (int)BadGateway,
+            (int)ServiceUnavailable,
+            (int)GatewayTimeout,
+            506, // VariantAlsoNegotiates
+            511 // NetworkAuthenticationRequired
         };
 
 
-        public static bool CheckForCodeToRetry(this HttpStatusCode status) => _invalidCodes.Contains(status);
+        public static bool CheckForCodeToRetry(this HttpStatusCode status) => _invalidCodes.Contains((int)status);
     }
 }

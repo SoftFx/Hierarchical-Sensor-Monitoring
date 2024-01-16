@@ -1,5 +1,4 @@
-﻿using System;
-using System.Net.Http;
+﻿using System.Net.Http;
 
 namespace HSMDataCollector.SyncQueue
 {
@@ -12,16 +11,12 @@ namespace HSMDataCollector.SyncQueue
         public string Error { get; }
 
 
-        public PackageSendingInfo(double contentSize, HttpResponseMessage response, Exception exception = null)
+        public PackageSendingInfo(double contentSize, HttpResponseMessage response)
         {
             ContentSize = contentSize;
 
             IsSuccess = response?.IsSuccessStatusCode ?? false;
-
-            if (exception != null && response is null)
-                Error = $"Error: {exception.Message}";
-            else
-                Error = !IsSuccess ? $"Code: {response.StatusCode}. {response.Content}" : null;
+            Error = !IsSuccess ? $"Code: {response.StatusCode}. {response.Content}" : null;
         }
     }
 }
