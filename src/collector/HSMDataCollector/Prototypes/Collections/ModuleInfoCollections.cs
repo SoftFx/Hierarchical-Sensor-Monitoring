@@ -9,13 +9,16 @@ namespace HSMDataCollector.Prototypes
 {
     internal abstract class ProductVersionInfoPrototype : InstantSensorOptionsPrototype<VersionSensorOptions>
     {
+        private const long FiveYearTicks = 5 * 315_360_000_000_000;
+
+
         public override VersionSensorOptions Get(VersionSensorOptions customOptions)
         {
             var options = base.Get(customOptions);
 
             options.Type = SensorType.VersionSensor;
             options.StartTime = customOptions?.StartTime ?? DateTime.UtcNow;
-
+            options.KeepHistory = TimeSpan.FromTicks(FiveYearTicks);
             options.Version = customOptions?.Version;
 
             return options;
