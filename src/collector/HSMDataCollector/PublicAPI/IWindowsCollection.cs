@@ -48,6 +48,10 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddDisksQueueLength(DiskBarSensorOptions options = null);
 
+        IWindowsCollection AddDiskAverageWriteSpeed(DiskBarSensorOptions options = null);
+
+        IWindowsCollection AddDisksAverageWriteSpeed(DiskBarSensorOptions options = null);
+
         IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null);
 
         IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null);
