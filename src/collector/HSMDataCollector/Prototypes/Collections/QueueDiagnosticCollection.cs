@@ -45,7 +45,7 @@ namespace HSMDataCollector.Prototypes.Collections
 
         public QueueOverflowPrototype ApplyOptions(CollectorOptions options)
         {
-            Description = $"The sensor sends the amount of data that was removed from the queue during the overflow process.  \n" +
+            Description = $"The sensor sends the amount of data that was removed from the queue during the overflow process {GetBarDescriptionPart()}.  \n" +
             $"Collector max queue size = **{options.MaxQueueSize}**, collect period = **{options.PackageCollectPeriod.ToReadableView()}**.";
 
             return this;
@@ -67,7 +67,7 @@ namespace HSMDataCollector.Prototypes.Collections
 
         public PackageValuesCountPrototype ApplyOptions(CollectorOptions options)
         {
-            Description = $"The sensor sends information about the number of values in each collected package. Package max values count = **{options.MaxValuesInPackage}**.";
+            Description = $"The sensor sends information about the number of values in each collected package {GetBarDescriptionPart()}. Package max values count = **{options.MaxValuesInPackage}**.";
 
             return this;
         }
@@ -87,7 +87,7 @@ namespace HSMDataCollector.Prototypes.Collections
 
         public PackageProcessTimePrototype ApplyOptions(CollectorOptions options)
         {
-            Description = $"The sensor sends information about the package processing time. Package collect period = **{options.PackageCollectPeriod.ToReadableView()}**.";
+            Description = $"The sensor sends information about the package processing time {GetBarDescriptionPart()}. Package collect period = **{options.PackageCollectPeriod.ToReadableView()}**.";
 
             return this;
         }
@@ -101,7 +101,7 @@ namespace HSMDataCollector.Prototypes.Collections
 
         public PackageContentSizePrototype() : base()
         {
-            Description = $"The sensor sends information about the package body size.";
+            Description = $"The sensor sends information about the package body size {GetBarDescriptionPart()}.";
             SensorUnit = Unit.MB;
         }
     }

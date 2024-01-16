@@ -5,6 +5,7 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
+using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Options
 {
@@ -106,5 +107,8 @@ namespace HSMDataCollector.Options
 
 
         internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
+
+
+        internal string GetBarDescriptionPart() => $"with a period of {PostDataPeriod.ToReadableView()} and aggregated into bars of {BarPeriod.ToReadableView()}";
     }
 }
