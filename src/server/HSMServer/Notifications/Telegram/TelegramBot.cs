@@ -110,6 +110,10 @@ namespace HSMServer.Notifications
             catch (Exception exc)
             {
                 _bot = null;
+
+                _logger.Error($"Invalid credentials: {BotToken}, name = {_config?.BotName}");
+                _logger.Error(exc);
+
                 return $"An error ({exc.Message}) has been occurred while starting the Bot. Please check Bot configurations. The current state of the Bot is stopped.";
             }
 
