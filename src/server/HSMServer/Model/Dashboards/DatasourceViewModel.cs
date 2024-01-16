@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Extensions;
+using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Dashboards;
 using HSMServer.Datasources;
@@ -7,7 +8,6 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using HSMServer.Core;
 
 namespace HSMServer.Model.Dashboards;
 
@@ -16,30 +16,30 @@ public class DatasourceViewModel
     private readonly PanelDatasource _panelSource;
 
     private static readonly List<PlottedProperty> _singleSensorProperties =
-    [
-        PlottedProperty.Value
-    ];
-    
+        new List<PlottedProperty>(){
+            PlottedProperty.Value
+        };
+
     private static readonly List<PlottedProperty> _singleEmaSensorProperties =
-    [
-        PlottedProperty.EmaValue
-    ];
+        new List<PlottedProperty>() {
+            PlottedProperty.EmaValue
+        };
 
     private static readonly List<PlottedProperty> _barSensorProperties =
-    [
-        PlottedProperty.Min,
-        PlottedProperty.Mean,
-        PlottedProperty.Max,
-        PlottedProperty.Count,
-    ];
-    
+        new List<PlottedProperty>(){
+            PlottedProperty.Min,
+            PlottedProperty.Mean,
+            PlottedProperty.Max,
+            PlottedProperty.Count,
+        };
+
     private static readonly List<PlottedProperty> _barEmaSensorProperties =
-    [
-        PlottedProperty.EmaMin,
-        PlottedProperty.EmaMean,
-        PlottedProperty.EmaMax,
-        PlottedProperty.EmaCount,
-    ];
+        new List<PlottedProperty>(){
+            PlottedProperty.EmaMin,
+            PlottedProperty.EmaMean,
+            PlottedProperty.EmaMax,
+            PlottedProperty.EmaCount,
+        };
 
 
     public List<SelectListItem> AvailableProperties { get; set; }
@@ -59,7 +59,7 @@ public class DatasourceViewModel
     public string Color { get; set; }
 
     public string Path { get; set; }
-    
+
     public string SensorName { get; set; }
 
     public Unit? Unit { get; set; }
@@ -113,9 +113,9 @@ public class DatasourceViewModel
     private List<SelectListItem> GetAvailableProperties(BaseSensorModel sensor)
     {
         var isBar = sensor is IntegerBarSensorModel or DoubleBarSensorModel;
-        
+
         var properties = new List<PlottedProperty>(isBar ? _barSensorProperties : _singleSensorProperties);
-        
+
         if (sensor.Statistics.HasEma())
             properties.AddRange(isBar ? _barEmaSensorProperties : _singleEmaSensorProperties);
 

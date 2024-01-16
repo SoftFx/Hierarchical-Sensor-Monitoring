@@ -16,17 +16,17 @@ namespace HSMServer.Model.Dashboards
         private readonly Dashboard _dashboard;
 
 
-        public static readonly List<SelectListItem> Periods =
-        [
-            new SelectListItem("last 30 minutes", TimeSpan.FromMinutes(30).ToString()),
-            new SelectListItem("last 1 hour", TimeSpan.FromHours(1).ToString()),
-            new SelectListItem("last 3 hours", TimeSpan.FromHours(3).ToString()),
-            new SelectListItem("last 6 hours", TimeSpan.FromHours(6).ToString()),
-            new SelectListItem("last 12 hours", TimeSpan.FromHours(12).ToString()),
-            new SelectListItem("last 1 day", TimeSpan.FromDays(1).ToString()),
-            new SelectListItem("last 3 day", TimeSpan.FromDays(3).ToString()),
-            new SelectListItem("last 7 day", TimeSpan.FromDays(7).ToString())
-        ];
+        public static readonly List<SelectListItem> Periods = new()
+        {
+            new("last 30 minutes", TimeSpan.FromMinutes(30).ToString()),
+            new("last 1 hour", TimeSpan.FromHours(1).ToString()),
+            new("last 3 hours", TimeSpan.FromHours(3).ToString()),
+            new("last 6 hours", TimeSpan.FromHours(6).ToString()),
+            new("last 12 hours", TimeSpan.FromHours(12).ToString()),
+            new("last 1 day", TimeSpan.FromDays(1).ToString()),
+            new("last 3 day", TimeSpan.FromDays(3).ToString()),
+            new("last 7 day", TimeSpan.FromDays(7).ToString())
+        };
 
 
         public List<PanelViewModel> Panels { get; set; } = new();

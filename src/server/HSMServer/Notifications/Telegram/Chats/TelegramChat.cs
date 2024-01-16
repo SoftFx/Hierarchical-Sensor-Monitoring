@@ -27,7 +27,7 @@ namespace HSMServer.Notifications
         private DateTime _nextSendMessageTime;
 
 
-        internal HashSet<Guid> Folders { get; } = [];
+        internal HashSet<Guid> Folders { get; } = new();
 
 
         internal ScheduleBuilder ScheduleMessageBuilder { get; } = new();

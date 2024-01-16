@@ -7,7 +7,7 @@ namespace HSMServer.Core.Managers
 {
     public class AlertMessage
     {
-        public List<AlertResult> Alerts { get; } = [];
+        public List<AlertResult> Alerts { get; } = new();
 
         public Guid SensorId { get; }
 
