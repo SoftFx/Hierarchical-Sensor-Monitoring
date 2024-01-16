@@ -44,11 +44,14 @@ namespace HSMDataCollector.Client.HttpsClient
             {
                 _logger.Error($"Failed to send data. Error={ex} Data={value}");
 
-                if (value is IEnumerable<T> list)
+                if (value is IEnumerable<object> list)
                     foreach (var data in list)
-                        _queue.PushFailValue(data);
+                    {
+                        if (data is T tdata)
+                            _queue.PushFailValue(tdata);
+                    }
                 else if (value is T single)
-                    _queue.PushFailValue(single);
+                        _queue.PushFailValue(single);
 
                 return null;
             }
