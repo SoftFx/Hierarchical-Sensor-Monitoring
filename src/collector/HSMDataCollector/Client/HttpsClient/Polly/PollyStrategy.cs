@@ -23,7 +23,7 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
         {
             var retryStrategyOptions = new RetryStrategyOptions<HttpResponseMessage>()
             {
-                MaxRetryAttempts = 10,
+                MaxRetryAttempts = 15,
                 ShouldHandle = arguments => new ValueTask<bool>(arguments.Outcome.Result?.StatusCode.CheckForCodeToRetry() ?? true),
                 DelayGenerator = args =>
                 {
