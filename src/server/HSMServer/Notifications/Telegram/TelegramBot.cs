@@ -4,6 +4,7 @@ using HSMServer.Folders;
 using HSMServer.Notifications.Telegram.AddressBook;
 using HSMServer.ServerConfiguration;
 using System;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
@@ -97,19 +98,34 @@ namespace HSMServer.Notifications
             if (!_config.IsValid)
                 return ConfigurationsError;
 
+            HttpClientHandler clientHandler = new()
+            {
+                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true,
+                SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
+            };
+
+            // Pass the handler to httpclient(from you are calling api)
+            //HttpClient client = new HttpClient(clientHandler);
+
             _tokenSource = new CancellationTokenSource();
-            _bot = new TelegramBotClient(BotToken)
+            _bot = new TelegramBotClient(BotToken, new HttpClient(clientHandler))
             {
                 Timeout = new TimeSpan(0, 5, 0) // 5 minutes timeout
             };
 
             try
             {
+                //System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
+
                 await _bot.GetMeAsync(_tokenSource.Token);
             }
             catch (Exception exc)
             {
                 _bot = null;
+
+                _logger.Error($"Invalid credentials: {BotToken}, name = {_config?.BotName}");
+                _logger.Error(exc);
+
                 return $"An error ({exc.Message}) has been occurred while starting the Bot. Please check Bot configurations. The current state of the Bot is stopped.";
             }
 
