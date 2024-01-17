@@ -54,6 +54,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public long JournalDbSize => _settings.PathToJournalDb.GetSize();
 
+        public long BackupsSize => _settings.DatabaseBackupsFolder.GetSize();
+
 
         private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
         private delegate IEnumerable<(byte[], byte[])> GetJournalValuesFunc(IJournalValuesDatabase db);

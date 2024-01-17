@@ -23,6 +23,8 @@ namespace HSMServer.Core.DataLayer
 
         long JournalDbSize { get; }
 
+        long BackupsSize { get; }
+
 
         void BackupEnvironment(string backupPath);
 
