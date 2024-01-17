@@ -1,4 +1,5 @@
 using HSMDataCollector.Client.HttpsClient;
+using HSMDataCollector.Client.HttpsClient.Polly;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue;
@@ -10,7 +11,6 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using HSMDataCollector.Client.HttpsClient.Polly;
 
 namespace HSMDataCollector.Client
 {
@@ -91,7 +91,7 @@ namespace HSMDataCollector.Client
 
             var data = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _polly.Pipeline.ExecuteAsync<HttpResponseMessage>(async token => await PostAsync(uri, data, json, token), _tokenSource.Token);
+            var response = await _polly.Pipeline.ExecuteAsync(async token => await PostAsync(uri, data, json, token), _tokenSource.Token);
 
             return response;
         }
@@ -99,7 +99,7 @@ namespace HSMDataCollector.Client
         private async Task<HttpResponseMessage> PostAsync(string uri, HttpContent data, string json, CancellationToken token)
         {
             HttpResponseMessage response;
-            
+
             try
             {
                 response = await _client.PostAsync(uri, data, token);

@@ -6,7 +6,7 @@ using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMDataCollector.Prototypes.Collections.Disks
 {
-    internal class WindowsAverageDiskWriteSpeedPrototype : BarDisksMonitoringPrototype
+    internal sealed class WindowsAverageDiskWriteSpeedPrototype : BarDisksMonitoringPrototype
     {
         protected override string DescriptionPath => WindowsAverageDiskWriteSpeed.Counter;
 
