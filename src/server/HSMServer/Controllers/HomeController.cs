@@ -532,8 +532,6 @@ namespace HSMServer.Controllers
         {
             void UpdateStats(ProductNodeViewModel vm, NodeHistoryInfo nodeInfo)
             {
-                vm.HistoryStatistic.Update(nodeInfo);
-
                 foreach (var (sensorId, sensorInfo) in nodeInfo.SensorsInfo)
                     if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
                         sensor.HistoryStatistic.Update(sensorInfo);
@@ -541,20 +539,22 @@ namespace HSMServer.Controllers
                 foreach (var (subnodeId, subnodeInfo) in nodeInfo.SubnodesInfo)
                     if (_treeViewModel.Nodes.TryGetValue(subnodeId, out var node))
                         UpdateStats(node, subnodeInfo);
+
+                vm.HistoryStatistic.RecalculateSubTreeStats(vm);
             }
 
             if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
             {
                 sensor.HistoryStatistic.Update(_treeValuesCache.GetSensorHistoryInfo(sensor.Id));
 
-                return sensor.HistoryStatistic.TotalInfo;
+                return sensor.HistoryStatistic.DisplayInfo;
             }
 
             if (_treeViewModel.Nodes.TryGetValue(id, out var node))
             {
                 UpdateStats(node, _treeValuesCache.GetNodeHistoryInfo(node.Id));
 
-                return node.HistoryStatistic.TotalInfo;
+                return node.HistoryStatistic.DisplayInfo;
             }
 
             return "Unknown";

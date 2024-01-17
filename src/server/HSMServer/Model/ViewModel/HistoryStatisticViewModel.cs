@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Extensions;
+using HSMServer.Model.TreeViewModel;
 using System;
 
 namespace HSMServer.Model.ViewModel
@@ -9,16 +10,20 @@ namespace HSMServer.Model.ViewModel
     {
         public DateTime LastUpdate { get; private set; } = DateTime.MinValue;
 
-        public double Percent { get; private set; }
+        public long TotalValueSize { get; private set; }
 
-        public long TotalSize { get; private set; }
+        public long TotalKeysSize { get; private set; }
 
         public long DataCount { get; private set; }
 
+        public string DisplayInfo { get; private set; }
+
+
+        public double ValuePercent => TotalSize != 0 ? (double)TotalValueSize / TotalSize * 100 : 0.0;
+
+        public long TotalSize => TotalValueSize + TotalKeysSize;
 
         public bool IsEmpty => LastUpdate == DateTime.MinValue;
-
-        public string TotalInfo { get; private set; }
 
 
         public HistoryStatisticViewModel() { }
@@ -27,9 +32,8 @@ namespace HSMServer.Model.ViewModel
         {
             LastUpdate = DateTime.UtcNow;
 
-            TotalSize = historyInfo.TotalSizeBytes;
-            Percent = (double)historyInfo.ValuesSizeBytes / TotalSize * 100;
-
+            TotalValueSize = historyInfo.ValuesSizeBytes;
+            TotalKeysSize = historyInfo.KeysSizeBytes;
             DataCount = historyInfo.DataCount;
 
             RefreshTotalInfo();
@@ -37,33 +41,22 @@ namespace HSMServer.Model.ViewModel
             return this;
         }
 
-        public HistoryStatisticViewModel Update(NodeHistoryInfo historyInfo)
+        public HistoryStatisticViewModel RecalculateSubTreeStats(ProductNodeViewModel node)
         {
-            var totalValuesSizeCount = 0L;
-            var totalKeysSizeCount = 0L;
-            var totalData = 0L;
-
-            void CalculateTotal(NodeHistoryInfo info)
-            {
-                foreach (var (_, subNodeInfo) in info.SubnodesInfo)
-                    CalculateTotal(subNodeInfo);
-
-                foreach (var (_, sensor) in info.SensorsInfo)
-                {
-                    totalValuesSizeCount += sensor.ValuesSizeBytes;
-                    totalKeysSizeCount += sensor.KeysSizeBytes;
-
-                    totalData += sensor.DataCount;
-                }
-            }
-
             LastUpdate = DateTime.UtcNow;
 
-            CalculateTotal(historyInfo);
+            void Apply(HistoryStatisticViewModel subNodeStat)
+            {
+                TotalValueSize += subNodeStat.TotalValueSize;
+                TotalKeysSize += subNodeStat.TotalKeysSize;
+                DataCount += subNodeStat.DataCount;
+            }
 
-            DataCount = totalData;
-            TotalSize = totalKeysSizeCount + totalValuesSizeCount;
-            Percent = (double)totalValuesSizeCount / TotalSize * 100;
+            foreach (var (_, sensor) in node.Sensors)
+                Apply(sensor.HistoryStatistic);
+
+            foreach (var (_, subNode) in node.Nodes)
+                Apply(subNode.HistoryStatistic);
 
             RefreshTotalInfo();
 
@@ -71,11 +64,11 @@ namespace HSMServer.Model.ViewModel
         }
 
 
-        internal string ToCsvFormat(string path) => $"\"{path}\";{DataCount};{TotalSize};{Percent:F4}";
+        internal string ToCsvFormat(string path) => $"\"{path}\";{DataCount};{TotalSize};{ValuePercent:F4}";
 
         private void RefreshTotalInfo()
         {
-            TotalInfo = $"{TotalSize.ToReadableMemoryFormat()} ({Percent:F2}% values from {DataCount} records) updated at {LastUpdate.ToDefaultFormat()}";
+            DisplayInfo = $"{TotalSize.ToReadableMemoryFormat()} ({ValuePercent:F2}% values from {DataCount} records) updated at {LastUpdate.ToDefaultFormat()}";
         }
     }
 }
