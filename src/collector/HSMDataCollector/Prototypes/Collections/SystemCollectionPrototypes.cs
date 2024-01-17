@@ -28,7 +28,7 @@ namespace HSMDataCollector.Prototypes
         {
             Description = "Free memory, which is memory available to the operating system," +
             " is defined as free and cache pages. The remainder is active memory, which is memory " +
-            $"currently in use by the operating system. This sensor sends data {GetBarDescriptionPart()}. " +
+            $"currently in use by the operating system. {GetBarOptionsInfo()}" +
             "More info can be found [**here**](https://en.wikipedia.org/wiki/Random-access_memory).";
 
             SensorUnit = Unit.MB;
@@ -45,7 +45,7 @@ namespace HSMDataCollector.Prototypes
         {
             Description = "CPU usage indicates the total percentage of processing power" +
             " exhausted to process data and run various programs on a network device, " +
-            $"server, or computer at any given point.  This sensor sends data {GetBarDescriptionPart()}. " +
+            $"server, or computer at any given point. {GetBarOptionsInfo()}" +
             "More info can be found [**here**](https://en.wikipedia.org/wiki/Central_processing_unit).";
 
             SensorUnit = Unit.Percents;

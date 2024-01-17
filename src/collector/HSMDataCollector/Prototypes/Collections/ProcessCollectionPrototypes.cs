@@ -54,7 +54,7 @@ namespace HSMDataCollector.Prototypes
 
         public ProcessMemoryPrototype() : base()
         {
-            Description = $"This sensor sends information about **{_processName}** process RAM {GetBarDescriptionPart()}.  \n" +
+            Description = $"This sensor sends information about **{_processName}** process RAM. {GetBarOptionsInfo()}  \n" +
             "Free memory, which is memory available to the operating system," +
             " is defined as free and cache pages. The remainder is active memory, which is memory " +
             "currently in use by the operating system. More info can be found [**here**](https://en.wikipedia.org/wiki/Random-access_memory).";
@@ -79,7 +79,7 @@ namespace HSMDataCollector.Prototypes
 
         public ProcessThreadCountPrototype() : base()
         {
-            Description = $"This sensor sends information about **{_processName}** process threads count {GetBarDescriptionPart()}. \n" +
+            Description = $"This sensor sends information about **{_processName}** process threads count. {GetBarOptionsInfo()} \n" +
             "A thread is the basic unit to which the operating system allocates processor time. A thread can execute any part of the process code, " +
             "including parts currently being executed by another thread.  \n" +
             "More information about processes and threads you can find [**here**](https://learn.microsoft.com/en-us/windows/win32/procthread/processes-and-threads).";
