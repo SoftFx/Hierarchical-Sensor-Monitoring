@@ -98,14 +98,11 @@ namespace HSMServer.Notifications
             if (!_config.IsValid)
                 return ConfigurationsError;
 
-            HttpClientHandler clientHandler = new()
+            HttpClientHandler clientHandler = new() //todo: should be removed after live ubuntu update
             {
                 ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true,
                 SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
             };
-
-            // Pass the handler to httpclient(from you are calling api)
-            //HttpClient client = new HttpClient(clientHandler);
 
             _tokenSource = new CancellationTokenSource();
             _bot = new TelegramBotClient(BotToken, new HttpClient(clientHandler))
@@ -115,8 +112,6 @@ namespace HSMServer.Notifications
 
             try
             {
-                //System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
-
                 await _bot.GetMeAsync(_tokenSource.Token);
             }
             catch (Exception exc)
