@@ -12,10 +12,12 @@ namespace HSMServer.BackgroundServices
         private const double MbDivisor = 1 << 20;
         private const int DigitsCnt = 2;
 
-        private const string EnvironmentDbSizePath = "Environment data size";
-        private const string HistoryDbSizePath = "SensorValues data size";
-        private const string SnaphotsDbSizePath = "Snapshots data size";
-        private const string TotalDbSizePath = "All database size";
+        private const string EnvironmentDbSizePath = "Environment";
+        private const string HistoryDbSizePath = "SensorValues";
+        private const string LayoutDbSizePath = "ServerLayout";
+        private const string SnaphotsDbSizePath = "Snapshots";
+        private const string JournalsDbSizePath = "Journals";
+        private const string TotalDbSizePath = "All";
 
 
         private readonly IDataCollector _collector;
@@ -24,15 +26,19 @@ namespace HSMServer.BackgroundServices
         private readonly IInstantValueSensor<double> _environmentDbSizeSensor;
         private readonly IInstantValueSensor<double> _snapshotsDbSizeSensor;
         private readonly IInstantValueSensor<double> _historyDbSizeSensor;
+        private readonly IInstantValueSensor<double> _journalDbSizeSensor;
+        private readonly IInstantValueSensor<double> _layoutDbSizeSensor;
         private readonly IInstantValueSensor<double> _dbSizeSensor;
 
 
         private readonly Dictionary<string, string> Descriptions = new()
         {
-            { EnvironmentDbSizePath, "The database contains all server entities meta information (folders, products, sensors, users, etc.)." },
-            { SnaphotsDbSizePath, "The database contains current state of tree (last update time of sensors, timeouts, etc.)." },
+            { EnvironmentDbSizePath, "The database contains all server entities meta information (folders, products, sensors, users and etc.)." },
             { HistoryDbSizePath, "The database contains sensors history divided into weekly folders." },
-            { TotalDbSizePath, "All database size is the sum of the sizes of Environment, SensorValues, Snapshots, ServerLayouts and Journal databases." },
+            { LayoutDbSizePath, "The database contains information about dashboards (meta information, information about charts, panels and etc.)." },
+            { SnaphotsDbSizePath, "The database contains current state of tree (last update time of sensors, timeouts and etc.)." },
+            { JournalsDbSizePath, "The database contains journal records for each sensor." },
+            { TotalDbSizePath, "All database size is the sum of the sizes of Environment, SensorValues, Snapshots, ServerLayout and Journals databases." },
         };
 
 
@@ -44,6 +50,8 @@ namespace HSMServer.BackgroundServices
             _environmentDbSizeSensor = CreateDataSizeSensor(EnvironmentDbSizePath);
             _snapshotsDbSizeSensor = CreateDataSizeSensor(SnaphotsDbSizePath);
             _historyDbSizeSensor = CreateDataSizeSensor(HistoryDbSizePath);
+            _journalDbSizeSensor = CreateDataSizeSensor(JournalsDbSizePath);
+            _layoutDbSizeSensor = CreateDataSizeSensor(LayoutDbSizePath);
             _dbSizeSensor = CreateDataSizeSensor(TotalDbSizePath);
         }
 
@@ -57,15 +65,14 @@ namespace HSMServer.BackgroundServices
 
             _environmentDbSizeSensor.AddValue(GetRoundedDouble(_database.EnviromentDbSize));
             _historyDbSizeSensor.AddValue(GetRoundedDouble(_database.SensorHistoryDbSize));
+            _layoutDbSizeSensor.AddValue(GetRoundedDouble(_database.ServerLayoutDbSize));
             _snapshotsDbSizeSensor.AddValue(GetRoundedDouble(_database.Snapshots.Size));
+            _journalDbSizeSensor.AddValue(GetRoundedDouble(_database.JournalDbSize));
             _dbSizeSensor.AddValue(GetRoundedDouble(_database.TotalDbSize));
         }
 
-        private IInstantValueSensor<double> CreateDataSizeSensor(string sensorName)
+        private IInstantValueSensor<double> CreateDataSizeSensor(string databaseName)
         {
-            var databaseName = sensorName[..sensorName.IndexOf(' ')];
-            var databaseDescription = Descriptions[sensorName];
-
             var options = new InstantSensorOptions
             {
                 Alerts = [],
@@ -73,10 +80,10 @@ namespace HSMServer.BackgroundServices
                 EnableForGrafana = true,
                 SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.MB,
 
-                Description = $"The sensor sends information about {databaseName} database size. {databaseDescription}"
+                Description = $"The sensor sends information about {databaseName} database size. {Descriptions[databaseName]}"
             };
 
-            return _collector.CreateDoubleSensor($"Database/{sensorName}", options);
+            return _collector.CreateDoubleSensor($"Database/{databaseName} data size", options);
         }
     }
 }

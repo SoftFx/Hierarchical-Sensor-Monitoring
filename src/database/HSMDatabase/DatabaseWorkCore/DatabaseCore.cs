@@ -50,6 +50,10 @@ namespace HSMDatabase.DatabaseWorkCore
             }
         }
 
+        public long ServerLayoutDbSize => _settings.PathToServerLayoutDb.GetSize();
+
+        public long JournalDbSize => _settings.PathToJournalDb.GetSize();
+
 
         private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
         private delegate IEnumerable<(byte[], byte[])> GetJournalValuesFunc(IJournalValuesDatabase db);
