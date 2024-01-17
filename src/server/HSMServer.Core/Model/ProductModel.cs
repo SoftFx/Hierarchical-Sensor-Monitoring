@@ -31,6 +31,9 @@ namespace HSMServer.Core.Model
         public Guid? FolderId { get; private set; }
 
 
+        public bool IsEmpty => SubProducts.IsEmpty && Sensors.IsEmpty;
+
+
         public ProductModel(string name, Guid? authorId = default) : base(name.Trim(), authorId)
         {
             State = ProductState.FullAccess;

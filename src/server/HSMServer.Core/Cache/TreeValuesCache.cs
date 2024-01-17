@@ -12,6 +12,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.TreeStateSnapshot;
 using NLog;
@@ -555,6 +556,47 @@ namespace HSMServer.Core.Cache
                         _fileHistoryLocks[sensorId] = false;
                 }
             }
+        }
+
+        public SensorHistoryInfo GetSensorHistoryInfo(Guid sensorId)
+        {
+            var (dataCnt, keysSize, valueSize) = _database.CalculateSensorHistorySize(sensorId);
+
+            return new SensorHistoryInfo
+            {
+                ValuesSizeBytes = valueSize,
+                KeysSizeBytes = keysSize,
+                DataCount = dataCnt,
+            };
+        }
+
+        public NodeHistoryInfo GetNodeHistoryInfo(Guid nodeId)
+        {
+            void CalculateHistoryInfo(ProductModel model, NodeHistoryInfo rootInfo)
+            {
+                if (model.IsEmpty)
+                    return;
+
+                foreach (var (sensorId, _) in model.Sensors)
+                    rootInfo.SensorsInfo.Add(sensorId, GetSensorHistoryInfo(sensorId));
+
+                foreach (var (nodeId, subNode) in model.SubProducts)
+                {
+                    var subNodeInfo = new NodeHistoryInfo();
+
+                    CalculateHistoryInfo(subNode, subNodeInfo);
+
+                    rootInfo.SubnodesInfo.Add(nodeId, subNodeInfo);
+                }
+            }
+
+
+            var nodeInfo = new NodeHistoryInfo();
+
+            if (_tree.TryGetValue(nodeId, out var nodeModel))
+                CalculateHistoryInfo(nodeModel, nodeInfo);
+
+            return nodeInfo;
         }
 
 

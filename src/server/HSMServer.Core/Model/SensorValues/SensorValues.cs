@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMCommon.Extensions;
+using System;
 using System.IO;
 
 namespace HSMServer.Core.Model
@@ -68,9 +69,6 @@ namespace HSMServer.Core.Model
 
     public record FileValue : BaseValue<byte[]>
     {
-        private const double SizeDenominator = 1024.0;
-
-
         public string Name { get; init; }
 
         public string Extension { get; init; }
@@ -85,30 +83,11 @@ namespace HSMServer.Core.Model
 
         public override bool TryParseValue(string value, out byte[] parsedValue)
         {
-            parsedValue = Array.Empty<byte>();
+            parsedValue = [];
             return false;
         }
 
-        public string FileSizeToNormalString()
-        {
-            const int maxGBCounter = 3;
-
-            int counter = 0;
-            double size = OriginalSize;
-
-            while (size > SizeDenominator && counter++ < maxGBCounter)
-                size /= SizeDenominator;
-
-            string units = counter switch
-            {
-                0 => "bytes",
-                1 => "KB",
-                2 => "MB",
-                _ => "GB",
-            };
-
-            return $"{size:F2} {units}";
-        }
+        public string FileSizeToNormalString() => OriginalSize.ToReadableMemoryFormat();
 
         protected override bool IsEqual(BaseValue value) => false;
 
