@@ -44,6 +44,9 @@ namespace HSMServer.Model.ViewModel
         public HistoryStatisticViewModel RecalculateSubTreeStats(ProductNodeViewModel node)
         {
             LastUpdate = DateTime.UtcNow;
+            TotalValueSize = 0;
+            TotalKeysSize = 0;
+            DataCount = 0;
 
             void Apply(HistoryStatisticViewModel subNodeStat)
             {
