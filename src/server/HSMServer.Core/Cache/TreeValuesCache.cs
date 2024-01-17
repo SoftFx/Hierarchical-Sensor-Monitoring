@@ -341,7 +341,7 @@ namespace HSMServer.Core.Cache
                         NewValue = request.BuildComment(value: newValue)
                     });
 
-                    _database.AddSensorValue(value.ToEntity(request.Id));
+                    SaveSensorValueToDb(value, request.Id);
                 }
             }
         }
