@@ -23,6 +23,6 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
         };
 
 
-        public static bool CheckForCodeToRetry(this HttpStatusCode status) => _invalidCodes.Contains((int)status);
+        public static bool IsRetryCode(this HttpStatusCode status) => _invalidCodes.Contains((int)status);
     }
 }

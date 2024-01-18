@@ -7,16 +7,16 @@ using Polly.Retry;
 
 namespace HSMDataCollector.Client.HttpsClient.Polly
 {
-    public class PollyStrategy
+    public sealed class PollyStrategy
     {
-        private const int DelayGeneratorMaxAttempt = 8;
+        private const int MaxAttempt = 8;
 
 
         private static readonly TimeSpan _startDelay = TimeSpan.FromSeconds(2);
 
         private readonly PredicateBuilder<HttpResponseMessage> _fallbackHandle = new PredicateBuilder<HttpResponseMessage>()
             .Handle<HttpRequestException>()
-            .HandleResult(r => r.StatusCode.CheckForCodeToRetry());
+            .HandleResult(r => r.StatusCode.IsRetryCode());
 
         internal ResiliencePipeline<HttpResponseMessage> Pipeline { get; }
 
@@ -25,11 +25,11 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
         {
             var retryStrategyOptions = new RetryStrategyOptions<HttpResponseMessage>()
             {
-                MaxRetryAttempts = 15,
-                ShouldHandle = arguments => new ValueTask<bool>(arguments.Outcome.Result?.StatusCode.CheckForCodeToRetry() ?? true),
+                MaxRetryAttempts = 10,
+                ShouldHandle = arguments => new ValueTask<bool>(arguments.Outcome.Result?.StatusCode.IsRetryCode() ?? true),
                 DelayGenerator = args =>
                 {
-                    if (args.AttemptNumber >= DelayGeneratorMaxAttempt)
+                    if (args.AttemptNumber >= MaxAttempt)
                         return new ValueTask<TimeSpan?>(TimeSpan.FromMinutes(5));
 
                     var delay = TimeSpan.FromSeconds(Math.Pow(_startDelay.Seconds, args.AttemptNumber));

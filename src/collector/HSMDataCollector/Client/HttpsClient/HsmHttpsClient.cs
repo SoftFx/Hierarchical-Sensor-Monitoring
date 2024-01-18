@@ -17,11 +17,11 @@ namespace HSMDataCollector.Client
     internal sealed class HsmHttpsClient : IDisposable
     {
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
+        private readonly PollyStrategy _polly = new PollyStrategy();
         private readonly IQueueManager _queueManager;
         private readonly ILoggerManager _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
-        private readonly PollyStrategy _polly;
 
         internal CommandHandler Commands { get; }
 
@@ -50,8 +50,6 @@ namespace HSMDataCollector.Client
 
             Data = new DataHandlers(queue.Data, _endpoints, _logger);
             Data.InvokeRequest += RequestToServer;
-
-            _polly = new PollyStrategy();
         }
 
 
@@ -83,7 +81,7 @@ namespace HSMDataCollector.Client
         }
 
 
-        private async Task<HttpResponseMessage> RequestToServer(object value, string uri)
+        private Task<HttpResponseMessage> RequestToServer(object value, string uri)
         {
             var json = JsonConvert.SerializeObject(value);
 
@@ -91,30 +89,27 @@ namespace HSMDataCollector.Client
 
             var data = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _polly.Pipeline.ExecuteAsync(async token => await PostAsync(uri, data, json, token), _tokenSource.Token);
-
-            return response;
+            return _polly.Pipeline.ExecuteAsync(async token => await PostAsync(uri, data, json, token), _tokenSource.Token).AsTask();
         }
 
         private async Task<HttpResponseMessage> PostAsync(string uri, HttpContent data, string json, CancellationToken token)
         {
-            HttpResponseMessage response;
-
             try
             {
-                response = await _client.PostAsync(uri, data, token);
+                var response = await _client.PostAsync(uri, data, token);
 
                 _queueManager.ThrowPackageSendingInfo(new PackageSendingInfo(json.Length, response));
+
                 if (!response.IsSuccessStatusCode)
                     _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
+
+                return response;
             }
             catch (Exception exception)
             {
                 _logger.Error($"Failed to send data. Error={exception.Message}. Data={json}.");
                 throw;
             }
-
-            return response;
         }
     }
 }
