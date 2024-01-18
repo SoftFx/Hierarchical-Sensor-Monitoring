@@ -10,9 +10,8 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
     public sealed class PollyStrategy
     {
         private const int MaxAttempt = 8;
+        private const int StartSecondsDelay = 2;
 
-
-        private static readonly TimeSpan _startDelay = TimeSpan.FromSeconds(2);
 
         private readonly PredicateBuilder<HttpResponseMessage> _fallbackHandle = new PredicateBuilder<HttpResponseMessage>()
             .Handle<HttpRequestException>()
@@ -32,7 +31,7 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
                     if (args.AttemptNumber >= MaxAttempt)
                         return new ValueTask<TimeSpan?>(TimeSpan.FromMinutes(5));
 
-                    var delay = TimeSpan.FromSeconds(Math.Pow(_startDelay.Seconds, args.AttemptNumber));
+                    var delay = TimeSpan.FromSeconds(Math.Pow(StartSecondsDelay, args.AttemptNumber));
 
                     return new ValueTask<TimeSpan?>(delay);
                 }
