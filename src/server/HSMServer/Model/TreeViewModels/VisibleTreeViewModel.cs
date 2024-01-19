@@ -44,6 +44,8 @@ public sealed class VisibleTreeViewModel
 
     public void AddOpenedNode(Guid id) => OpenedNodes.Add(id);
 
+    public void AddOpenedNodes(IEnumerable<Guid> ids) => _openedNodes.AddRange(ids);
+
     public void RemoveOpenedNode(params Guid[] ids) => OpenedNodes.Remove(ids);
 
     public void ClearOpenedNodes() => OpenedNodes.Clear();
