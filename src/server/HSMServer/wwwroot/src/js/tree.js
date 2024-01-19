@@ -12,6 +12,7 @@ const AjaxPost = {
 
 var searchInterval = 1000; // 1 sec
 var emptySearch = false;
+var prevState = {};
 
 window.initializeTree = function () {
     initDropzone()
@@ -80,6 +81,14 @@ window.initializeTree = function () {
             searchRefresh = false;
         }
 
+        if (jQuery.isEmptyObject(prevState)) {
+
+            let jstreeState = JSON.parse(localStorage.getItem('jstree'));
+            jstreeState.state.core.open.forEach((node) => {
+                $(this).jstree('open_node', node);
+            })
+        }
+
         if (emptySearch !== undefined && emptySearch === true)
         {
             let selectedIds = $('#jstree').jstree('get_selected');
@@ -109,7 +118,17 @@ window.initializeTree = function () {
         if ($(this).val() === '') {
             $('#search_field').val($(this).val());
             emptySearch  = true;
-            $('#jstree').jstree(true).refresh(true);
+            if (!jQuery.isEmptyObject(prevState))
+            {
+                let jstreeState = JSON.parse(localStorage.getItem('jstree'));
+                
+                jstreeState.state.core = prevState.core;
+                localStorage.setItem('jstree', JSON.stringify(jstreeState));
+                $('#jstree').jstree(true).refresh(true, true);
+                prevState = {};
+            }
+            else 
+                $('#jstree').jstree(true).refresh(true);
         }
         else {
             clearTimeout(refreshTreeTimeoutId);
@@ -126,6 +145,9 @@ window.initializeTree = function () {
         if (window.hasOwnProperty('updateSelectedNodeDataTimeoutId')) {
             clearTimeout(updateSelectedNodeDataTimeoutId);
         }
+
+        if (jQuery.isEmptyObject(prevState))
+            prevState = $('#jstree').jstree('get_state')
 
         $('#search_field').val(value);
         $('#jstree').hide().jstree(true).refresh(true);

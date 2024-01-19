@@ -21,12 +21,17 @@ public sealed class VisibleTreeViewModel
 {
     private readonly ConcurrentDictionary<Guid, NodeShallowModel> _allTree = new();
     private readonly CHash<Guid> _openedNodes = new();
+    private readonly CHash<Guid> _searchOpenedNodes = new(1 << 6);
 
     private readonly User _user;
+
+    private bool _isSearch;
 
     public event Func<User, List<ProductNodeViewModel>> GetUserProducts;
     public event Func<List<FolderModel>> GetFolders;
 
+
+    public CHash<Guid> OpenedNodes => _isSearch ? _searchOpenedNodes : _openedNodes;
 
     internal SensorRenderedHash SearchedSensors { get; } = new();
 
@@ -37,11 +42,11 @@ public sealed class VisibleTreeViewModel
     }
 
 
-    public void AddOpenedNode(Guid id) => _openedNodes.Add(id);
+    public void AddOpenedNode(Guid id) => OpenedNodes.Add(id);
 
-    public void RemoveOpenedNode(params Guid[] ids) => _openedNodes.Remove(ids);
+    public void RemoveOpenedNode(params Guid[] ids) => OpenedNodes.Remove(ids);
 
-    public void ClearOpenedNodes() => _openedNodes.Clear();
+    public void ClearOpenedNodes() => OpenedNodes.Clear();
 
 
     public List<BaseShallowModel> GetUserTree(string searchParameter = null)
@@ -52,17 +57,17 @@ public sealed class VisibleTreeViewModel
 
         var folderTree = new List<BaseShallowModel>(1 << 4);
         var tree = new List<BaseShallowModel>(1 << 4);
-        var isSearchTree = !string.IsNullOrEmpty(searchParameter);
+        _isSearch = !string.IsNullOrEmpty(searchParameter);
 
         SearchedSensors.Clear();
         _allTree.Clear();
 
-        if (isSearchTree)
+        if (_isSearch)
             ClearOpenedNodes();
 
         foreach (var product in products)
         {
-            var shouldAddNode = isSearchTree ? CanAddNodeByName(product, searchParameter, out var node)
+            var shouldAddNode = _isSearch ? CanAddNodeByName(product, searchParameter, out var node)
                                              : CanAddNode(product, out node);
 
             if (shouldAddNode)
@@ -76,7 +81,7 @@ public sealed class VisibleTreeViewModel
             }
         }
 
-        Func<FolderShallowModel, bool> filter = isSearchTree ? folder =>
+        Func<FolderShallowModel, bool> filter = _isSearch ? folder =>
         {
             var isFolderEmpty = folder.IsEmpty;
 
@@ -149,7 +154,7 @@ public sealed class VisibleTreeViewModel
 
         _allTree.TryAdd(product.Id, node);
 
-        var toRender = _openedNodes.Contains(product.Id) || depth > 0;
+        var toRender = OpenedNodes.Contains(product.Id) || depth > 0;
 
         foreach (var nodeModel in GetSubNodes(product))
         {

@@ -19,6 +19,13 @@ namespace HSMCommon.Collections
             lock (_lock)
                 return base.Add(item);
         }
+        
+        public void AddRange(IEnumerable<T> data)
+        {
+            lock (_lock)
+                foreach (var item in data)
+                    base.Add(item);
+        }
 
         public new bool Remove(T item)
         {
