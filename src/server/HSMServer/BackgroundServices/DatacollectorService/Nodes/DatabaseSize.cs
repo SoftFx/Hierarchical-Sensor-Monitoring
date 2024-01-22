@@ -12,13 +12,11 @@ namespace HSMServer.BackgroundServices
         private const double MbDivisor = 1 << 20;
         private const int DigitsCnt = 2;
 
-        private const string EnvironmentDbName = "Environment";
-        private const string HistoryDbName = "SensorValues";
-        private const string LayoutDbName = "ServerLayout";
-        private const string SnaphotsDbName = "Snapshots";
+        private const string BackupsDbName = "Config backups";
         private const string JournalsDbName = "Journals";
-        private const string BackupsDbName = "Backups";
-        private const string TotalDbName = "All";
+        private const string HistoryDbName = "History";
+        private const string ConfigDbName = "Config";
+        private const string TotalDbName = "Total";
 
 
         private readonly IDataCollector _collector;
@@ -27,10 +25,11 @@ namespace HSMServer.BackgroundServices
 
         private readonly Dictionary<string, DatabaseSizeSensor> Sensors = new()
         {
-            { EnvironmentDbName, new("The database contains all server entities meta information (folders, products, sensors, users and etc.).") },
+            { ConfigDbName, new($"The sensor displays sum of the EnvironmentData, ServerLayout and Snapshots database sizes.  \n" +
+                                "* EnvironmentData - the database contains all server entities meta information (folders, products, sensors, users and etc.)  \n" +
+                                "* ServerLayout - the database contains information about dashboards (meta information, information about charts, panels and etc.)  \n" +
+                                "* Snapshots - the database contains current state of tree (last update time of sensors, timeouts and etc.)") },
             { HistoryDbName, new("The database contains sensors history divided into weekly folders.") },
-            { LayoutDbName, new("The database contains information about dashboards (meta information, information about charts, panels and etc.).") },
-            { SnaphotsDbName, new("The database contains current state of tree (last update time of sensors, timeouts and etc.).") },
             { JournalsDbName, new("The database contains journal records for each sensor.") },
             { BackupsDbName, new("The database contains backups of Environment and ServerLayout databases.") },
             { TotalDbName, new("All database size is the sum of the sizes of Environment, SensorValues, Snapshots, ServerLayout and Journals databases.") },
@@ -42,11 +41,9 @@ namespace HSMServer.BackgroundServices
             _collector = collector;
             _database = database;
 
-            CreateDataSizeSensor(EnvironmentDbName, () => _database.EnviromentDbSize);
-            CreateDataSizeSensor(SnaphotsDbName, () => _database.SensorHistoryDbSize);
-            CreateDataSizeSensor(HistoryDbName, () => _database.ServerLayoutDbSize);
-            CreateDataSizeSensor(JournalsDbName, () => _database.Snapshots.Size);
-            CreateDataSizeSensor(LayoutDbName, () => _database.JournalDbSize);
+            CreateDataSizeSensor(HistoryDbName, () => _database.SensorHistoryDbSize);
+            CreateDataSizeSensor(JournalsDbName, () => _database.JournalDbSize);
+            CreateDataSizeSensor(ConfigDbName, () => _database.ConfigDbSize);
             CreateDataSizeSensor(BackupsDbName, () => _database.BackupsSize);
             CreateDataSizeSensor(TotalDbName, () => _database.TotalDbSize);
         }
