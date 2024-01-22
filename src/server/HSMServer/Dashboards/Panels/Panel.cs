@@ -1,11 +1,12 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core;
 using HSMServer.Core.Model;
+using HSMServer.Dashboards.Panels.Modules;
 using HSMServer.Extensions;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
-using HSMServer.Core;
 
 namespace HSMServer.Dashboards
 {
@@ -13,6 +14,8 @@ namespace HSMServer.Dashboards
     {
         private readonly Dashboard _board;
 
+
+        public ConcurrentDictionary<Guid, PanelSubscription> Subscriptions { get; } = new();
 
         public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
 
@@ -38,10 +41,13 @@ namespace HSMServer.Dashboards
 
             foreach (var sourceEntity in entity.Sources)
                 TryAddSource(new Guid(sourceEntity.SensorId), sourceEntity);
+
+            foreach (var subEntity in entity.Subsctiptions)
+                TryAddSubscription(new PanelSubscription(subEntity));
         }
 
 
-        protected override void UpdateCustom(PanelUpdate update)
+        protected override void ApplyUpdate(PanelUpdate update)
         {
             Settings.Update(update);
         }
@@ -50,7 +56,9 @@ namespace HSMServer.Dashboards
         {
             var entity = base.ToEntity();
 
+            entity.Subsctiptions.AddRange(Subscriptions.Select(u => u.Value.ToEntity()));
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
+
             entity.Settings = Settings.ToEntity();
 
             return entity;
@@ -62,6 +70,9 @@ namespace HSMServer.Dashboards
 
             foreach ((_, var source) in Sources)
                 source.Dispose();
+
+            foreach ((_, var sub) in Subscriptions)
+                sub.Dispose();
         }
 
 
@@ -92,8 +103,7 @@ namespace HSMServer.Dashboards
                     MainUnit = null;
                 }
 
-                source.Dispose();
-                ThrowUpdateEvent();
+                UnsubscribeModuleWithCall(source);
 
                 return true;
             }
@@ -101,8 +111,37 @@ namespace HSMServer.Dashboards
             return false;
         }
 
+
+        public bool TryAddSubscription(PanelSubscription subscription)
+        {
+            var result = Subscriptions.TryAdd(subscription.Id, subscription);
+
+            if (result)
+                subscription.UpdateEvent += ThrowUpdateEvent;
+
+            return result;
+        }
+
+        public bool TryRemoveSubscription(Guid id)
+        {
+            var ok = Subscriptions.TryRemove(id, out var sub);
+
+            if (ok)
+                UnsubscribeModuleWithCall(sub);
+
+            return ok;
+        }
+
+
         private bool TrySaveNewSource(PanelDatasource source, out string error)
         {
+            bool TryAddNewSource(PanelDatasource source)
+            {
+                var existingSource = Sources.FirstOrDefault(x => x.Key != source.Id && x.Value.SensorId == source.SensorId).Value;
+
+                return (existingSource is null || existingSource.Sensor.Type.IsBar()) && Sources.TryAdd(source.Id, source);
+            }
+
             error = string.Empty;
 
             if (source is null)
@@ -130,13 +169,13 @@ namespace HSMServer.Dashboards
             }
 
             return string.IsNullOrEmpty(error);
+        }
 
-            bool TryAddNewSource(PanelDatasource source)
-            {
-                var existingSource = Sources.FirstOrDefault(x => x.Key != source.Id && x.Value.SensorId == source.SensorId).Value;
 
-                return (existingSource is null || existingSource.Sensor.Type.IsBar()) && Sources.TryAdd(source.Id, source);
-            }
+        private void UnsubscribeModuleWithCall(IPanelModule module)
+        {
+            module.Dispose();
+            ThrowUpdateEvent();
         }
 
         private static bool IsSupportedType(SensorType type) =>

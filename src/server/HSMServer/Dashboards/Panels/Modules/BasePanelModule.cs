@@ -3,14 +3,23 @@ using System;
 
 namespace HSMServer.Dashboards.Panels.Modules
 {
-    public abstract class BasePanelModule<TUpdate, TEntity> : IDisposable
+    public interface IPanelModule : IDisposable
+    {
+        Guid Id { get; }
+
+
+        event Action UpdateEvent;
+    }
+
+
+    public abstract class BasePanelModule<TUpdate, TEntity> : IPanelModule
         where TUpdate : PanelSourceUpdate
         where TEntity : PanelBaseModuleEntity
     {
         public Guid Id { get; }
 
 
-        internal event Action UpdateEvent;
+        public event Action UpdateEvent;
 
 
         protected BasePanelModule()

@@ -74,7 +74,7 @@ namespace HSMServer.ConcurrentStorage
             Name = update.Name ?? Name;
             Description = update.Description ?? Description;
 
-            UpdateCustom(update);
+            ApplyUpdate(update);
         }
 
         public void NotifyUpdate(UpdateType update)
@@ -83,7 +83,7 @@ namespace HSMServer.ConcurrentStorage
             ThrowUpdateEvent();
         }
 
-        protected virtual void UpdateCustom(UpdateType update) { }
+        protected virtual void ApplyUpdate(UpdateType update) { }
 
 
         public virtual EntityType ToEntity() => new()

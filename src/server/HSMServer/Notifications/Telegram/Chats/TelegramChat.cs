@@ -70,7 +70,7 @@ namespace HSMServer.Notifications
         }
 
 
-        protected override void UpdateCustom(TelegramChatUpdate update)
+        protected override void ApplyUpdate(TelegramChatUpdate update)
         {
             SendMessages = update.SendMessages ?? SendMessages;
             MessagesAggregationTimeSec = update.MessagesAggregationTimeSec ?? MessagesAggregationTimeSec;

@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.Dashboards.Panels.Modules;
-using System;
 
 namespace HSMServer.Dashboards
 {
@@ -8,6 +7,8 @@ namespace HSMServer.Dashboards
     {
         public string PathTempalte { get; private set; }
 
+
+        public PanelSubscription() : base() { }
 
         public PanelSubscription(PanelSubscriptionEntity entity) : base(entity) { }
 
@@ -18,9 +19,11 @@ namespace HSMServer.Dashboards
                 PathTempalte = update.PathTemplate;
         }
 
-        public override PanelSubscriptionEntity ToEntity()
-        {
-            throw new NotImplementedException();
-        }
+        public override PanelSubscriptionEntity ToEntity() =>
+            new()
+            {
+                PathTemplate = PathTempalte,
+                Id = Id.ToByteArray(),
+            };
     }
 }
