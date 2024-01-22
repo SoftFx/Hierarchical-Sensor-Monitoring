@@ -7,6 +7,7 @@ using HSMServer.Extensions;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Threading;
 
 namespace HSMServer.Dashboards
 {
@@ -122,14 +123,26 @@ namespace HSMServer.Dashboards
             return result;
         }
 
+        public bool TryAddSubscription(out PanelSubscription subscription)
+        {
+            subscription = new PanelSubscription();
+
+            var result = TryAddSubscription(subscription);
+
+            if (result)
+                ThrowUpdateEvent();
+
+            return result;
+        }
+
         public bool TryRemoveSubscription(Guid id)
         {
-            var ok = Subscriptions.TryRemove(id, out var sub);
+            var result = Subscriptions.TryRemove(id, out var sub);
 
-            if (ok)
+            if (result)
                 UnsubscribeModuleWithCall(sub);
 
-            return ok;
+            return result;
         }
 
 
