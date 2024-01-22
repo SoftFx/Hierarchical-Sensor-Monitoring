@@ -1,11 +1,11 @@
 using HSMServer.Authentication;
 using HSMServer.Dashboards;
 using HSMServer.Model.Dashboards;
+using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Controllers
 {
@@ -208,14 +208,15 @@ namespace HSMServer.Controllers
             if (TryGetSource(dashboardId, panelId, sourceId, out var source))
             {
                 var oldProperty = source.Property;
-                var updatedSource = source.Update(update);
 
-                if (updatedSource.Property != oldProperty)
+                source.Update(update);
+
+                if (source.Property != oldProperty)
                 {
-                    var response = await updatedSource.Source.Initialize();
-                    return Json(new DatasourceViewModel(response, updatedSource));
+                    var response = await source.Source.Initialize();
+                    return Json(new DatasourceViewModel(response, source));
                 }
-                
+
                 return Ok();
             }
 

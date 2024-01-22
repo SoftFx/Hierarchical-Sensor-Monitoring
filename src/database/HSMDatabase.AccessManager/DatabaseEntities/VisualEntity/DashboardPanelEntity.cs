@@ -4,7 +4,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 {
     public sealed record DashboardPanelEntity : BaseServerEntity
     {
-        public List<PanelSubscriptionsEntity> Subsctiptions { get; init; } = new();
+        public List<PanelSubscriptionEntity> Subsctiptions { get; init; } = new();
 
         public List<PanelSourceEntity> Sources { get; init; } = new();
 
@@ -26,13 +26,5 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 
 
         public bool ShowLegend { get; init; }
-    }
-
-
-    public sealed record PanelSubscriptionsEntity : PlotSourceSettingsEntity
-    {
-        public byte[] Id { get; init; }
-
-        public string PathTemplate { get; init; }
     }
 }

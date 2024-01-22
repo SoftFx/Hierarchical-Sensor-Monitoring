@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.Core;
 using HSMServer.Core.Model;
+using HSMServer.Dashboards.Panels.Modules;
 using HSMServer.Datasources;
 using HSMServer.Extensions;
 using System;
@@ -34,13 +35,11 @@ namespace HSMServer.Dashboards
     }
 
 
-    public sealed class PanelDatasource : IDisposable
+    public sealed class PanelDatasource : BasePanelModule<PanelSourceUpdate, PanelSourceEntity>
     {
         public BaseSensorModel Sensor { get; }
 
         public Guid SensorId { get; }
-
-        public Guid Id { get; }
 
 
         public SensorDatasourceBase Source { get; private set; }
@@ -53,14 +52,9 @@ namespace HSMServer.Dashboards
         public Color Color { get; private set; }
 
 
-        internal event Action UpdateEvent;
-
-
-        public PanelDatasource(BaseSensorModel sensor)
+        public PanelDatasource(BaseSensorModel sensor) : base()
         {
-            Id = Guid.NewGuid();
             SensorId = sensor.Id;
-
             Sensor = sensor;
 
             Color = Color.FromName(ColorExtensions.GenerateRandomColor());
@@ -68,10 +62,10 @@ namespace HSMServer.Dashboards
             Label = $"{sensor.DisplayName} ({Property})";
         }
 
-        public PanelDatasource(BaseSensorModel sensor, PanelSourceEntity entity) : this(sensor)
+        public PanelDatasource(BaseSensorModel sensor, PanelSourceEntity entity) : base(entity)
         {
-            Id = new Guid(entity.Id);
             SensorId = new Guid(entity.SensorId);
+            Sensor = sensor;
 
             Property = (PlottedProperty)entity.Property;
             Color = Color.FromName(entity.Color);
@@ -88,7 +82,7 @@ namespace HSMServer.Dashboards
         }
 
 
-        public PanelDatasource Update(PanelSourceUpdate update)
+        protected override void ApplyUpdate(PanelSourceUpdate update)
         {
             Color = update.Color is not null ? Color.FromName(update.Color) : Color;
             Label = !string.IsNullOrEmpty(update.Name) ? update.Name : Label;
@@ -98,14 +92,10 @@ namespace HSMServer.Dashboards
                 Property = newProperty;
                 BuildSource();
             }
-
-            UpdateEvent?.Invoke();
-
-            return this;
         }
 
 
-        public PanelSourceEntity ToEntity() =>
+        public override PanelSourceEntity ToEntity() =>
             new()
             {
                 Id = Id.ToByteArray(),
@@ -116,10 +106,11 @@ namespace HSMServer.Dashboards
                 Label = Label,
             };
 
-        public void Dispose()
+        public override void Dispose()
         {
+            base.Dispose();
+
             Source?.Dispose();
-            UpdateEvent = null;
         }
     }
 }

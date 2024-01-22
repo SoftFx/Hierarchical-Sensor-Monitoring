@@ -34,4 +34,6 @@ namespace HSMServer.Dashboards
 
 
     public record PanelSourceUpdate(string Name, string Color, string Property);
+
+    public record PanelSubscriptionUpdate(string PathTemplate, string Name, string Color, string Property) : PanelSourceUpdate(Name, Color, Property);
 }
