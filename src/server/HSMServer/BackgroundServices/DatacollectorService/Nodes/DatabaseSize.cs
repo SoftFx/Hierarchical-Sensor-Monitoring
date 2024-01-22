@@ -24,24 +24,16 @@ namespace HSMServer.BackgroundServices
         private readonly IDataCollector _collector;
         private readonly IDatabaseCore _database;
 
-        private readonly IInstantValueSensor<double> _environmentDbSizeSensor;
-        private readonly IInstantValueSensor<double> _snapshotsDbSizeSensor;
-        private readonly IInstantValueSensor<double> _historyDbSizeSensor;
-        private readonly IInstantValueSensor<double> _journalDbSizeSensor;
-        private readonly IInstantValueSensor<double> _layoutDbSizeSensor;
-        private readonly IInstantValueSensor<double> _backupsSizeSensor;
-        private readonly IInstantValueSensor<double> _dbSizeSensor;
 
-
-        private readonly Dictionary<string, string> Descriptions = new()
+        private readonly Dictionary<string, DatabaseSizeSensor> Sensors = new()
         {
-            { EnvironmentDbName, "The database contains all server entities meta information (folders, products, sensors, users and etc.)." },
-            { HistoryDbName, "The database contains sensors history divided into weekly folders." },
-            { LayoutDbName, "The database contains information about dashboards (meta information, information about charts, panels and etc.)." },
-            { SnaphotsDbName, "The database contains current state of tree (last update time of sensors, timeouts and etc.)." },
-            { JournalsDbName, "The database contains journal records for each sensor." },
-            { BackupsDbName, "The database contains backups of Environment and ServerLayout databases." },
-            { TotalDbName, "All database size is the sum of the sizes of Environment, SensorValues, Snapshots, ServerLayout and Journals databases." },
+            { EnvironmentDbName, new("The database contains all server entities meta information (folders, products, sensors, users and etc.).") },
+            { HistoryDbName, new("The database contains sensors history divided into weekly folders.") },
+            { LayoutDbName, new("The database contains information about dashboards (meta information, information about charts, panels and etc.).") },
+            { SnaphotsDbName, new("The database contains current state of tree (last update time of sensors, timeouts and etc.).") },
+            { JournalsDbName, new("The database contains journal records for each sensor.") },
+            { BackupsDbName, new("The database contains backups of Environment and ServerLayout databases.") },
+            { TotalDbName, new("All database size is the sum of the sizes of Environment, SensorValues, Snapshots, ServerLayout and Journals databases.") },
         };
 
 
@@ -50,34 +42,25 @@ namespace HSMServer.BackgroundServices
             _collector = collector;
             _database = database;
 
-            _environmentDbSizeSensor = CreateDataSizeSensor(EnvironmentDbName);
-            _snapshotsDbSizeSensor = CreateDataSizeSensor(SnaphotsDbName);
-            _historyDbSizeSensor = CreateDataSizeSensor(HistoryDbName);
-            _journalDbSizeSensor = CreateDataSizeSensor(JournalsDbName);
-            _layoutDbSizeSensor = CreateDataSizeSensor(LayoutDbName);
-            _backupsSizeSensor = CreateDataSizeSensor(BackupsDbName);
-            _dbSizeSensor = CreateDataSizeSensor(TotalDbName);
+            CreateDataSizeSensor(EnvironmentDbName, () => _database.EnviromentDbSize);
+            CreateDataSizeSensor(SnaphotsDbName, () => _database.SensorHistoryDbSize);
+            CreateDataSizeSensor(HistoryDbName, () => _database.ServerLayoutDbSize);
+            CreateDataSizeSensor(JournalsDbName, () => _database.Snapshots.Size);
+            CreateDataSizeSensor(LayoutDbName, () => _database.JournalDbSize);
+            CreateDataSizeSensor(BackupsDbName, () => _database.BackupsSize);
+            CreateDataSizeSensor(TotalDbName, () => _database.TotalDbSize);
         }
 
 
         internal void SendInfo()
         {
-            static double GetRoundedDouble(long sizeInBytes)
-            {
-                return Math.Round(sizeInBytes / MbDivisor, DigitsCnt, MidpointRounding.AwayFromZero);
-            }
-
-            _environmentDbSizeSensor.AddValue(GetRoundedDouble(_database.EnviromentDbSize));
-            _historyDbSizeSensor.AddValue(GetRoundedDouble(_database.SensorHistoryDbSize));
-            _layoutDbSizeSensor.AddValue(GetRoundedDouble(_database.ServerLayoutDbSize));
-            _snapshotsDbSizeSensor.AddValue(GetRoundedDouble(_database.Snapshots.Size));
-            _journalDbSizeSensor.AddValue(GetRoundedDouble(_database.JournalDbSize));
-            _backupsSizeSensor.AddValue(GetRoundedDouble(_database.BackupsSize));
-            _dbSizeSensor.AddValue(GetRoundedDouble(_database.TotalDbSize));
+            foreach (var (_, sensor) in Sensors)
+                sensor.SendInfo();
         }
 
-        private IInstantValueSensor<double> CreateDataSizeSensor(string databaseName)
+        private void CreateDataSizeSensor(string databaseName, Func<long> getSizeFunc)
         {
+            var sensor = Sensors[databaseName];
             var options = new InstantSensorOptions
             {
                 Alerts = [],
@@ -85,10 +68,36 @@ namespace HSMServer.BackgroundServices
                 EnableForGrafana = true,
                 SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.MB,
 
-                Description = $"The sensor sends information about {databaseName} database size. {Descriptions[databaseName]}"
+                Description = $"The sensor sends information about {databaseName} database size. {sensor.Description}"
             };
 
-            return _collector.CreateDoubleSensor($"Database/{databaseName} data size", options);
+            sensor.GetSize = getSizeFunc;
+            sensor.Sensor = _collector.CreateDoubleSensor($"Database/{databaseName} data size", options);
+        }
+
+
+        private sealed record DatabaseSizeSensor
+        {
+            internal string Description { get; init; }
+
+
+            internal IInstantValueSensor<double> Sensor { get; set; }
+
+            internal Func<long> GetSize { get; set; }
+
+
+            internal DatabaseSizeSensor(string description) => Description = description;
+
+
+            internal void SendInfo()
+            {
+                static double GetRoundedDouble(long sizeInBytes)
+                {
+                    return Math.Round(sizeInBytes / MbDivisor, DigitsCnt, MidpointRounding.AwayFromZero);
+                }
+
+                Sensor.AddValue(GetRoundedDouble(GetSize()));
+            }
         }
     }
 }
