@@ -1,13 +1,11 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+﻿using HSMCommon.Collections.Reactive;
+using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
-using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Dashboards.Panels.Modules;
 using HSMServer.Extensions;
 using System;
-using System.Collections.Concurrent;
 using System.Linq;
-using System.Threading;
 
 namespace HSMServer.Dashboards
 {
@@ -16,9 +14,10 @@ namespace HSMServer.Dashboards
         private readonly Dashboard _board;
 
 
-        public ConcurrentDictionary<Guid, PanelSubscription> Subscriptions { get; } = new();
+        public RDict<PanelSubscription> Subscriptions { get; }
 
-        public ConcurrentDictionary<Guid, PanelDatasource> Sources { get; } = new();
+        public RDict<PanelDatasource> Sources { get; }
+
 
         public PanelSettings Settings { get; } = new();
 
@@ -36,6 +35,9 @@ namespace HSMServer.Dashboards
         internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
         {
             _board = board;
+
+            Subscriptions = new RDict<PanelSubscription>(ThrowUpdateEvent);
+            Sources = new RDict<PanelDatasource>(ThrowUpdateEvent);
 
             if (entity.Settings is not null)
                 Settings.FromEntity(entity.Settings);
@@ -79,24 +81,19 @@ namespace HSMServer.Dashboards
 
         public bool TryAddSource(Guid sensorId, PanelSourceEntity entity)
         {
-            return _board.TryGetSensor(sensorId, out var sensor) && TrySaveNewSource(new PanelDatasource(sensor, entity), out _);
+            return _board.TryGetSensor(sensorId, out var sensor) && TrySaveNewSource(new PanelDatasource(sensor, entity), out _).IsOk;
         }
 
         public bool TryAddSource(Guid sensorId, out PanelDatasource source, out string error)
         {
             source = _board.TryGetSensor(sensorId, out var sensor) ? new PanelDatasource(sensor) : null;
 
-            var result = TrySaveNewSource(source, out error);
-
-            if (result)
-                ThrowUpdateEvent();
-
-            return result;
+            return TrySaveNewSource(source, out error).ThenCall().IsOk; ;
         }
 
         public bool TryRemoveSource(Guid sourceId)
         {
-            if (Sources.TryRemove(sourceId, out var source))
+            void RemoveSource(PanelDatasource source)
             {
                 if (Sources.IsEmpty)
                 {
@@ -104,63 +101,38 @@ namespace HSMServer.Dashboards
                     MainUnit = null;
                 }
 
-                UnsubscribeModuleWithCall(source);
-
-                return true;
+                DisposeModule(source);
             }
 
-            return false;
+            return Sources.IfTryRemove(sourceId).ThenCallForSuccess(RemoveSource).ThenCall().IsOk;
         }
 
 
-        public bool TryAddSubscription(PanelSubscription subscription)
-        {
-            var result = Subscriptions.TryAdd(subscription.Id, subscription);
+        private void SubscribeModuleToUpdates(IPanelModule module) => module.UpdateEvent += ThrowUpdateEvent;
 
-            if (result)
-                subscription.UpdateEvent += ThrowUpdateEvent;
+        private void DisposeModule(IPanelModule module) => module.Dispose();
 
-            return result;
-        }
+
+        public bool TryAddSubscription(PanelSubscription sub) => Subscriptions.IfTryAdd(sub.Id, sub).ThenCallForSuccess(SubscribeModuleToUpdates).IsOk;
 
         public bool TryAddSubscription(out PanelSubscription subscription)
         {
             subscription = new PanelSubscription();
 
-            var result = TryAddSubscription(subscription);
-
-            if (result)
-                ThrowUpdateEvent();
-
-            return result;
+            return Subscriptions.IfTryAdd(subscription.Id, subscription).ThenCallForSuccess(SubscribeModuleToUpdates).ThenCall().IsOk;
         }
 
-        public bool TryRemoveSubscription(Guid id)
+        public bool TryRemoveSubscription(Guid id) => Subscriptions.IfTryRemove(id).ThenCallForSuccess(DisposeModule).ThenCall().IsOk;
+
+
+        private RDictResult<PanelDatasource> TrySaveNewSource(PanelDatasource source, out string error)
         {
-            var result = Subscriptions.TryRemove(id, out var sub);
-
-            if (result)
-                UnsubscribeModuleWithCall(sub);
-
-            return result;
-        }
-
-
-        private bool TrySaveNewSource(PanelDatasource source, out string error)
-        {
-            bool TryAddNewSource(PanelDatasource source)
-            {
-                var existingSource = Sources.FirstOrDefault(x => x.Key != source.Id && x.Value.SensorId == source.SensorId).Value;
-
-                return (existingSource is null || existingSource.Sensor.Type.IsBar()) && Sources.TryAdd(source.Id, source);
-            }
-
             error = string.Empty;
 
             if (source is null)
             {
                 error = "Source not found";
-                return false;
+                return RDictResult<PanelDatasource>.ErrorResult;
             }
 
             var sourceUnit = source.Sensor.OriginalUnit;
@@ -170,9 +142,8 @@ namespace HSMServer.Dashboards
                 error = $"Can't plot using {sourceType} sensor type";
             else if (!MainUnit.IsNullOrEqual(sourceUnit))
                 error = $"Can't plot using {sourceUnit} unit type";
-            else if (!TryAddNewSource(source))
-                error = "Source already exists";
-            else
+
+            void ApplyNewSource(PanelDatasource source)
             {
                 MainSensorType = sourceType;
                 MainUnit = sourceUnit ?? MainUnit;
@@ -181,15 +152,9 @@ namespace HSMServer.Dashboards
                 source.UpdateEvent += ThrowUpdateEvent;
             }
 
-            return string.IsNullOrEmpty(error);
+            return Sources.IfTryAdd(source.Id, source).ThenCallForSuccess(ApplyNewSource);
         }
 
-
-        private void UnsubscribeModuleWithCall(IPanelModule module)
-        {
-            module.Dispose();
-            ThrowUpdateEvent();
-        }
 
         private static bool IsSupportedType(SensorType type) =>
             type is SensorType.Integer or SensorType.Double or SensorType.TimeSpan or SensorType.IntegerBar or SensorType.DoubleBar;

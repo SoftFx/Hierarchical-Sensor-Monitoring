@@ -12,7 +12,7 @@ public sealed class PanelViewModel
 {
     private const string DefaultName = "New Panel";
 
-    public CGuidDict<DatasourceViewModel> Sources { get; }
+    public CDict<DatasourceViewModel> Sources { get; }
 
 
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -44,7 +44,7 @@ public sealed class PanelViewModel
         DashboardId = dashboardId;
         Settings = panel.Settings;
 
-        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x => new DatasourceViewModel(x.Value)));
+        Sources = new CDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x => new DatasourceViewModel(x.Value)));
     }
 
 

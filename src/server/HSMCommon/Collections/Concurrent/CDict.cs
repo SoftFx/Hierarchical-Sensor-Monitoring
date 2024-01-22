@@ -4,14 +4,14 @@ using System.Collections.Generic;
 
 namespace HSMCommon.Collections
 {
-    public sealed class CDict<T> : CDictBase<string, T> where T : new() { }
+    public sealed class CStringDict<T> : CDictBase<string, T> where T : new() { }
 
 
-    public sealed class CGuidDict<T> : CDictBase<Guid, T> where T : new()
+    public sealed class CDict<T> : CDictBase<Guid, T> where T : new()
     {
-        public CGuidDict() : base() { }
+        public CDict() : base() { }
 
-        public CGuidDict(Dictionary<Guid, T> dict) : base(dict) { }
+        public CDict(Dictionary<Guid, T> dict) : base(dict) { }
     }
 
 

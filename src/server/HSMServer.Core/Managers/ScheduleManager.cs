@@ -6,7 +6,7 @@ namespace HSMServer.Core.Managers
 {
     internal sealed class ScheduleManager : BaseTimeManager
     {
-        private readonly CTimeDict<CGuidDict<ScheduleAlertMessage>> _storage = new();
+        private readonly CTimeDict<CDict<ScheduleAlertMessage>> _storage = new();
 
 
         internal void ProcessMessage(AlertMessage message)
