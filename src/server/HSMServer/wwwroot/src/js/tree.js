@@ -11,6 +11,8 @@ const AjaxPost = {
 };
 
 var searchInterval = 1000; // 1 sec
+var searchClientRefresh = false;
+var searchServerRefresh = false;
 var emptySearch = false;
 var prevState = {};
 
@@ -18,7 +20,6 @@ window.initializeTree = function () {
     initDropzone()
     
     var sortingType = $("input[name='TreeSortType']:checked");
-    var searchRefresh = false;
 
     if (window.localStorage.jstree) {
         let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
@@ -41,7 +42,8 @@ window.initializeTree = function () {
                 data: function (node) {
                     return {
                         'id': node.id,
-                        'searchParameter': $('#search_field').val()
+                        'searchParameter': $('#search_field').val(),
+                        'isSearchRefresh': searchServerRefresh
                     }
                 }
             }
@@ -70,7 +72,7 @@ window.initializeTree = function () {
             updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
         }
 
-        if (searchRefresh) {
+        if (searchClientRefresh) {
             $(this).jstree(true).get_json('#', { flat: true }).forEach((node) => {
                 if (node.state.loaded === true)
                     $(this).jstree('open_node', node.id);
@@ -78,7 +80,7 @@ window.initializeTree = function () {
 
             $(this).show();
             $('#jstreeSpinner').addClass('d-none');
-            searchRefresh = false;
+            searchClientRefresh = false;
         }
 
         if (jQuery.isEmptyObject(prevState)) {
@@ -100,6 +102,7 @@ window.initializeTree = function () {
                 $(`#${selectedIds[0]}`)[0].scrollIntoView();
 
             emptySearch = false;
+            searchServerRefresh = false;
         }
     }).on('open_node.jstree', function (e, data) {
         collapseButton.reset();
@@ -162,9 +165,13 @@ window.initializeTree = function () {
             prevState = $('#jstree').jstree('get_state')
 
         $('#search_field').val(value);
+        
+        searchClientRefresh = true;
+        
         $('#jstree').hide().jstree(true).refresh(true);
 
-        searchRefresh = true;
+        searchServerRefresh = true;
+
         $('#jstreeSpinner').removeClass('d-none')
     }
 }

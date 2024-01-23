@@ -22,6 +22,7 @@ public sealed class VisibleTreeViewModel
     private readonly ConcurrentDictionary<Guid, NodeShallowModel> _allTree = new();
     private readonly CHash<Guid> _openedNodes = new();
     private readonly CHash<Guid> _searchOpenedNodes = new(1 << 6);
+    private readonly CHash<Guid> _addedSearchNodes = new(1 << 2);
 
     private readonly User _user;
 
@@ -48,10 +49,14 @@ public sealed class VisibleTreeViewModel
 
     public void RemoveOpenedNode(params Guid[] ids) => OpenedNodes.Remove(ids);
 
-    public void ClearOpenedNodes() => OpenedNodes.Clear();
+    public void ClearOpenedNodes()
+    {
+        OpenedNodes.Clear();
+        _addedSearchNodes.Clear();
+    }
 
 
-    public List<BaseShallowModel> GetUserTree(string searchParameter = null)
+    public List<BaseShallowModel> GetUserTree(string searchParameter = null, bool isSearchRefresh = false)
     {
         // products should be updated before folders because folders should contain updated products
         var products = GetUserProducts?.Invoke(_user).GetOrdered(_user);
@@ -64,7 +69,7 @@ public sealed class VisibleTreeViewModel
         SearchedSensors.Clear();
         _allTree.Clear();
 
-        if (_isSearch)
+        if (!isSearchRefresh && _isSearch)
             ClearOpenedNodes();
 
         foreach (var product in products)
@@ -103,12 +108,15 @@ public sealed class VisibleTreeViewModel
         return folderTree;
     }
 
-    public NodeShallowModel LoadNode(ProductNodeViewModel globalModel)
+    public NodeShallowModel LoadNode(ProductNodeViewModel globalModel, bool isSearchRefresh = false)
     {
         var id = globalModel.Id;
 
         if (_allTree.TryGetValue(id, out var node) && IsVisibleNodeForUser(node))
         {
+            if (isSearchRefresh)
+                _addedSearchNodes.Add(id);
+
             node.LoadRenderingNodes();
             AddOpenedNode(id);
         }
@@ -127,7 +135,7 @@ public sealed class VisibleTreeViewModel
         {
             var subNode = node.AddChild(FilterNodes(nodeModel, searchParameter, out var currentNodeToRender));
 
-            if (subNode.IsNameContainsPattern(searchParameter) || currentNodeToRender)
+            if (subNode.IsNameContainsPattern(searchParameter) || currentNodeToRender || _addedSearchNodes.Contains(subNode.Id))
             {
                 toRender = node.ToRenderNode(subNode.Id);
                 AddOpenedNode(subNode.Id);
@@ -138,7 +146,7 @@ public sealed class VisibleTreeViewModel
         {
             var sensor = node.AddChild(new SensorShallowModel(sensorModel, _user), _user);
 
-            if (sensor.IsNameContainsPattern(searchParameter))
+            if (sensor.IsNameContainsPattern(searchParameter) || _addedSearchNodes.Contains(node.Id))
             {
                 toRender = node.ToRenderNode(sensor.Id);
 

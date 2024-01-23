@@ -121,9 +121,9 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetNode(string id) =>
+        public IActionResult GetNode(string id, bool isSearchRefresh = false) =>
             _treeViewModel.Nodes.TryGetValue(id.ToGuid(), out var node)
-                ? PartialView("~/Views/Tree/_TreeNode.cshtml", CurrentUser.Tree.LoadNode(node))
+                ? PartialView("~/Views/Tree/_TreeNode.cshtml", CurrentUser.Tree.LoadNode(node, isSearchRefresh))
                 : NotFound();
 
         [HttpPut]
@@ -146,8 +146,8 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult RefreshTree(string searchParameter) =>
-            PartialView("~/Views/Tree/_Tree.cshtml", CurrentUser.Tree.GetUserTree(searchParameter));
+        public IActionResult RefreshTree(string searchParameter, bool isSearchRefresh = false) =>
+            PartialView("~/Views/Tree/_Tree.cshtml", CurrentUser.Tree.GetUserTree(searchParameter, isSearchRefresh));
 
         [HttpGet]
         public IActionResult ApplyFilter(UserFilterViewModel viewModel)
