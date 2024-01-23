@@ -113,6 +113,13 @@ namespace HSMServer.Controllers
             return PartialView("_NodeDataPanel", viewModel);
         }
 
+        [HttpPost]
+        public IActionResult AddToRenderingTree([FromBody] params Guid[] ids)
+        {
+            CurrentUser.Tree.AddOpenedNodes(ids);
+            return Ok();
+        }
+
         [HttpGet]
         public IActionResult GetNode(string id) =>
             _treeViewModel.Nodes.TryGetValue(id.ToGuid(), out var node)
