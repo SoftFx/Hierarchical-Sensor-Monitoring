@@ -200,7 +200,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddSensorValue(SensorValueEntity valueEntity)
         {
-            var dbs = _sensorValuesDatabases.GetNewestDatabases(valueEntity.ReceivingTime);
+            var dbs = _sensorValuesDatabases.GetDatabaseByTime(valueEntity.ReceivingTime);
             var key = BuildSensorValueKey(valueEntity.SensorId, valueEntity.ReceivingTime);
 
             dbs.PutSensorValue(key, valueEntity.Value);

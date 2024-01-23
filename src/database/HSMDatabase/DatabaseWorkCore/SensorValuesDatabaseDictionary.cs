@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager;
+﻿using HSMCommon.Collections;
+using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB;
 using System.Collections;
 using System.Collections.Concurrent;
@@ -10,46 +11,48 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     internal sealed class SensorValuesDatabaseDictionary : IEnumerable<ISensorValuesDatabase>
     {
-        private readonly ConcurrentQueue<ISensorValuesDatabase> _sensorDbs = new();
-        private readonly IDatabaseSettings _dbSettings;
+        private readonly CPriorityQueue<ISensorValuesDatabase, long> _sensorDbs = new();
+        private readonly SortedList<ISensorValuesDatabase, long> _sortedList = new();
 
-        private ISensorValuesDatabase _lastDb;
+        private readonly IDatabaseSettings _dbSettings;
 
 
         internal SensorValuesDatabaseDictionary(IDatabaseSettings dbSettings)
         {
+            ConcurrentBag
             _dbSettings = dbSettings;
 
             var sensorValuesDirectories = GetSensorValuesDirectories();
             foreach (var directory in sensorValuesDirectories)
             {
                 (var from, var to) = GetDatesFromFolderName(directory);
-                AddNewDb(directory, from, to);
-            }
-        }
-
-
-        internal ISensorValuesDatabase GetNewestDatabases(long time)
-        {
-            if (_lastDb == null || _lastDb.To < time)
-            {
-                var from = DateTimeMethods.GetMinDateTimeTicks(time);
-                var to = DateTimeMethods.GetMaxDateTimeTicks(time);
-
-                return AddNewDb(_dbSettings.GetPathToSensorValueDatabase(from, to), from, to);
+                _sensorDbs.Add(BuildNewDatabase(directory, from, to));
             }
 
-            return _lastDb;
+            FixDatabaseOrder();
         }
 
-        internal ISensorValuesDatabase AddNewDb(string name, long from, long to)
+
+        internal ISensorValuesDatabase GetDatabaseByTime(long time)
         {
-            _lastDb = LevelDBManager.GetSensorValuesDatabaseInstance(name, from, to);
+            foreach (var db in this)
+                if (db.IsInclude(time))
+                    return db;
+                else if (time < db.From)
+                    break;
 
-            _sensorDbs.Enqueue(_lastDb);
+            var from = DateTimeMethods.GetMinDateTimeTicks(time);
+            var to = DateTimeMethods.GetMaxDateTimeTicks(time);
 
-            return _lastDb;
+            var newDb = BuildNewDatabase(_dbSettings.GetPathToSensorValueDatabase(from, to), from, to);
+            _sensorDbs.Add(newDb);
+
+            FixDatabaseOrder();
+
+            return newDb;
         }
+
+        private void FixDatabaseOrder() => _sensorDbs = new ConcurrentBag<ISensorValuesDatabase>(_sensorDbs.OrderBy(u => u.From));
 
         private List<string> GetSensorValuesDirectories()
         {
@@ -58,6 +61,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return sensorValuesDirectories.OrderBy(d => d).ToList();
         }
+
+
+        private static ISensorValuesDatabase BuildNewDatabase(string name, long from, long to) => LevelDBManager.GetSensorValuesDatabaseInstance(name, from, to);
 
         private static (long from, long to) GetDatesFromFolderName(string folder)
         {
