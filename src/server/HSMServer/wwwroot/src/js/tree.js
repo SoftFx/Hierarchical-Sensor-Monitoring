@@ -127,12 +127,13 @@ window.initializeTree = function () {
                 let jstreeState = JSON.parse(localStorage.getItem('jstree'));
                 prevState.core.selected = jstreeState.state.core.selected;
                 let currenotSelectedNode = $('#jstree').jstree('get_node', prevState.core.selected[0]);
-                $.ajax({
-                    url: `${addNodes}`,
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(currenotSelectedNode.parents.slice(0, -1))
-                })
+                if (currenotSelectedNode)
+                    $.ajax({
+                        url: `${addNodes}`,
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify(currenotSelectedNode.parents.slice(0, -1))
+                    })
                 jstreeState.state.core = prevState.core;
                 localStorage.setItem('jstree', JSON.stringify(jstreeState));
                 $('#jstree').jstree(true).refresh(true, true);
