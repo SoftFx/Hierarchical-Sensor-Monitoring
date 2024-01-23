@@ -35,7 +35,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public long TotalDbSize => _settings.DatabaseFolder.GetSize();
 
-        public long EnviromentDbSize => _settings.PathToEnvironmentDb.GetSize();
+        public long ConfigDbSize => _settings.PathToEnvironmentDb.GetSize() + _settings.PathToServerLayoutDb.GetSize() + Snapshots.Size;
 
         public long SensorHistoryDbSize
         {
@@ -49,6 +49,10 @@ namespace HSMDatabase.DatabaseWorkCore
                 return size;
             }
         }
+
+        public long JournalDbSize => _settings.PathToJournalDb.GetSize();
+
+        public long BackupsSize => _settings.DatabaseBackupsFolder.GetSize();
 
 
         private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
