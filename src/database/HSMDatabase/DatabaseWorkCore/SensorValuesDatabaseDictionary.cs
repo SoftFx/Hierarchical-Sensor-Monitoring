@@ -33,7 +33,7 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var db in this)
                 if (db.IsInclude(time))
                     return db;
-                else if (time < db.From)
+                else if (time > db.To)
                     break;
 
             var from = DateTimeMethods.GetMinDateTimeTicks(time);

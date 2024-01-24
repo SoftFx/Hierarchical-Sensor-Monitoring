@@ -107,15 +107,15 @@ namespace HSMDatabase.DatabaseWorkCore
             var curDb = _sensorValuesDatabases.GetEnumerator();
             var maxBorder = DateTime.MaxValue.Ticks;
 
-            curDb.MoveNext(); //go to first db
+            var dbExist = curDb.MoveNext(); //go to first db
 
             foreach (var (sensorId, time) in orderedList)
                 if (time < maxBorder) //skip no data sensors
                 {
-                    while (curDb.Current != null && !curDb.Current.IsInclude(time))
-                        curDb.MoveNext();
+                    while (dbExist && !curDb.Current.IsInclude(time))
+                        dbExist = curDb.MoveNext();
 
-                    if (curDb.Current != null)
+                    if (dbExist)
                     {
                         var id = sensorId.ToString();
 
@@ -238,13 +238,13 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = BuildSensorValueKey(sensorId.ToString(), fromTicks);
             var toBytes = BuildSensorValueKey(sensorId.ToString(), toTicks);
 
-            var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList(); //TODO check direction
-            GetValuesFunc getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
+            var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
+            GetValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
 
-            if (count > 0)
+            if (count < 0)
             {
                 databases.Reverse();
-                getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
+                getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
             }
 
             return GetSensorValuesPage(databases, count, getValues);
