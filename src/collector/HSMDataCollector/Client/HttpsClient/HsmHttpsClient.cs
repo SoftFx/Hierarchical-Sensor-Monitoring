@@ -89,7 +89,7 @@ namespace HSMDataCollector.Client
 
             var data = new StringContent(json, Encoding.UTF8, "application/json");
 
-            return _polly.Pipeline.ExecuteAsync(async token => await PostAsync(uri, data, json, token), _tokenSource.Token).AsTask();
+            return (uri == _endpoints.CommandsList ? _polly.CommandsPipeline : _polly.Pipeline).ExecuteAsync(async token => await PostAsync(uri, data, json, token), _tokenSource.Token).AsTask();
         }
 
         private async Task<HttpResponseMessage> PostAsync(string uri, HttpContent data, string json, CancellationToken token)

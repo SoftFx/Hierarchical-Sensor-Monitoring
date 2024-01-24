@@ -18,6 +18,8 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
             .HandleResult(r => r.StatusCode.IsRetryCode());
 
         internal ResiliencePipeline<HttpResponseMessage> Pipeline { get; }
+        
+        internal ResiliencePipeline<HttpResponseMessage> CommandsPipeline { get; }
 
 
         public PollyStrategy()
@@ -44,8 +46,14 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
                     ? Outcome.FromResultAsValueTask(args.Outcome.Result) 
                     : Outcome.FromExceptionAsValueTask<HttpResponseMessage>(args.Outcome.Exception),
             };
-
+            
             Pipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
+                .AddFallback(fallbackStrategyOptions)
+                .AddRetry(retryStrategyOptions)
+                .Build();
+
+            retryStrategyOptions.MaxRetryAttempts = int.MaxValue;
+            CommandsPipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
                 .AddFallback(fallbackStrategyOptions)
                 .AddRetry(retryStrategyOptions)
                 .Build();
