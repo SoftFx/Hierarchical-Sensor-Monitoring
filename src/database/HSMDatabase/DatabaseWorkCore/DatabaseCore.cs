@@ -86,7 +86,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var maxKey = BuildSensorValueKey(sensorId.ToString(), to);
             var idBytes = Encoding.UTF8.GetBytes(sensorId.ToString());
 
-            foreach (var database in _sensorValuesDatabases.Reverse())
+            foreach (var database in _sensorValuesDatabases)
                 if (database.From <= to)
                 {
                     var value = database.GetLatest(maxKey, idBytes);
@@ -101,7 +101,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors)
         {
-            var orderedList = sensors.OrderBy(u => u.Value).ToList();
+            var orderedList = sensors.OrderByDescending(u => u.Value).ToList();
             var result = GetResult(sensors.Keys.ToList());
 
             var curDb = _sensorValuesDatabases.GetEnumerator();
@@ -112,7 +112,7 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var (sensorId, time) in orderedList)
                 if (time < maxBorder) //skip no data sensors
                 {
-                    while (curDb.Current != null && curDb.Current.To < time)
+                    while (curDb.Current != null && !curDb.Current.IsInclude(time))
                         curDb.MoveNext();
 
                     if (curDb.Current != null)
@@ -137,7 +137,7 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var (id, (from, to)) in sensors)
                 tempResult.Add(Encoding.UTF8.GetBytes(id.ToString()), (from, BuildSensorValueKey(id.ToString(), to), null));
 
-            foreach (var database in _sensorValuesDatabases.Reverse())
+            foreach (var database in _sensorValuesDatabases)
                 database.FillLatestValues(tempResult);
 
             foreach (var (key, (_, _, value)) in tempResult)
@@ -170,8 +170,12 @@ namespace HSMDatabase.DatabaseWorkCore
             var toBytes = BuildSensorValueKey(sensorId, toTicks);
 
             foreach (var db in _sensorValuesDatabases)
+            {
                 if (db.IsInclude(fromTicks, toTicks))
                     db.RemoveSensorValues(fromBytes, toBytes);
+                else if (db.To < fromTicks)
+                    break;
+            }
         }
 
         public (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId)
@@ -204,7 +208,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddSensorValue(SensorValueEntity valueEntity)
         {
-            var dbs = _sensorValuesDatabases.GetNewestDatabases(valueEntity.ReceivingTime);
+            var dbs = _sensorValuesDatabases.GetDatabaseByTime(valueEntity.ReceivingTime);
             var key = BuildSensorValueKey(valueEntity.SensorId, valueEntity.ReceivingTime);
 
             dbs.PutSensorValue(key, valueEntity.Value);
@@ -234,13 +238,13 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = BuildSensorValueKey(sensorId.ToString(), fromTicks);
             var toBytes = BuildSensorValueKey(sensorId.ToString(), toTicks);
 
-            var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
-            GetValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
+            var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList(); //TODO check direction
+            GetValuesFunc getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
 
-            if (count < 0)
+            if (count > 0)
             {
                 databases.Reverse();
-                getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
+                getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
             }
 
             return GetSensorValuesPage(databases, count, getValues);
