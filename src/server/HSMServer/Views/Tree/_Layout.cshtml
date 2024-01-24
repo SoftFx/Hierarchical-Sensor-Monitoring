@@ -74,6 +74,10 @@
                         <button id="search_tree" type="button" class="btn no-border">
                             <i class="fas fa-search"></i>
                         </button>
+                        <button id="match_word" title="Match whole word" type="button" class="btn no-border ps-1 pe-2">
+                            <i class="fa-brands fa-wordpress" style="color: red"></i>
+                            <i class="fa-brands fa-wordpress-simple" style="display:none; color: green"></i>
+                        </button>
                     </form>
                 </div>
 
@@ -119,6 +123,10 @@
 
     $(document).ready(() => {
         $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
+    })
+    
+    $('#match_word').on('click', function (e){
+        $('.fa-wordpress, .fa-wordpress-simple').toggle()
     })
 
     $(window).on('load', function () {
