@@ -49,8 +49,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
         }
 
 
-        internal bool IsNameContainsPattern(string pattern) =>
-            Data.Name.Contains(pattern, StringComparison.OrdinalIgnoreCase);
+        internal bool IsNameContainsPattern(string pattern, bool isMatchWord) =>
+            isMatchWord ? Data.Name.Equals(pattern) : Data.Name.Contains(pattern, StringComparison.OrdinalIgnoreCase);
 
         public override string ToString() => Data.Name;
     }

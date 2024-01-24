@@ -43,7 +43,8 @@ window.initializeTree = function () {
                     return {
                         'id': node.id,
                         'searchParameter': $('#search_field').val(),
-                        'isSearchRefresh': searchServerRefresh
+                        'isSearchRefresh': searchServerRefresh,
+                        'isMatchWord': $('#match_word .fa-wordpress').is(":hidden")
                     }
                 }
             }
