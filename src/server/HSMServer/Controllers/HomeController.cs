@@ -127,7 +127,7 @@ namespace HSMServer.Controllers
                 : NotFound();
 
         [HttpPut]
-        public void RemoveRenderingNode([FromBody] RemoveNodesRequestModel request) => CurrentUser.Tree.RemoveOpenedNode(request.NodeIds);
+        public void RemoveRenderingNode([FromBody] RemoveNodesRequestModel request) => CurrentUser.Tree.RemoveOpenedNode(request);
 
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)

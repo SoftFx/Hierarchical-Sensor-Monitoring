@@ -14,6 +14,8 @@ namespace HSMServer.Model.TreeViewModels;
 public class RemoveNodesRequestModel
 {
     public Guid[] NodeIds { get; set; }
+    
+    public bool IsSearch { get; set; }
 }
 
 
@@ -47,7 +49,11 @@ public sealed class VisibleTreeViewModel
 
     public void AddOpenedNodes(IEnumerable<Guid> ids) => _openedNodes.AddRange(ids);
 
-    public void RemoveOpenedNode(params Guid[] ids) => OpenedNodes.Remove(ids);
+    public void RemoveOpenedNode(RemoveNodesRequestModel request)
+    {
+        _isSearch = request.IsSearch;
+        OpenedNodes.Remove(request.NodeIds);
+    }
 
     public void ClearOpenedNodes()
     {
@@ -71,6 +77,9 @@ public sealed class VisibleTreeViewModel
 
         if (!isSearchRefresh && _isSearch)
             ClearOpenedNodes();
+        
+        if (!_isSearch)
+            _addedSearchNodes.Clear();
 
         foreach (var product in products)
         {

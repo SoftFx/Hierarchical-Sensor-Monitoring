@@ -14,7 +14,7 @@ var searchInterval = 1000; // 1 sec
 var searchClientRefresh = false;
 var searchServerRefresh = false;
 var emptySearch = false;
-var prevState = {};
+var prevState = undefined;
 
 window.initializeTree = function () {
     initDropzone()
@@ -62,8 +62,11 @@ window.initializeTree = function () {
             cache: false,
             contentType: 'application/json',
             data: JSON.stringify({
-                nodeIds: [data.node.id]
+                nodeIds: [data.node.id],
+                isSearch: $('#search_input').val() !== ''
             })
+        }).done(function (){
+            $('#jstree').jstree('close_all', data.node.id)
         })
     }).on('refresh.jstree', function (e, data) {
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
@@ -83,7 +86,7 @@ window.initializeTree = function () {
             searchClientRefresh = false;
         }
 
-        if (jQuery.isEmptyObject(prevState)) {
+        if (jQuery.isEmptyObject(prevState) && prevState !== undefined) {
             let jstreeState = JSON.parse(localStorage.getItem('jstree'));
             jstreeState.state.core.open.forEach((node) => {
                 $(this).jstree('open_node', node);
@@ -93,6 +96,8 @@ window.initializeTree = function () {
                 $(this).jstree('open_node', node);
                 $(this).jstree('select_node', node);
             })
+            
+            prevState = undefined;
         }
 
         if (emptySearch !== undefined && emptySearch === true)
@@ -127,20 +132,8 @@ window.initializeTree = function () {
             emptySearch  = true;
             if (!jQuery.isEmptyObject(prevState))
             {
-                let jstreeState = JSON.parse(localStorage.getItem('jstree'));
-                prevState.core.selected = jstreeState.state.core.selected;
-                let currenotSelectedNode = $('#jstree').jstree('get_node', prevState.core.selected[0]);
-                if (currenotSelectedNode)
-                    $.ajax({
-                        url: `${addNodes}`,
-                        type: 'POST',
-                        contentType: 'application/json',
-                        data: JSON.stringify(currenotSelectedNode.parents.slice(0, -1))
-                    })
-                jstreeState.state.core = prevState.core;
-                localStorage.setItem('jstree', JSON.stringify(jstreeState));
+                applySelectedNodeToPreviousTreeState();
                 $('#jstree').jstree(true).refresh(true, true);
-                prevState = {};
             }
             else 
                 $('#jstree').jstree(true).refresh(true);
@@ -173,6 +166,23 @@ window.initializeTree = function () {
         searchServerRefresh = true;
 
         $('#jstreeSpinner').removeClass('d-none')
+    }
+    
+    function applySelectedNodeToPreviousTreeState()
+    {
+        let jstreeState = JSON.parse(localStorage.getItem('jstree'));
+        prevState.core.selected = jstreeState.state.core.selected;
+        let currenotSelectedNode = $('#jstree').jstree('get_node', prevState.core.selected[0]);
+        if (currenotSelectedNode)
+            $.ajax({
+                url: `${addNodes}`,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(currenotSelectedNode.parents.slice(0, -1))
+            })
+        jstreeState.state.core = prevState.core;
+        localStorage.setItem('jstree', JSON.stringify(jstreeState));
+        prevState = {};
     }
 }
 
