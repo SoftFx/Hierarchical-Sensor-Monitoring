@@ -22,8 +22,6 @@ namespace HSMServer.Datasources
 
     public abstract class SensorDatasourceBase : IDisposable
     {
-        private const int MaxVisibleCnt = 100;
-
         private readonly CLinkedList<BaseChartValue> _newVisibleValues = new();
         private readonly CLinkedList<BaseChartValue> _curVisibleValues = new();
 
