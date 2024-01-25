@@ -111,8 +111,9 @@ namespace HSMServer.Model.History
             summary.LastValue = value.LastValue;
             summary.CloseTime = value.CloseTime;
 
-            summary.Count += value.Count;
-
+            if (value.Count.CompareTo(summary.Count) > 0)
+                summary.Count = value.Count;
+            
             if (value.Max.CompareTo(summary.Max) > 0)
                 summary.Max = value.Max;
 
