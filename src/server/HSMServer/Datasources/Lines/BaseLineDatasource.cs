@@ -18,11 +18,11 @@ namespace HSMServer.Datasources
         protected override ChartType NormalType => ChartType.Line;
 
 
-        internal override SensorDatasourceBase AttachSensor(BaseSensorModel sensor, PlottedProperty plotProperty)
+        internal override SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings)
         {
-            base.AttachSensor(sensor, plotProperty);
+            base.AttachSensor(sensor, settings);
 
-            _getPropertyFactory = GetPropertyFactory();
+            _getPropertyFactory = GetPropertyFactory(settings.Property);
 
             return this;
         }
@@ -55,12 +55,12 @@ namespace HSMServer.Datasources
         }
 
 
-        protected abstract Func<TValue, TProp> GetPropertyFactory();
+        protected abstract Func<TValue, TProp> GetPropertyFactory(PlottedProperty property);
 
         protected abstract TChart ConvertToChartType(TProp value);
 
 
-        protected Exception BuildException() => new($"Unsupport cast property for {typeof(TValue).Name} {_plotProperty} from {typeof(TProp).Name} to {typeof(TChart).Name}");
+        protected Exception BuildException(PlottedProperty property) => new($"Unsupport cast property for {typeof(TValue).Name} {property} from {typeof(TProp).Name} to {typeof(TChart).Name}");
 
 
         private TChart ToChartValue(TValue value) => ConvertToChartType(_getPropertyFactory(value));

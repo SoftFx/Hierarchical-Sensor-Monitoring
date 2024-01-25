@@ -33,7 +33,7 @@ namespace HSMServer.Datasources
         protected BarBaseValue _lastBarValue; //TODO move to special derived class
         protected bool _isBarSensor;
 
-        protected PlottedProperty _plotProperty;
+        protected SourceSettings _settings;
 
 
         protected abstract ChartType AggregatedType { get; }
@@ -46,9 +46,9 @@ namespace HSMServer.Datasources
         protected abstract void ApplyToLast(BaseValue newValue);
 
 
-        internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, PlottedProperty plotProperty)
+        internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings)
         {
-            _plotProperty = plotProperty;
+            _settings = settings;
             _sensor = sensor;
 
             _isBarSensor = sensor.Type.IsBar();
@@ -63,7 +63,7 @@ namespace HSMServer.Datasources
             Initialize(new SensorHistoryRequest
             {
                 To = DateTime.UtcNow,
-                Count = -MaxVisibleCnt,
+                Count = -_settings.MaxVisibleCount,
             });
 
         public Task<InitChartSourceResponse> Initialize(DateTime from, DateTime to) =>
@@ -71,7 +71,7 @@ namespace HSMServer.Datasources
             {
                 From = from,
                 To = to,
-                Count = -TreeValuesCache.MaxHistoryCount
+                Count = -_settings.MaxVisibleCount,
             });
 
         public async Task<InitChartSourceResponse> Initialize(SensorHistoryRequest request)

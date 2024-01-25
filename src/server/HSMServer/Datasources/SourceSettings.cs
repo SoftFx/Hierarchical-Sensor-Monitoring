@@ -1,4 +1,6 @@
-﻿using HSMServer.Dashboards;
+﻿using HSMServer.Core.Cache;
+using HSMServer.Dashboards;
+using System;
 
 namespace HSMServer.Datasources
 {
@@ -9,10 +11,10 @@ namespace HSMServer.Datasources
 
         public PlottedProperty Property { get; init; }
 
-        public bool NotAggregateValues { get; init; }
+        public bool AggregateValues { get; init; }
 
         public int CustomVisibleCount { get; init; } = DefaultMaxVisibleCnt;
 
-        public int MaxVisibleCount => NotAggregateValues ? int.MaxValue : CustomVisibleCount;
+        public int MaxVisibleCount => AggregateValues ? Math.Max(CustomVisibleCount, TreeValuesCache.MaxHistoryCount) : int.MaxValue;
     }
 }

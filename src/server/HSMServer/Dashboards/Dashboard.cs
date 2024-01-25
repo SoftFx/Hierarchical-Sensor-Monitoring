@@ -32,8 +32,6 @@ namespace HSMServer.Dashboards
 
         protected override void UpdateCustom(DashboardUpdate update)
         {
-            base.Update(update);
-
             DataPeriod = update.FromPeriod;
         }
 
