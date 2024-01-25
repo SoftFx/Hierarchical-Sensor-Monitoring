@@ -36,7 +36,7 @@ public sealed class VisibleTreeViewModel
 
     private readonly User _user;
 
-    private SearchPattern _searchPattern;
+    private SearchPattern _searchPattern = new();
 
     
     public event Func<User, List<ProductNodeViewModel>> GetUserProducts;
