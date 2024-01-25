@@ -69,10 +69,7 @@
                         <button id="search_tree" type="button" title="Search" class="btn no-border">
                             <i class="fas fa-search"></i>
                         </button>
-                        <button id="match_word" title="Match whole word" type="button" class="btn no-border ps-1 pe-2">
-                            <i class="fa-solid fa-w icon-width-height-1 icon-border-grey-2" title="Match whole word" style="display: none"></i>
-                            <i class="fa-solid fa-won-sign icon-width-height-1" title="Match whole word" ></i>
-                        </button>
+                        <i class="fa-solid fa-w icon-width-height-1 icon-border-grey-2 me-2 align-self-center" title="Match whole word" style="display: none"></i>
                     </form>
                 </div>
 
@@ -118,10 +115,6 @@
 
     $(document).ready(() => {
         $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
-    })
-    
-    $('#match_word').on('click', function (e){
-        $('.fa-won-sign, .fa-w').toggle()
     })
 
     $(window).on('load', function () {

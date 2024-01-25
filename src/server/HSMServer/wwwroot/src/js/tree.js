@@ -42,7 +42,7 @@ window.initializeTree = function () {
                         'id': node.id,
                         'searchParameter': $('#search_field').val(),
                         'isSearchRefresh': searchServerRefresh,
-                        'isMatchWord': $('#match_word .fa-won-sign').is(":hidden")
+                        'isMatchWord': !$('#searchForm .fa-w').is(":hidden")
                     }
                 }
             }
@@ -116,18 +116,19 @@ window.initializeTree = function () {
             redirectToHome(node.attr('id'));
         }
     });
-
+    
     $("#search_tree").on('click', function () {
-        search($('#search_input').val());
+        search(getSearchString());
     });
 
     $('#search_input').on('keyup', function (e) {
         if (e.keyCode == 13) {
-            search($(this).val());
+            search(getSearchString());
         }
     }).on('input', function () {
-        if ($(this).val() === '') {
-            $('#search_field').val($(this).val());
+        let value = getSearchString();
+        if (value === '') {
+            $('#search_field').val(value);
             emptySearch  = true;
             if (!jQuery.isEmptyObject(prevState))
             {
@@ -139,7 +140,7 @@ window.initializeTree = function () {
         }
         else {
             clearTimeout(refreshTreeTimeoutId);
-            refreshTreeTimeoutId = setTimeout(() => search($(this).val()), searchInterval);
+            refreshTreeTimeoutId = setTimeout(() => search(value), searchInterval);
         }
     });
 
@@ -183,6 +184,19 @@ window.initializeTree = function () {
         localStorage.setItem('jstree', JSON.stringify(jstreeState));
         prevState = {};
     }
+}
+
+function getSearchString(){
+    let value = $('#search_input').val();
+    if (value.length >= 2 && value[0] === '"' && value.at(-1) === '"')
+    {
+        value = value.slice(1, -1);
+        $('#searchForm .fa-w').show();
+    }
+    else
+        $('#searchForm .fa-w').hide();
+
+    return value;
 }
 
 window.loadEditSensorStatusModal = function (id) {
