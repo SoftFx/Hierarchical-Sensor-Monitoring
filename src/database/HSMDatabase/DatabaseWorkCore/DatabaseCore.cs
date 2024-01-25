@@ -239,12 +239,12 @@ namespace HSMDatabase.DatabaseWorkCore
             var toBytes = BuildSensorValueKey(sensorId.ToString(), toTicks);
 
             var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
-            GetValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
+            GetValuesFunc getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
 
-            if (count < 0)
+            if (count > 0)
             {
                 databases.Reverse();
-                getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
+                getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
             }
 
             return GetSensorValuesPage(databases, count, getValues);
