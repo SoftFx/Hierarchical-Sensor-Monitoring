@@ -1,5 +1,7 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Datasources.Aggregators;
 using System;
+using System.Diagnostics.Eventing.Reader;
 using System.Numerics;
 
 namespace HSMServer.Datasources
@@ -70,6 +72,16 @@ namespace HSMServer.Datasources
             }
 
             Apply(value, lastCollectedValue);
+        }
+
+        internal void SetNewState(ref readonly LinePointState<T> state)
+        {
+            Value = state.Value;
+            Time = state.Time;
+
+            var count = state.Count;
+
+            Tooltip = count > 1 ? $"Aggregated ({count}) values" : string.Empty;
         }
     }
 }

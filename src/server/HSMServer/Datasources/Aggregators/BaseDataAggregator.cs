@@ -21,7 +21,7 @@ namespace HSMServer.Datasources.Aggregators
         protected abstract BaseChartValue BuildChartValue(BaseValue value);
 
 
-        internal void Setup(SourceSettings settings)
+        internal virtual void Setup(SourceSettings settings)
         {
             _maxVisiblePoints = settings.MaxVisibleCount;
             _useReapplyRule = GetReapplyRule(settings);
@@ -34,9 +34,9 @@ namespace HSMServer.Datasources.Aggregators
             _aggrStepTicks = _maxVisiblePoints > 0 ? (request.To - request.From).Ticks / _maxVisiblePoints : 0;
         }
 
-        internal bool TryAddNewPoint(BaseValue newValue, out BaseChartValue lastPoint)
+        internal bool TryAddNewPoint(BaseValue newValue, out BaseChartValue updatedPoint)
         {
-            lastPoint = _lastChartValue;
+            updatedPoint = _lastChartValue;
 
             if (_useReapplyRule(newValue))
             {
@@ -54,7 +54,7 @@ namespace HSMServer.Datasources.Aggregators
             }
 
             _lastChartValue = BuildChartValue(newValue);
-            lastPoint = _lastChartValue;
+            updatedPoint = _lastChartValue;
 
             return true;
         }

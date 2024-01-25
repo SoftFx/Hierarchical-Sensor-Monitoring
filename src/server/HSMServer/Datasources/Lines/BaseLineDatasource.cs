@@ -10,7 +10,7 @@ namespace HSMServer.Datasources
         where TValue : BaseValue
         where TChart : INumber<TChart>
     {
-        private BaseChartValue<TChart> _lastVisibleValue;
+        //private BaseChartValue<TChart> _lastVisibleValue;
         protected Func<TValue, TProp> _getPropertyFactory;
 
 
@@ -59,7 +59,7 @@ namespace HSMServer.Datasources
                 //if (IsPartialValueUpdate(value))
                 //    _lastVisibleValue.ReapplyLast(chartValue, value.Time);
                 //else
-                _lastVisibleValue.Apply(chartValue, value.Time);
+                //_lastVisibleValue.Apply(chartValue, value.Time);
             }
         }
 
