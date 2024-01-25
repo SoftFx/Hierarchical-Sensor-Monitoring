@@ -1,6 +1,6 @@
 ﻿namespace HSMServer.Datasources.Aggregators
 {
-    internal sealed class LineDataAggregator : BaseDataAggregator
+    public sealed class LineDataAggregator : BaseDataAggregator
     {
     }
 }

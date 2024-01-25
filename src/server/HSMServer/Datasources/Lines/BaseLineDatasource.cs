@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Dashboards;
+using HSMServer.Datasources.Aggregators;
 using System;
 using System.Numerics;
 
@@ -12,6 +13,8 @@ namespace HSMServer.Datasources
         private BaseChartValue<TChart> _lastVisibleValue;
         protected Func<TValue, TProp> _getPropertyFactory;
 
+
+        protected override BaseDataAggregator DataAggregator { get; } = new LineDataAggregator();
 
         protected override ChartType AggregatedType => ChartType.Line;
 
@@ -32,8 +35,8 @@ namespace HSMServer.Datasources
         {
             if (rawValue is TValue value)
             {
-                if (_isBarSensor)
-                    _lastBarValue = rawValue as BarBaseValue;
+                //if (_isBarSensor)
+                //    _lastBarValue = rawValue as BarBaseValue;
 
                 _lastVisibleValue = new LineChartValue<TChart>(rawValue, ToChartValue(value));
 
@@ -47,10 +50,10 @@ namespace HSMServer.Datasources
             {
                 var chartValue = ToChartValue(value);
 
-                if (IsPartialValueUpdate(value))
-                    _lastVisibleValue.ReapplyLast(chartValue, value.Time);
-                else
-                    _lastVisibleValue.Apply(chartValue, value.Time);
+                //if (IsPartialValueUpdate(value))
+                //    _lastVisibleValue.ReapplyLast(chartValue, value.Time);
+                //else
+                _lastVisibleValue.Apply(chartValue, value.Time);
             }
         }
 

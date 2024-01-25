@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Cache;
+using HSMServer.Core.Model;
 using HSMServer.Dashboards;
 using System;
 
@@ -9,7 +10,10 @@ namespace HSMServer.Datasources
         private const int DefaultMaxVisibleCnt = 100;
 
 
-        public PlottedProperty Property { get; init; }
+        public required PlottedProperty Property { get; init; }
+
+        public required SensorType SensorType { get; init; }
+
 
         public bool AggregateValues { get; init; }
 

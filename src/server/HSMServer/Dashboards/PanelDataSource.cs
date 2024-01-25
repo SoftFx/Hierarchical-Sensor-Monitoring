@@ -88,7 +88,9 @@ namespace HSMServer.Dashboards
 
             var settings = new SourceSettings
             {
+                SensorType = Sensor.Type,
                 Property = Property,
+
                 AggregateValues = AggragateValues,
             };
 
