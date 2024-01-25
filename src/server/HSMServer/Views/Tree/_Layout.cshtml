@@ -2,8 +2,8 @@
 @using HSMServer.Controllers
 @using HSMServer.Model.Authentication
 @using HSMServer.Model
+@using HSMServer.Model.TreeViewModels
 @using HSMServer.Model.ViewModel
-@using HSMServer.UserFilters
 
 @{
     var user = User as User;
@@ -92,7 +92,7 @@
                 <div class="row justify-content-start mw-100 me-1">
                     <div class="tree-height-weight-parameters col-auto ms-2 pe-0">
                         <div class="col-md-auto">
-                            <div id="jstree">@await Html.PartialAsync("~/Views/Tree/_Tree.cshtml", user.Tree.GetUserTree())</div>
+                            <div id="jstree">@await Html.PartialAsync("~/Views/Tree/_Tree.cshtml", user.Tree.GetUserTree(new SearchPattern()))</div>
                         </div>
                     </div>
                 </div>

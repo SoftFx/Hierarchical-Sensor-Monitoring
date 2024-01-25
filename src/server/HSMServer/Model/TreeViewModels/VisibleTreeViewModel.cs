@@ -19,6 +19,14 @@ public class RemoveNodesRequestModel
 }
 
 
+public record SearchPattern(string SearchParameter = "", bool IsMatchWord = false, bool IsSearchRefresh = false)
+{
+    public bool IsSearch { get; set; } = !string.IsNullOrEmpty(SearchParameter);
+    
+    public bool IsNameFits(string name) => IsMatchWord ? name.Equals(SearchParameter) : name.Contains(SearchParameter, StringComparison.OrdinalIgnoreCase);
+}
+
+
 public sealed class VisibleTreeViewModel
 {
     private readonly ConcurrentDictionary<Guid, NodeShallowModel> _allTree = new();
@@ -28,14 +36,14 @@ public sealed class VisibleTreeViewModel
 
     private readonly User _user;
 
-    private bool _isSearch;
-    private bool _isMatchWord;
+    private SearchPattern _searchPattern;
 
+    
     public event Func<User, List<ProductNodeViewModel>> GetUserProducts;
     public event Func<List<FolderModel>> GetFolders;
 
 
-    public CHash<Guid> OpenedNodes => _isSearch ? _searchOpenedNodes : _openedNodes;
+    public CHash<Guid> OpenedNodes => _searchPattern.IsSearch ? _searchOpenedNodes : _openedNodes;
 
     internal SensorRenderedHash SearchedSensors { get; } = new();
 
@@ -52,7 +60,7 @@ public sealed class VisibleTreeViewModel
 
     public void RemoveOpenedNode(RemoveNodesRequestModel request)
     {
-        _isSearch = request.IsSearch;
+        _searchPattern.IsSearch = request.IsSearch;
         OpenedNodes.Remove(request.NodeIds);
     }
 
@@ -63,8 +71,10 @@ public sealed class VisibleTreeViewModel
     }
 
 
-    public List<BaseShallowModel> GetUserTree(string searchParameter = null, bool isSearchRefresh = false, bool isMatchWord = false)
+    public List<BaseShallowModel> GetUserTree(SearchPattern pattern)
     {
+        _searchPattern = pattern;
+        
         // products should be updated before folders because folders should contain updated products
         var products = GetUserProducts?.Invoke(_user).GetOrdered(_user);
         var folders = GetFolders?.Invoke().GetOrdered(_user).ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
@@ -72,22 +82,18 @@ public sealed class VisibleTreeViewModel
         var folderTree = new List<BaseShallowModel>(1 << 4);
         var tree = new List<BaseShallowModel>(1 << 4);
         
-        _isSearch = !string.IsNullOrEmpty(searchParameter);
-        _isMatchWord = isMatchWord;
-        
         SearchedSensors.Clear();
         _allTree.Clear();
 
-        if (!isSearchRefresh && _isSearch)
+        if (!_searchPattern.IsSearchRefresh && _searchPattern.IsSearch)
             ClearOpenedNodes();
         
-        if (!_isSearch)
+        if (!_searchPattern.IsSearch)
             _addedSearchNodes.Clear();
 
         foreach (var product in products)
         {
-            var shouldAddNode = _isSearch ? CanAddNodeByName(product, searchParameter, out var node)
-                                             : CanAddNode(product, out node);
+            var shouldAddNode = _searchPattern.IsSearch ? CanAddSearchNode(product, out var node) : CanAddNode(product, out node);
 
             if (shouldAddNode)
             {
@@ -100,21 +106,7 @@ public sealed class VisibleTreeViewModel
             }
         }
 
-        Func<FolderShallowModel, bool> filter = _isSearch ? folder =>
-        {
-            var isFolderEmpty = folder.IsEmpty;
-
-            if (folder.Products.Count == 1)
-            {
-                if (isFolderEmpty && folder.Products[0].ContentIsEmpty)
-                    isFolderEmpty = !folder.Products[0].IsNameContainsPattern(searchParameter, _isMatchWord);
-            }
-
-            return !isFolderEmpty || (folder.IsNameContainsPattern(searchParameter, _isMatchWord) && IsVisibleFolderForUser(folder.Id));
-        }
-        : folder => !folder.IsEmpty || IsVisibleFolderForUser(folder.Id);
-
-        folderTree.AddRange(folders.Values.Where(filter));
+        folderTree.AddRange(folders.Values.Where(GetFolderFilter()));
         folderTree.AddRange(tree);
 
         return folderTree;
@@ -136,7 +128,23 @@ public sealed class VisibleTreeViewModel
         return node;
     }
 
-    private NodeShallowModel FilterNodes(ProductNodeViewModel product, string searchParameter, out bool toRender)
+    
+    private Func<FolderShallowModel, bool> GetFolderFilter() => _searchPattern.IsSearch 
+        ? folder =>
+        {
+            var isFolderEmpty = folder.IsEmpty;
+
+            if (folder.Products.Count == 1)
+            {
+                if (isFolderEmpty && folder.Products[0].ContentIsEmpty)
+                    isFolderEmpty = !_searchPattern.IsNameFits(folder.Products[0].Data.Name);
+            }
+
+            return !isFolderEmpty || (_searchPattern.IsNameFits(folder.Data.Name) && IsVisibleFolderForUser(folder.Id));
+        }
+        : folder => !folder.IsEmpty || IsVisibleFolderForUser(folder.Id);
+    
+    private NodeShallowModel FilterSearchNodes(ProductNodeViewModel product, out bool toRender)
     {
         var node = new NodeShallowModel(product, _user, IsVisibleNodeForUser, IsVisibleSensorForUser);
 
@@ -145,9 +153,9 @@ public sealed class VisibleTreeViewModel
 
         foreach (var nodeModel in GetSubNodes(product))
         {
-            var subNode = node.AddChild(FilterNodes(nodeModel, searchParameter, out var currentNodeToRender));
+            var subNode = node.AddChild(FilterSearchNodes(nodeModel, out var currentNodeToRender));
 
-            if (subNode.IsNameContainsPattern(searchParameter, _isMatchWord) || currentNodeToRender || _addedSearchNodes.Contains(subNode.Id))
+            if (_searchPattern.IsNameFits(subNode.Data.Name) || currentNodeToRender || _addedSearchNodes.Contains(subNode.Id))
             {
                 toRender = node.ToRenderNode(subNode.Id);
                 AddOpenedNode(subNode.Id);
@@ -158,7 +166,7 @@ public sealed class VisibleTreeViewModel
         {
             var sensor = node.AddChild(new SensorShallowModel(sensorModel, _user), _user);
 
-            if (sensor.IsNameContainsPattern(searchParameter, _isMatchWord) || _addedSearchNodes.Contains(node.Id))
+            if (_searchPattern.IsNameFits(sensor.Data.Name) || _addedSearchNodes.Contains(node.Id))
             {
                 toRender = node.ToRenderNode(sensor.Id);
 
@@ -204,11 +212,11 @@ public sealed class VisibleTreeViewModel
         return IsVisibleNodeForUser(node);
     }
 
-    private bool CanAddNodeByName(ProductNodeViewModel product, string searchParameter, out NodeShallowModel node)
+    private bool CanAddSearchNode(ProductNodeViewModel product, out NodeShallowModel node)
     {
-        node = FilterNodes(product, searchParameter, out var toRender);
+        node = FilterSearchNodes(product, out var toRender);
 
-        bool isVisible = IsVisibleNodeForUser(node) && toRender || node.IsNameContainsPattern(searchParameter, _isMatchWord);
+        bool isVisible = IsVisibleNodeForUser(node) && toRender || _searchPattern.IsNameFits(node.Data.Name);
 
         if (isVisible)
             AddOpenedNode(node.Id);
