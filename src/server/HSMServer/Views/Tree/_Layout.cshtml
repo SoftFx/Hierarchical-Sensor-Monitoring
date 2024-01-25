@@ -62,21 +62,16 @@
                         </span>
                     }
                 </button>
-
-                <div class="mx-3 my-2">
-                    <i id="currentSort" class="@(user?.TreeFilter.TreeSortType == TreeSortType.ByTime ? "fas fa-sort-numeric-down-alt" : "fas fa-sort-alpha-down")"></i>
-                </div>
-
-                <div class="input-group border-1 d-flex rounded-1" style="border-style: solid; border-width: 1px; width: auto">
+                <div class="input-group border-1 d-flex rounded-1 ms-3" style="border-style: solid; border-width: 1px; width: auto">
                     <form id="searchForm" class="form-outline d-flex">
                         <input id="search_input" placeholder="Folders, products, sensors" title="Folders, products, sensors" type="search" class="no-border ms-1" style="width: 8rem; font-size: smaller;" />
                         <input class="d-none" id="search_field" />
-                        <button id="search_tree" type="button" class="btn no-border">
+                        <button id="search_tree" type="button" title="Search" class="btn no-border">
                             <i class="fas fa-search"></i>
                         </button>
                         <button id="match_word" title="Match whole word" type="button" class="btn no-border ps-1 pe-2">
-                            <i class="fa-brands fa-wordpress" style="color: red"></i>
-                            <i class="fa-brands fa-wordpress-simple" style="display:none; color: green"></i>
+                            <i class="fa-solid fa-w icon-width-height-1 icon-border-grey-2" title="Match whole word" style="display: none"></i>
+                            <i class="fa-solid fa-won-sign icon-width-height-1" title="Match whole word" ></i>
                         </button>
                     </form>
                 </div>
@@ -126,7 +121,7 @@
     })
     
     $('#match_word').on('click', function (e){
-        $('.fa-wordpress, .fa-wordpress-simple').toggle()
+        $('.fa-won-sign, .fa-w').toggle()
     })
 
     $(window).on('load', function () {

@@ -19,8 +19,6 @@ var prevState = undefined;
 window.initializeTree = function () {
     initDropzone()
     
-    var sortingType = $("input[name='TreeSortType']:checked");
-
     if (window.localStorage.jstree) {
         let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
         if (initOpened > 1)
@@ -44,7 +42,7 @@ window.initializeTree = function () {
                         'id': node.id,
                         'searchParameter': $('#search_field').val(),
                         'isSearchRefresh': searchServerRefresh,
-                        'isMatchWord': $('#match_word .fa-wordpress').is(":hidden")
+                        'isMatchWord': $('#match_word .fa-won-sign').is(":hidden")
                     }
                 }
             }
