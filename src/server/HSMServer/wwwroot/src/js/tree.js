@@ -41,8 +41,7 @@ window.initializeTree = function () {
                     return {
                         'id': node.id,
                         'searchParameter': $('#search_field').val(),
-                        'isSearchRefresh': searchServerRefresh,
-                        'isMatchWord': !$('#searchForm .fa-w').is(":hidden")
+                        'isSearchRefresh': searchServerRefresh
                     }
                 }
             }
@@ -118,15 +117,15 @@ window.initializeTree = function () {
     });
     
     $("#search_tree").on('click', function () {
-        search(getSearchString());
+        search($('#search_input').val());
     });
 
     $('#search_input').on('keyup', function (e) {
         if (e.keyCode == 13) {
-            search(getSearchString());
+            search($(this).val());
         }
     }).on('input', function () {
-        let value = getSearchString();
+        let value = $(this).val();
         if (value === '') {
             $('#search_field').val(value);
             emptySearch  = true;
@@ -139,6 +138,11 @@ window.initializeTree = function () {
                 $('#jstree').jstree(true).refresh(true);
         }
         else {
+            if (value.length >= 2 && value[0] === '"' && value.at(-1) === '"')
+                $('#searchForm .fa-w').show();
+            else
+                $('#searchForm .fa-w').hide();
+            
             clearTimeout(refreshTreeTimeoutId);
             refreshTreeTimeoutId = setTimeout(() => search(value), searchInterval);
         }
@@ -184,19 +188,6 @@ window.initializeTree = function () {
         localStorage.setItem('jstree', JSON.stringify(jstreeState));
         prevState = {};
     }
-}
-
-function getSearchString(){
-    let value = $('#search_input').val();
-    if (value.length >= 2 && value[0] === '"' && value.at(-1) === '"')
-    {
-        value = value.slice(1, -1);
-        $('#searchForm .fa-w').show();
-    }
-    else
-        $('#searchForm .fa-w').hide();
-
-    return value;
 }
 
 window.loadEditSensorStatusModal = function (id) {

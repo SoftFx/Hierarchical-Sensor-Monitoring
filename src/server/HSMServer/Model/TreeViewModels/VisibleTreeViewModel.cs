@@ -19,11 +19,13 @@ public class RemoveNodesRequestModel
 }
 
 
-public record SearchPattern(string SearchParameter = "", bool IsMatchWord = false, bool IsSearchRefresh = false)
+public record SearchPattern(string SearchParameter = "", bool IsSearchRefresh = false)
 {
     public bool IsSearch { get; set; } = !string.IsNullOrEmpty(SearchParameter);
+
+    public bool IsMatchWord { get; set; } = SearchParameter is not null && SearchParameter.Length >= 2 && SearchParameter.StartsWith('"') && SearchParameter.EndsWith('"');
     
-    public bool IsNameFits(string name) => IsMatchWord ? name.Equals(SearchParameter) : name.Contains(SearchParameter, StringComparison.OrdinalIgnoreCase);
+    public bool IsNameFits(string name) => IsMatchWord ? name.Equals(SearchParameter[1..^1]) : name.Contains(SearchParameter, StringComparison.OrdinalIgnoreCase);
 }
 
 
