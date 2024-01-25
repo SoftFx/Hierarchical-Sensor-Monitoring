@@ -7,6 +7,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public List<PanelSourceEntity> Sources { get; init; } = new();
 
         public PanelSettingsEntity Settings { get; set; }
+
+        public bool ShowProduct { get; set; }
     }
 
 

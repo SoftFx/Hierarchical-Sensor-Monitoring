@@ -146,7 +146,8 @@ namespace HSMServer.Controllers
                 panel.NotifyUpdate(new PanelUpdate(panel.Id)
                 {
                     Name = model.Name,
-                    Description = model.Description
+                    Description = model.Description,
+                    ShowProduct = model.ShowProduct,
                 });
 
             return Ok(dashboardId);
@@ -193,7 +194,7 @@ namespace HSMServer.Controllers
             {
                 var response = await datasource.Source.Initialize();
 
-                return Json(new DatasourceViewModel(response, datasource));
+                return Json(new DatasourceViewModel(response, datasource, panel.ShowProduct));
             }
 
             return Json(new
@@ -205,7 +206,7 @@ namespace HSMServer.Controllers
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
         public async Task<IActionResult> UpdateSource([FromBody] PanelSourceUpdate update, Guid dashboardId, Guid panelId, Guid sourceId)
         {
-            if (TryGetSource(dashboardId, panelId, sourceId, out var source))
+            if (TryGetPanel(dashboardId, panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out var source))
             {
                 var oldProperty = source.Property;
                 var updatedSource = source.Update(update);
@@ -213,7 +214,7 @@ namespace HSMServer.Controllers
                 if (updatedSource.Property != oldProperty)
                 {
                     var response = await updatedSource.Source.Initialize();
-                    return Json(new DatasourceViewModel(response, updatedSource));
+                    return Json(new DatasourceViewModel(response, updatedSource, panel.ShowProduct));
                 }
                 
                 return Ok();
