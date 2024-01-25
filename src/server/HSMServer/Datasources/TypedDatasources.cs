@@ -12,10 +12,6 @@ namespace HSMServer.Datasources
 
         protected override BaseDataAggregator DataAggregator => throw new NotImplementedException();
 
-        protected override void AddVisibleValue(BaseValue baseValue)
-        {
-            throw new NotImplementedException();
-        }
 
         protected override void ApplyToLast(BaseValue newValue)
         {
@@ -32,10 +28,6 @@ namespace HSMServer.Datasources
 
         protected override BaseDataAggregator DataAggregator => throw new NotImplementedException();
 
-        protected override void AddVisibleValue(BaseValue baseValue)
-        {
-            throw new NotImplementedException();
-        }
 
         protected override void ApplyToLast(BaseValue newValue)
         {

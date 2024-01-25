@@ -40,7 +40,7 @@ namespace HSMServer.Datasources
         protected abstract ChartType NormalType { get; }
 
 
-        protected abstract void AddVisibleValue(BaseValue baseValue);
+        //protected abstract void AddVisibleValue(BaseValue baseValue);
 
         protected abstract void ApplyToLast(BaseValue newValue);
 

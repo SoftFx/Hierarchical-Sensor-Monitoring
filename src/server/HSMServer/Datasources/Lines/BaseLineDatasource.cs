@@ -14,12 +14,18 @@ namespace HSMServer.Datasources
         protected Func<TValue, TProp> _getPropertyFactory;
 
 
-        protected override BaseDataAggregator DataAggregator { get; } = new LineDataAggregator();
+        protected override BaseDataAggregator DataAggregator { get; }
+
 
         protected override ChartType AggregatedType => ChartType.Line;
 
         protected override ChartType NormalType => ChartType.Line;
 
+
+        protected BaseLineDatasource()
+        {
+            DataAggregator = new LineDataAggregator<TChart>(ToChartValue);
+        }
 
         internal override SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings)
         {
@@ -31,18 +37,18 @@ namespace HSMServer.Datasources
         }
 
 
-        protected override void AddVisibleValue(BaseValue rawValue)
-        {
-            if (rawValue is TValue value)
-            {
-                //if (_isBarSensor)
-                //    _lastBarValue = rawValue as BarBaseValue;
+        //protected override void AddVisibleValue(BaseValue rawValue)
+        //{
+        //    if (rawValue is TValue value)
+        //    {
+        //        //if (_isBarSensor)
+        //        //    _lastBarValue = rawValue as BarBaseValue;
 
-                _lastVisibleValue = new LineChartValue<TChart>(rawValue, ToChartValue(value));
+        //        _lastVisibleValue = new LineChartValue<TChart>(rawValue, ToChartValue(value));
 
-                AddVisibleToLast(_lastVisibleValue);
-            }
-        }
+        //        AddVisibleToLast(_lastVisibleValue);
+        //    }
+        //}
 
         protected override void ApplyToLast(BaseValue rawValue)
         {
@@ -66,6 +72,6 @@ namespace HSMServer.Datasources
         protected Exception BuildException(PlottedProperty property) => new($"Unsupport cast property for {typeof(TValue).Name} {property} from {typeof(TProp).Name} to {typeof(TChart).Name}");
 
 
-        private TChart ToChartValue(TValue value) => ConvertToChartType(_getPropertyFactory(value));
+        private TChart ToChartValue(BaseValue value) => ConvertToChartType(_getPropertyFactory((TValue)value));
     }
 }

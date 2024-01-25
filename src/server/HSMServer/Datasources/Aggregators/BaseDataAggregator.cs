@@ -18,6 +18,9 @@ namespace HSMServer.Datasources.Aggregators
         internal bool UseAggregation { get; private set; }
 
 
+        protected abstract BaseChartValue BuildChartValue(BaseValue value);
+
+
         internal void Setup(SourceSettings settings)
         {
             _maxVisiblePoints = settings.MaxVisibleCount;
@@ -37,9 +40,12 @@ namespace HSMServer.Datasources.Aggregators
 
             if (_useReapplyRule(newValue))
             {
+                _lastSensorValue = newValue;
                 //reapply
                 return false;
             }
+
+            _lastSensorValue = newValue;
 
             if (UseAggregation && _lastChartValue?.Time.Ticks + _aggrStepTicks >= newValue.Time.Ticks)
             {
@@ -47,7 +53,8 @@ namespace HSMServer.Datasources.Aggregators
                 return false;
             }
 
-            //AddNewValue
+            _lastChartValue = BuildChartValue(newValue);
+            lastPoint = _lastChartValue;
 
             return true;
         }
