@@ -11,8 +11,7 @@ namespace HSMServer.Datasources.Aggregators
         private BaseChartValue _lastChartValue;
         private BaseValue _lastSensorValue;
 
-        private long _maxVisiblePoints;
-        private long _aggrStepTicks;
+        private long _maxVisiblePoints, _aggrStepTicks, _aggrEndOfPeriod;
 
 
         internal bool UseAggregation { get; private set; }
@@ -36,6 +35,7 @@ namespace HSMServer.Datasources.Aggregators
         internal void RecalculateStep(SensorHistoryRequest request)
         {
             _aggrStepTicks = _maxVisiblePoints > 0 ? (request.To - request.From).Ticks / _maxVisiblePoints : 0;
+            _aggrEndOfPeriod = request.To.Ticks + _aggrStepTicks;
         }
 
         internal bool TryAddNewPoint(BaseValue newValue, out BaseChartValue updatedPoint)
@@ -53,17 +53,39 @@ namespace HSMServer.Datasources.Aggregators
                     return false;
                 }
 
-                if (UseAggregation && _lastChartValue?.Time.Ticks + _aggrStepTicks >= newValue.Time.Ticks)
+                if (UseAggregation && newValue.Time.Ticks <= _aggrEndOfPeriod)
                 {
                     ApplyValue(_lastChartValue, newValue);
                     return false;
                 }
             }
 
-            _lastChartValue = BuildChartValue(newValue);
-            updatedPoint = _lastChartValue;
+            updatedPoint = CalculateNewPoint(newValue);
 
             return true;
+        }
+
+
+        private BaseChartValue CalculateNewPoint(BaseValue newValue)
+        {
+            _lastChartValue = BuildChartValue(newValue);
+
+            var time = newValue.Time.Ticks;
+
+            if (UseAggregation && _aggrStepTicks > 0)
+            {
+                var diff = time - _aggrEndOfPeriod;
+                var cntSteps = diff / _aggrStepTicks;
+
+                if (diff % _aggrStepTicks != 0) //check on right max border
+                    cntSteps++;
+
+                _aggrEndOfPeriod += cntSteps * _aggrStepTicks;
+            }
+            else
+                _aggrEndOfPeriod = time;
+
+            return _lastChartValue;
         }
 
 

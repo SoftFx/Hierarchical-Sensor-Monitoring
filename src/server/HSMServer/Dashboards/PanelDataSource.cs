@@ -68,6 +68,8 @@ namespace HSMServer.Dashboards
             Color = Color.FromName(ColorExtensions.GenerateRandomColor());
             Property = sensor.Type.IsBar() ? PlottedProperty.Max : PlottedProperty.Value;
             Label = $"{sensor.DisplayName} ({Property})";
+
+            AggragateValues = true;
         }
 
         public PanelDatasource(BaseSensorModel sensor, PanelSourceEntity entity) : this(sensor)
@@ -76,9 +78,10 @@ namespace HSMServer.Dashboards
             SensorId = new Guid(entity.SensorId);
 
             Property = (PlottedProperty)entity.Property;
-            AggragateValues = !entity.IsNotAggregate;
             Color = Color.FromName(entity.Color);
             Label = entity.Label;
+
+            AggragateValues = !entity.IsNotAggregate;
         }
 
 

@@ -8,7 +8,7 @@ namespace HSMServer.Datasources.Aggregators
     public abstract class BaseDataAggregator<TState> : BaseDataAggregator
         where TState : struct
     {
-        private readonly LinkedList<TState> _lastPointStates;
+        private readonly LinkedList<TState> _lastPointStates = new();
         private Func<TState, TState, TState> _getAggrState;
 
 
