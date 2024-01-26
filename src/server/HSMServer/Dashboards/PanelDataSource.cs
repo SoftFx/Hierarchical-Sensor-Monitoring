@@ -81,7 +81,7 @@ namespace HSMServer.Dashboards
             Color = Color.FromName(entity.Color);
             Label = entity.Label;
 
-            AggragateValues = !entity.IsNotAggregate;
+            AggragateValues = entity.IsAggregate;
         }
 
 
@@ -137,7 +137,7 @@ namespace HSMServer.Dashboards
                 Id = Id.ToByteArray(),
                 SensorId = SensorId.ToByteArray(),
 
-                IsNotAggregate = !AggragateValues,
+                IsAggregate = AggragateValues,
                 Property = (byte)Property,
                 Color = Color.Name,
                 Label = Label,
