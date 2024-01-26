@@ -19,6 +19,6 @@ namespace HSMServer.Datasources
 
         public int CustomVisibleCount { get; init; } = DefaultMaxVisibleCnt;
 
-        public int MaxVisibleCount => AggregateValues ? Math.Max(CustomVisibleCount, TreeValuesCache.MaxHistoryCount) : int.MaxValue;
+        public int MaxVisibleCount => AggregateValues ? Math.Min(CustomVisibleCount, TreeValuesCache.MaxHistoryCount) : int.MaxValue;
     }
 }

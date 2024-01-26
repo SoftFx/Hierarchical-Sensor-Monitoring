@@ -34,8 +34,8 @@ namespace HSMServer.Datasources.Aggregators
 
         internal virtual void RecalculateAggrSections(SensorHistoryRequest request)
         {
-            _aggrStepTicks = _maxVisiblePoints > 0 ? (request.To - request.From).Ticks / _maxVisiblePoints : 0;
-            _aggrEndOfPeriod = request.To.Ticks + _aggrStepTicks;
+            _aggrStepTicks = _maxVisiblePoints > 0 && request.From != DateTime.MinValue ? (request.To - request.From).Ticks / _maxVisiblePoints : 0;
+            _aggrEndOfPeriod = request.From.Ticks + _aggrStepTicks;
 
             _lastSensorValue = null;
             _lastChartValue = null;
