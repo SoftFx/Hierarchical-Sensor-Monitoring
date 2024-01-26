@@ -11,12 +11,6 @@ namespace HSMServer.Datasources
         protected override ChartType NormalType => ChartType.Points;
 
         protected override BaseDataAggregator DataAggregator => throw new NotImplementedException();
-
-
-        protected override void ApplyToLast(BaseValue newValue)
-        {
-            throw new NotImplementedException();
-        }
     }
 
 
@@ -27,11 +21,5 @@ namespace HSMServer.Datasources
         protected override ChartType NormalType => ChartType.Bars;
 
         protected override BaseDataAggregator DataAggregator => throw new NotImplementedException();
-
-
-        protected override void ApplyToLast(BaseValue newValue)
-        {
-            throw new NotImplementedException();
-        }
     }
 }

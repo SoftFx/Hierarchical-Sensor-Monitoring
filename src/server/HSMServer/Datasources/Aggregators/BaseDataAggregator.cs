@@ -6,7 +6,7 @@ namespace HSMServer.Datasources.Aggregators
 {
     public abstract class BaseDataAggregator
     {
-        private Predicate<BaseValue> _useReapplyRule;
+        private Func<BaseValue, BaseValue, bool> _useReapplyRule;
 
         private BaseChartValue _lastChartValue;
         private BaseValue _lastSensorValue;
@@ -40,22 +40,24 @@ namespace HSMServer.Datasources.Aggregators
 
         internal bool TryAddNewPoint(BaseValue newValue, out BaseChartValue updatedPoint)
         {
+            var oldValue = _lastSensorValue;
             updatedPoint = _lastChartValue;
-            //check refs
-            if (_useReapplyRule(newValue))
-            {
-                _lastSensorValue = newValue;
-                ReapplyValue(_lastChartValue, newValue);
-
-                return false;
-            }
 
             _lastSensorValue = newValue;
 
-            if (UseAggregation && _lastChartValue?.Time.Ticks + _aggrStepTicks >= newValue.Time.Ticks)
+            if (_lastChartValue is not null)
             {
-                ApplyValue(_lastChartValue, newValue);
-                return false;
+                if (_useReapplyRule(oldValue, newValue))
+                {
+                    ReapplyValue(_lastChartValue, newValue);
+                    return false;
+                }
+
+                if (UseAggregation && _lastChartValue?.Time.Ticks + _aggrStepTicks >= newValue.Time.Ticks)
+                {
+                    ApplyValue(_lastChartValue, newValue);
+                    return false;
+                }
             }
 
             _lastChartValue = BuildChartValue(newValue);
@@ -65,12 +67,12 @@ namespace HSMServer.Datasources.Aggregators
         }
 
 
-        private Predicate<BaseValue> GetReapplyRule(SourceSettings settings) => settings.SensorType switch
+        private static Func<BaseValue, BaseValue, bool> GetReapplyRule(SourceSettings settings) => settings.SensorType switch
         {
-            SensorType.IntegerBar or SensorType.DoubleBar => (newValue) => IsPartialUpdate((BarBaseValue)newValue),
-            _ => _ => false,
+            SensorType.IntegerBar or SensorType.DoubleBar => (o, n) => IsPartialUpdate(o, (BarBaseValue)n),
+            _ => (_, _) => false,
         };
 
-        private bool IsPartialUpdate(BarBaseValue newValue) => _lastSensorValue is BarBaseValue oldBarValue && oldBarValue.IsUpdatedBar(newValue);
+        private static bool IsPartialUpdate(BaseValue oldValue, BarBaseValue newValue) => oldValue is BarBaseValue oldBarValue && oldBarValue.IsUpdatedBar(newValue);
     }
 }
