@@ -32,10 +32,13 @@ namespace HSMServer.Datasources.Aggregators
             UseAggregation = settings.AggregateValues;
         }
 
-        internal void RecalculateStep(SensorHistoryRequest request)
+        internal virtual void RecalculateAggrSections(SensorHistoryRequest request)
         {
             _aggrStepTicks = _maxVisiblePoints > 0 ? (request.To - request.From).Ticks / _maxVisiblePoints : 0;
             _aggrEndOfPeriod = request.To.Ticks + _aggrStepTicks;
+
+            _lastSensorValue = null;
+            _lastChartValue = null;
         }
 
         internal bool TryAddNewPoint(BaseValue newValue, out BaseChartValue updatedPoint)
@@ -72,15 +75,18 @@ namespace HSMServer.Datasources.Aggregators
 
             var time = newValue.Time.Ticks;
 
-            if (UseAggregation && _aggrStepTicks > 0)
+            if (UseAggregation)
             {
-                var diff = time - _aggrEndOfPeriod;
-                var cntSteps = diff / _aggrStepTicks;
+                if (time > _aggrEndOfPeriod && _aggrStepTicks > 0) //protection for first value
+                {
+                    var diff = time - _aggrEndOfPeriod;
+                    var cntSteps = diff / _aggrStepTicks;
 
-                if (diff % _aggrStepTicks != 0) //check on right max border
-                    cntSteps++;
+                    if (diff % _aggrStepTicks != 0) //check on right max border
+                        cntSteps++;
 
-                _aggrEndOfPeriod += cntSteps * _aggrStepTicks;
+                    _aggrEndOfPeriod += cntSteps * _aggrStepTicks;
+                }
             }
             else
                 _aggrEndOfPeriod = time;

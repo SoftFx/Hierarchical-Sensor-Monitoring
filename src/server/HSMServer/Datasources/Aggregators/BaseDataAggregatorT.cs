@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Dashboards;
 using System;
 using System.Collections.Generic;
@@ -26,6 +27,13 @@ namespace HSMServer.Datasources.Aggregators
 
         protected abstract TState BuildState(BaseValue value);
 
+
+        internal override void RecalculateAggrSections(SensorHistoryRequest request)
+        {
+            _lastPointStates.Clear();
+
+            base.RecalculateAggrSections(request);
+        }
 
         protected override void ReapplyValue(BaseChartValue point, BaseValue newValue)
         {

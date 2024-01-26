@@ -64,7 +64,7 @@ namespace HSMServer.Datasources
         {
             _newVisibleValues.Clear();
 
-            DataAggregator.RecalculateStep(request);
+            DataAggregator.RecalculateAggrSections(request);
 
             var history = await _sensor.GetHistoryData(request);
 
