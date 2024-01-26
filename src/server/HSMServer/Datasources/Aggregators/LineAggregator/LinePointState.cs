@@ -13,6 +13,15 @@ namespace HSMServer.Datasources.Aggregators
         public long Count { get; init; }
 
 
+        public LinePointState(T value, DateTime time)
+        {
+            Value = value;
+            Time = time;
+
+            Count = 1;
+        }
+
+
         public static LinePointState<T> GetMaxState(LinePointState<T> first, LinePointState<T> second)
         {
             var firstMax = first.Value > second.Value;

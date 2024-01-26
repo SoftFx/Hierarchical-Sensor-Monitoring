@@ -20,7 +20,17 @@ namespace HSMServer.Datasources.Aggregators
         protected override BaseChartValue BuildChartValue(BaseValue baseValue) =>
             new LineChartValue<T>(baseValue, _toChartValue(baseValue));
 
-        protected override Func<LinePointState<T>, LinePointState<T>, LinePointState<T>> GetNewStateFactory(PlottedProperty property) =>
+        protected override LinePointState<T> BuildState(BaseValue rawValue) =>
+            new(_toChartValue(rawValue), rawValue.Time);
+
+        protected override void ApplyState(BaseChartValue rawPoint, LinePointState<T> state)
+        {
+            if (rawPoint is LineChartValue<T> point)
+                point.SetNewState(ref state);
+        }
+
+
+        protected override Func<LinePointState<T>, LinePointState<T>, LinePointState<T>> GetAggrStateFactory(PlottedProperty property) =>
             property switch
             {
                 PlottedProperty.Max or PlottedProperty.Count => LinePointState<T>.GetMaxState,

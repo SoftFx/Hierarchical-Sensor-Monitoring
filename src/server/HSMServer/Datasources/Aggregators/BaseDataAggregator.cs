@@ -18,6 +18,10 @@ namespace HSMServer.Datasources.Aggregators
         internal bool UseAggregation { get; private set; }
 
 
+        protected abstract void ReapplyValue(BaseChartValue point, BaseValue newValue);
+
+        protected abstract void ApplyValue(BaseChartValue point, BaseValue newValue);
+
         protected abstract BaseChartValue BuildChartValue(BaseValue value);
 
 
@@ -37,11 +41,12 @@ namespace HSMServer.Datasources.Aggregators
         internal bool TryAddNewPoint(BaseValue newValue, out BaseChartValue updatedPoint)
         {
             updatedPoint = _lastChartValue;
-
+            //check refs
             if (_useReapplyRule(newValue))
             {
                 _lastSensorValue = newValue;
-                //reapply
+                ReapplyValue(_lastChartValue, newValue);
+
                 return false;
             }
 
@@ -49,7 +54,7 @@ namespace HSMServer.Datasources.Aggregators
 
             if (UseAggregation && _lastChartValue?.Time.Ticks + _aggrStepTicks >= newValue.Time.Ticks)
             {
-                //apply
+                ApplyValue(_lastChartValue, newValue);
                 return false;
             }
 
