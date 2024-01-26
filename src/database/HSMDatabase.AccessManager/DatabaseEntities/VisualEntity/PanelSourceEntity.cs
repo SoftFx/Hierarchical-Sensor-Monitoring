@@ -13,6 +13,6 @@
 
         public byte Property { get; init; }
 
-        public bool IsAggregate { get; init; }
+        public bool IsAggregate { get; init; } = true;
     }
 }
