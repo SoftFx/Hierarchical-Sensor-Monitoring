@@ -10,7 +10,7 @@
         <div class="d-flex flex-column" style="flex-grow: 10">
             <div class="d-flex mx-1 align-items-center">
                 <label class="me-1">Label:</label>
-                <label id="productName_@Model.Id" class="text-nowrap @(Model.ShowProduct ? string.Empty : "d-none")">@Model.DisplayProduct</label>
+                <label id="productName_@Model.Id" class="text-nowrap me-1 @(Model.ShowProduct ? string.Empty : "d-none")">@Model.DisplayProduct</label>
                 <input id='name_input_@Model.Id' class="form-control" asp-for="Label" type="text" oninput="javascript:realtimeUpdate('@Model.Id')" />
                 <input id='name_default_@Model.Id' class="d-none" value="@Model.SensorName">
 

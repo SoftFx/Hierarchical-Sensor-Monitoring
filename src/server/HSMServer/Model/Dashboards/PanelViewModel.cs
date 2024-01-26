@@ -23,7 +23,7 @@ public sealed class PanelViewModel
     [Display(Name = "Panel:")]
     public string Name { get; set; }
 
-    [Display(Name = "Display product name in source label")]
+    [Display(Name = "Apply product names")]
     public bool ShowProduct { get; set; }
 
     public string Description { get; set; }
