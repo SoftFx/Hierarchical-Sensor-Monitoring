@@ -72,7 +72,7 @@ public class DatasourceViewModel
     public string Color { get; set; }
 
 
-    public bool ShowProduct { get; }
+    public bool ShowProduct { get; set; }
 
     public string DisplayLabel => ShowProduct ? $"{ProductName}: {Label}" : Label;
 

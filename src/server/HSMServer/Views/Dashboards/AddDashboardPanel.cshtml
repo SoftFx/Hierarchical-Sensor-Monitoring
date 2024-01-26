@@ -28,8 +28,8 @@
                 <textarea id='description' maxlength="250" class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
 
                 <div class="form-check mt-2">
-                    <input id="showProduct" type="checkbox" asp-for="ShowProduct" class="form-check-input" onchange="javascript:showProductInLabels()" />
-                    <label class="form-check-label text-nowrap" for="showProduct">Display product name in source label</label>
+                    <input type="checkbox" asp-for="ShowProduct" class="form-check-input" onchange="javascript:showProductInLabels()" />
+                    <label class="form-check-label" asp-for="ShowProduct"></label>
                 </div>
             </form>
         </div>
@@ -80,14 +80,17 @@
 
         $('#editablePanelSettings form').on('submit', function (event){
             event.preventDefault();
-            event.stopPropagation();
-            let object = {};
-            $(this).serializeArray().forEach((value, key) => object[value.name] = value.value);
+            event.stopImmediatePropagation();
+
             $.ajax({
                 type: 'post',
-                url: window.pathname,
-                contentType: 'application/json',
-                data: JSON.stringify(object)
+                url: $(this).attr("action"),
+                data: new FormData(this),
+                datatype: 'html',
+                processData: false,
+                contentType: false,
+                cache: false,
+                async: true
             }).done(function(id, status){
                 window.location.href = `/Dashboards/${id}`;
             }).fail(function (response){
@@ -107,7 +110,7 @@
             let idAttr = source.attr('id');
             let sourceId = idAttr.substring('source_'.length, idAttr.length);
 
-            if ($(`#showProduct`).is(':checked'))
+            if ($(`input[name='ShowProduct']`).is(':checked'))
                 $(`#productName_${sourceId}`).removeClass('d-none');
             else
                 $(`#productName_${sourceId}`).addClass('d-none');

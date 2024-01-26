@@ -36,7 +36,7 @@
 
 <script>
     function realtimeUpdate(id) {
-        updateSource($(`#name_input_${id}`).val(), $(`#color_${id}`).val(), $(`#property_${id}`).val(), $(`#showProduct`).is(':checked'), id);
+        updateSource($(`#name_input_${id}`).val(), $(`#color_${id}`).val(), $(`#property_${id}`).val(), $(`input[name='ShowProduct']`).is(':checked'), id);
     }
 
     function deletePlot(sourceId) {
