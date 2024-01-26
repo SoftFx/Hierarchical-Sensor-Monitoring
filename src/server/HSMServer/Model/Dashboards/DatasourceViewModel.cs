@@ -74,7 +74,7 @@ public class DatasourceViewModel
 
     public bool ShowProduct { get; set; }
 
-    public string DisplayProduct => $"[{ProductName}]";
+    public string DisplayProduct => $"[{ProductName}] ";
 
     public string DisplayLabel => ShowProduct ? $"{DisplayProduct}{Label}" : Label;
 
