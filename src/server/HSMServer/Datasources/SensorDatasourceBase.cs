@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Collections;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Datasources.Aggregators;
@@ -57,7 +58,7 @@ namespace HSMServer.Datasources
             {
                 From = from,
                 To = to,
-                Count = -_settings.MaxVisibleCount,
+                Count = -TreeValuesCache.MaxHistoryCount,
             });
 
         public async Task<InitChartSourceResponse> Initialize(SensorHistoryRequest request)

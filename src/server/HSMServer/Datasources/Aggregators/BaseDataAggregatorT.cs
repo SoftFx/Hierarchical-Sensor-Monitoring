@@ -41,12 +41,7 @@ namespace HSMServer.Datasources.Aggregators
         {
             _lastPointStates.Clear();
 
-            var state = BuildState(value);
-            var point = BuildNewPoint();
-
-            ApplyAndSaveState(point, state);
-
-            return point;
+            return ApplyAndSaveState(BuildNewPoint(), BuildState(value));
         }
 
         protected override void ReapplyValue(BaseChartValue point, BaseValue newValue)
@@ -72,7 +67,7 @@ namespace HSMServer.Datasources.Aggregators
             ApplyAndSaveState(point, newState);
         }
 
-        private void ApplyAndSaveState(BaseChartValue point, TState state)
+        private BaseChartValue ApplyAndSaveState(BaseChartValue point, TState state)
         {
             ApplyState(point, state);
 
@@ -80,6 +75,8 @@ namespace HSMServer.Datasources.Aggregators
 
             while (_lastPointStates.Count > 2)
                 _lastPointStates.RemoveFirst();
+
+            return point;
         }
     }
 }
