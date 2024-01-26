@@ -23,6 +23,9 @@ public sealed class PanelViewModel
     [Display(Name = "Panel:")]
     public string Name { get; set; }
 
+    [Display(Name = "Apply product names")]
+    public bool ShowProduct { get; set; }
+
     public string Description { get; set; }
 
 
@@ -40,11 +43,12 @@ public sealed class PanelViewModel
     {
         Name = panel.Name ?? DefaultName;
         Description = panel.Description;
+        ShowProduct = panel.ShowProduct;
         Id = panel.Id;
         DashboardId = dashboardId;
         Settings = panel.Settings;
 
-        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x => new DatasourceViewModel(x.Value)));
+        Sources = new CGuidDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x => new DatasourceViewModel(x.Value, ShowProduct)));
     }
 
 

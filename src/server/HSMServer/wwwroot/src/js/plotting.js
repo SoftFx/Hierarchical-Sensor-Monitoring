@@ -34,7 +34,7 @@ window.customReset =  function (plot = undefined, range = undefined){
         if (currentPlot.x.length === 0)
             return range[1];
 
-        return new Date(1000000 + Math.min(new Date(range[1]), new Date(currentPlot.x.at(-1)))).toISOString();
+        return 1000000 + Math.min(new Date(range[1]), new Date(currentPlot.x.at(-1)));
     }
 }
 

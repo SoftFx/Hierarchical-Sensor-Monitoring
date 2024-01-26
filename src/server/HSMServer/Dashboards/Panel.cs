@@ -1,11 +1,11 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
-using HSMServer.Core;
 
 namespace HSMServer.Dashboards
 {
@@ -21,6 +21,8 @@ namespace HSMServer.Dashboards
 
         public SensorType? MainSensorType { get; private set; }
 
+        public bool ShowProduct { get; private set; }
+
         public Unit? MainUnit { get; private set; }
 
 
@@ -33,6 +35,8 @@ namespace HSMServer.Dashboards
         {
             _board = board;
 
+            ShowProduct = entity.ShowProduct;
+
             if (entity.Settings is not null)
                 Settings.FromEntity(entity.Settings);
 
@@ -43,6 +47,8 @@ namespace HSMServer.Dashboards
 
         protected override void UpdateCustom(PanelUpdate update)
         {
+            ShowProduct = update.ShowProduct;
+
             Settings.Update(update);
         }
 
@@ -52,6 +58,7 @@ namespace HSMServer.Dashboards
 
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
             entity.Settings = Settings.ToEntity();
+            entity.ShowProduct = ShowProduct;
 
             return entity;
         }

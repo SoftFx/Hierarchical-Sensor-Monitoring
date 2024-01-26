@@ -127,7 +127,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     }
 
     plot.id = data.id;
-    plot.name = data.label;
+    plot.name = data.displayLabel;
     plot.mode = 'lines+markers';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
@@ -319,7 +319,7 @@ window.initDashboard = function () {
                             let timespanValue = TimeSpanPlot.getTimeSpanValue(j);
                             customData.push(Plot.checkError(j) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, j) + '<br>' + j.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, j))
                             x.push(j.time)
-                            y.push(timespanValue.totalMilliseconds())
+                            y.push(timespanValue === 'NaN' ? timespanValue : timespanValue.totalMilliseconds())
                         }
                         else {
                             if (prevId !== undefined && j.id === prevId) {
@@ -488,14 +488,14 @@ function addResizable(interactable) {
     })
 }
 
-window.updateSource = function (name, color, property, id) {
+window.updateSource = function (name, color, property, showProduct, id) {
     if (currentPanel[id] === undefined)
         return;
 
     if (currentPanel[id].updateTimeout !== undefined)
         clearTimeout(currentPanel[id].updateTimeout);
 
-    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, id);
+    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, showProduct, id);
 }
 
 window.getCurrentPlotInDashboard = function (id) {
@@ -615,7 +615,7 @@ function showEventInfo(event) {
     $(`#${id}.cloned`).remove();
 }
 
-function updatePlotSource(name, color, property, id) {
+function updatePlotSource(name, color, property, showProduct, id) {
     let updatedName = defaultLabelUpdate(currentPanel[id].oldIndex, name)
 
     $.ajax({
@@ -634,6 +634,9 @@ function updatePlotSource(name, color, property, id) {
             insertSourcePlot(response, 'multichart');
             syncIndexes();
         }
+
+        if (showProduct)
+            updatedName = $(`#productName_${id}`).text() + updatedName;
 
         let layoutUpdate = {
             'hovertemplate': `${updatedName}, %{customdata}<extra></extra>`,

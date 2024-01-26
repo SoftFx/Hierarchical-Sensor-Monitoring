@@ -24,6 +24,8 @@ namespace HSMServer.Dashboards
 
         public bool? ShowLegend { get; init; }
 
+        public bool ShowProduct { get; init; }
+
 
         [SetsRequiredMembers]
         public PanelUpdate(Guid panelId) : base()
