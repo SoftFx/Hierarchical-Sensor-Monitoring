@@ -91,7 +91,7 @@
                 contentType: false,
                 cache: false,
                 async: true
-            }).done(function(id, status){
+            }).done(function(id){
                 window.location.href = `/Dashboards/${id}`;
             }).fail(function (response){
                 showToast(response.responseText);
