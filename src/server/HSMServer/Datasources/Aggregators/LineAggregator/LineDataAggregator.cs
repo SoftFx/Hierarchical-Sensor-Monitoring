@@ -17,8 +17,7 @@ namespace HSMServer.Datasources.Aggregators
         }
 
 
-        protected override BaseChartValue BuildChartValue(BaseValue baseValue) =>
-            new LineChartValue<T>(BuildState(baseValue));
+        protected override BaseChartValue BuildNewPoint() => new LineChartValue<T>();
 
         protected override LinePointState<T> BuildState(BaseValue rawValue) =>
             new(_toChartValue(rawValue), rawValue.Time);

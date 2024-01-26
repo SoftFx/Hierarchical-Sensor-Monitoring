@@ -25,9 +25,6 @@ namespace HSMServer.Datasources
 
     public sealed class LineChartValue<T> : BaseChartValue<T> where T : INumber<T>
     {
-        internal LineChartValue(LinePointState<T> state) => SetNewState(ref state);
-
-
         internal void SetNewState(ref readonly LinePointState<T> state)
         {
             Value = state.Value;

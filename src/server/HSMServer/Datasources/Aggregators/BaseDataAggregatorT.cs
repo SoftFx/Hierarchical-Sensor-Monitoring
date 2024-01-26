@@ -27,12 +27,26 @@ namespace HSMServer.Datasources.Aggregators
 
         protected abstract TState BuildState(BaseValue value);
 
+        protected abstract BaseChartValue BuildNewPoint();
+
 
         internal override void RecalculateAggrSections(SensorHistoryRequest request)
         {
             _lastPointStates.Clear();
 
             base.RecalculateAggrSections(request);
+        }
+
+        protected override BaseChartValue GetNewChartValue(BaseValue value)
+        {
+            _lastPointStates.Clear();
+
+            var state = BuildState(value);
+            var point = BuildNewPoint();
+
+            ApplyAndSaveState(point, state);
+
+            return point;
         }
 
         protected override void ReapplyValue(BaseChartValue point, BaseValue newValue)
@@ -42,22 +56,27 @@ namespace HSMServer.Datasources.Aggregators
             if (_lastPointStates.Count > 0)
                 _lastPointStates.RemoveLast();
 
-            RebuildLastState(point, newValue, prevState);
+            AggregateStates(point, newValue, prevState);
         }
 
         protected override void ApplyValue(BaseChartValue point, BaseValue newValue) =>
-            RebuildLastState(point, newValue, _lastPointStates.Last?.Value);
+            AggregateStates(point, newValue, _lastPointStates.Last?.Value);
 
-        private void RebuildLastState(BaseChartValue point, BaseValue newValue, TState? prevState)
+        private void AggregateStates(BaseChartValue point, BaseValue newValue, TState? prevState)
         {
             var newState = BuildState(newValue);
 
             if (prevState is not null)
                 newState = _getAggrState(prevState.Value, newState);
 
-            ApplyState(point, newState);
+            ApplyAndSaveState(point, newState);
+        }
 
-            _lastPointStates.AddLast(newState);
+        private void ApplyAndSaveState(BaseChartValue point, TState state)
+        {
+            ApplyState(point, state);
+
+            _lastPointStates.AddLast(state);
 
             while (_lastPointStates.Count > 2)
                 _lastPointStates.RemoveFirst();

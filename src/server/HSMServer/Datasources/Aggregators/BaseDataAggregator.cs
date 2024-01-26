@@ -21,7 +21,7 @@ namespace HSMServer.Datasources.Aggregators
 
         protected abstract void ApplyValue(BaseChartValue point, BaseValue newValue);
 
-        protected abstract BaseChartValue BuildChartValue(BaseValue value);
+        protected abstract BaseChartValue GetNewChartValue(BaseValue value);
 
 
         internal virtual void Setup(SourceSettings settings)
@@ -71,7 +71,7 @@ namespace HSMServer.Datasources.Aggregators
 
         private BaseChartValue CalculateNewPoint(BaseValue newValue)
         {
-            _lastChartValue = BuildChartValue(newValue);
+            _lastChartValue = GetNewChartValue(newValue);
 
             var time = newValue.Time.Ticks;
 
