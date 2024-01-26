@@ -36,7 +36,7 @@ namespace HSMServer.Model.History
             DateTime nextBarTime = oldestValue.OpenTime + compressionInterval;
 
             SummaryBarItem<T> summary = new(oldestValue.OpenTime, oldestValue.CloseTime, DefaultMax, DefaultMin, oldestValue.FirstValue, oldestValue.LastValue);
-            ProcessItem(oldestValue, summary);
+            ProcessItem(oldestValue, summary, out var isCompressed);
 
             for (int i = 1; i < values.Count; ++i)
             {
@@ -45,19 +45,19 @@ namespace HSMServer.Model.History
 
                 if (summary.CloseTime + (value.CloseTime - value.OpenTime) > nextBarTime)
                 {
-                    result.Add(Convert(summary, summary.Count != value.Count));
+                    result.Add(Convert(summary, isCompressed));
 
                     summary = new(value.OpenTime, value.CloseTime, DefaultMax, DefaultMin, oldestValue.FirstValue, oldestValue.LastValue);
-                    ProcessItem(value, summary);
+                    ProcessItem(value, summary, out isCompressed);
 
                     while (nextBarTime <= summary.CloseTime)
                         nextBarTime += compressionInterval;
                 }
                 else
-                    ProcessItem(value, summary);
+                    ProcessItem(value, summary, out isCompressed);
             }
 
-            result.Add(Convert(summary, (values[^1] as BarBaseValue).Count != summary.Count));
+            result.Add(Convert(summary, isCompressed));
 
             return result;
         }
@@ -101,17 +101,21 @@ namespace HSMServer.Model.History
         /// </summary>
         /// <param name="value">Currently processed data item</param>
         /// <param name="summary">Current summary item</param>
-        private void ProcessItem(BarBaseValue<T> value, SummaryBarItem<T> summary)
+        /// <param name="IsCompressed">Current state of compression of summary</param>
+        private void ProcessItem(BarBaseValue<T> value, SummaryBarItem<T> summary, out bool IsCompressed)
         {
+            IsCompressed = summary.Count != 0;
+            
             AddValueToList(value);
 
-            if (summary.Count == 0)
+            if (!IsCompressed)
                 summary.FirstValue = value.FirstValue;
 
             summary.LastValue = value.LastValue;
             summary.CloseTime = value.CloseTime;
 
-            summary.Count += value.Count;
+            if (value.Count.CompareTo(summary.Count) > 0)
+                summary.Count = value.Count;
 
             if (value.Max.CompareTo(summary.Max) > 0)
                 summary.Max = value.Max;

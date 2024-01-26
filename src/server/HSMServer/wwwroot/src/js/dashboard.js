@@ -319,7 +319,7 @@ window.initDashboard = function () {
                             let timespanValue = TimeSpanPlot.getTimeSpanValue(j);
                             customData.push(Plot.checkError(j) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, j) + '<br>' + j.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, j))
                             x.push(j.time)
-                            y.push(timespanValue.totalMilliseconds())
+                            y.push(timespanValue === 'NaN' ? timespanValue : timespanValue.totalMilliseconds())
                         }
                         else {
                             if (prevId !== undefined && j.id === prevId) {
