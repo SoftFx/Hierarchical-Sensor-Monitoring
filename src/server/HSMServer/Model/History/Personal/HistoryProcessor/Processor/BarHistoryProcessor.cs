@@ -110,7 +110,7 @@ namespace HSMServer.Model.History
 
             if (!IsCompressed)
                 summary.FirstValue = value.FirstValue;
-            
+
             summary.LastValue = value.LastValue;
             summary.CloseTime = value.CloseTime;
 
