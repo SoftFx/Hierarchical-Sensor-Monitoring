@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.DefaultSensors.SystemInfo;
+using System.Net.NetworkInformation;
 using System;
 
 namespace HSMDataCollector.Options
@@ -77,6 +78,22 @@ namespace HSMDataCollector.Options
         public WindowsInfoSensorOptions()
         {
             PostDataPeriod = TimeSpan.FromHours(12);
+        }
+    }
+
+    public sealed class SocketSensorOptions : MonitoringInstantSensorOptions
+    {
+        public TcpState State { get; set; }
+
+
+        public SocketSensorOptions()
+        {
+            PostDataPeriod = TimeSpan.FromSeconds(15);
+        }
+        
+        public SocketSensorOptions(TcpState state) : this()
+        {
+            State = state;
         }
     }
 

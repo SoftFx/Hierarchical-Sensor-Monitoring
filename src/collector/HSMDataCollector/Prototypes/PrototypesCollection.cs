@@ -2,6 +2,7 @@
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.Prototypes.Collections;
 using HSMDataCollector.Prototypes.Collections.Disks;
+using HSMDataCollector.Prototypes.Collections.Network;
 
 namespace HSMDataCollector.Options
 {
@@ -94,6 +95,13 @@ namespace HSMDataCollector.Options
         #endregion
 
 
+        #region Network
+
+        public EstablishedSocketsCountPrototype EstablishedSocketsCount { get; set; }
+
+        #endregion
+
+
         internal PrototypesCollection(CollectorOptions options)
         {
             T Register<T>() where T : SensorOptions, new() => new T()
@@ -139,6 +147,8 @@ namespace HSMDataCollector.Options
             PackageProcessTime = Register<PackageProcessTimePrototype>().ApplyOptions(options);
             PackageContentSize = Register<PackageContentSizePrototype>();
             QueueOverflow = Register<QueueOverflowPrototype>().ApplyOptions(options);
+
+            EstablishedSocketsCount = Register<EstablishedSocketsCountPrototype>();
         }
     }
 }

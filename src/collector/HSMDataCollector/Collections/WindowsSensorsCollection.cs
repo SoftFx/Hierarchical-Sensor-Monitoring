@@ -5,6 +5,8 @@ using HSMDataCollector.DefaultSensors.Windows.WindowsInfo;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using System;
+using HSMDataCollector.DefaultSensors.Windows.Network;
+using HSMDataCollector.Prototypes.Collections.Network;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -224,6 +226,13 @@ namespace HSMDataCollector.DefaultSensors
 
         #endregion
 
+
+        #region Network
+
+        public IWindowsCollection AddEstablishedSocketsConnections() => ToWindows(new EstablishedSocketsSensor(_prototype.EstablishedSocketsCount.Get(new SocketSensorOptions())));
+        
+        #endregion
+        
 
         public IWindowsCollection AddProductVersion(VersionSensorOptions options) => (IWindowsCollection)AddProductVersionCommon(options);
 
