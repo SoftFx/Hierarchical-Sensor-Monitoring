@@ -14,20 +14,7 @@ namespace HSMServer.Model.TreeViewModels;
 public class RemoveNodesRequestModel
 {
     public Guid[] NodeIds { get; set; }
-    
-    public bool IsSearch { get; set; }
 }
-
-
-public record SearchPattern(string SearchParameter = "", bool IsSearchRefresh = false)
-{
-    public bool IsSearch { get; set; } = !string.IsNullOrEmpty(SearchParameter);
-
-    public bool IsMatchWord { get; set; } = SearchParameter is not null && SearchParameter.Length >= 2 && SearchParameter.StartsWith('"') && SearchParameter.EndsWith('"');
-    
-    public bool IsNameFits(string name) => IsMatchWord ? name.Equals(SearchParameter[1..^1]) : name.Contains(SearchParameter, StringComparison.OrdinalIgnoreCase);
-}
-
 
 public sealed class VisibleTreeViewModel
 {
@@ -38,7 +25,7 @@ public sealed class VisibleTreeViewModel
 
     private readonly User _user;
 
-    private SearchPattern _searchPattern = new();
+    private readonly SearchPattern _searchPattern = new();
 
     
     public event Func<User, List<ProductNodeViewModel>> GetUserProducts;
@@ -60,11 +47,7 @@ public sealed class VisibleTreeViewModel
 
     public void AddOpenedNodes(IEnumerable<Guid> ids) => _openedNodes.AddRange(ids);
 
-    public void RemoveOpenedNode(RemoveNodesRequestModel request)
-    {
-        _searchPattern.IsSearch = request.IsSearch;
-        OpenedNodes.Remove(request.NodeIds);
-    }
+    public void RemoveOpenedNode(RemoveNodesRequestModel request) => OpenedNodes.Remove(request.NodeIds);
 
     public void ClearOpenedNodes()
     {
@@ -75,7 +58,7 @@ public sealed class VisibleTreeViewModel
 
     public List<BaseShallowModel> GetUserTree(SearchPattern pattern)
     {
-        _searchPattern = pattern;
+        _searchPattern.Recalculate(pattern);
         
         // products should be updated before folders because folders should contain updated products
         var products = GetUserProducts?.Invoke(_user).GetOrdered(_user);
@@ -87,7 +70,7 @@ public sealed class VisibleTreeViewModel
         SearchedSensors.Clear();
         _allTree.Clear();
 
-        if (!_searchPattern.IsSearchRefresh && _searchPattern.IsSearch)
+        if (_searchPattern.ShouldClearOpenedNodes)
             ClearOpenedNodes();
         
         if (!_searchPattern.IsSearch)

@@ -20,8 +20,7 @@ window.collapseButton =  {
             cache: false,
             contentType: 'application/json',
             data: JSON.stringify({
-                nodeIds: collapseButton.treeState.core.open,
-                isSearch: $('#search_input').val() !== ''
+                nodeIds: collapseButton.treeState.core.open
             })
         }).done(function (){
             collapseButton.tree.jstree('close_all');

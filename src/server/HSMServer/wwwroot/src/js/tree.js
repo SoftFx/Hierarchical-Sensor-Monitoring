@@ -40,7 +40,7 @@ window.initializeTree = function () {
                 data: function (node) {
                     return {
                         'id': node.id,
-                        'searchParameter': $('#search_field').val(),
+                        'searchParameter': $('#search_input').val(),
                         'isSearchRefresh': searchServerRefresh
                     }
                 }
@@ -127,7 +127,7 @@ window.initializeTree = function () {
     }).on('input', function () {
         let value = $(this).val();
         if (value === '') {
-            $('#search_field').val(value);
+            $('#searchForm .fa-w').hide();
             emptySearch  = true;
             if (!jQuery.isEmptyObject(prevState))
             {
@@ -160,8 +160,6 @@ window.initializeTree = function () {
 
         if (jQuery.isEmptyObject(prevState))
             prevState = $('#jstree').jstree('get_state')
-
-        $('#search_field').val(value);
         
         searchClientRefresh = true;
         
