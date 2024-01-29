@@ -131,7 +131,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public IActionResult SaveDashboardPanel(Guid dashboardId, Guid panelId, [FromBody] PanelViewModel model)
+        public IActionResult SaveDashboardPanel(Guid dashboardId, Guid panelId, PanelViewModel model)
         {
             if (string.IsNullOrEmpty(model.Name) || string.IsNullOrWhiteSpace(model.Name))
                 return BadRequest("Invalid Name");
@@ -139,14 +139,15 @@ namespace HSMServer.Controllers
             if (model.Name.Length > 30)
                 return BadRequest("Name length is grater than 30 characters");
 
-            if (model.Description.Length > 250)
+            if (model.Description?.Length > 250)
                 return BadRequest("Description length is greater than 100 characters");
 
             if (TryGetPanel(dashboardId, panelId, out var panel))
                 panel.NotifyUpdate(new PanelUpdate(panel.Id)
                 {
                     Name = model.Name,
-                    Description = model.Description
+                    Description = model.Description ?? string.Empty,
+                    ShowProduct = model.ShowProduct,
                 });
 
             return Ok(dashboardId);
@@ -193,7 +194,7 @@ namespace HSMServer.Controllers
             {
                 var response = await datasource.Source.Initialize();
 
-                return Json(new DatasourceViewModel(response, datasource));
+                return Json(new DatasourceViewModel(response, datasource, panel.ShowProduct));
             }
 
             return Json(new
@@ -205,7 +206,7 @@ namespace HSMServer.Controllers
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
         public async Task<IActionResult> UpdateSource([FromBody] PanelSourceUpdate update, Guid dashboardId, Guid panelId, Guid sourceId)
         {
-            if (TryGetSource(dashboardId, panelId, sourceId, out var source))
+            if (TryGetPanel(dashboardId, panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out var source))
             {
                 var oldProperty = source.Property;
                 var updatedSource = source.Update(update);
@@ -213,7 +214,7 @@ namespace HSMServer.Controllers
                 if (updatedSource.Property != oldProperty)
                 {
                     var response = await updatedSource.Source.Initialize();
-                    return Json(new DatasourceViewModel(response, updatedSource));
+                    return Json(new DatasourceViewModel(response, updatedSource, panel.ShowProduct));
                 }
                 
                 return Ok();

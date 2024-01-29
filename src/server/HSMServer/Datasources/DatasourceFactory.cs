@@ -6,8 +6,10 @@ namespace HSMServer.Datasources
 {
     public static class DatasourceFactory
     {
-        public static SensorDatasourceBase Build(BaseSensorModel sensor, PlottedProperty property)
+        public static SensorDatasourceBase Build(BaseSensorModel sensor, SourceSettings settings)
         {
+            var property = settings.Property;
+
             SensorDatasourceBase source = sensor.Type switch
             {
                 SensorType.Integer when property.IsInstantView() => new IntLineDatasource(),
@@ -33,7 +35,7 @@ namespace HSMServer.Datasources
                 _ => throw new Exception($"History visualization for {sensor.Type} sensor is not supported")
             };
 
-            return source.AttachSensor(sensor, property);
+            return source.AttachSensor(sensor, settings);
         }
 
 

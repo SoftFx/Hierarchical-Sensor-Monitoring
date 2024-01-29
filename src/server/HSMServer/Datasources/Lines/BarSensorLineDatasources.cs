@@ -10,7 +10,7 @@ namespace HSMServer.Datasources
         where TProp : struct, INumber<TProp>
         where TChart : INumber<TChart>
     {
-        protected override Func<TValue, TProp> GetPropertyFactory() => _plotProperty switch
+        protected override Func<TValue, TProp> GetPropertyFactory(PlottedProperty property) => property switch
         {
             PlottedProperty.Min => v => v.Min,
             PlottedProperty.Max => v => v.Max,
@@ -19,7 +19,7 @@ namespace HSMServer.Datasources
             PlottedProperty.FirstValue => v => v.FirstValue ?? v.Min,
             PlottedProperty.LastValue => v => v.LastValue,
 
-            _ => throw BuildException(),
+            _ => throw BuildException(property),
         };
 
         protected override TChart ConvertToChartType(TProp value) => TChart.CreateChecked(value);
@@ -33,14 +33,14 @@ namespace HSMServer.Datasources
     public abstract class BarBaseNullDoubleLineDatasource<TValue> : BaseLineDatasource<TValue, double?, double>
         where TValue : BarBaseValue
     {
-        protected override Func<TValue, double?> GetPropertyFactory() => _plotProperty switch
+        protected override Func<TValue, double?> GetPropertyFactory(PlottedProperty property) => property switch
         {
             PlottedProperty.EmaMin => v => v.EmaMin,
             PlottedProperty.EmaMax => v => v.EmaMax,
             PlottedProperty.EmaMean => v => v.EmaMean,
             PlottedProperty.EmaCount => v => v.EmaCount,
 
-            _ => throw BuildException(),
+            _ => throw BuildException(property),
         };
 
         protected override double ConvertToChartType(double? value) => value ?? 0.0;
@@ -54,11 +54,11 @@ namespace HSMServer.Datasources
     public abstract class BarBaseIntLineDatasource<TValue> : BaseLineDatasource<TValue, int, int>
         where TValue : BarBaseValue
     {
-        protected override Func<TValue, int> GetPropertyFactory() => _plotProperty switch
+        protected override Func<TValue, int> GetPropertyFactory(PlottedProperty property) => property switch
         {
             PlottedProperty.Count => v => v.Count,
 
-            _ => throw BuildException(),
+            _ => throw BuildException(property),
         };
 
         protected override int ConvertToChartType(int value) => value;

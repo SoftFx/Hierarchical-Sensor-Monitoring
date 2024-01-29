@@ -13,11 +13,15 @@ namespace HSMServer.Core.DataLayer
         ISnapshotDatabase Snapshots { get; }
 
 
-        long TotalDbSize { get; }
-
         long SensorHistoryDbSize { get; }
 
-        long EnviromentDbSize { get; }
+        long JournalDbSize { get; }
+
+        long ConfigDbSize { get; }
+
+        long BackupsSize { get; }
+
+        long TotalDbSize { get; }
 
 
         void BackupEnvironment(string backupPath);
