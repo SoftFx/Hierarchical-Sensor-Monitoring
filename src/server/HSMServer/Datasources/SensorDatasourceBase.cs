@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Collections;
+using HSMCommon.Extensions;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
@@ -69,9 +70,7 @@ namespace HSMServer.Datasources
 
             var history = await _sensor.GetHistoryData(request);
 
-            history.Reverse();
-
-            foreach (var raw in history)
+            foreach (var raw in history.ReverseFluent())
                 AddNewValue(raw);
 
             return new()

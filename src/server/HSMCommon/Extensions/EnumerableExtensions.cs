@@ -26,5 +26,12 @@ namespace HSMCommon.Extensions
 
             return (notApply, apply);
         }
+
+        public static IEnumerable<T> ReverseFluent<T>(this List<T> list)
+        {
+            list.Reverse();
+
+            return list;
+        }
     }
 }
