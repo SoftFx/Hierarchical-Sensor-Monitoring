@@ -40,7 +40,7 @@ namespace HSMServer.Dashboards
             _board = board;
 
             ShowProduct = entity.ShowProduct;
-            AggregateValues = entity.IsAggregate;
+            AggregateValues = !entity.IsNotAggregate;
 
             if (entity.Settings is not null)
                 Settings.FromEntity(entity.Settings);
@@ -71,7 +71,7 @@ namespace HSMServer.Dashboards
 
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
             entity.Settings = Settings.ToEntity();
-            entity.IsAggregate = AggregateValues;
+            entity.IsNotAggregate = !AggregateValues;
             entity.ShowProduct = ShowProduct;
 
             return entity;
