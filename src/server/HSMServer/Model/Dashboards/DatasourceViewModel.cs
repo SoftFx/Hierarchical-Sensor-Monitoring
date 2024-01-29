@@ -7,6 +7,7 @@ using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 
 namespace HSMServer.Model.Dashboards;
@@ -67,6 +68,9 @@ public class DatasourceViewModel
 
     public PlottedProperty Property { get; set; }
 
+    [Display(Name = "Aggregate values")]
+    public bool AggregateValues { get; set; }
+
     public string Label { get; set; }
 
     public string Color { get; set; }
@@ -90,6 +94,7 @@ public class DatasourceViewModel
         SensorId = source.SensorId;
         Color = source.Color.ToRGB();
         Label = source.Label;
+        AggregateValues = source.AggragateValues;
 
         var sensor = source.Sensor;
 
