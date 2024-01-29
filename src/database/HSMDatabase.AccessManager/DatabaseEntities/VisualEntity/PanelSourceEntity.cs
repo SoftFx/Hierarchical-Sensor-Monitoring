@@ -7,6 +7,8 @@
         public byte[] SensorId { get; init; }
 
 
+        public byte Shape { get; init; }
+
         public string Color { get; init; }
 
         public string Label { get; init; }

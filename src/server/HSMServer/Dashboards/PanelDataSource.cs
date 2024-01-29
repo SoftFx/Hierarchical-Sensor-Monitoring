@@ -34,6 +34,17 @@ namespace HSMServer.Dashboards
     }
 
 
+    public enum PlottedShape : byte
+    {
+        linear = 0,
+        spline = 1,
+        hv = 2,
+        vh = 3,
+        hvh = 4,
+        vhv = 5,
+    }
+
+
     public sealed class PanelDatasource : IDisposable
     {
         public BaseSensorModel Sensor { get; }
@@ -47,6 +58,8 @@ namespace HSMServer.Dashboards
 
 
         public PlottedProperty Property { get; private set; }
+
+        public PlottedShape Shape { get; private set; }
 
         public string Label { get; private set; }
 
@@ -68,6 +81,7 @@ namespace HSMServer.Dashboards
             Color = Color.FromName(ColorExtensions.GenerateRandomColor());
             Property = sensor.Type.IsBar() ? PlottedProperty.Max : PlottedProperty.Value;
             Label = $"{sensor.DisplayName} ({Property})";
+            Shape = PlottedShape.linear;
 
             AggragateValues = true;
         }
@@ -78,6 +92,7 @@ namespace HSMServer.Dashboards
             SensorId = new Guid(entity.SensorId);
 
             Property = (PlottedProperty)entity.Property;
+            Shape = (PlottedShape)entity.Shape;
             Color = Color.FromName(entity.Color);
             Label = entity.Label;
 
@@ -119,6 +134,9 @@ namespace HSMServer.Dashboards
             if (Enum.TryParse<PlottedProperty>(update.Property, out var newProperty) && Property != newProperty)
                 Property = ApplyRebuild(newProperty);
 
+            if (Enum.TryParse<PlottedShape>(update.Shape, out var newShape) && Shape != newShape)
+                Shape = newShape;
+
             if (update.IsAggregateValues != AggragateValues)
                 AggragateValues = ApplyRebuild(update.IsAggregateValues);
 
@@ -139,6 +157,7 @@ namespace HSMServer.Dashboards
 
                 IsAggregate = AggragateValues,
                 Property = (byte)Property,
+                Shape = (byte)Shape,
                 Color = Color.Name,
                 Label = Label,
             };

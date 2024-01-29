@@ -35,5 +35,5 @@ namespace HSMServer.Dashboards
     }
 
 
-    public record PanelSourceUpdate(string Name, string Color, string Property, bool IsAggregateValues = true);
+    public record PanelSourceUpdate(string Name, string Color, string Property, string Shape, bool IsAggregateValues = true);
 }

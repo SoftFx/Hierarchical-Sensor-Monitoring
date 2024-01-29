@@ -290,12 +290,12 @@ export class BoolPlot extends Plot {
 }
 
 export class IntegerPlot extends ErrorColorPlot {
-    constructor(data, unitType = undefined, color = Colors.default) {
+    constructor(data, unitType = undefined, color = Colors.default, shape = undefined) {
         super(data, unitType, color);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
-        this.line.shape = 'hv';
+        this.line.shape = shape == undefined ? 'hv' : shape;
         this.marker = {
             color: [],
             size: [],
@@ -323,11 +323,15 @@ export class IntegerPlot extends ErrorColorPlot {
 }
 
 export class DoublePlot extends ErrorColorPlot {
-    constructor(data, name, field = 'value', unitType = undefined, color = Colors.default) {
+    constructor(data, name, field = 'value', unitType = undefined, color = Colors.default, shape = undefined) {
         super(data, unitType, color);
 
         this.type = 'scatter';
         this.name = name;
+
+        if (shape != undefined)
+            this.line.shape = shape;
+
         this.marker = {
             color: [],
             size: [],

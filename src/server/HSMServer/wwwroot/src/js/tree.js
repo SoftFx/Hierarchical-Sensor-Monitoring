@@ -1,6 +1,4 @@
-import { currentPanel, getPlotSourceView, initDropzone, Model} from "./dashboard";
-import {convertToGraphData} from "./plotting";
-import {BarPLot, BoolPlot, DoublePlot, EnumPlot, IntegerPlot, TimeSpanPlot} from "./plots";
+import { initDropzone} from "./dashboard";
 
 window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
 

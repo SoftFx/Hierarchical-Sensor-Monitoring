@@ -48,7 +48,7 @@ function defaultLabelUpdate(id, name) {
 
     let row = sources[id];
     let label = $(row).find('input[id^="name_input"]')
-    let property = $(row).find(':selected');
+    let property = $(row).find(`select[id^='property_']`).find(':selected');
     let sensorNameDefault = $(row).find('input[id^="name_default"]').val();
 
     if (label.length === 0)
@@ -108,7 +108,7 @@ window.insertSourceHtml = function (data) {
 }
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
-    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.chartType == 1);
+    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1);
 
     let layoutUpdate = {
         'xaxis.visible': true,
@@ -488,14 +488,14 @@ function addResizable(interactable) {
     })
 }
 
-window.updateSource = function (name, color, property, showProduct, id) {
+window.updateSource = function (name, color, property, shape, showProduct, id) {
     if (currentPanel[id] === undefined)
         return;
 
     if (currentPanel[id].updateTimeout !== undefined)
         clearTimeout(currentPanel[id].updateTimeout);
 
-    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, showProduct, id);
+    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, shape, showProduct, id);
 }
 
 window.getCurrentPlotInDashboard = function (id) {
@@ -615,7 +615,7 @@ function showEventInfo(event) {
     $(`#${id}.cloned`).remove();
 }
 
-function updatePlotSource(name, color, property, showProduct, id) {
+function updatePlotSource(name, color, property, shape, showProduct, id) {
     let updatedName = defaultLabelUpdate(currentPanel[id].oldIndex, name)
 
     $.ajax({
@@ -626,7 +626,8 @@ function updatePlotSource(name, color, property, showProduct, id) {
         data: JSON.stringify({
             name: updatedName,
             color: color,
-            property: property
+            property: property,
+            shape: shape
         })
     }).done(function (response) {
         if (response !== '') {
@@ -642,6 +643,7 @@ function updatePlotSource(name, color, property, showProduct, id) {
             'hovertemplate': `${updatedName}, %{customdata}<extra></extra>`,
             'line.color': color,
             'marker.color': color,
+            'line.shape': shape,
             name: updatedName
         }
 
