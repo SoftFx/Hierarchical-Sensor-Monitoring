@@ -52,6 +52,8 @@ namespace HSMServer.Dashboards
 
         public Color Color { get; private set; }
 
+        public bool AggragateValues { get; private set; }
+
 
         internal event Action UpdateEvent;
 
@@ -66,6 +68,8 @@ namespace HSMServer.Dashboards
             Color = Color.FromName(ColorExtensions.GenerateRandomColor());
             Property = sensor.Type.IsBar() ? PlottedProperty.Max : PlottedProperty.Value;
             Label = $"{sensor.DisplayName} ({Property})";
+
+            AggragateValues = true;
         }
 
         public PanelDatasource(BaseSensorModel sensor, PanelSourceEntity entity) : this(sensor)
@@ -76,13 +80,24 @@ namespace HSMServer.Dashboards
             Property = (PlottedProperty)entity.Property;
             Color = Color.FromName(entity.Color);
             Label = entity.Label;
+
+            AggragateValues = entity.IsAggregate;
         }
 
 
         public PanelDatasource BuildSource()
         {
             Source?.Dispose(); // unsubscribe prev version
-            Source = DatasourceFactory.Build(Sensor, Property);
+
+            var settings = new SourceSettings
+            {
+                SensorType = Sensor.Type,
+                Property = Property,
+
+                AggregateValues = AggragateValues,
+            };
+
+            Source = DatasourceFactory.Build(Sensor, settings);
 
             return this;
         }
@@ -90,16 +105,27 @@ namespace HSMServer.Dashboards
 
         public PanelDatasource Update(PanelSourceUpdate update)
         {
+            var rebuildSource = false;
+
+            T ApplyRebuild<T>(T value)
+            {
+                rebuildSource = true;
+                return value;
+            }
+
             Color = update.Color is not null ? Color.FromName(update.Color) : Color;
             Label = !string.IsNullOrEmpty(update.Name) ? update.Name : Label;
 
             if (Enum.TryParse<PlottedProperty>(update.Property, out var newProperty) && Property != newProperty)
-            {
-                Property = newProperty;
-                BuildSource();
-            }
+                Property = ApplyRebuild(newProperty);
+
+            if (update.IsAggregateValues != AggragateValues)
+                AggragateValues = ApplyRebuild(update.IsAggregateValues);
 
             UpdateEvent?.Invoke();
+
+            if (rebuildSource)
+                BuildSource();
 
             return this;
         }
@@ -111,6 +137,7 @@ namespace HSMServer.Dashboards
                 Id = Id.ToByteArray(),
                 SensorId = SensorId.ToByteArray(),
 
+                IsAggregate = AggragateValues,
                 Property = (byte)Property,
                 Color = Color.Name,
                 Label = Label,

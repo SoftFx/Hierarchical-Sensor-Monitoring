@@ -167,6 +167,7 @@
             </summary>
             <param name="value">Currently processed data item</param>
             <param name="summary">Current summary item</param>
+            <param name="IsCompressed">Current state of compression of summary</param>
         </member>
         <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountMean(System.Collections.Generic.List{System.ValueTuple{`0,System.Int32}})">
             <summary>

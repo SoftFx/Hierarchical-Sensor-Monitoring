@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Datasources.Aggregators;
 using System;
 
 namespace HSMServer.Datasources
@@ -9,16 +10,7 @@ namespace HSMServer.Datasources
 
         protected override ChartType NormalType => ChartType.Points;
 
-
-        protected override void AddVisibleValue(BaseValue baseValue)
-        {
-            throw new NotImplementedException();
-        }
-
-        protected override void ApplyToLast(BaseValue newValue)
-        {
-            throw new NotImplementedException();
-        }
+        protected override BaseDataAggregator DataAggregator => throw new NotImplementedException();
     }
 
 
@@ -28,15 +20,6 @@ namespace HSMServer.Datasources
 
         protected override ChartType NormalType => ChartType.Bars;
 
-
-        protected override void AddVisibleValue(BaseValue baseValue)
-        {
-            throw new NotImplementedException();
-        }
-
-        protected override void ApplyToLast(BaseValue newValue)
-        {
-            throw new NotImplementedException();
-        }
+        protected override BaseDataAggregator DataAggregator => throw new NotImplementedException();
     }
 }

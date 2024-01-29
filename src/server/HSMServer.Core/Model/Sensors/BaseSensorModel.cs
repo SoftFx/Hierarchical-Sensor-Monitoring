@@ -156,7 +156,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask();
+        public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask() ?? Task.FromResult(new List<BaseValue>());
 
 
         protected override void UpdateTTL(PolicyUpdate update) => Policies.UpdateTTL(update);
