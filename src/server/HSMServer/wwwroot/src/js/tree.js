@@ -11,14 +11,14 @@ const AjaxPost = {
 };
 
 var searchInterval = 1000; // 1 sec
+var searchClientRefresh = false;
+var searchServerRefresh = false;
 var emptySearch = false;
+var prevState = undefined;
 
 window.initializeTree = function () {
     initDropzone()
     
-    var sortingType = $("input[name='TreeSortType']:checked");
-    var searchRefresh = false;
-
     if (window.localStorage.jstree) {
         let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
         if (initOpened > 1)
@@ -40,7 +40,8 @@ window.initializeTree = function () {
                 data: function (node) {
                     return {
                         'id': node.id,
-                        'searchParameter': $('#search_field').val()
+                        'searchParameter': $('#search_input').val(),
+                        'isSearchRefresh': searchServerRefresh
                     }
                 }
             }
@@ -59,8 +60,11 @@ window.initializeTree = function () {
             cache: false,
             contentType: 'application/json',
             data: JSON.stringify({
-                nodeIds: [data.node.id]
+                nodeIds: [data.node.id],
+                isSearch: $('#search_input').val() !== ''
             })
+        }).done(function (){
+            $('#jstree').jstree('close_all', data.node.id)
         })
     }).on('refresh.jstree', function (e, data) {
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
@@ -69,7 +73,7 @@ window.initializeTree = function () {
             updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
         }
 
-        if (searchRefresh) {
+        if (searchClientRefresh) {
             $(this).jstree(true).get_json('#', { flat: true }).forEach((node) => {
                 if (node.state.loaded === true)
                     $(this).jstree('open_node', node.id);
@@ -77,7 +81,21 @@ window.initializeTree = function () {
 
             $(this).show();
             $('#jstreeSpinner').addClass('d-none');
-            searchRefresh = false;
+            searchClientRefresh = false;
+        }
+
+        if (jQuery.isEmptyObject(prevState) && prevState !== undefined) {
+            let jstreeState = JSON.parse(localStorage.getItem('jstree'));
+            jstreeState.state.core.open.forEach((node) => {
+                $(this).jstree('open_node', node);
+            })
+
+            jstreeState.state.core.selected.forEach((node) => {
+                $(this).jstree('open_node', node);
+                $(this).jstree('select_node', node);
+            })
+            
+            prevState = undefined;
         }
 
         if (emptySearch !== undefined && emptySearch === true)
@@ -87,6 +105,7 @@ window.initializeTree = function () {
                 $(`#${selectedIds[0]}`)[0].scrollIntoView();
 
             emptySearch = false;
+            searchServerRefresh = false;
         }
     }).on('open_node.jstree', function (e, data) {
         collapseButton.reset();
@@ -96,7 +115,7 @@ window.initializeTree = function () {
             redirectToHome(node.attr('id'));
         }
     });
-
+    
     $("#search_tree").on('click', function () {
         search($('#search_input').val());
     });
@@ -106,14 +125,26 @@ window.initializeTree = function () {
             search($(this).val());
         }
     }).on('input', function () {
-        if ($(this).val() === '') {
-            $('#search_field').val($(this).val());
+        let value = $(this).val();
+        if (value === '') {
+            $('#searchForm .fa-w').hide();
             emptySearch  = true;
-            $('#jstree').jstree(true).refresh(true);
+            if (!jQuery.isEmptyObject(prevState))
+            {
+                applySelectedNodeToPreviousTreeState();
+                $('#jstree').jstree(true).refresh(true, true);
+            }
+            else 
+                $('#jstree').jstree(true).refresh(true);
         }
         else {
+            if (value.length >= 2 && value[0] === '"' && value.at(-1) === '"')
+                $('#searchForm .fa-w').show();
+            else
+                $('#searchForm .fa-w').hide();
+            
             clearTimeout(refreshTreeTimeoutId);
-            refreshTreeTimeoutId = setTimeout(() => search($(this).val()), searchInterval);
+            refreshTreeTimeoutId = setTimeout(() => search(value), searchInterval);
         }
     });
 
@@ -127,11 +158,33 @@ window.initializeTree = function () {
             clearTimeout(updateSelectedNodeDataTimeoutId);
         }
 
-        $('#search_field').val(value);
+        if (jQuery.isEmptyObject(prevState))
+            prevState = $('#jstree').jstree('get_state')
+        
+        searchClientRefresh = true;
+        
         $('#jstree').hide().jstree(true).refresh(true);
 
-        searchRefresh = true;
+        searchServerRefresh = true;
+
         $('#jstreeSpinner').removeClass('d-none')
+    }
+    
+    function applySelectedNodeToPreviousTreeState()
+    {
+        let jstreeState = JSON.parse(localStorage.getItem('jstree'));
+        prevState.core.selected = jstreeState.state.core.selected;
+        let currenotSelectedNode = $('#jstree').jstree('get_node', prevState.core.selected[0]);
+        if (currenotSelectedNode)
+            $.ajax({
+                url: `${addNodes}`,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(currenotSelectedNode.parents.slice(0, -1))
+            })
+        jstreeState.state.core = prevState.core;
+        localStorage.setItem('jstree', JSON.stringify(jstreeState));
+        prevState = {};
     }
 }
 
