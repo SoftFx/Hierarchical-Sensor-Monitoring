@@ -184,12 +184,12 @@ export function convertToGraphData(graphData, sensorInfo, graphName, color = Col
         case 1:
             return new IntegerPlot(escapedData, sensorInfo.units, color, shape);
         case 2:
-            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color);
+            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape);
         case 4:
             return asLine ? new IntegerPlot(escapedData, sensorInfo.units, color, shape)
                           : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 5:
-            return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color) 
+            return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape) 
                           : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 7:
             return new TimeSpanPlot(escapedData, sensorInfo.units, color);

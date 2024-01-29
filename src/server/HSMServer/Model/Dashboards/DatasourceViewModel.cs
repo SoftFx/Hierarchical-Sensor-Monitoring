@@ -6,9 +6,10 @@ using HSMServer.Datasources;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace HSMServer.Model.Dashboards;
@@ -75,6 +76,7 @@ public class DatasourceViewModel
     [Display(Name = "Aggregate values")]
     public bool AggregateValues { get; set; }
 
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public PlottedShape Shape { get; set; }
 
     public string Label { get; set; }
@@ -100,7 +102,6 @@ public class DatasourceViewModel
         SensorId = source.SensorId;
         Color = source.Color.ToRGB();
         Label = source.Label;
-        Shape = source.Shape;
         AggregateValues = source.AggragateValues;
 
         var sensor = source.Sensor;
@@ -117,6 +118,7 @@ public class DatasourceViewModel
         Property = source.Property;
 
         AvailableShapes = Enum.GetValues(typeof(PlottedShape)).Cast<PlottedShape>().ToSelectedItems();
+        Shape = source.Shape;
     }
 
     public DatasourceViewModel(InitChartSourceResponse chartResponse, PanelDatasource source, bool showProduct) : this(source, showProduct)
