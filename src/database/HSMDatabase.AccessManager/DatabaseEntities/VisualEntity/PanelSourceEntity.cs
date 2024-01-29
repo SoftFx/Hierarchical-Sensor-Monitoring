@@ -14,7 +14,5 @@
         public string Label { get; init; }
 
         public byte Property { get; init; }
-
-        public bool IsAggregate { get; init; } = true;
     }
 }

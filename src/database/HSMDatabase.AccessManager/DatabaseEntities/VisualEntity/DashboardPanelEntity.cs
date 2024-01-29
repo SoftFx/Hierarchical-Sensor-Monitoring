@@ -8,6 +8,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 
         public PanelSettingsEntity Settings { get; set; }
 
+        public bool IsAggregate { get; set; } = true;
+
         public bool ShowProduct { get; set; }
     }
 

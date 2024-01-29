@@ -73,9 +73,6 @@ public class DatasourceViewModel
 
     public PlottedProperty Property { get; set; }
 
-    [Display(Name = "Aggregate values")]
-    public bool AggregateValues { get; set; }
-
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public PlottedShape Shape { get; set; }
 
@@ -102,7 +99,6 @@ public class DatasourceViewModel
         SensorId = source.SensorId;
         Color = source.Color.ToRGB();
         Label = source.Label;
-        AggregateValues = source.AggragateValues;
 
         var sensor = source.Sensor;
 

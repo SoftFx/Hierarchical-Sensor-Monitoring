@@ -26,6 +26,8 @@ namespace HSMServer.Dashboards
 
         public bool ShowProduct { get; init; }
 
+        public bool IsAggregateValues { get; init; } = true;
+
 
         [SetsRequiredMembers]
         public PanelUpdate(Guid panelId) : base()
@@ -35,5 +37,5 @@ namespace HSMServer.Dashboards
     }
 
 
-    public record PanelSourceUpdate(string Name, string Color, string Property, string Shape, bool IsAggregateValues = true);
+    public record PanelSourceUpdate(string Name, string Color, string Property, string Shape);
 }

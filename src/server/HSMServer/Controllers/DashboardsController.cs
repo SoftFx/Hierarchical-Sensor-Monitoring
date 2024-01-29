@@ -148,6 +148,7 @@ namespace HSMServer.Controllers
                     Name = model.Name,
                     Description = model.Description ?? string.Empty,
                     ShowProduct = model.ShowProduct,
+                    IsAggregateValues = model.AggregateValues,
                 });
 
             return Ok(dashboardId);
@@ -209,7 +210,7 @@ namespace HSMServer.Controllers
             if (TryGetPanel(dashboardId, panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out var source))
             {
                 var oldProperty = source.Property;
-                var updatedSource = source.Update(update);
+                var updatedSource = source.Update(update, panel.AggregateValues);
 
                 if (updatedSource.Property != oldProperty)
                 {

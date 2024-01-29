@@ -27,9 +27,16 @@
 
                 <textarea id='description' maxlength="250" class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
 
-                <div class="form-check mt-2">
-                    <input type="checkbox" asp-for="ShowProduct" class="form-check-input" onchange="javascript:showProductInLabels()" />
-                    <label class="form-check-label" asp-for="ShowProduct"></label>
+                <div class="d-flex flex-row mt-2">
+                    <div class="form-check">
+                        <input type="checkbox" asp-for="ShowProduct" class="form-check-input" onchange="javascript:showProductInLabels()" />
+                        <label class="form-check-label" asp-for="ShowProduct"></label>
+                    </div>
+
+                    <div class="form-check ms-4">
+                        <input type="checkbox" asp-for="AggregateValues" class="form-check-input" />
+                        <label class="form-check-label" asp-for="AggregateValues"></label>
+                    </div>
                 </div>
             </form>
         </div>
