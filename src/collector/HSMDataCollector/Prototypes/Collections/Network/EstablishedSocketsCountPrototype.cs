@@ -14,6 +14,8 @@ namespace HSMDataCollector.Prototypes.Collections.Network
 
         public EstablishedSocketsCountPrototype() : base()
         {
+            IsComputerSensor = true;
+            
             Type = SensorType.IntSensor;
             TTL = TimeSpan.FromMinutes(5);
             KeepHistory = TimeSpan.FromDays(90);
@@ -25,9 +27,6 @@ namespace HSMDataCollector.Prototypes.Collections.Network
         {
             var options = base.Get(customOptions);
 
-            options.IsComputerSensor = true;
-            
-            
             return options;
         }
     }

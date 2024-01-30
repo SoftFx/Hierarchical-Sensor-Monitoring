@@ -6,7 +6,6 @@ using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using System;
 using HSMDataCollector.DefaultSensors.Windows.Network;
-using HSMDataCollector.Prototypes.Collections.Network;
 
 namespace HSMDataCollector.DefaultSensors
 {

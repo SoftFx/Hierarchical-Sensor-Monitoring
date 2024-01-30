@@ -90,11 +90,6 @@ namespace HSMDataCollector.Options
         {
             PostDataPeriod = TimeSpan.FromSeconds(15);
         }
-        
-        public SocketSensorOptions(TcpState state) : this()
-        {
-            State = state;
-        }
     }
 
     public sealed class CollectorMonitoringInfoOptions : MonitoringInstantSensorOptions { }

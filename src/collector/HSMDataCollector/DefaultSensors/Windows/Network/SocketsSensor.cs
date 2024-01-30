@@ -4,18 +4,20 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
-    public class SocketsSensor : MonitoringSensorBase<int>
+    public abstract class SocketsSensor : MonitoringSensorBase<int>
     {
         private readonly IPGlobalProperties _properties = IPGlobalProperties.GetIPGlobalProperties();
-        private readonly TcpState _state;
+
+        
+        protected virtual TcpState State { get; }
         
         
         public SocketsSensor(SocketSensorOptions options) : base(options)
         {
-            _state = options.State;
+            State = options.State;
         }
 
         
-        protected override int GetValue() => _properties.GetActiveTcpConnections().Count(x => _state == x.State);
+        protected override int GetValue() => _properties.GetActiveTcpConnections().Count(x => State == x.State);
     }
 }
