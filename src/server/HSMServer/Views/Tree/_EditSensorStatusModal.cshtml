@@ -100,7 +100,9 @@
 
 <script>
    var allowSubmitEditStatus = true;
-   
+   var value = '@Model.NewValue';
+   var comment = '@Model.Comment';
+  
    $(document).on("submit", "#editSensorStatus_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -155,4 +157,10 @@
     $("#editSensorStatus_modal").on("hidden", function () {
         allowSubmitEditStatus = true;
     });
+   
+   $('#ChangeLast').on('change', function (e){
+       let isChecked = $(this).is(':checked')
+       $('#NewValue').val(isChecked ? value : '');
+       $('#Comment').val(isChecked ? comment : '');
+   })
 </script>
