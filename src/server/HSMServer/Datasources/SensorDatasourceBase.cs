@@ -51,7 +51,7 @@ namespace HSMServer.Datasources
             Initialize(new SensorHistoryRequest
             {
                 To = DateTime.UtcNow,
-                Count = -_settings.MaxVisibleCount,
+                Count = -_settings.CustomVisibleCount,
             });
 
         public Task<InitChartSourceResponse> Initialize(DateTime from, DateTime to) =>

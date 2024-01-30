@@ -7,6 +7,9 @@ using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace HSMServer.Model.Dashboards;
@@ -44,6 +47,9 @@ public class DatasourceViewModel
 
     public List<SelectListItem> AvailableProperties { get; set; }
 
+    public List<SelectListItem> AvailableShapes { get; set; }
+
+
     public SensorInfoViewModel SensorInfo { get; set; }
 
     public List<object> Values { get; set; } = new();
@@ -66,6 +72,9 @@ public class DatasourceViewModel
 
 
     public PlottedProperty Property { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public PlottedShape Shape { get; set; }
 
     public string Label { get; set; }
 
@@ -103,6 +112,9 @@ public class DatasourceViewModel
 
         AvailableProperties = GetAvailableProperties(sensor);
         Property = source.Property;
+
+        AvailableShapes = Enum.GetValues(typeof(PlottedShape)).Cast<PlottedShape>().ToSelectedItems();
+        Shape = source.Shape;
     }
 
     public DatasourceViewModel(InitChartSourceResponse chartResponse, PanelDatasource source, bool showProduct) : this(source, showProduct)

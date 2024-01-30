@@ -28,6 +28,9 @@ public sealed class PanelViewModel
 
     public string Description { get; set; }
 
+    [Display(Name = "Aggregate values")]
+    public bool AggregateValues { get; set; }
+
 
     public SensorType? MainSensorType { get; set; }
 
@@ -44,6 +47,7 @@ public sealed class PanelViewModel
         Name = panel.Name ?? DefaultName;
         Description = panel.Description;
         ShowProduct = panel.ShowProduct;
+        AggregateValues = panel.AggregateValues;
         Id = panel.Id;
         DashboardId = dashboardId;
         Settings = panel.Settings;

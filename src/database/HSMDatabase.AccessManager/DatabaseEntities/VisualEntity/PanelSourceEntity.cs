@@ -7,12 +7,12 @@
         public byte[] SensorId { get; init; }
 
 
+        public byte Shape { get; init; }
+
         public string Color { get; init; }
 
         public string Label { get; init; }
 
         public byte Property { get; init; }
-
-        public bool IsAggregate { get; init; } = true;
     }
 }
