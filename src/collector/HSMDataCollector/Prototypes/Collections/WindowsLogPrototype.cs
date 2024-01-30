@@ -1,5 +1,7 @@
+using HSMDataCollector.Alerts;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
+using System;
 
 namespace HSMDataCollector.Prototypes.Collections
 {
@@ -33,9 +35,13 @@ namespace HSMDataCollector.Prototypes.Collections
         {
             Description = string.Format(BaseDescription, Status);
             IsComputerSensor = true;
-            
+
             Type = SensorType.StringSensor;
             AggregateData = true;
+
+            TTL = TimeSpan.MaxValue;
+            
+            TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSendNotification($"[$product]$path").AndSetIcon(AlertIcon.Clock).AndSetSensorError().Build();
         }
     }
 }
