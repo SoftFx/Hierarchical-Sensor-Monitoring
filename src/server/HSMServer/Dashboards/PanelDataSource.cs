@@ -94,7 +94,7 @@ namespace HSMServer.Dashboards
         }
 
 
-        public PanelDatasource BuildSource(bool isAggregate)
+        public PanelDatasource BuildSource(bool aggregateValues)
         {
             Source?.Dispose(); // unsubscribe prev version
 
@@ -103,7 +103,7 @@ namespace HSMServer.Dashboards
                 SensorType = Sensor.Type,
                 Property = Property,
 
-                AggregateValues = isAggregate,
+                AggregateValues = aggregateValues,
             };
 
             Source = DatasourceFactory.Build(Sensor, settings);
@@ -112,7 +112,7 @@ namespace HSMServer.Dashboards
         }
 
 
-        public PanelDatasource Update(PanelSourceUpdate update, bool isAggregate)
+        public PanelDatasource Update(PanelSourceUpdate update, bool aggregateValues)
         {
             var rebuildSource = false;
 
@@ -134,7 +134,7 @@ namespace HSMServer.Dashboards
             UpdateEvent?.Invoke();
 
             if (rebuildSource)
-                BuildSource(isAggregate);
+                BuildSource(aggregateValues);
 
             return this;
         }
