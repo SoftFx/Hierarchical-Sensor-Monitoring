@@ -152,22 +152,40 @@ namespace {
 		return hsm_alerts;
 	}
 
+	void ConvertsBaseOptions(HSMDataCollector::Options::SensorOptions^ hsm_options, const hsm_wrapper::HSMBaseSensorOptions& options)
+	{
+		hsm_options->Description = gcnew String(options.description.c_str());
+		if (options.keep_history)	hsm_options->KeepHistory = TimeSpan::FromMilliseconds(options.keep_history->count());
+		if (options.self_destroy)	hsm_options->SelfDestroy = TimeSpan::FromMilliseconds(options.self_destroy->count());
+		if (options.ttl)			hsm_options->TTL		 = TimeSpan::FromMilliseconds(options.ttl->count());
+		if (options.enable_for_grafana)		hsm_options->EnableForGrafana = options.enable_for_grafana.value();
+		if (options.is_singleton_sensor)	hsm_options->IsSingletonSensor = options.is_singleton_sensor.value();
+		if (options.aggregate_data)			hsm_options->AggregateData = options.aggregate_data.value();
+	}
+
 	HSMDataCollector::Options::InstantSensorOptions^ ConvertInstantOptions(const hsm_wrapper::HSMInstantSensorOptions& options)
 	{
 		auto hsm_options = gcnew InstantSensorOptions();
-		hsm_options->Description = gcnew String(options.description.c_str());
+
+		ConvertsBaseOptions(hsm_options, options);
+		
 		hsm_options->Alerts = ConvertAlerts<InstantAlertTemplate>(options.alerts);
+
 		return hsm_options;
 	}
 
 	HSMDataCollector::Options::BarSensorOptions^ ConvertBarOptions(const hsm_wrapper::HSMBarSensorOptions& options)
 	{
 		auto hsm_options = gcnew HSMDataCollector::Options::BarSensorOptions();
-		hsm_options->Description = gcnew String(options.description.c_str());
-		hsm_options->BarPeriod = TimeSpan::FromMilliseconds(options.bar_period);
-		hsm_options->PostDataPeriod = TimeSpan::FromMilliseconds(options.post_data_period);
+
+		ConvertsBaseOptions(hsm_options, options);
+
+		hsm_options->BarPeriod = TimeSpan::FromMilliseconds(options.bar_period.count());
+		hsm_options->BarTickPeriod = TimeSpan::FromMilliseconds(options.bar_tick_period.count());
+		hsm_options->PostDataPeriod = TimeSpan::FromMilliseconds(options.post_data_period.count());
 		hsm_options->Precision = options.precision;
 		hsm_options->Alerts = ConvertAlerts<BarAlertTemplate>(options.alerts);
+
 		return hsm_options;
 	}
 }

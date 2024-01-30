@@ -34,7 +34,7 @@ namespace HSMServer.Datasources.Aggregators
 
         internal virtual void RecalculateAggrSections(SensorHistoryRequest request)
         {
-            _aggrStepTicks = _maxVisiblePoints > 0 && request.From != DateTime.MinValue ? (request.To - request.From).Ticks / _maxVisiblePoints : 0;
+            _aggrStepTicks = _maxVisiblePoints > 0 && request.From != DateTime.MinValue ? (request.To - request.From).Ticks / _maxVisiblePoints : 0; //disable aggr for Edit panel request (from == MinValue)
             _aggrEndOfPeriod = request.From.Ticks + _aggrStepTicks;
 
             _lastSensorValue = null;
