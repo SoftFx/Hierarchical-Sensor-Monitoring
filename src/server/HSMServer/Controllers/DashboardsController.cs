@@ -21,7 +21,7 @@ namespace HSMServer.Controllers
 
 
         [HttpGet("Dashboards")]
-        public IActionResult Index() => View(_dashboards.GetValues().Select(d => new DashboardViewModel(d)).ToList());
+        public IActionResult Index() => View(_dashboards.GetValues().Select(d => new DashboardViewModel(d).AttachUser(_userManager)).ToList());
 
 
         #region Dashboards
