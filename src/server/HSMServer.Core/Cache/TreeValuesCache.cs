@@ -327,8 +327,9 @@ namespace HSMServer.Core.Cache
             if (request.Comment is not null && (!request.ChangeLast || lastValue is not null))
             {
                 var value = request.BuildNewValue(sensor);
+                var result = request.ChangeLast ? sensor.TryUpdateLastValue(value) : sensor.TryAddValue(value);
 
-                if (sensor.TryUpdateLastValue(value, request.ChangeLast))
+                if (result)
                 {
                     var (oldValue, newValue) = request.GetValues(lastValue, value);
 

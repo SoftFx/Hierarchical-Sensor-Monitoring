@@ -165,7 +165,7 @@ namespace HSMServer.Core.Model
 
         internal abstract void AddDbValue(byte[] bytes);
 
-        internal abstract bool TryUpdateLastValue(BaseValue value, bool changeLast = false);
+        internal abstract bool TryUpdateLastValue(BaseValue value);
 
 
         internal abstract IEnumerable<BaseValue> Convert(List<byte[]> valuesBytes);
