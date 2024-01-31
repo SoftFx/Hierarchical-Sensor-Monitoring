@@ -157,10 +157,4 @@
     $("#editSensorStatus_modal").on("hidden", function () {
         allowSubmitEditStatus = true;
     });
-   
-   $('#ChangeLast').on('change', function (e){
-       let isChecked = $(this).is(':checked')
-       $('#NewValue').val(isChecked ? value : '');
-       $('#Comment').val(isChecked ? comment : '');
-   })
 </script>

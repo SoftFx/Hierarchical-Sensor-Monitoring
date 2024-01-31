@@ -401,7 +401,7 @@ function buildContextMenu(node) {
 
         if (isSensor && !(isMutedState === "True")) {
             contextMenu["ChangeStatus"] = {
-                "label": `Edit status`,
+                "label": `Edit last value`,
                 "icon": "/dist/edit.svg",
                 "action": _ => {
                     loadEditSensorStatusModal(node.id);
