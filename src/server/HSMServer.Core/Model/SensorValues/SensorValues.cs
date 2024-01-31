@@ -1,4 +1,6 @@
 ﻿using HSMCommon.Extensions;
+using HSMServer.Core.Extensions;
+using HSMServer.Core.Model.Storages;
 using System;
 using System.IO;
 
@@ -19,6 +21,20 @@ namespace HSMServer.Core.Model
 
 
         public override bool TryParseValue(string value, out int parsedValue) => int.TryParse(value, out parsedValue);
+
+        public override BaseValue TryBuildEma(BaseValue baseValue, bool changeLast)
+        {
+            if (!changeLast)
+                return StatisticsCalculation.CalculateEma<IntegerValue, int>((IntegerValue)baseValue, this);
+
+            if (baseValue is IntegerValue integerValue)
+                return this with
+                {
+                    EmaValue = integerValue.Value == Value ? integerValue.EmaValue : (integerValue.EmaValue - 0.1 * (integerValue.Value - Value))?.Round()
+                };
+
+            return this;
+        }
     }
 
 
@@ -28,6 +44,20 @@ namespace HSMServer.Core.Model
 
 
         public override bool TryParseValue(string value, out double parsedValue) => double.TryParse(value, out parsedValue);
+
+        public override BaseValue TryBuildEma(BaseValue baseValue, bool changeLast)
+        {
+            if (!changeLast)
+                return StatisticsCalculation.CalculateEma<DoubleValue, double>((DoubleValue)baseValue, this);
+
+            if (baseValue is DoubleValue doubleValue)
+                return this with
+                {
+                    EmaValue = Math.Abs(doubleValue.Value - Value) < 0.001 ? doubleValue.EmaValue : (doubleValue.EmaValue - 0.1 * (doubleValue.Value - Value))?.Round()
+                };
+
+            return this;
+        }
     }
 
 
@@ -118,11 +148,50 @@ namespace HSMServer.Core.Model
     public record IntegerBarValue : BarBaseValue<int>
     {
         public override SensorType Type => SensorType.IntegerBar;
+
+        public override BaseValue TryBuildEma(BaseValue baseValue, bool changeLast)
+        {
+            if (baseValue is IntegerBarValue integerBarValue)
+            {
+                if (!changeLast)
+                    return StatisticsCalculation.CalculateBarEma<IntegerBarValue, int>(integerBarValue, this);
+
+                return this with
+                {
+                    EmaCount = integerBarValue.EmaCount,
+                    EmaMin = integerBarValue.EmaMin,
+                    EmaMax = integerBarValue.EmaMax,
+                    EmaMean = integerBarValue.EmaMean,
+                };
+            }
+
+            return this;
+        }
     }
 
 
     public record DoubleBarValue : BarBaseValue<double>
     {
         public override SensorType Type => SensorType.DoubleBar;
+
+
+        public override BaseValue TryBuildEma(BaseValue baseValue, bool changeLast)
+        {
+            if (baseValue is DoubleBarValue doubleBarValue)
+            {
+                if (!changeLast)
+                    return StatisticsCalculation.CalculateBarEma<DoubleBarValue, double>(doubleBarValue, this);
+
+                return this with
+                {
+                    EmaCount = doubleBarValue.EmaCount,
+                    EmaMin = doubleBarValue.EmaMin,
+                    EmaMax = doubleBarValue.EmaMax,
+                    EmaMean = doubleBarValue.EmaMean,
+                };
+            }
+
+            return this;
+        }
     }
 }

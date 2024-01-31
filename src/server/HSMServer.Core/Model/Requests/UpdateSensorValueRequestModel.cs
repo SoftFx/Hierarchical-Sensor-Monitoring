@@ -37,8 +37,11 @@ public sealed record UpdateSensorValueRequestModel
         return response;
     }
 
-    public BaseValue BuildNewValue(BaseValue value, BaseValue oldValue)
+    public BaseValue BuildNewValue(BaseSensorModel sensor)
     {
+        var value = sensor.Storage.GetEmptyValue();
+        var oldValue = sensor.LastValue;
+        
         if (value is FileValue && oldValue is FileValue oldFileValue)
             value = ChangeLast ? oldFileValue : oldFileValue with
             {
@@ -54,7 +57,9 @@ public sealed record UpdateSensorValueRequestModel
 
         var configuredValue = ChangeLast ? SetLastValueTime(value, oldValue) : SetUtcNowTime(value);
 
-        return configuredValue is BarBaseValue ? configuredValue.TrySetValue(ChangeLast ? oldValue : null) : configuredValue.TrySetValue(Value);
+        configuredValue = configuredValue is BarBaseValue ? configuredValue.TrySetValue(ChangeLast ? oldValue : null) : configuredValue.TrySetValue(Value);
+ 
+        return sensor.Statistics.HasEma() ? configuredValue.TryBuildEma(oldValue, ChangeLast) : configuredValue;
     }
 
 
