@@ -61,8 +61,6 @@ namespace HSMServer.Core.Model
             };
         }
 
-        public override BaseValue TryBuildEma(BaseValue baseValue, bool changeLast) => this;
-
         protected override bool IsEqual(BaseValue value) => false;
     }
 
