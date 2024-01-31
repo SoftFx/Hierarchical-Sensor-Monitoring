@@ -48,7 +48,7 @@ namespace HSMServer.Core.Model.Storages
         {
             var newValue = GetNumber(newRaw);
 
-            return curValue.HasValue ? (OldEmaCoef * curValue.Value + NewEmaCoef * newValue).Round() : newValue;
+            return (curValue.HasValue ? OldEmaCoef * curValue.Value + NewEmaCoef * newValue : NewEmaCoef * newValue).Round();
         }
 
         private static double RecalculateEMA<T>(double? curEma, T? curRaw, T newRaw) where T : struct, INumber<T>
@@ -56,7 +56,7 @@ namespace HSMServer.Core.Model.Storages
             var newValue = GetNumber(newRaw);
             var curValue = curRaw.HasValue ? GetNumber(curRaw.Value) : default;
 
-            return curEma.HasValue && curRaw.HasValue ? (curEma.Value - NewEmaCoef * (curValue - newValue)).Round() : newValue.Round();
+            return (curEma.HasValue && curRaw.HasValue ? curEma.Value - NewEmaCoef * (curValue - newValue) : NewEmaCoef * newValue).Round();
         }
 
         private static double GetNumber<T>(T value) where T : INumber<T> => double.CreateChecked(value);

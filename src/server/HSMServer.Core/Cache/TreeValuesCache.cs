@@ -331,6 +331,8 @@ namespace HSMServer.Core.Cache
 
                 if (result)
                 {
+                    value = sensor.LastValue; // value can be rebuild in storage
+
                     var (oldValue, newValue) = request.GetValues(lastValue, value);
 
                     _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator)
