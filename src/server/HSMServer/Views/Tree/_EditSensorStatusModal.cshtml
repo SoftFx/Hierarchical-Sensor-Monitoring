@@ -100,7 +100,9 @@
 
 <script>
    var allowSubmitEditStatus = true;
-   
+   var value = '@Model.NewValue';
+   var comment = '@Model.Comment';
+  
    $(document).on("submit", "#editSensorStatus_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();

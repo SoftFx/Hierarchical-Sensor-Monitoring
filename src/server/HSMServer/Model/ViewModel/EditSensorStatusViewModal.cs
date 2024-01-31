@@ -51,6 +51,9 @@ public class EditSensorStatusViewModal
 
         Status = model.Status;
 
+        Comment = model.LastValue?.Comment;
+        NewValue = model.LastValue?.ShortInfo;
+        
         IsValueChangeBlockDisplayed = model.Type is not (SensorType.File or SensorType.DoubleBar or SensorType.IntegerBar);
     }
 }
