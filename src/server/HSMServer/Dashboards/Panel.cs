@@ -52,13 +52,13 @@ namespace HSMServer.Dashboards
 
         protected override void UpdateCustom(PanelUpdate update)
         {
-            ShowProduct = update.ShowProduct;
+            ShowProduct = update.ShowProduct ?? ShowProduct;
 
             Settings.Update(update);
 
-            if (update.IsAggregateValues != AggregateValues)
+            if (update.IsAggregateValues.HasValue && update.IsAggregateValues != AggregateValues)
             {
-                AggregateValues = update.IsAggregateValues;
+                AggregateValues = update.IsAggregateValues.Value;
 
                 foreach (var (_, source) in Sources)
                     source.BuildSource(AggregateValues);

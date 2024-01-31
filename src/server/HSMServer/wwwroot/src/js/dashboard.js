@@ -64,10 +64,12 @@ function defaultLabelUpdate(id, name) {
 }
 
 export function getPlotSourceView(id) {
+    let showProduct = $(`input[name='ShowProduct']`).is(':checked');
+
     return new Promise(function (resolve, reject) {
         $.ajax({
             type: 'GET',
-            url: `${window.location.pathname}/${id}`
+            url: `${window.location.pathname}/${id}?showProduct=${showProduct}`
         }).done(function (data) {
             if (data.error === undefined)
                 return resolve(data);

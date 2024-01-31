@@ -187,7 +187,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sensorId:guid}")]
-        public async Task<IActionResult> GetSource(Guid sensorId, Guid dashboardId, Guid panelId)
+        public async Task<IActionResult> GetSource(Guid sensorId, Guid dashboardId, Guid panelId, bool showProduct)
         {
             var error = string.Empty;
 
@@ -195,7 +195,7 @@ namespace HSMServer.Controllers
             {
                 var response = await datasource.Source.Initialize();
 
-                return Json(new DatasourceViewModel(response, datasource, panel.ShowProduct));
+                return Json(new DatasourceViewModel(response, datasource, showProduct));
             }
 
             return Json(new

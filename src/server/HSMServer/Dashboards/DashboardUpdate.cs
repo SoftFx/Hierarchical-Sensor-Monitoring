@@ -24,9 +24,9 @@ namespace HSMServer.Dashboards
 
         public bool? ShowLegend { get; init; }
 
-        public bool ShowProduct { get; init; }
+        public bool? ShowProduct { get; init; }
 
-        public bool IsAggregateValues { get; init; } = true;
+        public bool? IsAggregateValues { get; init; }
 
 
         [SetsRequiredMembers]
