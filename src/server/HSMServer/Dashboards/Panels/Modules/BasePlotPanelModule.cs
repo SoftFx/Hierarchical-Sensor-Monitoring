@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.Extensions;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Drawing;
 
@@ -68,6 +69,32 @@ namespace HSMServer.Dashboards
             Color = Color.FromName(entity.Color);
             Label = entity.Label;
         }
+
+
+        protected override void Update(TUpdate update)
+        {
+            var changePrinciples = false;
+
+            T ApplyDependentChange<T>(T value)
+            {
+                changePrinciples = true;
+                return value;
+            }
+
+            Color = update.Color is not null ? Color.FromName(update.Color) : Color;
+            Label = !string.IsNullOrEmpty(update.Name) ? update.Name : Label;
+
+            if (Enum.TryParse<PlottedProperty>(update.Property, out var newProperty) && Property != newProperty)
+                Property = ApplyDependentChange(newProperty);
+
+            if (Enum.TryParse<PlottedShape>(update.Shape, out var newShape) && Shape != newShape)
+                Shape = newShape;
+
+            if (changePrinciples)
+                ChangeDependentProperties(update);
+        }
+
+        protected virtual void ChangeDependentProperties(TUpdate update) { }
 
 
         public override TEntity ToEntity()

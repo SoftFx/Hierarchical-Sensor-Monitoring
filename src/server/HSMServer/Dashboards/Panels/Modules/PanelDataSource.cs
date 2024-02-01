@@ -3,7 +3,6 @@ using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Datasources;
 using System;
-using System.Drawing;
 
 namespace HSMServer.Dashboards
 {
@@ -32,29 +31,6 @@ namespace HSMServer.Dashboards
             Sensor = sensor;
         }
 
-
-        protected override void Update(PanelSourceUpdate update)
-        {
-            var rebuildSource = false;
-
-            T ApplyRebuild<T>(T value)
-            {
-                rebuildSource = true;
-                return value;
-            }
-
-            Color = update.Color is not null ? Color.FromName(update.Color) : Color;
-            Label = !string.IsNullOrEmpty(update.Name) ? update.Name : Label;
-
-            if (Enum.TryParse<PlottedProperty>(update.Property, out var newProperty) && Property != newProperty)
-                Property = ApplyRebuild(newProperty);
-
-            if (Enum.TryParse<PlottedShape>(update.Shape, out var newShape) && Shape != newShape)
-                Shape = newShape;
-
-            if (rebuildSource)
-                BuildSource(update.AggregateValues);
-        }
 
         public PanelDatasource BuildSource(bool aggregateValues)
         {
@@ -89,5 +65,7 @@ namespace HSMServer.Dashboards
 
             Source?.Dispose();
         }
+
+        protected override void ChangeDependentProperties(PanelSourceUpdate update) => BuildSource(update.AggregateValues);
     }
 }
