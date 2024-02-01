@@ -96,6 +96,8 @@ namespace HSMDataCollector.PublicInterface
 
 
         IWindowsCollection AddEstablishedSocketsConnections();
+        
+        IWindowsCollection AddListenedSocketsConnections();
 
         
         IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);

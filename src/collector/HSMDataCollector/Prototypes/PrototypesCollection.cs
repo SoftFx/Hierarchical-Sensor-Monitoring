@@ -98,6 +98,8 @@ namespace HSMDataCollector.Options
         #region Network
 
         public EstablishedSocketsCountPrototype EstablishedSocketsCount { get; set; }
+        
+        public ListeningSocketsCountPrototype ListenedSocketsCount { get; set; }
 
         #endregion
 
@@ -149,6 +151,7 @@ namespace HSMDataCollector.Options
             QueueOverflow = Register<QueueOverflowPrototype>().ApplyOptions(options);
 
             EstablishedSocketsCount = Register<EstablishedSocketsCountPrototype>();
+            ListenedSocketsCount = Register<ListeningSocketsCountPrototype>();
         }
     }
 }

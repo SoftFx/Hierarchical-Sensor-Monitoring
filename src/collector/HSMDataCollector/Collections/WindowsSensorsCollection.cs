@@ -230,6 +230,8 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddEstablishedSocketsConnections() => ToWindows(new EstablishedSocketsSensor(_prototype.EstablishedSocketsCount.Get(new SocketSensorOptions())));
         
+        public IWindowsCollection AddListenedSocketsConnections() => ToWindows(new ListenedSocketsSensor(_prototype.ListenedSocketsCount.Get(new SocketSensorOptions())));
+        
         #endregion
         
 
