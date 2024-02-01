@@ -26,7 +26,10 @@ namespace HSMServer.Core.Model
                 return true;
             }
 
-            if (Statistics.HasEma() && value is T valueT)
+            if (IsSingleton && !Storage.TryAddAsSingleton(value))
+                return false;
+
+            if (value is T valueT && Statistics.HasEma())
                 value = Storage.CalculateStatistics(valueT);
 
             var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
@@ -38,8 +41,6 @@ namespace HSMServer.Core.Model
 
                 if (AggregateValues)
                     isNewValue &= !Storage.TryAggregateValue(valueT);
-                else if (IsSingleton)
-                    isNewValue &= Storage.TryAddAsSingleton(valueT);
                 else
                     Storage.AddValue(valueT);
 
