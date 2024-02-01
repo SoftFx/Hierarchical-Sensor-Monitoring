@@ -1,7 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using System;
 
-namespace HSMServer.Dashboards.Panels.Modules
+namespace HSMServer.Dashboards
 {
     public interface IPanelModule : IDisposable
     {
@@ -14,7 +14,7 @@ namespace HSMServer.Dashboards.Panels.Modules
 
     public abstract class BasePanelModule<TUpdate, TEntity> : IPanelModule
         where TUpdate : PanelSourceUpdate
-        where TEntity : PanelBaseModuleEntity
+        where TEntity : PanelBaseModuleEntity, new()
     {
         public Guid Id { get; }
 
@@ -33,22 +33,21 @@ namespace HSMServer.Dashboards.Panels.Modules
         }
 
 
-        protected abstract void ApplyUpdate(TUpdate update);
-
-        public abstract TEntity ToEntity();
+        protected abstract void Update(TUpdate update);
 
 
-        public void Update(TUpdate update)
+        public void NotifyUpdate(TUpdate update)
         {
-            ApplyUpdate(update);
+            Update(update);
 
             UpdateEvent?.Invoke();
         }
 
+        public virtual void Dispose() => UpdateEvent = null;
 
-        public virtual void Dispose()
+        public virtual TEntity ToEntity() => new()
         {
-            UpdateEvent = null;
-        }
+            Id = Id.ToByteArray()
+        };
     }
 }

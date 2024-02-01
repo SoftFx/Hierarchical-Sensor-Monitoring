@@ -1,0 +1,85 @@
+﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+using HSMServer.Extensions;
+using System.ComponentModel.DataAnnotations;
+using System.Drawing;
+
+namespace HSMServer.Dashboards
+{
+    public enum PlottedProperty : byte
+    {
+        Value = 0,
+
+        Bar = 50,
+        Min = 51,
+        Mean = 52,
+        Max = 53,
+        FirstValue = 54,
+        LastValue = 55,
+        Count = 56,
+
+        [Display(Name = "EMA (Value)")]
+        EmaValue = 200,
+        [Display(Name = "EMA (Min)")]
+        EmaMin = 201,
+        [Display(Name = "EMA (Mean)")]
+        EmaMean = 202,
+        [Display(Name = "EMA (Max)")]
+        EmaMax = 203,
+        [Display(Name = "EMA (Count)")]
+        EmaCount = 204,
+    }
+
+
+    public enum PlottedShape : byte
+    {
+        linear = 0,
+        spline = 1,
+        hv = 2,
+        vh = 3,
+        hvh = 4,
+        vhv = 5,
+    }
+
+
+    public abstract class BasePlotPanelModule<TUpdate, TEntity> : BasePanelModule<TUpdate, TEntity>
+        where TUpdate : PanelSourceUpdate
+        where TEntity : PlotSourceSettingsEntity, new()
+    {
+        public PlottedProperty Property { get; protected set; }
+
+        public PlottedShape Shape { get; protected set; }
+
+        public string Label { get; protected set; }
+
+        public Color Color { get; protected set; }
+
+
+        protected BasePlotPanelModule() : base()
+        {
+            Color = Color.FromName(ColorExtensions.GenerateRandomColor());
+            Property = PlottedProperty.Value;
+            Shape = PlottedShape.linear;
+        }
+
+        protected BasePlotPanelModule(TEntity entity) : base(entity)
+        {
+            Property = (PlottedProperty)entity.Property;
+            Shape = (PlottedShape)entity.Shape;
+            Color = Color.FromName(entity.Color);
+            Label = entity.Label;
+        }
+
+
+        public override TEntity ToEntity()
+        {
+            var entity = base.ToEntity();
+
+            entity.Property = (byte)Property;
+            entity.Shape = (byte)Shape;
+            entity.Color = Color.Name;
+            entity.Label = Label;
+
+            return entity;
+        }
+    }
+}

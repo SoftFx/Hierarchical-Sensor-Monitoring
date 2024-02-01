@@ -2,25 +2,25 @@
 {
     public sealed record PanelSubscriptionEntity : PlotSourceSettingsEntity
     {
-        public string PathTemplate { get; init; }
+        public string PathTemplate { get; set; }
     }
 
 
     public sealed record PanelSourceEntity : PlotSourceSettingsEntity
     {
-        public byte[] SensorId { get; init; }
+        public byte[] SensorId { get; set; }
     }
 
 
     public abstract record PlotSourceSettingsEntity : PanelBaseModuleEntity
     {
-        public string Color { get; init; }
+        public string Color { get; set; }
 
-        public string Label { get; init; }
+        public string Label { get; set; }
 
-        public byte Property { get; init; }
+        public byte Property { get; set; }
 
-        public byte Shape { get; init; }
+        public byte Shape { get; set; }
     }
 
 

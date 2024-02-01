@@ -1,9 +1,7 @@
 ﻿using HSMCommon.Collections.Reactive;
 using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
-using HSMServer.Core;
 using HSMServer.Core.Model;
-using HSMServer.Dashboards.Panels.Modules;
 using HSMServer.Extensions;
 using System;
 using System.Linq;
@@ -25,16 +23,16 @@ namespace HSMServer.Dashboards
 
         public SensorType? MainSensorType { get; private set; }
 
+        public Unit? MainUnit { get; private set; }
+
+
         public bool AggregateValues { get; private set; }
 
         public bool ShowProduct { get; private set; }
 
-        public Unit? MainUnit { get; private set; }
-
 
         internal Panel(Dashboard board) : base()
         {
-
             _board = board;
 
             Subscriptions = new RDict<PanelSubscription>(ThrowUpdateEvent);
@@ -47,11 +45,11 @@ namespace HSMServer.Dashboards
         {
             _board = board;
 
-            ShowProduct = entity.ShowProduct;
-            AggregateValues = !entity.IsNotAggregate;
-
             Subscriptions = new RDict<PanelSubscription>(ThrowUpdateEvent);
             Sources = new RDict<PanelDatasource>(ThrowUpdateEvent);
+
+            AggregateValues = !entity.IsNotAggregate;
+            ShowProduct = entity.ShowProduct;
 
             if (entity.Settings is not null)
                 Settings.FromEntity(entity.Settings);
@@ -134,11 +132,6 @@ namespace HSMServer.Dashboards
         }
 
 
-        private void SubscribeModuleToUpdates(IPanelModule module) => module.UpdateEvent += ThrowUpdateEvent;
-
-        private void DisposeModule(IPanelModule module) => module.Dispose();
-
-
         public bool TryAddSubscription(PanelSubscription sub) => Subscriptions.IfTryAdd(sub.Id, sub).ThenCallForSuccess(SubscribeModuleToUpdates).IsOk;
 
         public bool TryAddSubscription(out PanelSubscription subscription)
@@ -180,6 +173,10 @@ namespace HSMServer.Dashboards
 
             return Sources.IfTryAdd(source.Id, source).ThenCallForSuccess(ApplyNewSource);
         }
+
+        private void SubscribeModuleToUpdates(IPanelModule module) => module.UpdateEvent += ThrowUpdateEvent;
+
+        private void DisposeModule(IPanelModule module) => module.Dispose();
 
 
         private static bool IsSupportedType(SensorType type) =>
