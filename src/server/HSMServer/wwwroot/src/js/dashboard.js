@@ -33,6 +33,9 @@ window.getRangeDate = function () {
         case "7.00:00:00":
             newDate = currentDate.setDate(currentDate.getDate() - 7)
             break
+        case "30.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 30)
+            break
 
         default:
             newDate = currentDate.setHours(currentDate.getHours() - 6)
