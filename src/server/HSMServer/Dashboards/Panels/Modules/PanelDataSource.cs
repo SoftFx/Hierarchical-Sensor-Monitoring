@@ -125,12 +125,8 @@ namespace HSMServer.Dashboards
             if (Enum.TryParse<PlottedShape>(update.Shape, out var newShape) && Shape != newShape)
                 Shape = newShape;
 
-            UpdateEvent?.Invoke();
-
             if (rebuildSource)
-                BuildSource(aggregateValues);
-
-            return this;
+                BuildSource(update.AggregateValues);
         }
 
 

@@ -210,14 +210,13 @@ namespace HSMServer.Controllers
             if (TryGetPanel(dashboardId, panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out var source))
             {
                 var oldProperty = source.Property;
-                var updatedSource = source.Update(update, panel.AggregateValues);
 
-                source.Update(update);
+                source.Update(update with { AggregateValues = panel.AggregateValues });
 
                 if (source.Property != oldProperty)
                 {
-                    var response = await updatedSource.Source.Initialize();
-                    return Json(new DatasourceViewModel(response, updatedSource, panel.ShowProduct));
+                    var response = await source.Source.Initialize();
+                    return Json(new DatasourceViewModel(response, source, panel.ShowProduct));
                 }
 
                 return Ok();

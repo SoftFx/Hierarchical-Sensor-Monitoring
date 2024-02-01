@@ -12,13 +12,15 @@
     }
 
 
-    public record PlotSourceSettingsEntity : PanelBaseModuleEntity
+    public abstract record PlotSourceSettingsEntity : PanelBaseModuleEntity
     {
         public string Color { get; init; }
 
         public string Label { get; init; }
 
         public byte Property { get; init; }
+
+        public byte Shape { get; init; }
     }
 
 
