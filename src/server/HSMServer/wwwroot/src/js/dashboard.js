@@ -265,7 +265,7 @@ export function initDropzone() {
 }
 
 var dashboardGlobalStartDate;
-const minPlottedPoints = 1500;
+const maxPlottedPoints = 1500;
 window.initDashboard = function () {
     setInterval(() => {
         dashboardGlobalStartDate = new Date(getRangeDate()[0]);
@@ -365,7 +365,7 @@ window.initDashboard = function () {
                             y: [y],
                             x: [x],
                             customdata: [customData]
-                        }, [correctId], GetMaxPoints(plot.data[correctId], x.length)).then(
+                        }, [correctId], maxPlottedPoints).then(
                             (data) => {
                                 if (isTimeSpan)
                                     TimespanRelayout(data);
@@ -378,15 +378,6 @@ window.initDashboard = function () {
             })
         }, 30000)
     }
-}
-
-function GetMaxPoints(plot, additionalPointsCount){
-    let i;
-    for(i = 0; i < plot.x.length; i++)
-        if (new Date(plot.x[i]) > dashboardGlobalStartDate)
-            break;
-
-    return Math.min(minPlottedPoints, plot.length - i) + additionalPointsCount;
 }
 
 function TimespanRelayout(data) {
