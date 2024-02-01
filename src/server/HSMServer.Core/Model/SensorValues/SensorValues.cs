@@ -1,4 +1,6 @@
 ﻿using HSMCommon.Extensions;
+using HSMServer.Core.Extensions;
+using HSMServer.Core.Model.Storages;
 using System;
 using System.IO;
 

@@ -113,14 +113,21 @@ namespace HSMServer.Controllers
             return PartialView("_NodeDataPanel", viewModel);
         }
 
+        [HttpPost]
+        public IActionResult AddToRenderingTree([FromBody] params Guid[] ids)
+        {
+            CurrentUser.Tree.AddOpenedNodes(ids);
+            return Ok();
+        }
+
         [HttpGet]
-        public IActionResult GetNode(string id) =>
+        public IActionResult GetNode(string id, bool isSearchRefresh = false) =>
             _treeViewModel.Nodes.TryGetValue(id.ToGuid(), out var node)
-                ? PartialView("~/Views/Tree/_TreeNode.cshtml", CurrentUser.Tree.LoadNode(node))
+                ? PartialView("~/Views/Tree/_TreeNode.cshtml", CurrentUser.Tree.LoadNode(node, isSearchRefresh))
                 : NotFound();
 
         [HttpPut]
-        public void RemoveRenderingNode([FromBody] RemoveNodesRequestModel request) => CurrentUser.Tree.RemoveOpenedNode(request.NodeIds);
+        public void RemoveRenderingNode([FromBody] RemoveNodesRequestModel request) => CurrentUser.Tree.RemoveOpenedNode(request);
 
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)
@@ -139,8 +146,8 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult RefreshTree(string searchParameter) =>
-            PartialView("~/Views/Tree/_Tree.cshtml", CurrentUser.Tree.GetUserTree(searchParameter));
+        public IActionResult RefreshTree(SearchPattern searchPattern) =>
+            PartialView("~/Views/Tree/_Tree.cshtml", CurrentUser.Tree.GetUserTree(searchPattern));
 
         [HttpGet]
         public IActionResult ApplyFilter(UserFilterViewModel viewModel)

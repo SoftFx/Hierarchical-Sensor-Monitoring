@@ -28,7 +28,7 @@ namespace HSMServer.Model.History
                             IntegerBarValue integerBarValue => new NotCompressedValue<int>(integerBarValue, v.Time),
                             _ => v with { Time = v.Time.ToUniversalTime() }
                         })
-                        .ToList();;
+                        .ToList();
 
             values = tempValues.Select(v => v with { Time = v.Time.ToUniversalTime() }).ToList();
 

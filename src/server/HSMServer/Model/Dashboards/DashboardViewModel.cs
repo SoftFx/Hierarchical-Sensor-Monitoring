@@ -6,6 +6,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using HSMServer.Authentication;
 
 namespace HSMServer.Model.Dashboards
 {
@@ -27,6 +28,11 @@ namespace HSMServer.Model.Dashboards
             new SelectListItem("last 3 day", TimeSpan.FromDays(3).ToString()),
             new SelectListItem("last 7 day", TimeSpan.FromDays(7).ToString())
         ];
+
+
+        public Guid? AuthorId { get; }
+
+        public string Author { get; private set; }
 
 
         public List<PanelViewModel> Panels { get; set; } = new();
@@ -53,6 +59,7 @@ namespace HSMServer.Model.Dashboards
 
             Id = dashboard.Id;
             Name = dashboard.Name;
+            AuthorId = dashboard.AuthorId;
             Description = dashboard.Description;
             FromPeriod = dashboard.DataPeriod;
             Panels = dashboard.Panels.Select(x => new PanelViewModel(x.Value, Id.Value)).ToList();
@@ -66,6 +73,14 @@ namespace HSMServer.Model.Dashboards
             var from = DateTime.UtcNow - _dashboard.DataPeriod;
 
             await Task.WhenAll(Panels.Select(t => t.InitPanelData(from)));
+
+            return this;
+        }
+
+        internal DashboardViewModel AttachUser(IUserManager userManager)
+        {
+            if (userManager.TryGetValueById(AuthorId, out User user))
+                Author = user.Name;
 
             return this;
         }

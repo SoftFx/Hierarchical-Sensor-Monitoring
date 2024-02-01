@@ -34,7 +34,7 @@ window.customReset =  function (plot = undefined, range = undefined){
         if (currentPlot.x.length === 0)
             return range[1];
 
-        return new Date(1000000 + Math.min(new Date(range[1]), new Date(currentPlot.x.at(-1)))).toISOString();
+        return 1000000 + Math.min(new Date(range[1]), new Date(currentPlot.x.at(-1)));
     }
 }
 
@@ -175,21 +175,21 @@ function getPreviousZoomData(graphElementId) {
     return window.sessionStorage.getItem(graphElementId);
 }
 
-export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, asLine = false) {
+export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, shape = undefined, asLine = false) {
     let escapedData = JSON.parse(graphData);
 
     switch (sensorInfo.plotType) {
         case 0:
             return new BoolPlot(escapedData, sensorInfo.units, color);
         case 1:
-            return new IntegerPlot(escapedData, sensorInfo.units, color);
+            return new IntegerPlot(escapedData, sensorInfo.units, color, shape);
         case 2:
-            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color);
+            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape);
         case 4:
-            return asLine ? new IntegerPlot(escapedData, sensorInfo.units, color)
+            return asLine ? new IntegerPlot(escapedData, sensorInfo.units, color, shape)
                           : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 5:
-            return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color) 
+            return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape) 
                           : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 7:
             return new TimeSpanPlot(escapedData, sensorInfo.units, color);

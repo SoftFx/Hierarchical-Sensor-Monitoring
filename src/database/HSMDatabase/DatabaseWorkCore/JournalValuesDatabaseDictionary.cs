@@ -1,85 +1,85 @@
+using HSMDatabase.AccessManager;
+using HSMDatabase.LevelDB;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using HSMDatabase.AccessManager;
-using HSMDatabase.LevelDB;
 
 namespace HSMDatabase.DatabaseWorkCore;
 
 internal sealed class JournalValuesDatabaseDictionary : IEnumerable<IJournalValuesDatabase>
 {
-        private readonly ConcurrentQueue<IJournalValuesDatabase> _sensorDbs = new();
-        private readonly IDatabaseSettings _dbSettings;
+    private readonly ConcurrentQueue<IJournalValuesDatabase> _sensorDbs = new();
+    private readonly IDatabaseSettings _dbSettings;
 
-        private IJournalValuesDatabase _lastDb;
+    private IJournalValuesDatabase _lastDb;
 
-        private string _dataBasePath => Path.Combine(_dbSettings.DatabaseFolder, "Journals");
+    private string DataBasePath => _dbSettings.PathToJournalDb;
 
 
-        internal JournalValuesDatabaseDictionary(IDatabaseSettings dbSettings)
+    internal JournalValuesDatabaseDictionary(IDatabaseSettings dbSettings)
+    {
+        _dbSettings = dbSettings;
+
+        if (!Directory.Exists(DataBasePath))
+            Directory.CreateDirectory(DataBasePath);
+
+        var journalValuesDirectories = GetJournalValuesDirectories();
+        foreach (var directory in journalValuesDirectories)
         {
-            _dbSettings = dbSettings;
+            var (from, to) = GetDatesFromFolderName(directory);
+            AddNewDb(directory, from, to);
+        }
+    }
 
-            if (!Directory.Exists(_dataBasePath))
-                Directory.CreateDirectory(_dataBasePath);
-            
-            var journalValuesDirectories = GetJournalValuesDirectories();
-            foreach (var directory in journalValuesDirectories)
-            {
-                var (from, to) = GetDatesFromFolderName(directory);
-                AddNewDb(directory, from, to);
-            }
+
+    internal IJournalValuesDatabase GetNewestDatabases(long time)
+    {
+        if (_lastDb == null || _lastDb.To < time)
+        {
+            var from = DateTimeMethods.GetMinDateTimeTicks(time);
+            var to = DateTimeMethods.GetMaxDateTimeTicks(time);
+
+            return AddNewDb(_dbSettings.GetPathToJournalValueDatabase(from, to), from, to);
         }
 
+        return _lastDb;
+    }
 
-        internal IJournalValuesDatabase GetNewestDatabases(long time)
-        {
-            if (_lastDb == null || _lastDb.To < time)
-            {
-                var from = DateTimeMethods.GetMinDateTimeTicks(time);
-                var to = DateTimeMethods.GetMaxDateTimeTicks(time);
+    internal IJournalValuesDatabase AddNewDb(string name, long from, long to)
+    {
+        _lastDb = LevelDBManager.GetJournalValuesDatabaseInstance(name, from, to);
 
-                return AddNewDb(_dbSettings.GetPathToJournalValueDatabase(from, to), from, to);
-            }
+        _sensorDbs.Enqueue(_lastDb);
 
-            return _lastDb;
-        }
+        return _lastDb;
+    }
 
-        internal IJournalValuesDatabase AddNewDb(string name, long from, long to)
-        {
-            _lastDb = LevelDBManager.GetJournalValuesDatabaseInstance(name, from, to);
+    private List<string> GetJournalValuesDirectories()
+    {
+        var journalValuesDirectories = Directory.GetDirectories(DataBasePath, $"{_dbSettings.JournalValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
 
-            _sensorDbs.Enqueue(_lastDb);
+        return journalValuesDirectories.OrderBy(d => d).ToList();
+    }
 
-            return _lastDb;
-        }
+    private static (long from, long to) GetDatesFromFolderName(string folder)
+    {
+        var from = 0L;
+        var to = 0L;
 
-        private List<string> GetJournalValuesDirectories()
-        {
-            var journalValuesDirectories = Directory.GetDirectories(_dataBasePath, $"{_dbSettings.JournalValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
+        var splitResults = folder.Split('_');
 
-            return journalValuesDirectories.OrderBy(d => d).ToList();
-        }
+        if (long.TryParse(splitResults[1], out long fromTicks))
+            from = fromTicks;
 
-        private static (long from, long to) GetDatesFromFolderName(string folder)
-        {
-            var from = 0L;
-            var to = 0L;
+        if (long.TryParse(splitResults[2], out long toTicks))
+            to = toTicks;
 
-            var splitResults = folder.Split('_');
+        return (from, to);
+    }
 
-            if (long.TryParse(splitResults[1], out long fromTicks))
-                from = fromTicks;
+    public IEnumerator<IJournalValuesDatabase> GetEnumerator() => _sensorDbs.GetEnumerator();
 
-            if (long.TryParse(splitResults[2], out long toTicks))
-                to = toTicks;
-
-            return (from, to);
-        }
-
-        public IEnumerator<IJournalValuesDatabase> GetEnumerator() => _sensorDbs.GetEnumerator();
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
