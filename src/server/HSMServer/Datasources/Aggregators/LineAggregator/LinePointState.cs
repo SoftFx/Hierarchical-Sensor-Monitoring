@@ -56,7 +56,7 @@ namespace HSMServer.Datasources.Aggregators
             return new()
             {
                 Value = T.CreateChecked((GetNumber(first.Value) * oldCount + GetNumber(second.Value)) / count),
-                Time = new DateTime((long)(((double)first.Time.Ticks * oldCount + second.Time.Ticks) / count)),
+                Time = new DateTime((long)(((double)first.Time.Ticks * oldCount + second.Time.Ticks) / count), DateTimeKind.Utc),
                 Count = count,
             };
         }
