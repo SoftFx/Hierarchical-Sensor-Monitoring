@@ -264,7 +264,13 @@ export function initDropzone() {
         })
 }
 
+var dashboardGlobalStartDate;
+const minPlottedPoints = 1500;
 window.initDashboard = function () {
+    setInterval(() => {
+        dashboardGlobalStartDate = new Date(getRangeDate()[0]);
+    },29000)
+
     const currentRange = getRangeDate();
     const layoutUpdate = {
         'xaxis.range': currentRange
@@ -359,7 +365,7 @@ window.initDashboard = function () {
                             y: [y],
                             x: [x],
                             customdata: [customData]
-                        }, [correctId], 100).then(
+                        }, [correctId], GetMaxPoints(plot.data[correctId], x.length)).then(
                             (data) => {
                                 if (isTimeSpan)
                                     TimespanRelayout(data);
@@ -372,6 +378,15 @@ window.initDashboard = function () {
             })
         }, 30000)
     }
+}
+
+function GetMaxPoints(plot, additionalPointsCount){
+    let i;
+    for(i = 0; i < plot.x.length; i++)
+        if (new Date(plot.x[i]) > dashboardGlobalStartDate)
+            break;
+
+    return Math.min(minPlottedPoints, plot.length - i) + additionalPointsCount;
 }
 
 function TimespanRelayout(data) {
@@ -429,17 +444,7 @@ function addDraggable(interactable) {
         autoScroll: true,
 
         listeners: {
-            move: dragMoveListenerPanel,
-
-            end(event) {
-                var textEl = event.target.querySelector('p')
-
-                //textEl && (textEl.textContent =
-                //    'moved a distance of ' +
-                //    (Math.sqrt(Math.pow(event.pageX - event.x0, 2) +
-                //        Math.pow(event.pageY - event.y0, 2) | 0))
-                //        .toFixed(2) + 'px')
-            }
+            move: dragMoveListenerPanel
         }
     })
 }
