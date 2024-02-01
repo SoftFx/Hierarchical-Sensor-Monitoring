@@ -8,7 +8,7 @@ namespace HSMServer.Datasources
     public sealed record SourceSettings
     {
         private const int DefaultMaxVisibleCnt = 100;
-        private const int UpperBound = 1500;
+        private const int MaxNotAggrPoints = 1500;
 
 
         public required PlottedProperty Property { get; init; }
@@ -20,6 +20,6 @@ namespace HSMServer.Datasources
 
         public int CustomVisibleCount { get; init; } = DefaultMaxVisibleCnt;
 
-        public int MaxVisibleCount => AggregateValues ? Math.Min(CustomVisibleCount, TreeValuesCache.MaxHistoryCount) : UpperBound;
+        public int MaxVisibleCount => AggregateValues ? Math.Min(CustomVisibleCount, TreeValuesCache.MaxHistoryCount) : MaxNotAggrPoints;
     }
 }

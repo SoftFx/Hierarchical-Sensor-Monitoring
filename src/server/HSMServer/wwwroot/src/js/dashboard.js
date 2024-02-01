@@ -264,13 +264,8 @@ export function initDropzone() {
         })
 }
 
-var dashboardGlobalStartDate;
 const maxPlottedPoints = 1500;
 window.initDashboard = function () {
-    setInterval(() => {
-        dashboardGlobalStartDate = new Date(getRangeDate()[0]);
-    },29000)
-
     const currentRange = getRangeDate();
     const layoutUpdate = {
         'xaxis.range': currentRange
