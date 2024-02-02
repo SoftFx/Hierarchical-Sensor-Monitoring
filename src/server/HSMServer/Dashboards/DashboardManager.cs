@@ -44,10 +44,8 @@ namespace HSMServer.Dashboards
             if (action == ActionType.Delete)
                 foreach (var (_, panel) in this.SelectMany(x => x.Value.Panels))
                 {
-                    var (_, source) = panel.Sources.FirstOrDefault(x => x.Value.SensorId == model.Id);
-
-                    if (source is not null)
-                        panel.TryRemoveSource(source.Id);
+                    foreach(var (sourceId, _) in panel.Sources.Where(x => x.Value.SensorId == model.Id))
+                        panel.TryRemoveSource(sourceId);
                 }
         }
 
