@@ -93,7 +93,7 @@ namespace HSMServer.Dashboards
 
         public override void Dispose()
         {
-            ClearSubscriptions();
+            base.Dispose();
 
             foreach ((_, var source) in Sources)
                 source.Dispose();

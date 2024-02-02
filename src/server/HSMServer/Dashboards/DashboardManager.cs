@@ -4,7 +4,6 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
-using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,7 +32,6 @@ namespace HSMServer.Dashboards
             _cache = cache;
 
             Added += AddDashboardSubscriptions;
-            Removed -= RemoveDashboardSubscriptions;
 
             _cache.ChangeSensorEvent += ChangeSensorHandler;
         }
@@ -44,21 +42,21 @@ namespace HSMServer.Dashboards
             if (action == ActionType.Delete)
                 foreach (var (_, panel) in this.SelectMany(x => x.Value.Panels))
                 {
-                    foreach(var (sourceId, _) in panel.Sources.Where(x => x.Value.SensorId == model.Id))
+                    foreach (var (sourceId, _) in panel.Sources.Where(x => x.Value.SensorId == model.Id))
                         panel.TryRemoveSource(sourceId);
                 }
         }
 
         public Task<bool> TryAdd(DashboardAdd dashboardAdd, out Dashboard dashboard)
         {
-            dashboard = new Dashboard(dashboardAdd);
+            dashboard = new Dashboard(dashboardAdd, _cache);
 
             return TryAdd(dashboard);
         }
 
         protected override Dashboard FromEntity(DashboardEntity entity)
         {
-            var newBoard = new Dashboard(entity, _cache.GetSensor);
+            var newBoard = new Dashboard(entity, _cache);
 
             AddDashboardSubscriptions(newBoard);
 
@@ -68,10 +66,7 @@ namespace HSMServer.Dashboards
 
         private void AddDashboardSubscriptions(Dashboard board)
         {
-            board.Subscribe(_cache.GetSensor);
             board.UpdatedEvent += () => TryUpdate(board);
         }
-
-        private void RemoveDashboardSubscriptions(Dashboard board, InitiatorInfo _) => board.Unsubscribe();
     }
 }

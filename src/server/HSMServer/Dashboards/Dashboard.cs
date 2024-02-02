@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
@@ -11,7 +12,7 @@ namespace HSMServer.Dashboards
     public sealed class Dashboard : BaseServerModel<DashboardEntity, DashboardUpdate>
     {
         private static readonly TimeSpan _defaultDataPeriod = new(0, 30, 0);
-        private Func<Guid, BaseSensorModel> _getSensorModel;
+        private readonly ITreeValuesCache _cache;
 
 
         public ConcurrentDictionary<Guid, Panel> Panels { get; } = new();
@@ -19,11 +20,14 @@ namespace HSMServer.Dashboards
         public TimeSpan DataPeriod { get; private set; } = _defaultDataPeriod;
 
 
-        internal Dashboard(DashboardAdd addModel) : base(addModel) { }
-
-        internal Dashboard(DashboardEntity entity, Func<Guid, BaseSensorModel> getSensorModel) : base(entity)
+        internal Dashboard(DashboardAdd addModel, ITreeValuesCache cache) : base(addModel)
         {
-            _getSensorModel += getSensorModel;
+            _cache = cache;
+        }
+
+        internal Dashboard(DashboardEntity entity, ITreeValuesCache cache) : base(entity)
+        {
+            _cache = cache;
 
             Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), AddPanel));
             DataPeriod = GetPeriod(entity.DataPeriod);
@@ -47,7 +51,7 @@ namespace HSMServer.Dashboards
 
         public override void Dispose()
         {
-            Unsubscribe();
+            base.Dispose();
 
             foreach (var (_, panel) in Panels)
                 panel.Dispose();
@@ -87,18 +91,9 @@ namespace HSMServer.Dashboards
             return ok;
         }
 
-
-        internal void Subscribe(Func<Guid, BaseSensorModel> getSensorModel) => _getSensorModel ??= getSensorModel;
-
-        internal void Unsubscribe()
-        {
-            _getSensorModel = null;
-            ClearSubscriptions();
-        }
-
         internal bool TryGetSensor(Guid id, out BaseSensorModel sensor)
         {
-            sensor = _getSensorModel?.Invoke(id);
+            sensor = _cache.GetSensor(id);
 
             return sensor is not null;
         }
