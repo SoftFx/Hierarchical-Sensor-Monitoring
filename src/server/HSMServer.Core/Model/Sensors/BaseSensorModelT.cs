@@ -26,7 +26,7 @@ namespace HSMServer.Core.Model
                 return true;
             }
 
-            if (IsSingleton && !Storage.TryAddAsSingleton(value))
+            if (IsSingleton && !Storage.IsNewSingletonValue(value))
                 return false;
 
             if (value is T valueT && Statistics.HasEma())

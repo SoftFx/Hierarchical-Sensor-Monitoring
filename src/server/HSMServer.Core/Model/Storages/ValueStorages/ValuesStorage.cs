@@ -108,16 +108,7 @@ namespace HSMServer.Core.Model
             return true;
         }
 
-        internal bool TryAddAsSingleton(BaseValue value)
-        {
-            if (IsLastEmptyOrTimeout || LastValue.Time.Floor(_singletonTimePrecision) < value.Time.Floor(_singletonTimePrecision))
-            {
-                AddValue((T)value);
-                return true;
-            }
-
-            return false;
-        }
+        internal bool IsNewSingletonValue(BaseValue value) => IsLastEmptyOrTimeout || LastValue.Time.Floor(_singletonTimePrecision) < value.Time.Floor(_singletonTimePrecision);
 
 
         internal override List<BaseValue> GetValues(int count) =>

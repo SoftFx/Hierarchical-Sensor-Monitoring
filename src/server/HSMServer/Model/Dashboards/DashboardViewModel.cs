@@ -26,7 +26,8 @@ namespace HSMServer.Model.Dashboards
             new SelectListItem("last 12 hours", TimeSpan.FromHours(12).ToString()),
             new SelectListItem("last 1 day", TimeSpan.FromDays(1).ToString()),
             new SelectListItem("last 3 day", TimeSpan.FromDays(3).ToString()),
-            new SelectListItem("last 7 day", TimeSpan.FromDays(7).ToString())
+            new SelectListItem("last 7 day", TimeSpan.FromDays(7).ToString()),
+            new SelectListItem("last 30 days", TimeSpan.FromDays(30).ToString())
         ];
 
 

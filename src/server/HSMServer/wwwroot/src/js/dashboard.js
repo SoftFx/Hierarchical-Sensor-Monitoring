@@ -33,6 +33,9 @@ window.getRangeDate = function () {
         case "7.00:00:00":
             newDate = currentDate.setDate(currentDate.getDate() - 7)
             break
+        case "30.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 30)
+            break
 
         default:
             newDate = currentDate.setHours(currentDate.getHours() - 6)
@@ -264,6 +267,7 @@ export function initDropzone() {
         })
 }
 
+const maxPlottedPoints = 1500;
 window.initDashboard = function () {
     const currentRange = getRangeDate();
     const layoutUpdate = {
@@ -359,7 +363,7 @@ window.initDashboard = function () {
                             y: [y],
                             x: [x],
                             customdata: [customData]
-                        }, [correctId], 100).then(
+                        }, [correctId], maxPlottedPoints).then(
                             (data) => {
                                 if (isTimeSpan)
                                     TimespanRelayout(data);
@@ -429,17 +433,7 @@ function addDraggable(interactable) {
         autoScroll: true,
 
         listeners: {
-            move: dragMoveListenerPanel,
-
-            end(event) {
-                var textEl = event.target.querySelector('p')
-
-                //textEl && (textEl.textContent =
-                //    'moved a distance of ' +
-                //    (Math.sqrt(Math.pow(event.pageX - event.x0, 2) +
-                //        Math.pow(event.pageY - event.y0, 2) | 0))
-                //        .toFixed(2) + 'px')
-            }
+            move: dragMoveListenerPanel
         }
     })
 }
