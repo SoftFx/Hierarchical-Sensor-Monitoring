@@ -1,0 +1,42 @@
+﻿<div class="d-flex flex-row align-items-center">
+    <div class="card w-100">
+        <div class="card-body py-2">
+            <div class="d-flex flex-column">
+                <div class="d-flex mx-1 align-items-center">
+                    <label class="fw-bold me-1 text-nowrap">From folder:</label>
+                    <select class="form-select w-auto">
+                        <option>Any</option>
+                        <option>Folder1</option>
+                        <option>Folder2</option>
+                    </select>
+
+                    <label class="fw-bold ms-2 me-1 text-nowrap">with path:</label>
+                    <input class="form-control" type="text" />
+                </div>
+            </div>
+
+            <div class="d-flex flex-column mt-1">
+                <div class="d-flex mx-1 align-items-center">
+                    <label class="fw-bold me-1">Label:</label>
+                    <input class="form-control" type="text"/>
+
+                    <label class="fw-bold ms-2 me-1">Property:</label>
+                    <select class="form-select w-auto" title="Property to output"></select>
+
+                    <a href="https://plotly.com/javascript/line-charts/#line-shape-options-for-interpolation" class="fw-bold ms-2 me-1">Shape:</a>
+                    <select class="form-select w-auto" title="Shape of chart line"></select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+            <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+        </button>
+        <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+            <a class="dropdown-item text-decoration-none fw-normal button-link">Apply</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+        </div>
+    </div>
+</div>

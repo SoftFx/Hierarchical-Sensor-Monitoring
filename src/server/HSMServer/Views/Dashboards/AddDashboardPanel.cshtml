@@ -48,6 +48,24 @@
         <div id="multichart"></div>
     </div>
 
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <label class="col-form-label fw-bold">Templates:</label>
+            <a id="addTemplate" href="javascript:addTemplate();" class="mx-2">
+                <i class="fa-solid fa-plus"></i> Add
+            </a>
+        </div>
+        <a id="labelHelp" data-bs-toggle="popover" title="Custom label variables" data-bs-html="true"
+           style="color: #0366d6; cursor: pointer; text-decoration: underline;">
+            Label help
+        </a>
+    </div>
+
+    <div>
+        @await Html.PartialAsync("_TemplateSettings")
+    </div>
+
+    <label class="col-form-label fw-bold">Sources:</label>
     <div id="plots" class="mt-1">
         <ul id="sources" class="list-group">
         </ul>
