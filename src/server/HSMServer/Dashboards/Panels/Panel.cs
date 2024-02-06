@@ -129,26 +129,24 @@ namespace HSMServer.Dashboards
                     MainSensorType = null;
                     MainUnit = null;
                 }
-
-                DisposeModule(source);
             }
 
-            return Sources.IfTryRemove(sourceId).ThenCallForSuccess(RemoveSource).ThenCall().IsOk;
+            return Sources.IfTryRemoveAndDispose(sourceId).ThenCallForSuccess(RemoveSource).ThenCall().IsOk;
         }
 
-        public List<Guid> GetSensorSourcesId(Guid sensorId) => _sensorToSourceMap[sensorId].ToList();
+        public List<Guid> GetSensorSourcesId(Guid sensorId) => _sensorToSourceMap[sensorId].ToList(); //to internal function
 
 
-        public bool TryAddSubscription(PanelSubscription sub) => Subscriptions.IfTryAdd(sub.Id, sub).ThenCallForSuccess(SubscribeModuleToUpdates).IsOk;
+        public bool TryAddSubscription(PanelSubscription sub) => Subscriptions.IfTryAdd(sub.Id, sub, SubscribeModuleToUpdates).IsOk;
 
         public bool TryAddSubscription(out PanelSubscription subscription)
         {
             subscription = new PanelSubscription();
 
-            return Subscriptions.IfTryAdd(subscription.Id, subscription).ThenCallForSuccess(SubscribeModuleToUpdates).ThenCall().IsOk;
+            return Subscriptions.TryCallAdd(subscription.Id, subscription, SubscribeModuleToUpdates);
         }
 
-        public bool TryRemoveSubscription(Guid id) => Subscriptions.IfTryRemove(id).ThenCallForSuccess(DisposeModule).ThenCall().IsOk;
+        public bool TryRemoveSubscription(Guid id) => Subscriptions.TryCallRemoveAndDispose(id);
 
 
         private RDictResult<PanelDatasource> TrySaveNewSource(PanelDatasource source, out string error)
@@ -180,15 +178,13 @@ namespace HSMServer.Dashboards
                 _sensorToSourceMap[source.Sensor.Id].Add(source.Id);
 
                 source.BuildSource(AggregateValues);
-                source.UpdateEvent += ThrowUpdateEvent;
+                SubscribeModuleToUpdates(source);
             }
 
-            return string.IsNullOrEmpty(error) ? Sources.IfTryAdd(source.Id, source).ThenCallForSuccess(ApplyNewSource) : errorResult;
+            return string.IsNullOrEmpty(error) ? Sources.IfTryAdd(source.Id, source, ApplyNewSource) : errorResult;
         }
 
         private void SubscribeModuleToUpdates(IPanelModule module) => module.UpdateEvent += ThrowUpdateEvent;
-
-        private void DisposeModule(IPanelModule module) => module.Dispose();
 
 
         private static bool IsSupportedType(SensorType type) =>

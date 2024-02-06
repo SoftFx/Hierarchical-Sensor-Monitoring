@@ -59,21 +59,41 @@ namespace HSMCommon.Collections.Reactive
         }
 
 
-        public RDictResult<TValue> IfTryAdd(TKey key, TValue value) => ToReaction(TryAdd(key, value), value);
+        public RDictResult<TValue> IfTryAdd(TKey key, TValue value, Action<TValue> successReaction = null)
+        {
+            var result = ToResult(TryAdd(key, value), value);
 
-        public bool TryCallAdd(TKey key, TValue value) => IfTryAdd(key, value).ThenCall().IsOk;
+            if (result.IsOk && successReaction is not null)
+                successReaction?.Invoke(value);
+
+            return result;
+        }
+
+        public bool TryCallAdd(TKey key, TValue value, Action<TValue> successReaction = null) => IfTryAdd(key, value, successReaction).ThenCall().IsOk;
 
 
         public RDictResult<TValue> IfTryRemove(TKey key)
         {
             var result = TryRemove(key, out var value);
 
-            return ToReaction(result, value);
+            return ToResult(result, value);
         }
 
-        public bool TryCallRemoveCall(TKey key) => IfTryRemove(key).ThenCall().IsOk;
+        public RDictResult<TValue> IfTryRemoveAndDispose(TKey key)
+        {
+            var result = TryRemove(key, out var value);
+
+            if (result && value is IDisposable dispose)
+                dispose.Dispose();
+
+            return ToResult(result, value);
+        }
+
+        public bool TryCallRemoveAndDispose(TKey key) => IfTryRemoveAndDispose(key).ThenCall().IsOk;
+
+        public bool TryCallRemove(TKey key) => IfTryRemove(key).ThenCall().IsOk;
 
 
-        private RDictResult<TValue> ToReaction(bool result, TValue value) => new(result, value, _reaction);
+        private RDictResult<TValue> ToResult(bool result, TValue value) => new(result, value, _reaction);
     }
 }
