@@ -1,30 +1,36 @@
-﻿<div class="d-flex flex-row align-items-center">
+﻿@using HSMCommon.Extensions
+@using HSMServer.Extensions
+@using HSMServer.Dashboards
+@using HSMServer.Model.Dashboards
+
+@model TemplateViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="d-flex flex-row align-items-center">
     <div class="card w-100">
         <div class="card-body py-2">
             <div class="d-flex flex-column">
                 <div class="d-flex mx-1 align-items-center">
                     <label class="fw-bold me-1 text-nowrap">From folder:</label>
-                    <select class="form-select w-auto">
-                        <option>Any</option>
-                        <option>Folder1</option>
-                        <option>Folder2</option>
-                    </select>
+                    <select class="form-select w-auto" asp-for=Folder asp-items="@Model.AvailableFolders.ToSelectedItems(k => k.Value, v => v.Key.ToString())"></select>
 
                     <label class="fw-bold ms-2 me-1 text-nowrap">with path:</label>
-                    <input class="form-control" type="text" />
+                    <input class="form-control" type="text" placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" asp-for="Path" />
                 </div>
             </div>
 
             <div class="d-flex flex-column mt-1">
                 <div class="d-flex mx-1 align-items-center">
                     <label class="fw-bold me-1">Label:</label>
-                    <input class="form-control" type="text"/>
+                    <input class="form-control" type="text" asp-for="Label"/>
 
                     <label class="fw-bold ms-2 me-1">Property:</label>
-                    <select class="form-select w-auto" title="Property to output"></select>
+                    <select class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties.ToSelectedItems(k => k.GetDisplayName())"></select>
 
                     <a href="https://plotly.com/javascript/line-charts/#line-shape-options-for-interpolation" class="fw-bold ms-2 me-1">Shape:</a>
-                    <select class="form-select w-auto" title="Shape of chart line"></select>
+                    <select class="form-select w-auto" title="Shape of chart line" asp-for="Shape" asp-items="Enum.GetValues(typeof(PlottedShape)).Cast<PlottedShape>().ToSelectedItems()"></select>
                 </div>
             </div>
         </div>
