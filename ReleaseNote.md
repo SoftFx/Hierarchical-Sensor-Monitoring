@@ -37,7 +37,7 @@
 ## Edit sensor status
 * Last sensor value (and status) after server restart has been fixed.
 * **EMA** calculation for updated values has been fixed.
-* Fillling inputs by Last value for **Value** and **Comment** inputs has been added.
+* Filling inputs by Last value for **Value** and **Comment** inputs has been added.
 * **Edit status** menu item in context menu has been renamed to **Edit last value**.
 
 ## Sensor chart
