@@ -25,6 +25,8 @@
 * **Match whole word** logic has been added. To activate, you should add quotes to the request (ex. "database").
 * Saving tree state before filtering. After clearing search input, the previous saved state is restored.
 * Freezing and "jumping" of filtered tree have been fixed.
+* Search with status filter has been fixed.
+* Search with empty sensors has been fixed.
 * Search input box size has been increased.
 
 ## Product/node metainfo
