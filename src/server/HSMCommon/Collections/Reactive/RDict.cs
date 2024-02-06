@@ -61,7 +61,7 @@ namespace HSMCommon.Collections.Reactive
 
         public RDictResult<TValue> IfTryAdd(TKey key, TValue value) => ToReaction(TryAdd(key, value), value);
 
-        public bool TryAddWithCall(TKey key, TValue value) => IfTryAdd(key, value).ThenCall().IsOk;
+        public bool TryCallAdd(TKey key, TValue value) => IfTryAdd(key, value).ThenCall().IsOk;
 
 
         public RDictResult<TValue> IfTryRemove(TKey key)
@@ -71,7 +71,7 @@ namespace HSMCommon.Collections.Reactive
             return ToReaction(result, value);
         }
 
-        public bool TryRemoveWithCall(TKey key) => IfTryRemove(key).ThenCall().IsOk;
+        public bool TryCallRemoveCall(TKey key) => IfTryRemove(key).ThenCall().IsOk;
 
 
         private RDictResult<TValue> ToReaction(bool result, TValue value) => new(result, value, _reaction);

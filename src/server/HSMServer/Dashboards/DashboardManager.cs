@@ -3,10 +3,8 @@ using HSMDatabase.AccessManager.DatabaseSettings;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Model;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.Dashboards
@@ -32,20 +30,8 @@ namespace HSMServer.Dashboards
             _cache = cache;
 
             Added += AddDashboardSubscriptions;
-
-            _cache.ChangeSensorEvent += ChangeSensorHandler;
         }
 
-
-        private void ChangeSensorHandler(BaseSensorModel model, ActionType action)
-        {
-            if (action == ActionType.Delete)
-                foreach (var (_, panel) in this.SelectMany(x => x.Value.Panels))
-                {
-                    foreach (var (sourceId, _) in panel.Sources.Where(x => x.Value.SensorId == model.Id))
-                        panel.TryRemoveSource(sourceId);
-                }
-        }
 
         public Task<bool> TryAdd(DashboardAdd dashboardAdd, out Dashboard dashboard)
         {
@@ -54,14 +40,7 @@ namespace HSMServer.Dashboards
             return TryAdd(dashboard);
         }
 
-        protected override Dashboard FromEntity(DashboardEntity entity)
-        {
-            var newBoard = new Dashboard(entity, _cache);
-
-            AddDashboardSubscriptions(newBoard);
-
-            return newBoard;
-        }
+        protected override Dashboard FromEntity(DashboardEntity entity) => new(entity, _cache);
 
 
         private void AddDashboardSubscriptions(Dashboard board)

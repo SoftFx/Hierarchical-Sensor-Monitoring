@@ -1,15 +1,20 @@
-﻿using HSMCommon.Collections.Reactive;
+﻿using HSMCommon.Collections;
+using HSMCommon.Collections.Reactive;
 using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Dashboards
 {
     public sealed class Panel : BaseServerModel<DashboardPanelEntity, PanelUpdate>
     {
+        private const int MaxCountOfSources = 100;
+
+        private readonly CDict<CHash<Guid>> _sensorToSourceMap = new();
         private readonly Dashboard _board;
 
 
@@ -131,6 +136,8 @@ namespace HSMServer.Dashboards
             return Sources.IfTryRemove(sourceId).ThenCallForSuccess(RemoveSource).ThenCall().IsOk;
         }
 
+        public List<Guid> GetSensorSourcesId(Guid sensorId) => _sensorToSourceMap[sensorId].ToList();
+
 
         public bool TryAddSubscription(PanelSubscription sub) => Subscriptions.IfTryAdd(sub.Id, sub).ThenCallForSuccess(SubscribeModuleToUpdates).IsOk;
 
@@ -146,12 +153,13 @@ namespace HSMServer.Dashboards
 
         private RDictResult<PanelDatasource> TrySaveNewSource(PanelDatasource source, out string error)
         {
+            var errorResult = RDictResult<PanelDatasource>.ErrorResult;
             error = string.Empty;
 
             if (source is null)
             {
                 error = "Source not found";
-                return RDictResult<PanelDatasource>.ErrorResult;
+                return errorResult;
             }
 
             var sourceUnit = source.Sensor.OriginalUnit;
@@ -161,17 +169,21 @@ namespace HSMServer.Dashboards
                 error = $"Can't plot using {sourceType} sensor type";
             else if (!MainUnit.IsNullOrEqual(sourceUnit))
                 error = $"Can't plot using {sourceUnit} unit type";
+            else if (Sources.Count >= MaxCountOfSources)
+                error = $"Max count of sources is {MaxCountOfSources}. Cannot add the new one";
 
             void ApplyNewSource(PanelDatasource source)
             {
                 MainSensorType = sourceType;
                 MainUnit = sourceUnit ?? MainUnit;
 
+                _sensorToSourceMap[source.Sensor.Id].Add(source.Id);
+
                 source.BuildSource(AggregateValues);
                 source.UpdateEvent += ThrowUpdateEvent;
             }
 
-            return Sources.IfTryAdd(source.Id, source).ThenCallForSuccess(ApplyNewSource);
+            return string.IsNullOrEmpty(error) ? Sources.IfTryAdd(source.Id, source).ThenCallForSuccess(ApplyNewSource) : errorResult;
         }
 
         private void SubscribeModuleToUpdates(IPanelModule module) => module.UpdateEvent += ThrowUpdateEvent;

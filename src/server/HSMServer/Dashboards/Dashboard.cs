@@ -23,11 +23,15 @@ namespace HSMServer.Dashboards
         internal Dashboard(DashboardAdd addModel, ITreeValuesCache cache) : base(addModel)
         {
             _cache = cache;
+
+            _cache.ChangeSensorEvent += ChangeSensorHandler;
         }
 
         internal Dashboard(DashboardEntity entity, ITreeValuesCache cache) : base(entity)
         {
             _cache = cache;
+
+            _cache.ChangeSensorEvent += ChangeSensorHandler;
 
             Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), AddPanel));
             DataPeriod = GetPeriod(entity.DataPeriod);
@@ -51,6 +55,8 @@ namespace HSMServer.Dashboards
 
         public override void Dispose()
         {
+            _cache.ChangeSensorEvent -= ChangeSensorHandler;
+
             base.Dispose();
 
             foreach (var (_, panel) in Panels)
@@ -116,6 +122,16 @@ namespace HSMServer.Dashboards
                 panel.UpdatedEvent += ThrowUpdateEvent;
 
             return result;
+        }
+
+        private void ChangeSensorHandler(BaseSensorModel model, ActionType action)
+        {
+            if (action == ActionType.Delete)
+            {
+                foreach (var (_, panel) in Panels)
+                    foreach (var sourceId in panel.GetSensorSourcesId(model.Id))
+                        panel.TryRemoveSource(sourceId);
+            }
         }
 
 
