@@ -97,9 +97,11 @@ namespace HSMDataCollector.Options
 
         #region Network
 
-        public EstablishedSocketsCountPrototype EstablishedSocketsCount { get; set; }
+        public ConnectionsEstablishedCountPrototype ConnectionsEstablishedCount { get; set; }
         
-        public ListeningSocketsCountPrototype ListenedSocketsCount { get; set; }
+        public ConnectionsResetCountPrototype ConnectionsResetCount { get; set; }
+        
+        public ConnectionFailuresCountPrototype ConnectionFailuresCount { get; set; }
 
         #endregion
 
@@ -150,8 +152,9 @@ namespace HSMDataCollector.Options
             PackageContentSize = Register<PackageContentSizePrototype>();
             QueueOverflow = Register<QueueOverflowPrototype>().ApplyOptions(options);
 
-            EstablishedSocketsCount = Register<EstablishedSocketsCountPrototype>();
-            ListenedSocketsCount = Register<ListeningSocketsCountPrototype>();
+            ConnectionsEstablishedCount = Register<ConnectionsEstablishedCountPrototype>();
+            ConnectionsResetCount = Register<ConnectionsResetCountPrototype>();
+            ConnectionFailuresCount = Register<ConnectionFailuresCountPrototype>();
         }
     }
 }

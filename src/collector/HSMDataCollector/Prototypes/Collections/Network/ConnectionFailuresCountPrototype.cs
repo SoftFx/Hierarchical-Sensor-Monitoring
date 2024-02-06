@@ -5,29 +5,22 @@ using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Prototypes.Collections.Network
 {
-    internal sealed class EstablishedSocketsCountPrototype : MonitoringInstantSensorOptionsPrototype<SocketSensorOptions>
+    internal sealed class ConnectionFailuresCountPrototype : MonitoringInstantSensorOptionsPrototype<MonitoringInstantSensorOptions>
     {
-        protected override string SensorName => "Established sockets count";
+        protected override string SensorName => "Connection Failures Count";
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromMinutes(5);
         protected override string Category => "Network";
 
 
-        public EstablishedSocketsCountPrototype() : base()
+        public ConnectionFailuresCountPrototype() : base()
         {
             IsComputerSensor = true;
             
-            Type = SensorType.IntSensor;
+            Type = SensorType.DoubleSensor;
             TTL = TimeSpan.FromMinutes(5);
             KeepHistory = TimeSpan.FromDays(90);
             
             TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSendNotification($"[$product]$path").AndSetIcon(AlertIcon.Clock).AndSetSensorError().Build();
-        }
-        
-        public override SocketSensorOptions Get(SocketSensorOptions customOptions)
-        {
-            var options = base.Get(customOptions);
-
-            return options;
         }
     }
 }

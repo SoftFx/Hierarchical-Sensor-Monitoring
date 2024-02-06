@@ -81,16 +81,5 @@ namespace HSMDataCollector.Options
         }
     }
 
-    public sealed class SocketSensorOptions : MonitoringInstantSensorOptions
-    {
-        public TcpState State { get; set; }
-
-
-        public SocketSensorOptions()
-        {
-            PostDataPeriod = TimeSpan.FromSeconds(15);
-        }
-    }
-
     public sealed class CollectorMonitoringInfoOptions : MonitoringInstantSensorOptions { }
 }

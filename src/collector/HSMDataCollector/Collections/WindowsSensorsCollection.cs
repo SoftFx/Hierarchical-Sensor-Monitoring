@@ -228,9 +228,11 @@ namespace HSMDataCollector.DefaultSensors
 
         #region Network
 
-        public IWindowsCollection AddEstablishedSocketsConnections() => ToWindows(new EstablishedSocketsSensor(_prototype.EstablishedSocketsCount.Get(new SocketSensorOptions())));
+        public IWindowsCollection AddConnectionsEstablished() => ToWindows(new ConnectionsEstablishedCountSensor(_prototype.ConnectionsEstablishedCount.Get(new MonitoringInstantSensorOptions())));
         
-        public IWindowsCollection AddListenedSocketsConnections() => ToWindows(new ListenedSocketsSensor(_prototype.ListenedSocketsCount.Get(new SocketSensorOptions())));
+        public IWindowsCollection AddConnectionFailures() => ToWindows(new ConnectionFailuresCountSensor(_prototype.ConnectionFailuresCount.Get(new MonitoringInstantSensorOptions())));
+        
+        public IWindowsCollection AddConnectionsReset() => ToWindows(new ConnectionsResetCountSensor(_prototype.ConnectionsResetCount.Get(new MonitoringInstantSensorOptions())));
         
         #endregion
         
