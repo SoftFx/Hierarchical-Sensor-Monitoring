@@ -14,7 +14,6 @@ namespace HSMServer.UserFilters
         public GroupByState() { }
 
 
-        internal override bool IsSensorSuitable(FilteredSensor sensor) =>
-            Muted.Value && sensor.State == SensorState.Muted;
+        internal override bool IsSensorSuitable(FilteredSensor sensor) => Muted.Value && sensor.State == SensorState.Muted;
     }
 }

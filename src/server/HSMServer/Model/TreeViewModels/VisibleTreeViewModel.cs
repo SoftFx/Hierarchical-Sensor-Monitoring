@@ -142,7 +142,7 @@ public sealed class VisibleTreeViewModel
 
             if (_searchPattern.IsNameFits(subNode.Data.Name) || currentNodeToRender || _addedSearchNodes.Contains(subNode.Id))
             {
-                toRender = node.ToRenderNode(subNode.Id);
+                toRender |= node.ToRenderNode(subNode.Id);
                 AddOpenedNode(subNode.Id);
             }
         }
@@ -153,9 +153,10 @@ public sealed class VisibleTreeViewModel
 
             if (_searchPattern.IsNameFits(sensor.Data.Name) || _addedSearchNodes.Contains(node.Id))
             {
-                toRender = node.ToRenderNode(sensor.Id);
+                var sensorToRender = node.ToRenderNode(sensor.Id);
+                toRender |= sensorToRender;
 
-                if (toRender)
+                if (sensorToRender)
                     SearchedSensors.Add(sensor.Id);
             }
         }
