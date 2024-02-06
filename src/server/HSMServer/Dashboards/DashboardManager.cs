@@ -45,7 +45,9 @@ namespace HSMServer.Dashboards
 
         private void AddDashboardSubscriptions(Dashboard board)
         {
-            board.UpdatedEvent += () => TryUpdate(board);
+            void CallUpdate() => TryUpdate(board);
+
+            board.UpdatedEvent += CallUpdate;
         }
     }
 }

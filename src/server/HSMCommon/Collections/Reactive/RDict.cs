@@ -1,9 +1,15 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace HSMCommon.Collections.Reactive
 {
-    public sealed class RDict<T>(Action reaction) : RDictBase<Guid, T>(reaction) { }
+    public sealed class RDict<T> : RDictBase<Guid, T>
+    {
+        public RDict(Dictionary<Guid, T> dict, Action reaction) : base(dict, reaction) { }
+
+        public RDict(Action reaction) : base(reaction) { }
+    }
 
 
     public readonly struct RDictResult<T>
@@ -52,6 +58,11 @@ namespace HSMCommon.Collections.Reactive
     {
         private readonly Action _reaction;
 
+
+        public RDictBase(Dictionary<TKey, TValue> dict, Action reaction) : base(dict)
+        {
+            _reaction = reaction;
+        }
 
         protected RDictBase(Action reaction) : base()
         {

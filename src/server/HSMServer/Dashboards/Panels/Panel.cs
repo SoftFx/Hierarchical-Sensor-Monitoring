@@ -5,7 +5,6 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Dashboards
@@ -134,7 +133,11 @@ namespace HSMServer.Dashboards
             return Sources.IfTryRemoveAndDispose(sourceId).ThenCallForSuccess(RemoveSource).ThenCall().IsOk;
         }
 
-        public List<Guid> GetSensorSourcesId(Guid sensorId) => _sensorToSourceMap[sensorId].ToList(); //to internal function
+        public void RemoveSensor(Guid sensorId)
+        {
+            foreach (var sourceId in _sensorToSourceMap[sensorId])
+                TryRemoveSource(sourceId);
+        }
 
 
         public bool TryAddSubscription(PanelSubscription sub) => Subscriptions.IfTryAdd(sub.Id, sub, SubscribeModuleToUpdates).IsOk;
