@@ -43,7 +43,7 @@ namespace HSMServer.BackgroundServices
         internal IParamsFuncSensor<double, double> RequestsCountSensor { get; }
 
 
-        public DataCollectorWrapper(IDatabaseCore database, ITreeValuesCache cache)
+        public DataCollectorWrapper(IDatabaseCore database, ITreeValuesCache cache, IDataCollector collector)
         {
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
             var loggerOptions = new LoggerOptions()
@@ -51,7 +51,7 @@ namespace HSMServer.BackgroundServices
                 WriteDebug = false,
             };
 
-            _collector = new DataCollector(GetSelfMonitoringKey(cache)).AddNLog(loggerOptions);
+            _collector = collector.AddNLog(loggerOptions);
 
             if (OperatingSystem.IsWindows())
                 _collector.Windows.AddAllDefaultSensors(productVersion);
@@ -78,7 +78,7 @@ namespace HSMServer.BackgroundServices
         internal void SendDbInfo() => DbSizeSensors.SendInfo();
 
 
-        private static string GetSelfMonitoringKey(ITreeValuesCache cache)
+        public static string GetSelfMonitoringKey(ITreeValuesCache cache)
         {
             var selfMonitoring = cache.GetProductByName(SelfMonitoringProductName);
             selfMonitoring ??= cache.AddProduct(SelfMonitoringProductName, Guid.Empty);

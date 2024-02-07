@@ -1,4 +1,5 @@
 using HSMDatabase.DatabaseWorkCore;
+using HSMDataCollector.Core;
 using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
 using HSMServer.ConcurrentStorage;
@@ -60,6 +61,8 @@ public static class ApplicationServiceExtensions
                 .AddHostedService<NotificationsBackgroundService>()
                 .AddHostedService<BackupDatabaseService>();
 
+        services.ConfigureDataCollector();
+        
         services.AddSwaggerGen(o =>
         {
             o.UseInlineDefinitionsForEnums();
@@ -157,6 +160,22 @@ public static class ApplicationServiceExtensions
         foreach (var type in _asyncStorageTypes)
             if (services.GetService(type) is IAsyncStorage storage)
                 await storage.Initialize();
+    }
+
+    private static IServiceCollection ConfigureDataCollector(this IServiceCollection services)
+    {
+        services.AddSingleton<CollectorOptions>(sp => {
+            var cache = sp.GetService<ITreeValuesCache>();
+            
+            return new CollectorOptions()
+            {
+                AccessKey = DataCollectorWrapper.GetSelfMonitoringKey(cache)
+            };
+        });
+
+        services.AddSingleton<IDataCollector, DataCollector>();
+
+        return services;
     }
 
 
