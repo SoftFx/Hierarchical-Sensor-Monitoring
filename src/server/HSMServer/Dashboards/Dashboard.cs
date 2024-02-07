@@ -33,8 +33,11 @@ namespace HSMServer.Dashboards
             _cache = cache;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
 
-            Panels = new RDict<Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), AddPanel), ThrowUpdateEvent);
+            Panels = new RDict<Panel>(ThrowUpdateEvent);
             DataPeriod = GetPeriod(entity.DataPeriod);
+
+            foreach (var panelEntity in entity.Panels)
+                AddPanel(panelEntity);
         }
 
 
@@ -86,11 +89,11 @@ namespace HSMServer.Dashboards
         }
 
 
-        private Panel AddPanel(DashboardPanelEntity entity)
+        private bool AddPanel(DashboardPanelEntity entity)
         {
             var panel = new Panel(entity, this);
 
-            return Panels.IfTryAdd(panel.Id, panel).ThenCallForSuccess(SubscribeToPanelUpdates).Value;
+            return Panels.IfTryAdd(panel.Id, panel, SubscribeToPanelUpdates).IsOk;
         }
 
         private void SubscribeToPanelUpdates(Panel panel)
