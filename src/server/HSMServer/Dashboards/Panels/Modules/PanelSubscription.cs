@@ -1,9 +1,14 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+using HSMServer.Core.Model;
+using HSMServer.PathTemplates;
 
 namespace HSMServer.Dashboards
 {
     public sealed class PanelSubscription : BasePlotPanelModule<PanelSubscriptionUpdate, PanelSubscriptionEntity>
     {
+        private readonly PathTemplateConverter _pathConverter = new();
+
+
         public string PathTempalte { get; private set; }
 
 
@@ -12,12 +17,6 @@ namespace HSMServer.Dashboards
         public PanelSubscription(PanelSubscriptionEntity entity) : base(entity) { }
 
 
-        protected override void Update(PanelSubscriptionUpdate update)
-        {
-            if (!string.IsNullOrEmpty(update.PathTemplate))
-                PathTempalte = update.PathTemplate;
-        }
-
         public override PanelSubscriptionEntity ToEntity()
         {
             var entity = base.ToEntity();
@@ -25,6 +24,40 @@ namespace HSMServer.Dashboards
             entity.PathTemplate = PathTempalte;
 
             return entity;
+        }
+
+
+        public override void Update(PanelSubscriptionUpdate update)
+        {
+            ApplyNewTemplate(update.PathTemplate);
+        }
+
+        public bool TryBuildSource(BaseSensorModel sensor, out PanelDatasource source)
+        {
+            source = null;
+
+            if (!_pathConverter.IsMatch(sensor.FullPath))
+                return false;
+
+            source = new PanelDatasource(sensor);
+
+            source.Update(new PanelSourceUpdate
+            {
+                Name = _pathConverter.BuildStringByTempalte(Label),
+                Property = nameof(Property),
+                Shape = nameof(Shape),
+            });
+
+            return true;
+        }
+
+
+        private void ApplyNewTemplate(string template)
+        {
+            if (string.IsNullOrEmpty(template) || !_pathConverter.ApplyNewTemplate(template, out _))
+                return;
+
+            PathTempalte = template;
         }
     }
 }

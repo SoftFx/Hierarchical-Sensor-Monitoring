@@ -37,7 +37,22 @@ namespace HSMServer.Dashboards
     }
 
 
-    public record PanelSourceUpdate(string Name, string Color, string Property, string Shape, bool AggregateValues = false);
+    public record PanelSourceUpdate
+    {
+        public string Name { get; init; }
 
-    public record PanelSubscriptionUpdate(string PathTemplate, string Name, string Color, string Property, string Shape, bool AggregateValues = false) : PanelSourceUpdate(Name, Color, Property, Shape, AggregateValues);
+        public string Color { get; init; }
+
+        public string Property { get; init; }
+
+        public string Shape { get; init; }
+
+        public bool AggregateValues { get; init; }
+    }
+
+
+    public record PanelSubscriptionUpdate : PanelSourceUpdate
+    {
+        public string PathTemplate { get; init; }
+    }
 }

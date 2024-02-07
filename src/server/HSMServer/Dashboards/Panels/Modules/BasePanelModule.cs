@@ -33,7 +33,7 @@ namespace HSMServer.Dashboards
         }
 
 
-        protected abstract void Update(TUpdate update);
+        public abstract void Update(TUpdate update);
 
 
         public void NotifyUpdate(TUpdate update)

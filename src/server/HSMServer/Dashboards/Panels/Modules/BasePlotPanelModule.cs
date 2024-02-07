@@ -71,7 +71,7 @@ namespace HSMServer.Dashboards
         }
 
 
-        protected override void Update(TUpdate update)
+        public override void Update(TUpdate update)
         {
             var changePrinciples = false;
 
