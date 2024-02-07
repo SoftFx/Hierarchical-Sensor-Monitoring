@@ -1,6 +1,7 @@
 ﻿@using HSMCommon.Extensions
 @using HSMServer.Extensions
 @using HSMServer.Dashboards
+@using HSMServer.Controllers
 @using HSMServer.Model.Dashboards
 
 @model TemplateViewModel
@@ -8,7 +9,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<div class="d-flex flex-row align-items-center mb-2">
+<form class="templateForm d-flex flex-row align-items-center mb-2">
     <div class="card w-100">
         <div class="card-body py-2">
             <div class="d-flex flex-column">
@@ -24,7 +25,7 @@
             <div class="d-flex flex-column mt-1">
                 <div class="d-flex mx-1 align-items-center">
                     <label class="fw-bold me-1">Label:</label>
-                    <input class="form-control" type="text" asp-for="Label"/>
+                    <input class="form-control" type="text" placeholder="Example: {product} - {diskName}" asp-for="Label" />
 
                     <label class="fw-bold ms-2 me-1">Property:</label>
                     <select class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties.ToSelectedItems(k => k.GetDisplayName())"></select>
@@ -41,8 +42,25 @@
             <i class="fa-solid fa-ellipsis-vertical button-link"></i>
         </button>
         <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-            <a class="dropdown-item text-decoration-none fw-normal button-link">Apply</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link applyTemplate">Apply</a>
             <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
         </div>
     </div>
-</div>
+</form>
+
+
+<script>
+    $("a.applyTemplate").off("click").on("click", function () {
+        var form = $(this).parents("form.templateForm:first");
+        var formData = new FormData(form[0]);
+        
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.ApplyTemplate))`,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            async: true
+        });
+    });
+</script>

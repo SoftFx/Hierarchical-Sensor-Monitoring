@@ -240,6 +240,9 @@ namespace HSMServer.Controllers
 
         public IActionResult AddTemplate() => PartialView("_TemplateSettings", new TemplateViewModel());
 
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplyTemplate")]
+        public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, TemplateViewModel template) => Ok();
+
         #endregion
 
         private bool TryGetBoard(Guid id, out Dashboard board) => _dashboards.TryGetValue(id, out board);
