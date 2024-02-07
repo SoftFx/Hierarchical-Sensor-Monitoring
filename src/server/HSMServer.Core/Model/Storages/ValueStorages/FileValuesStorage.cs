@@ -7,10 +7,8 @@ namespace HSMServer.Core.Model
         protected override int CacheSize => 1;
 
 
-        internal override void AddValueBase(FileValue value) =>
-            base.AddValueBase(value.DecompressContent());
+        internal override void AddValueBase(FileValue value) => base.AddValueBase(value.DecompressContent());
 
-        internal override void AddValue(FileValue value) =>
-            base.AddValue(value.CompressContent());
+        internal override void AddValue(FileValue value) => base.AddValue(value.CompressContent());
     }
 }

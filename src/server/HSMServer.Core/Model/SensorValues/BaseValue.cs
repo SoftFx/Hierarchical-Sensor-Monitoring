@@ -70,7 +70,7 @@ namespace HSMServer.Core.Model
         public abstract BaseValue TrySetValue(string str);
 
         public abstract BaseValue TrySetValue(BaseValue baseValue);
-
+        
 
         internal bool TryAggregateValue(BaseValue value)
         {
@@ -131,7 +131,6 @@ namespace HSMServer.Core.Model
         {
             Value = ((BaseValue<T>)baseValue).Value
         };
-
 
         protected override bool IsEqual(BaseValue value)
         {

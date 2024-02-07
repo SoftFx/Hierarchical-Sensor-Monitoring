@@ -26,7 +26,10 @@ namespace HSMServer.Core.Model
                 return true;
             }
 
-            if (Statistics.HasEma() && value is T valueT)
+            if (IsSingleton && !Storage.IsNewSingletonValue(value))
+                return false;
+
+            if (value is T valueT && Statistics.HasEma())
                 value = Storage.CalculateStatistics(valueT);
 
             var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
@@ -38,8 +41,6 @@ namespace HSMServer.Core.Model
 
                 if (AggregateValues)
                     isNewValue &= !Storage.TryAggregateValue(valueT);
-                else if (IsSingleton)
-                    isNewValue &= Storage.TryAddAsSingleton(valueT);
                 else
                     Storage.AddValue(valueT);
 
@@ -52,19 +53,18 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
-        internal override bool TryUpdateLastValue(BaseValue value, bool changeLast = false)
+        internal override bool TryUpdateLastValue(BaseValue value)
         {
-            if (Storage.TryChangeLastValue(value, changeLast))
-            {
-                var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
-                var canStore = Policies.TryValidate(value, out _, isLastValue);
+            if (Statistics.HasEma() && value is T valueT)
+                value = Storage.RecalculateStatistics(valueT);
 
-                ReceivedNewValue?.Invoke(value);
+            if (!Storage.TryChangeLastValue(value) || !Policies.TryValidate(value, out valueT, true))
+                return false;
 
-                return canStore;
-            }
+            Policies.SensorTimeout(valueT);
+            ReceivedNewValue?.Invoke(value);
 
-            return false;
+            return true;
         }
 
 

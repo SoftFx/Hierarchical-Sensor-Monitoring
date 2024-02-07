@@ -13,11 +13,15 @@ namespace HSMServer.Core.DataLayer
         ISnapshotDatabase Snapshots { get; }
 
 
-        long TotalDbSize { get; }
-
         long SensorHistoryDbSize { get; }
 
-        long EnviromentDbSize { get; }
+        long JournalDbSize { get; }
+
+        long ConfigDbSize { get; }
+
+        long BackupsSize { get; }
+
+        long TotalDbSize { get; }
 
 
         void BackupEnvironment(string backupPath);
@@ -71,6 +75,8 @@ namespace HSMServer.Core.DataLayer
         IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
 
         List<SensorEntity> GetAllSensors();
+
+        (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId);
 
         #endregion
 

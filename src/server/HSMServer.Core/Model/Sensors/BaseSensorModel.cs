@@ -156,7 +156,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask();
+        public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask() ?? Task.FromResult(new List<BaseValue>());
 
 
         protected override void UpdateTTL(PolicyUpdate update) => Policies.UpdateTTL(update);
@@ -165,7 +165,7 @@ namespace HSMServer.Core.Model
 
         internal abstract void AddDbValue(byte[] bytes);
 
-        internal abstract bool TryUpdateLastValue(BaseValue value, bool changeLast = false);
+        internal abstract bool TryUpdateLastValue(BaseValue value);
 
 
         internal abstract IEnumerable<BaseValue> Convert(List<byte[]> valuesBytes);

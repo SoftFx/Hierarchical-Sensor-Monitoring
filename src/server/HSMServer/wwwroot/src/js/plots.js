@@ -174,6 +174,7 @@ export class Plot {
 
 class ErrorColorPlot extends Plot {
     mode = "markers+lines";
+    connectgaps = false;
 
     constructor(data, unitType, color) {
         super(data, unitType, color);
@@ -289,12 +290,12 @@ export class BoolPlot extends Plot {
 }
 
 export class IntegerPlot extends ErrorColorPlot {
-    constructor(data, unitType = undefined, color = Colors.default) {
+    constructor(data, unitType = undefined, color = Colors.default, shape = undefined) {
         super(data, unitType, color);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
-        this.line.shape = 'hv';
+        this.line.shape = shape == undefined ? 'hv' : shape;
         this.marker = {
             color: [],
             size: [],
@@ -311,7 +312,7 @@ export class IntegerPlot extends ErrorColorPlot {
         for (let i of data) {
             this.x.push(i.time)
             if (Plot.checkNaN(i.value))
-                this.y.push(0)
+                this.y.push("NaN")
             else
                 this.y.push(Number(i.value) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i.value))
             this.addCustomData(i);
@@ -322,11 +323,15 @@ export class IntegerPlot extends ErrorColorPlot {
 }
 
 export class DoublePlot extends ErrorColorPlot {
-    constructor(data, name, field = 'value', unitType = undefined, color = Colors.default) {
+    constructor(data, name, field = 'value', unitType = undefined, color = Colors.default, shape = undefined) {
         super(data, unitType, color);
 
         this.type = 'scatter';
         this.name = name;
+
+        if (shape != undefined)
+            this.line.shape = shape;
+
         this.marker = {
             color: [],
             size: [],
@@ -345,7 +350,7 @@ export class DoublePlot extends ErrorColorPlot {
             this.x.push(i.time)
 
             if (Plot.checkNaN(i[customField]))
-                this.y.push(0)
+                this.y.push("NaN")
             else
                 this.y.push(Number(i[customField]) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i[customField]))
 
@@ -455,7 +460,7 @@ export class TimeSpanPlot extends ErrorColorPlot {
             this.x.push(i.time);
 
             let timespan = TimeSpanPlot.getTimeSpanValue(i);
-            this.y.push(timespan.totalMilliseconds());
+            this.y.push(timespan === 'NaN' ? timespan : timespan.totalMilliseconds());
             this.customdata.push(Plot.checkError(i) ? TimeSpanPlot.getTimeSpanCustomData(timespan, i) + '<br>' + i.comment : TimeSpanPlot.getTimeSpanCustomData(timespan, i))
             this.marker.color.push(this.markerColorCompareFunc(i));
             this.marker.size.push(this.getMarkerSize(i));
@@ -469,7 +474,7 @@ export class TimeSpanPlot extends ErrorColorPlot {
             return new TimeSpan.TimeSpan(value.value, 0, 0, 0, 0);
         
         if (Plot.checkNaN(value.value))
-            return new TimeSpan.TimeSpan(0, 0, 0, 0, 0);
+            return "NaN";
 
         let time = value.value.split(':');
         let temp = time[0].split('.')
