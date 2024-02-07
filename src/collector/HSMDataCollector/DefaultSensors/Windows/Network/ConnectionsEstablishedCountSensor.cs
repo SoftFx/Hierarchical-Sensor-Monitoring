@@ -2,11 +2,11 @@
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
-    public sealed class ConnectionsEstablishedCountSensor : SocketsSensor
+    internal sealed class ConnectionsEstablishedCountSensor : SocketsSensor
     {
-        protected override string CounterName => "Connections Established";
+        internal protected override string CounterName => "Connections Established";
 
 
-        public ConnectionsEstablishedCountSensor(MonitoringInstantSensorOptions options) : base(options) { }
+        internal ConnectionsEstablishedCountSensor(MonitoringInstantSensorOptions options) : base(options) { }
     }
 }

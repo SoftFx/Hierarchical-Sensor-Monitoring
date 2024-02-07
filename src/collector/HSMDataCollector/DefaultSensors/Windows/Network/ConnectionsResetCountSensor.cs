@@ -2,11 +2,11 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
-    public class ConnectionsResetCountSensor : SocketsSensor
+    internal sealed class ConnectionsResetCountSensor : ConnectionsDifferenceSensor
     {
-        protected override string CounterName => "Connections Reset";
+        internal protected override string CounterName => "Connections Reset";
         
         
-        public ConnectionsResetCountSensor(MonitoringInstantSensorOptions options) : base(options) {}
+        internal ConnectionsResetCountSensor(MonitoringInstantSensorOptions options) : base(options) {}
     }
 }

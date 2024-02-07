@@ -1,15 +1,12 @@
 ﻿using System;
 using HSMDataCollector.Alerts;
-using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Prototypes.Collections.Network
 {
-    internal sealed class ConnectionsResetCountPrototype : MonitoringInstantSensorOptionsPrototype<MonitoringInstantSensorOptions>
+    internal sealed class ConnectionsResetCountPrototype : NetworkCollectionPrototype
     {
         protected override string SensorName => "Connections Reset Count";
-        protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromMinutes(5);
-        protected override string Category => "Network";
 
 
         public ConnectionsResetCountPrototype() : base()

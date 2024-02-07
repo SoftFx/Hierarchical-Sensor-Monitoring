@@ -2,11 +2,11 @@
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
-    public sealed class ConnectionFailuresCountSensor : SocketsSensor
+    internal sealed class ConnectionFailuresCountSensor : ConnectionsDifferenceSensor
     {
-        protected override string CounterName => "Connection Failures";
+        internal protected override string CounterName => "Connection Failures";
 
 
-        public ConnectionFailuresCountSensor(MonitoringInstantSensorOptions options) : base(options) {}
+        internal ConnectionFailuresCountSensor(MonitoringInstantSensorOptions options) : base(options) {}
     }
 }
