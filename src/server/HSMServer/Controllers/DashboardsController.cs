@@ -236,6 +236,11 @@ namespace HSMServer.Controllers
 
         #endregion
 
+        #region Templates
+
+        public IActionResult AddTemplate() => PartialView("_TemplateSettings", new TemplateViewModel());
+
+        #endregion
 
         private bool TryGetBoard(Guid id, out Dashboard board) => _dashboards.TryGetValue(id, out board);
 
