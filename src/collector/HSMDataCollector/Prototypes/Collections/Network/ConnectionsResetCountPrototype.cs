@@ -1,8 +1,4 @@
-﻿using System;
-using HSMDataCollector.Alerts;
-using HSMSensorDataObjects;
-
-namespace HSMDataCollector.Prototypes.Collections.Network
+﻿namespace HSMDataCollector.Prototypes.Collections.Network
 {
     internal sealed class ConnectionsResetCountPrototype : NetworkCollectionPrototype
     {
@@ -11,13 +7,8 @@ namespace HSMDataCollector.Prototypes.Collections.Network
 
         public ConnectionsResetCountPrototype() : base()
         {
-            IsComputerSensor = true;
-            
-            Type = SensorType.DoubleSensor;
-            TTL = TimeSpan.FromMinutes(5);
-            KeepHistory = TimeSpan.FromDays(90);
-            
-            TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSendNotification($"[$product]$path").AndSetIcon(AlertIcon.Clock).AndSetSensorError().Build();
+            Description = "The number of connections reset." +
+                          "TCP counts a connection as having been reset when it goes directly from ESTABLISHED or CLOSE-WAIT to CLOSED.";
         }
     }
 }

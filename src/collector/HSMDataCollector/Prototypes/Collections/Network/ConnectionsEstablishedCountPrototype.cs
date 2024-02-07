@@ -1,8 +1,4 @@
-﻿using System;
-using HSMDataCollector.Alerts;
-using HSMSensorDataObjects;
-
-namespace HSMDataCollector.Prototypes.Collections.Network
+﻿namespace HSMDataCollector.Prototypes.Collections.Network
 {
     internal sealed class ConnectionsEstablishedCountPrototype : NetworkCollectionPrototype
     {
@@ -11,13 +7,9 @@ namespace HSMDataCollector.Prototypes.Collections.Network
 
         public ConnectionsEstablishedCountPrototype() : base()
         {
-            IsComputerSensor = true;
-            
-            Type = SensorType.DoubleSensor;
-            TTL = TimeSpan.FromMinutes(5);
-            KeepHistory = TimeSpan.FromDays(90);
-            
-            TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSendNotification($"[$product]$path").AndSetIcon(AlertIcon.Clock).AndSetSensorError().Build();
+            Description = "The number of simultaneous connections supported by TCP." +
+                          " This counter displays the number of connections last observed to be in the ESTABLISHED or CLOSE-WAIT state." +
+                          " This counter displays the last observed value (indicating the current state).";
         }
     }
 }
