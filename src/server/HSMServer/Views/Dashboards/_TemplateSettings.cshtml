@@ -1,0 +1,66 @@
+﻿@using HSMCommon.Extensions
+@using HSMServer.Extensions
+@using HSMServer.Dashboards
+@using HSMServer.Controllers
+@using HSMServer.Model.Dashboards
+
+@model TemplateViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<form class="templateForm d-flex flex-row align-items-center mb-2">
+    <div class="card w-100">
+        <div class="card-body py-2">
+            <div class="d-flex flex-column">
+                <div class="d-flex mx-1 align-items-center">
+                    <label class="fw-bold me-1 text-nowrap">From folder:</label>
+                    <select class="form-select w-auto" asp-for=Folder asp-items="@Model.AvailableFolders.ToSelectedItems(k => k.Value, v => v.Key.ToString())"></select>
+
+                    <label class="fw-bold ms-2 me-1 text-nowrap">with path:</label>
+                    <input class="form-control" type="text" placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" asp-for="Path" />
+                </div>
+            </div>
+
+            <div class="d-flex flex-column mt-1">
+                <div class="d-flex mx-1 align-items-center">
+                    <label class="fw-bold me-1">Label:</label>
+                    <input class="form-control" type="text" placeholder="Example: {product} - {diskName}" asp-for="Label" />
+
+                    <label class="fw-bold ms-2 me-1">Property:</label>
+                    <select class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties.ToSelectedItems(k => k.GetDisplayName())"></select>
+
+                    <a href="https://plotly.com/javascript/line-charts/#line-shape-options-for-interpolation" class="fw-bold ms-2 me-1">Shape:</a>
+                    <select class="form-select w-auto" title="Shape of chart line" asp-for="Shape" asp-items="Enum.GetValues(typeof(PlottedShape)).Cast<PlottedShape>().ToSelectedItems()"></select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+            <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+        </button>
+        <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+            <a class="dropdown-item text-decoration-none fw-normal button-link applyTemplate">Apply</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+        </div>
+    </div>
+</form>
+
+
+<script>
+    $("a.applyTemplate").off("click").on("click", function () {
+        var form = $(this).parents("form.templateForm:first");
+        var formData = new FormData(form[0]);
+        
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.ApplyTemplate))`,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            async: true
+        });
+    });
+</script>
