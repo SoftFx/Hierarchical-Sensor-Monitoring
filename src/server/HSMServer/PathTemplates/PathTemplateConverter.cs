@@ -61,18 +61,25 @@ namespace HSMServer.PathTemplates
             return match.Success;
         }
 
-        public string BuildStringByTempalte(string template)
-        {
-            return template;
-        }
+        public string BuildStringByTempalte(string template) => NamedVariableToRegex().Replace(template, GetVariableByName);
+
 
         private string RegisterNamedVariable(string str)
         {
-            var variable = ClearVariableName().Replace(str, string.Empty).Trim();
+            var variable = ClearVariable(str);
 
             _namedVariables.TryAdd(variable, string.Empty);
 
             return variable;
         }
+
+        private string GetVariableByName(Match match)
+        {
+            _namedVariables.TryGetValue(ClearVariable(match.Value), out var value);
+
+            return value;
+        }
+
+        private static string ClearVariable(string value) => ClearVariableName().Replace(value, string.Empty).Trim();
     }
 }
