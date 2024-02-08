@@ -28,7 +28,7 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> GetValues(int count);
 
-        internal abstract bool TryChangeLastValue(BaseValue value, bool changeLast = false);
+        internal abstract bool TryChangeLastValue(BaseValue value);
 
         internal abstract BaseValue GetEmptyValue();
 
@@ -60,6 +60,8 @@ namespace HSMServer.Core.Model
 
         internal virtual T CalculateStatistics(T value) => value;
 
+        internal virtual T RecalculateStatistics(T value) => value;
+
 
         internal virtual void AddValue(T value) => AddValueBase(value);
 
@@ -82,14 +84,8 @@ namespace HSMServer.Core.Model
             }
         }
 
-        internal override bool TryChangeLastValue(BaseValue value, bool changeLast = false)
+        internal override bool TryChangeLastValue(BaseValue value)
         {
-            if (!changeLast)
-            {
-                AddValue((T)value);
-                return true;
-            }
-
             if (_cache.TryDequeue(out _) || _cache.IsEmpty)
             {
                 AddValue((T)value);
@@ -112,16 +108,7 @@ namespace HSMServer.Core.Model
             return true;
         }
 
-        internal bool TryAddAsSingleton(T value)
-        {
-            if (IsLastEmptyOrTimeout || LastValue.Time.Floor(_singletonTimePrecision) < value.Time.Floor(_singletonTimePrecision))
-            {
-                AddValue(value);
-                return true;
-            }
-
-            return false;
-        }
+        internal bool IsNewSingletonValue(BaseValue value) => IsLastEmptyOrTimeout || LastValue.Time.Floor(_singletonTimePrecision) < value.Time.Floor(_singletonTimePrecision);
 
 
         internal override List<BaseValue> GetValues(int count) =>

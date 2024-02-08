@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
@@ -335,7 +336,7 @@ namespace HSMServer.Controllers
                 _dataCollector.ReceivedDataCountSensor.AddValue(values.Count);
 
                 var result = new Dictionary<string, string>(values.Count);
-                foreach (var value in values)
+                foreach (var value in values.OrderBy(u => u.Time))
                 {
                     var storeInfo = BuildStoreInfo(value, value.Convert());
 

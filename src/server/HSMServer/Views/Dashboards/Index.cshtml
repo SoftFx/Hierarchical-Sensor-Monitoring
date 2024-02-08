@@ -30,8 +30,24 @@
             <div id="@dashboard.Id" class="d-flex flex-row align-items-center">
                 <div class="card mb-2 w-100" onclick="javascript:editDashboard('@dashboard.Id')" style="cursor:pointer;">
                     <div class="card-body py-2">
-                        <div style="font-weight: bold;">@dashboard.Name</div>
+                        <div>
+                            <span class="fw-bold">@dashboard.Name</span>
+                            @if (!string.IsNullOrEmpty(dashboard.Author))
+                            {
+                                <span style="color:gray;font-size:smaller"> by @dashboard.Author</span>
+                            }
+                        </div>
                         <div id="markdown_description_@dashboard.Id">@dashboard.Description</div>
+                        <div style="color:gray">
+                            @if (dashboard.Panels.Count == 0)
+                            {
+                                <span>No panels</span>
+                            }
+                            else
+                            {
+                                <span>Panels: @string.Join(", ", dashboard.Panels.Select(p => p.Name))</span>
+                            }
+                        </div>
                     </div>
                 </div>
 
@@ -43,7 +59,7 @@
                         <a id="edit_@dashboard.Id" class="dropdown-item text-decoration-none fw-normal button-link"
                            asp-action="@nameof(DashboardsController.EditDashboard)" asp-route-dashboardId="@dashboard.Id">
                            View/Edit
-                       </a>
+                        </a>
                         <a class="dropdown-item text-decoration-none fw-normal button-link" id="remove_@dashboard.Id" name="@dashboard.Name">Remove</a>
                     </div>
                 </div>

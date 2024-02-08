@@ -30,15 +30,18 @@ public sealed record UpdateSensorValueRequestModel
     public string BuildComment(SensorStatus? status = null, string comment = null, string value = null)
     {
         var response = $"Status - {status ?? Status}; Comment - '{comment ?? Comment}';";
-        
+
         if (!string.IsNullOrEmpty(value) || !string.IsNullOrEmpty(Value))
             response += $"Value - '{value ?? Value}'";
 
         return response;
     }
 
-    public BaseValue BuildNewValue(BaseValue value, BaseValue oldValue)
+    public BaseValue BuildNewValue(BaseSensorModel sensor)
     {
+        var value = sensor.Storage.GetEmptyValue();
+        var oldValue = sensor.LastValue;
+
         if (value is FileValue && oldValue is FileValue oldFileValue)
             value = ChangeLast ? oldFileValue : oldFileValue with
             {
@@ -54,7 +57,9 @@ public sealed record UpdateSensorValueRequestModel
 
         var configuredValue = ChangeLast ? SetLastValueTime(value, oldValue) : SetUtcNowTime(value);
 
-        return configuredValue is BarBaseValue ? configuredValue.TrySetValue(ChangeLast ? oldValue : null) : configuredValue.TrySetValue(Value);
+        configuredValue = configuredValue is BarBaseValue ? configuredValue.TrySetValue(ChangeLast ? oldValue : null) : configuredValue.TrySetValue(Value);
+
+        return configuredValue;
     }
 
 
@@ -66,7 +71,7 @@ public sealed record UpdateSensorValueRequestModel
                 CloseTime = barValue.CloseTime,
                 OpenTime = barValue.OpenTime,
             };
-        
+
         return value with
         {
             ReceivingTime = oldValue.ReceivingTime,

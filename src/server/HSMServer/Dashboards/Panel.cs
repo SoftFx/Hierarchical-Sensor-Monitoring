@@ -1,11 +1,11 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
-using HSMServer.Core;
 
 namespace HSMServer.Dashboards
 {
@@ -21,17 +21,26 @@ namespace HSMServer.Dashboards
 
         public SensorType? MainSensorType { get; private set; }
 
+        public bool AggregateValues { get; private set; }
+
+        public bool ShowProduct { get; private set; }
+
         public Unit? MainUnit { get; private set; }
 
 
         internal Panel(Dashboard board) : base()
         {
             _board = board;
+
+            AggregateValues = true;
         }
 
         internal Panel(DashboardPanelEntity entity, Dashboard board) : base(entity)
         {
             _board = board;
+
+            ShowProduct = entity.ShowProduct;
+            AggregateValues = !entity.IsNotAggregate;
 
             if (entity.Settings is not null)
                 Settings.FromEntity(entity.Settings);
@@ -43,7 +52,17 @@ namespace HSMServer.Dashboards
 
         protected override void UpdateCustom(PanelUpdate update)
         {
+            ShowProduct = update.ShowProduct ?? ShowProduct;
+
             Settings.Update(update);
+
+            if (update.IsAggregateValues.HasValue && update.IsAggregateValues != AggregateValues)
+            {
+                AggregateValues = update.IsAggregateValues.Value;
+
+                foreach (var (_, source) in Sources)
+                    source.BuildSource(AggregateValues);
+            }
         }
 
         public override DashboardPanelEntity ToEntity()
@@ -52,6 +71,8 @@ namespace HSMServer.Dashboards
 
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
             entity.Settings = Settings.ToEntity();
+            entity.IsNotAggregate = !AggregateValues;
+            entity.ShowProduct = ShowProduct;
 
             return entity;
         }
@@ -125,7 +146,7 @@ namespace HSMServer.Dashboards
                 MainSensorType = sourceType;
                 MainUnit = sourceUnit ?? MainUnit;
 
-                source.BuildSource();
+                source.BuildSource(AggregateValues);
                 source.UpdateEvent += ThrowUpdateEvent;
             }
 

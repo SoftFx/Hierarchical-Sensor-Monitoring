@@ -93,7 +93,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 _logger.Error($"Failed getting value {key.GetString()} - {e.Message}");
 
-                return Array.Empty<byte>();
+                return [];
             }
         }
 
@@ -107,7 +107,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 _logger.Error($"Failed getting latest value {key.GetString()} - {e.Message}");
 
-                return Array.Empty<byte>();
+                return [];
             }
         }
 
@@ -136,6 +136,20 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 _logger.Error($"Failed getting value [{to.GetString()}, {from.GetString()}] - {e.Message}");
 
                 return Enumerable.Empty<byte[]>();
+            }
+        }
+
+        public IEnumerable<(byte[] key, byte[] value)> GetKeysValuesTo(byte[] from, byte[] to)
+        {
+            try
+            {
+                return _openedDb.GetValueKeyPairToFrom(from, to);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting value [{to.GetString()}, {from.GetString()}] - {e.Message}");
+
+                return Enumerable.Empty<(byte[], byte[])>();
             }
         }
     }

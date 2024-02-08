@@ -1,4 +1,17 @@
-$Version = $args[0]
+Param(
+	[Parameter(Mandatory=$True)][string]$Version,
+	[string]$BaseDirectory
+)
+
+if ([string]::IsNullOrEmpty($BaseDirectory))
+{
+	$BaseDirectory = "/usr/HSM/" # Unix base directory
+	#$BaseDirectory = "C:\HSM\" # Windows base directory
+}
+
+Write-Host "Base directory:" $BaseDirectory
+
+Write-Host $LogsFolder
 $Repository = "hsmonitoring/hierarchical_sensor_monitoring"
 $ExpectedImageTag = "${Repository}:$Version"
 $ContainerName = "HSMServer"
@@ -25,17 +38,10 @@ if ($ExpectedImageId)
 {
 	Write-Host "Image id to run = $ExpectedImageId"
 
-    # Unix directories
-	# $LogsFolder = "/usr/HSM/Logs:/app/Logs"
-	# $SensorConfigFolder = "/usr/HSM/Config:/app/Config"
-	# $EnvironmentDatabaseFolder = "/usr/HSM/Databases:/app/Databases"
-	# $DatabasesBackupsFolder = "/usr/HSM/DatabasesBackups:/app/DatabasesBackups"
-
-    # Windows directories
-	$LogsFolder = "C:\HSM\Logs:/app/Logs"
-	$SensorConfigFolder = "C:\HSM\Config:/app/Config"
-	$EnvironmentDatabaseFolder = "C:\HSM\Databases:/app/Databases"
-	$DatabasesBackupsFolder = "C:\HSM\DatabasesBackups:/app/DatabasesBackups"
+	$LogsFolder = $BaseDirectory + "Logs:/app/Logs"
+	$SensorConfigFolder = $BaseDirectory + "Config:/app/Config"
+	$EnvironmentDatabaseFolder = $BaseDirectory + "Databases:/app/Databases"
+	$DatabasesBackupsFolder = $BaseDirectory + "DatabasesBackups:/app/DatabasesBackups"
 
 	$SensorDataPort = "44330:44330"
 	$SensorSitePort = "44333:44333"

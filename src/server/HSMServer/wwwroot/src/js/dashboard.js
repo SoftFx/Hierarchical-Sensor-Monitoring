@@ -33,6 +33,9 @@ window.getRangeDate = function () {
         case "7.00:00:00":
             newDate = currentDate.setDate(currentDate.getDate() - 7)
             break
+        case "30.00:00:00":
+            newDate = currentDate.setDate(currentDate.getDate() - 30)
+            break
 
         default:
             newDate = currentDate.setHours(currentDate.getHours() - 6)
@@ -48,7 +51,7 @@ function defaultLabelUpdate(id, name) {
 
     let row = sources[id];
     let label = $(row).find('input[id^="name_input"]')
-    let property = $(row).find(':selected');
+    let property = $(row).find(`select[id^='property_']`).find(':selected');
     let sensorNameDefault = $(row).find('input[id^="name_default"]').val();
 
     if (label.length === 0)
@@ -64,10 +67,12 @@ function defaultLabelUpdate(id, name) {
 }
 
 export function getPlotSourceView(id) {
+    let showProduct = $(`input[name='ShowProduct']`).is(':checked');
+
     return new Promise(function (resolve, reject) {
         $.ajax({
             type: 'GET',
-            url: `${window.location.pathname}/${id}`
+            url: `${window.location.pathname}/${id}?showProduct=${showProduct}`
         }).done(function (data) {
             if (data.error === undefined)
                 return resolve(data);
@@ -108,7 +113,7 @@ window.insertSourceHtml = function (data) {
 }
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId) {
-    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.chartType == 1);
+    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1);
 
     let layoutUpdate = {
         'xaxis.visible': true,
@@ -127,7 +132,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
     }
 
     plot.id = data.id;
-    plot.name = data.label;
+    plot.name = data.displayLabel;
     plot.mode = 'lines+markers';
     plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
@@ -262,6 +267,7 @@ export function initDropzone() {
         })
 }
 
+const maxPlottedPoints = 1500;
 window.initDashboard = function () {
     const currentRange = getRangeDate();
     const layoutUpdate = {
@@ -319,7 +325,7 @@ window.initDashboard = function () {
                             let timespanValue = TimeSpanPlot.getTimeSpanValue(j);
                             customData.push(Plot.checkError(j) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, j) + '<br>' + j.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, j))
                             x.push(j.time)
-                            y.push(timespanValue.totalMilliseconds())
+                            y.push(timespanValue === 'NaN' ? timespanValue : timespanValue.totalMilliseconds())
                         }
                         else {
                             if (prevId !== undefined && j.id === prevId) {
@@ -357,7 +363,7 @@ window.initDashboard = function () {
                             y: [y],
                             x: [x],
                             customdata: [customData]
-                        }, [correctId], 100).then(
+                        }, [correctId], maxPlottedPoints).then(
                             (data) => {
                                 if (isTimeSpan)
                                     TimespanRelayout(data);
@@ -427,17 +433,7 @@ function addDraggable(interactable) {
         autoScroll: true,
 
         listeners: {
-            move: dragMoveListenerPanel,
-
-            end(event) {
-                var textEl = event.target.querySelector('p')
-
-                //textEl && (textEl.textContent =
-                //    'moved a distance of ' +
-                //    (Math.sqrt(Math.pow(event.pageX - event.x0, 2) +
-                //        Math.pow(event.pageY - event.y0, 2) | 0))
-                //        .toFixed(2) + 'px')
-            }
+            move: dragMoveListenerPanel
         }
     })
 }
@@ -488,14 +484,14 @@ function addResizable(interactable) {
     })
 }
 
-window.updateSource = function (name, color, property, id) {
+window.updateSource = function (name, color, property, shape, showProduct, id) {
     if (currentPanel[id] === undefined)
         return;
 
     if (currentPanel[id].updateTimeout !== undefined)
         clearTimeout(currentPanel[id].updateTimeout);
 
-    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, id);
+    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, shape, showProduct, id);
 }
 
 window.getCurrentPlotInDashboard = function (id) {
@@ -615,7 +611,7 @@ function showEventInfo(event) {
     $(`#${id}.cloned`).remove();
 }
 
-function updatePlotSource(name, color, property, id) {
+function updatePlotSource(name, color, property, shape, showProduct, id) {
     let updatedName = defaultLabelUpdate(currentPanel[id].oldIndex, name)
 
     $.ajax({
@@ -626,7 +622,8 @@ function updatePlotSource(name, color, property, id) {
         data: JSON.stringify({
             name: updatedName,
             color: color,
-            property: property
+            property: property,
+            shape: shape
         })
     }).done(function (response) {
         if (response !== '') {
@@ -635,10 +632,14 @@ function updatePlotSource(name, color, property, id) {
             syncIndexes();
         }
 
+        if (showProduct)
+            updatedName = $(`#productName_${id}`).text() + updatedName;
+
         let layoutUpdate = {
             'hovertemplate': `${updatedName}, %{customdata}<extra></extra>`,
             'line.color': color,
             'marker.color': color,
+            'line.shape': shape,
             name: updatedName
         }
 

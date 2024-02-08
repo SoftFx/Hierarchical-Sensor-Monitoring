@@ -485,7 +485,9 @@ namespace HSMDataCollector.Core
             if (existingSensor is ILastValueSensor<T> lastValueSensor)
                 return lastValueSensor;
 
-            var sensor = new DefaultValueSensor<T>(path, _queueManager.Data as IValuesQueue, defaultValue, description);
+            var upgradedPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, path);
+
+            var sensor = new DefaultValueSensor<T>(upgradedPath, _queueManager.Data as IValuesQueue, defaultValue, description);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -598,7 +600,9 @@ namespace HSMDataCollector.Core
             if (existingSensor is IParamsFuncSensor<T, U> typedSensor)
                 return typedSensor;
 
-            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _queueManager.Data as IValuesQueue, description, interval, function, _logger);
+            var upgradedPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, path);
+
+            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(upgradedPath, _queueManager.Data as IValuesQueue, description, interval, function, _logger);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -612,7 +616,9 @@ namespace HSMDataCollector.Core
             if (existingSensor is INoParamsFuncSensor<T> typedSensor)
                 return typedSensor;
 
-            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _queueManager.Data as IValuesQueue, description, interval, function, _logger);
+            var upgradedPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, path);
+
+            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(upgradedPath, _queueManager.Data as IValuesQueue, description, interval, function, _logger);
             AddNewSensor(sensor, path);
 
             return sensor;

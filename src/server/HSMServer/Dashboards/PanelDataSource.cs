@@ -34,6 +34,17 @@ namespace HSMServer.Dashboards
     }
 
 
+    public enum PlottedShape : byte
+    {
+        linear = 0,
+        spline = 1,
+        hv = 2,
+        vh = 3,
+        hvh = 4,
+        vhv = 5,
+    }
+
+
     public sealed class PanelDatasource : IDisposable
     {
         public BaseSensorModel Sensor { get; }
@@ -47,6 +58,8 @@ namespace HSMServer.Dashboards
 
 
         public PlottedProperty Property { get; private set; }
+
+        public PlottedShape Shape { get; private set; }
 
         public string Label { get; private set; }
 
@@ -66,6 +79,7 @@ namespace HSMServer.Dashboards
             Color = Color.FromName(ColorExtensions.GenerateRandomColor());
             Property = sensor.Type.IsBar() ? PlottedProperty.Max : PlottedProperty.Value;
             Label = $"{sensor.DisplayName} ({Property})";
+            Shape = PlottedShape.linear;
         }
 
         public PanelDatasource(BaseSensorModel sensor, PanelSourceEntity entity) : this(sensor)
@@ -74,32 +88,53 @@ namespace HSMServer.Dashboards
             SensorId = new Guid(entity.SensorId);
 
             Property = (PlottedProperty)entity.Property;
+            Shape = (PlottedShape)entity.Shape;
             Color = Color.FromName(entity.Color);
             Label = entity.Label;
         }
 
 
-        public PanelDatasource BuildSource()
+        public PanelDatasource BuildSource(bool aggregateValues)
         {
             Source?.Dispose(); // unsubscribe prev version
-            Source = DatasourceFactory.Build(Sensor, Property);
+
+            var settings = new SourceSettings
+            {
+                SensorType = Sensor.Type,
+                Property = Property,
+
+                AggregateValues = aggregateValues,
+            };
+
+            Source = DatasourceFactory.Build(Sensor, settings);
 
             return this;
         }
 
 
-        public PanelDatasource Update(PanelSourceUpdate update)
+        public PanelDatasource Update(PanelSourceUpdate update, bool aggregateValues)
         {
+            var rebuildSource = false;
+
+            T ApplyRebuild<T>(T value)
+            {
+                rebuildSource = true;
+                return value;
+            }
+
             Color = update.Color is not null ? Color.FromName(update.Color) : Color;
             Label = !string.IsNullOrEmpty(update.Name) ? update.Name : Label;
 
             if (Enum.TryParse<PlottedProperty>(update.Property, out var newProperty) && Property != newProperty)
-            {
-                Property = newProperty;
-                BuildSource();
-            }
+                Property = ApplyRebuild(newProperty);
+
+            if (Enum.TryParse<PlottedShape>(update.Shape, out var newShape) && Shape != newShape)
+                Shape = newShape;
 
             UpdateEvent?.Invoke();
+
+            if (rebuildSource)
+                BuildSource(aggregateValues);
 
             return this;
         }
@@ -112,6 +147,7 @@ namespace HSMServer.Dashboards
                 SensorId = SensorId.ToByteArray(),
 
                 Property = (byte)Property,
+                Shape = (byte)Shape,
                 Color = Color.Name,
                 Label = Label,
             };

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "HSMEnums.h"
+#include <optional>
 
 namespace hsm_wrapper
 {
@@ -342,20 +343,31 @@ namespace hsm_wrapper
 		HSMBarAlertTemplate() : HSMAlertBaseTemplate(CreateHSMBarAlertBaseTemplateImpl()) {};
 	};
 
-	class HSMWRAPPER_API HSMInstantSensorOptions
+	class HSMWRAPPER_API HSMBaseSensorOptions
 	{
 	public:
 		std::string description;
+		std::optional<std::chrono::milliseconds> keep_history;
+		std::optional<std::chrono::milliseconds> self_destroy;
+		std::optional<std::chrono::milliseconds> ttl;
+		std::optional<bool> enable_for_grafana;
+		std::optional<bool> is_singleton_sensor;
+		std::optional<bool> aggregate_data;
+	};
+
+	class HSMWRAPPER_API HSMInstantSensorOptions : public HSMBaseSensorOptions
+	{
+	public:
 		std::vector<HSMInstantAlertTemplate> alerts;
 	};
 
-	class HSMWRAPPER_API HSMBarSensorOptions
+	class HSMWRAPPER_API HSMBarSensorOptions : public HSMBaseSensorOptions
 	{
 	public:
-		int bar_period = 30000;
-		int post_data_period = 15000;
+		std::chrono::milliseconds bar_period = std::chrono::minutes(5);
+		std::chrono::milliseconds bar_tick_period = std::chrono::seconds(5);
+		std::chrono::milliseconds post_data_period = std::chrono::seconds(15);
 		int precision = 2;
-		std::string description;
 		std::vector<HSMBarAlertTemplate> alerts;
 	};
 
