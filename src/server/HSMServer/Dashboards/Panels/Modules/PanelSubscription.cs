@@ -54,10 +54,8 @@ namespace HSMServer.Dashboards
 
         private void ApplyNewTemplate(string template)
         {
-            if (string.IsNullOrEmpty(template) || !_pathConverter.ApplyNewTemplate(template, out _))
-                return;
-
-            PathTempalte = template;
+            if (!string.IsNullOrEmpty(template) && _pathConverter.ApplyNewTemplate(template, out _))
+                PathTempalte = template;
         }
     }
 }
