@@ -1,5 +1,4 @@
 using HSMDataCollector.Options;
-using HSMSensorDataObjects;
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
@@ -17,15 +16,11 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             var returnValue = 0d;
             
             if (_prevValue.HasValue)
-               returnValue = currentValue - _prevValue.Value;
+                returnValue = currentValue - _prevValue.Value;
 
-            _prevValue = currentValue;
+            (_needSendValue, _prevValue) = (returnValue != 0 && _prevValue.HasValue, currentValue);
             
             return returnValue;
         }
-
-        protected override string GetComment() => !_prevValue.HasValue ? "Calibration request" : base.GetComment();
-
-        protected override SensorStatus GetStatus() => !_prevValue.HasValue ? SensorStatus.OffTime : base.GetStatus();
     }
 }
