@@ -21,7 +21,7 @@ namespace HSMServer.Controllers
 
 
         [HttpGet("Dashboards")]
-        public IActionResult Index() => View(_dashboards.GetValues().Select(d => new DashboardViewModel(d)).ToList());
+        public IActionResult Index() => View(_dashboards.GetValues().Select(d => new DashboardViewModel(d).AttachUser(_userManager)).ToList());
 
 
         #region Dashboards
@@ -131,7 +131,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public IActionResult SaveDashboardPanel(Guid dashboardId, Guid panelId, [FromBody] PanelViewModel model)
+        public IActionResult SaveDashboardPanel(Guid dashboardId, Guid panelId, PanelViewModel model)
         {
             if (string.IsNullOrEmpty(model.Name) || string.IsNullOrWhiteSpace(model.Name))
                 return BadRequest("Invalid Name");
@@ -139,14 +139,16 @@ namespace HSMServer.Controllers
             if (model.Name.Length > 30)
                 return BadRequest("Name length is grater than 30 characters");
 
-            if (model.Description.Length > 250)
+            if (model.Description?.Length > 250)
                 return BadRequest("Description length is greater than 100 characters");
 
             if (TryGetPanel(dashboardId, panelId, out var panel))
                 panel.NotifyUpdate(new PanelUpdate(panel.Id)
                 {
                     Name = model.Name,
-                    Description = model.Description
+                    Description = model.Description ?? string.Empty,
+                    ShowProduct = model.ShowProduct,
+                    IsAggregateValues = model.AggregateValues,
                 });
 
             return Ok(dashboardId);
@@ -185,7 +187,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/{sensorId:guid}")]
-        public async Task<IActionResult> GetSource(Guid sensorId, Guid dashboardId, Guid panelId)
+        public async Task<IActionResult> GetSource(Guid sensorId, Guid dashboardId, Guid panelId, bool showProduct)
         {
             var error = string.Empty;
 
@@ -193,7 +195,7 @@ namespace HSMServer.Controllers
             {
                 var response = await datasource.Source.Initialize();
 
-                return Json(new DatasourceViewModel(response, datasource));
+                return Json(new DatasourceViewModel(response, datasource, showProduct));
             }
 
             return Json(new
@@ -205,15 +207,15 @@ namespace HSMServer.Controllers
         [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/{sourceId:guid}")]
         public async Task<IActionResult> UpdateSource([FromBody] PanelSourceUpdate update, Guid dashboardId, Guid panelId, Guid sourceId)
         {
-            if (TryGetSource(dashboardId, panelId, sourceId, out var source))
+            if (TryGetPanel(dashboardId, panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out var source))
             {
                 var oldProperty = source.Property;
-                var updatedSource = source.Update(update);
+                var updatedSource = source.Update(update, panel.AggregateValues);
 
                 if (updatedSource.Property != oldProperty)
                 {
                     var response = await updatedSource.Source.Initialize();
-                    return Json(new DatasourceViewModel(response, updatedSource));
+                    return Json(new DatasourceViewModel(response, updatedSource, panel.ShowProduct));
                 }
                 
                 return Ok();

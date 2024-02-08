@@ -4,6 +4,7 @@ using HSMServer.Folders;
 using HSMServer.Notifications.Telegram.AddressBook;
 using HSMServer.ServerConfiguration;
 using System;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
@@ -97,8 +98,14 @@ namespace HSMServer.Notifications
             if (!_config.IsValid)
                 return ConfigurationsError;
 
+            HttpClientHandler clientHandler = new() //todo: should be removed after live ubuntu update
+            {
+                ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true,
+                SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
+            };
+
             _tokenSource = new CancellationTokenSource();
-            _bot = new TelegramBotClient(BotToken)
+            _bot = new TelegramBotClient(BotToken, new HttpClient(clientHandler))
             {
                 Timeout = new TimeSpan(0, 5, 0) // 5 minutes timeout
             };
@@ -110,6 +117,10 @@ namespace HSMServer.Notifications
             catch (Exception exc)
             {
                 _bot = null;
+
+                _logger.Error($"Invalid credentials: {BotToken}, name = {_config?.BotName}");
+                _logger.Error(exc);
+
                 return $"An error ({exc.Message}) has been occurred while starting the Bot. Please check Bot configurations. The current state of the Bot is stopped.";
             }
 

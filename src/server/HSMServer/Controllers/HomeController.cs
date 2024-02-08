@@ -6,11 +6,12 @@ using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.StatisticInfo;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
-using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
@@ -28,8 +29,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
-using HSMServer.Core.TableOfChanges;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
@@ -58,7 +59,7 @@ namespace HSMServer.Controllers
         [ApiExplorerSettings(IgnoreApi = true)]
         [Route("/Home/Index")]
         public IActionResult HomeIndex() => Redirect("/Home");
-        
+
         [ApiExplorerSettings(IgnoreApi = true)]
         [Route("/")]
         [Route("/Home")]
@@ -112,14 +113,21 @@ namespace HSMServer.Controllers
             return PartialView("_NodeDataPanel", viewModel);
         }
 
+        [HttpPost]
+        public IActionResult AddToRenderingTree([FromBody] params Guid[] ids)
+        {
+            CurrentUser.Tree.AddOpenedNodes(ids);
+            return Ok();
+        }
+
         [HttpGet]
-        public IActionResult GetNode(string id) =>
+        public IActionResult GetNode(string id, bool isSearchRefresh = false) =>
             _treeViewModel.Nodes.TryGetValue(id.ToGuid(), out var node)
-                ? PartialView("~/Views/Tree/_TreeNode.cshtml", CurrentUser.Tree.LoadNode(node))
+                ? PartialView("~/Views/Tree/_TreeNode.cshtml", CurrentUser.Tree.LoadNode(node, isSearchRefresh))
                 : NotFound();
 
         [HttpPut]
-        public void RemoveRenderingNode([FromBody] RemoveNodesRequestModel request) => CurrentUser.Tree.RemoveOpenedNode(request.NodeIds);
+        public void RemoveRenderingNode([FromBody] RemoveNodesRequestModel request) => CurrentUser.Tree.RemoveOpenedNode(request);
 
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)
@@ -138,8 +146,8 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult RefreshTree(string searchParameter) =>
-            PartialView("~/Views/Tree/_Tree.cshtml", CurrentUser.Tree.GetUserTree(searchParameter));
+        public IActionResult RefreshTree(SearchPattern searchPattern) =>
+            PartialView("~/Views/Tree/_Tree.cshtml", CurrentUser.Tree.GetUserTree(searchPattern));
 
         [HttpGet]
         public IActionResult ApplyFilter(UserFilterViewModel viewModel)
@@ -525,6 +533,70 @@ namespace HSMServer.Controllers
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
+
+        [HttpGet]
+        public string RefreshHistoryInfo(Guid id)
+        {
+            void UpdateStats(ProductNodeViewModel vm, NodeHistoryInfo nodeInfo)
+            {
+                foreach (var (sensorId, sensorInfo) in nodeInfo.SensorsInfo)
+                    if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
+                        sensor.HistoryStatistic.Update(sensorInfo);
+
+                foreach (var (subnodeId, subnodeInfo) in nodeInfo.SubnodesInfo)
+                    if (_treeViewModel.Nodes.TryGetValue(subnodeId, out var node))
+                        UpdateStats(node, subnodeInfo);
+
+                vm.HistoryStatistic.RecalculateSubTreeStats(vm);
+            }
+
+            if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
+            {
+                sensor.HistoryStatistic.Update(_treeValuesCache.GetSensorHistoryInfo(sensor.Id));
+
+                return sensor.HistoryStatistic.DisplayInfo;
+            }
+
+            if (_treeViewModel.Nodes.TryGetValue(id, out var node))
+            {
+                UpdateStats(node, _treeValuesCache.GetNodeHistoryInfo(node.Id));
+
+                return node.HistoryStatistic.DisplayInfo;
+            }
+
+            return "Unknown";
+        }
+
+        [HttpGet]
+        public FileResult SaveHistoryInfo(Guid id)
+        {
+            string nodePath = null;
+            var content = new StringBuilder(1 << 10);
+
+            content.AppendLine("PATH;COUNT;SIZE_bytes;%VALUES");
+
+            if (_treeViewModel.Nodes.TryGetValue(id, out var node))
+            {
+                nodePath = node.FullPath;
+
+                void BuildContent(ProductNodeViewModel model)
+                {
+                    foreach (var (_, sensor) in model.Sensors)
+                        content.AppendLine(sensor.HistoryStatistic.ToCsvFormat(sensor.FullPath));
+
+                    foreach (var (_, subNode) in model.Nodes)
+                        BuildContent(subNode);
+                }
+
+                BuildContent(node);
+            }
+
+            var fileName = $"{nodePath.Replace('/', '_')}_DBstats.csv";
+            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
+
+            return File(Encoding.UTF8.GetBytes(content.ToString()), fileName.GetContentType(), fileName);
+        }
+
         [HttpPost]
         public IActionResult UpdateSensorInfo(SensorInfoViewModel newModel)
         {
@@ -538,8 +610,7 @@ namespace HSMServer.Controllers
 
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
-                ? list.Select(a => a.ToUpdate(availableChats)).ToList()
-                : new();
+                ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
 
             var update = new SensorUpdate
             {

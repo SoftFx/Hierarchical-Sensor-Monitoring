@@ -10,10 +10,9 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     internal sealed class SensorValuesDatabaseDictionary : IEnumerable<ISensorValuesDatabase>
     {
-        private readonly ConcurrentQueue<ISensorValuesDatabase> _sensorDbs = new();
+        private readonly ConcurrentStack<ISensorValuesDatabase> _youngestDb = new();
+        private readonly ConcurrentStack<ISensorValuesDatabase> _sensorDbs = new();
         private readonly IDatabaseSettings _dbSettings;
-
-        private ISensorValuesDatabase _lastDb;
 
 
         internal SensorValuesDatabaseDictionary(IDatabaseSettings dbSettings)
@@ -24,31 +23,38 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var directory in sensorValuesDirectories)
             {
                 (var from, var to) = GetDatesFromFolderName(directory);
-                AddNewDb(directory, from, to);
+                AddNewDatabase(directory, from, to);
             }
         }
 
 
-        internal ISensorValuesDatabase GetNewestDatabases(long time)
+        internal ISensorValuesDatabase GetDatabaseByTime(long time)
         {
-            if (_lastDb == null || _lastDb.To < time)
-            {
-                var from = DateTimeMethods.GetMinDateTimeTicks(time);
-                var to = DateTimeMethods.GetMaxDateTimeTicks(time);
+            foreach (var db in this)
+                if (db.IsInclude(time))
+                    return db;
+                else if (time > db.To)
+                    break;
 
-                return AddNewDb(_dbSettings.GetPathToSensorValueDatabase(from, to), from, to);
-            }
+            var from = DateTimeMethods.GetMinDateTimeTicks(time);
+            var to = DateTimeMethods.GetMaxDateTimeTicks(time);
 
-            return _lastDb;
+            return AddNewDatabase(_dbSettings.GetPathToSensorValueDatabase(from, to), from, to);
         }
 
-        internal ISensorValuesDatabase AddNewDb(string name, long from, long to)
+        private ISensorValuesDatabase AddNewDatabase(string name, long from, long to)
         {
-            _lastDb = LevelDBManager.GetSensorValuesDatabaseInstance(name, from, to);
+            var newDb = LevelDBManager.GetSensorValuesDatabaseInstance(name, from, to);
 
-            _sensorDbs.Enqueue(_lastDb);
+            while (_sensorDbs.TryPeek(out var lastDb) && lastDb.From > newDb.To && _sensorDbs.TryPop(out lastDb))
+                _youngestDb.Push(lastDb);
 
-            return _lastDb;
+            _sensorDbs.Push(newDb);
+
+            while (_youngestDb.TryPop(out var db))
+                _sensorDbs.Push(db);
+
+            return newDb;
         }
 
         private List<string> GetSensorValuesDirectories()

@@ -8,6 +8,8 @@ namespace HSMDatabase.AccessManager
 
         public string DatabaseFolder { get; init; }
 
+        public string JournalFolder { get; init; }
+
 
         public string JournalValuesDatabaseName { get; init; }
 
@@ -26,8 +28,10 @@ namespace HSMDatabase.AccessManager
 
         public string PathToSnaphotsDb => Path.Combine(DatabaseFolder, SnaphotsDatabaseName);
 
+        public string PathToJournalDb => Path.Combine(DatabaseFolder, JournalFolder);
 
-        public string GetPathToJournalValueDatabase(long from, long to) => BuildWeeklyDbName(Path.Combine(DatabaseFolder, "Journals"), JournalValuesDatabaseName, from, to);
+
+        public string GetPathToJournalValueDatabase(long from, long to) => BuildWeeklyDbName(PathToJournalDb, JournalValuesDatabaseName, from, to);
 
         public string GetPathToSensorValueDatabase(long from, long to) => BuildWeeklyDbName(DatabaseFolder, SensorValuesDatabaseName, from, to);
 

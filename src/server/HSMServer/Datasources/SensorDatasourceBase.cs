@@ -1,11 +1,10 @@
 ﻿using HSMCommon.Collections;
-using HSMServer.Core;
+using HSMCommon.Extensions;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Dashboards;
+using HSMServer.Datasources.Aggregators;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -22,38 +21,25 @@ namespace HSMServer.Datasources
 
     public abstract class SensorDatasourceBase : IDisposable
     {
-        private const int MaxVisibleCnt = 100;
-
         private readonly CLinkedList<BaseChartValue> _newVisibleValues = new();
-        private readonly CLinkedList<BaseChartValue> _curVisibleValues = new();
 
+        private SourceSettings _settings;
         private BaseSensorModel _sensor;
 
-        private long _removedValuesCnt, _aggrValuesStep;
-        private bool _aggreagateValues;
 
-        protected BarBaseValue _lastBarValue; //TODO move to special derived class
-        protected bool _isBarSensor;
-
-        protected PlottedProperty _plotProperty;
-
+        protected abstract BaseDataAggregator DataAggregator { get; }
 
         protected abstract ChartType AggregatedType { get; }
 
         protected abstract ChartType NormalType { get; }
 
 
-        protected abstract void AddVisibleValue(BaseValue baseValue);
-
-        protected abstract void ApplyToLast(BaseValue newValue);
-
-
-        internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, PlottedProperty plotProperty)
+        internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings)
         {
-            _plotProperty = plotProperty;
+            _settings = settings;
             _sensor = sensor;
 
-            _isBarSensor = sensor.Type.IsBar();
+            DataAggregator.Setup(settings);
 
             _sensor.ReceivedNewValue += AddNewValue;
 
@@ -65,7 +51,7 @@ namespace HSMServer.Datasources
             Initialize(new SensorHistoryRequest
             {
                 To = DateTime.UtcNow,
-                Count = -MaxVisibleCnt,
+                Count = -_settings.CustomVisibleCount,
             });
 
         public Task<InitChartSourceResponse> Initialize(DateTime from, DateTime to) =>
@@ -73,27 +59,24 @@ namespace HSMServer.Datasources
             {
                 From = from,
                 To = to,
-                Count = -TreeValuesCache.MaxHistoryCount
+                Count = -TreeValuesCache.MaxHistoryCount,
             });
 
         public async Task<InitChartSourceResponse> Initialize(SensorHistoryRequest request)
         {
-            var history = _sensor.GetHistoryData(request);
+            _newVisibleValues.Clear();
 
-            if (history is not null)
-            {
-                var data = await history;
+            DataAggregator.RecalculateAggrSections(request);
 
-                BuildInitialValues(data, request);
+            var history = await _sensor.GetHistoryData(request);
 
-                _newVisibleValues.Clear();
-                _removedValuesCnt = 0;
-            }
+            foreach (var raw in history.ReverseFluent())
+                AddNewValue(raw);
 
             return new()
             {
-                ChartType = _aggreagateValues ? AggregatedType : NormalType,
-                Values = _curVisibleValues.Cast<object>().ToList(),
+                ChartType = DataAggregator.UseAggregation ? AggregatedType : NormalType,
+                Values = _newVisibleValues.Cast<object>().ToList(),
             };
         }
 
@@ -101,8 +84,6 @@ namespace HSMServer.Datasources
             new()
             {
                 NewVisibleValues = _newVisibleValues.Cast<object>().ToList(),
-
-                RemovedValuesCount = _removedValuesCnt,
                 IsTimeSpan = _sensor.Type is SensorType.TimeSpan
             };
 
@@ -113,52 +94,14 @@ namespace HSMServer.Datasources
         }
 
 
-        protected bool IsPartialValueUpdate(BaseValue newValue)
-        {
-            return _isBarSensor && newValue is BarBaseValue barValue &&
-                   _lastBarValue?.OpenTime == barValue?.OpenTime &&
-                   _lastBarValue.CloseTime == barValue?.CloseTime;
-        }
-
-        protected void AddVisibleToLast(BaseChartValue value)
-        {
-            _curVisibleValues.AddLast(value);
-            _newVisibleValues.AddLast(value);
-        }
-
-        private void BuildInitialValues(List<BaseValue> rawList, SensorHistoryRequest request)
-        {
-            rawList.Reverse();
-
-            _aggreagateValues = rawList.Count > MaxVisibleCnt;
-            _aggrValuesStep = _aggreagateValues ? (request.To - request.From).Ticks / MaxVisibleCnt : 0L;
-            _curVisibleValues.Clear();
-
-            foreach (var raw in rawList)
-                AddNewValue(raw);
-        }
-
         private void AddNewValue(BaseValue value)
         {
-            if (IsPartialValueUpdate(value))
-                ApplyToLast(value);
-            else if (_aggreagateValues && _aggrValuesStep > 0)
-            {
-                if (_curVisibleValues.Count == 0 || _curVisibleValues.Last.Value.Time.Ticks + _aggrValuesStep < value.Time.Ticks)
-                    AddVisibleValue(value);
-                else
-                    ApplyToLast(value);
-            }
-            else
-                AddVisibleValue(value);
+            if (!DataAggregator.TryAddNewPoint(value, out var newPoint))
+                return;
 
-            while (_curVisibleValues.Count > MaxVisibleCnt)
-            {
-                _curVisibleValues.RemoveFirst();
-                _removedValuesCnt = Math.Min(++_removedValuesCnt, MaxVisibleCnt);
-            }
+            _newVisibleValues.AddLast(newPoint);
 
-            while (_newVisibleValues.Count > MaxVisibleCnt)
+            while (_newVisibleValues.Count > _settings.MaxVisibleCount)
                 _newVisibleValues.RemoveFirst();
         }
     }

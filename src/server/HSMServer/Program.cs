@@ -1,10 +1,7 @@
 ﻿using FluentValidation.AspNetCore;
 using HSMCommon.Constants;
 using HSMServer.Authentication;
-using HSMServer.ConcurrentStorage;
-using HSMServer.Folders;
 using HSMServer.Middleware;
-using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -19,7 +16,6 @@ using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.FileSystemGlobbing.Internal.Patterns;
 
 const string NLogConfigFileName = "nlog.config";
 
@@ -91,7 +87,7 @@ try
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
 
     app.MapControllers();
- 
+
     app.MapControllerRoute(
         name: "Account",
         pattern: "{controller=Account}/{action}",

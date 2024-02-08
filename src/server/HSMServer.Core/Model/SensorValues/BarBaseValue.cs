@@ -19,6 +19,9 @@ namespace HSMServer.Core.Model
         public double? EmaMean { get; init; }
 
         public double? EmaCount { get; init; }
+
+
+        public bool IsUpdatedBar(BarBaseValue newBar) => OpenTime == newBar?.OpenTime && CloseTime == newBar?.CloseTime;
     }
 
 

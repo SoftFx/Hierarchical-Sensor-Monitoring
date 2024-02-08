@@ -36,7 +36,10 @@ namespace HSMServer.Model.ViewModel
         [MinTimeInterval(TimeInterval.Hour, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel SelfDestroyPeriod { get; set; }
 
-        public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; set; } = new();
+        public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; set; } = [];
+
+        public HistoryStatisticViewModel HistoryStatistic { get; }
+
 
         public string EncodedId { get; set; }
 
@@ -69,11 +72,13 @@ namespace HSMServer.Model.ViewModel
             SavedHistoryPeriod = new(model.KeepHistory, PredefinedIntervals.ForKeepHistory);
             SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
 
+            HistoryStatistic = model.HistoryStatistic;
+
             AlertIcons = model.AlertIcons;
             HasTimeToLive = model.TTL.TimeInterval is not TimeInterval.None;
             DataAlerts = new(model.DataAlerts);
             if (model.TTLAlert is not null)
-                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = new List<DataAlertViewModelBase> { model.TTLAlert.FromInterval(model.TTL) };
+                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = [model.TTLAlert.FromInterval(model.TTL)];
         }
     }
 }
