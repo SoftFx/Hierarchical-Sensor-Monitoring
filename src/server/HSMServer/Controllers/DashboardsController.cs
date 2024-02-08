@@ -241,7 +241,29 @@ namespace HSMServer.Controllers
         public IActionResult AddTemplate() => PartialView("_TemplateSettings", new TemplateViewModel());
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplyTemplate")]
-        public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, TemplateViewModel template) => Ok();
+        public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, TemplateViewModel template)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+            {
+                if (!panel.Subscriptions.TryGetValue(template.Id, out var subscription))
+                    panel.TryAddSubscription(out subscription);
+
+                subscription.NotifyUpdate(template.ToUpdate());
+
+                return Ok(subscription.Id);
+            }
+
+            return NotFound("No such panel");
+        }
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/DeleteTemplate")]
+        public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, Guid templateId)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+                panel.TryRemoveSubscription(templateId);
+
+            return Ok();
+        }
 
         #endregion
 

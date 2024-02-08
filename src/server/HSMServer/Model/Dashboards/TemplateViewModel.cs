@@ -29,6 +29,8 @@ namespace HSMServer.Model.Dashboards
         ];
 
 
+        public Guid Id { get; set; }
+
         public Guid Folder { get; set; }
 
         public string Path { get; set; }
@@ -45,7 +47,22 @@ namespace HSMServer.Model.Dashboards
 
         public TemplateViewModel(PanelSubscription subscription)
         {
+            Id = subscription.Id;
+
             Path = subscription.PathTempalte;
+            Property = subscription.Property;
+            Label = subscription.Label;
+            Shape = subscription.Shape;
         }
+
+
+        internal PanelSubscriptionUpdate ToUpdate() =>
+            new()
+            {
+                PathTemplate = Path,
+                Property = Property.ToString(),
+                Shape = Shape.ToString(),
+                Label = Label,
+            };
     }
 }

@@ -29,6 +29,9 @@ namespace HSMServer.Dashboards
 
         public override void Update(PanelSubscriptionUpdate update)
         {
+            base.Update(update);
+
+            Label = update.Label ?? Label;
             ApplyNewTemplate(update.PathTemplate);
         }
 

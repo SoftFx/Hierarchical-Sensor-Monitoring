@@ -14,6 +14,8 @@ public sealed class PanelViewModel
 
     public CDict<DatasourceViewModel> Sources { get; }
 
+    public CDict<TemplateViewModel> Templates { get; }
+
 
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -53,6 +55,7 @@ public sealed class PanelViewModel
         Settings = panel.Settings;
 
         Sources = new CDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x => new DatasourceViewModel(x.Value, ShowProduct)));
+        Templates = new CDict<TemplateViewModel>(panel.Subscriptions.ToDictionary(y => y.Value.Id, x => new TemplateViewModel(x.Value)));
     }
 
 

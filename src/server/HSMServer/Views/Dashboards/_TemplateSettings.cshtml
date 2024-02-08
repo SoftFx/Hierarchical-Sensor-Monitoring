@@ -9,7 +9,9 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<form class="templateForm d-flex flex-row align-items-center mb-2">
+<form id="@(Model.Id == Guid.Empty ? string.Empty : Model.Id)" class="templateForm d-flex flex-row align-items-center mb-2">
+    <input class="d-none" asp-for="Id" value="@Model.Id"/>
+    
     <div class="card w-100">
         <div class="card-body py-2">
             <div class="d-flex flex-column">
@@ -43,7 +45,7 @@
         </button>
         <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
             <a class="dropdown-item text-decoration-none fw-normal button-link applyTemplate">Apply</a>
-            <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link deleteTemplate">Remove</a>
         </div>
     </div>
 </form>
@@ -60,7 +62,23 @@
             data: formData,
             processData: false,
             contentType: false,
-            async: true
+            async: true,
+            success: function (id) {
+                form.attr("id", id);
+            }
+        });
+    });
+
+    $("a.deleteTemplate").off("click").on("click", function () {
+        var form = $(this).parents("form.templateForm:first");
+        let formId = form.attr("id");
+
+        $.ajax({
+            url: `${window.location.pathname}/DeleteTemplate?templateId=${formId}`,
+            type: 'Post',
+            success: function () {
+                form.remove();
+            }
         });
     });
 </script>
