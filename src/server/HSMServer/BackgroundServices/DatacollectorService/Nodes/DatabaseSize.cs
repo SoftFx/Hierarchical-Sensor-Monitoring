@@ -2,12 +2,14 @@
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.Core.DataLayer;
+using HSMServer.ServerConfiguration.Monitoring;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 
 namespace HSMServer.BackgroundServices
 {
-    internal sealed class DatabaseSize
+    public sealed class DatabaseSize
     {
         private const double MbDivisor = 1 << 20;
         private const int DigitsCnt = 2;
@@ -21,6 +23,7 @@ namespace HSMServer.BackgroundServices
 
         private readonly IDataCollector _collector;
         private readonly IDatabaseCore _database;
+        private readonly IOptionsMonitor<MonitoringOptions> _optionsMonitor;
 
 
         private readonly Dictionary<string, DatabaseSizeSensor> Sensors = new()
@@ -36,10 +39,11 @@ namespace HSMServer.BackgroundServices
         };
 
 
-        internal DatabaseSize(IDataCollector collector, IDatabaseCore database)
+        public DatabaseSize(IDataCollector collector, IDatabaseCore database, IOptionsMonitor<MonitoringOptions> optionsMonitor)
         {
             _collector = collector;
             _database = database;
+            _optionsMonitor = optionsMonitor;
 
             CreateDataSizeSensor(HistoryDbName, () => _database.SensorHistoryDbSize);
             CreateDataSizeSensor(JournalsDbName, () => _database.JournalDbSize);

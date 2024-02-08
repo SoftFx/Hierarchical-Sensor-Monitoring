@@ -19,14 +19,14 @@ namespace HSMServer.Middleware
 
         public Task InvokeAsync(HttpContext context)
         {
-            _collector.RequestsCountSensor.AddValue(1);
+            _collector.Statistics.RequestsCountSensor.AddValue(1);
 
             var request = context.Request;
-            _collector.RequestSizeSensor.AddValue((request.ContentLength ?? 0) / KbDivisor);
+            _collector.Statistics.RequestSizeSensor.AddValue((request.ContentLength ?? 0) / KbDivisor);
 
             context.Response.OnCompleted(() =>
             {
-                _collector.ResponseSizeSensor.AddValue((context.Response.ContentLength ?? 0) / KbDivisor);
+                _collector.Statistics.ResponseSizeSensor.AddValue((context.Response.ContentLength ?? 0) / KbDivisor);
                 return Task.CompletedTask;
             });
 

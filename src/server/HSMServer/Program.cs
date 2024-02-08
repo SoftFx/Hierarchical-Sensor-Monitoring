@@ -3,6 +3,7 @@ using HSMCommon.Constants;
 using HSMServer.Authentication;
 using HSMServer.Middleware;
 using HSMServer.ServerConfiguration;
+using HSMServer.ServerConfiguration.Monitoring;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NLog.Extensions.Logging;
 using NLog.LayoutRenderers;
 using NLog.Web;
@@ -22,7 +24,7 @@ const string NLogConfigFileName = "nlog.config";
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.SetBasePath(ServerConfig.ConfigPath)
-                     .AddJsonFile(ServerConfig.ConfigName, true);
+                     .AddJsonFile(ServerConfig.ConfigName, true, reloadOnChange: true);
 
 var serverConfig = new ServerConfig(builder.Configuration);
 
@@ -71,6 +73,8 @@ builder.Services.AddFluentValidationAutoValidation()
 builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.SitePort);
 
 builder.Services.AddApplicationServices(serverConfig);
+
+builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection(nameof(MonitoringOptions)));
 
 builder.Services.Configure<HostOptions>(hostOptions =>
 {

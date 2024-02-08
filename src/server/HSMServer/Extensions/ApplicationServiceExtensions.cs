@@ -61,6 +61,9 @@ public static class ApplicationServiceExtensions
                 .AddHostedService<NotificationsBackgroundService>()
                 .AddHostedService<BackupDatabaseService>();
 
+        services.AddSingleton<ClientStatistics>();
+        services.AddSingleton<DatabaseSize>();
+
         services.ConfigureDataCollector();
         
         services.AddSwaggerGen(o =>

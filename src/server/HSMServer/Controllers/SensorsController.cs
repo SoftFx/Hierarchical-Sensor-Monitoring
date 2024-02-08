@@ -71,7 +71,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
+                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -100,7 +100,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
+                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -129,7 +129,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
+                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -158,7 +158,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
+                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
                     return Ok(sensorValue);
@@ -186,7 +186,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
+                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -215,7 +215,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
+                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                         out var message))
@@ -244,7 +244,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
+                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -273,7 +273,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
+                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -302,7 +302,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
+                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -333,7 +333,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(values.Count);
+                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(values.Count);
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values.OrderBy(u => u.Time))
@@ -371,7 +371,7 @@ namespace HSMServer.Controllers
 
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(values.Count);
+                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(values.Count);
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)
