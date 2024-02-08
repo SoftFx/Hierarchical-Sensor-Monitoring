@@ -1,5 +1,4 @@
 ﻿using HSMDataCollector.DefaultSensors.SystemInfo;
-using System.Net.NetworkInformation;
 using System;
 
 namespace HSMDataCollector.Options

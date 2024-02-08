@@ -95,11 +95,13 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddAllQueueDiagnosticSensors(BarSensorOptions barOptions = null);
 
 
-        IWindowsCollection AddConnectionsEstablished();
+        IWindowsCollection AddNetworkConnectionsEstablished(NetworkSensorOptions options = null);
         
-        IWindowsCollection AddConnectionFailures();
+        IWindowsCollection AddNetworkConnectionFailures(NetworkSensorOptions options = null);
         
-        IWindowsCollection AddConnectionsReset();
+        IWindowsCollection AddNetworkConnectionsReset(NetworkSensorOptions options = null);
+
+        IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null);
 
         
         IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);

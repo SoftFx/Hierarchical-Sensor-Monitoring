@@ -11,22 +11,22 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         private const string CategoryTcp6 = "TCPv6";
 
         
-        private PerformanceCounter _performanceCounterTCPv4;
-        private PerformanceCounter _performanceCounterTCPv6;
+        private PerformanceCounter _counterTCPv4;
+        private PerformanceCounter _counterTCPv6;
 
 
-        internal protected virtual string CounterName { get; }
+        protected abstract string CounterName { get; }
 
 
-        internal protected SocketsSensor(SensorOptions options) : base(options) { }
+        protected internal SocketsSensor(SensorOptions options) : base(options) { }
         
         
         internal override Task<bool> Init()
         {
             try
             {
-                _performanceCounterTCPv4 = new PerformanceCounter(CategoryTcp4, CounterName);
-                _performanceCounterTCPv6 = new PerformanceCounter(CategoryTcp4, CounterName);
+                _counterTCPv4 = new PerformanceCounter(CategoryTcp4, CounterName);
+                _counterTCPv6 = new PerformanceCounter(CategoryTcp4, CounterName);
             }
             catch (Exception ex)
             {
@@ -41,12 +41,12 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         
         internal override Task Stop()
         {
-            _performanceCounterTCPv4?.Dispose();
-            _performanceCounterTCPv6?.Dispose();
+            _counterTCPv4?.Dispose();
+            _counterTCPv6?.Dispose();
 
             return base.Stop();
         }
         
-        protected override double GetValue() => _performanceCounterTCPv4.NextValue() + _performanceCounterTCPv6.NextValue();
+        protected override double GetValue() => _counterTCPv4.NextValue() + _counterTCPv6.NextValue();
     }
 }

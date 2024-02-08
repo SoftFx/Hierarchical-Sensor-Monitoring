@@ -18,7 +18,7 @@ namespace HSMDataCollector.DefaultSensors
 
 
         public IWindowsCollection AddAllComputerSensors() =>
-            (this as IWindowsCollection).AddSystemMonitoringSensors().AddAllDisksMonitoringSensors().AddWindowsInfoMonitoringSensors();
+            (this as IWindowsCollection).AddSystemMonitoringSensors().AddAllDisksMonitoringSensors().AddWindowsInfoMonitoringSensors().AddAllNetworkSensors();
 
         public IWindowsCollection AddAllModuleSensors(Version productVersion)
         {
@@ -228,11 +228,13 @@ namespace HSMDataCollector.DefaultSensors
 
         #region Network
 
-        public IWindowsCollection AddConnectionsEstablished() => ToWindows(new ConnectionsEstablishedCountSensor(_prototype.ConnectionsEstablishedCount.Get(new NetworkSensorOptions())));
+        public IWindowsCollection AddNetworkConnectionsEstablished(NetworkSensorOptions options = null) => ToWindows(new ConnectionsEstablishedCountSensor(_prototype.ConnectionsEstablishedCount.Get(options)));
         
-        public IWindowsCollection AddConnectionFailures() => ToWindows(new ConnectionFailuresCountSensor(_prototype.ConnectionFailuresCount.Get(new NetworkSensorOptions())));
+        public IWindowsCollection AddNetworkConnectionFailures(NetworkSensorOptions options = null) => ToWindows(new ConnectionFailuresCountSensor(_prototype.ConnectionFailuresCount.Get(options)));
         
-        public IWindowsCollection AddConnectionsReset() => ToWindows(new ConnectionsResetCountSensor(_prototype.ConnectionsResetCount.Get(new NetworkSensorOptions())));
+        public IWindowsCollection AddNetworkConnectionsReset(NetworkSensorOptions options = null) => ToWindows(new ConnectionsResetCountSensor(_prototype.ConnectionsResetCount.Get(options)));
+       
+        public IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null) => AddNetworkConnectionFailures(options).AddNetworkConnectionsEstablished(options).AddNetworkConnectionsReset(options);
         
         #endregion
         
