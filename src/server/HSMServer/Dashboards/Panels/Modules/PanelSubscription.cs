@@ -46,7 +46,7 @@ namespace HSMServer.Dashboards
 
             source.Update(new PanelSourceUpdate
             {
-                Name = _pathConverter.BuildStringByTempalte(Label),
+                Label = _pathConverter.BuildStringByTempalte(Label),
                 Property = nameof(Property),
                 Shape = nameof(Shape),
             });

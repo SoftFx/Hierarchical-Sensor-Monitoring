@@ -74,7 +74,7 @@
         let formId = form.attr("id");
 
         $.ajax({
-            url: `${window.location.pathname}/DeleteTemplate?templateId=${formId}`,
+            url: `${window.location.pathname}/@(nameof(DashboardsController.DeleteTemplate))?templateId=${formId}`,
             type: 'Post',
             success: function () {
                 form.remove();

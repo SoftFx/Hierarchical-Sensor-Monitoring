@@ -257,7 +257,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/DeleteTemplate")]
-        public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, Guid templateId)
+        public IActionResult DeleteTemplate(Guid dashboardId, Guid panelId, Guid templateId)
         {
             if (TryGetPanel(dashboardId, panelId, out var panel))
                 panel.TryRemoveSubscription(templateId);
