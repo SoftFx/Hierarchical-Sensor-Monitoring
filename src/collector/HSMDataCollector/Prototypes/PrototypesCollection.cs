@@ -101,7 +101,7 @@ namespace HSMDataCollector.Options
         
         public ConnectionsResetCountPrototype ConnectionsResetCount { get; set; }
         
-        public ConnectionFailuresCountPrototype ConnectionFailuresCount { get; set; }
+        public ConnectionsFailuresCountPrototype ConnectionsFailuresCount { get; set; }
 
         #endregion
 
@@ -154,7 +154,7 @@ namespace HSMDataCollector.Options
 
             ConnectionsEstablishedCount = Register<ConnectionsEstablishedCountPrototype>();
             ConnectionsResetCount = Register<ConnectionsResetCountPrototype>();
-            ConnectionFailuresCount = Register<ConnectionFailuresCountPrototype>();
+            ConnectionsFailuresCount = Register<ConnectionsFailuresCountPrototype>();
         }
     }
 }

@@ -3,7 +3,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.Prototypes.Collections.Network
 {
-    internal sealed class ConnectionFailuresCountPrototype : NetworkCollectionPrototype
+    internal sealed class ConnectionsFailuresCountPrototype : ConnectionsDifferencePrototype
     {
         protected override string SensorName => "Connection Failures Count";
  

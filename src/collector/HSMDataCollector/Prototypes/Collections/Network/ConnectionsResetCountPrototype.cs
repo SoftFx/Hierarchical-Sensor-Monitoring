@@ -3,7 +3,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.Prototypes.Collections.Network
 {
-    internal sealed class ConnectionsResetCountPrototype : NetworkCollectionPrototype
+    internal sealed class ConnectionsResetCountPrototype : ConnectionsDifferencePrototype
     {
         protected override string SensorName => "Connections Reset Count";
 
