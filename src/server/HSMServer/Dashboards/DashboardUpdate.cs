@@ -54,5 +54,7 @@ namespace HSMServer.Dashboards
     public record PanelSubscriptionUpdate : PanelSourceUpdate
     {
         public string PathTemplate { get; init; }
+
+        public Guid? Folder { get; init; }
     }
 }

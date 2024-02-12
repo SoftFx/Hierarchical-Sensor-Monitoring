@@ -1,8 +1,12 @@
-﻿namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
+﻿using System;
+
+namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 {
     public sealed record PanelSubscriptionEntity : PlotSourceSettingsEntity
     {
         public string PathTemplate { get; set; }
+
+        public Guid? Folder { get; set; }
     }
 
 

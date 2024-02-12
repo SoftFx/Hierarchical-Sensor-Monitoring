@@ -2,6 +2,7 @@ using HSMCommon.Collections;
 using HSMServer.Core.Model;
 using HSMServer.Dashboards;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
@@ -44,7 +45,7 @@ public sealed class PanelViewModel
 
     public PanelViewModel() { }
 
-    public PanelViewModel(Panel panel, Guid dashboardId)
+    public PanelViewModel(Panel panel, Guid dashboardId, Dictionary<Guid, string> availableFolders)
     {
         Name = panel.Name ?? DefaultName;
         Description = panel.Description;
@@ -55,7 +56,7 @@ public sealed class PanelViewModel
         Settings = panel.Settings;
 
         Sources = new CDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x => new DatasourceViewModel(x.Value, ShowProduct)));
-        Templates = new CDict<TemplateViewModel>(panel.Subscriptions.ToDictionary(y => y.Value.Id, x => new TemplateViewModel(x.Value)));
+        Templates = new CDict<TemplateViewModel>(panel.Subscriptions.ToDictionary(y => y.Value.Id, x => new TemplateViewModel(x.Value, availableFolders)));
     }
 
 

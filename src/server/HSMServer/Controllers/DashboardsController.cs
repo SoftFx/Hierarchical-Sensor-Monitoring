@@ -1,9 +1,10 @@
 using HSMServer.Authentication;
 using HSMServer.Dashboards;
+using HSMServer.Folders;
 using HSMServer.Model.Dashboards;
-using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -12,16 +13,18 @@ namespace HSMServer.Controllers
     public class DashboardsController : BaseController
     {
         private readonly IDashboardManager _dashboards;
+        private readonly IFolderManager _folders;
 
 
-        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, TreeViewModel _) : base(userManager)
+        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, IFolderManager folderManager) : base(userManager)
         {
             _dashboards = dashboardManager;
+            _folders = folderManager;
         }
 
 
         [HttpGet("Dashboards")]
-        public IActionResult Index() => View(_dashboards.GetValues().Select(d => new DashboardViewModel(d).AttachUser(_userManager)).ToList());
+        public IActionResult Index() => View(_dashboards.GetValues().Select(d => new DashboardViewModel(d, GetAvailableFolders()).AttachUser(_userManager)).ToList());
 
 
         #region Dashboards
@@ -39,7 +42,7 @@ namespace HSMServer.Controllers
         {
             if (TryGetBoard(dashboardId, out var dashboard))
             {
-                var vm = new DashboardViewModel(dashboard, isModify);
+                var vm = new DashboardViewModel(dashboard, GetAvailableFolders(), isModify);
 
                 return View(nameof(EditDashboard), await vm.InitDashboardData());
             }
@@ -101,7 +104,7 @@ namespace HSMServer.Controllers
 
                 if (dashboard.TryAddPanel(newPanel))
                 {
-                    var vm = new PanelViewModel(newPanel, dashboard.Id);
+                    var vm = new PanelViewModel(newPanel, dashboard.Id, GetAvailableFolders());
 
                     return PartialView("_Panel", await vm.InitPanelData());
                 }
@@ -116,7 +119,7 @@ namespace HSMServer.Controllers
         {
             if (TryGetPanel(dashboardId, panelId, out var panel))
             {
-                var vm = new PanelViewModel(panel, dashboardId);
+                var vm = new PanelViewModel(panel, dashboardId, GetAvailableFolders());
 
                 return View("AddDashboardPanel", await vm.InitPanelData());
             }
@@ -238,7 +241,7 @@ namespace HSMServer.Controllers
 
         #region Templates
 
-        public IActionResult AddTemplate() => PartialView("_TemplateSettings", new TemplateViewModel());
+        public IActionResult AddTemplate() => PartialView("_TemplateSettings", new TemplateViewModel(GetAvailableFolders()));
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplyTemplate")]
         public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, TemplateViewModel template)
@@ -282,5 +285,7 @@ namespace HSMServer.Controllers
 
             return TryGetBoard(boardId, out var board) && board.Panels.TryGetValue(panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out source);
         }
+
+        private Dictionary<Guid, string> GetAvailableFolders() => _folders.GetValues().ToDictionary(k => k.Id, v => v.Name);
     }
 }

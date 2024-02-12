@@ -6,13 +6,15 @@ namespace HSMServer.Model.Dashboards
 {
     public sealed class TemplateViewModel
     {
-        private const string AnyFolders = "Any";
+        private const string AnyFolders = "--Any--";
+        private const string NoneFolders = "--None--";
 
 
-        public Dictionary<Guid, string> AvailableFolders { get; } = new Dictionary<Guid, string>()
-        {
-            { Guid.Empty, AnyFolders }
-        };
+        public List<(Guid?, string)> AvailableFolders { get; } =
+        [
+            (null, AnyFolders),
+            (Guid.Empty, NoneFolders),
+        ];
 
         public List<PlottedProperty> AvailableProperties { get; } =
         [
@@ -31,9 +33,9 @@ namespace HSMServer.Model.Dashboards
 
         public Guid Id { get; set; }
 
-        public Guid Folder { get; set; }
-
         public string Path { get; set; }
+
+        public Guid? Folder { get; set; }
 
 
         public PlottedProperty Property { get; set; }
@@ -45,7 +47,13 @@ namespace HSMServer.Model.Dashboards
 
         public TemplateViewModel() { }
 
-        public TemplateViewModel(PanelSubscription subscription)
+        public TemplateViewModel(Dictionary<Guid, string> availableFolders)
+        {
+            foreach (var (id, name) in availableFolders)
+                AvailableFolders.Add((id, name));
+        }
+
+        public TemplateViewModel(PanelSubscription subscription, Dictionary<Guid, string> availableFolders) : this(availableFolders)
         {
             Id = subscription.Id;
 
@@ -53,6 +61,7 @@ namespace HSMServer.Model.Dashboards
             Property = subscription.Property;
             Label = subscription.Label;
             Shape = subscription.Shape;
+            Folder = subscription.Folder;
         }
 
 
@@ -62,6 +71,7 @@ namespace HSMServer.Model.Dashboards
                 PathTemplate = Path,
                 Property = Property.ToString(),
                 Shape = Shape.ToString(),
+                Folder = Folder,
                 Label = Label,
             };
     }

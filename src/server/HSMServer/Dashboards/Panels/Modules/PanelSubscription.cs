@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.Core.Model;
 using HSMServer.PathTemplates;
+using System;
 
 namespace HSMServer.Dashboards
 {
@@ -11,12 +12,15 @@ namespace HSMServer.Dashboards
 
         public string PathTempalte { get; private set; }
 
+        public Guid? Folder { get; private set; }
+
 
         public PanelSubscription() : base() { }
 
         public PanelSubscription(PanelSubscriptionEntity entity) : base(entity)
         {
             PathTempalte = entity.PathTemplate;
+            Folder = entity.Folder;
         }
 
 
@@ -25,6 +29,7 @@ namespace HSMServer.Dashboards
             var entity = base.ToEntity();
 
             entity.PathTemplate = PathTempalte;
+            entity.Folder = Folder;
 
             return entity;
         }
@@ -34,6 +39,7 @@ namespace HSMServer.Dashboards
         {
             base.Update(update);
 
+            Folder = update.Folder;
             Label = update.Label ?? Label;
             ApplyNewTemplate(update.PathTemplate);
         }

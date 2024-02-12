@@ -17,7 +17,7 @@
             <div class="d-flex flex-column">
                 <div class="d-flex mx-1 align-items-center">
                     <label class="fw-bold me-1 text-nowrap">From folder:</label>
-                    <select class="form-select w-auto" asp-for=Folder asp-items="@Model.AvailableFolders.ToSelectedItems(k => k.Value, v => v.Key.ToString())"></select>
+                    <select class="form-select w-auto" asp-for="Folder" asp-items="@Model.AvailableFolders.ToSelectedItems(k => k.Item2, v => v.Item1.ToString()).OrderBy(o => o.Text)"></select>
 
                     <label class="fw-bold ms-2 me-1 text-nowrap">with path:</label>
                     <input class="form-control" type="text" placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" asp-for="Path" />
