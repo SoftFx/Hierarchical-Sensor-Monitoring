@@ -14,7 +14,10 @@ namespace HSMServer.Dashboards
 
         public PanelSubscription() : base() { }
 
-        public PanelSubscription(PanelSubscriptionEntity entity) : base(entity) { }
+        public PanelSubscription(PanelSubscriptionEntity entity) : base(entity)
+        {
+            PathTempalte = entity.PathTemplate;
+        }
 
 
         public override PanelSubscriptionEntity ToEntity()
