@@ -1,6 +1,6 @@
-﻿using HSMDataCollector.Extensions;
-using HSMDataCollector.Options;
+﻿using HSMDataCollector.Options;
 using System;
+using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
