@@ -80,9 +80,6 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : BaseNodeModel
     {
-        public const string TimeoutComment = "#Timeout";
-
-
         private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
 
         public override SensorPolicyCollection Policies { get; }

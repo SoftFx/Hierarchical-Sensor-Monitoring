@@ -58,7 +58,7 @@ namespace HSMServer.Core.Model
             if (Statistics.HasEma() && value is T valueT)
                 value = Storage.RecalculateStatistics(valueT);
 
-            if (!Storage.TryChangeLastValue(value) || !Policies.TryValidate(value, out valueT, true))
+            if (!Storage.TryChangeLastValue(value) || !Policies.TryValidate(value, out valueT))
                 return false;
 
             Policies.SensorTimeout(valueT);
