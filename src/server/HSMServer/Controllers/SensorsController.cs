@@ -10,6 +10,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
+using HSMServer.Middleware;
 using HSMServer.ModelBinders;
 using HSMServer.ObsoleteUnitedSensorValue;
 using HSMServer.Validation;
@@ -34,6 +35,7 @@ namespace HSMServer.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [AllowAnonymous]
+    [TypeFilter<ErrorResultFilter>]
     public class SensorsController : ControllerBase
     {
         private readonly ILogger<SensorsController> _logger;
@@ -71,7 +73,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
+                // // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -100,7 +102,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
+                // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -129,7 +131,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
+                // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -158,7 +160,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
+                // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
                     return Ok(sensorValue);
@@ -186,7 +188,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
+                // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -215,7 +217,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
+                // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                         out var message))
@@ -244,7 +246,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
+                // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -273,7 +275,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
+                // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -302,7 +304,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
+                // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -333,7 +335,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(values.Count);
+                // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(values.Count);
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values.OrderBy(u => u.Time))
@@ -371,7 +373,7 @@ namespace HSMServer.Controllers
 
             try
             {
-                _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(values.Count);
+                // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(values.Count);
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)

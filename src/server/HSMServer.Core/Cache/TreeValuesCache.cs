@@ -1181,6 +1181,16 @@ namespace HSMServer.Core.Cache
             return hasProduct;
         }
 
+        public bool TryGetProductByKey(string keyId, out ProductModel product, out AccessKeyModel keyModel)
+        {
+            if (Guid.TryParse(keyId, out var id) && _keys.TryGetValue(id, out keyModel))
+                return _tree.TryGetValue(keyModel.ProductId, out product);
+
+            product = null;
+            keyModel = null;
+            return false;
+        }
+
         private static bool TryGetSensor(BaseRequestModel request, ProductModel product,
             AccessKeyModel accessKey, out BaseSensorModel sensor, out string message)
         {
