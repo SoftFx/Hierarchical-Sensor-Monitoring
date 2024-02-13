@@ -13,7 +13,7 @@ namespace HSMServer.Core.Managers
         {
             var sensorId = message.SensorId;
 
-            var (notApplyAlerts, applyAlerts) = message.Alerts.SplitByCondition(u => u.IsScheduleAlert);
+            var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
 
             SendAlertMessage(sensorId, notApplyAlerts);
 
@@ -21,12 +21,16 @@ namespace HSMServer.Core.Managers
             {
                 var grouppedAlerts = _storage[alert.SendTime];
 
-                if (!grouppedAlerts.ContainsKey(sensorId))
-                    grouppedAlerts.TryAdd(sensorId, new ScheduleAlertMessage(sensorId));
+                if (!grouppedAlerts.TryGetValue(sensorId, out var sensorGroup))
+                {
+                    sensorGroup = grouppedAlerts[sensorId];
+                    grouppedAlerts.TryAdd(sensorId, sensorGroup);
+                }
 
-                //if (alert.IsScheduleAlert)
+                if (alert.IsReplaceAlert)
+                    sensorGroup.RemovePolicyAlerts(alert.PolicyId);
 
-                grouppedAlerts[sensorId].Alerts.Add(alert);
+                sensorGroup.AddAlert(alert);
             }
         }
 
