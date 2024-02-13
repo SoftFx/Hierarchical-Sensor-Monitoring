@@ -52,7 +52,7 @@ namespace HSMServer.Core.Model.Policies
         private protected BaseSensorModel _sensor;
 
 
-        protected abstract bool CalculateStorageResult(T value, bool updateSensor);
+        protected abstract bool CalculateStorageResult(T value, bool isLastValue);
 
 
         internal override void Attach(BaseNodeModel sensor)
@@ -76,7 +76,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal bool TryValidate(BaseValue value, out T valueT, bool updateSensor = true)
+        internal bool TryValidate(BaseValue value, out T valueT, bool isLastValue = true)
         {
             valueT = value as T;
 
@@ -88,7 +88,7 @@ namespace HSMServer.Core.Model.Policies
                 return false;
             }
 
-            return CalculateStorageResult(valueT, updateSensor);
+            return CalculateStorageResult(valueT, isLastValue);
         }
 
         internal bool SensorTimeout(BaseValue value)
@@ -131,7 +131,7 @@ namespace HSMServer.Core.Model.Policies
         private readonly ConcurrentDictionary<Guid, PolicyType> _storage = new();
 
 
-        protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
+        protected override bool CalculateStorageResult(ValueType value, bool isLastValue = true)
         {
             SensorResult = SensorResult.Ok;
             PolicyResult = new(_sensor.Id);
@@ -143,7 +143,7 @@ namespace HSMServer.Core.Model.Policies
                     {
                         PolicyResult.AddAlert(policy);
 
-                        if (updateStatus)
+                        if (isLastValue)
                             SensorResult += policy.SensorResult;
                     }
             }

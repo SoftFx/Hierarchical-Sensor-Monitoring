@@ -826,7 +826,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"Migrate sensor settings and alerts finished");
 
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
-            ApplyAccessKeys(accessKeysEntities.ToList());
+            ApplyAccessKeys([.. accessKeysEntities]);
             _logger.Info($"{nameof(accessKeysEntities)} applied");
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");

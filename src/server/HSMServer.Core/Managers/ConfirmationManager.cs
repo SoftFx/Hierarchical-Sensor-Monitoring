@@ -41,7 +41,7 @@ namespace HSMServer.Core.Confirmation
                     }
                 }
 
-                SendAlertMessage(sensorId, [.. newAlerts.Values]);
+                SendAlertMessage(sensorId, [..newAlerts.Values]);
             }
             catch (Exception ex)
             {
