@@ -12,7 +12,6 @@ namespace HSMServer.Core.Managers
         internal void ProcessMessage(AlertMessage message)
         {
             var sensorId = message.SensorId;
-            var utcTime = DateTime.UtcNow;
 
             var (notApplyAlerts, applyAlerts) = message.Alerts.SplitByCondition(u => u.IsScheduleAlert);
 
@@ -24,6 +23,8 @@ namespace HSMServer.Core.Managers
 
                 if (!grouppedAlerts.ContainsKey(sensorId))
                     grouppedAlerts.TryAdd(sensorId, new ScheduleAlertMessage(sensorId));
+
+                //if (alert.IsScheduleAlert)
 
                 grouppedAlerts[sensorId].Alerts.Add(alert);
             }

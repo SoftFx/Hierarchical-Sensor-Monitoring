@@ -38,8 +38,9 @@ namespace HSMServer.Core.Model
         {
             var key = policy.Id;
 
-            if (!Alerts.ContainsKey(key))
-                Alerts.Add(key, new AlertResult(policy));
+            RemoveAlert(policy);
+
+            Alerts.Add(key, new AlertResult(policy, true));
         }
 
         internal void AddAlert(Policy policy)

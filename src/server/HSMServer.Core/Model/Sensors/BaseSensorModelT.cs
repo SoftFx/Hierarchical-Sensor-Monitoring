@@ -44,8 +44,6 @@ namespace HSMServer.Core.Model
                 else
                     Storage.AddValue(valueT);
 
-                Policies.SensorTimeout(valueT);
-
                 if (isNewValue)
                     ReceivedNewValue?.Invoke(valueT);
             }
@@ -58,10 +56,9 @@ namespace HSMServer.Core.Model
             if (Statistics.HasEma() && value is T valueT)
                 value = Storage.RecalculateStatistics(valueT);
 
-            if (!Storage.TryChangeLastValue(value) || !Policies.TryValidate(value, out valueT))
+            if (!Storage.TryChangeLastValue(value) || !Policies.TryRevalidate(value))
                 return false;
 
-            Policies.SensorTimeout(valueT);
             ReceivedNewValue?.Invoke(value);
 
             return true;
@@ -74,13 +71,8 @@ namespace HSMServer.Core.Model
         {
             var dbValue = Convert(bytes);
 
-            if (dbValue.IsTimeout)
+            if (dbValue.IsTimeout || Policies.TryValidate(dbValue, out _))
                 Storage.AddValue((T)dbValue);
-            else if (Policies.TryValidate(dbValue, out var valueT))
-            {
-                Storage.AddValue(valueT);
-                Policies.SensorTimeout(valueT);
-            }
         }
 
 
