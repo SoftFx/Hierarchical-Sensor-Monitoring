@@ -241,22 +241,30 @@ namespace HSMServer.Controllers
 
         #region Templates
 
-        public IActionResult AddTemplate() => PartialView("_TemplateSettings", new TemplateViewModel(GetAvailableFolders()));
-
-        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplyTemplate")]
-        public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, TemplateViewModel template)
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/AddTemplate")]
+        public IActionResult AddTemplate(Guid dashboardId, Guid panelId)
         {
             if (TryGetPanel(dashboardId, panelId, out var panel))
             {
-                if (!panel.Subscriptions.TryGetValue(template.Id, out var subscription))
-                    panel.TryAddSubscription(out subscription);
+                panel.TryAddSubscription(out var subscription);
 
+                return PartialView("_TemplateSettings", new TemplateViewModel(subscription, GetAvailableFolders()));
+            }
+
+            return NotFound("No such panel");
+        }
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/UpdateTemplate")]
+        public IActionResult UpdateTemplate(Guid dashboardId, Guid panelId, TemplateViewModel template)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel) && panel.Subscriptions.TryGetValue(template.Id, out var subscription))
+            {
                 subscription.NotifyUpdate(template.ToUpdate());
 
                 return Ok(subscription.Id);
             }
 
-            return NotFound("No such panel");
+            return NotFound("No such template to update");
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/DeleteTemplate")]

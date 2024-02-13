@@ -15,6 +15,8 @@ namespace HSMServer.Dashboards
 
         public List<Guid> Folders { get; private set; }
 
+        public bool IsApplied { get; private set; }
+
 
         public PanelSubscription() : base() { }
 

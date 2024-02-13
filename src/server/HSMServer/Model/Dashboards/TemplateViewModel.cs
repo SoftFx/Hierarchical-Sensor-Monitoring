@@ -43,14 +43,11 @@ namespace HSMServer.Model.Dashboards
 
         public TemplateViewModel() { }
 
-        public TemplateViewModel(Dictionary<Guid, string> availableFolders)
+        public TemplateViewModel(PanelSubscription subscription, Dictionary<Guid, string> availableFolders) 
         {
             foreach (var (id, name) in availableFolders)
                 AvailableFolders.Add((id, name));
-        }
 
-        public TemplateViewModel(PanelSubscription subscription, Dictionary<Guid, string> availableFolders) : this(availableFolders)
-        {
             Id = subscription.Id;
 
             Path = subscription.PathTempalte;

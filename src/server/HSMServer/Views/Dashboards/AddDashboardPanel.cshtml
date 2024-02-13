@@ -143,7 +143,7 @@
 
     function addTemplate() {
         $.ajax({
-            url: `@Url.Action(nameof(DashboardsController.AddTemplate))`,
+            url: `${window.location.pathname}/@(nameof(DashboardsController.AddTemplate))`,
             cache: false
         }).done(function (viewData) {
             $(`#templates`).append(viewData);
