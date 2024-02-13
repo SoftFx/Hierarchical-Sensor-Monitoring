@@ -20,6 +20,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.Core.Cache
@@ -344,6 +345,8 @@ namespace HSMServer.Core.Cache
 
                     if (sensor.LastDbValue != null)
                         SaveSensorValueToDb(sensor.LastDbValue, request.Id);
+
+                    SensorUpdateViewAndNotify(sensor);
                 }
             }
         }
@@ -505,7 +508,15 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
+        private void SensorUpdateViewAndNotify(BaseSensorModel sensor)
+        {
+            SensorUpdateView(sensor);
+            SendNotification(sensor.PolicyResult);
+        }
+
+        private void SendNotification(PolicyResult result) => _confirmationManager.RegisterNotification(result);
+
+        private void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
 
         public IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request)
@@ -779,9 +790,7 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
-            _confirmationManager.SaveOrSendPolicies(sensor.PolicyResult);
-
-            SensorUpdateView(sensor);
+            SensorUpdateViewAndNotify(sensor);
         }
 
 
@@ -1247,6 +1256,8 @@ namespace HSMServer.Core.Cache
                     {
                         sensor.AddDbValue(value);
 
+                        SendNotification(sensor.PolicyResult.LeftOnlyScheduled());
+
                         if (!_snapshot.IsFinal && sensor.LastValue is not null)
                             _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
                     }
@@ -1328,7 +1339,7 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                _confirmationManager.SaveOrSendPolicies(timeout ? ttl.PolicyResult : ttl.Ok);
+                SendNotification(timeout ? ttl.PolicyResult : ttl.Ok);
             }
 
             SensorUpdateView(sensor);

@@ -15,7 +15,7 @@ namespace HSMServer.Core.Confirmation
         private readonly ConcurrentDictionary<Guid, AlertResult> _lastStatusUpdates = new();
 
 
-        internal void SaveOrSendPolicies(PolicyResult policyResult)
+        internal void RegisterNotification(PolicyResult policyResult)
         {
             try
             {

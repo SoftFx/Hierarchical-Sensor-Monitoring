@@ -2,6 +2,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -36,11 +37,9 @@ namespace HSMServer.Core.Model
 
         internal void AddSingleAlert(Policy policy)
         {
-            var key = policy.Id;
-
             RemoveAlert(policy);
 
-            Alerts.Add(key, new AlertResult(policy, true));
+            Alerts.Add(policy.Id, new AlertResult(policy, true));
         }
 
         internal void AddAlert(Policy policy)
@@ -51,6 +50,15 @@ namespace HSMServer.Core.Model
                 alert.AddPolicyResult(policy);
             else
                 Alerts.Add(key, new AlertResult(policy));
+        }
+
+        internal PolicyResult LeftOnlyScheduled()
+        {
+            foreach (var (id, alert) in Alerts)
+                if (!alert.IsScheduleAlert)
+                    Alerts.Remove(id);
+
+            return this;
         }
 
 
