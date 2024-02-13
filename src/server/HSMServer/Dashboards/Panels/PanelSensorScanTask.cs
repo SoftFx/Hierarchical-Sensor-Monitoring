@@ -12,7 +12,7 @@ namespace HSMServer.Dashboards
     {
         private const int BatchSize = 50;
 
-        private readonly CancellationTokenSource _tokenSource;
+        private readonly CancellationTokenSource _tokenSource = new();
         private long _totalScannedSensors, _totalMatchedSensors;
 
 

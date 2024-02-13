@@ -69,13 +69,12 @@
     });
 
     $("a.applyTemplate").off("click").on("click", function () {
+        var form = $(this).parents("form.templateForm:first");
+        let formId = form.attr("id");
+
         $.ajax({
-            url: `${window.location.pathname}/@(nameof(DashboardsController.ApplyTemplate))`,
+            url: `${window.location.pathname}/@(nameof(DashboardsController.ApplyTemplate))?templateId=${formId}`,
             type: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            async: false,
             success: function () {
                 $(`#applyTemplate_modal`).modal('show');
             }
