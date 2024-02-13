@@ -5,12 +5,11 @@ using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
-    internal abstract class SocketsSensor : MonitoringSensorBase<double>
+    internal abstract class BaseSocketsSensor : MonitoringSensorBase<double>
     {
         private const string CategoryTcp4 = "TCPv4";
         private const string CategoryTcp6 = "TCPv6";
 
-        
         private PerformanceCounter _counterTCPv4;
         private PerformanceCounter _counterTCPv6;
 
@@ -18,7 +17,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         protected abstract string CounterName { get; }
 
 
-        protected internal SocketsSensor(SensorOptions options) : base(options) { }
+        protected internal BaseSocketsSensor(SensorOptions options) : base(options) { }
         
         
         internal override Task<bool> Init()
