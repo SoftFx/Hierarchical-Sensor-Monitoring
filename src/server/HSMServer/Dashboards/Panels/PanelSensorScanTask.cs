@@ -13,7 +13,7 @@ namespace HSMServer.Dashboards
         private const int BatchSize = 50;
 
         private readonly CancellationTokenSource _tokenSource;
-        private long _totalScannedSensors, _totalAddedSensors;
+        private long _totalScannedSensors, _totalMatchedSensors;
 
 
         public bool IsFinish { get; private set; }
@@ -22,7 +22,7 @@ namespace HSMServer.Dashboards
         public async Task StartScanning(IEnumerable<BaseSensorModel> sensors, PanelSubscription subscription)
         {
             var currentScan = 0L;
-            var currentAdd = 0L;
+            var currentMatch = 0L;
             var index = 0L;
 
             foreach (var sensor in sensors)
@@ -33,16 +33,16 @@ namespace HSMServer.Dashboards
                 if (++index % BatchSize == 0)
                 {
                     Interlocked.Add(ref _totalScannedSensors, currentScan);
-                    Interlocked.Add(ref _totalAddedSensors, currentAdd);
+                    Interlocked.Add(ref _totalMatchedSensors, currentMatch);
 
                     currentScan = 0;
-                    currentAdd = 0;
+                    currentMatch = 0;
 
                     await Task.Yield();
                 }
 
                 if (subscription.IsMatch(sensor.FullPath))
-                    currentAdd++;
+                    currentMatch++;
 
                 currentScan++;
             }
@@ -50,7 +50,7 @@ namespace HSMServer.Dashboards
             IsFinish = true;
         }
 
-        public SensorScanResult GetResult() => new(Interlocked.Read(ref _totalScannedSensors), Interlocked.Read(ref _totalAddedSensors), IsFinish);
+        public SensorScanResult GetResult() => new(Interlocked.Read(ref _totalScannedSensors), Interlocked.Read(ref _totalMatchedSensors), IsFinish);
 
 
         public void Cancel()
