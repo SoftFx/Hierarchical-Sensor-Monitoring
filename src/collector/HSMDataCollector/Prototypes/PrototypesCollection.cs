@@ -32,13 +32,13 @@ namespace HSMDataCollector.Options
 
         internal WindowsFreeSpaceOnDiskPredictionPrototype WindowsFreeSpaceOnDiskPrediction { get; }
 
-        internal WindowsFreeSpaceOnDiskPrototype WindowsFreeSpaceOnDisk { get; }
-
-        internal WindowsActiveTimeDiskPrototype WindowsActiveTimeDisk { get; }
+        internal WindowsAverageDiskWriteSpeedPrototype WindowsAverageDiskWriteSpeed { get; }
 
         internal WindowsDiskQueueLengthPrototype WindowsDiskQueueLength { get; }
 
-        internal WindowsAverageDiskWriteSpeedPrototype WindowsAverageDiskWriteSpeed { get; }
+        internal WindowsFreeSpaceOnDiskPrototype WindowsFreeSpaceOnDisk { get; }
+
+        internal WindowsActiveTimeDiskPrototype WindowsActiveTimeDisk { get; }
 
 
         internal UnixFreeSpaceOnDiskPredictionPrototype UnixFreeSpaceOnDiskPrediction { get; }
@@ -98,10 +98,11 @@ namespace HSMDataCollector.Options
         #region Network
 
         public ConnectionsEstablishedCountPrototype ConnectionsEstablishedCount { get; set; }
-        
-        public ConnectionsResetCountPrototype ConnectionsResetCount { get; set; }
-        
+
         public ConnectionsFailuresCountPrototype ConnectionsFailuresCount { get; set; }
+
+        public ConnectionsResetCountPrototype ConnectionsResetCount { get; set; }
+
 
         #endregion
 
@@ -153,8 +154,8 @@ namespace HSMDataCollector.Options
             QueueOverflow = Register<QueueOverflowPrototype>().ApplyOptions(options);
 
             ConnectionsEstablishedCount = Register<ConnectionsEstablishedCountPrototype>();
-            ConnectionsResetCount = Register<ConnectionsResetCountPrototype>();
             ConnectionsFailuresCount = Register<ConnectionsFailuresCountPrototype>();
+            ConnectionsResetCount = Register<ConnectionsResetCountPrototype>();
         }
     }
 }
