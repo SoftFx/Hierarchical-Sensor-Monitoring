@@ -80,7 +80,7 @@ namespace HSMServer.Core.Model.Policies
             TryCheckValueType(value, out valueT) && CalculateStorageResult(valueT, isLastValue, false);
 
         internal bool TryRevalidate(BaseValue value) => TryCheckValueType(value, out var valueT) &&
-            CalculateStorageResult(valueT, false, true);
+            CalculateStorageResult(valueT, true, true);
 
         internal bool SensorTimeout(BaseValue value)
         {
@@ -138,7 +138,7 @@ namespace HSMServer.Core.Model.Policies
         private readonly ConcurrentDictionary<Guid, PolicyType> _storage = new();
 
 
-        protected override bool CalculateStorageResult(ValueType value, bool isLastValue = true, bool isReplace = false)
+        protected override bool CalculateStorageResult(ValueType value, bool isLastValue, bool isReplace)
         {
             SensorResult = SensorResult.Ok;
             PolicyResult = new(_sensor.Id);
@@ -227,7 +227,7 @@ namespace HSMServer.Core.Model.Policies
             }
 
             if (_sensor?.LastValue is ValueType valueT)
-                CalculateStorageResult(valueT, isReplace: true);
+                TryRevalidate(valueT);
 
             error = errors.Length > 0 ? errors.ToString() : null;
 
