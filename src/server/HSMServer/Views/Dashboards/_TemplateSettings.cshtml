@@ -69,7 +69,17 @@
     });
 
     $("a.applyTemplate").off("click").on("click", function () {
-        
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.ApplyTemplate))`,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            async: false,
+            success: function () {
+                $(`#applyTemplate_modal`).modal('show');
+            }
+        });
     });
 
     $("a.deleteTemplate").off("click").on("click", function () {

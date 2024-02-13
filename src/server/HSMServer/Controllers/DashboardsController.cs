@@ -267,6 +267,12 @@ namespace HSMServer.Controllers
             return NotFound("No such template to update");
         }
 
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplyTemplate")]
+        public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, Guid templateId) =>
+            TryGetPanel(dashboardId, panelId, out var panel) && panel.TryGetScanTask(templateId, out _)
+                ? Ok()
+                : NotFound("No such template to apply");
+
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/DeleteTemplate")]
         public IActionResult DeleteTemplate(Guid dashboardId, Guid panelId, Guid templateId)
         {

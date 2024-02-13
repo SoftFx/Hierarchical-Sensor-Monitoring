@@ -93,7 +93,7 @@ namespace HSMServer.Dashboards
             {
                 task = _scanSensorsTasks[templateId];
 
-                _ = task.StartScanning(_board.GetSensorsByFolder(null), sub);
+                _ = task.StartScanning(_board.GetSensorsByFolder(sub.Folders), sub);
             }
             
             return true;

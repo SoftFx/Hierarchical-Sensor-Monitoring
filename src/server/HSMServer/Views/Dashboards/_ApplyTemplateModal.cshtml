@@ -1,0 +1,27 @@
+﻿<div class="modal fade" tabindex="-1" role="dialog" data-bs-backdrop="static" id="applyTemplate_modal">
+    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-break">Applying template</h5>
+            </div>
+
+            <div class="modal-body text-break" id="applyTemplate_body"></div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary col-2 col-lg-1 disabled" id="applyTemplate_okButton">Ok</button>
+                <button class="btn btn-secondary col-2 col-lg-1 px-2" id="applyTemplate_cancelButton">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        let modal = document.getElementById('applyTemplate_modal')
+
+        modal.addEventListener('shown.bs.modal', function (event) {
+            console.log("start get result");
+        })
+    });
+</script>
