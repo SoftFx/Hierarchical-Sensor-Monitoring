@@ -5,6 +5,7 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Dashboards
@@ -87,6 +88,8 @@ namespace HSMServer.Dashboards
 
             return sensor is not null;
         }
+
+        internal IEnumerable<BaseSensorModel> GetSensorsByFolder(List<Guid> foldersIds) => _cache.GetSensorsByFolder(foldersIds);
 
 
         private bool AddPanel(DashboardPanelEntity entity)

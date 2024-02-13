@@ -13,7 +13,8 @@ namespace HSMServer.Dashboards
     {
         private const int MaxCountOfSources = 100;
 
-        private readonly CDict<CHash<Guid>> _sensorToSourceMap = new();
+        private readonly CDict<PanelSensorScanTask> _scanSensorsTasks = [];
+        private readonly CDict<CHash<Guid>> _sensorToSourceMap = [];
         private readonly Dashboard _board;
 
 
@@ -79,6 +80,23 @@ namespace HSMServer.Dashboards
                 foreach (var (_, source) in Sources)
                     source.BuildSource(AggregateValues);
             }
+        }
+
+        public bool TryGetScanTask(Guid templateId, out PanelSensorScanTask task)
+        {
+            task = null;
+
+            if (!Subscriptions.TryGetValue(templateId, out var sub))
+                return false;
+
+            if (!_scanSensorsTasks.TryGetValue(templateId, out task))
+            {
+                task = _scanSensorsTasks[templateId];
+
+                _ = task.StartScanning(_board.GetSensorsByFolder(null), sub);
+            }
+            
+            return true;
         }
 
         public override DashboardPanelEntity ToEntity()
