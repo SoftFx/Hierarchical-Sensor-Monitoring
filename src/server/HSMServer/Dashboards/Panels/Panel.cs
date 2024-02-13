@@ -90,8 +90,12 @@ namespace HSMServer.Dashboards
                 return false;
 
             if (!_scanSensorsTasks.TryGetValue(templateId, out task))
-                _ = _scanSensorsTasks[templateId].StartScanning(_board.GetSensorsByFolder(null), sub);
+            {
+                task = _scanSensorsTasks[templateId];
 
+                _ = task.StartScanning(_board.GetSensorsByFolder(null), sub);
+            }
+            
             return true;
         }
 

@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Dashboards
 {
+    public record SensorScanResult(long TotalScanned, long TotalMatched, bool IsFinish);
+
+
     public sealed class PanelSensorScanTask : TaskCompletionSource
     {
         private const int BatchSize = 50;
@@ -13,11 +16,7 @@ namespace HSMServer.Dashboards
         private long _totalScannedSensors, _totalAddedSensors;
 
 
-        public bool IsFinished { get; private set; }
-
-        public long TotalScannedSensors => _totalScannedSensors;
-
-        public long TotalAddedSensors => _totalAddedSensors;
+        public bool IsFinish { get; private set; }
 
 
         public async Task StartScanning(IEnumerable<BaseSensorModel> sensors, PanelSubscription subscription)
@@ -48,12 +47,15 @@ namespace HSMServer.Dashboards
                 currentScan++;
             }
 
-            IsFinished = true;
+            IsFinish = true;
         }
+
+        public SensorScanResult GetResult() => new(Interlocked.Read(ref _totalScannedSensors), Interlocked.Read(ref _totalAddedSensors), IsFinish);
+
 
         public void Cancel()
         {
-            IsFinished = true;
+            IsFinish = true;
 
             _tokenSource.Cancel();
             SetCanceled(_tokenSource.Token);
