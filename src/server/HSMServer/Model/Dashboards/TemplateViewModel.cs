@@ -6,15 +6,11 @@ namespace HSMServer.Model.Dashboards
 {
     public sealed class TemplateViewModel
     {
-        private const string AnyFolders = "--Any--";
-        private const string NoneFolders = "--None--";
+        public const string AnyFolders = "--Any--";
+        public const string OtherProducts = "Other products";
 
 
-        public List<(Guid?, string)> AvailableFolders { get; } =
-        [
-            (null, AnyFolders),
-            (Guid.Empty, NoneFolders),
-        ];
+        public List<(Guid?, string)> AvailableFolders { get; } = [];
 
         public List<PlottedProperty> AvailableProperties { get; } =
         [
@@ -35,7 +31,7 @@ namespace HSMServer.Model.Dashboards
 
         public string Path { get; set; }
 
-        public Guid? Folder { get; set; }
+        public List<Guid> Folders { get; set; }
 
 
         public PlottedProperty Property { get; set; }
@@ -61,7 +57,7 @@ namespace HSMServer.Model.Dashboards
             Property = subscription.Property;
             Label = subscription.Label;
             Shape = subscription.Shape;
-            Folder = subscription.Folder;
+            Folders = subscription.Folders;
         }
 
 
@@ -71,7 +67,7 @@ namespace HSMServer.Model.Dashboards
                 PathTemplate = Path,
                 Property = Property.ToString(),
                 Shape = Shape.ToString(),
-                Folder = Folder,
+                Folders = Folders,
                 Label = Label,
             };
     }

@@ -17,7 +17,19 @@
             <div class="d-flex flex-column">
                 <div class="d-flex mx-1 align-items-center">
                     <label class="fw-bold me-1 text-nowrap">From folder:</label>
-                    <select class="form-select w-auto" asp-for="Folder" asp-items="@Model.AvailableFolders.ToSelectedItems(k => k.Item2, v => v.Item1.ToString()).OrderBy(o => o.Text)"></select>
+
+                    <select class="selectpicker" name="Folders" multiple data-live-search="true" data-actions-box="true" data-container="body">
+                        <option value="@TemplateViewModel.AnyFolders" selected="@(Model.Folders is null)" title="All products (with and without folders)">@TemplateViewModel.AnyFolders</option>
+
+                        <option data-divider="true"></option>
+
+                        @foreach (var folder in Model.AvailableFolders.OrderBy(f => f.Item2))
+                        {
+                            <option value="@folder.Item1" selected="@(Model.Folders?.Contains(folder.Item1.Value) ?? false)">@folder.Item2</option>
+                        }
+
+                        <option value="@Guid.Empty" selected="@(Model.Folders?.Contains(Guid.Empty) ?? false)" title="Products without folder">@TemplateViewModel.OtherProducts</option>
+                    </select>
 
                     <label class="fw-bold ms-2 me-1 text-nowrap">with path:</label>
                     <input class="form-control" type="text" placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" asp-for="Path" />
@@ -52,9 +64,22 @@
 
 
 <script>
+    $(document).ready(function () {
+        $("select[name='Folders']").selectpicker();
+    });
+
     $("a.applyTemplate").off("click").on("click", function () {
         var form = $(this).parents("form.templateForm:first");
         var formData = new FormData(form[0]);
+
+        if ($(`select[name='Folders'] option[value='@TemplateViewModel.AnyFolders']`).is(':selected') == true) {
+            console.log("remove folders");
+            formData.delete("Folders");
+        }
+        else if ($(`select[name='Folders'] option:selected`).length == 0) {
+            console.log("nothing");
+            formData.set("Folders", []);
+        }
         
         $.ajax({
             url: `${window.location.pathname}/@(nameof(DashboardsController.ApplyTemplate))`,

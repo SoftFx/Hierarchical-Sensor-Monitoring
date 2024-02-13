@@ -2,6 +2,7 @@
 using HSMServer.Core.Model;
 using HSMServer.PathTemplates;
 using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Dashboards
 {
@@ -12,7 +13,7 @@ namespace HSMServer.Dashboards
 
         public string PathTempalte { get; private set; }
 
-        public Guid? Folder { get; private set; }
+        public List<Guid> Folders { get; private set; }
 
 
         public PanelSubscription() : base() { }
@@ -20,7 +21,7 @@ namespace HSMServer.Dashboards
         public PanelSubscription(PanelSubscriptionEntity entity) : base(entity)
         {
             PathTempalte = entity.PathTemplate;
-            Folder = entity.Folder;
+            Folders = entity.Folders;
         }
 
 
@@ -29,7 +30,7 @@ namespace HSMServer.Dashboards
             var entity = base.ToEntity();
 
             entity.PathTemplate = PathTempalte;
-            entity.Folder = Folder;
+            entity.Folders = Folders;
 
             return entity;
         }
@@ -39,7 +40,7 @@ namespace HSMServer.Dashboards
         {
             base.Update(update);
 
-            Folder = update.Folder;
+            Folders = update.Folders;
             Label = update.Label ?? Label;
             ApplyNewTemplate(update.PathTemplate);
         }

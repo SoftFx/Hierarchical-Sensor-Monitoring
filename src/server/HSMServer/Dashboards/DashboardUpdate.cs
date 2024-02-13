@@ -1,5 +1,6 @@
 ﻿using HSMServer.ConcurrentStorage;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
 namespace HSMServer.Dashboards
@@ -55,6 +56,6 @@ namespace HSMServer.Dashboards
     {
         public string PathTemplate { get; init; }
 
-        public Guid? Folder { get; init; }
+        public List<Guid> Folders { get; init; }
     }
 }

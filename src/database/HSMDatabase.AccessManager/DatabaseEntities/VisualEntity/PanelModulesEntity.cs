@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 {
@@ -6,7 +7,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
     {
         public string PathTemplate { get; set; }
 
-        public Guid? Folder { get; set; }
+        public List<Guid> Folders { get; set; }
     }
 
 
