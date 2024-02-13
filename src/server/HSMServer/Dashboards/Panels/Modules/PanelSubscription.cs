@@ -17,6 +17,11 @@ namespace HSMServer.Dashboards
         public PanelSubscription(PanelSubscriptionEntity entity) : base(entity) { }
 
 
+        public override void Update(PanelSubscriptionUpdate update)
+        {
+            ApplyNewTemplate(update.PathTemplate);
+        }
+
         public override PanelSubscriptionEntity ToEntity()
         {
             var entity = base.ToEntity();
@@ -27,16 +32,13 @@ namespace HSMServer.Dashboards
         }
 
 
-        public override void Update(PanelSubscriptionUpdate update)
-        {
-            ApplyNewTemplate(update.PathTemplate);
-        }
+        public bool IsMatch(string path) => _pathConverter.IsMatch(path);
 
         public bool TryBuildSource(BaseSensorModel sensor, out PanelDatasource source)
         {
             source = null;
 
-            if (!_pathConverter.IsMatch(sensor.FullPath))
+            if (!IsMatch(sensor.FullPath))
                 return false;
 
             source = new PanelDatasource(sensor);

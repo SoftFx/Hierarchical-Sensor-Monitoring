@@ -467,6 +467,24 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
+        public IEnumerable<BaseSensorModel> GetSensorsByFolder(List<Guid> folderIds = null)
+        {
+            var hash = new HashSet<Guid>(folderIds);
+
+            bool GetAnySensor(BaseSensorModel _) => true;
+            bool GetSensorByFolder(BaseSensorModel sensor) => hash.Contains(sensor.Root.FolderId ?? Guid.Empty);
+
+            Predicate<BaseSensorModel> filter = folderIds switch
+            {
+                null => GetAnySensor,
+                _ => GetSensorByFolder,
+            };
+
+            foreach (var (_, sensor) in _sensors)
+                if (filter(sensor))
+                    yield return sensor;
+        }
+
         public bool TryGetSensorByPath(string productName, string path, out BaseSensorModel sensor)
         {
             sensor = null;
