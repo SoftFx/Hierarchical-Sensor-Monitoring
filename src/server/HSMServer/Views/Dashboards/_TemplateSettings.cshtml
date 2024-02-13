@@ -44,7 +44,7 @@
                     <label class="fw-bold ms-2 me-1">Property:</label>
                     <select class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties.ToSelectedItems(k => k.GetDisplayName())" onfocusout="javascript:updateTemplate('@Model.Id')"></select>
 
-                    <a href="https://plotly.com/javascript/line-charts/#line-shape-options-for-interpolation" class="fw-bold ms-2 me-1">Shape:</a>
+                    <a href="https://plotly.com/javascript/line-charts/#line-shape-options-for-interpolation" target="_blank" class="fw-bold ms-2 me-1">Shape:</a>
                     <select class="form-select w-auto" title="Shape of chart line" asp-for="Shape" asp-items="Enum.GetValues(typeof(PlottedShape)).Cast<PlottedShape>().ToSelectedItems()" onfocusout="javascript:updateTemplate('@Model.Id')"></select>
                 </div>
             </div>
