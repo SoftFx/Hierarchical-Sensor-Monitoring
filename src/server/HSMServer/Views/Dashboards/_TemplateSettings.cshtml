@@ -73,9 +73,10 @@
         let formId = form.attr("id");
 
         $.ajax({
-            url: `${window.location.pathname}/@(nameof(DashboardsController.ApplyTemplate))?templateId=${formId}`,
+            url: `${window.location.pathname}/@(nameof(DashboardsController.ApplyTemplate))/${formId}`,
             type: 'POST',
             success: function () {
+                $(`#applyTemplate_modal`).attr("name", formId);
                 $(`#applyTemplate_modal`).modal('show');
             }
         });
@@ -86,7 +87,7 @@
         let formId = form.attr("id");
 
         $.ajax({
-            url: `${window.location.pathname}/@(nameof(DashboardsController.DeleteTemplate))?templateId=${formId}`,
+            url: `${window.location.pathname}/@(nameof(DashboardsController.DeleteTemplate))/${formId}`,
             type: 'POST',
             success: function () {
                 form.remove();

@@ -267,13 +267,7 @@ namespace HSMServer.Controllers
             return NotFound("No such template to update");
         }
 
-        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplyTemplate")]
-        public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, Guid templateId) =>
-            TryGetPanel(dashboardId, panelId, out var panel) && panel.TryGetScanTask(templateId, out _)
-                ? Ok()
-                : NotFound("No such template to apply");
-
-        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/DeleteTemplate")]
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/DeleteTemplate/{templateId:guid}")]
         public IActionResult DeleteTemplate(Guid dashboardId, Guid panelId, Guid templateId)
         {
             if (TryGetPanel(dashboardId, panelId, out var panel))
@@ -281,6 +275,18 @@ namespace HSMServer.Controllers
 
             return Ok();
         }
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplyTemplate/{templateId:guid}")]
+        public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, Guid templateId) =>
+            TryGetPanel(dashboardId, panelId, out var panel) && panel.TryGetScanTask(templateId, out _)
+                ? Ok()
+                : NotFound("No such template to apply");
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/GetResultOfApplying/{templateId:guid}")]
+        public IActionResult GetResultOfApplying(Guid dashboardId, Guid panelId, Guid templateId) =>
+            TryGetPanel(dashboardId, panelId, out var panel) && panel.TryGetScanTask(templateId, out var template)
+                ? new JsonResult(template.GetResult())
+                : NotFound("No such template to update");
 
         #endregion
 

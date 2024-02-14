@@ -146,6 +146,7 @@
     function addTemplate() {
         $.ajax({
             url: `${window.location.pathname}/@(nameof(DashboardsController.AddTemplate))`,
+            method: "POST",
             cache: false
         }).done(function (viewData) {
             $(`#templates`).append(viewData);

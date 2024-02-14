@@ -1,4 +1,7 @@
-﻿<div class="modal fade" tabindex="-1" role="dialog" data-bs-backdrop="static" id="applyTemplate_modal">
+﻿@using HSMServer.Controllers
+
+
+<div class="modal fade" tabindex="-1" role="dialog" data-bs-backdrop="static" id="applyTemplate_modal">
     <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
@@ -22,6 +25,27 @@
 
         modal.addEventListener('shown.bs.modal', function (event) {
             console.log("start get result");
+
+            getResult();
         })
     });
+
+    let scanInterval = 3000;
+    function getResult() {
+        let templateId = $(`#applyTemplate_modal`).attr("name");
+
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.GetResultOfApplying))/${templateId}`,
+            type: 'POST',
+            success: function (result) {
+                console.log(result);
+                //let result = JSON.parse(jsonResult);
+                console.log(result.totalScanned, result.totalMatched, result.isFinish);
+
+                if (!result.isFinish) {
+                    setTimeout(getResult, scanInterval)
+                }
+            }
+        });
+    }
 </script>
