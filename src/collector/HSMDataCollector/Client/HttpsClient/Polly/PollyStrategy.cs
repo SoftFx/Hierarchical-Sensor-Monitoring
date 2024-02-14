@@ -1,62 +1,57 @@
-using System;
-using System.Net.Http;
-using System.Threading.Tasks;
 using Polly;
 using Polly.Fallback;
 using Polly.Retry;
+using System;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.Client.HttpsClient.Polly
 {
     public sealed class PollyStrategy
     {
-        private const int MaxAttempt = 8;
+        private const int MaxDelayPowerOfTwo = 8; //max delay is 1024 sec
         private const int StartSecondsDelay = 2;
-
 
         private readonly PredicateBuilder<HttpResponseMessage> _fallbackHandle = new PredicateBuilder<HttpResponseMessage>()
             .Handle<HttpRequestException>()
             .HandleResult(r => r.StatusCode.IsRetryCode());
 
-        internal ResiliencePipeline<HttpResponseMessage> Pipeline { get; }
-        
         internal ResiliencePipeline<HttpResponseMessage> CommandsPipeline { get; }
+
+        internal ResiliencePipeline<HttpResponseMessage> DataPipeline { get; }
 
 
         public PollyStrategy()
         {
-            var retryStrategyOptions = new RetryStrategyOptions<HttpResponseMessage>()
+            var retryOptions = new RetryStrategyOptions<HttpResponseMessage>()
             {
                 MaxRetryAttempts = 10,
                 ShouldHandle = arguments => new ValueTask<bool>(arguments.Outcome.Result?.StatusCode.IsRetryCode() ?? true),
-                DelayGenerator = args =>
-                {
-                    if (args.AttemptNumber >= MaxAttempt)
-                        return new ValueTask<TimeSpan?>(TimeSpan.FromMinutes(5));
-
-                    var delay = TimeSpan.FromSeconds(Math.Pow(StartSecondsDelay, args.AttemptNumber));
-
-                    return new ValueTask<TimeSpan?>(delay);
-                }
+                DelayGenerator = args => new ValueTask<TimeSpan?>(BuildDelay(args.AttemptNumber)),
             };
 
-            var fallbackStrategyOptions = new FallbackStrategyOptions<HttpResponseMessage>()
+            var fallbackOptions = new FallbackStrategyOptions<HttpResponseMessage>()
             {
                 ShouldHandle = _fallbackHandle,
-                FallbackAction = args => args.Outcome.Result != null 
-                    ? Outcome.FromResultAsValueTask(args.Outcome.Result) 
+                FallbackAction = args => args.Outcome.Result != null
+                    ? Outcome.FromResultAsValueTask(args.Outcome.Result)
                     : Outcome.FromExceptionAsValueTask<HttpResponseMessage>(args.Outcome.Exception),
             };
-            
-            Pipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
-                .AddFallback(fallbackStrategyOptions)
-                .AddRetry(retryStrategyOptions)
+
+            DataPipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
+                .AddFallback(fallbackOptions)
+                .AddRetry(retryOptions)
                 .Build();
 
-            retryStrategyOptions.MaxRetryAttempts = int.MaxValue;
+            retryOptions.MaxRetryAttempts = int.MaxValue;
+
             CommandsPipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
-                .AddFallback(fallbackStrategyOptions)
-                .AddRetry(retryStrategyOptions)
+                .AddFallback(fallbackOptions)
+                .AddRetry(retryOptions)
                 .Build();
         }
+
+
+        private static TimeSpan BuildDelay(int curAttemptNumber) => TimeSpan.FromSeconds(Math.Pow(StartSecondsDelay, Math.Min(curAttemptNumber, MaxDelayPowerOfTwo)));
     }
 }
