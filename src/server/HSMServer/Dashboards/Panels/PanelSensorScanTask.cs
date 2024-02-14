@@ -34,7 +34,10 @@ namespace HSMServer.Dashboards
                     await Task.Yield();
 
                 if (subscription.IsMatch(sensor.FullPath))
+                {
+                    Interlocked.Increment(ref _totalMatchedSensors);
                     _matсhedSensorsPaths.Add(sensor.FullPath);
+                }
             }
 
             IsFinish = true;
@@ -42,7 +45,7 @@ namespace HSMServer.Dashboards
 
         public SensorScanResult GetResult()
         {
-            var result = new SensorScanResult([.. _matсhedSensorsPaths], Interlocked.Read(ref _totalScannedSensors), _matсhedSensorsPaths.Count, IsFinish);
+            var result = new SensorScanResult([.. _matсhedSensorsPaths], Interlocked.Read(ref _totalScannedSensors), Interlocked.Read(ref _totalMatchedSensors), IsFinish);
 
             _matсhedSensorsPaths.Clear();
 
