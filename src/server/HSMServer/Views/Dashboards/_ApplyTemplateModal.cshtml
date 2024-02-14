@@ -11,6 +11,7 @@
             <div class="modal-body text-break" id="applyTemplate_body">
                 <div class="d-flex flex-column">
                     <div id="applyingResults"></div>
+                    <p id="suitableSensors"></p>
 
                     <div id="applyingProgress" class="progress-bar align-self-end">
                         <div class="progress-bar-value"></div>
@@ -19,7 +20,7 @@
             </div>
 
             <div class="modal-footer">
-                <button class="btn btn-secondary col-2 col-lg-1 disabled" id="applyTemplate_okButton">Ok</button>
+                <button class="btn btn-secondary col-2 col-lg-1 disabled" id="applyTemplate_okButton" onclick="javascript:apply()">Ok</button>
                 <button class="btn btn-secondary col-2 col-lg-1 px-2" id="applyTemplate_cancelButton" onclick="javascript:cancel()">Cancel</button>
             </div>
         </div>
@@ -47,6 +48,11 @@
             type: 'POST',
             success: function (result) {
                 $('#applyingResults').html(`Total scanned: ${result.totalScanned}, total matched: ${result.totalMatched}`);
+                
+                result.matсhedSensors.forEach(function (path) {
+                    $('#suitableSensors').append(path);
+                    $('#suitableSensors').append('<br/>');
+                });
 
                 if (result.isFinish == true) {
                     $('#applyingProgress').addClass('d-none');
@@ -59,6 +65,18 @@
         });
     }
 
+    function apply() {
+        let templateId = $(`#applyTemplate_modal`).attr("name");
+
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.ApplySources))/${templateId}`,
+            type: 'POST',
+            success: function (result) {
+                resetModal();
+            }
+        });
+    }
+
     function cancel() {
         let templateId = $(`#applyTemplate_modal`).attr("name");
 
@@ -67,13 +85,17 @@
             type: 'POST',
             success: function (result) {
                 clearTimeout(getResultTimeout);
-
-                $(`#applyTemplate_modal`).modal('hide');
-
-                $('#applyingResults').empty();
-                $('#applyingProgress').removeClass('d-none');
-                $('#applyTemplate_okButton').addClass('disabled');
+                resetModal();
             }
         });
+    }
+
+    function resetModal() {
+        $(`#applyTemplate_modal`).modal('hide');
+
+        $('#suitableSensors').empty();
+        $('#applyingResults').empty();
+        $('#applyingProgress').removeClass('d-none');
+        $('#applyTemplate_okButton').addClass('disabled');
     }
 </script>

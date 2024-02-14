@@ -276,6 +276,7 @@ namespace HSMServer.Controllers
             return Ok();
         }
 
+
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplyTemplate/{templateId:guid}")]
         public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, Guid templateId) =>
             TryGetPanel(dashboardId, panelId, out var panel) && panel.TryGetScanTask(templateId, out _)
@@ -298,6 +299,17 @@ namespace HSMServer.Controllers
                 return Ok();
             }
             
+            return NotFound("No such panel");
+        }
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplySources/{templateId:guid}")]
+        public IActionResult ApplySources(Guid dashboardId, Guid panelId, Guid templateId)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+            {
+                return Ok();
+            }
+
             return NotFound("No such panel");
         }
 
