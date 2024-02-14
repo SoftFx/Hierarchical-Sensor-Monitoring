@@ -96,16 +96,13 @@
     });
 
     function updateTemplate(templateId) {
-        console.log("update");
         var form = document.getElementById(templateId);
         var formData = new FormData(form);
 
         if ($(`select[id='folders_${templateId}'] option[value='@TemplateViewModel.AnyFolders']`).is(':selected') == true) {
-            console.log("remove folders");
             formData.delete("Folders");
         }
         else if ($(`select[id='folders_${templateId}'] option:selected`).length == 0) {
-            console.log("empty folders");
             formData.set("Folders", []);
         }
 

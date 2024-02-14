@@ -288,6 +288,19 @@ namespace HSMServer.Controllers
                 ? new JsonResult(template.GetResult())
                 : NotFound("No such template to update");
 
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/CancelApplying/{templateId:guid}")]
+        public IActionResult CancelApplying(Guid dashboardId, Guid panelId, Guid templateId)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+            {
+                panel.CancelTask(templateId);
+
+                return Ok();
+            }
+            
+            return NotFound("No such panel");
+        }
+
         #endregion
 
         private bool TryGetBoard(Guid id, out Dashboard board) => _dashboards.TryGetValue(id, out board);

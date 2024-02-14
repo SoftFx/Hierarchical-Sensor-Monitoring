@@ -10,7 +10,7 @@ namespace HSMServer.Dashboards
 
     public sealed class PanelSensorScanTask : TaskCompletionSource
     {
-        private const int BatchSize = 50;
+        private const int BatchSize = 10;//50;
 
         private readonly CancellationTokenSource _tokenSource = new();
         private long _totalScannedSensors, _totalMatchedSensors;
@@ -37,7 +37,7 @@ namespace HSMServer.Dashboards
             {
                 if (_tokenSource.IsCancellationRequested)
                     break;
-
+                await Task.Delay(500);
                 if (++currentScan % BatchSize == 0)
                 {
                     FlushResults();

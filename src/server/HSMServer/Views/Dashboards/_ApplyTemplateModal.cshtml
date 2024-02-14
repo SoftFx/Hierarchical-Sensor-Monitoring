@@ -2,17 +2,25 @@
 
 
 <div class="modal fade" tabindex="-1" role="dialog" data-bs-backdrop="static" id="applyTemplate_modal">
-    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title text-break">Applying template</h5>
             </div>
 
-            <div class="modal-body text-break" id="applyTemplate_body"></div>
+            <div class="modal-body text-break" id="applyTemplate_body">
+                <div class="d-flex flex-column">
+                    <div id="applyingResults"></div>
+
+                    <div id="applyingProgress" class="progress-bar align-self-end">
+                        <div class="progress-bar-value"></div>
+                    </div>
+                </div>
+            </div>
 
             <div class="modal-footer">
                 <button class="btn btn-secondary col-2 col-lg-1 disabled" id="applyTemplate_okButton">Ok</button>
-                <button class="btn btn-secondary col-2 col-lg-1 px-2" id="applyTemplate_cancelButton">Cancel</button>
+                <button class="btn btn-secondary col-2 col-lg-1 px-2" id="applyTemplate_cancelButton" onclick="javascript:cancel()">Cancel</button>
             </div>
         </div>
     </div>
@@ -24,13 +32,13 @@
         let modal = document.getElementById('applyTemplate_modal')
 
         modal.addEventListener('shown.bs.modal', function (event) {
-            console.log("start get result");
-
             getResult();
         })
     });
 
     let scanInterval = 3000;
+    let getResultTimeout;
+
     function getResult() {
         let templateId = $(`#applyTemplate_modal`).attr("name");
 
@@ -38,13 +46,33 @@
             url: `${window.location.pathname}/@(nameof(DashboardsController.GetResultOfApplying))/${templateId}`,
             type: 'POST',
             success: function (result) {
-                console.log(result);
-                //let result = JSON.parse(jsonResult);
-                console.log(result.totalScanned, result.totalMatched, result.isFinish);
+                $('#applyingResults').html(`Total scanned: ${result.totalScanned}, total matched: ${result.totalMatched}`);
 
-                if (!result.isFinish) {
-                    setTimeout(getResult, scanInterval)
+                if (result.isFinish == true) {
+                    $('#applyingProgress').addClass('d-none');
+                    $('#applyTemplate_okButton').removeClass('disabled');
                 }
+                else {
+                    getResultTimeout = setTimeout(getResult, scanInterval);
+                }
+            }
+        });
+    }
+
+    function cancel() {
+        let templateId = $(`#applyTemplate_modal`).attr("name");
+
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.CancelApplying))/${templateId}`,
+            type: 'POST',
+            success: function (result) {
+                clearTimeout(getResultTimeout);
+
+                $(`#applyTemplate_modal`).modal('hide');
+
+                $('#applyingResults').empty();
+                $('#applyingProgress').removeClass('d-none');
+                $('#applyTemplate_okButton').addClass('disabled');
             }
         });
     }

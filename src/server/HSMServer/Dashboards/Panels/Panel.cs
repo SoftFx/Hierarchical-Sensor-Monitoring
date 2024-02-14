@@ -99,6 +99,12 @@ namespace HSMServer.Dashboards
             return true;
         }
 
+        public void CancelTask(Guid templateId)
+        {
+            if (_scanSensorsTasks.TryRemove(templateId, out var sub))
+                sub.Cancel();
+        }
+
         public override DashboardPanelEntity ToEntity()
         {
             var entity = base.ToEntity();
