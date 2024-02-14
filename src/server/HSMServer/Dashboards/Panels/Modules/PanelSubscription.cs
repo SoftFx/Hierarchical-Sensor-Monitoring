@@ -22,7 +22,7 @@ namespace HSMServer.Dashboards
 
         public PanelSubscription(PanelSubscriptionEntity entity) : base(entity)
         {
-            PathTempalte = entity.PathTemplate;
+            PathTempalte = ApplyNewTemplate(entity.PathTemplate);
             Folders = entity.Folders;
         }
 
@@ -31,9 +31,9 @@ namespace HSMServer.Dashboards
         {
             base.Update(update);
 
-            Folders = update.Folders;
+            PathTempalte = ApplyNewTemplate(update.PathTemplate);
             Label = update.Label ?? Label;
-            ApplyNewTemplate(update.PathTemplate);
+            Folders = update.Folders;
         }
 
         public override PanelSubscriptionEntity ToEntity()
@@ -68,10 +68,12 @@ namespace HSMServer.Dashboards
         }
 
 
-        private void ApplyNewTemplate(string template)
+        private string ApplyNewTemplate(string template)
         {
-            if (!string.IsNullOrEmpty(template) && _pathConverter.ApplyNewTemplate(template, out _))
-                PathTempalte = template;
+            if (!string.IsNullOrEmpty(template))
+                _pathConverter.ApplyNewTemplate(template, out _);
+
+            return template;
         }
     }
 }

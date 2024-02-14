@@ -24,6 +24,15 @@ namespace HSMServer.Dashboards
             var currentMatch = 0L;
             var currentScan = 0L;
 
+            void FlushResults()
+            {
+                Interlocked.Add(ref _totalScannedSensors, currentScan);
+                Interlocked.Add(ref _totalMatchedSensors, currentMatch);
+
+                currentScan = 0;
+                currentMatch = 0;
+            }
+
             foreach (var sensor in sensors)
             {
                 if (_tokenSource.IsCancellationRequested)
@@ -31,11 +40,7 @@ namespace HSMServer.Dashboards
 
                 if (++currentScan % BatchSize == 0)
                 {
-                    Interlocked.Add(ref _totalScannedSensors, currentScan);
-                    Interlocked.Add(ref _totalMatchedSensors, currentMatch);
-
-                    currentScan = 0;
-                    currentMatch = 0;
+                    FlushResults();
 
                     await Task.Yield();
                 }
@@ -43,6 +48,8 @@ namespace HSMServer.Dashboards
                 if (subscription.IsMatch(sensor.FullPath))
                     currentMatch++;
             }
+
+            FlushResults();
 
             IsFinish = true;
         }
