@@ -5,12 +5,14 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Dashboards
 {
-    public record SensorScanResult(long TotalScanned, long TotalMatched, bool IsFinish);
+    public record SensorScanResult(List<string> MathedSensors, long TotalScanned, long TotalMatched, bool IsFinish);
 
 
     public sealed class PanelSensorScanTask : TaskCompletionSource
     {
         private const int BatchSize = 10;//50;
+
+        private readonly List<string> _mathedSensorsPaths = new(1 << 5);
 
         private readonly CancellationTokenSource _tokenSource = new();
         private long _totalScannedSensors, _totalMatchedSensors;
@@ -46,7 +48,10 @@ namespace HSMServer.Dashboards
                 }
 
                 if (subscription.IsMatch(sensor.FullPath))
+                {
+                    _mathedSensorsPaths.Add(sensor.FullPath);
                     currentMatch++;
+                }
             }
 
             FlushResults();
@@ -54,7 +59,14 @@ namespace HSMServer.Dashboards
             IsFinish = true;
         }
 
-        public SensorScanResult GetResult() => new(Interlocked.Read(ref _totalScannedSensors), Interlocked.Read(ref _totalMatchedSensors), IsFinish);
+        public SensorScanResult GetResult()
+        {
+            var result = new SensorScanResult([.. _mathedSensorsPaths], Interlocked.Read(ref _totalScannedSensors), Interlocked.Read(ref _totalMatchedSensors), IsFinish);
+
+            _mathedSensorsPaths.Clear();
+
+            return result;
+        }
 
 
         public void Cancel()
