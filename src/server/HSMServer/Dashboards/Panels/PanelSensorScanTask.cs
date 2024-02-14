@@ -21,16 +21,15 @@ namespace HSMServer.Dashboards
 
         public async Task StartScanning(IEnumerable<BaseSensorModel> sensors, PanelSubscription subscription)
         {
-            var currentScan = 0L;
             var currentMatch = 0L;
-            var index = 0L;
+            var currentScan = 0L;
 
             foreach (var sensor in sensors)
             {
                 if (_tokenSource.IsCancellationRequested)
                     break;
 
-                if (++index % BatchSize == 0)
+                if (++currentScan % BatchSize == 0)
                 {
                     Interlocked.Add(ref _totalScannedSensors, currentScan);
                     Interlocked.Add(ref _totalMatchedSensors, currentMatch);
@@ -43,8 +42,6 @@ namespace HSMServer.Dashboards
 
                 if (subscription.IsMatch(sensor.FullPath))
                     currentMatch++;
-
-                currentScan++;
             }
 
             IsFinish = true;
