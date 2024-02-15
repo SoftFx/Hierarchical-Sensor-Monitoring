@@ -23,5 +23,20 @@ namespace HSMDataCollector.DefaultSensors
                 }
             };
         }
+
+        internal static Process GetPowershellProcess(string args)
+        {
+            return new Process()
+            {
+                StartInfo = new ProcessStartInfo()
+                {
+                    FileName = "powershell.exe",
+                    Arguments = args.Replace("\"", "\\\""),
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+        }
     }
 }
