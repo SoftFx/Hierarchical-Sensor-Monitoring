@@ -2,6 +2,7 @@
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Collections.Generic;
+using Microsoft.Extensions.Options;
 
 namespace HSMServer.Filters
 {
@@ -19,6 +20,17 @@ namespace HSMServer.Filters
                 Name = nameof(BaseRequest.Key),
                 In = ParameterLocation.Header,
                 Required = true,
+                Schema = new OpenApiSchema
+                {
+                    Type = "string",
+                }
+            });
+
+            operation.Parameters.Add(new OpenApiParameter
+            {
+                Name = nameof(BaseRequest.ClientName),
+                In = ParameterLocation.Header,
+                Required = false,
                 Schema = new OpenApiSchema
                 {
                     Type = "string",
