@@ -1,12 +1,12 @@
 ﻿using Microsoft.Win32;
 using System;
-using System.Text;
 
 namespace HSMDataCollector.DefaultSensors
 {
     internal static class RegistryInfo
     {
         private const string WindowsOSNodeInfo = @"Software\Microsoft\Windows NT\CurrentVersion";
+        private const string WindowsOSUpdateNodeInfo = @"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate";
 
         private static readonly RegistryView _view;
         private static readonly RegistryKey _localMachineKey;
@@ -21,11 +21,8 @@ namespace HSMDataCollector.DefaultSensors
 
         internal static DateTime GetInstallationDate()
         {
-            if (TryLoadWindowsOsNode(out var node))
-            {
-                var unixStartTime = new DateTime(1970, 1, 1);
-                return unixStartTime.AddSeconds(Convert.ToInt64($"{node.GetValue("InstallDate")}"));
-            }
+            if (TryLoadWindowsOsUpdateNode(out var node) && DateTime.TryParse(node.GetValue("LastDownloadsPurgeTime").ToString(), out var date))
+                return date;
 
             return DateTime.MinValue;
         }
@@ -52,6 +49,13 @@ namespace HSMDataCollector.DefaultSensors
         private static bool TryLoadWindowsOsNode(out RegistryKey node)
         {
             node = _localMachineKey?.OpenSubKey(WindowsOSNodeInfo);
+
+            return node != null;
+        }
+        
+        private static bool TryLoadWindowsOsUpdateNode(out RegistryKey node)
+        {
+            node = _localMachineKey?.OpenSubKey(WindowsOSUpdateNodeInfo);
 
             return node != null;
         }

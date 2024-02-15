@@ -20,6 +20,6 @@ namespace HSMDataCollector.SyncQueue
 
         void Stop();
 
-        void ThrowPackageSensingInfo(PackageSendingInfo info);
+        void ThrowPackageSendingInfo(PackageSendingInfo info);
     }
 }
