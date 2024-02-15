@@ -27,6 +27,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
         }
 
 
-        protected override TimeSpan GetValue() => DateTime.UtcNow - _lastUpdateDate;
+        protected override TimeSpan GetValue() => DateTime.UtcNow - _lastUpdateDate.ToUniversalTime();
     }
 }
