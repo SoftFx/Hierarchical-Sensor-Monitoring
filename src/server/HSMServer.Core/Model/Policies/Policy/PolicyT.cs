@@ -4,7 +4,11 @@
     {
         internal bool Validate(T value)
         {
+            var prevStatus = IsActivate;
             var fail = CheckConditions(value, out var failedCondition);
+
+            if (prevStatus != fail)
+                IsActivate = fail;
 
             if (fail)
                 RebuildState(failedCondition, value);

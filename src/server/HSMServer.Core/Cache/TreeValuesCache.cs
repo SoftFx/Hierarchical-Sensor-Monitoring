@@ -1331,7 +1331,7 @@ namespace HSMServer.Core.Cache
                 var ttl = sensor.Policies.TimeToLive;
                 snapshot.IsExpired = timeout;
 
-                if (timeout)
+                if (timeout && sensor.LastValue is not null)
                 {
                     var value = sensor.GetTimeoutValue();
 

@@ -8,7 +8,7 @@ namespace HSMServer.Core.Managers
 {
     public class AlertMessage : IEnumerable<AlertResult>
     {
-        private Dictionary<Guid, List<AlertResult>> _alerts;
+        private readonly Dictionary<Guid, List<AlertResult>> _alerts = [];
         private int _totalAlerts = 0;
 
         public Guid SensorId { get; }
