@@ -6,9 +6,9 @@ using HSMServer.ServerConfiguration.Monitoring;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Options;
-using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using HSMDataCollector.Sensors;
 
 namespace HSMServer.BackgroundServices
 {
@@ -19,10 +19,10 @@ namespace HSMServer.BackgroundServices
         
         public required IBarSensor<int> RequestCount { get; init; }
         public required IBarSensor<double> RequestSize { get; init; }
-        public required IInstantValueSensor<double> RequestsCountPerSecond { get; init; }
-        public required IInstantValueSensor<double> RequestsSizePerSecond { get; init; }
+        public required MonitoringSensorSpeed RequestsCountPerSecond { get; init; } //should be params
+        public required MonitoringSensorSpeed RequestsSizePerSecond { get; init; } //should be params
         public required IBarSensor<double> ResponseSize { get; init; }
-        public required IInstantValueSensor<double> SensorUpdatesPerSecond { get; init; }
+        public required MonitoringSensorSpeed SensorUpdatesPerSecond { get; init; } //should be params
         public required IBarSensor<int> SensorUpdates { get; init; }
         
 
@@ -31,8 +31,10 @@ namespace HSMServer.BackgroundServices
 
         public void AddRequestData(HttpRequest request)
         {
-            RequestsSizePerSecond.AddValue((request.ContentLength ?? 0) / KbDivisor);
             RequestCount.AddValue(1);
+            RequestSize.AddValue((request.ContentLength ?? 0) / KbDivisor);
+            RequestsCountPerSecond.AddValue(1);
+            RequestsSizePerSecond.AddValue((request.ContentLength ?? 0) / KbDivisor);
         }
 
         public void AddResponseResult(HttpResponse response)
@@ -43,19 +45,23 @@ namespace HSMServer.BackgroundServices
         public void AddReceiveData(ActionExecutingContext context)
         {
             if (context.ActionArguments.TryGetValue("values", out var values) && values is List<SensorValueBase> list)
+            {
                 SensorUpdates.AddValue(list.Count);
-            else 
+                SensorUpdatesPerSecond.AddValue(list.Count);
+            }
+            else
+            {
                 SensorUpdates.AddValue(1);
+                SensorUpdatesPerSecond.AddValue(1);
+            }
         }
     }
     public class ClientStatistics
     {        
-        private const int DigitsCnt = 2;
         private readonly BarSensorOptions _barSensorOptions = new BarSensorOptions() { BarPeriod = new(0, 1, 0) };
 
         private readonly IDataCollector _collector;
         public readonly IOptionsMonitor<MonitoringOptions> _optionsMonitor;
-        private readonly TimeSpan _barInterval = new(0, 1, 0);
 
         
         public const string RequestsPerSecond = "Requests per second";
@@ -109,10 +115,10 @@ namespace HSMServer.BackgroundServices
             {
                 RequestCount = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{RequestCount}"),
                 RequestSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{RequestSize}"),
-                RequestsCountPerSecond = _collector.CreateDoubleSensor($"{ClientNode}/{id}/{RequestsPerSecond}"),
-                RequestsSizePerSecond = _collector.CreateDoubleSensor($"{ClientNode}/{id}/{RequestSizePerSecond}"),
+                RequestsCountPerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{RequestsPerSecond}"),
+                RequestsSizePerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{RequestSizePerSecond}"),
                 ResponseSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{ResponseSize}"),
-                SensorUpdatesPerSecond = _collector.CreateDoubleSensor($"{ClientNode}/{id}/{SensorUpdatesPerSecond}"),
+                SensorUpdatesPerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{SensorUpdatesPerSecond}"),
                 SensorUpdates = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{SensorUpdates}"),
             });
         }
