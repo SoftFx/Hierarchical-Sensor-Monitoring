@@ -18,6 +18,7 @@ namespace HSMDataCollector.Client
     {
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
         private readonly PollyStrategy _polly = new PollyStrategy();
+
         private readonly IQueueManager _queueManager;
         private readonly ILoggerManager _logger;
         private readonly Endpoints _endpoints;
@@ -87,9 +88,10 @@ namespace HSMDataCollector.Client
 
             _logger.Debug($"{nameof(RequestToServer)}: {json}");
 
+            var pipline = _endpoints.IsCommandRequest(uri) ? _polly.CommandsPipeline : _polly.DataPipeline;
             var data = new StringContent(json, Encoding.UTF8, "application/json");
 
-            return (uri == _endpoints.CommandsList ? _polly.CommandsPipeline : _polly.Pipeline).ExecuteAsync(async token => await PostAsync(uri, data, json, token), _tokenSource.Token).AsTask();
+            return pipline.ExecuteAsync(async token => await PostAsync(uri, data, json, token), _tokenSource.Token).AsTask();
         }
 
         private async Task<HttpResponseMessage> PostAsync(string uri, HttpContent data, string json, CancellationToken token)

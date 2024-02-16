@@ -14,8 +14,7 @@ namespace HSMDataCollector.Prototypes
         public FreeSpaceOnDiskPredictionPrototype() : base()
         {
             Type = SensorType.TimeSpanSensor;
-
-
+            
             //Alerts = new List<InstantAlertTemplate>()
             //{
             //    AlertsFactory.IfValue(AlertOperation.LessThanOrEqual, TimeSpan.FromDays(2))

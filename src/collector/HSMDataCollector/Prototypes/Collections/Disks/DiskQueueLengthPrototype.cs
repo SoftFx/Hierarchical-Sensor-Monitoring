@@ -1,7 +1,6 @@
 ﻿using HSMDataCollector.Alerts;
 using HSMDataCollector.DefaultSensors.Windows;
 using HSMSensorDataObjects.SensorRequests;
-using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes.Collections.Disks
@@ -20,7 +19,6 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
             Alerts = new List<BarAlertTemplate>()
             {
                 AlertsFactory.IfEmaMean(AlertOperation.GreaterThanOrEqual, 100)
-                             .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
                              .ThenSendNotification($"[$product]$path $property $operation $target $unit")
                              .AndSetIcon(AlertIcon.Warning).Build()
             };

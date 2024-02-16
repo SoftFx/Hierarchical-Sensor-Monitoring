@@ -91,6 +91,14 @@ namespace HSMDataCollector.Options
         public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
     }
 
+    public class NetworkSensorOptions : MonitoringInstantSensorOptions
+    {
+        public NetworkSensorOptions()
+        {
+            PostDataPeriod = TimeSpan.FromMinutes(1);
+        }
+    }
+
 
     public class BarSensorOptions : SensorOptions, IMonitoringOptions
     {

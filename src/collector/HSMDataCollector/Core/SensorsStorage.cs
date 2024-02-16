@@ -51,6 +51,13 @@ namespace HSMDataCollector.Core
         internal Task Stop() => Task.WhenAll(Values.Select(s => s.Stop()));
 
 
+        internal MonitoringSpeedSensor CreateSpeedSensor(string path, MonitoringInstantSensorOptions options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetInstantType<double>(), options);
+            
+            return (MonitoringSpeedSensor)Register(new MonitoringSpeedSensor(options));
+        }
+        
         internal SensorInstant<T> CreateInstantSensor<T>(string path, InstantSensorOptions options)
         {
             options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
