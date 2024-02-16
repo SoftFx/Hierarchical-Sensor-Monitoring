@@ -29,7 +29,7 @@
 
                 <div class="d-flex">
                     <div class="form-control w-auto d-flex no-border align-items-center">
-                        <div class="d-flex no-border align-items-center disabled-group">
+                        <div id="autoscale-range" class="d-flex no-border align-items-center @(Model.Settings.AutoScale ? "disabled-group" : "")">
                             <span>Y axis:</span>
 
                             <label class="form-check-label w-auto ms-2" asp-for="Settings.MinY"></label>
@@ -39,7 +39,7 @@
                             <input type="number" asp-for="Settings.MaxY" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
                         </div>
                        
-                        <input class="form-check-input mx-1" asp-for="Settings.AutoScale" type="checkbox"/>
+                        <input id="autoscale" class="form-check-input mx-1" asp-for="Settings.AutoScale" type="checkbox"/>
                         <label class="form-check-label" asp-for="Settings.AutoScale"></label>
                     </div>
                     <div class="d-flex flex-row align-items-center justify-content-end mt-2 flex-grow-1">
@@ -130,6 +130,13 @@
                 showToast(response.responseText);
             })
         })
+    })
+    
+    $('#autoscale').on('change', function (){
+        if ($(this).is(':checked'))
+            $('#autoscale-range').addClass('disabled-group')
+        else
+            $('#autoscale-range').removeClass('disabled-group')
     })
     
     $('#multichart').on('plotly_legendclick', function (data){
