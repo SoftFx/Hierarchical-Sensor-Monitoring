@@ -126,6 +126,15 @@ namespace HSMDataCollector.Core
         #endregion
 
         /// <summary>
+        /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is double
+        /// </summary>
+        /// <param name="path">Sensor path to display in the tree</param>
+        /// <param name="description">Possible sensor description, empty by default</param>
+        /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is double</returns>
+        IInstantValueSensor<double> CreateSpeedSensor(string path, string description = "");
+        
+        IInstantValueSensor<double> CreateSpeedSensor(string path,  MonitoringInstantSensorOptions options);
+        /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is bool
         /// </summary>
         /// <param name="path">Sensor path to display in the tree</param>

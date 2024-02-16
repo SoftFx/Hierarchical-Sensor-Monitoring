@@ -351,6 +351,13 @@ namespace HSMDataCollector.Core
 
         #region Custom instant sensors
 
+        public IInstantValueSensor<double> CreateSpeedSensor(string path, string description = "") => _sensorsStorage.CreateSpeedSensor(path, new MonitoringInstantSensorOptions()
+        {
+            Description = description
+        });
+        
+        public IInstantValueSensor<double> CreateSpeedSensor(string path, MonitoringInstantSensorOptions options) => _sensorsStorage.CreateSpeedSensor(path, options);
+
         public IInstantValueSensor<Version> CreateVersionSensor(string path, string description = "") => CreateInstantSensor<Version>(path, description);
 
         public IInstantValueSensor<TimeSpan> CreateTimeSensor(string path, string description = "") => CreateInstantSensor<TimeSpan>(path, description);
