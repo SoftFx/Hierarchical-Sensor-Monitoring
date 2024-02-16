@@ -6,10 +6,14 @@
         {
             var fail = CheckConditions(value, out var failedCondition);
 
+            IsActivate = _prevResult != fail && fail;
+
             if (fail)
                 RebuildState(failedCondition, value);
             else
                 ResetState();
+
+            _prevResult = fail;
 
             return !fail;
         }

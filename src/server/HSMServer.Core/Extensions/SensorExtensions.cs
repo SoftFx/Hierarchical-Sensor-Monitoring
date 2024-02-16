@@ -1,11 +1,14 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core.Extensions;
+using HSMServer.Core.Model;
 using System;
-using HSMServer.Core.Extensions;
 
 namespace HSMServer.Core
 {
     public static class SensorExtensions
     {
+        private const string TimeoutComment = "#Timeout";
+
+
         public static bool IsBar(this SensorType type) => type is SensorType.IntegerBar or SensorType.DoubleBar;
 
 
@@ -47,7 +50,7 @@ namespace HSMServer.Core
                     Time = DateTime.UtcNow,
                     ReceivingTime = DateTime.UtcNow,
                     AggregatedValuesCount = 1,
-                    Comment = $"{BaseSensorModel.TimeoutComment} - {sensor.LastUpdate.ToDefaultFormat()}, TTL = {new TimeSpan(ttl)}"
+                    Comment = $"{TimeoutComment} - {sensor.LastUpdate.ToDefaultFormat()}, TTL = {new TimeSpan(ttl)}"
                 };
             }
 
