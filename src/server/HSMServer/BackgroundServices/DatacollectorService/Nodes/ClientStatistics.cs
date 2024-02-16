@@ -19,10 +19,10 @@ namespace HSMServer.BackgroundServices
         
         public required IBarSensor<int> RequestCount { get; init; }
         public required IBarSensor<double> RequestSize { get; init; }
-        public required MonitoringSensorSpeed RequestsCountPerSecond { get; init; } //should be params
-        public required MonitoringSensorSpeed RequestsSizePerSecond { get; init; } //should be params
+        public required IInstantValueSensor<double> RequestsCountPerSecond { get; init; } //should be params
+        public required IInstantValueSensor<double> RequestsSizePerSecond { get; init; } //should be params
         public required IBarSensor<double> ResponseSize { get; init; }
-        public required MonitoringSensorSpeed SensorUpdatesPerSecond { get; init; } //should be params
+        public required IInstantValueSensor<double> SensorUpdatesPerSecond { get; init; } //should be params
         public required IBarSensor<int> SensorUpdates { get; init; }
         
 
