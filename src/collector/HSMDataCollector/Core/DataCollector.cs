@@ -351,12 +351,12 @@ namespace HSMDataCollector.Core
 
         #region Custom instant sensors
 
-        public IInstantValueSensor<double> CreateSpeedSensor(string path, string description = "") => _sensorsStorage.CreateSpeedSensor(path, new MonitoringInstantSensorOptions()
+        public IInstantValueSensor<double> CreateSpeedSensor(string path, string description = "") => CreateSpeedSensor(path, new MonitoringInstantSensorOptions()
         {
             Description = description
         });
         
-        public IInstantValueSensor<double> CreateSpeedSensor(string path, MonitoringInstantSensorOptions options) => _sensorsStorage.CreateSpeedSensor(path, options);
+        public IInstantValueSensor<double> CreateSpeedSensor(string path, MonitoringInstantSensorOptions options) =>  CreateSpeedSensor<double>(path, options);
 
         public IInstantValueSensor<Version> CreateVersionSensor(string path, string description = "") => CreateInstantSensor<Version>(path, description);
 
@@ -392,6 +392,7 @@ namespace HSMDataCollector.Core
 
         private IInstantValueSensor<T> CreateInstantSensor<T>(string path, InstantSensorOptions options) => _sensorsStorage.CreateInstantSensor<T>(path, options);
 
+        private IInstantValueSensor<T> CreateSpeedSensor<T>(string path, MonitoringInstantSensorOptions options) => (IInstantValueSensor<T>)_sensorsStorage.CreateSpeedSensor(path, options);
 
         public IServiceCommandsSensor CreateServiceCommandsSensor()
         {
