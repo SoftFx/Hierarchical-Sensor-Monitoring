@@ -2,16 +2,14 @@ using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using System.Collections.Concurrent;
-using System.Linq;
-
 namespace HSMDataCollector.Sensors
 {
     public class MonitoringSpeedSensor : MonitoringSensorBase<double>, IInstantValueSensor<double>
     {
-        private readonly ConcurrentStack<double> _values = new ConcurrentStack<double>();
-        
-        
+        private readonly object _lock = new object();
+
+
+        private double _sum = 0d;
         private string _lastComment = string.Empty;
         private SensorStatus _lastStatus = SensorStatus.Ok;
 
@@ -21,8 +19,8 @@ namespace HSMDataCollector.Sensors
         
         protected override double GetValue()
         {
-            var value = _values.Sum() / _receiveDataPeriod.Seconds;
-            _values.Clear();
+            var value = _sum / _receiveDataPeriod.Seconds;
+            _sum = 0d;
             
             return value;
         }
@@ -33,7 +31,8 @@ namespace HSMDataCollector.Sensors
         
         public void AddValue(double value)
         {
-            _values.Push(value);
+            lock (_lock)
+                _sum += value;
         }
         
         public void AddValue(double value, string comment = "")
