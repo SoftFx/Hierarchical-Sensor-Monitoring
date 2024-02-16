@@ -43,6 +43,8 @@ namespace HSMServer.Core.Model.Policies
 
         public PolicySchedule Schedule { get; set; } = new();
 
+        public bool IsActivate { get; protected set; }
+
 
         public string Template
         {

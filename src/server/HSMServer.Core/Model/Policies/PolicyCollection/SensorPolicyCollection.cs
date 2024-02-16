@@ -146,7 +146,7 @@ namespace HSMServer.Core.Model.Policies
             if (!value.Status.IsOfftime())
             {
                 foreach (var policy in _storage.Values)
-                    if (!policy.IsDisabled && !policy.Validate(value))
+                    if (!policy.IsDisabled && !policy.Validate(value) && policy.IsActivate)
                     {
                         if (isReplace)
                             PolicyResult.AddSingleAlert(policy);
@@ -257,13 +257,13 @@ namespace HSMServer.Core.Model.Policies
                 Status = SensorStatus.Ok,
                 Template = $"$prevStatus->$status [$product]$path = $comment",
                 Destination = new(),
-                Conditions = new(1)
-                {
+                Conditions =
+                [
                     new PolicyConditionUpdate(
                         PolicyOperation.IsChanged,
                         PolicyProperty.Status,
                         new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
-                },
+                ],
                 IsDisabled = options.HasFlag(DefaultAlertsOptions.DisableStatusChange)
             };
 
