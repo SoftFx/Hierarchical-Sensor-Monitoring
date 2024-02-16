@@ -149,6 +149,9 @@ namespace HSMServer.Controllers
                     Description = model.Description ?? string.Empty,
                     ShowProduct = model.ShowProduct,
                     IsAggregateValues = model.AggregateValues,
+                    MaxY = model.Settings.MaxY,
+                    MinY = model.Settings.MinY,
+                    AutoScale = model.Settings.AutoScale
                 });
 
             return Ok(dashboardId);

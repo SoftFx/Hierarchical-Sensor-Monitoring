@@ -27,7 +27,12 @@ namespace HSMServer.Dashboards
         public bool? ShowProduct { get; init; }
 
         public bool? IsAggregateValues { get; init; }
+        
+        public int? MaxY { get; init; }
+        
+        public int? MinY { get; init; }
 
+        public bool? AutoScale { get; set; }
 
         [SetsRequiredMembers]
         public PanelUpdate(Guid panelId) : base()

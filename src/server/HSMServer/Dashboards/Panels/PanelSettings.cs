@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Dashboards
 {
@@ -19,11 +20,22 @@ namespace HSMServer.Dashboards
 
 
         public bool ShowLegend { get; private set; }
+        
+        [Display(Name = "Max")]
+        public int MaxY { get; set; }
+        
+        [Display(Name = "Min")]
+        public int MinY { get; set; }
+        
+        
+        [Display(Name = "Autoscale")]
+        public bool AutoScale { get; set; }
 
 
         public PanelSettings()
         {
             ShowLegend = true;
+            AutoScale = true;
         }
 
 
@@ -36,6 +48,11 @@ namespace HSMServer.Dashboards
             Y = update.Y ?? Y;
 
             ShowLegend = update.ShowLegend ?? ShowLegend;
+
+            MaxY = update.MaxY ?? MaxY;
+            MinY = update.MinY ?? MinY;
+
+            AutoScale = update.AutoScale ?? AutoScale;
         }
 
         public PanelSettings FromEntity(PanelSettingsEntity entity)
@@ -48,6 +65,10 @@ namespace HSMServer.Dashboards
 
             ShowLegend = entity.ShowLegend;
 
+            MaxY = entity.MaxY;
+            MinY = entity.MinY;
+
+            AutoScale = entity.AutoScale;
             return this;
         }
 
@@ -61,6 +82,11 @@ namespace HSMServer.Dashboards
                 Y = Y,
 
                 ShowLegend = ShowLegend,
+                
+                MaxY = MaxY,
+                MinY = MinY,
+                
+                AutoScale = AutoScale
             };
     }
 }

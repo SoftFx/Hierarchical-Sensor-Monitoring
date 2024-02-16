@@ -30,5 +30,11 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 
 
         public bool ShowLegend { get; init; }
+        
+        public int MaxY { get; set; }
+        
+        public int MinY { get; set; }
+        
+        public bool AutoScale { get; set; }
     }
 }
