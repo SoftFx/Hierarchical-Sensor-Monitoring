@@ -344,7 +344,7 @@ namespace HSMServer.Core.Cache
                     });
 
                     if (sensor.LastDbValue != null)
-                        SaveSensorValueToDb(sensor.LastDbValue, request.Id);
+                        SaveSensorValueToDb(sensor.LastDbValue, request.Id, true);
 
                     SensorUpdateViewAndNotify(sensor);
                 }
@@ -511,7 +511,7 @@ namespace HSMServer.Core.Cache
         private void SensorUpdateViewAndNotify(BaseSensorModel sensor)
         {
             SensorUpdateView(sensor);
-            SendNotification(sensor.PolicyResult);
+            SendNotification(sensor.Notifications);
         }
 
         private void SendNotification(PolicyResult result) => _confirmationManager.RegisterNotification(result);
@@ -794,11 +794,11 @@ namespace HSMServer.Core.Cache
         }
 
 
-        private void SaveSensorValueToDb(BaseValue value, Guid sensorId)
+        private void SaveSensorValueToDb(BaseValue value, Guid sensorId, bool ignoreSnapshot = false)
         {
             _database.AddSensorValue(value.ToEntity(sensorId));
 
-            if (!value.IsTimeout)
+            if (!value.IsTimeout && !ignoreSnapshot)
                 _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
         }
 
@@ -1256,7 +1256,7 @@ namespace HSMServer.Core.Cache
                     {
                         sensor.AddDbValue(value);
 
-                        SendNotification(sensor.PolicyResult.LeftOnlyScheduled());
+                        SendNotification(sensor.Notifications.LeftOnlyScheduled());
 
                         if (!_snapshot.IsFinal && sensor.LastValue is not null)
                             _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());

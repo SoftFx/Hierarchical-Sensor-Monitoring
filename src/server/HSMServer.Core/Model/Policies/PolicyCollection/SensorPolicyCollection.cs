@@ -17,6 +17,8 @@ namespace HSMServer.Core.Model.Policies
 
         internal protected PolicyResult PolicyResult { get; protected set; } = PolicyResult.Ok;
 
+        internal protected PolicyResult NotificationResult { get; protected set; } = PolicyResult.Ok;
+
 
         internal Action<ActionType, Policy> Uploaded;
         internal Action<BaseSensorModel, bool> SensorExpired;
@@ -37,6 +39,7 @@ namespace HSMServer.Core.Model.Policies
         {
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
+            NotificationResult = PolicyResult.Ok;
         }
 
 
@@ -62,6 +65,7 @@ namespace HSMServer.Core.Model.Policies
             _sensor = (BaseSensorModel)_model;
             _typePolicy = new CorrectTypePolicy<T>(_sensor);
 
+            NotificationResult = new(sensor.Id);
             PolicyResult = new(sensor.Id);
 
             base.BuildDefault(sensor);
@@ -122,6 +126,7 @@ namespace HSMServer.Core.Model.Policies
             {
                 SensorResult = _typePolicy.SensorResult;
                 PolicyResult = _typePolicy.PolicyResult;
+                NotificationResult = _typePolicy.PolicyResult;
 
                 return false;
             }
@@ -142,19 +147,28 @@ namespace HSMServer.Core.Model.Policies
         {
             SensorResult = SensorResult.Ok;
             PolicyResult = new(_sensor.Id);
+            NotificationResult = new(_sensor.Id);
 
             if (!value.Status.IsOfftime())
             {
                 foreach (var policy in _storage.Values)
-                    if (!policy.IsDisabled && !policy.Validate(value) && policy.IsActivate)
+                    if (!policy.IsDisabled && !policy.Validate(value))
                     {
-                        if (isReplace)
-                            PolicyResult.AddSingleAlert(policy);
-                        else
-                            PolicyResult.AddAlert(policy);
+                        PolicyResult.AddAlert(policy);
 
                         if (isLastValue)
                             SensorResult += policy.SensorResult;
+
+                        if (policy.IsActivate)
+                        {
+                            if (isReplace)
+                            {
+                                NotificationResult.AddSingleAlert(policy);
+                                policy.ResetState();
+                            }
+                            else
+                                NotificationResult.AddAlert(policy);
+                        }
                     }
             }
 

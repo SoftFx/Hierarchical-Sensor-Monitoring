@@ -12,6 +12,7 @@ namespace HSMServer.Core.Model.Policies
     {
         private AlertSystemTemplate _systemTemplate;
         private string _userTemplate;
+        protected bool _prevResult;
 
         public List<PolicyCondition> Conditions { get; } = new();
 
@@ -173,11 +174,13 @@ namespace HSMServer.Core.Model.Policies
         };
 
 
-        protected void ResetState()
+        public void ResetState()
         {
             Comment = string.Empty;
+
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
+            _prevResult = false;
         }
 
 

@@ -116,7 +116,11 @@ namespace HSMServer.Core.Model
             }
         }
 
+
+        public PolicyResult Notifications => Policies.NotificationResult;
+
         public PolicyResult PolicyResult => Policies.PolicyResult;
+
 
         public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? false;
 
