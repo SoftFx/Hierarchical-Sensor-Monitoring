@@ -2,6 +2,8 @@ using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using System.Threading;
+
 namespace HSMDataCollector.Sensors
 {
     public class MonitoringSpeedSensor : MonitoringSensorBase<double>, IInstantValueSensor<double>
@@ -20,7 +22,7 @@ namespace HSMDataCollector.Sensors
         protected override double GetValue()
         {
             var value = _sum / _receiveDataPeriod.Seconds;
-            _sum = 0d;
+            Interlocked.Exchange(ref _sum, 0d);
             
             return value;
         }
