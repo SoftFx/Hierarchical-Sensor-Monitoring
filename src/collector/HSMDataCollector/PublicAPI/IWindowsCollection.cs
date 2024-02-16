@@ -48,6 +48,10 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddDisksQueueLength(DiskBarSensorOptions options = null);
 
+        IWindowsCollection AddDiskAverageWriteSpeed(DiskBarSensorOptions options = null);
+
+        IWindowsCollection AddDisksAverageWriteSpeed(DiskBarSensorOptions options = null);
+
         IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null);
 
         IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null);
@@ -91,6 +95,15 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddAllQueueDiagnosticSensors(BarSensorOptions barOptions = null);
 
 
+        IWindowsCollection AddNetworkConnectionsEstablished(NetworkSensorOptions options = null);
+        
+        IWindowsCollection AddNetworkConnectionFailures(NetworkSensorOptions options = null);
+        
+        IWindowsCollection AddNetworkConnectionsReset(NetworkSensorOptions options = null);
+
+        IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null);
+
+        
         IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);
 
         IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options);

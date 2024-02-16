@@ -1,4 +1,5 @@
 using HSMDataCollector.Client.HttpsClient;
+using HSMDataCollector.Client.HttpsClient.Polly;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue;
@@ -16,11 +17,12 @@ namespace HSMDataCollector.Client
     internal sealed class HsmHttpsClient : IDisposable
     {
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
+        private readonly PollyStrategy _polly = new PollyStrategy();
+
         private readonly IQueueManager _queueManager;
         private readonly ILoggerManager _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
-
 
         internal CommandHandler Commands { get; }
 
@@ -42,6 +44,7 @@ namespace HSMDataCollector.Client
             });
 
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
+            _client.DefaultRequestHeaders.Add(nameof(BaseRequest.ClientName), options.ClientName);
 
             Commands = new CommandHandler(queue.Commands, _endpoints, _logger);
             Commands.InvokeRequest += RequestToServer;
@@ -79,21 +82,36 @@ namespace HSMDataCollector.Client
         }
 
 
-        private async Task<HttpResponseMessage> RequestToServer(object value, string uri)
+        private Task<HttpResponseMessage> RequestToServer(object value, string uri)
         {
-            string json = JsonConvert.SerializeObject(value);
+            var json = JsonConvert.SerializeObject(value);
 
             _logger.Debug($"{nameof(RequestToServer)}: {json}");
 
+            var pipline = _endpoints.IsCommandRequest(uri) ? _polly.CommandsPipeline : _polly.DataPipeline;
             var data = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await _client.PostAsync(uri, data, _tokenSource.Token);
 
-            _queueManager.ThrowPackageSensingInfo(new PackageSendingInfo(json.Length, response));
+            return pipline.ExecuteAsync(async token => await PostAsync(uri, data, json, token), _tokenSource.Token).AsTask();
+        }
 
-            if (!response.IsSuccessStatusCode)
-                _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
+        private async Task<HttpResponseMessage> PostAsync(string uri, HttpContent data, string json, CancellationToken token)
+        {
+            try
+            {
+                var response = await _client.PostAsync(uri, data, token);
 
-            return response;
+                _queueManager.ThrowPackageSendingInfo(new PackageSendingInfo(json.Length, response));
+
+                if (!response.IsSuccessStatusCode)
+                    _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
+
+                return response;
+            }
+            catch (Exception exception)
+            {
+                _logger.Error($"Failed to send data. Error={exception.Message}. Data={json}.");
+                throw;
+            }
         }
     }
 }

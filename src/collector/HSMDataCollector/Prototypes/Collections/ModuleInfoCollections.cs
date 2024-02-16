@@ -15,7 +15,7 @@ namespace HSMDataCollector.Prototypes
 
             options.Type = SensorType.VersionSensor;
             options.StartTime = customOptions?.StartTime ?? DateTime.UtcNow;
-
+            options.KeepHistory = TimeSpan.FromDays(365 * 5 + 1); // at least 1 leap year
             options.Version = customOptions?.Version;
 
             return options;
