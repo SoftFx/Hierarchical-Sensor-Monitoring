@@ -1,6 +1,6 @@
 import { convertToGraphData } from "./plotting";
 import { pan } from "plotly.js/src/fonts/ploticon";
-import { Colors, Plot, TimeSpanPlot } from "./plots";
+import {Colors, getScaleValue, Plot, TimeSpanPlot} from "./plots";
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();
@@ -87,7 +87,7 @@ export function getPlotSourceView(id) {
 export const currentPanel = {};
 export const plotColorDelay = 1000;
 
-export function Model(id, panelId, dashboardId, sensorId) {
+export function Model(id, panelId, dashboardId, sensorId, range = undefined) {
     this.id = id;
     this.oldIndex = id;
     this.sensorId = sensorId;
@@ -95,6 +95,7 @@ export function Model(id, panelId, dashboardId, sensorId) {
     this.dashboardId = dashboardId;
     this.updateTimeout = undefined;
     this.requestTimeout = undefined;
+    this.range = range;
 }
 
 window.insertSourceHtml = function (data) {
@@ -112,8 +113,8 @@ window.insertSourceHtml = function (data) {
     });
 }
 
-window.insertSourcePlot = function (data, id, panelId, dashboardId) {
-    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1);
+window.insertSourcePlot = function (data, id, panelId, dashboardId, range = undefined) {
+    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     let layoutUpdate = {
         'xaxis.visible': true,
@@ -179,7 +180,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         }
     );
 
-    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId);
+    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
 }
 
 window.addNewSourceHtml = function (data, id) {
@@ -335,7 +336,7 @@ window.initDashboard = function () {
                                 prevData.customdata.pop();
                             }
                             x.push(j.time);
-                            y.push(j.value);
+                            y.push(currentPanel[i].range === true ? j.value : getScaleValue(j.value, currentPanel[i].range));
                             prevData.ids.push(j.id)
                             let custom = j.value;
                             if (j.tooltip !== null)

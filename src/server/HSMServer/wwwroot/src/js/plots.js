@@ -12,6 +12,21 @@ export const ServiceStatusIcon = {
     'path': 'M32 32c17.7 0 32 14.3 32 32V400c0 8.8 7.2 16 16 16H480c17.7 0 32 14.3 32 32s-14.3 32-32 32H80c-44.2 0-80-35.8-80-80V64C0 46.3 14.3 32 32 32zM160 224c17.7 0 32 14.3 32 32v64c0 17.7-14.3 32-32 32s-32-14.3-32-32V256c0-17.7 14.3-32 32-32zm128-64V320c0 17.7-14.3 32-32 32s-32-14.3-32-32V160c0-17.7 14.3-32 32-32s32 14.3 32 32zm64 32c17.7 0 32 14.3 32 32v96c0 17.7-14.3 32-32 32s-32-14.3-32-32V224c0-17.7 14.3-32 32-32zM480 96V320c0 17.7-14.3 32-32 32s-32-14.3-32-32V96c0-17.7 14.3-32 32-32s32 14.3 32 32z'
 }
 
+export function getScaleValue(value, range){
+    let number = Number(value);
+
+    if (range === true)
+        return number;
+
+    if (number < range[0])
+        return range[0];
+
+    if (number > range[1])
+        return range[1];
+
+    return number;
+}
+
 const SensorsStatus = {
     Ok: 0,
     Error: 1
@@ -46,7 +61,10 @@ export class Plot {
     #customYaxisName = undefined;
     customColor = Colors.default;
     
-    constructor(data, customYaxisName = undefined, customColor = Colors.default) {
+    #autoscaleY = true;
+    
+    constructor(data, customYaxisName = undefined, customColor = Colors.default, range = undefined) {
+        this.#autoscaleY = range ?? true;
         this.#customYaxisName = customYaxisName;
         this.line = {
             color: Colors.defaultTrace
@@ -58,6 +76,10 @@ export class Plot {
         }
     }
 
+    getScaleValue(value) {
+        return getScaleValue(value, this.#autoscaleY)
+    }
+    
     setUpData(data) { }
 
     getPlotData() {
@@ -176,8 +198,8 @@ class ErrorColorPlot extends Plot {
     mode = "markers+lines";
     connectgaps = false;
 
-    constructor(data, unitType, color) {
-        super(data, unitType, color);
+    constructor(data, unitType, color, range) {
+        super(data, unitType, color, range);
     }
 
     markerColorCompareFunc(value) {
@@ -202,8 +224,8 @@ class ErrorColorPlot extends Plot {
 }
 
 export class BoolPlot extends Plot {
-    constructor(data, unitType = undefined, color = Colors.default) {
-        super(data, unitType, color);
+    constructor(data, unitType = undefined, color = Colors.default, range = undefined) {
+        super(data, unitType, color, range);
         this.type = 'scatter';
         this.mode = 'markers';
         this.marker = {
@@ -290,8 +312,8 @@ export class BoolPlot extends Plot {
 }
 
 export class IntegerPlot extends ErrorColorPlot {
-    constructor(data, unitType = undefined, color = Colors.default, shape = undefined) {
-        super(data, unitType, color);
+    constructor(data, unitType = undefined, color = Colors.default, shape = undefined, range = undefined) {
+        super(data, unitType, color, range);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
@@ -314,7 +336,7 @@ export class IntegerPlot extends ErrorColorPlot {
             if (Plot.checkNaN(i.value))
                 this.y.push("NaN")
             else
-                this.y.push(Number(i.value) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i.value))
+                this.y.push(this.getScaleValue(Number(i.value) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i.value)))
             this.addCustomData(i);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
@@ -323,8 +345,8 @@ export class IntegerPlot extends ErrorColorPlot {
 }
 
 export class DoublePlot extends ErrorColorPlot {
-    constructor(data, name, field = 'value', unitType = undefined, color = Colors.default, shape = undefined) {
-        super(data, unitType, color);
+    constructor(data, name, field = 'value', unitType = undefined, color = Colors.default, shape = undefined, range = undefined) {
+        super(data, unitType, color, range);
 
         this.type = 'scatter';
         this.name = name;
@@ -348,12 +370,11 @@ export class DoublePlot extends ErrorColorPlot {
         let name = this.name;
         for (let i of data) {
             this.x.push(i.time)
-
+            
             if (Plot.checkNaN(i[customField]))
                 this.y.push("NaN")
             else
-                this.y.push(Number(i[customField]) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i[customField]))
-
+                this.y.push(Number(this.getScaleValue(i[customField] === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i[customField]))))
             this.addCustomData(i, checkNotCompressedCount, customField);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
