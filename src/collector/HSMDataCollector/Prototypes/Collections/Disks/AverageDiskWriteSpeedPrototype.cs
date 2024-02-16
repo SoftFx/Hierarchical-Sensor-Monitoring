@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using HSMDataCollector.Alerts;
 using HSMDataCollector.DefaultSensors.Windows;
 using HSMSensorDataObjects.SensorRequests;
 
@@ -15,15 +12,7 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
 
         public WindowsAverageDiskWriteSpeedPrototype() : base()
         {
-            SensorUnit = Unit.bytes;
-
-            // Alerts = new List<BarAlertTemplate>()
-            // {
-            //     AlertsFactory.IfEmaMean(AlertOperation.GreaterThanOrEqual, 80)
-            //         .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
-            //         .ThenSendNotification($"[$product]$path $property $operation $target$unit")
-            //         .AndSetIcon(AlertIcon.Warning).Build()
-            // };
+            SensorUnit = Unit.MB;
         }
     }
 }
