@@ -8,6 +8,8 @@ namespace HSMServer.Dashboards
 {
     public sealed class PanelDatasource : BasePlotPanelModule<PanelSourceUpdate, PanelSourceEntity>
     {
+        public PanelSettings Settings { get; }
+        
         public BaseSensorModel Sensor { get; }
 
         public Guid SensorId { get; }
@@ -16,20 +18,23 @@ namespace HSMServer.Dashboards
         public SensorDatasourceBase Source { get; private set; }
 
 
-        public PanelDatasource(BaseSensorModel sensor) : base()
+        public PanelDatasource(BaseSensorModel sensor, PanelSettings settings = null) : base()
         {
             SensorId = sensor.Id;
             Sensor = sensor;
 
             Property = sensor.Type.IsBar() ? PlottedProperty.Max : PlottedProperty.Value;
             Label = $"{sensor.DisplayName} ({Property})";
+            Settings = settings;
         }
 
-        public PanelDatasource(BaseSensorModel sensor, PanelSourceEntity entity) : base(entity)
+        public PanelDatasource(BaseSensorModel sensor, PanelSourceEntity entity, PanelSettings settings) : base(entity)
         {
             SensorId = new Guid(entity.SensorId);
             Sensor = sensor;
+            Settings = settings;
         }
+
 
 
         public PanelDatasource BuildSource(bool aggregateValues)
@@ -44,7 +49,7 @@ namespace HSMServer.Dashboards
                 AggregateValues = aggregateValues,
             };
 
-            Source = DatasourceFactory.Build(Sensor, settings);
+            Source = DatasourceFactory.Build(Sensor, settings, Settings);
 
             return this;
         }

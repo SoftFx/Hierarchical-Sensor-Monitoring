@@ -7,6 +7,7 @@ using HSMServer.Datasources.Aggregators;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Dashboards;
 
 namespace HSMServer.Datasources
 {
@@ -24,6 +25,7 @@ namespace HSMServer.Datasources
         private readonly CLinkedList<BaseChartValue> _newVisibleValues = new();
 
         private SourceSettings _settings;
+        private PanelSettings _panelSettings;
         private BaseSensorModel _sensor;
 
 
@@ -34,11 +36,12 @@ namespace HSMServer.Datasources
         protected abstract ChartType NormalType { get; }
 
 
-        internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings)
+        internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings, PanelSettings panelSettings)
         {
             _settings = settings;
             _sensor = sensor;
-
+            _panelSettings = panelSettings;
+            
             DataAggregator.Setup(settings);
 
             _sensor.ReceivedNewValue += AddNewValue;
@@ -67,7 +70,7 @@ namespace HSMServer.Datasources
             _newVisibleValues.Clear();
 
             DataAggregator.RecalculateAggrSections(request);
-
+        
             var history = await _sensor.GetHistoryData(request);
 
             foreach (var raw in history.ReverseFluent())
@@ -76,14 +79,19 @@ namespace HSMServer.Datasources
             return new()
             {
                 ChartType = DataAggregator.UseAggregation ? AggregatedType : NormalType,
-                Values = _newVisibleValues.Cast<object>().ToList(),
+                Values = (_panelSettings?.AutoScale ?? true 
+                    ? _newVisibleValues
+                    : _newVisibleValues.Select(x => x.Filter(_panelSettings))).ToList(),
             };
+            
         }
 
         public UpdateChartSourceResponse GetSourceUpdates() =>
             new()
             {
-                NewVisibleValues = _newVisibleValues.Cast<object>().ToList(),
+                NewVisibleValues = (_panelSettings?.AutoScale ?? true 
+                    ? _newVisibleValues
+                    : _newVisibleValues.Select(x => x.Filter(_panelSettings))).ToList(),
                 IsTimeSpan = _sensor.Type is SensorType.TimeSpan
             };
 

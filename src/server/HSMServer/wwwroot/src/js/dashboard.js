@@ -336,10 +336,12 @@ window.initDashboard = function () {
                                 prevData.customdata.pop();
                             }
                             x.push(j.time);
-                            y.push(currentPanel[i].range === true ? j.value : getScaleValue(j.value, currentPanel[i].range));
+                            y.push(j.value);
                             prevData.ids.push(j.id)
                             let custom = j.value;
-                            if (j.tooltip !== null)
+                            if (currentPanel[i].range === true)
+                                custom = j.tooltip;
+                            else if (j.tooltip !== null)
                                 custom += `<br>${j.tooltip}`;
 
                             customData.push(custom);

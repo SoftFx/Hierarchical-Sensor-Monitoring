@@ -1,6 +1,7 @@
 ﻿using HSMServer.Datasources.Aggregators;
 using System;
 using System.Numerics;
+using HSMServer.Dashboards;
 
 namespace HSMServer.Datasources
 {
@@ -14,6 +15,8 @@ namespace HSMServer.Datasources
         public DateTime Time { get; protected set; }
 
         public string Tooltip { get; protected set; }
+
+        protected internal abstract object Filter(PanelSettings settings);
     }
 
 
@@ -33,6 +36,20 @@ namespace HSMServer.Datasources
             var count = state.Count;
 
             Tooltip = count > 1 ? $"Aggregated ({count}) values" : string.Empty;
+        }
+        
+        
+        protected internal override object Filter(PanelSettings settings)
+        {
+            Tooltip = Value + " " + Tooltip;
+            
+            if (Value.CompareTo(settings.MaxY) > 0)
+                Value = T.CreateChecked(settings.MaxY);
+          
+            if (Value.CompareTo(settings.MinY) < 0)
+                Value = T.CreateChecked(settings.MinY);
+            
+            return this;
         }
     }
 }

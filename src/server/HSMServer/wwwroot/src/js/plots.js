@@ -61,10 +61,10 @@ export class Plot {
     #customYaxisName = undefined;
     customColor = Colors.default;
     
-    #autoscaleY = true;
+    autoscaleY = true;
     
     constructor(data, customYaxisName = undefined, customColor = Colors.default, range = undefined) {
-        this.#autoscaleY = range ?? true;
+        this.autoscaleY = range ?? true;
         this.#customYaxisName = customYaxisName;
         this.line = {
             color: Colors.defaultTrace
@@ -77,7 +77,7 @@ export class Plot {
     }
 
     getScaleValue(value) {
-        return getScaleValue(value, this.#autoscaleY)
+        return getScaleValue(value, this.autoscaleY)
     }
     
     setUpData(data) { }
@@ -153,6 +153,11 @@ export class Plot {
     }
 
     addCustomData(value, compareFunc = null, customField = 'value') {
+        if (this.autoscaleY !== undefined) {
+            this.customdata.push(value.tooltip);
+            return;
+        }
+
         if (Plot.checkTtl(value)) {
             this.customdata.push(value.comment);
             return;
@@ -258,6 +263,11 @@ export class BoolPlot extends Plot {
     }
     
     addCustomData(value, compareFunc = null, customField = 'value') {
+        if (this.autoscaleY !== undefined) {
+            this.customdata.push(value.tooltip);
+            return;
+        }
+        
         if (Plot.checkTtl(value)) {
             this.customdata.push(value.comment);
             return;
@@ -336,7 +346,7 @@ export class IntegerPlot extends ErrorColorPlot {
             if (Plot.checkNaN(i.value))
                 this.y.push("NaN")
             else
-                this.y.push(this.getScaleValue(Number(i.value) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i.value)))
+                this.y.push(Number(i.value) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i.value))
             this.addCustomData(i);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
@@ -374,7 +384,7 @@ export class DoublePlot extends ErrorColorPlot {
             if (Plot.checkNaN(i[customField]))
                 this.y.push("NaN")
             else
-                this.y.push(Number(this.getScaleValue(i[customField] === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i[customField]))))
+                this.y.push(Number(i[customField] === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i[customField])))
             this.addCustomData(i, checkNotCompressedCount, customField);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));

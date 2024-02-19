@@ -29,9 +29,9 @@ namespace HSMServer.Datasources
         }
 
 
-        internal override SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings)
+        internal override SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings, PanelSettings panelSettings)
         {
-            base.AttachSensor(sensor, settings);
+            base.AttachSensor(sensor, settings, panelSettings);
 
             _getPropertyFactory = GetPropertyFactory(settings.Property);
 
