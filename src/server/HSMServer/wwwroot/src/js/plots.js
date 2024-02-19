@@ -134,7 +134,7 @@ export class Plot {
     }
 
     addCustomData(value, compareFunc = null, customField = 'value') {
-        if (this.autoscaleY !== undefined) {
+        if (this.autoscaleY !== undefined && this.autoscaleY !== true) {
             this.customdata.push(value.tooltip);
             return;
         }
@@ -244,7 +244,7 @@ export class BoolPlot extends Plot {
     }
     
     addCustomData(value, compareFunc = null, customField = 'value') {
-        if (this.autoscaleY !== undefined) {
+        if (this.autoscaleY !== undefined && this.autoscaleY !== true) {
             this.customdata.push(value.tooltip);
             return;
         }
