@@ -34,7 +34,7 @@ namespace HSMServer.Dashboards
             Sensor = sensor;
             Settings = settings;
         }
-        
+
 
         public PanelDatasource BuildSource(bool aggregateValues)
         {
