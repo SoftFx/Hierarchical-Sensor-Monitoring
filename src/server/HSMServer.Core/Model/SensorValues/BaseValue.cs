@@ -23,8 +23,8 @@ namespace HSMServer.Core.Model
         File,
         TimeSpan,
         Version,
-        Enum,
-        Counter
+        Counter,
+        Enum, //should be last because it's not implemented type
     }
 
 

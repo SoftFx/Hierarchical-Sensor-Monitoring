@@ -11,7 +11,8 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 SensorType.Boolean => BuildBooleanValue(),
                 SensorType.Integer => BuildIntegerValue(),
-                SensorType.Double or SensorType.Counter => BuildDoubleValue(),
+                SensorType.Double => BuildDoubleValue(),
+                SensorType.Counter => BuildCounterValue(),
                 SensorType.String => BuildStringValue(),
                 SensorType.IntegerBar => BuildIntegerBarValue(),
                 SensorType.DoubleBar => BuildDoubleBarValue(),
@@ -40,6 +41,15 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
 
         internal static DoubleValue BuildDoubleValue() =>
+            new()
+            {
+                Comment = RandomGenerator.GetRandomString(),
+                Time = DateTime.UtcNow,
+                Status = SensorStatus.Ok,
+                Value = RandomGenerator.GetRandomDouble(),
+            };
+
+        internal static CounterValue BuildCounterValue() =>
             new()
             {
                 Comment = RandomGenerator.GetRandomString(),
