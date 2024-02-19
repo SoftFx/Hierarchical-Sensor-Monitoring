@@ -46,7 +46,7 @@ namespace HSMServer.Dashboards
                 if (Interlocked.Increment(ref _totalScanned) % BatchSize == 0)
                     await Task.Yield();
 
-                if (subscription.IsMatch(sensor.FullPath) && Interlocked.Increment(ref _totalMatched) <= MaxVisibleMathedItems)
+                if (subscription.IsMatch(sensor) && Interlocked.Increment(ref _totalMatched) <= MaxVisibleMathedItems)
                     _matсhedSensors.Add(new ScannedSensorInfo(sensor.FullPath, subscription.BuildSensorLabel()));
             }
 

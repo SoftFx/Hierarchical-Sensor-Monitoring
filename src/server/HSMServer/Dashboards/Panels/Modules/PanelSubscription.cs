@@ -1,8 +1,10 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.Core.Model;
+using HSMServer.Datasources;
 using HSMServer.PathTemplates;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace HSMServer.Dashboards
@@ -52,9 +54,9 @@ namespace HSMServer.Dashboards
         }
 
 
-        public bool IsMatch(string path) => _pathConverter?.IsMatch(path) ?? false;
+        public bool IsMatch(BaseSensorModel sensor) => _pathConverter.IsMatch(sensor.Path) && DatasourceFactory.IsSupportedPlotProperty(sensor, Property);
 
-        public string BuildSensorLabel() => _pathConverter?.BuildStringByTempalte(Label) ?? Label;
+        public string BuildSensorLabel() => _pathConverter.BuildStringByTempalte(Label) ?? Label;
 
 
         public Task StartScanning(Func<List<Guid>, IEnumerable<BaseSensorModel>> getSensors)
@@ -77,7 +79,7 @@ namespace HSMServer.Dashboards
         {
             source = null;
 
-            if (!IsMatch(sensor.FullPath))
+            if (!IsMatch(sensor))
                 return false;
 
             source = new PanelDatasource(sensor);
