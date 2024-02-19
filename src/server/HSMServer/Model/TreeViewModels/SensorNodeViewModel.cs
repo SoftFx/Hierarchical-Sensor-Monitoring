@@ -49,7 +49,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public bool IsTableFormatSupported => Type is not SensorType.File;
 
-        public bool IsDatapointFormatSupported => Type is SensorType.Integer or SensorType.Double or SensorType.Boolean
+        public bool IsDatapointFormatSupported => Type is SensorType.Integer or SensorType.Double or SensorType.Counter or SensorType.Boolean
                                                   or SensorType.String or SensorType.TimeSpan;
 
 

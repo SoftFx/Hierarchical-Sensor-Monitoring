@@ -305,6 +305,7 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorType.FileSensor => SensorType.File,
                 HSMSensorDataObjects.SensorType.IntegerBarSensor => SensorType.IntegerBar,
                 HSMSensorDataObjects.SensorType.DoubleBarSensor => SensorType.DoubleBar,
+                HSMSensorDataObjects.SensorType.CounterSensor => SensorType.Counter,
                 _ => throw new NotImplementedException(),
             };
 

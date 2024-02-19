@@ -11,7 +11,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 SensorType.Boolean => BuildBooleanValue(),
                 SensorType.Integer => BuildIntegerValue(),
-                SensorType.Double => BuildDoubleValue(),
+                SensorType.Double or SensorType.Counter => BuildDoubleValue(),
                 SensorType.String => BuildStringValue(),
                 SensorType.IntegerBar => BuildIntegerBarValue(),
                 SensorType.DoubleBar => BuildDoubleBarValue(),
