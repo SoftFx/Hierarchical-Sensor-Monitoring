@@ -16,6 +16,7 @@ namespace HSMServer.Datasources
 
         public string Tooltip { get; protected set; }
 
+        
         protected internal abstract object Filter(PanelSettings settings);
     }
 
