@@ -303,10 +303,14 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplySources/{templateId:guid}")]
-        public IActionResult ApplySources(Guid dashboardId, Guid panelId, Guid templateId)
+        public async Task<IActionResult> ApplySources(Guid dashboardId, Guid panelId, Guid templateId)
         {
-            if (TryGetPanel(dashboardId, panelId, out var panel))
+            if (TryGetBoard(dashboardId, out var board) && board.Panels.TryGetValue(panelId, out var panel) && panel.Subscriptions.TryGetValue(templateId, out var subscription))
             {
+                subscription.Apply();
+
+                await _dashboards.TryUpdate(board);
+
                 return Ok();
             }
 

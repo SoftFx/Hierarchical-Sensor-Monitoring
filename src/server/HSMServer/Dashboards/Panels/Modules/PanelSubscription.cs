@@ -24,6 +24,7 @@ namespace HSMServer.Dashboards
         {
             PathTempalte = ApplyNewTemplate(entity.PathTemplate);
             Folders = entity.Folders;
+            IsApplied = entity.IsApplied;
         }
 
 
@@ -41,12 +42,19 @@ namespace HSMServer.Dashboards
             var entity = base.ToEntity();
 
             entity.PathTemplate = PathTempalte;
+            entity.IsApplied = IsApplied;
             entity.Folders = Folders;
 
             return entity;
         }
 
         public bool IsMatch(string path) => _pathConverter.IsMatch(path);
+
+        public void Apply()
+        {
+            IsApplied = true;
+
+        }
 
         public bool TryBuildSource(BaseSensorModel sensor, out PanelDatasource source)
         {

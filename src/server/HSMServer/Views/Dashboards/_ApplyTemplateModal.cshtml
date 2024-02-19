@@ -73,6 +73,9 @@
             type: 'POST',
             success: function (result) {
                 resetModal();
+
+                $(`#card_${templateId}`).removeClass("border-warning");
+                $(`#card_${templateId}`).addClass("border-success");
             }
         });
     }

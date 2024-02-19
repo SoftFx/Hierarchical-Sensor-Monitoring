@@ -8,6 +8,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public string PathTemplate { get; set; }
 
         public List<Guid> Folders { get; set; }
+
+        public bool IsApplied { get; set; }
     }
 
 

@@ -12,7 +12,7 @@
 <form id="@Model.Id" class="templateForm d-flex flex-row align-items-center mb-2">
     <input class="d-none" asp-for="Id" value="@Model.Id"/>
     
-    <div class="card w-100">
+    <div id="card_@Model.Id" class="card w-100 @(Model.IsApplied ? "border-success" : "border-warning")">
         <div class="card-body py-2">
             <div class="d-flex flex-column">
                 <div class="d-flex mx-1 align-items-center">

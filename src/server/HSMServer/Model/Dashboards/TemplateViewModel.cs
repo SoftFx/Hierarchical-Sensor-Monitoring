@@ -31,6 +31,8 @@ namespace HSMServer.Model.Dashboards
 
         public string Path { get; set; }
 
+        public bool IsApplied { get; set; }
+
         public List<Guid> Folders { get; set; }
 
 
@@ -55,6 +57,7 @@ namespace HSMServer.Model.Dashboards
             Label = subscription.Label;
             Shape = subscription.Shape;
             Folders = subscription.Folders;
+            IsApplied = subscription.IsApplied;
         }
 
 

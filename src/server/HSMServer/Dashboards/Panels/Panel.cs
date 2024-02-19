@@ -62,7 +62,7 @@ namespace HSMServer.Dashboards
             foreach (var sourceEntity in entity.Sources)
                 TryAddSource(new Guid(sourceEntity.SensorId), sourceEntity);
 
-            foreach (var subEntity in entity.Subsctiptions)
+            foreach (var subEntity in entity.Subscriptions)
                 TryAddSubscription(new PanelSubscription(subEntity));
         }
 
@@ -109,7 +109,7 @@ namespace HSMServer.Dashboards
         {
             var entity = base.ToEntity();
 
-            entity.Subsctiptions.AddRange(Subscriptions.Select(u => u.Value.ToEntity()));
+            entity.Subscriptions.AddRange(Subscriptions.Select(u => u.Value.ToEntity()));
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
 
             entity.Settings = Settings.ToEntity();
