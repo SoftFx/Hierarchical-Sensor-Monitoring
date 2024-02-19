@@ -12,7 +12,7 @@
 <form id="@Model.Id" class="templateForm d-flex flex-row align-items-center mb-2">
     <input class="d-none" asp-for="Id" value="@Model.Id"/>
     
-    <div id="card_@Model.Id" class="card w-100 @(Model.IsApplied ? "border-success" : "border-warning")">
+    <div id="card_@Model.Id" class="card w-100 @(Model.IsApplied ? string.Empty : "border-danger")">
         <div class="card-body py-2">
             <div class="d-flex flex-column">
                 <div class="d-flex mx-1 align-items-center">
@@ -52,11 +52,23 @@
     </div>
 
     <div>
-        <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+        <button id="actionButton" class="btn position-relative" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
             <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+            @if (!Model.IsApplied)
+            {
+                <span name="enableTemplateBadge" class="position-absolute translate-middle p-1 bg-danger border border-light rounded-circle" style="left: 75%!important;"></span>
+            }
         </button>
         <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-            <a class="dropdown-item text-decoration-none fw-normal button-link applyTemplate">Apply</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link applyTemplate">
+                <span class="position-relative">
+                    Enable
+                    @if (!Model.IsApplied)
+                    {
+                        <span name="enableTemplateBadge" class="position-absolute top-0 start-100 p-1 bg-danger border border-light rounded-circle"></span>
+                    }
+                </span>
+            </a>
             <a class="dropdown-item text-decoration-none fw-normal button-link deleteTemplate">Remove</a>
         </div>
     </div>

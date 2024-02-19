@@ -5,7 +5,7 @@
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title text-break">Applying template</h5>
+                <h5 class="modal-title text-break">Enabling template</h5>
             </div>
 
             <div class="modal-body text-break" id="applyTemplate_body">
@@ -20,8 +20,8 @@
             </div>
 
             <div class="modal-footer">
-                <button class="btn btn-secondary col-2 col-lg-1 disabled" id="applyTemplate_okButton" onclick="javascript:apply()">Ok</button>
-                <button class="btn btn-secondary col-2 col-lg-1 px-2" id="applyTemplate_cancelButton" onclick="javascript:cancel()">Cancel</button>
+                <button class="btn btn-primary col-2 col-lg-1 disabled" id="applyTemplate_okButton" onclick="javascript:apply()">Ok</button>
+                <button class="btn btn-primary col-2 col-lg-1 px-2" id="applyTemplate_cancelButton" onclick="javascript:cancel()">Cancel</button>
             </div>
         </div>
     </div>
@@ -74,8 +74,8 @@
             success: function (result) {
                 resetModal();
 
-                $(`#card_${templateId}`).removeClass("border-warning");
-                $(`#card_${templateId}`).addClass("border-success");
+                $(`span[name='enableTemplateBadge']`).addClass("d-none");
+                $(`#card_${templateId}`).removeClass("border-danger");
             }
         });
     }
