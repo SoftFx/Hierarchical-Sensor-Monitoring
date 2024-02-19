@@ -10,10 +10,10 @@ namespace HSMServer.Dashboards
     {
         private readonly PathTemplateConverter _pathConverter = new();
 
+        public List<Guid> Folders { get; private set; }
+
 
         public string PathTempalte { get; private set; }
-
-        public List<Guid> Folders { get; private set; }
 
         public bool IsApplied { get; private set; }
 
@@ -48,7 +48,11 @@ namespace HSMServer.Dashboards
             return entity;
         }
 
-        public bool IsMatch(string path) => _pathConverter.IsMatch(path);
+
+        public bool IsMatch(string path) =>_pathConverter?.IsMatch(path) ?? false;
+
+        public string BuildSensorLabel() => _pathConverter?.BuildStringByTempalte(Label) ?? Label;
+
 
         public void Apply()
         {
