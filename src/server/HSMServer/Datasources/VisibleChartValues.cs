@@ -17,7 +17,7 @@ namespace HSMServer.Datasources
         public string Tooltip { get; protected set; }
 
         
-        protected internal abstract object Filter(PanelSettings settings);
+        protected internal abstract object Filter(RangeSettings settings);
     }
 
 
@@ -40,7 +40,7 @@ namespace HSMServer.Datasources
         }
         
         
-        protected internal override object Filter(PanelSettings settings)
+        protected internal override object Filter(RangeSettings settings)
         {
             Tooltip = Value + " " + Tooltip;
 

@@ -29,18 +29,18 @@
 
                 <div class="d-flex">
                     <div class="form-control w-auto d-flex no-border align-items-center">
-                        <div id="autoscale-range" class="d-flex no-border align-items-center @(Model.Settings.AutoScale ? "disabled-group" : "")">
+                        <div id="autoscale-range" class="d-flex no-border align-items-center @(Model.Settings.RangeSettings.AutoScale ? "disabled-group" : "")">
                             <span>Y axis:</span>
 
-                            <label class="form-check-label w-auto ms-2" asp-for="Settings.MinY"></label>
-                            <input type="number" step="any" asp-for="Settings.MinY" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
+                            <label class="form-check-label w-auto ms-2" asp-for="Settings.RangeSettings.MinY"></label>
+                            <input type="number" step="any" asp-for="Settings.RangeSettings.MinY" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
 
-                            <label class="form-check-label w-auto ms-2" asp-for="Settings.MaxY"></label>
-                            <input type="number" step="any" asp-for="Settings.MaxY" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
+                            <label class="form-check-label w-auto ms-2" asp-for="Settings.RangeSettings.MaxY"></label>
+                            <input type="number" step="any" asp-for="Settings.RangeSettings.MaxY" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
                         </div>
                        
-                        <input id="autoscale" class="form-check-input mx-1" asp-for="Settings.AutoScale" type="checkbox"/>
-                        <label class="form-check-label" asp-for="Settings.AutoScale"></label>
+                        <input id="autoscale" class="form-check-input mx-1" asp-for="Settings.RangeSettings.AutoScale" type="checkbox"/>
+                        <label class="form-check-label" asp-for="Settings.RangeSettings.AutoScale"></label>
                     </div>
                     <div class="d-flex flex-row align-items-center justify-content-end mt-2 flex-grow-1">
                         <div class="form-check">

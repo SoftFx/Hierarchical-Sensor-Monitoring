@@ -8,8 +8,6 @@ namespace HSMServer.Dashboards
 {
     public sealed class PanelDatasource : BasePlotPanelModule<PanelSourceUpdate, PanelSourceEntity>
     {
-        public PanelSettings Settings { get; }
-        
         public BaseSensorModel Sensor { get; }
 
         public Guid SensorId { get; }
@@ -18,25 +16,23 @@ namespace HSMServer.Dashboards
         public SensorDatasourceBase Source { get; private set; }
 
 
-        public PanelDatasource(BaseSensorModel sensor, PanelSettings settings = null) : base()
+        public PanelDatasource(BaseSensorModel sensor) : base()
         {
             SensorId = sensor.Id;
             Sensor = sensor;
 
             Property = sensor.Type.IsBar() ? PlottedProperty.Max : PlottedProperty.Value;
             Label = $"{sensor.DisplayName} ({Property})";
-            Settings = settings;
         }
 
-        public PanelDatasource(BaseSensorModel sensor, PanelSourceEntity entity, PanelSettings settings) : base(entity)
+        public PanelDatasource(BaseSensorModel sensor, PanelSourceEntity entity) : base(entity)
         {
             SensorId = new Guid(entity.SensorId);
             Sensor = sensor;
-            Settings = settings;
         }
 
 
-        public PanelDatasource BuildSource(bool aggregateValues)
+        public PanelDatasource BuildSource(bool aggregateValues, RangeSettings rangeSettings)
         {
             Source?.Dispose(); // unsubscribe prev version
 
@@ -46,9 +42,10 @@ namespace HSMServer.Dashboards
                 Property = Property,
 
                 AggregateValues = aggregateValues,
+                RangeSettings = rangeSettings
             };
 
-            Source = DatasourceFactory.Build(Sensor, settings, Settings);
+            Source = DatasourceFactory.Build(Sensor, settings);
 
             return this;
         }
@@ -70,6 +67,6 @@ namespace HSMServer.Dashboards
             Source?.Dispose();
         }
 
-        protected override void ChangeDependentProperties(PanelSourceUpdate update) => BuildSource(update.AggregateValues);
+        protected override void ChangeDependentProperties(PanelSourceUpdate update) => BuildSource(update.AggregateValues, null);
     }
 }

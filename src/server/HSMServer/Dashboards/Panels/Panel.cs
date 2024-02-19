@@ -78,7 +78,7 @@ namespace HSMServer.Dashboards
                 AggregateValues = update.IsAggregateValues.Value;
 
                 foreach (var (_, source) in Sources)
-                    source.BuildSource(AggregateValues);
+                    source.BuildSource(AggregateValues, Settings.RangeSettings);
             }
         }
 
@@ -127,7 +127,7 @@ namespace HSMServer.Dashboards
 
         public bool TryAddSource(Guid sensorId, PanelSourceEntity entity)
         {
-            return _board.TryGetSensor(sensorId, out var sensor) && TrySaveNewSource(new PanelDatasource(sensor, entity, Settings), out _).IsOk;
+            return _board.TryGetSensor(sensorId, out var sensor) && TrySaveNewSource(new PanelDatasource(sensor, entity), out _).IsOk;
         }
 
         public bool TryAddSource(Guid sensorId, out PanelDatasource source, out string error)
@@ -198,7 +198,7 @@ namespace HSMServer.Dashboards
 
                 _sensorToSourceMap[source.Sensor.Id].Add(source.Id);
 
-                source.BuildSource(AggregateValues);
+                source.BuildSource(AggregateValues, Settings.RangeSettings);
                 SubscribeModuleToUpdates(source);
             }
 

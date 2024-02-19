@@ -3,6 +3,18 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Dashboards
 {
+    public sealed record RangeSettings
+    {
+        [Display(Name = "Max")]
+        public double MaxY { get; set; }
+        
+        [Display(Name = "Min")]
+        public double MinY { get; set; }
+        
+        [Display(Name = "Autoscale")]
+        public required bool AutoScale { get; set; }
+    }
+    
     public sealed class PanelSettings
     {
         internal const double DefaultHeight = 0.2;
@@ -21,21 +33,16 @@ namespace HSMServer.Dashboards
 
         public bool ShowLegend { get; private set; }
         
-        [Display(Name = "Max")]
-        public double MaxY { get; set; }
-        
-        [Display(Name = "Min")]
-        public double MinY { get; set; }
-        
-        
-        [Display(Name = "Autoscale")]
-        public bool AutoScale { get; set; }
+        public RangeSettings RangeSettings { get; set; }
 
 
         public PanelSettings()
         {
             ShowLegend = true;
-            AutoScale = true;
+            RangeSettings = new RangeSettings()
+            {
+                AutoScale = true
+            };
         }
 
 
@@ -49,10 +56,10 @@ namespace HSMServer.Dashboards
 
             ShowLegend = update.ShowLegend ?? ShowLegend;
 
-            MaxY = update.MaxY ?? MaxY;
-            MinY = update.MinY ?? MinY;
+            RangeSettings.MaxY = update.MaxY ?? RangeSettings.MaxY;
+            RangeSettings.MinY = update.MinY ?? RangeSettings.MinY;
 
-            AutoScale = update.AutoScale ?? AutoScale;
+            RangeSettings.AutoScale = update.AutoScale ?? RangeSettings.AutoScale;
         }
 
         public PanelSettings FromEntity(PanelSettingsEntity entity)
@@ -65,10 +72,13 @@ namespace HSMServer.Dashboards
 
             ShowLegend = entity.ShowLegend;
 
-            MaxY = entity.MaxY;
-            MinY = entity.MinY;
-
-            AutoScale = entity.AutoScale;
+            RangeSettings = new RangeSettings
+            {
+                AutoScale = entity.AutoScale,
+                MaxY = entity.MaxY,
+                MinY = entity.MinY
+            };
+            
             return this;
         }
 
@@ -83,10 +93,10 @@ namespace HSMServer.Dashboards
 
                 ShowLegend = ShowLegend,
                 
-                MaxY = MaxY,
-                MinY = MinY,
+                MaxY = RangeSettings.MaxY,
+                MinY = RangeSettings.MinY,
                 
-                AutoScale = AutoScale
+                AutoScale = RangeSettings.AutoScale
             };
     }
 }

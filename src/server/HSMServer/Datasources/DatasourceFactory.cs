@@ -6,7 +6,7 @@ namespace HSMServer.Datasources
 {
     public static class DatasourceFactory
     {
-        public static SensorDatasourceBase Build(BaseSensorModel sensor, SourceSettings settings, PanelSettings panelSettings)
+        public static SensorDatasourceBase Build(BaseSensorModel sensor, SourceSettings settings)
         {
             var property = settings.Property;
 
@@ -35,7 +35,7 @@ namespace HSMServer.Datasources
                 _ => throw new Exception($"History visualization for {sensor.Type} sensor is not supported")
             };
 
-            return source.AttachSensor(sensor, settings, panelSettings);
+            return source.AttachSensor(sensor, settings);
         }
 
 

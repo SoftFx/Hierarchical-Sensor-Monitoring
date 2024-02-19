@@ -36,16 +36,15 @@ namespace HSMServer.Datasources
         protected abstract ChartType NormalType { get; }
 
 
-        protected internal Func<BaseChartValue, object> Filter;
+        protected internal Func<BaseChartValue, object> Filter { get; private set; }
         
 
-        internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings, PanelSettings panelSettings)
+        internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings)
         {
-            _settings = settings;
+            _settings = settings ?? _settings;
             _sensor = sensor;
-            _panelSettings = panelSettings;
             
-            Filter = panelSettings?.AutoScale ?? true ? value => value : value => value.Filter(_panelSettings);
+            Filter = _settings?.RangeSettings?.AutoScale ?? true ? value => value : value => value.Filter(_settings?.RangeSettings);
             DataAggregator.Setup(settings);
 
             _sensor.ReceivedNewValue += AddNewValue;
