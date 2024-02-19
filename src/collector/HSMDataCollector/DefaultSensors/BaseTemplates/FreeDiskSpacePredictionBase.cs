@@ -108,8 +108,8 @@ namespace HSMDataCollector.DefaultSensors
 
             while (!_tokenSource.IsCancellationRequested)
             {
-                var curSpace = FreeSpace;
                 var utc = DateTime.UtcNow;
+                var curSpace = FreeSpace;
 
                 var curSpeed = (_lastAvailableSpace - curSpace) / (utc - _lastSpeedCheckTime).TotalSeconds;
 
