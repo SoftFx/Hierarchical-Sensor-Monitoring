@@ -79,9 +79,7 @@ namespace HSMServer.Datasources
             return new()
             {
                 ChartType = DataAggregator.UseAggregation ? AggregatedType : NormalType,
-                Values = (_panelSettings?.AutoScale ?? true 
-                    ? _newVisibleValues
-                    : _newVisibleValues.Select(x => x.Filter(_panelSettings))).ToList(),
+                Values = _newVisibleValues.Select(Filter).ToList(),
             };
             
         }
@@ -89,9 +87,7 @@ namespace HSMServer.Datasources
         public UpdateChartSourceResponse GetSourceUpdates() =>
             new()
             {
-                NewVisibleValues = (_panelSettings?.AutoScale ?? true 
-                    ? _newVisibleValues
-                    : _newVisibleValues.Select(x => x.Filter(_panelSettings))).ToList(),
+                NewVisibleValues = _newVisibleValues.Select(Filter).ToList(),
                 IsTimeSpan = _sensor.Type is SensorType.TimeSpan
             };
 
@@ -111,6 +107,14 @@ namespace HSMServer.Datasources
 
             while (_newVisibleValues.Count > _settings.MaxVisibleCount)
                 _newVisibleValues.RemoveFirst();
+        }
+
+        private object Filter(BaseChartValue value)
+        {
+            if (_panelSettings?.AutoScale ?? true)
+                return value;
+
+            return value.Filter(_panelSettings);
         }
     }
 }
