@@ -33,10 +33,10 @@
                             <span>Y axis:</span>
 
                             <label class="form-check-label w-auto ms-2" asp-for="Settings.MinY"></label>
-                            <input type="number" asp-for="Settings.MinY" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
+                            <input type="number" step="any" asp-for="Settings.MinY" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
 
                             <label class="form-check-label w-auto ms-2" asp-for="Settings.MaxY"></label>
-                            <input type="number" asp-for="Settings.MaxY" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
+                            <input type="number" step="any" asp-for="Settings.MaxY" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
                         </div>
                        
                         <input id="autoscale" class="form-check-input mx-1" asp-for="Settings.AutoScale" type="checkbox"/>

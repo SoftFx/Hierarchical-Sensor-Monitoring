@@ -44,10 +44,11 @@ namespace HSMServer.Datasources
         {
             Tooltip = Value + " " + Tooltip;
 
-            if (settings.MaxY.CompareTo(Value) > 0)
+            var checkedValue = double.CreateChecked(Value);
+            if (settings.MaxY.CompareTo(checkedValue) < 0)
                 Value = T.CreateChecked(settings.MaxY);
           
-            if (settings.MinY.CompareTo(Value) < 0)
+            if (settings.MinY.CompareTo(checkedValue) > 0)
                 Value = T.CreateChecked(settings.MinY);
             
             return this;
