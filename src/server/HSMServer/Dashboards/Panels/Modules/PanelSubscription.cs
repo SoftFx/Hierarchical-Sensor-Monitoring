@@ -3,6 +3,7 @@ using HSMServer.Core.Model;
 using HSMServer.PathTemplates;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace HSMServer.Dashboards
 {
@@ -12,8 +13,10 @@ namespace HSMServer.Dashboards
 
         public List<Guid> Folders { get; private set; }
 
-
         public string PathTempalte { get; private set; }
+
+
+        public PanelSensorScanTask ScannedTask { get; private set; }
 
         public bool IsApplied { get; private set; }
 
@@ -49,15 +52,25 @@ namespace HSMServer.Dashboards
         }
 
 
-        public bool IsMatch(string path) =>_pathConverter?.IsMatch(path) ?? false;
+        public bool IsMatch(string path) => _pathConverter?.IsMatch(path) ?? false;
 
         public string BuildSensorLabel() => _pathConverter?.BuildStringByTempalte(Label) ?? Label;
 
 
+        public Task StartScanning(Func<List<Guid>, IEnumerable<BaseSensorModel>> getSensors)
+        {
+            CancelScanning();
+
+            ScannedTask = new PanelSensorScanTask();
+
+            return ScannedTask.StartScanning(getSensors?.Invoke(Folders), this);
+        }
+
+        public void CancelScanning() => ScannedTask?.Cancel();
+
         public void Apply()
         {
             IsApplied = true;
-
         }
 
         public bool TryBuildSource(BaseSensorModel sensor, out PanelDatasource source)

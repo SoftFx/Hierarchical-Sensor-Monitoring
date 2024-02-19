@@ -279,27 +279,26 @@ namespace HSMServer.Controllers
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplyTemplate/{templateId:guid}")]
         public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, Guid templateId) =>
-            TryGetPanel(dashboardId, panelId, out var panel) && panel.TryGetScanTask(templateId, out _)
+            TryGetPanel(dashboardId, panelId, out var panel) && panel.TryStartScan(templateId)
                 ? Ok()
                 : NotFound("No such template to apply");
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/GetResultOfApplying/{templateId:guid}")]
         public IActionResult GetResultOfApplying(Guid dashboardId, Guid panelId, Guid templateId) =>
-            TryGetPanel(dashboardId, panelId, out var panel) && panel.TryGetScanTask(templateId, out var template)
-                ? new JsonResult(template.GetResult())
-                : NotFound("No such template to update");
+            TryGetSubscription(dashboardId, panelId, templateId, out var sub)
+                ? new JsonResult(sub.ScannedTask?.GetResult())
+                : NotFound("No such panel or tempalte");
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/CancelApplying/{templateId:guid}")]
         public IActionResult CancelApplying(Guid dashboardId, Guid panelId, Guid templateId)
         {
-            if (TryGetPanel(dashboardId, panelId, out var panel))
+            if (TryGetSubscription(dashboardId, panelId, templateId, out var sub))
             {
-                panel.CancelTask(templateId);
-
+                sub.ScannedTask?.Cancel();
                 return Ok();
             }
             
-            return NotFound("No such panel");
+            return NotFound("No such panel or tempalte");
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplySources/{templateId:guid}")]
@@ -332,8 +331,16 @@ namespace HSMServer.Controllers
         {
             source = null;
 
-            return TryGetBoard(boardId, out var board) && board.Panels.TryGetValue(panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out source);
+            return TryGetPanel(boardId, panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out source);
         }
+
+        private bool TryGetSubscription(Guid boardId, Guid panelId, Guid subscriptionId, out PanelSubscription subscription)
+        {
+            subscription = null;
+
+            return TryGetPanel(boardId, panelId, out var panel) && panel.Subscriptions.TryGetValue(subscriptionId, out subscription);
+        }
+
 
         private Dictionary<Guid, string> GetAvailableFolders() => _folders.GetValues().ToDictionary(k => k.Id, v => v.Name);
     }
