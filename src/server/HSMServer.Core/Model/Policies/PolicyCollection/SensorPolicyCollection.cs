@@ -159,16 +159,13 @@ namespace HSMServer.Core.Model.Policies
                         if (isLastValue)
                             SensorResult += policy.SensorResult;
 
-                        if (policy.IsActivate)
+                        if (isReplace)
                         {
-                            if (isReplace)
-                            {
-                                NotificationResult.AddSingleAlert(policy);
-                                policy.ResetState();
-                            }
-                            else
-                                NotificationResult.AddAlert(policy);
+                            NotificationResult.AddSingleAlert(policy);
+                            policy.ResetState();
                         }
+                        else
+                            NotificationResult.AddAlert(policy);
                     }
             }
 
