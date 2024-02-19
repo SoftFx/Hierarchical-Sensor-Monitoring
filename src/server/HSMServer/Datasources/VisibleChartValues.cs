@@ -43,11 +43,11 @@ namespace HSMServer.Datasources
         protected internal override object Filter(PanelSettings settings)
         {
             Tooltip = Value + " " + Tooltip;
-            
-            if (Value.CompareTo(settings.MaxY) > 0)
+
+            if (settings.MaxY.CompareTo(Value) > 0)
                 Value = T.CreateChecked(settings.MaxY);
           
-            if (Value.CompareTo(settings.MinY) < 0)
+            if (settings.MinY.CompareTo(Value) < 0)
                 Value = T.CreateChecked(settings.MinY);
             
             return this;

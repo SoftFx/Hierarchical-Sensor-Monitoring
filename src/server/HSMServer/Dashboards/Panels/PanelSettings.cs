@@ -22,10 +22,10 @@ namespace HSMServer.Dashboards
         public bool ShowLegend { get; private set; }
         
         [Display(Name = "Max")]
-        public int MaxY { get; set; }
+        public double MaxY { get; set; }
         
         [Display(Name = "Min")]
-        public int MinY { get; set; }
+        public double MinY { get; set; }
         
         
         [Display(Name = "Autoscale")]

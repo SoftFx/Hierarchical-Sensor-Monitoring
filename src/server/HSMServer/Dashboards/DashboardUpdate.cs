@@ -28,9 +28,9 @@ namespace HSMServer.Dashboards
 
         public bool? IsAggregateValues { get; init; }
         
-        public int? MaxY { get; init; }
+        public double? MaxY { get; init; }
         
-        public int? MinY { get; init; }
+        public double? MinY { get; init; }
 
         public bool? AutoScale { get; set; }
 
