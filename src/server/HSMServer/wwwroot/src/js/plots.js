@@ -60,7 +60,7 @@ export class Plot {
             this.line.color = customColor;
         }
     }
-    
+
     setUpData(data) { }
 
     getPlotData() {
@@ -361,7 +361,7 @@ export class DoublePlot extends ErrorColorPlot {
         let name = this.name;
         for (let i of data) {
             this.x.push(i.time)
-            
+
             if (Plot.checkNaN(i[customField]))
                 this.y.push("NaN")
             else
