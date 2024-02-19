@@ -160,10 +160,7 @@ namespace HSMServer.Core.Model.Policies
                             SensorResult += policy.SensorResult;
 
                         if (isReplace)
-                        {
                             NotificationResult.AddSingleAlert(policy);
-                            policy.ResetState();
-                        }
                         else
                             NotificationResult.AddAlert(policy);
                     }
