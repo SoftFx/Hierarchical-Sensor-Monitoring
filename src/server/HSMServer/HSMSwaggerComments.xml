@@ -84,6 +84,13 @@
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.CounterSensorValue)">
+            <summary>
+            Receives value of counter sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleBarSensorValue)">
             <summary>
             Receives value of double bar sensor

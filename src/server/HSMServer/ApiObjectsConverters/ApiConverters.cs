@@ -80,6 +80,17 @@ namespace HSMServer.ApiObjectsConverters
             };
         }
 
+        public static CounterValue Convert(this CounterSensorValue value)
+        {
+            return new()
+            {
+                Comment = value.Comment,
+                Time = value.Time,
+                Status = value.Status.Convert(),
+                Value = value.Value
+            };
+        }
+
 
         public static FileValue Convert(this FileSensorValue value) =>
             new()
@@ -140,6 +151,7 @@ namespace HSMServer.ApiObjectsConverters
                 TimeSpanSensorValue sv => sv.Convert(),
                 VersionSensorValue sv => sv.Convert(),
                 FileSensorValue sv => sv.Convert(),
+                CounterSensorValue sv => sv.Convert(),
                 _ => null
             };
 
