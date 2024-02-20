@@ -10,6 +10,7 @@ namespace HSMServer.Datasources
         private const int DefaultMaxVisibleCnt = 100;
         private const int MaxNotAggrPoints = 1500;
 
+        public required PanelRangeSettings YRange { get; init; }
 
         public required PlottedProperty Property { get; init; }
 

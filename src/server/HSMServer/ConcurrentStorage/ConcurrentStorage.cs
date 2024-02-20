@@ -55,7 +55,12 @@ namespace HSMServer.ConcurrentStorage
         {
             model = FromEntity(entity);
 
-            return TryAdd(model.Id, model);
+            var result = TryAdd(model.Id, model);
+
+            if (result)
+                Added?.Invoke(model);
+
+            return result;
         }
 
         public virtual Task<bool> TryAdd(ModelType model)

@@ -38,7 +38,7 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree = new();
 
-        private readonly CGuidDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
+        private readonly CDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -469,6 +469,24 @@ namespace HSMServer.Core.Cache
 
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
+
+        public IEnumerable<BaseSensorModel> GetSensorsByFolder(List<Guid> folderIds = null)
+        {
+            var hash = folderIds?.ToHashSet();
+
+            bool GetAnySensor(BaseSensorModel _) => true;
+            bool GetSensorByFolder(BaseSensorModel sensor) => hash.Contains(sensor.Root.FolderId ?? Guid.Empty);
+
+            Predicate<BaseSensorModel> filter = folderIds switch
+            {
+                null => GetAnySensor,
+                _ => GetSensorByFolder,
+            };
+
+            foreach (var (_, sensor) in _sensors)
+                if (filter(sensor))
+                    yield return sensor;
+        }
 
         public bool TryGetSensorByPath(string productName, string path, out BaseSensorModel sensor)
         {

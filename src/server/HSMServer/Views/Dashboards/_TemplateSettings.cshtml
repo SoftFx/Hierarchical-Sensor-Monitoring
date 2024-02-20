@@ -1,0 +1,130 @@
+﻿@using HSMCommon.Extensions
+@using HSMServer.Extensions
+@using HSMServer.Dashboards
+@using HSMServer.Controllers
+@using HSMServer.Model.Dashboards
+
+@model TemplateViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<form id="@Model.Id" class="templateForm d-flex flex-row align-items-center mb-2">
+    <input class="d-none" asp-for="Id" value="@Model.Id"/>
+    
+    <div id="card_@Model.Id" class="card w-100 @(Model.IsApplied ? string.Empty : "border-danger")">
+        <div class="card-body py-2">
+            <div class="d-flex flex-column">
+                <div class="d-flex mx-1 align-items-center">
+                    <label class="fw-bold me-1 text-nowrap">From folder:</label>
+
+                    <select id="folders_@Model.Id" class="selectpicker" name="Folders" multiple data-live-search="true" data-actions-box="true" data-container="body" onchange="javascript:updateTemplate('@Model.Id')">
+                        <option value="@TemplateViewModel.AnyFolders" selected="@(Model.Folders is null)" title="All products (with and without folders)">@TemplateViewModel.AnyFolders</option>
+
+                        <option data-divider="true"></option>
+
+                        @foreach (var folder in Model.AvailableFolders.OrderBy(f => f.Item2))
+                        {
+                            <option value="@folder.Item1" selected="@(Model.Folders?.Contains(folder.Item1.Value) ?? false)">@folder.Item2</option>
+                        }
+
+                        <option value="@Guid.Empty" selected="@(Model.Folders?.Contains(Guid.Empty) ?? false)" title="Products without folder">@TemplateViewModel.OtherProducts</option>
+                    </select>
+
+                    <label class="fw-bold ms-2 me-1 text-nowrap">with path:</label>
+                    <input class="form-control" type="text" placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" asp-for="Path" onchange="javascript:updateTemplate('@Model.Id')" />
+                </div>
+            </div>
+
+            <div class="d-flex flex-column mt-1">
+                <div class="d-flex mx-1 align-items-center">
+                    <label class="fw-bold me-1">Label:</label>
+                    <input class="form-control" type="text" placeholder="Example: {product} - {diskName}" asp-for="Label" onchange="javascript:updateTemplate('@Model.Id')" />
+
+                    <label class="fw-bold ms-2 me-1">Property:</label>
+                    <select class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties.ToSelectedItems(k => k.GetDisplayName())" onfocusout="javascript:updateTemplate('@Model.Id')"></select>
+
+                    <a href="https://plotly.com/javascript/line-charts/#line-shape-options-for-interpolation" target="_blank" class="fw-bold ms-2 me-1">Shape:</a>
+                    <select class="form-select w-auto" title="Shape of chart line" asp-for="Shape" asp-items="Enum.GetValues(typeof(PlottedShape)).Cast<PlottedShape>().ToSelectedItems()" onfocusout="javascript:updateTemplate('@Model.Id')"></select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <button id="actionButton" class="btn position-relative" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+            <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+            @if (!Model.IsApplied)
+            {
+                <span name="enableTemplateBadge" class="position-absolute translate-middle p-1 bg-danger border border-light rounded-circle" style="left: 75%!important;"></span>
+            }
+        </button>
+        <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+            <a class="dropdown-item text-decoration-none fw-normal button-link applyTemplate">
+                <span class="position-relative">
+                    Enable
+                    @if (!Model.IsApplied)
+                    {
+                        <span name="enableTemplateBadge" class="position-absolute top-0 start-100 p-1 bg-danger border border-light rounded-circle"></span>
+                    }
+                </span>
+            </a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link deleteTemplate">Remove</a>
+        </div>
+    </div>
+</form>
+
+
+<script>
+    $(document).ready(function () {
+        $("select[name='Folders']").selectpicker();
+    });
+
+    $("a.applyTemplate").off("click").on("click", function () {
+        var form = $(this).parents("form.templateForm:first");
+        let formId = form.attr("id");
+
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.ApplyTemplate))/${formId}`,
+            type: 'POST',
+            success: function () {
+                $(`#applyTemplate_modal`).attr("name", formId);
+                $(`#applyTemplate_modal`).modal('show');
+            }
+        });
+    });
+
+    $("a.deleteTemplate").off("click").on("click", function () {
+        var form = $(this).parents("form.templateForm:first");
+        let formId = form.attr("id");
+
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.DeleteTemplate))/${formId}`,
+            type: 'POST',
+            success: function () {
+                form.remove();
+            }
+        });
+    });
+
+    function updateTemplate(templateId) {
+        var form = document.getElementById(templateId);
+        var formData = new FormData(form);
+
+        if ($(`select[id='folders_${templateId}'] option[value='@TemplateViewModel.AnyFolders']`).is(':selected') == true) {
+            formData.delete("Folders");
+        }
+        else if ($(`select[id='folders_${templateId}'] option:selected`).length == 0) {
+            formData.set("Folders", []);
+        }
+
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.UpdateTemplate))`,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            async: false
+        });
+    }
+</script>
