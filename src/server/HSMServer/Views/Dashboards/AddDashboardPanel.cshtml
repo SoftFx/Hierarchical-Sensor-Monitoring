@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Controllers
 @using System.Text.Json
-@using System.Text.Json.Serialization
+@using HSMServer.JsonConverters
+@using Microsoft.AspNetCore.Mvc.TagHelpers
 
 @model HSMServer.Model.Dashboards.PanelViewModel
 
@@ -9,6 +10,11 @@
 @{
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Tree/_Layout.cshtml";
+    var jsonOptions = new JsonSerializerOptions()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new PlotlyDoubleConverter() }
+    };
 }
 
 
@@ -86,15 +92,14 @@
 
 <script>
     $(document).ready(function () {
-        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions()
-                     {
-                         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                         NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
-                     }))
+        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions))
+        let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
+        let range = settings.rangeSettings.autoScale === true ? true : [Number(settings.rangeSettings.minY), Number(settings.rangeSettings.maxY)];
+
         initMultichart('multichart', 300, true, true).then(
             (dom) => {
                 values.forEach(function (x) {
-                    addNewSourceHtml(x, 'multichart');
+                    addNewSourceHtml(x, 'multichart', range);
                 })
 
                 $('#multichart').on('plotly_relayout', function (e, updateData){

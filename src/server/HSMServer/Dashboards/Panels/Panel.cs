@@ -77,6 +77,7 @@ namespace HSMServer.Dashboards
                 (update.AutoScale.HasValue && update.AutoScale != Settings.RangeSettings.AutoScale))
             {
                 AggregateValues = update.IsAggregateValues.Value;
+                Settings.RangeSettings.AutoScale = update.AutoScale.Value;
 
                 foreach (var (_, source) in Sources)
                     source.BuildSource(AggregateValues, Settings.RangeSettings);

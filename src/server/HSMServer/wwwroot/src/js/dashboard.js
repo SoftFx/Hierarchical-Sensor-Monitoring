@@ -183,9 +183,9 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
 }
 
-window.addNewSourceHtml = function (data, id) {
+window.addNewSourceHtml = function (data, id, range = undefined) {
     insertSourceHtml(data);
-    insertSourcePlot(data, id);
+    insertSourcePlot(data, id, undefined, undefined, range);
 }
 
 export function initDropzone() {
@@ -340,6 +340,7 @@ window.initDashboard = function () {
                             prevData.ids.push(j.id)
                             let custom = j.value;
                             if (currentPanel[i].range !== undefined && currentPanel[i].range !== true)
+                                // custom = j.tooltip.fakeValue + ' ' + j.tooltip.comment;
                                 custom = j.tooltip;
                             else if (j.tooltip !== null)
                                 custom += `<br>${j.tooltip}`;

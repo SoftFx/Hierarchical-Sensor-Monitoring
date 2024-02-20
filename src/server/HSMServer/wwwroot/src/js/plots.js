@@ -266,7 +266,6 @@ export class BoolPlot extends Plot {
             this.customdata.push(customValue + '<br>' + value.tooltip);
             return;
         }
-
         this.customdata.push(customValue);
     }
 
@@ -328,6 +327,7 @@ export class IntegerPlot extends ErrorColorPlot {
                 this.y.push("NaN")
             else
                 this.y.push(Number(i.value) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i.value))
+
             this.addCustomData(i);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
@@ -366,6 +366,7 @@ export class DoublePlot extends ErrorColorPlot {
                 this.y.push("NaN")
             else
                 this.y.push(Number(i[customField] === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i[customField])))
+
             this.addCustomData(i, checkNotCompressedCount, customField);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));

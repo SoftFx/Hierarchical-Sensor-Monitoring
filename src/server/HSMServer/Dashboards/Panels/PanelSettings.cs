@@ -58,8 +58,6 @@ namespace HSMServer.Dashboards
 
             RangeSettings.MaxY = update.MaxY ?? RangeSettings.MaxY;
             RangeSettings.MinY = update.MinY ?? RangeSettings.MinY;
-
-            RangeSettings.AutoScale = update.AutoScale ?? RangeSettings.AutoScale;
         }
 
         public PanelSettings FromEntity(PanelSettingsEntity entity)

@@ -42,8 +42,8 @@ namespace HSMServer.Datasources
         protected internal override object Filter(RangeSettings settings)
         {
             Tooltip = $"""
-                      Original value: {Value}<br>
-                      Comment: {Tooltip}
+                      Original value: {Value}
+                      {(string.IsNullOrEmpty(Tooltip) ? "" : $"<br>Comment: {Tooltip}" )}
                       """;
             
             var checkedValue = double.CreateChecked(Value);
