@@ -15,7 +15,7 @@ namespace HSMServer.Core.Confirmation
         private readonly ConcurrentDictionary<Guid, AlertResult> _lastStatusUpdates = new();
 
 
-        internal void SaveOrSendPolicies(PolicyResult policyResult)
+        internal void RegisterNotification(PolicyResult policyResult)
         {
             try
             {
@@ -41,7 +41,7 @@ namespace HSMServer.Core.Confirmation
                     }
                 }
 
-                SendAlertMessage(sensorId, [.. newAlerts.Values]);
+                SendAlertMessage(sensorId, [..newAlerts.Values]);
             }
             catch (Exception ex)
             {

@@ -64,37 +64,6 @@ namespace HSMServer.Core.Model.Policies
             _okPolicy.TryUpdate(update with { Template = _okPolicy.OkTemplate, Icon = null }, out _, sensor);
         }
 
-        internal bool AddChat(Guid id, string name)
-        {
-            if (Destination.AllChats && !Destination.Chats.ContainsKey(id))
-            {
-                Destination.Chats.Add(id, name);
-                _okPolicy.Destination.Chats.Add(id, name);
-
-                RebuildState();
-                _okPolicy.RebuildState();
-
-                return true;
-            }
-
-            return false;
-        }
-
-        internal bool RemoveChat(Guid id)
-        {
-            if (Destination.Chats.Remove(id))
-            {
-                _okPolicy.Destination.Chats.Remove(id);
-
-                RebuildState();
-                _okPolicy.RebuildState();
-
-                return true;
-            }
-
-            return false;
-        }
-
         internal bool HasTimeout(DateTime? time) => !_ttl.IsEmpty && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 
         public override string ToString()

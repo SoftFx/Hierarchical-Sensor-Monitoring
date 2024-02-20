@@ -171,9 +171,10 @@ namespace HSMServer.Core.Model.Policies
         };
 
 
-        protected void ResetState()
+        public void ResetState()
         {
             Comment = string.Empty;
+
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
