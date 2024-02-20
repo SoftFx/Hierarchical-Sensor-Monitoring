@@ -32,7 +32,7 @@ namespace HSMServer.Dashboards
         }
 
 
-        public PanelDatasource BuildSource(bool aggregateValues, RangeSettings rangeSettings)
+        public PanelDatasource BuildSource(bool aggregateValues, PanelRangeSettings yRangeSettings)
         {
             Source?.Dispose(); // unsubscribe prev version
 
@@ -42,7 +42,7 @@ namespace HSMServer.Dashboards
                 Property = Property,
 
                 AggregateValues = aggregateValues,
-                RangeSettings = rangeSettings
+                YRange = yRangeSettings
             };
 
             Source = DatasourceFactory.Build(Sensor, settings);

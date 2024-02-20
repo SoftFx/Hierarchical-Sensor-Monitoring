@@ -35,18 +35,18 @@
 
                 <div class="d-flex">
                     <div class="form-control w-auto d-flex no-border align-items-center">
-                        <div id="autoscale-range" class="d-flex no-border align-items-center @(Model.Settings.RangeSettings.AutoScale ? "disabled-group" : "")">
+                        <div id="autoscale-range" class="d-flex no-border align-items-center @(Model.YRange.AutoScale ? "disabled-group" : "")">
                             <span>Y axis settings:</span>
 
-                            <label class="form-check-label w-auto ms-2" asp-for="Settings.RangeSettings.MinY"></label>
-                            <input type="number" step="any" asp-for="Settings.RangeSettings.MinY" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
+                            <label class="form-check-label w-auto ms-2" asp-for="YRange.MinValue"></label>
+                            <input type="number" step="any" asp-for="YRange.MinValue" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
 
-                            <label class="form-check-label w-auto ms-2" asp-for="Settings.RangeSettings.MaxY"></label>
-                            <input type="number" step="any" asp-for="Settings.RangeSettings.MaxY" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
+                            <label class="form-check-label w-auto ms-2" asp-for="YRange.MaxValue"></label>
+                            <input type="number" step="any" asp-for="YRange.MaxValue" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
                         </div>
                        
-                        <input id="autoscale" class="form-check-input my-0 mx-1" asp-for="Settings.RangeSettings.AutoScale" type="checkbox"/>
-                        <label class="form-check-label" asp-for="Settings.RangeSettings.AutoScale"></label>
+                        <input id="autoscale" class="form-check-input my-0 mx-1" asp-for="YRange.AutoScale" type="checkbox"/>
+                        <label class="form-check-label" asp-for="YRange.AutoScale"></label>
                     </div>
                     <div class="d-flex flex-row align-items-center justify-content-end mt-2 flex-grow-1">
                         <div class="form-check">
@@ -93,9 +93,10 @@
 <script>
     var multichartRange;
     $(document).ready(function () {
-        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions))
-        let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
-        multichartRange = settings.rangeSettings.autoScale === true ? true : [Number(settings.rangeSettings.minY), Number(settings.rangeSettings.maxY)];
+        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
+        let ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
+
+        multichartRange = ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)];
 
         initMultichart('multichart', 300, true, true).then(
             (dom) => {

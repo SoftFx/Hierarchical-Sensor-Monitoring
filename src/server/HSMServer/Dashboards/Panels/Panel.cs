@@ -23,6 +23,8 @@ namespace HSMServer.Dashboards
         public RDict<PanelDatasource> Sources { get; }
 
 
+        public PanelRangeSettings YRange { get; } = new();
+
         public PanelSettings Settings { get; } = new();
 
 
@@ -59,6 +61,8 @@ namespace HSMServer.Dashboards
             if (entity.Settings is not null)
                 Settings.FromEntity(entity.Settings);
 
+            YRange.FromEntity(entity.YRangeSettings);
+
             foreach (var sourceEntity in entity.Sources)
                 TryAddSource(new Guid(sourceEntity.SensorId), sourceEntity);
 
@@ -72,12 +76,13 @@ namespace HSMServer.Dashboards
             AggregateValues = update.IsAggregateValues ?? AggregateValues;
             ShowProduct = update.ShowProduct ?? ShowProduct;
 
+            YRange.Update(update);
             Settings.Update(update);
 
             if (update.NeedSourceRebuild)
             {
                 foreach (var (_, source) in Sources)
-                    source.BuildSource(AggregateValues, Settings.RangeSettings);
+                    source.BuildSource(AggregateValues, YRange);
             }
         }
 
@@ -94,7 +99,7 @@ namespace HSMServer.Dashboards
 
                 _ = task.StartScanning(_board.GetSensorsByFolder(null), sub);
             }
-            
+
             return true;
         }
 
@@ -105,7 +110,9 @@ namespace HSMServer.Dashboards
             entity.Subsctiptions.AddRange(Subscriptions.Select(u => u.Value.ToEntity()));
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
 
+            entity.YRangeSettings = YRange.ToEntity();
             entity.Settings = Settings.ToEntity();
+
             entity.IsNotAggregate = !AggregateValues;
             entity.ShowProduct = ShowProduct;
 
@@ -197,7 +204,7 @@ namespace HSMServer.Dashboards
 
                 _sensorToSourceMap[source.Sensor.Id].Add(source.Id);
 
-                source.BuildSource(AggregateValues, Settings.RangeSettings);
+                source.BuildSource(AggregateValues, YRange);
                 SubscribeModuleToUpdates(source);
             }
 

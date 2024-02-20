@@ -17,7 +17,7 @@ namespace HSMServer.Datasources
         public string Tooltip { get; protected set; }
 
         
-        protected internal abstract object Filter(RangeSettings settings);
+        protected internal abstract object Filter(PanelRangeSettings settings);
     }
 
 
@@ -39,7 +39,7 @@ namespace HSMServer.Datasources
             Tooltip = count > 1 ? $"Aggregated ({count}) values" : string.Empty;
         }
         
-        protected internal override object Filter(RangeSettings settings)
+        protected internal override object Filter(PanelRangeSettings settings)
         {
             Tooltip = $"""
                       Original value: {Value}
@@ -47,11 +47,11 @@ namespace HSMServer.Datasources
                       """;
             
             var checkedValue = double.CreateChecked(Value);
-            if (settings.MaxY.CompareTo(checkedValue) < 0)
-                Value = T.CreateChecked(settings.MaxY);
+            if (settings.MaxValue.CompareTo(checkedValue) < 0)
+                Value = T.CreateChecked(settings.MaxValue);
           
-            if (settings.MinY.CompareTo(checkedValue) > 0)
-                Value = T.CreateChecked(settings.MinY);
+            if (settings.MinValue.CompareTo(checkedValue) > 0)
+                Value = T.CreateChecked(settings.MinValue);
             
             return this;
         }

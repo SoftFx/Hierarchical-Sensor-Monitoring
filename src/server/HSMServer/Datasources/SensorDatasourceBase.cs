@@ -42,7 +42,7 @@ namespace HSMServer.Datasources
             _settings = settings ?? _settings;
             _sensor = sensor;
             
-            Filter = _settings?.RangeSettings?.AutoScale ?? true ? value => value : value => value.Filter(_settings?.RangeSettings);
+            Filter = _settings?.YRange?.AutoScale ?? true ? value => value : value => value.Filter(_settings?.YRange);
             DataAggregator.Setup(settings);
 
             _sensor.ReceivedNewValue += AddNewValue;

@@ -1,44 +1,11 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
-using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Dashboards
 {
-    public sealed record RangeSettings
-    {
-        [Display(Name = "Autoscale")]
-        public bool AutoScale { get; set; } = true;
-
-
-        [Display(Name = "Max")]
-        public double MaxY { get; set; }
-
-        [Display(Name = "Min")]
-        public double MinY { get; set; }
-
-
-        public void Update(PanelUpdate update)
-        {
-            AutoScale = update.AutoScale ?? AutoScale;
-
-            MaxY = update.MaxY ?? MaxY;
-            MinY = update.MinY ?? MinY;
-        }
-
-        public void FromEntity(ChartRangeEntity entity)
-        {
-            AutoScale = !entity.FixedBorders;
-            MaxY = entity.MaxValue;
-            MinY = entity.MinValue;
-        }
-    }
-
-
     public sealed class PanelSettings
     {
         internal const double DefaultHeight = 0.2;
         internal const double DefaultWidth = 0.3;
-
-        public RangeSettings RangeSettings { get; } = new();
 
 
         public double Width { get; private set; } = DefaultWidth;
@@ -69,8 +36,6 @@ namespace HSMServer.Dashboards
             Y = update.Y ?? Y;
 
             ShowLegend = update.ShowLegend ?? ShowLegend;
-
-            RangeSettings.Update(update);
         }
 
         public PanelSettings FromEntity(PanelSettingsEntity entity)
@@ -82,8 +47,6 @@ namespace HSMServer.Dashboards
             Y = entity.Y;
 
             ShowLegend = entity.ShowLegend;
-
-            RangeSettings.FromEntity(entity.YRangeSettings);
 
             return this;
         }
@@ -98,14 +61,6 @@ namespace HSMServer.Dashboards
                 Y = Y,
 
                 ShowLegend = ShowLegend,
-
-                YRangeSettings = new ChartRangeEntity
-                {
-                    MaxValue = RangeSettings.MaxY,
-                    MinValue = RangeSettings.MinY,
-
-                    FixedBorders = !RangeSettings.AutoScale,
-                },
             };
     }
 }

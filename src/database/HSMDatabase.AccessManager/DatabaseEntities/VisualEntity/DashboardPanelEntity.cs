@@ -4,12 +4,15 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 {
     public sealed record DashboardPanelEntity : BaseServerEntity
     {
-        public List<PanelSubscriptionEntity> Subsctiptions { get; init; } = new();
+        public List<PanelSubscriptionEntity> Subsctiptions { get; init; } = [];
 
-        public List<PanelSourceEntity> Sources { get; init; } = new();
+        public List<PanelSourceEntity> Sources { get; init; } = [];
 
+
+        public ChartRangeEntity YRangeSettings { get; set; } = new();
 
         public PanelSettingsEntity Settings { get; set; }
+
 
         public bool IsNotAggregate { get; set; }
 
@@ -19,9 +22,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 
     public sealed record PanelSettingsEntity
     {
-        public ChartRangeEntity YRangeSettings { get; init; } = new();
-
-
         public double Width { get; init; }
 
         public double Height { get; init; }

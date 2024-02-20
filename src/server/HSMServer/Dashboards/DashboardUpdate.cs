@@ -27,9 +27,9 @@ namespace HSMServer.Dashboards
         public bool? ShowProduct { get; init; }
 
         public bool? IsAggregateValues { get; init; }
-        
+
         public double? MaxY { get; init; }
-        
+
         public double? MinY { get; init; }
 
         public bool? AutoScale { get; set; }
@@ -48,6 +48,9 @@ namespace HSMServer.Dashboards
 
     public record PanelSourceUpdate
     {
+        public PanelRangeSettings RangeSettings { get; init; }
+
+
         public string Name { get; init; }
 
         public string Color { get; init; }
@@ -57,8 +60,6 @@ namespace HSMServer.Dashboards
         public string Shape { get; init; }
 
         public bool AggregateValues { get; init; }
-        
-        public RangeSettings RangeSettings { get; init; }
     }
 
 

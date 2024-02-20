@@ -37,6 +37,8 @@ public sealed class PanelViewModel
     public Unit? MainUnit { get; set; }
 
 
+    public PanelRangeSettings YRange { get; set; }
+
     public PanelSettings Settings { get; set; }
 
 
@@ -50,7 +52,9 @@ public sealed class PanelViewModel
         AggregateValues = panel.AggregateValues;
         Id = panel.Id;
         DashboardId = dashboardId;
+
         Settings = panel.Settings;
+        YRange = panel.YRange;
 
         Sources = new CDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x => new DatasourceViewModel(x.Value, ShowProduct)));
     }
