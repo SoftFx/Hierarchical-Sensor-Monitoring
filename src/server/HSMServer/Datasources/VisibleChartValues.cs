@@ -1,7 +1,8 @@
-﻿using HSMServer.Datasources.Aggregators;
+﻿using HSMServer.Dashboards;
+using HSMServer.Datasources.Aggregators;
 using System;
 using System.Numerics;
-using HSMServer.Dashboards;
+using System.Text;
 
 namespace HSMServer.Datasources
 {
@@ -16,8 +17,8 @@ namespace HSMServer.Datasources
 
         public string Tooltip { get; protected set; }
 
-        
-        protected internal abstract object Filter(PanelRangeSettings settings);
+
+        internal abstract object Filter(PanelRangeSettings settings);
     }
 
 
@@ -38,21 +39,27 @@ namespace HSMServer.Datasources
 
             Tooltip = count > 1 ? $"Aggregated ({count}) values" : string.Empty;
         }
-        
-        protected internal override object Filter(PanelRangeSettings settings)
+
+        internal override object Filter(PanelRangeSettings settings)
         {
-            Tooltip = $"""
-                      Original value: {Value}
-                      {(string.IsNullOrEmpty(Tooltip) ? "" : $"<br>Comment: {Tooltip}" )}
-                      """;
-            
-            var checkedValue = double.CreateChecked(Value);
-            if (settings.MaxValue.CompareTo(checkedValue) < 0)
+            var currentValue = double.CreateChecked(Value);
+
+            if (currentValue > settings.MaxValue)
                 Value = T.CreateChecked(settings.MaxValue);
-          
-            if (settings.MinValue.CompareTo(checkedValue) > 0)
+
+            if (currentValue < settings.MinValue)
                 Value = T.CreateChecked(settings.MinValue);
-            
+
+            var sb = new StringBuilder(1 << 4);
+
+            if (currentValue != double.CreateChecked(Value))
+                sb.AppendLine($"<br>Original value: {currentValue}<br>");
+
+            if (!string.IsNullOrEmpty(Tooltip))
+                sb.AppendLine(Tooltip);
+
+            Tooltip = sb.ToString();
+
             return this;
         }
     }

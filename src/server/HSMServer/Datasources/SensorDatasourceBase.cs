@@ -23,6 +23,7 @@ namespace HSMServer.Datasources
     {
         private readonly CLinkedList<BaseChartValue> _newVisibleValues = new();
 
+        private Func<BaseChartValue, object> _filter;
         private SourceSettings _settings;
         private BaseSensorModel _sensor;
 
@@ -34,15 +35,15 @@ namespace HSMServer.Datasources
         protected abstract ChartType NormalType { get; }
 
 
-        protected internal Func<BaseChartValue, object> Filter { get; private set; }
-        
-
         internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings)
         {
-            _settings = settings ?? _settings;
+            static object DefautFilter(BaseChartValue value) => value;
+
+            _settings = settings;
             _sensor = sensor;
-            
-            Filter = _settings?.YRange?.AutoScale ?? true ? value => value : value => value.Filter(_settings?.YRange);
+
+            _filter = _settings.YRange.AutoScale ? DefautFilter : value => value.Filter(_settings.YRange);
+
             DataAggregator.Setup(settings);
 
             _sensor.ReceivedNewValue += AddNewValue;
@@ -80,15 +81,15 @@ namespace HSMServer.Datasources
             return new()
             {
                 ChartType = DataAggregator.UseAggregation ? AggregatedType : NormalType,
-                Values = _newVisibleValues.Select(Filter).ToList(),
+                Values = _newVisibleValues.Select(_filter).ToList(),
             };
-            
+
         }
 
         public UpdateChartSourceResponse GetSourceUpdates() =>
             new()
             {
-                NewVisibleValues = _newVisibleValues.Select(Filter).ToList(),
+                NewVisibleValues = _newVisibleValues.Select(_filter).ToList(),
                 IsTimeSpan = _sensor.Type is SensorType.TimeSpan
             };
 

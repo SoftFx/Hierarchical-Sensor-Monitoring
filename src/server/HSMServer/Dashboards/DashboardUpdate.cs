@@ -48,7 +48,7 @@ namespace HSMServer.Dashboards
 
     public record PanelSourceUpdate
     {
-        public PanelRangeSettings RangeSettings { get; init; }
+        public PanelRangeSettings YRange { get; init; }
 
 
         public string Name { get; init; }
