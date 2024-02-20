@@ -67,6 +67,6 @@ namespace HSMServer.Dashboards
             Source?.Dispose();
         }
 
-        protected override void ChangeDependentProperties(PanelSourceUpdate update) => BuildSource(update.AggregateValues, null);
+        protected override void ChangeDependentProperties(PanelSourceUpdate update) => BuildSource(update.AggregateValues, update.RangeSettings);
     }
 }

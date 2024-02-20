@@ -39,11 +39,13 @@ namespace HSMServer.Datasources
             Tooltip = count > 1 ? $"Aggregated ({count}) values" : string.Empty;
         }
         
-        
         protected internal override object Filter(RangeSettings settings)
         {
-            Tooltip = Value + " " + Tooltip;
-
+            Tooltip = $"""
+                      Original value: {Value}<br>
+                      Comment: {Tooltip}
+                      """;
+            
             var checkedValue = double.CreateChecked(Value);
             if (settings.MaxY.CompareTo(checkedValue) < 0)
                 Value = T.CreateChecked(settings.MaxY);

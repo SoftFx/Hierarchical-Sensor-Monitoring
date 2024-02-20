@@ -214,7 +214,7 @@ namespace HSMServer.Controllers
             {
                 var oldProperty = source.Property;
 
-                source.NotifyUpdate(update with { AggregateValues = panel.AggregateValues });
+                source.NotifyUpdate(update with { AggregateValues = panel.AggregateValues, RangeSettings = panel.Settings.RangeSettings });
 
                 if (source.Property != oldProperty)
                 {

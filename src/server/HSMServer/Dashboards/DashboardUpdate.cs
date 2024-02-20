@@ -53,6 +53,8 @@ namespace HSMServer.Dashboards
         public string Shape { get; init; }
 
         public bool AggregateValues { get; init; }
+        
+        public RangeSettings RangeSettings { get; init; }
     }
 
 

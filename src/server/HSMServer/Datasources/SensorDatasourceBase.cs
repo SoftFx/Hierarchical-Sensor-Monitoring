@@ -7,7 +7,6 @@ using HSMServer.Datasources.Aggregators;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Dashboards;
 
 namespace HSMServer.Datasources
 {
@@ -25,7 +24,6 @@ namespace HSMServer.Datasources
         private readonly CLinkedList<BaseChartValue> _newVisibleValues = new();
 
         private SourceSettings _settings;
-        private PanelSettings _panelSettings;
         private BaseSensorModel _sensor;
 
 

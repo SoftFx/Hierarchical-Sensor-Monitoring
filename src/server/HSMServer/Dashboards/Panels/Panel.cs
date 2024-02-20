@@ -73,7 +73,8 @@ namespace HSMServer.Dashboards
 
             Settings.Update(update);
 
-            if (update.IsAggregateValues.HasValue && update.IsAggregateValues != AggregateValues)
+            if ((update.IsAggregateValues.HasValue && update.IsAggregateValues != AggregateValues) ||
+                (update.AutoScale.HasValue && update.AutoScale != Settings.RangeSettings.AutoScale))
             {
                 AggregateValues = update.IsAggregateValues.Value;
 
