@@ -76,7 +76,7 @@ namespace HSMServer.Dashboards
             IsFinish = true;
 
             _tokenSource.Cancel();
-            SetCanceled(_tokenSource.Token);
+            TrySetCanceled(_tokenSource.Token);
         }
 
         private void AddMathedSensor(BaseSensorModel sensor, PanelSubscription subscription)
