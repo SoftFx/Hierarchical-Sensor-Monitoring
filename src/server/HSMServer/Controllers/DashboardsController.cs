@@ -297,24 +297,15 @@ namespace HSMServer.Controllers
                 sub.ScannedTask?.Cancel();
                 return Ok();
             }
-            
+
             return NotFound("No such panel or tempalte");
         }
 
         [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplySources/{templateId:guid}")]
-        public async Task<IActionResult> ApplySources(Guid dashboardId, Guid panelId, Guid templateId)
-        {
-            if (TryGetBoard(dashboardId, out var board) && board.Panels.TryGetValue(panelId, out var panel) && panel.Subscriptions.TryGetValue(templateId, out var subscription))
-            {
-                subscription.Apply();
-
-                await _dashboards.TryUpdate(board);
-
-                return Ok();
-            }
-
-            return NotFound("No such panel");
-        }
+        public IActionResult ApplySources(Guid dashboardId, Guid panelId, Guid templateId) =>
+            TryGetPanel(dashboardId, panelId, out var panel) && panel.TryApplyScanResults(templateId, out var error)
+                ? Ok(error)
+                : NotFound("No such panel");
 
         #endregion
 

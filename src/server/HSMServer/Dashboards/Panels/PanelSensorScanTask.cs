@@ -25,11 +25,13 @@ namespace HSMServer.Dashboards
         private const int MaxVisibleMathedItems = 20;
         private const int BatchSize = 50;
 
-        private readonly List<ScannedSensorInfo> _matсhedSensors = new(1 << 5);
+        private readonly List<ScannedSensorInfo> _matсhedResult = new(1 << 5);
         private readonly CancellationTokenSource _tokenSource = new();
 
         private long _totalScanned, _totalMatched;
 
+
+        public List<BaseSensorModel> MatchedSensors { get; } = new(1 << 4);
 
         public bool IsFinish { get; private set; }
 
@@ -47,7 +49,7 @@ namespace HSMServer.Dashboards
                     await Task.Yield();
 
                 if (subscription.IsMatch(sensor) && Interlocked.Increment(ref _totalMatched) <= MaxVisibleMathedItems)
-                    _matсhedSensors.Add(new ScannedSensorInfo(sensor.FullPath, subscription.BuildSensorLabel()));
+                    AddMathedSensor(sensor, subscription);
             }
 
             IsFinish = true;
@@ -57,13 +59,13 @@ namespace HSMServer.Dashboards
         {
             var result = new SensorScanResult
             {
-                MatсhedSensors = [.. _matсhedSensors],
+                MatсhedSensors = [.. _matсhedResult],
                 TotalScanned = Interlocked.Read(ref _totalScanned),
                 TotalMatched = Interlocked.Read(ref _totalMatched),
                 IsFinish = IsFinish,
             };
 
-            _matсhedSensors.Clear();
+            _matсhedResult.Clear();
 
             return result;
         }
@@ -75,6 +77,14 @@ namespace HSMServer.Dashboards
 
             _tokenSource.Cancel();
             SetCanceled(_tokenSource.Token);
+        }
+
+        private void AddMathedSensor(BaseSensorModel sensor, PanelSubscription subscription)
+        {
+            var info = new ScannedSensorInfo(sensor.FullPath, subscription.BuildSensorLabel());
+
+            _matсhedResult.Add(info);
+            MatchedSensors.Add(sensor);
         }
     }
 }

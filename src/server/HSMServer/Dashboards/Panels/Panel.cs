@@ -6,6 +6,7 @@ using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System;
 using System.Linq;
+using System.Text;
 
 namespace HSMServer.Dashboards
 {
@@ -81,16 +82,6 @@ namespace HSMServer.Dashboards
             }
         }
 
-        public bool TryStartScan(Guid templateId)
-        {
-            var result = Subscriptions.TryGetValue(templateId, out var sub);
-
-            if (result)
-                _ = sub.StartScanning(_board.GetSensorsByFolder);
-
-            return result;
-        }
-
 
         public override DashboardPanelEntity ToEntity()
         {
@@ -161,6 +152,36 @@ namespace HSMServer.Dashboards
         }
 
         public bool TryRemoveSubscription(Guid id) => Subscriptions.TryCallRemoveAndDispose(id);
+
+
+        public bool TryStartScan(Guid templateId)
+        {
+            var result = Subscriptions.TryGetValue(templateId, out var sub);
+
+            if (result)
+                _ = sub.StartScanning(_board.GetSensorsByFolder);
+
+            return result;
+        }
+
+        public bool TryApplyScanResults(Guid templateId, out string error)
+        {
+            error = string.Empty;
+
+            if (!Subscriptions.TryGetValue(templateId, out var template) || !template.ScanIsFinished)
+                return false;
+
+            var errorBuilder = new StringBuilder(1 << 4);
+
+            foreach (var source in template.BuildMathedSources())
+                if (!TrySaveNewSource(source, out var errorBuild).IsOk)
+                    errorBuilder.AppendLine(errorBuild);
+
+            error = errorBuilder.ToString();
+            Sources.Call();
+
+            return true;
+        }
 
 
         private RDictResult<PanelDatasource> TrySaveNewSource(PanelDatasource source, out string error)
