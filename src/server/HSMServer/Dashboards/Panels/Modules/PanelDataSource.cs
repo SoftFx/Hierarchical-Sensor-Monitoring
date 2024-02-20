@@ -32,7 +32,7 @@ namespace HSMServer.Dashboards
         }
 
 
-        public PanelDatasource BuildSource(bool aggregateValues)
+        public PanelDatasource BuildSource(bool aggregateValues, PanelRangeSettings yRange)
         {
             Source?.Dispose(); // unsubscribe prev version
 
@@ -42,6 +42,7 @@ namespace HSMServer.Dashboards
                 Property = Property,
 
                 AggregateValues = aggregateValues,
+                YRange = yRange
             };
 
             Source = DatasourceFactory.Build(Sensor, settings);
@@ -66,6 +67,6 @@ namespace HSMServer.Dashboards
             Source?.Dispose();
         }
 
-        protected override void ChangeDependentProperties(PanelSourceUpdate update) => BuildSource(update.AggregateValues);
+        protected override void ChangeDependentProperties(PanelSourceUpdate update) => BuildSource(update.AggregateValues, update.YRange);
     }
 }
