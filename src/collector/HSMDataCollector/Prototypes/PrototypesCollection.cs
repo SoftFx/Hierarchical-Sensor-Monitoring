@@ -2,6 +2,7 @@
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.Prototypes.Collections;
 using HSMDataCollector.Prototypes.Collections.Disks;
+using HSMDataCollector.Prototypes.Collections.Network;
 
 namespace HSMDataCollector.Options
 {
@@ -31,11 +32,13 @@ namespace HSMDataCollector.Options
 
         internal WindowsFreeSpaceOnDiskPredictionPrototype WindowsFreeSpaceOnDiskPrediction { get; }
 
+        internal WindowsAverageDiskWriteSpeedPrototype WindowsAverageDiskWriteSpeed { get; }
+
+        internal WindowsDiskQueueLengthPrototype WindowsDiskQueueLength { get; }
+
         internal WindowsFreeSpaceOnDiskPrototype WindowsFreeSpaceOnDisk { get; }
 
         internal WindowsActiveTimeDiskPrototype WindowsActiveTimeDisk { get; }
-
-        internal WindowsDiskQueueLengthPrototype WindowsDiskQueueLength { get; }
 
 
         internal UnixFreeSpaceOnDiskPredictionPrototype UnixFreeSpaceOnDiskPrediction { get; }
@@ -92,6 +95,18 @@ namespace HSMDataCollector.Options
         #endregion
 
 
+        #region Network
+
+        public ConnectionsEstablishedCountPrototype ConnectionsEstablishedCount { get; set; }
+
+        public ConnectionsFailuresCountPrototype ConnectionsFailuresCount { get; set; }
+
+        public ConnectionsResetCountPrototype ConnectionsResetCount { get; set; }
+
+
+        #endregion
+
+
         internal PrototypesCollection(CollectorOptions options)
         {
             T Register<T>() where T : SensorOptions, new() => new T()
@@ -113,6 +128,7 @@ namespace HSMDataCollector.Options
             WindowsFreeSpaceOnDisk = Register<WindowsFreeSpaceOnDiskPrototype>();
             WindowsActiveTimeDisk = Register<WindowsActiveTimeDiskPrototype>();
             WindowsDiskQueueLength = Register<WindowsDiskQueueLengthPrototype>();
+            WindowsAverageDiskWriteSpeed = Register<WindowsAverageDiskWriteSpeedPrototype>();
 
             UnixFreeSpaceOnDiskPrediction = Register<UnixFreeSpaceOnDiskPredictionPrototype>();
             UnixFreeSpaceOnDisk = Register<UnixFreeSpaceOnDiskPrototype>();
@@ -136,6 +152,10 @@ namespace HSMDataCollector.Options
             PackageProcessTime = Register<PackageProcessTimePrototype>().ApplyOptions(options);
             PackageContentSize = Register<PackageContentSizePrototype>();
             QueueOverflow = Register<QueueOverflowPrototype>().ApplyOptions(options);
+
+            ConnectionsEstablishedCount = Register<ConnectionsEstablishedCountPrototype>();
+            ConnectionsFailuresCount = Register<ConnectionsFailuresCountPrototype>();
+            ConnectionsResetCount = Register<ConnectionsResetCountPrototype>();
         }
     }
 }

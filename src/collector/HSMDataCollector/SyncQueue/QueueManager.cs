@@ -33,7 +33,7 @@ namespace HSMDataCollector.SyncQueue
 
         public void Stop() => _queueList.ForEach(q => q.Stop());
 
-        public void ThrowPackageSensingInfo(PackageSendingInfo info) => PackageSendingInfoEvent?.Invoke(info);
+        public void ThrowPackageSendingInfo(PackageSendingInfo info) => PackageSendingInfoEvent?.Invoke(info);
 
         public void Dispose()
         {

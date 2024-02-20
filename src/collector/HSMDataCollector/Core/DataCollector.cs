@@ -100,8 +100,8 @@ namespace HSMDataCollector.Core
         /// <param name="productKey">Key, which identifies the product (logical group) for all sensors that will be created.</param>
         /// <param name="address">HSM server address to send data to (Do not forget https:// if needed)</param>
         /// <param name="port">HSM sensors API port, which defaults to 44330. Specify if your HSM server Docker container configured differently.</param>
-        public DataCollector(string productKey, string address = CollectorOptions.LocalhostAddress, int port = CollectorOptions.DefaultPort)
-            : this(new CollectorOptions() { AccessKey = productKey, ServerAddress = address, Port = port }) { }
+        public DataCollector(string productKey, string address = CollectorOptions.LocalhostAddress, int port = CollectorOptions.DefaultPort, string clientName = null)
+            : this(new CollectorOptions() { AccessKey = productKey, ServerAddress = address, Port = port, ClientName = clientName}) { }
 
 
         public Task<ConnectionResult> TestConnection() => _hsmClient.TestConnection();

@@ -1,5 +1,4 @@
-﻿using System;
-using System.Net.Http;
+﻿using System.Net.Http;
 
 namespace HSMDataCollector.SyncQueue
 {
@@ -15,8 +14,8 @@ namespace HSMDataCollector.SyncQueue
         public PackageSendingInfo(double contentSize, HttpResponseMessage response)
         {
             ContentSize = contentSize;
-            IsSuccess = response.IsSuccessStatusCode;
 
+            IsSuccess = response?.IsSuccessStatusCode ?? false;
             Error = !IsSuccess ? $"Code: {response.StatusCode}. {response.Content}" : null;
         }
     }

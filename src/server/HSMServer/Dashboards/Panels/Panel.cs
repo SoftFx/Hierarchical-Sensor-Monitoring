@@ -23,6 +23,8 @@ namespace HSMServer.Dashboards
         public RDict<PanelDatasource> Sources { get; }
 
 
+        public PanelRangeSettings YRange { get; } = new();
+
         public PanelSettings Settings { get; } = new();
 
 
@@ -59,6 +61,8 @@ namespace HSMServer.Dashboards
             if (entity.Settings is not null)
                 Settings.FromEntity(entity.Settings);
 
+            YRange.FromEntity(entity.YRangeSettings);
+
             foreach (var sourceEntity in entity.Sources)
                 TryAddSource(new Guid(sourceEntity.SensorId), sourceEntity);
 
@@ -69,19 +73,18 @@ namespace HSMServer.Dashboards
 
         protected override void ApplyUpdate(PanelUpdate update)
         {
+            AggregateValues = update.IsAggregateValues ?? AggregateValues;
             ShowProduct = update.ShowProduct ?? ShowProduct;
 
+            YRange.Update(update);
             Settings.Update(update);
 
-            if (update.IsAggregateValues.HasValue && update.IsAggregateValues != AggregateValues)
+            if (update.NeedSourceRebuild)
             {
-                AggregateValues = update.IsAggregateValues.Value;
-
                 foreach (var (_, source) in Sources)
-                    source.BuildSource(AggregateValues);
+                    source.BuildSource(AggregateValues, YRange);
             }
         }
-
 
         public override DashboardPanelEntity ToEntity()
         {
@@ -90,7 +93,9 @@ namespace HSMServer.Dashboards
             entity.Subscriptions.AddRange(Subscriptions.Select(u => u.Value.ToEntity()));
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
 
+            entity.YRangeSettings = YRange.ToEntity();
             entity.Settings = Settings.ToEntity();
+
             entity.IsNotAggregate = !AggregateValues;
             entity.ShowProduct = ShowProduct;
 
@@ -212,7 +217,7 @@ namespace HSMServer.Dashboards
 
                 _sensorToSourceMap[source.Sensor.Id].Add(source.Id);
 
-                source.BuildSource(AggregateValues);
+                source.BuildSource(AggregateValues, YRange);
                 SubscribeModuleToUpdates(source);
             }
 

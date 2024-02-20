@@ -5,6 +5,9 @@ using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
+    public sealed record AlertDestination(bool AllChats, HashSet<Guid> Chats);
+
+
     public sealed record AlertResult
     {
         public AlertDestination Destination { get; }
@@ -28,6 +31,8 @@ namespace HSMServer.Core.Model.Policies
 
         public bool IsScheduleAlert { get; }
 
+        public bool IsReplaceAlert { get; }
+
 
         public AlertState LastState { get; private set; }
 
@@ -39,7 +44,7 @@ namespace HSMServer.Core.Model.Policies
         public (string, int) Key => (Icon, Count);
 
 
-        internal AlertResult(Policy policy)
+        internal AlertResult(Policy policy, bool isReplace = false)
         {
             Destination = new(policy.Destination.AllChats, new HashSet<Guid>(policy.Destination.Chats.Keys));
 
@@ -53,6 +58,7 @@ namespace HSMServer.Core.Model.Policies
 
             IsStatusIsChangeResult = policy.Conditions.IsStatusChangeResult();
             IsScheduleAlert = policy.Schedule.RepeatMode is not AlertRepeatMode.Immediately;
+            IsReplaceAlert = isReplace && IsScheduleAlert;
 
             AddPolicyResult(policy);
         }
@@ -118,7 +124,4 @@ namespace HSMServer.Core.Model.Policies
 
         public override string ToString() => BuildFullComment(LastComment);
     }
-
-
-    public sealed record AlertDestination(bool AllChats, HashSet<Guid> Chats);
 }

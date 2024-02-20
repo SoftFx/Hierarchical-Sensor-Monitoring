@@ -5,6 +5,7 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
+using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Options
 {
@@ -90,6 +91,14 @@ namespace HSMDataCollector.Options
         public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
     }
 
+    public class NetworkSensorOptions : MonitoringInstantSensorOptions
+    {
+        public NetworkSensorOptions()
+        {
+            PostDataPeriod = TimeSpan.FromMinutes(1);
+        }
+    }
+
 
     public class BarSensorOptions : SensorOptions, IMonitoringOptions
     {
@@ -106,5 +115,8 @@ namespace HSMDataCollector.Options
 
 
         internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
+
+
+        internal string GetBarOptionsInfo() => $"Bar period is {BarPeriod.ToReadableView()} with updates every {BarTickPeriod.ToReadableView()}.";
     }
 }
