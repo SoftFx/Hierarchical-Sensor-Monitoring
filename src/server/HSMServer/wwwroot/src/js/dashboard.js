@@ -340,7 +340,6 @@ window.initDashboard = function () {
                             prevData.ids.push(j.id)
                             let custom = j.value;
                             if (currentPanel[i].range !== undefined && currentPanel[i].range !== true)
-                                // custom = j.tooltip.fakeValue + ' ' + j.tooltip.comment;
                                 custom = j.tooltip;
                             else if (j.tooltip !== null)
                                 custom += `<br>${j.tooltip}`;
