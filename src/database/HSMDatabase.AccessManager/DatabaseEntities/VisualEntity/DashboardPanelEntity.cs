@@ -19,6 +19,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 
     public sealed record PanelSettingsEntity
     {
+        public ChartRangeEntity YRangeSettings { get; init; } = new();
+
+
         public double Width { get; init; }
 
         public double Height { get; init; }
@@ -30,11 +33,15 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 
 
         public bool ShowLegend { get; init; }
-        
-        public double MaxY { get; set; }
-        
-        public double MinY { get; set; }
-        
-        public bool AutoScale { get; set; }
+    }
+
+
+    public sealed record ChartRangeEntity
+    {
+        public double MaxValue { get; set; }
+
+        public double MinValue { get; set; }
+
+        public bool FixedBorders { get; set; }
     }
 }

@@ -69,16 +69,13 @@ namespace HSMServer.Dashboards
 
         protected override void ApplyUpdate(PanelUpdate update)
         {
+            AggregateValues = update.IsAggregateValues ?? AggregateValues;
             ShowProduct = update.ShowProduct ?? ShowProduct;
 
             Settings.Update(update);
 
-            if ((update.IsAggregateValues.HasValue && update.IsAggregateValues != AggregateValues) ||
-                (update.AutoScale.HasValue && update.AutoScale != Settings.RangeSettings.AutoScale))
+            if (update.NeedSourceRebuild)
             {
-                AggregateValues = update.IsAggregateValues.Value;
-                Settings.RangeSettings.AutoScale = update.AutoScale.Value;
-
                 foreach (var (_, source) in Sources)
                     source.BuildSource(AggregateValues, Settings.RangeSettings);
             }

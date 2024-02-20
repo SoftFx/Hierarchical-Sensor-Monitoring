@@ -34,6 +34,10 @@ namespace HSMServer.Dashboards
 
         public bool? AutoScale { get; set; }
 
+
+        public bool NeedSourceRebuild => IsAggregateValues.HasValue || MinY.HasValue || MaxY.HasValue || AutoScale.HasValue;
+
+
         [SetsRequiredMembers]
         public PanelUpdate(Guid panelId) : base()
         {
