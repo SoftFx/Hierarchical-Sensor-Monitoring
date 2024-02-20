@@ -183,9 +183,9 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
 }
 
-window.addNewSourceHtml = function (data, id, range = undefined) {
+window.addNewSourceHtml = function (data, id) {
     insertSourceHtml(data);
-    insertSourcePlot(data, id, undefined, undefined, range);
+    insertSourcePlot(data, id, undefined, undefined, multichartRange);
 }
 
 export function initDropzone() {

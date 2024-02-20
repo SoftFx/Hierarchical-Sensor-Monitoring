@@ -91,15 +91,16 @@
 
 
 <script>
+    var multichartRange;
     $(document).ready(function () {
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions))
         let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
-        let range = settings.rangeSettings.autoScale === true ? true : [Number(settings.rangeSettings.minY), Number(settings.rangeSettings.maxY)];
+        multichartRange = settings.rangeSettings.autoScale === true ? true : [Number(settings.rangeSettings.minY), Number(settings.rangeSettings.maxY)];
 
         initMultichart('multichart', 300, true, true).then(
             (dom) => {
                 values.forEach(function (x) {
-                    addNewSourceHtml(x, 'multichart', range);
+                    addNewSourceHtml(x, 'multichart');
                 })
 
                 $('#multichart').on('plotly_relayout', function (e, updateData){
@@ -172,4 +173,5 @@
             $(`#templates`).append(viewData);
         });
     }
+
 </script>
