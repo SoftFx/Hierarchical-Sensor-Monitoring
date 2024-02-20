@@ -22,7 +22,7 @@ namespace HSMServer.Dashboards
 
     public sealed class PanelSensorScanTask : TaskCompletionSource
     {
-        private const int MaxVisibleMathedItems = 20;
+        public const int MaxVisibleMathedItems = 20;
         private const int BatchSize = 50;
 
         private readonly List<ScannedSensorInfo> _matсhedResult = new(1 << 5);
@@ -48,8 +48,13 @@ namespace HSMServer.Dashboards
                 if (Interlocked.Increment(ref _totalScanned) % BatchSize == 0)
                     await Task.Yield();
 
-                if (subscription.IsMatch(sensor) && Interlocked.Increment(ref _totalMatched) <= MaxVisibleMathedItems)
-                    AddMathedSensor(sensor, subscription);
+                if (subscription.IsMatch(sensor))
+                {
+                    MatchedSensors.Add(sensor);
+
+                    if (Interlocked.Increment(ref _totalMatched) <= MaxVisibleMathedItems)
+                        _matсhedResult.Add(new ScannedSensorInfo(sensor.FullPath, subscription.BuildSensorLabel()));
+                }
             }
 
             IsFinish = true;

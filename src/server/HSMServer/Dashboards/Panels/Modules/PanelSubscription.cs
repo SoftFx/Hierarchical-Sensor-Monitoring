@@ -56,7 +56,7 @@ namespace HSMServer.Dashboards
         }
 
 
-        public bool IsMatch(BaseSensorModel sensor) => _pathTemplate.IsMatch(sensor.Path) && DatasourceFactory.IsSupportedPlotProperty(sensor, Property);
+        public bool IsMatch(BaseSensorModel sensor) => _pathTemplate.IsMatch(sensor.FullPath) && DatasourceFactory.IsSupportedPlotProperty(sensor, Property);
 
         public string BuildSensorLabel() => _pathTemplate.BuildStringByTempalte(Label) ?? Label;
 

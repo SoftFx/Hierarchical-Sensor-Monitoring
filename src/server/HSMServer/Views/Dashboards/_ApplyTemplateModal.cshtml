@@ -1,4 +1,5 @@
 ﻿@using HSMServer.Controllers
+@using HSMServer.Dashboards
 
 
 <div class="modal fade" tabindex="-1" role="dialog" data-bs-backdrop="static" id="applyTemplate_modal">
@@ -10,17 +11,28 @@
 
             <div class="modal-body text-break" id="applyTemplate_body">
                 <div class="d-flex flex-column">
-                    <div id="applyingResults"></div>
-                    <p id="suitableSensors"></p>
+                    <h5 id="applyingResults"></h5>
 
                     <div id="applyingProgress" class="progress-bar align-self-end">
                         <div class="progress-bar-value"></div>
                     </div>
+
+                    <table class="mt-3">
+                        <thead>
+                            <tr>
+                                <th>Path</th>
+                                <th>Source label</th>
+                            </tr>
+                        </thead>
+                        <tbody id="matchedSensors"></tbody>
+                    </table>
+
+                    <div id="moreMatchedSensors" class="d-flex justify-content-center"></div>
                 </div>
             </div>
 
             <div class="modal-footer">
-                <button class="btn btn-primary col-2 col-lg-1 disabled" id="applyTemplate_okButton" onclick="javascript:apply()">Ok</button>
+                <button class="btn btn-primary col-2 col-lg-1 disabled" id="applyTemplate_okButton" onclick="javascript:apply()">Enable</button>
                 <button class="btn btn-primary col-2 col-lg-1 px-2" id="applyTemplate_cancelButton" onclick="javascript:cancel()">Cancel</button>
             </div>
         </div>
@@ -42,17 +54,21 @@
 
     function getResult() {
         let templateId = $(`#applyTemplate_modal`).attr("name");
+        let maxVisibleMatchedSensors = parseInt('@PanelSensorScanTask.MaxVisibleMathedItems');
 
         $.ajax({
             url: `${window.location.pathname}/@(nameof(DashboardsController.GetResultOfApplying))/${templateId}`,
             type: 'POST',
             success: function (result) {
-                $('#applyingResults').html(`Total scanned: ${result.totalScanned}, total matched: ${result.totalMatched}`);
+                $('#applyingResults').html(`Total scanned: ${result.totalScanned}, matched: ${result.totalMatched}`);
                 
-                result.matсhedSensors.forEach(function (path) {
-                    $('#suitableSensors').append(path);
-                    $('#suitableSensors').append('<br/>');
+                result.matсhedSensors.forEach(function (sensor) {
+                    $('#matchedSensors').append(`<tr><td>${sensor.path}</td><td>${sensor.label}</td></tr>`);
                 });
+
+                if (result.totalMatched > maxVisibleMatchedSensors) {
+                    $('#moreMatchedSensors').html(`... and ${(result.totalMatched - maxVisibleMatchedSensors)} more matched sensors`)
+                }
 
                 if (result.isFinish == true) {
                     $('#applyingProgress').addClass('d-none');
@@ -96,8 +112,9 @@
     function resetModal() {
         $(`#applyTemplate_modal`).modal('hide');
 
-        $('#suitableSensors').empty();
+        $('#matchedSensors').empty();
         $('#applyingResults').empty();
+        $('#moreMatchedSensors').empty();
         $('#applyingProgress').removeClass('d-none');
         $('#applyTemplate_okButton').addClass('disabled');
     }
