@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Controllers
 @using System.Text.Json
-@using System.Text.Json.Serialization
+@using HSMServer.JsonConverters
+@using Microsoft.AspNetCore.Mvc.TagHelpers
 
 @model HSMServer.Model.Dashboards.PanelViewModel
 
@@ -9,13 +10,18 @@
 @{
     ViewData["Title"] = "Dashboard";
     Layout = "~/Views/Tree/_Layout.cshtml";
+    var jsonOptions = new JsonSerializerOptions()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new PlotlyDoubleConverter() }
+    };
 }
 
 
 <div class="w-100 overflow-y-auto p-2">
     <div id="panelSettings" class="my-2">
         <div id="editablePanelSettings" class="my-2">
-            <form method="post"  asp-action="@nameof(DashboardsController.SaveDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
+            <form method="post" asp-action="@nameof(DashboardsController.SaveDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
                 <div class="d-flex justify-content-between mb-1">
                     <div class="d-flex align-items-center flex-grow-1">
                         <label asp-for="Name" class="me-2"></label>
@@ -27,16 +33,32 @@
 
                 <textarea id='description' maxlength="250" class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
 
-                <div class="d-flex flex-row align-items-center justify-content-end mt-2">
-                    <div class="form-check">
-                        <input type="checkbox" asp-for="AggregateValues" class="form-check-input" />
-                        <label class="form-check-label" asp-for="AggregateValues"></label>
-                    </div>
-                    <i class='fas fa-question-circle ms-1' title='If the setting is checked, the requested period will be divided into 100 equal sections and an aggregate point will be created for each subsection. The aggregation function depends on the source property. If source property is Min then aggregation function is Min(el1, el2). For source properties Max and Count the aggregation function is Max(el1, el2) and for Mean, Value and EMA (all) the function is Mean(el1, el2).'></i>
+                <div class="d-flex">
+                    <div class="form-control w-auto d-flex no-border align-items-center">
+                        <div id="autoscale-range" class="d-flex no-border align-items-center @(Model.YRange.AutoScale ? "disabled-group" : "")">
+                            <span>Y axis settings:</span>
 
-                    <div class="form-check ms-4">
-                        <input type="checkbox" asp-for="ShowProduct" class="form-check-input" onchange="javascript:showProductInLabels()" />
-                        <label class="form-check-label" asp-for="ShowProduct"></label>
+                            <label class="form-check-label w-auto ms-2" asp-for="YRange.MinValue"></label>
+                            <input type="number" step="any" asp-for="YRange.MinValue" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
+
+                            <label class="form-check-label w-auto ms-2" asp-for="YRange.MaxValue"></label>
+                            <input type="number" step="any" asp-for="YRange.MaxValue" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
+                        </div>
+                       
+                        <input id="autoscale" class="form-check-input my-0 mx-1" asp-for="YRange.AutoScale" type="checkbox"/>
+                        <label class="form-check-label" asp-for="YRange.AutoScale"></label>
+                    </div>
+                    <div class="d-flex flex-row align-items-center justify-content-end mt-2 flex-grow-1">
+                        <div class="form-check">
+                            <input type="checkbox" asp-for="AggregateValues" class="form-check-input"/>
+                            <label class="form-check-label" asp-for="AggregateValues"></label>
+                        </div>
+                        <i class='fas fa-question-circle ms-1' title='If the setting is checked, the requested period will be divided into 100 equal sections and an aggregate point will be created for each subsection. The aggregation function depends on the source property. If source property is Min then aggregation function is Min(el1, el2). For source properties Max and Count the aggregation function is Max(el1, el2) and for Mean, Value and EMA (all) the function is Mean(el1, el2).'></i>
+
+                        <div class="form-check ms-4">
+                            <input type="checkbox" asp-for="ShowProduct" class="form-check-input" onchange="javascript:showProductInLabels()"/>
+                            <label class="form-check-label" asp-for="ShowProduct"></label>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -69,12 +91,13 @@
 
 
 <script>
+    var multichartRange;
     $(document).ready(function () {
-        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, new JsonSerializerOptions()
-                     {
-                         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                         NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
-                     }))
+        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
+        let ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
+
+        multichartRange = ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)];
+
         initMultichart('multichart', 300, true, true).then(
             (dom) => {
                 values.forEach(function (x) {
@@ -116,6 +139,13 @@
         })
     })
     
+    $('#autoscale').on('change', function (){
+        if ($(this).is(':checked'))
+            $('#autoscale-range').addClass('disabled-group')
+        else
+            $('#autoscale-range').removeClass('disabled-group')
+    })
+    
     $('#multichart').on('plotly_legendclick', function (data){
         return false;
     })
@@ -144,4 +174,5 @@
             $(`#templates`).append(viewData);
         });
     }
+
 </script>

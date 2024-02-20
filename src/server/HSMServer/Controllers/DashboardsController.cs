@@ -149,6 +149,10 @@ namespace HSMServer.Controllers
                     Description = model.Description ?? string.Empty,
                     ShowProduct = model.ShowProduct,
                     IsAggregateValues = model.AggregateValues,
+
+                    AutoScale = model.YRange.AutoScale,
+                    MaxY = model.YRange.MaxValue,
+                    MinY = model.YRange.MinValue,
                 });
 
             return Ok(dashboardId);
@@ -211,7 +215,11 @@ namespace HSMServer.Controllers
             {
                 var oldProperty = source.Property;
 
-                source.NotifyUpdate(update with { AggregateValues = panel.AggregateValues });
+                source.NotifyUpdate(update with
+                {
+                    AggregateValues = panel.AggregateValues,
+                    YRange = panel.YRange
+                });
 
                 if (source.Property != oldProperty)
                 {

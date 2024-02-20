@@ -28,6 +28,15 @@ namespace HSMServer.Dashboards
 
         public bool? IsAggregateValues { get; init; }
 
+        public double? MaxY { get; init; }
+
+        public double? MinY { get; init; }
+
+        public bool? AutoScale { get; set; }
+
+
+        public bool NeedSourceRebuild => IsAggregateValues.HasValue || MinY.HasValue || MaxY.HasValue || AutoScale.HasValue;
+
 
         [SetsRequiredMembers]
         public PanelUpdate(Guid panelId) : base()
@@ -39,6 +48,9 @@ namespace HSMServer.Dashboards
 
     public record PanelSourceUpdate
     {
+        public PanelRangeSettings YRange { get; init; }
+
+
         public string Name { get; init; }
 
         public string Color { get; init; }
