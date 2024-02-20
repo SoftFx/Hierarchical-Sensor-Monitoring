@@ -86,8 +86,8 @@ namespace HSMServer.Dashboards
                     source.Update(new PanelSourceUpdate
                     {
                         Label = _pathTemplate.BuildStringByTempalte(Label),
-                        Property = nameof(Property),
-                        Shape = nameof(Shape),
+                        Property = Property.ToString(),
+                        Shape = Shape.ToString(),
                     });
 
                     yield return source;

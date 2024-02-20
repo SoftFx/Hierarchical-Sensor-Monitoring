@@ -93,6 +93,8 @@
                 $(`span[name='enableTemplateBadge']`).addClass("d-none");
                 $(`#card_${templateId}`).removeClass("border-danger");
             }
+        }).done(function () {
+            document.location.reload();
         });
     }
 

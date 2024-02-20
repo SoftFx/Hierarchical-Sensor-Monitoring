@@ -43,8 +43,6 @@ namespace HSMServer.Dashboards
                 if (_tokenSource.IsCancellationRequested)
                     break;
 
-                await Task.Delay(500);
-
                 if (Interlocked.Increment(ref _totalScanned) % BatchSize == 0)
                     await Task.Yield();
 
