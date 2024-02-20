@@ -105,6 +105,8 @@ namespace HSMCommon.Collections.Reactive
         public bool TryCallRemove(TKey key) => IfTryRemove(key).ThenCall().IsOk;
 
 
+        public void Call() => _reaction?.Invoke();
+
         private RDictResult<TValue> ToResult(bool result, TValue value) => new(result, value, _reaction);
     }
 }

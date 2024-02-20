@@ -82,7 +82,7 @@ namespace HSMServer.Dashboards
             }
 
             Color = update.Color is not null ? Color.FromName(update.Color) : Color;
-            Label = !string.IsNullOrEmpty(update.Name) ? update.Name : Label;
+            Label = !string.IsNullOrEmpty(update.Label) ? update.Label : Label;
 
             if (Enum.TryParse<PlottedProperty>(update.Property, out var newProperty) && Property != newProperty)
                 Property = ApplyDependentChange(newProperty);

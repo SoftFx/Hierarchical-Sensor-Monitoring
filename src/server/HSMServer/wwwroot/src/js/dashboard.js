@@ -623,7 +623,7 @@ function updatePlotSource(name, color, property, shape, showProduct, id) {
         contentType: 'application/json',
         url: window.location.pathname + '/' + id,
         data: JSON.stringify({
-            name: updatedName,
+            label: updatedName,
             color: color,
             property: property,
             shape: shape

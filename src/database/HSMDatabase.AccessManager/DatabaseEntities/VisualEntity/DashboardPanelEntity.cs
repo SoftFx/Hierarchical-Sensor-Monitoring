@@ -4,7 +4,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 {
     public sealed record DashboardPanelEntity : BaseServerEntity
     {
-        public List<PanelSubscriptionEntity> Subsctiptions { get; init; } = [];
+        public List<PanelSubscriptionEntity> Subscriptions { get; init; } = [];
 
         public List<PanelSourceEntity> Sources { get; init; } = [];
 

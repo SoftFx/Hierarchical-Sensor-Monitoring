@@ -1,5 +1,6 @@
 ﻿using HSMServer.ConcurrentStorage;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
 namespace HSMServer.Dashboards
@@ -50,8 +51,7 @@ namespace HSMServer.Dashboards
     {
         public PanelRangeSettings YRange { get; init; }
 
-
-        public string Name { get; init; }
+        public string Label { get; init; }
 
         public string Color { get; init; }
 
@@ -66,5 +66,7 @@ namespace HSMServer.Dashboards
     public record PanelSubscriptionUpdate : PanelSourceUpdate
     {
         public string PathTemplate { get; init; }
+
+        public List<Guid> Folders { get; init; }
     }
 }

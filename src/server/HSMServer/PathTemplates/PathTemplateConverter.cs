@@ -6,7 +6,7 @@ namespace HSMServer.PathTemplates
 {
     public sealed partial class PathTemplateConverter
     {
-        private const string AllValidSymbols = @"[\p{L}\p{Nd}\p{Zs}]*";
+        private const string AllValidSymbols = @"[\p{L}\p{Nd}\p{Zs}\._\$]*";
         private const string NamedVariables = @"\{(.*?)\}";
         private const string UnnamedVariable = @"\*";
 
@@ -33,9 +33,9 @@ namespace HSMServer.PathTemplates
 
             try
             {
-                template = EscapeConstParts().Replace(template, "($0)"); // add () to const path of template
+                template = EscapeConstParts().Replace(template, "($0)"); // add () to const parts of template
                 template = NamedVariableToRegex().Replace(template, g => $"(?<{RegisterNamedVariable(g.Value)}>{AllValidSymbols})"); // change custom variable {product} -> regex style (?<product>...)
-                template = EmptyVariableToRegex().Replace(template, AllValidSymbols); //change noname variable to valid pattern
+                template = EmptyVariableToRegex().Replace(template, AllValidSymbols); //change noname variable * to regex pattern
 
                 _regexPattern = $"^{template}$"; //set start and end string constants
 

@@ -76,7 +76,12 @@
             <i class="fa-solid fa-plus"></i> Add
         </a>
     </div>
-    <div id="templates"></div>
+    <div id="templates">
+        @foreach (var (_, template) in Model.Templates)
+        {
+            @await Html.PartialAsync("_TemplateSettings", template)
+        }
+    </div>
 
     <label class="col-form-label fw-bold">Sources:</label>
     <div id="plots" class="mt-1">
@@ -88,6 +93,8 @@
         <span>Drag and drop sensor to the plot above</span>
     </div>
 </div>
+
+@await Html.PartialAsync("_ApplyTemplateModal")
 
 
 <script>
@@ -168,7 +175,8 @@
 
     function addTemplate() {
         $.ajax({
-            url: `@Url.Action(nameof(DashboardsController.AddTemplate))`,
+            url: `${window.location.pathname}/@(nameof(DashboardsController.AddTemplate))`,
+            method: "POST",
             cache: false
         }).done(function (viewData) {
             $(`#templates`).append(viewData);

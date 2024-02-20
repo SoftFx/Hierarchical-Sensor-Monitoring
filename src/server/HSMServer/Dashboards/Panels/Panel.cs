@@ -6,6 +6,7 @@ using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System;
 using System.Linq;
+using System.Text;
 
 namespace HSMServer.Dashboards
 {
@@ -13,7 +14,6 @@ namespace HSMServer.Dashboards
     {
         private const int MaxCountOfSources = 100;
 
-        private readonly CDict<PanelSensorScanTask> _scanSensorsTasks = [];
         private readonly CDict<CHash<Guid>> _sensorToSourceMap = [];
         private readonly Dashboard _board;
 
@@ -66,7 +66,7 @@ namespace HSMServer.Dashboards
             foreach (var sourceEntity in entity.Sources)
                 TryAddSource(new Guid(sourceEntity.SensorId), sourceEntity);
 
-            foreach (var subEntity in entity.Subsctiptions)
+            foreach (var subEntity in entity.Subscriptions)
                 TryAddSubscription(new PanelSubscription(subEntity));
         }
 
@@ -86,28 +86,11 @@ namespace HSMServer.Dashboards
             }
         }
 
-        public bool TryGetScanTask(Guid templateId, out PanelSensorScanTask task)
-        {
-            task = null;
-
-            if (!Subscriptions.TryGetValue(templateId, out var sub))
-                return false;
-
-            if (!_scanSensorsTasks.TryGetValue(templateId, out task))
-            {
-                task = _scanSensorsTasks[templateId];
-
-                _ = task.StartScanning(_board.GetSensorsByFolder(null), sub);
-            }
-
-            return true;
-        }
-
         public override DashboardPanelEntity ToEntity()
         {
             var entity = base.ToEntity();
 
-            entity.Subsctiptions.AddRange(Subscriptions.Select(u => u.Value.ToEntity()));
+            entity.Subscriptions.AddRange(Subscriptions.Select(u => u.Value.ToEntity()));
             entity.Sources.AddRange(Sources.Select(u => u.Value.ToEntity()));
 
             entity.YRangeSettings = YRange.ToEntity();
@@ -174,6 +157,36 @@ namespace HSMServer.Dashboards
         }
 
         public bool TryRemoveSubscription(Guid id) => Subscriptions.TryCallRemoveAndDispose(id);
+
+
+        public bool TryStartScan(Guid templateId)
+        {
+            var result = Subscriptions.TryGetValue(templateId, out var sub);
+
+            if (result)
+                _ = sub.StartScanning(_board.GetSensorsByFolder);
+
+            return result;
+        }
+
+        public bool TryApplyScanResults(Guid templateId, out string error)
+        {
+            error = string.Empty;
+
+            if (!Subscriptions.TryGetValue(templateId, out var template) || !template.ScanIsFinished)
+                return false;
+
+            var errorBuilder = new StringBuilder(1 << 4);
+
+            foreach (var source in template.BuildMathedSources())
+                if (!TrySaveNewSource(source, out var errorBuild).IsOk)
+                    errorBuilder.AppendLine(errorBuild);
+
+            error = errorBuilder.ToString();
+            Sources.Call();
+
+            return true;
+        }
 
 
         private RDictResult<PanelDatasource> TrySaveNewSource(PanelDatasource source, out string error)

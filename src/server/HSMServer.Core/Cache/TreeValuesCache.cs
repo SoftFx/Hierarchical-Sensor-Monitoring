@@ -472,7 +472,7 @@ namespace HSMServer.Core.Cache
 
         public IEnumerable<BaseSensorModel> GetSensorsByFolder(List<Guid> folderIds = null)
         {
-            var hash = new HashSet<Guid>(folderIds);
+            var hash = folderIds?.ToHashSet();
 
             bool GetAnySensor(BaseSensorModel _) => true;
             bool GetSensorByFolder(BaseSensorModel sensor) => hash.Contains(sensor.Root.FolderId ?? Guid.Empty);
