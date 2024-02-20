@@ -51,7 +51,8 @@
 <script>
     $(document).ready(function () {
         let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
-        let range = settings.rangeSettings.autoScale === true ? true : [Number(settings.rangeSettings.minY), Number(settings.rangeSettings.maxY)];
+        let ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
+        let range = ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)];
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         let dashboardpanels = $('#dashboardPanels');
 

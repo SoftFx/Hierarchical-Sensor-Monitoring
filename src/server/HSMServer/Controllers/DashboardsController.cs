@@ -150,9 +150,8 @@ namespace HSMServer.Controllers
                     ShowProduct = model.ShowProduct,
                     IsAggregateValues = model.AggregateValues,
 
-
                     AutoScale = model.YRange.AutoScale,
-                    MaxY = model.YRange.MinValue,
+                    MaxY = model.YRange.MaxValue,
                     MinY = model.YRange.MinValue,
                 });
 
