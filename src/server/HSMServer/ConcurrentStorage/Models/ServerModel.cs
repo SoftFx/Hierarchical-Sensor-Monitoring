@@ -96,10 +96,7 @@ namespace HSMServer.ConcurrentStorage
             Description = Description,
         };
 
-        public virtual void Dispose() 
-        {
-            UpdatedEvent = null;
-        }
+        public virtual void Dispose() => UpdatedEvent = null;
 
 
         protected void ThrowUpdateEvent() => UpdatedEvent?.Invoke();
