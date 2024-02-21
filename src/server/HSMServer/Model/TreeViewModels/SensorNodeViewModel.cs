@@ -110,6 +110,7 @@ namespace HSMServer.Model.TreeViewModel
             TimeSpanPolicy p => new SingleDataAlertViewModel<TimeSpanValue>(p, this),
             IntegerPolicy p => new NumericDataAlertViewModel<IntegerValue>(p, this),
             DoublePolicy p => new NumericDataAlertViewModel<DoubleValue>(p, this),
+            CounterPolicy p => new NumericDataAlertViewModel<CounterValue>(p, this),
             IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue>(p, this),
             DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue>(p, this),
             _ => null,

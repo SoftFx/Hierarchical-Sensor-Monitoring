@@ -18,7 +18,7 @@ namespace HSMDataCollector.Sensors
 
         protected override double GetValue()
         {
-            var sec = _receiveDataPeriod.Seconds;
+            var sec = _receiveDataPeriod.TotalSeconds;
             var value = sec > 0 ? _sum / sec : 0;
 
             Interlocked.Exchange(ref _sum, 0d);

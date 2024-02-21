@@ -3,19 +3,27 @@ using HSMDataCollector.Options;
 using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
+using System;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class SensorBase<T> : SensorBase 
+    public abstract class SensorBase<T> : SensorBase
     {
-        protected SensorBase(SensorOptions options) : base(options) { }
-        
+        private readonly Func<T, SensorValueBase> _valueBuilder;
+
+
+        protected SensorBase(SensorOptions options) : base(options)
+        {
+            _valueBuilder = SensorValuesFactory.GetValueBuilder<T>(options.Type);
+        }
+
 
         public void SendValue(T value, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
             SendValue(GetSensorValue(value).Complete(comment, status));
         }
 
-        protected static SensorValueBase GetSensorValue(T value) => SensorValuesFactory.BuildValue(value);
+
+        protected SensorValueBase GetSensorValue(T value) => value is SensorValueBase valueB ? valueB : _valueBuilder?.Invoke(value);
     }
 }
