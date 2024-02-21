@@ -217,8 +217,7 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                        out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -235,7 +234,7 @@ namespace HSMServer.Controllers
         /// </summary>
         /// <param name="sensorValue"></param>
         /// <returns></returns>
-        [HttpPost("couner")]
+        [HttpPost("counter")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
