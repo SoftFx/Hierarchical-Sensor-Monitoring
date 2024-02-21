@@ -20,6 +20,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.Core.Cache
@@ -37,7 +38,7 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree = new();
 
-        private readonly CGuidDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
+        private readonly CDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -343,7 +344,9 @@ namespace HSMServer.Core.Cache
                     });
 
                     if (sensor.LastDbValue != null)
-                        SaveSensorValueToDb(sensor.LastDbValue, request.Id);
+                        SaveSensorValueToDb(sensor.LastDbValue, request.Id, true);
+
+                    SensorUpdateViewAndNotify(sensor);
                 }
             }
         }
@@ -467,6 +470,24 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
+        public IEnumerable<BaseSensorModel> GetSensorsByFolder(List<Guid> folderIds = null)
+        {
+            var hash = folderIds?.ToHashSet();
+
+            bool GetAnySensor(BaseSensorModel _) => true;
+            bool GetSensorByFolder(BaseSensorModel sensor) => hash.Contains(sensor.Root.FolderId ?? Guid.Empty);
+
+            Predicate<BaseSensorModel> filter = folderIds switch
+            {
+                null => GetAnySensor,
+                _ => GetSensorByFolder,
+            };
+
+            foreach (var (_, sensor) in _sensors)
+                if (filter(sensor))
+                    yield return sensor;
+        }
+
         public bool TryGetSensorByPath(string productName, string path, out BaseSensorModel sensor)
         {
             sensor = null;
@@ -505,7 +526,15 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
+        private void SensorUpdateViewAndNotify(BaseSensorModel sensor)
+        {
+            SensorUpdateView(sensor);
+            SendNotification(sensor.Notifications);
+        }
+
+        private void SendNotification(PolicyResult result) => _confirmationManager.RegisterNotification(result);
+
+        private void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
 
         public IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request)
@@ -779,17 +808,15 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
-            _confirmationManager.SaveOrSendPolicies(sensor.PolicyResult);
-
-            SensorUpdateView(sensor);
+            SensorUpdateViewAndNotify(sensor);
         }
 
 
-        private void SaveSensorValueToDb(BaseValue value, Guid sensorId)
+        private void SaveSensorValueToDb(BaseValue value, Guid sensorId, bool ignoreSnapshot = false)
         {
             _database.AddSensorValue(value.ToEntity(sensorId));
 
-            if (!value.IsTimeout)
+            if (!value.IsTimeout && !ignoreSnapshot)
                 _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
         }
 
@@ -826,7 +853,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"Migrate sensor settings and alerts finished");
 
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
-            ApplyAccessKeys(accessKeysEntities.ToList());
+            ApplyAccessKeys([.. accessKeysEntities]);
             _logger.Info($"{nameof(accessKeysEntities)} applied");
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
@@ -1247,6 +1274,8 @@ namespace HSMServer.Core.Cache
                     {
                         sensor.AddDbValue(value);
 
+                        SendNotification(sensor.Notifications.LeftOnlyScheduled());
+
                         if (!_snapshot.IsFinal && sensor.LastValue is not null)
                             _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
                     }
@@ -1320,7 +1349,7 @@ namespace HSMServer.Core.Cache
                 var ttl = sensor.Policies.TimeToLive;
                 snapshot.IsExpired = timeout;
 
-                if (timeout)
+                if (timeout && sensor.LastValue is not null)
                 {
                     var value = sensor.GetTimeoutValue();
 
@@ -1328,7 +1357,7 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                _confirmationManager.SaveOrSendPolicies(timeout ? ttl.PolicyResult : ttl.Ok);
+                SendNotification(timeout ? ttl.PolicyResult : ttl.Ok);
             }
 
             SensorUpdateView(sensor);

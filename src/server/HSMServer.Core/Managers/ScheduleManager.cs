@@ -6,15 +6,14 @@ namespace HSMServer.Core.Managers
 {
     internal sealed class ScheduleManager : BaseTimeManager
     {
-        private readonly CTimeDict<CGuidDict<ScheduleAlertMessage>> _storage = new();
+        private readonly CTimeDict<CDict<ScheduleAlertMessage>> _storage = new();
 
 
         internal void ProcessMessage(AlertMessage message)
         {
             var sensorId = message.SensorId;
-            var utcTime = DateTime.UtcNow;
 
-            var (notApplyAlerts, applyAlerts) = message.Alerts.SplitByCondition(u => u.IsScheduleAlert);
+            var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
 
             SendAlertMessage(sensorId, notApplyAlerts);
 
@@ -22,10 +21,16 @@ namespace HSMServer.Core.Managers
             {
                 var grouppedAlerts = _storage[alert.SendTime];
 
-                if (!grouppedAlerts.ContainsKey(sensorId))
-                    grouppedAlerts.TryAdd(sensorId, new ScheduleAlertMessage(sensorId));
+                if (!grouppedAlerts.TryGetValue(sensorId, out var sensorGroup))
+                {
+                    sensorGroup = grouppedAlerts[sensorId];
+                    grouppedAlerts.TryAdd(sensorId, sensorGroup);
+                }
 
-                grouppedAlerts[sensorId].Alerts.Add(alert);
+                if (alert.IsReplaceAlert)
+                    sensorGroup.RemovePolicyAlerts(alert.PolicyId);
+
+                sensorGroup.AddAlert(alert);
             }
         }
 

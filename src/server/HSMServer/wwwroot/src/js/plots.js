@@ -46,7 +46,10 @@ export class Plot {
     #customYaxisName = undefined;
     customColor = Colors.default;
     
-    constructor(data, customYaxisName = undefined, customColor = Colors.default) {
+    autoscaleY = true;
+    
+    constructor(data, customYaxisName = undefined, customColor = Colors.default, range = undefined) {
+        this.autoscaleY = range ?? true;
         this.#customYaxisName = customYaxisName;
         this.line = {
             color: Colors.defaultTrace
@@ -131,6 +134,11 @@ export class Plot {
     }
 
     addCustomData(value, compareFunc = null, customField = 'value') {
+        if (this.autoscaleY !== undefined && this.autoscaleY !== true) {
+            this.customdata.push(value.tooltip);
+            return;
+        }
+
         if (Plot.checkTtl(value)) {
             this.customdata.push(value.comment);
             return;
@@ -176,8 +184,8 @@ class ErrorColorPlot extends Plot {
     mode = "markers+lines";
     connectgaps = false;
 
-    constructor(data, unitType, color) {
-        super(data, unitType, color);
+    constructor(data, unitType, color, range) {
+        super(data, unitType, color, range);
     }
 
     markerColorCompareFunc(value) {
@@ -202,8 +210,8 @@ class ErrorColorPlot extends Plot {
 }
 
 export class BoolPlot extends Plot {
-    constructor(data, unitType = undefined, color = Colors.default) {
-        super(data, unitType, color);
+    constructor(data, unitType = undefined, color = Colors.default, range = undefined) {
+        super(data, unitType, color, range);
         this.type = 'scatter';
         this.mode = 'markers';
         this.marker = {
@@ -236,6 +244,11 @@ export class BoolPlot extends Plot {
     }
     
     addCustomData(value, compareFunc = null, customField = 'value') {
+        if (this.autoscaleY !== undefined && this.autoscaleY !== true) {
+            this.customdata.push(value.tooltip);
+            return;
+        }
+        
         if (Plot.checkTtl(value)) {
             this.customdata.push(value.comment);
             return;
@@ -253,7 +266,6 @@ export class BoolPlot extends Plot {
             this.customdata.push(customValue + '<br>' + value.tooltip);
             return;
         }
-
         this.customdata.push(customValue);
     }
 
@@ -290,8 +302,8 @@ export class BoolPlot extends Plot {
 }
 
 export class IntegerPlot extends ErrorColorPlot {
-    constructor(data, unitType = undefined, color = Colors.default, shape = undefined) {
-        super(data, unitType, color);
+    constructor(data, unitType = undefined, color = Colors.default, shape = undefined, range = undefined) {
+        super(data, unitType, color, range);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
@@ -315,6 +327,7 @@ export class IntegerPlot extends ErrorColorPlot {
                 this.y.push("NaN")
             else
                 this.y.push(Number(i.value) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i.value))
+
             this.addCustomData(i);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
@@ -323,8 +336,8 @@ export class IntegerPlot extends ErrorColorPlot {
 }
 
 export class DoublePlot extends ErrorColorPlot {
-    constructor(data, name, field = 'value', unitType = undefined, color = Colors.default, shape = undefined) {
-        super(data, unitType, color);
+    constructor(data, name, field = 'value', unitType = undefined, color = Colors.default, shape = undefined, range = undefined) {
+        super(data, unitType, color, range);
 
         this.type = 'scatter';
         this.name = name;
@@ -352,7 +365,7 @@ export class DoublePlot extends ErrorColorPlot {
             if (Plot.checkNaN(i[customField]))
                 this.y.push("NaN")
             else
-                this.y.push(Number(i[customField]) === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i[customField]))
+                this.y.push(Number(i[customField] === Number.POSITIVE_INFINITY ? Number.MAX_VALUE : Number(i[customField])))
 
             this.addCustomData(i, checkNotCompressedCount, customField);
             this.marker.size.push(this.getMarkerSize(i));

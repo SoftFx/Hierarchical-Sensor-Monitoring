@@ -5,33 +5,41 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<li id='source_@Model.Id' class="d-flex flex-wrap list-group-item my-1 align-items-center justify-content-between border-top-1 rounded-1">
-    <div class="d-flex flex-grow-1">
-        <div class="d-flex flex-column" style="flex-grow: 10">
-            <div class="d-flex mx-1 align-items-center">
-                <label class="fw-bold me-1">Label:</label>
-                <label id="productName_@Model.Id" class="text-nowrap me-1 @(Model.ShowProduct ? string.Empty : "d-none")">@Model.DisplayProduct</label>
-                <input id='name_input_@Model.Id' class="form-control" asp-for="Label" type="text" oninput="javascript:realtimeUpdate('@Model.Id')" />
-                <input id='name_default_@Model.Id' class="d-none" value="@Model.SensorName">
+<li id='source_@Model.Id' class="mb-2">
+    <div class="d-flex flex-row align-items-center">
+        <div class="card w-100">
+            <div class="card-body py-2">
+                <div class="d-flex flex-column" style="flex-grow: 10">
+                    <div class="d-flex mx-1 align-items-center">
+                        <label class="fw-bold me-1">Label:</label>
+                        <label id="productName_@Model.Id" class="text-nowrap me-1 @(Model.ShowProduct ? string.Empty : "d-none")">@Model.DisplayProduct</label>
+                        <input id='name_input_@Model.Id' class="form-control" asp-for="Label" type="text" oninput="javascript:realtimeUpdate('@Model.Id')" />
+                        <input id='name_default_@Model.Id' class="d-none" value="@Model.SensorName">
 
-                <label class="fw-bold ms-2 me-1">Property:</label>
-                <select id="property_@Model.Id" class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties" onchange="javascript:realtimeUpdate('@Model.Id')"></select>
+                        <label class="fw-bold ms-2 me-1">Property:</label>
+                        <select id="property_@Model.Id" class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties" onchange="javascript:realtimeUpdate('@Model.Id')"></select>
 
-                <a href="https://plotly.com/javascript/line-charts/#line-shape-options-for-interpolation" class="fw-bold ms-2 me-1">Shape:</a>
-                <select id="shape_@Model.Id" class="form-select w-auto" title="Shape of chart line" asp-for="Shape" asp-items="@Model.AvailableShapes" onchange="javascript:realtimeUpdate('@Model.Id')"></select>
+                        <a href="https://plotly.com/javascript/line-charts/#line-shape-options-for-interpolation" target="_blank" class="fw-bold ms-2 me-1">Shape:</a>
+                        <select id="shape_@Model.Id" class="form-select w-auto" title="Shape of chart line" asp-for="Shape" asp-items="@Model.AvailableShapes" onchange="javascript:realtimeUpdate('@Model.Id')"></select>
 
-                <input id='color_@Model.Id' type="color" asp-for="Color" class="form-control form-control-color mx-1" oninput="javascript:realtimeUpdate('@Model.Id')" />
+                        <input id='color_@Model.Id' type="color" asp-for="Color" class="form-control form-control-color mx-1" oninput="javascript:realtimeUpdate('@Model.Id')" />
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span class="ms-1" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;" onclick="javascript:redirectToHome('@Model.SensorId')">
+                            @Model.Path
+                        </span>
+                    </div>
+                </div>
             </div>
-            <div class="d-flex align-items-center">
-                <span class="ms-1" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;" onclick="javascript:redirectToHome('@Model.SensorId')">
-                    @Model.Path
-                </span>
-            </div>
-        </div>
-        <div class="d-flex justify-content-center">
-            <button class="btn" type="button" style="color: red" onclick="javascript:deletePlot('@Model.Id')">
-                <i class="fa-solid fa-xmark"></i>
+        </div>    
+    
+        <div>
+            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                <i class="fa-solid fa-ellipsis-vertical button-link"></i>
             </button>
+            <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                <a class="dropdown-item text-decoration-none fw-normal button-link" href="javascript:deletePlot('@Model.Id')">Remove</a>
+            </div>
         </div>
     </div>
 </li>

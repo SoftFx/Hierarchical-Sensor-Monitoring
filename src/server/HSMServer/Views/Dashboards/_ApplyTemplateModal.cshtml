@@ -1,0 +1,123 @@
+﻿@using HSMServer.Controllers
+@using HSMServer.Dashboards
+
+
+<div class="modal fade" tabindex="-1" role="dialog" data-bs-backdrop="static" id="applyTemplate_modal">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-break">Enabling template</h5>
+            </div>
+
+            <div class="modal-body text-break" id="applyTemplate_body">
+                <div class="d-flex flex-column">
+                    <h5 id="applyingResults"></h5>
+
+                    <div id="applyingProgress" class="progress-bar align-self-end">
+                        <div class="progress-bar-value"></div>
+                    </div>
+
+                    <table class="mt-3">
+                        <thead>
+                            <tr>
+                                <th>Path</th>
+                                <th>Source label</th>
+                            </tr>
+                        </thead>
+                        <tbody id="matchedSensors"></tbody>
+                    </table>
+
+                    <div id="moreMatchedSensors" class="d-flex justify-content-center"></div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-primary col-2 col-lg-1 disabled" id="applyTemplate_okButton" onclick="javascript:apply()">Enable</button>
+                <button class="btn btn-primary col-2 col-lg-1 px-2" id="applyTemplate_cancelButton" onclick="javascript:cancel()">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        let modal = document.getElementById('applyTemplate_modal')
+
+        modal.addEventListener('shown.bs.modal', function (event) {
+            getResult();
+        })
+    });
+
+    let scanInterval = 3000;
+    let getResultTimeout;
+
+    function getResult() {
+        let templateId = $(`#applyTemplate_modal`).attr("name");
+        let maxVisibleMatchedSensors = parseInt('@PanelSensorScanTask.MaxVisibleMathedItems');
+
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.GetResultOfApplying))/${templateId}`,
+            type: 'POST',
+            success: function (result) {
+                $('#applyingResults').html(`Total scanned: ${result.totalScanned}, matched: ${result.totalMatched}`);
+                
+                result.matсhedSensors.forEach(function (sensor) {
+                    $('#matchedSensors').append(`<tr><td>${sensor.path}</td><td>${sensor.label}</td></tr>`);
+                });
+
+                if (result.totalMatched > maxVisibleMatchedSensors) {
+                    $('#moreMatchedSensors').html(`... and ${(result.totalMatched - maxVisibleMatchedSensors)} more matched sensors`)
+                }
+
+                if (result.isFinish == true) {
+                    $('#applyingProgress').addClass('d-none');
+                    $('#applyTemplate_okButton').removeClass('disabled');
+                }
+                else {
+                    getResultTimeout = setTimeout(getResult, scanInterval);
+                }
+            }
+        });
+    }
+
+    function apply() {
+        let templateId = $(`#applyTemplate_modal`).attr("name");
+
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.ApplySources))/${templateId}`,
+            type: 'POST',
+            success: function (result) {
+                resetModal();
+
+                $(`span[name='enableTemplateBadge']`).addClass("d-none");
+                $(`#card_${templateId}`).removeClass("border-danger");
+            }
+        }).done(function () {
+            document.location.reload();
+        });
+    }
+
+    function cancel() {
+        let templateId = $(`#applyTemplate_modal`).attr("name");
+
+        $.ajax({
+            url: `${window.location.pathname}/@(nameof(DashboardsController.CancelApplying))/${templateId}`,
+            type: 'POST',
+            success: function (result) {
+                clearTimeout(getResultTimeout);
+                resetModal();
+            }
+        });
+    }
+
+    function resetModal() {
+        $(`#applyTemplate_modal`).modal('hide');
+
+        $('#matchedSensors').empty();
+        $('#applyingResults').empty();
+        $('#moreMatchedSensors').empty();
+        $('#applyingProgress').removeClass('d-none');
+        $('#applyTemplate_okButton').addClass('disabled');
+    }
+</script>
