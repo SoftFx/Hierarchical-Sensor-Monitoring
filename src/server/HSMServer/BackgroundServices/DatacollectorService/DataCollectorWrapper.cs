@@ -6,9 +6,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Extensions;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using System.Reflection;
 using System.Threading.Tasks;
 
@@ -34,13 +32,14 @@ namespace HSMServer.BackgroundServices
         internal DatabaseSize DbSizeSensors { get; }
 
 
-        internal IParamsFuncSensor<double, double> RequestSizeSensor { get; }
+        internal IMonitoringCounterSensor ResponseSizeSensor { get; }
 
-        internal IParamsFuncSensor<double, double> ResponseSizeSensor { get; }
+        internal IMonitoringCounterSensor RequestSizeSensor { get; }
 
-        internal IParamsFuncSensor<double, double> ReceivedDataCountSensor { get; }
 
-        internal IParamsFuncSensor<double, double> RequestsCountSensor { get; }
+        internal IMonitoringCounterSensor ReceivedDataCountSensor { get; }
+
+        internal IMonitoringCounterSensor RequestsCountSensor { get; }
 
 
         public DataCollectorWrapper(IDatabaseCore database, ITreeValuesCache cache)
@@ -58,11 +57,11 @@ namespace HSMServer.BackgroundServices
             else
                 _collector.Unix.AddAllDefaultSensors(productVersion);
 
-            RequestSizeSensor = RegisterParamSensor<double>(RequestSizePath);
-            ResponseSizeSensor = RegisterParamSensor<double>(ResponseSizePath);
+            ResponseSizeSensor = _collector.CreateM1CounterSensor(ResponseSizePath);
+            RequestSizeSensor = _collector.CreateM1CounterSensor(RequestSizePath);
 
-            ReceivedDataCountSensor = RegisterParamSensor<double>(DataCountPath);
-            RequestsCountSensor = RegisterParamSensor<double>(RequestsCountPath);
+            ReceivedDataCountSensor = _collector.CreateM1CounterSensor(DataCountPath);
+            RequestsCountSensor = _collector.CreateM1CounterSensor(RequestsCountPath);
 
             DbSizeSensors = new DatabaseSize(_collector, database);
         }
@@ -86,18 +85,6 @@ namespace HSMServer.BackgroundServices
             var key = selfMonitoring.AccessKeys.FirstOrDefault(k => k.Value.DisplayName == CommonConstants.DefaultAccessKey).Key;
 
             return key.ToString();
-        }
-
-        private IParamsFuncSensor<T, T> RegisterParamSensor<T>(string path) where T : IFloatingPoint<T>
-        {
-            static T GetSum(List<T> values)
-            {
-                return values.Aggregate(T.Zero, (sum, curVal) => sum + curVal);
-            }
-
-            var denominator = T.CreateChecked(_barInterval.TotalSeconds);
-
-            return _collector.CreateParamsFuncSensor<T, T>(path, string.Empty, values => T.Round(GetSum(values) / denominator, DigitsCnt, MidpointRounding.AwayFromZero), _barInterval);
         }
     }
 }
