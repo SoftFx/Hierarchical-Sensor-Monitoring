@@ -83,7 +83,12 @@
         }
     </div>
 
-    <label class="col-form-label fw-bold">Sources:</label>
+    <div class="d-flex align-items-center">
+        <label class="col-form-label fw-bold">Sources:</label>
+        <a href="javascript:removeAllSources()" class="mx-2">
+            <i class='fas fa-trash-alt'></i> Remove all
+        </a>
+    </div>
     <div id="plots" class="mt-1">
         <ul id="sources" class="list-group">
         </ul>
@@ -183,4 +188,14 @@
         });
     }
 
+    function removeAllSources() {
+        $('#sources li').each(function (idx, li) {
+            let source = $(li);
+
+            let idAttr = source.attr('id');
+            let sourceId = idAttr.substring('source_'.length, idAttr.length);
+
+            deletePlot(sourceId);
+        });
+    }
 </script>
