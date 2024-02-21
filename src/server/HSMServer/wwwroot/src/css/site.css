@@ -179,6 +179,12 @@ input.input-validation-error {
     opacity: 1;
 }
 
+.help-popover {
+    color: #0366d6;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
 /* Wrappers
 -------------------------------------------------- */
 

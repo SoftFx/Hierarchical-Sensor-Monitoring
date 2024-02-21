@@ -70,10 +70,17 @@
         <div id="multichart"></div>
     </div>
 
-    <div class="d-flex align-items-center">
-        <label class="col-form-label fw-bold">Templates:</label>
-        <a href="javascript:addTemplate();" class="mx-2">
-            <i class="fa-solid fa-plus"></i> Add
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center">
+            <label class="col-form-label fw-bold">Templates:</label>
+            <a href="javascript:addTemplate();" class="mx-2">
+                <i class="fa-solid fa-plus"></i> Add
+            </a>
+        </div>
+
+        <a id="templateHelp" data-bs-toggle="popover" data-bs-html="true" title="Template variables help" class="help-popover"
+           data-bs-content="<b>Path</b> input may contain 2 types of variables that help to define the pattern of a piece of sensor path. The piece can include letters, digits and symbols '_', '.', '$'. There are<br/><b>* -</b> unnamed variable;<br/><b>{piece} -</b> named variable, that can be used in <b>Label</b> input.">
+            Template help
         </a>
     </div>
     <div id="templates">
@@ -83,7 +90,7 @@
         }
     </div>
 
-    <div class="d-flex align-items-center">
+    <div class="d-flex align-items-center justify-content-between">
         <label class="col-form-label fw-bold">Sources:</label>
         <a href="javascript:removeAllSources()" class="mx-2">
             <i class='fas fa-trash-alt'></i> Remove all
@@ -105,6 +112,11 @@
 <script>
     var multichartRange;
     $(document).ready(function () {
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl);
+        });
+
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         let ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
 
@@ -158,9 +170,23 @@
             $('#autoscale-range').removeClass('disabled-group')
     })
     
-    $('#multichart').on('plotly_legendclick', function (data){
+    $('#multichart').on('plotly_legendclick', function (data) {
         return false;
-    })
+    });
+
+    $('#templateHelp').on('show.bs.popover', () => {
+        $('html').on('click', hideNotFocusedHelp);
+    });
+
+    $('#templateHelp').on('hide.bs.popover', () => {
+        $('html').off('click', hideNotFocusedHelp);
+    });
+
+    function hideNotFocusedHelp(e) {
+        if (!$(e.target).parents().is('.popover')) {
+            $('#templateHelp').popover('hide');
+        }
+    }
 
     function showProductInLabels() {
         $('#sources li').each(function (idx, li) {
