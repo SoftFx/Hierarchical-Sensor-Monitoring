@@ -404,6 +404,11 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorRequests.Unit.Requests => Core.Model.Unit.Requests,
                 HSMSensorDataObjects.SensorRequests.Unit.Responses => Core.Model.Unit.Responses,
 
+                HSMSensorDataObjects.SensorRequests.Unit.Bits_sec => Core.Model.Unit.Bits_sec,
+                HSMSensorDataObjects.SensorRequests.Unit.Bytes_sec => Core.Model.Unit.Bytes_sec,
+                HSMSensorDataObjects.SensorRequests.Unit.KBytes_sec => Core.Model.Unit.KBytes_sec,
+                HSMSensorDataObjects.SensorRequests.Unit.MBytes_sec => Core.Model.Unit.MBytes_sec,
+
                 _ => throw new NotImplementedException(),
             };
 

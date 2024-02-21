@@ -25,7 +25,8 @@ namespace HSMSensorDataObjects.SensorRequests
 
         Bits_sec = 2100,
         Bytes_sec = 2101,
-        MBytes_sec = 2102,
+        KBytes_sec = 2102,
+        MBytes_sec = 2103,
     }
 
 
