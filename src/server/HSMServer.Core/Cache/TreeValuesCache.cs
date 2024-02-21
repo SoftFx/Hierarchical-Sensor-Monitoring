@@ -20,7 +20,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.Core.Cache
@@ -470,12 +469,10 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
-        public IEnumerable<BaseSensorModel> GetSensorsByFolder(List<Guid> folderIds = null)
+        public IEnumerable<BaseSensorModel> GetSensorsByFolder(HashSet<Guid> folderIds = null)
         {
-            var hash = folderIds?.ToHashSet();
-
             bool GetAnySensor(BaseSensorModel _) => true;
-            bool GetSensorByFolder(BaseSensorModel sensor) => hash.Contains(sensor.Root.FolderId ?? Guid.Empty);
+            bool GetSensorByFolder(BaseSensorModel sensor) => folderIds.Contains(sensor.Root.FolderId ?? Guid.Empty);
 
             Predicate<BaseSensorModel> filter = folderIds switch
             {

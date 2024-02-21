@@ -12,7 +12,8 @@ namespace HSMServer.Dashboards
     {
         private readonly PathTemplateConverter _pathTemplate = new();
 
-        public List<Guid> Folders { get; private set; }
+
+        public HashSet<Guid> Folders { get; private set; }
 
         public string PathTempalte { get; private set; }
 
@@ -43,7 +44,8 @@ namespace HSMServer.Dashboards
         {
             base.Update(update);
 
-            Folders = update.Folders;
+            if (update.Folders is not null)
+                Folders = update.Folders.Folders;
 
             PathTempalte = ApplyNewTemplate(update.PathTemplate);
             Label = update.Label ?? Label;
@@ -64,12 +66,13 @@ namespace HSMServer.Dashboards
         }
 
 
-        public bool IsMatch(BaseSensorModel sensor) => _pathTemplate.IsMatch(sensor.FullPath) && DatasourceFactory.IsSupportedPlotProperty(sensor, Property); //TODO add to folder check
+        public bool IsMatch(BaseSensorModel sensor) =>
+            AreFoldersContain(sensor.Root.FolderId) && _pathTemplate.IsMatch(sensor.FullPath) && DatasourceFactory.IsSupportedPlotProperty(sensor, Property);
 
         public string BuildSensorLabel() => _pathTemplate.BuildStringByTempalte(Label) ?? Label;
 
 
-        public Task StartScanning(Func<List<Guid>, IEnumerable<BaseSensorModel>> getSensors)
+        public Task StartScanning(Func<HashSet<Guid>, IEnumerable<BaseSensorModel>> getSensors)
         {
             CancelScanning();
 
@@ -122,5 +125,8 @@ namespace HSMServer.Dashboards
 
             return template;
         }
+
+        internal bool AreFoldersContain(Guid? folder) =>
+            Folders is null || (!folder.HasValue && Folders.Contains(Guid.Empty)) || Folders.Contains(folder.Value);
     }
 }

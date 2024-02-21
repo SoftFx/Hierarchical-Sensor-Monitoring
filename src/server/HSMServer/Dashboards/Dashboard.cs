@@ -89,7 +89,7 @@ namespace HSMServer.Dashboards
             return sensor is not null;
         }
 
-        internal IEnumerable<BaseSensorModel> GetSensorsByFolder(List<Guid> foldersIds) => _cache.GetSensorsByFolder(foldersIds);
+        internal IEnumerable<BaseSensorModel> GetSensorsByFolder(HashSet<Guid> foldersIds) => _cache.GetSensorsByFolder(foldersIds);
 
 
         private bool AddPanel(DashboardPanelEntity entity)

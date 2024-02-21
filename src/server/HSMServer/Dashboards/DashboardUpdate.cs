@@ -65,10 +65,13 @@ namespace HSMServer.Dashboards
 
     public record PanelSubscriptionUpdate : PanelSourceUpdate
     {
-        public List<Guid> Folders { get; init; }
+        public SubscriptionFoldersUpdate Folders { get; init; }
 
         public string PathTemplate { get; init; }
 
         public bool? IsSubscribed { get; init; }
     }
+
+
+    public record SubscriptionFoldersUpdate(HashSet<Guid> Folders);
 }

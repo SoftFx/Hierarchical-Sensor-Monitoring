@@ -27,7 +27,7 @@ namespace HSMServer.Model.Dashboards
         ];
 
 
-        public List<Guid> Folders { get; set; }
+        public HashSet<Guid> Folders { get; set; }
 
         public Guid Id { get; set; }
 
@@ -70,7 +70,7 @@ namespace HSMServer.Model.Dashboards
                 PathTemplate = Path,
                 Property = Property.ToString(),
                 Shape = Shape.ToString(),
-                Folders = Folders,
+                Folders = new(Folders),
                 Label = Label,
 
                 IsSubscribed = IsSubscribed,
