@@ -19,6 +19,8 @@ namespace HSMServer.Dashboards
 
         public PanelSensorScanTask ScannedTask { get; private set; }
 
+        public bool IsSubscribed { get; private set; }
+
         public bool IsApplied { get; private set; }
 
 
@@ -31,6 +33,8 @@ namespace HSMServer.Dashboards
         {
             PathTempalte = ApplyNewTemplate(entity.PathTemplate);
             Folders = entity.Folders;
+
+            IsSubscribed = entity.IsSubscribed;
             IsApplied = entity.IsApplied;
         }
 
@@ -39,9 +43,12 @@ namespace HSMServer.Dashboards
         {
             base.Update(update);
 
+            Folders = update.Folders;
+
             PathTempalte = ApplyNewTemplate(update.PathTemplate);
             Label = update.Label ?? Label;
-            Folders = update.Folders;
+
+            IsSubscribed = update.IsSubscribed ?? IsSubscribed;
         }
 
         public override PanelSubscriptionEntity ToEntity()
@@ -49,6 +56,7 @@ namespace HSMServer.Dashboards
             var entity = base.ToEntity();
 
             entity.PathTemplate = PathTempalte;
+            entity.IsSubscribed = IsSubscribed;
             entity.IsApplied = IsApplied;
             entity.Folders = Folders;
 
@@ -79,21 +87,31 @@ namespace HSMServer.Dashboards
                 yield break;
 
             foreach (var sensor in ScannedTask.MatchedSensors)
-                if (IsMatch(sensor))
-                {
-                    var source = new PanelDatasource(sensor);
-
-                    source.Update(new PanelSourceUpdate
-                    {
-                        Label = _pathTemplate.BuildStringByTempalte(Label),
-                        Property = Property.ToString(),
-                        Shape = Shape.ToString(),
-                    });
-
+                if (TryBuildSource(sensor, out var source))
                     yield return source;
-                }
 
             IsApplied = true;
+        }
+
+        public bool TryBuildSource(BaseSensorModel sensor, out PanelDatasource source)
+        {
+            source = null;
+
+            if (IsMatch(sensor))
+            {
+                source = new PanelDatasource(sensor);
+
+                source.Update(new PanelSourceUpdate
+                {
+                    Label = _pathTemplate.BuildStringByTempalte(Label),
+                    Property = Property.ToString(),
+                    Shape = Shape.ToString(),
+                });
+
+                return true;
+            }
+
+            return false;
         }
 
 

@@ -140,6 +140,14 @@ namespace HSMServer.Dashboards
             return Sources.IfTryRemoveAndDispose(sourceId).ThenCallForSuccess(RemoveSource).ThenCall().IsOk;
         }
 
+
+        public void AddSensor(BaseSensorModel sensor)
+        {
+            foreach (var (_, sub) in Subscriptions)
+                if (sub.IsSubscribed && sub.TryBuildSource(sensor, out var source))
+                    TrySaveNewSource(source, out _);
+        }
+
         public void RemoveSensor(Guid sensorId)
         {
             foreach (var sourceId in _sensorToSourceMap[sensorId])

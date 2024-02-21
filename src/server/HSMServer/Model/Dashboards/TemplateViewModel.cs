@@ -27,13 +27,13 @@ namespace HSMServer.Model.Dashboards
         ];
 
 
+        public List<Guid> Folders { get; set; }
+
         public Guid Id { get; set; }
 
         public string Path { get; set; }
 
         public bool IsApplied { get; set; }
-
-        public List<Guid> Folders { get; set; }
 
 
         public PlottedProperty Property { get; set; }
@@ -43,9 +43,12 @@ namespace HSMServer.Model.Dashboards
         public string Label { get; set; }
 
 
+        public bool IsSubscribed { get; set; }
+
+
         public TemplateViewModel() { }
 
-        public TemplateViewModel(PanelSubscription subscription, Dictionary<Guid, string> availableFolders) 
+        public TemplateViewModel(PanelSubscription subscription, Dictionary<Guid, string> availableFolders)
         {
             foreach (var (id, name) in availableFolders)
                 AvailableFolders.Add((id, name));
@@ -69,6 +72,8 @@ namespace HSMServer.Model.Dashboards
                 Shape = Shape.ToString(),
                 Folders = Folders,
                 Label = Label,
+
+                IsSubscribed = IsSubscribed,
             };
     }
 }
