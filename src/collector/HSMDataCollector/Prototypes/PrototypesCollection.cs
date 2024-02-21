@@ -32,7 +32,7 @@ namespace HSMDataCollector.Options
 
         internal WindowsFreeSpaceOnDiskPredictionPrototype WindowsFreeSpaceOnDiskPrediction { get; }
 
-        internal WindowsAverageDiskWriteSpeedPrototype WindowsAverageDiskWriteSpeed { get; }
+        internal WindowsDiskWriteSpeedPrototype WindowsAverageDiskWriteSpeed { get; }
 
         internal WindowsDiskQueueLengthPrototype WindowsDiskQueueLength { get; }
 
@@ -128,7 +128,7 @@ namespace HSMDataCollector.Options
             WindowsFreeSpaceOnDisk = Register<WindowsFreeSpaceOnDiskPrototype>();
             WindowsActiveTimeDisk = Register<WindowsActiveTimeDiskPrototype>();
             WindowsDiskQueueLength = Register<WindowsDiskQueueLengthPrototype>();
-            WindowsAverageDiskWriteSpeed = Register<WindowsAverageDiskWriteSpeedPrototype>();
+            WindowsAverageDiskWriteSpeed = Register<WindowsDiskWriteSpeedPrototype>();
 
             UnixFreeSpaceOnDiskPrediction = Register<UnixFreeSpaceOnDiskPredictionPrototype>();
             UnixFreeSpaceOnDisk = Register<UnixFreeSpaceOnDiskPrototype>();

@@ -3,14 +3,14 @@ using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMDataCollector.Prototypes.Collections.Disks
 {
-    internal sealed class WindowsAverageDiskWriteSpeedPrototype : BarDisksMonitoringPrototype
+    internal sealed class WindowsDiskWriteSpeedPrototype : BarDisksMonitoringPrototype
     {
-        protected override string DescriptionPath => WindowsAverageDiskWriteSpeed.Counter;
+        protected override string DescriptionPath => "Disk Write MB/sec";
 
         protected override string SensorNameTemplate => "Average disk write speed on {0} disk";
 
 
-        public WindowsAverageDiskWriteSpeedPrototype() : base()
+        public WindowsDiskWriteSpeedPrototype() : base()
         {
             SensorUnit = Unit.MB;
         }
