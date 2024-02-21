@@ -392,17 +392,17 @@ namespace HSMDataCollector.Core
         }
 
 
-        public IInstantValueSensor<double> CreateM1CounterSensor(string path, string desctiption = "") => CreateCounterSensor(path, 60000, desctiption);
+        public IMonitoringCounterSensor CreateM1CounterSensor(string path, string desctiption = "") => CreateCounterSensor(path, 60000, desctiption);
 
-        public IInstantValueSensor<double> CreateM5CounterSensor(string path, string description = "") => CreateCounterSensor(path, 300000, description);
+        public IMonitoringCounterSensor CreateM5CounterSensor(string path, string description = "") => CreateCounterSensor(path, 300000, description);
 
-        private IInstantValueSensor<double> CreateCounterSensor(string path, int postPeriod, string description = "") => CreateCounterSensor(path, new MonitoringInstantSensorOptions
+        private IMonitoringCounterSensor CreateCounterSensor(string path, int postPeriod, string description = "") => CreateCounterSensor(path, new MonitoringInstantSensorOptions
         {
             PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
             Description = description,
         });
 
-        private IInstantValueSensor<double> CreateCounterSensor(string path, MonitoringInstantSensorOptions options) => _sensorsStorage.CreateCounterSensor(path, options);
+        private IMonitoringCounterSensor CreateCounterSensor(string path, MonitoringInstantSensorOptions options) => _sensorsStorage.CreateCounterSensor(path, options);
 
 
         #endregion

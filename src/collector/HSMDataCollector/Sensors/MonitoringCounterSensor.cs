@@ -6,7 +6,7 @@ using System.Threading;
 
 namespace HSMDataCollector.Sensors
 {
-    internal sealed class MonitoringCounterSensor : MonitoringSensorBase<double>, IInstantValueSensor<double>
+    internal sealed class MonitoringCounterSensor : MonitoringSensorBase<double>, IMonitoringCounterSensor
     {
         private SensorStatus _lastStatus = SensorStatus.Ok;
         private string _lastComment = string.Empty;
