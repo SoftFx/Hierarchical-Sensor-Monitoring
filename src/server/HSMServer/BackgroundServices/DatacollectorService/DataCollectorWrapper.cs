@@ -14,8 +14,6 @@ namespace HSMServer.BackgroundServices
 {
     public sealed class DataCollectorWrapper : IDisposable
     {
-        private const int DigitsCnt = 2;
-
         private const string SelfMonitoringProductName = "HSM Server Monitoring";
 
         private const string RequestsCountPath = "Load/Requests per second";
@@ -25,8 +23,6 @@ namespace HSMServer.BackgroundServices
         private const string RequestSizePath = "Load/Received data per second KB";
 
         private readonly IDataCollector _collector;
-
-        private readonly TimeSpan _barInterval = new(0, 1, 0);
 
 
         internal DatabaseSize DbSizeSensors { get; }

@@ -22,6 +22,10 @@ namespace HSMSensorDataObjects.SensorRequests
         Count = 1100,
         Requests = 1101,
         Responses = 1102,
+
+        Bits_sec = 2100,
+        Bytes_sec = 2101,
+        MBytes_sec = 2102,
     }
 
 

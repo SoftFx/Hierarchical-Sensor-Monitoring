@@ -52,6 +52,13 @@ namespace HSMServer.Core.Model
         Requests = 1101,
         [Display(Name = "responses")]
         Responses = 1102,
+
+        [Display(Name = "bits/sec")]
+        Bits_sec = 2100,
+        [Display(Name = "Bytes/sec")]
+        Bytes_sec = 2101,
+        [Display(Name = "MB/sec")]
+        MBytes_sec = 2102,
     }
 
 
