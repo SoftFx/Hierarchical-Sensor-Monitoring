@@ -351,13 +351,6 @@ namespace HSMDataCollector.Core
 
         #region Custom instant sensors
 
-        public IInstantValueSensor<double> CreateSpeedSensor(string path, string description = "") => CreateSpeedSensor(path, new MonitoringInstantSensorOptions()
-        {
-            Description = description
-        });
-        
-        public IInstantValueSensor<double> CreateSpeedSensor(string path, MonitoringInstantSensorOptions options) =>  CreateSpeedSensor<double>(path, options);
-
         public IInstantValueSensor<Version> CreateVersionSensor(string path, string description = "") => CreateInstantSensor<Version>(path, description);
 
         public IInstantValueSensor<TimeSpan> CreateTimeSensor(string path, string description = "") => CreateInstantSensor<TimeSpan>(path, description);
@@ -392,12 +385,25 @@ namespace HSMDataCollector.Core
 
         private IInstantValueSensor<T> CreateInstantSensor<T>(string path, InstantSensorOptions options) => _sensorsStorage.CreateInstantSensor<T>(path, options);
 
-        private IInstantValueSensor<T> CreateSpeedSensor<T>(string path, MonitoringInstantSensorOptions options) => (IInstantValueSensor<T>)_sensorsStorage.CreateSpeedSensor(path, options);
 
         public IServiceCommandsSensor CreateServiceCommandsSensor()
         {
             return (IServiceCommandsSensor)_sensorsStorage.Register(new ServiceCommandsSensor(_prototypes.ServiceCommands.Get(null)));
         }
+
+
+        public IInstantValueSensor<double> CreateM1CounterSensor(string path, string desctiption = "") => CreateCounterSensor(path, 60000, desctiption);
+
+        public IInstantValueSensor<double> CreateM5CounterSensor(string path, string description = "") => CreateCounterSensor(path, 300000, description);
+
+        private IInstantValueSensor<double> CreateCounterSensor(string path, int postPeriod, string description = "") => CreateCounterSensor(path, new MonitoringInstantSensorOptions
+        {
+            PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
+            Description = description,
+        });
+
+        private IInstantValueSensor<double> CreateCounterSensor(string path, MonitoringInstantSensorOptions options) => _sensorsStorage.CreateCounterSensor(path, options);
+
 
         #endregion
 

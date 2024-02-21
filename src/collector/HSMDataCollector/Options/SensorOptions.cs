@@ -1,11 +1,11 @@
 ﻿using HSMDataCollector.Alerts;
 using HSMDataCollector.Converters;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Prototypes;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
-using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Options
 {
@@ -90,6 +90,7 @@ namespace HSMDataCollector.Options
     {
         public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
     }
+
 
     public class NetworkSensorOptions : MonitoringInstantSensorOptions
     {
