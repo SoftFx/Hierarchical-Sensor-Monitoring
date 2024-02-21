@@ -11,6 +11,8 @@ namespace HSMServer.Dashboards
     public sealed class PanelSubscription : BasePlotPanelModule<PanelSubscriptionUpdate, PanelSubscriptionEntity>
     {
         private readonly PathTemplateConverter _pathTemplate = new();
+        private PanelRangeSettings _panelYSettings;
+        private bool _panelAggrValue;
 
 
         public HashSet<Guid> Folders { get; private set; }
@@ -65,6 +67,14 @@ namespace HSMServer.Dashboards
             return entity;
         }
 
+        public PanelSubscription UpdatePanelSettings(PanelRangeSettings ySetting, bool aggrValues)
+        {
+            _panelAggrValue = aggrValues;
+            _panelYSettings = ySetting;
+
+            return this;
+        }
+
 
         public bool IsMatch(BaseSensorModel sensor) =>
             AreFoldersContain(sensor.Root.FolderId) && _pathTemplate.IsMatch(sensor.FullPath) && DatasourceFactory.IsSupportedPlotProperty(sensor, Property);
@@ -109,6 +119,9 @@ namespace HSMServer.Dashboards
                     Label = _pathTemplate.BuildStringByTempalte(Label),
                     Property = Property.ToString(),
                     Shape = Shape.ToString(),
+
+                    AggregateValues = _panelAggrValue,
+                    YRange = _panelYSettings,
                 });
 
                 return true;
