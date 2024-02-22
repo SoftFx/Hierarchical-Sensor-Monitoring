@@ -134,6 +134,7 @@ namespace HSMServer.Model.History
             SensorType.Boolean => Build((BooleanValue)value),
             SensorType.Integer => Build((IntegerValue)value),
             SensorType.Double => Build((DoubleValue)value),
+            SensorType.Counter => Build((CounterValue)value),
             SensorType.String => Build((StringValue)value),
             SensorType.IntegerBar => Build((IntegerBarValue)value),
             SensorType.DoubleBar => Build((DoubleBarValue)value),

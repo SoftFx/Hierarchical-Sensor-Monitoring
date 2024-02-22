@@ -391,6 +391,20 @@ namespace HSMDataCollector.Core
             return (IServiceCommandsSensor)_sensorsStorage.Register(new ServiceCommandsSensor(_prototypes.ServiceCommands.Get(null)));
         }
 
+
+        public IMonitoringCounterSensor CreateM1CounterSensor(string path, string desctiption = "") => CreateCounterSensor(path, 60000, desctiption);
+
+        public IMonitoringCounterSensor CreateM5CounterSensor(string path, string description = "") => CreateCounterSensor(path, 300000, description);
+
+        private IMonitoringCounterSensor CreateCounterSensor(string path, int postPeriod, string description = "") => CreateCounterSensor(path, new MonitoringInstantSensorOptions
+        {
+            PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
+            Description = description,
+        });
+
+        private IMonitoringCounterSensor CreateCounterSensor(string path, MonitoringInstantSensorOptions options) => _sensorsStorage.CreateCounterSensor(path, options);
+
+
         #endregion
 
         #region Obsolete functions

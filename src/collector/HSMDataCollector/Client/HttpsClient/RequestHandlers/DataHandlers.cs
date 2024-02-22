@@ -34,6 +34,8 @@ namespace HSMDataCollector.Client.HttpsClient
                     return RequestToServer(fileV, _endpoints.File);
                 case VersionSensorValue versionV:
                     return RequestToServer(versionV, _endpoints.Version);
+                case CounterSensorValue counterV:
+                    return RequestToServer(counterV, _endpoints.Counter);
                 default:
                     _logger.Error($"Unsupported sensor type: {value.Path}");
                     return Task.CompletedTask;

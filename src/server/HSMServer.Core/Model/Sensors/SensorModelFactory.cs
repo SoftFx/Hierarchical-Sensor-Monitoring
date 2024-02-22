@@ -18,6 +18,7 @@ namespace HSMServer.Core.Model
                 SensorType.File => new FileSensorModel(entity),
                 SensorType.TimeSpan => new TimeSpanSensorModel(entity),
                 SensorType.Version => new VersionSensorModel(entity),
+                SensorType.Counter => new CounterSensorModel(entity),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }

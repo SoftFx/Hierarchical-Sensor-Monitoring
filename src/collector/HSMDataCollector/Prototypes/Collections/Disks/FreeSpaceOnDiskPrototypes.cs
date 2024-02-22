@@ -3,7 +3,6 @@ using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
-using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes

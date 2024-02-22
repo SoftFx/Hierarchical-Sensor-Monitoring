@@ -39,6 +39,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [InlineData(SensorType.Boolean)]
         [InlineData(SensorType.Integer)]
         [InlineData(SensorType.Double)]
+        [InlineData(SensorType.Counter)]
         [InlineData(SensorType.String)]
         [InlineData(SensorType.IntegerBar)]
         [InlineData(SensorType.DoubleBar)]
@@ -73,6 +74,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [InlineData(SensorType.Boolean)]
         [InlineData(SensorType.Integer)]
         [InlineData(SensorType.Double)]
+        [InlineData(SensorType.Counter)]
         [InlineData(SensorType.String)]
         [InlineData(SensorType.IntegerBar)]
         [InlineData(SensorType.DoubleBar)]
@@ -283,6 +285,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 SensorType.Boolean => nameof(BooleanValue),
                 SensorType.Integer => nameof(IntegerValue),
                 SensorType.Double => nameof(DoubleValue),
+                SensorType.Counter => nameof(CounterValue),
                 SensorType.String => nameof(StringValue),
                 SensorType.IntegerBar => nameof(IntegerBarValue),
                 SensorType.DoubleBar => nameof(DoubleBarValue),

@@ -114,7 +114,7 @@ namespace HSMDataCollector.DefaultSensors
         
         public IWindowsCollection AddDiskAverageWriteSpeed(DiskBarSensorOptions options)
         {
-            return ToWindows(new WindowsAverageDiskWriteSpeed(_prototype.WindowsAverageDiskWriteSpeed.Get(options)));
+            return ToWindows(new WindowsDiskWriteSpeed(_prototype.WindowsAverageDiskWriteSpeed.Get(options)));
         }
 
         public IWindowsCollection AddFreeDisksSpace(DiskSensorOptions options)
@@ -152,7 +152,7 @@ namespace HSMDataCollector.DefaultSensors
         public IWindowsCollection AddDisksAverageWriteSpeed(DiskBarSensorOptions options = null)
         {
             foreach (var diskOptions in _prototype.WindowsAverageDiskWriteSpeed.GetAllDisksOptions(options))
-                ToWindows(new WindowsAverageDiskWriteSpeed(diskOptions));
+                ToWindows(new WindowsDiskWriteSpeed(diskOptions));
 
             return this;
         }

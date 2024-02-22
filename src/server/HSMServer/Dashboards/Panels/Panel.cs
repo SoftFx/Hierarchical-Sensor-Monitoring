@@ -240,7 +240,7 @@ namespace HSMServer.Dashboards
         private void SubscribeModuleToUpdates(IPanelModule module) => module.UpdateEvent += ThrowUpdateEvent;
 
 
-        private static bool IsSupportedType(SensorType type) =>
-            type is SensorType.Integer or SensorType.Double or SensorType.TimeSpan or SensorType.IntegerBar or SensorType.DoubleBar;
+        private static bool IsSupportedType(SensorType type) => type is SensorType.Integer or SensorType.Double or
+            SensorType.Counter or SensorType.TimeSpan or SensorType.IntegerBar or SensorType.DoubleBar;
     }
 }

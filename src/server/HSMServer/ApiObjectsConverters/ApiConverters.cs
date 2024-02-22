@@ -80,6 +80,17 @@ namespace HSMServer.ApiObjectsConverters
             };
         }
 
+        public static CounterValue Convert(this CounterSensorValue value)
+        {
+            return new()
+            {
+                Comment = value.Comment,
+                Time = value.Time,
+                Status = value.Status.Convert(),
+                Value = value.Value
+            };
+        }
+
 
         public static FileValue Convert(this FileSensorValue value) =>
             new()
@@ -140,6 +151,7 @@ namespace HSMServer.ApiObjectsConverters
                 TimeSpanSensorValue sv => sv.Convert(),
                 VersionSensorValue sv => sv.Convert(),
                 FileSensorValue sv => sv.Convert(),
+                CounterSensorValue sv => sv.Convert(),
                 _ => null
             };
 
@@ -293,6 +305,7 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorType.FileSensor => SensorType.File,
                 HSMSensorDataObjects.SensorType.IntegerBarSensor => SensorType.IntegerBar,
                 HSMSensorDataObjects.SensorType.DoubleBarSensor => SensorType.DoubleBar,
+                HSMSensorDataObjects.SensorType.CounterSensor => SensorType.Counter,
                 _ => throw new NotImplementedException(),
             };
 
@@ -390,6 +403,11 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorRequests.Unit.Count => Core.Model.Unit.Count,
                 HSMSensorDataObjects.SensorRequests.Unit.Requests => Core.Model.Unit.Requests,
                 HSMSensorDataObjects.SensorRequests.Unit.Responses => Core.Model.Unit.Responses,
+
+                HSMSensorDataObjects.SensorRequests.Unit.Bits_sec => Core.Model.Unit.Bits_sec,
+                HSMSensorDataObjects.SensorRequests.Unit.Bytes_sec => Core.Model.Unit.Bytes_sec,
+                HSMSensorDataObjects.SensorRequests.Unit.KBytes_sec => Core.Model.Unit.KBytes_sec,
+                HSMSensorDataObjects.SensorRequests.Unit.MBytes_sec => Core.Model.Unit.MBytes_sec,
 
                 _ => throw new NotImplementedException(),
             };
