@@ -52,7 +52,7 @@ namespace HSMServer.Datasources
 
             var sb = new StringBuilder(1 << 4);
 
-            sb.Append(currentValue != double.CreateChecked(Value) ? $"<br>Original value: {currentValue}": currentValue);
+            sb.Append(currentValue != double.CreateChecked(Value) ? $"<br>Original value: {currentValue}" : currentValue);
 
             if (!string.IsNullOrEmpty(Tooltip))
                 sb.Append($"<br>{Tooltip}");
