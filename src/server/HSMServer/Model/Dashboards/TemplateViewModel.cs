@@ -70,7 +70,8 @@ namespace HSMServer.Model.Dashboards
                 PathTemplate = Path,
                 Property = Property.ToString(),
                 Shape = Shape.ToString(),
-                Folders = new(Folders),
+
+                FoldersFilter = new(Folders),
                 Label = Label,
 
                 IsSubscribed = IsSubscribed,

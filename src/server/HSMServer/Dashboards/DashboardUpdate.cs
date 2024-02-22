@@ -63,9 +63,9 @@ namespace HSMServer.Dashboards
     }
 
 
-    public record PanelSubscriptionUpdate : PanelSourceUpdate
+    public sealed record PanelSubscriptionUpdate : PanelSourceUpdate
     {
-        public SubscriptionFoldersUpdate Folders { get; init; }
+        public SubscriptionFoldersUpdate FoldersFilter { get; init; }
 
         public string PathTemplate { get; init; }
 

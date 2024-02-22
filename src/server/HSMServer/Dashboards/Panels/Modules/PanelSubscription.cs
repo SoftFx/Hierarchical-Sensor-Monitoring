@@ -35,7 +35,7 @@ namespace HSMServer.Dashboards
         public PanelSubscription(PanelSubscriptionEntity entity) : base(entity)
         {
             PathTempalte = ApplyNewTemplate(entity.PathTemplate);
-            Folders = entity.Folders;
+            Folders = new HashSet<Guid>(entity.Folders);
 
             IsSubscribed = entity.IsSubscribed;
             IsApplied = entity.IsApplied;
@@ -46,8 +46,8 @@ namespace HSMServer.Dashboards
         {
             base.Update(update);
 
-            if (update.Folders is not null)
-                Folders = update.Folders.Folders;
+            if (update.FoldersFilter is not null)
+                Folders = update.FoldersFilter.Folders;
 
             PathTempalte = ApplyNewTemplate(update.PathTemplate);
             Label = update.Label ?? Label;
@@ -62,7 +62,7 @@ namespace HSMServer.Dashboards
             entity.PathTemplate = PathTempalte;
             entity.IsSubscribed = IsSubscribed;
             entity.IsApplied = IsApplied;
-            entity.Folders = Folders;
+            entity.Folders = [.. Folders];
 
             return entity;
         }
@@ -76,8 +76,8 @@ namespace HSMServer.Dashboards
         }
 
 
-        public bool IsMatch(BaseSensorModel sensor) =>
-            AreFoldersContain(sensor.Root.FolderId) && _pathTemplate.IsMatch(sensor.FullPath) && DatasourceFactory.IsSupportedPlotProperty(sensor, Property);
+        public bool IsMatch(BaseSensorModel sensor) => DatasourceFactory.IsSupportedPlotProperty(sensor, Property) &&
+            _pathTemplate.IsMatch(sensor.FullPath) && AreFoldersContain(sensor.Root.FolderId);
 
         public string BuildSensorLabel() => _pathTemplate.BuildStringByTempalte(Label) ?? Label;
 
