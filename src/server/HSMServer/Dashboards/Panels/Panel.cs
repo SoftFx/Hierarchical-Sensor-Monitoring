@@ -81,8 +81,11 @@ namespace HSMServer.Dashboards
 
             if (update.NeedSourceRebuild)
             {
+                foreach (var (_, sub) in Subscriptions)
+                    ApplyPanelSettings(sub);
+
                 foreach (var (_, source) in Sources)
-                    source.BuildSource(AggregateValues, YRange);
+                    source.BuildSource(YRange, AggregateValues);
             }
         }
 
@@ -140,6 +143,14 @@ namespace HSMServer.Dashboards
             return Sources.IfTryRemoveAndDispose(sourceId).ThenCallForSuccess(RemoveSource).ThenCall().IsOk;
         }
 
+
+        public void AddSensor(BaseSensorModel sensor)
+        {
+            foreach (var (_, sub) in Subscriptions)
+                if (sub.IsSubscribed && sub.TryBuildSource(sensor, out var source))
+                    TrySaveNewSource(source, out _);
+        }
+
         public void RemoveSensor(Guid sensorId)
         {
             foreach (var sourceId in _sensorToSourceMap[sensorId])
@@ -147,11 +158,11 @@ namespace HSMServer.Dashboards
         }
 
 
-        public bool TryAddSubscription(PanelSubscription sub) => Subscriptions.IfTryAdd(sub.Id, sub, SubscribeModuleToUpdates).IsOk;
+        public bool TryAddSubscription(PanelSubscription sub) => Subscriptions.IfTryAdd(sub.Id, ApplyPanelSettings(sub), SubscribeModuleToUpdates).IsOk;
 
         public bool TryAddSubscription(out PanelSubscription subscription)
         {
-            subscription = new PanelSubscription();
+            subscription = ApplyPanelSettings(new PanelSubscription());
 
             return Subscriptions.TryCallAdd(subscription.Id, subscription, SubscribeModuleToUpdates);
         }
@@ -217,12 +228,14 @@ namespace HSMServer.Dashboards
 
                 _sensorToSourceMap[source.Sensor.Id].Add(source.Id);
 
-                source.BuildSource(AggregateValues, YRange);
+                source.BuildSource(YRange, AggregateValues);
                 SubscribeModuleToUpdates(source);
             }
 
             return string.IsNullOrEmpty(error) ? Sources.IfTryAdd(source.Id, source, ApplyNewSource) : errorResult;
         }
+
+        private PanelSubscription ApplyPanelSettings(PanelSubscription sub) => sub.UpdatePanelSettings(YRange, AggregateValues);
 
         private void SubscribeModuleToUpdates(IPanelModule module) => module.UpdateEvent += ThrowUpdateEvent;
 
