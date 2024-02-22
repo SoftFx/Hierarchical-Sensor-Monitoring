@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+using HSMServer.Core.Model;
 using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Dashboards
@@ -14,6 +15,9 @@ namespace HSMServer.Dashboards
 
         [Display(Name = "Min")]
         public double MinValue { get; set; }
+
+
+        internal bool IsRangeScalePossible(SensorType sensorType) => sensorType is (SensorType.Double or SensorType.Integer or SensorType.DoubleBar or SensorType.IntegerBar);
 
 
         public void Update(PanelUpdate update)

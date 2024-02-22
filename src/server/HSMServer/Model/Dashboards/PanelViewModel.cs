@@ -49,6 +49,7 @@ public sealed class PanelViewModel
 
     public PanelViewModel(Panel panel, Guid dashboardId, Dictionary<Guid, string> availableFolders)
     {
+        MainSensorType = panel.MainSensorType;
         Name = panel.Name ?? DefaultName;
         Description = panel.Description;
         ShowProduct = panel.ShowProduct;

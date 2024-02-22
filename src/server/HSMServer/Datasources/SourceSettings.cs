@@ -22,5 +22,7 @@ namespace HSMServer.Datasources
         public int CustomVisibleCount { get; init; } = DefaultMaxVisibleCnt;
 
         public int MaxVisibleCount => AggregateValues ? Math.Min(CustomVisibleCount, TreeValuesCache.MaxHistoryCount) : MaxNotAggrPoints;
+
+        public bool IsDefaultFilter => !YRange.IsRangeScalePossible(SensorType) || YRange.AutoScale;
     }
 }

@@ -1,6 +1,6 @@
 import { convertToGraphData } from "./plotting";
 import { pan } from "plotly.js/src/fonts/ploticon";
-import {Colors, getScaleValue, Plot, TimeSpanPlot} from "./plots";
+import {Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot} from "./plots";
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();
@@ -113,9 +113,20 @@ window.insertSourceHtml = function (data) {
     });
 }
 
+function checkForYRange(plot){
+    if ($('#multichart').length !== 0 &&
+        plot instanceof ErrorColorPlot &&
+        !(plot instanceof TimeSpanPlot))
+        $('#y-range-settings').show()
+    else
+        $('#y-range-settings').hide()
+}
+
 window.insertSourcePlot = function (data, id, panelId, dashboardId, range = undefined) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
+    checkForYRange(plot)
+    
     let layoutUpdate = {
         'xaxis.visible': true,
         'xaxis.type': 'date',
