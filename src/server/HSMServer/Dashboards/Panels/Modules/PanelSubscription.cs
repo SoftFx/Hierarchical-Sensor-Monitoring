@@ -4,6 +4,7 @@ using HSMServer.Datasources;
 using HSMServer.PathTemplates;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.Dashboards
@@ -35,7 +36,7 @@ namespace HSMServer.Dashboards
         public PanelSubscription(PanelSubscriptionEntity entity) : base(entity)
         {
             PathTempalte = ApplyNewTemplate(entity.PathTemplate);
-            Folders = new HashSet<Guid>(entity.Folders);
+            Folders = entity.Folders?.ToHashSet();
 
             IsSubscribed = entity.IsSubscribed;
             IsApplied = entity.IsApplied;
@@ -62,7 +63,7 @@ namespace HSMServer.Dashboards
             entity.PathTemplate = PathTempalte;
             entity.IsSubscribed = IsSubscribed;
             entity.IsApplied = IsApplied;
-            entity.Folders = [.. Folders];
+            entity.Folders = Folders?.ToList();
 
             return entity;
         }
