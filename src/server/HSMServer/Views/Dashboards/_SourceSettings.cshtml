@@ -67,6 +67,8 @@
 
                         $('[id^="source"] li')[model.oldIndex].remove();
                         syncIndexes();
+                        if ($('[id^="source"] li').length === 0)
+                            $('#y-range-settings').show();
                     }
                 )
             }).fail(function (response) {

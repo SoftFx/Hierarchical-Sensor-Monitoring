@@ -37,12 +37,12 @@ namespace HSMServer.Datasources
 
         internal virtual SensorDatasourceBase AttachSensor(BaseSensorModel sensor, SourceSettings settings)
         {
-            static object DefautFilter(BaseChartValue value) => value;
+            static object DefaultFilter(BaseChartValue value) => value;
 
             _settings = settings;
             _sensor = sensor;
 
-            _filter = _settings.YRange.AutoScale ? DefautFilter : value => value.Filter(_settings.YRange);
+            _filter = _settings.IsDefaultFilter ? DefaultFilter : value => value.Filter(_settings.YRange);
 
             DataAggregator.Setup(settings);
 

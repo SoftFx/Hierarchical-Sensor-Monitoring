@@ -15,6 +15,8 @@
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Converters = { new PlotlyDoubleConverter() }
     };
+
+    var isYRangeAvailabe = !Model.MainSensorType.HasValue || Model.YRange.IsRangeScalePossible(Model.MainSensorType.Value);
 }
 
 
@@ -34,7 +36,7 @@
                 <textarea id='description' maxlength="250" class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
 
                 <div class="d-flex">
-                    <div class="form-control w-auto d-flex no-border align-items-center">
+                    <div id="y-range-settings" class="form-control w-auto no-border align-items-center" style="display: flex">
                         <div id="autoscale-range" class="d-flex no-border align-items-center @(Model.YRange.AutoScale ? "disabled-group" : "")">
                             <span>Y axis settings:</span>
 
@@ -44,7 +46,7 @@
                             <label class="form-check-label w-auto ms-2" asp-for="YRange.MaxValue"></label>
                             <input type="number" step="any" asp-for="YRange.MaxValue" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
                         </div>
-                       
+
                         <input id="autoscale" class="form-check-input my-0 mx-1" asp-for="YRange.AutoScale" type="checkbox"/>
                         <label class="form-check-label" asp-for="YRange.AutoScale"></label>
                     </div>
@@ -112,6 +114,9 @@
 <script>
     var multichartRange;
     $(document).ready(function () {
+        if ('@isYRangeAvailabe' !== 'True')
+            $('#y-range-settings').hide()
+    
         var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
         var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
             return new bootstrap.Popover(popoverTriggerEl);

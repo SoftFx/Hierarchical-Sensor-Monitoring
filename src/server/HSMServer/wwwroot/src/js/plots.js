@@ -180,7 +180,7 @@ export class Plot {
     }
 }
 
-class ErrorColorPlot extends Plot {
+export class ErrorColorPlot extends Plot {
     mode = "markers+lines";
     connectgaps = false;
 
@@ -437,8 +437,8 @@ export class BarPLot extends Plot {
 }
 
 export class TimeSpanPlot extends ErrorColorPlot {
-    constructor(data, unitType = undefined, color = Colors.default) {
-        super(data, unitType, color);
+    constructor(data, unitType = undefined, color = Colors.default, range = undefined) {
+        super(data, unitType, color, range);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';

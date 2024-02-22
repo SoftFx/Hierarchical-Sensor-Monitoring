@@ -192,7 +192,7 @@ export function convertToGraphData(graphData, sensorInfo, graphName, color = Col
             return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range) 
                           : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 7:
-            return new TimeSpanPlot(escapedData, sensorInfo.units, color);
+            return new TimeSpanPlot(escapedData, sensorInfo.units, color, range);
         case 9:
             if (sensorInfo.realType === 0)
                 return new EnumPlot(escapedData, false, false)
