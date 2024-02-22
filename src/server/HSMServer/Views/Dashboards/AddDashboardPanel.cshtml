@@ -112,6 +112,8 @@
 
 
 <script>
+    let rangePreviewUpdate;
+    
     var multichartRange;
     $(document).ready(function () {
         if ('@isYRangeAvailabe' !== 'True')
@@ -151,28 +153,50 @@
             event.preventDefault();
             event.stopImmediatePropagation();
 
-            $.ajax({
-                type: 'post',
-                url: $(this).attr("action"),
-                data: new FormData(this),
-                datatype: 'html',
-                processData: false,
-                contentType: false,
-                cache: false,
-                async: true
-            }).done(function(id){
-                window.location.href = `/Dashboards/${id}`;
-            }).fail(function (response){
-                showToast(response.responseText);
-            })
+            submit((id) => window.location.href = `/Dashboards/${id}`)
         })
     })
+    
+    function submit(callback){
+        let form = $('#editablePanelSettings form')[0];
+        $.ajax({
+            type: 'post',
+            url: $(form).attr("action"),
+            data: new FormData(form),
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            cache: false,
+            async: true
+        }).done(function(id){
+            callback(id);
+        }).fail(function (response){
+            showToast(response.responseText);
+        })
+    }
+    
+    $('#YRange_MinValue').on('change', function (){
+        rangeUpdate(600)
+    })
+    
+    $('#YRange_MaxValue').on('change', function (){
+        rangeUpdate(600)
+    })
+    
+    function rangeUpdate(time) {
+        clearTimeout(rangePreviewUpdate)
+        rangePreviewUpdate = setTimeout(function (){
+            submit(() => window.location.reload())
+        }, time);
+    }
     
     $('#autoscale').on('change', function (){
         if ($(this).is(':checked'))
             $('#autoscale-range').addClass('disabled-group')
         else
             $('#autoscale-range').removeClass('disabled-group')
+            
+        rangeUpdate(200)
     })
     
     $('#multichart').on('plotly_legendclick', function (data) {
