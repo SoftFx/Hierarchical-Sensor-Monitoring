@@ -5,8 +5,12 @@
 @using HSMServer.Model.Authentication
 @using HSMServer.Model
 @using HSMServer.ServerConfiguration;
+@using HSMServer.Dashboards
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@inject IDashboardManager Dashboards
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -40,9 +44,24 @@
                                         </li>
 
                                         <li class="nav-item">
-                                            <a class="nav-link @Html.ActiveClass(ViewConstants.DashboardsController)" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.DashboardsController)">
-                                                Dashboards
-                                            </a>
+                                            <div class="btn-group">
+                                                <a class="nav-link pe-0 @Html.ActiveClass(ViewConstants.DashboardsController)" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.DashboardsController)">
+                                                    Dashboards
+                                                </a>
+                                                <a class="nav-link dropdown-toggle dropdown-toggle-split" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                    <span class="sr-only">List</span>
+                                                </a>
+                                                <ul class="dropdown-menu">
+                                                    @foreach (var dashboard in Dashboards.GetValues().OrderBy(d => d.Name))
+                                                    {
+                                                        <li>
+                                                            <a class="dropdown-item" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.EditDashboard)" asp-route-dashboardId="@dashboard.Id">
+                                                                @dashboard.Name
+                                                            </a>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </div>
                                         </li>
 
                                         <li class="nav-item">
