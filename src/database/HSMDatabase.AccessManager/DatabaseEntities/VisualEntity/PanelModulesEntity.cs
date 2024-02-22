@@ -5,9 +5,12 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 {
     public sealed record PanelSubscriptionEntity : PlotSourceSettingsEntity
     {
+        public List<Guid> Folders { get; set; }
+
         public string PathTemplate { get; set; }
 
-        public List<Guid> Folders { get; set; }
+
+        public bool IsSubscribed { get; set; }
 
         public bool IsApplied { get; set; }
     }

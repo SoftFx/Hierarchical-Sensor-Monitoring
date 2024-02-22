@@ -4,6 +4,7 @@ using HSMServer.Datasources;
 using HSMServer.PathTemplates;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.Dashboards
@@ -11,13 +12,18 @@ namespace HSMServer.Dashboards
     public sealed class PanelSubscription : BasePlotPanelModule<PanelSubscriptionUpdate, PanelSubscriptionEntity>
     {
         private readonly PathTemplateConverter _pathTemplate = new();
+        private PanelRangeSettings _panelYSettings;
+        private bool _panelAggrValue;
 
-        public List<Guid> Folders { get; private set; }
+
+        public HashSet<Guid> Folders { get; private set; }
 
         public string PathTempalte { get; private set; }
 
 
         public PanelSensorScanTask ScannedTask { get; private set; }
+
+        public bool IsSubscribed { get; private set; }
 
         public bool IsApplied { get; private set; }
 
@@ -30,7 +36,9 @@ namespace HSMServer.Dashboards
         public PanelSubscription(PanelSubscriptionEntity entity) : base(entity)
         {
             PathTempalte = ApplyNewTemplate(entity.PathTemplate);
-            Folders = entity.Folders;
+            Folders = entity.Folders?.ToHashSet();
+
+            IsSubscribed = entity.IsSubscribed;
             IsApplied = entity.IsApplied;
         }
 
@@ -39,9 +47,13 @@ namespace HSMServer.Dashboards
         {
             base.Update(update);
 
+            if (update.FoldersFilter is not null)
+                Folders = update.FoldersFilter.Folders;
+
             PathTempalte = ApplyNewTemplate(update.PathTemplate);
             Label = update.Label ?? Label;
-            Folders = update.Folders;
+
+            IsSubscribed = update.IsSubscribed ?? IsSubscribed;
         }
 
         public override PanelSubscriptionEntity ToEntity()
@@ -49,19 +61,29 @@ namespace HSMServer.Dashboards
             var entity = base.ToEntity();
 
             entity.PathTemplate = PathTempalte;
+            entity.IsSubscribed = IsSubscribed;
             entity.IsApplied = IsApplied;
-            entity.Folders = Folders;
+            entity.Folders = Folders?.ToList();
 
             return entity;
         }
 
+        public PanelSubscription UpdatePanelSettings(PanelRangeSettings ySetting, bool aggrValues)
+        {
+            _panelAggrValue = aggrValues;
+            _panelYSettings = ySetting;
 
-        public bool IsMatch(BaseSensorModel sensor) => _pathTemplate.IsMatch(sensor.FullPath) && DatasourceFactory.IsSupportedPlotProperty(sensor, Property);
+            return this;
+        }
+
+
+        public bool IsMatch(BaseSensorModel sensor) => DatasourceFactory.IsSupportedPlotProperty(sensor, Property) &&
+            _pathTemplate.IsMatch(sensor.FullPath) && AreFoldersContain(sensor.Root.FolderId);
 
         public string BuildSensorLabel() => _pathTemplate.BuildStringByTempalte(Label) ?? Label;
 
 
-        public Task StartScanning(Func<List<Guid>, IEnumerable<BaseSensorModel>> getSensors)
+        public Task StartScanning(Func<HashSet<Guid>, IEnumerable<BaseSensorModel>> getSensors)
         {
             CancelScanning();
 
@@ -79,21 +101,34 @@ namespace HSMServer.Dashboards
                 yield break;
 
             foreach (var sensor in ScannedTask.MatchedSensors)
-                if (IsMatch(sensor))
-                {
-                    var source = new PanelDatasource(sensor);
-
-                    source.Update(new PanelSourceUpdate
-                    {
-                        Label = _pathTemplate.BuildStringByTempalte(Label),
-                        Property = Property.ToString(),
-                        Shape = Shape.ToString(),
-                    });
-
+                if (TryBuildSource(sensor, out var source))
                     yield return source;
-                }
 
             IsApplied = true;
+        }
+
+        public bool TryBuildSource(BaseSensorModel sensor, out PanelDatasource source)
+        {
+            source = null;
+
+            if (IsMatch(sensor))
+            {
+                source = new PanelDatasource(sensor);
+
+                source.Update(new PanelSourceUpdate
+                {
+                    Label = _pathTemplate.BuildStringByTempalte(Label),
+                    Property = Property.ToString(),
+                    Shape = Shape.ToString(),
+
+                    AggregateValues = _panelAggrValue,
+                    YRange = _panelYSettings,
+                });
+
+                return true;
+            }
+
+            return false;
         }
 
 
@@ -104,5 +139,8 @@ namespace HSMServer.Dashboards
 
             return template;
         }
+
+        internal bool AreFoldersContain(Guid? folder) =>
+            Folders is null || (!folder.HasValue && Folders.Contains(Guid.Empty)) || Folders.Contains(folder.Value);
     }
 }

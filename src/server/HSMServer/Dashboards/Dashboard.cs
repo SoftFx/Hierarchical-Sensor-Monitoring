@@ -89,7 +89,7 @@ namespace HSMServer.Dashboards
             return sensor is not null;
         }
 
-        internal IEnumerable<BaseSensorModel> GetSensorsByFolder(List<Guid> foldersIds) => _cache.GetSensorsByFolder(foldersIds);
+        internal IEnumerable<BaseSensorModel> GetSensorsByFolder(HashSet<Guid> foldersIds) => _cache.GetSensorsByFolder(foldersIds);
 
 
         private bool AddPanel(DashboardPanelEntity entity)
@@ -105,12 +105,18 @@ namespace HSMServer.Dashboards
                 panel.UpdatedEvent += ThrowUpdateEvent;
         }
 
-        private void ChangeSensorHandler(BaseSensorModel model, ActionType action)
+        private void ChangeSensorHandler(BaseSensorModel sensor, ActionType action)
         {
             if (action == ActionType.Delete)
             {
                 foreach (var (_, panel) in Panels)
-                    panel.RemoveSensor(model.Id);
+                    panel.RemoveSensor(sensor.Id);
+            }
+
+            if (action == ActionType.Add)
+            {
+                foreach (var (_, panel) in Panels)
+                    panel.AddSensor(sensor);
             }
         }
 
