@@ -194,6 +194,8 @@ export function convertToGraphData(graphData, sensorInfo, graphName, color = Col
         case 7:
             return new TimeSpanPlot(escapedData, sensorInfo.units, color);
         case 9:
+            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range);
+        case 10:
             if (sensorInfo.realType === 0)
                 return new EnumPlot(escapedData, false, false)
 
