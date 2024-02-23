@@ -102,13 +102,19 @@
         var form = $(this).parents("form.templateForm:first");
         let formId = form.attr("id");
 
-        $.ajax({
-            url: `${window.location.pathname}/@(nameof(DashboardsController.DeleteTemplate))/${formId}`,
-            type: 'POST',
-            success: function () {
-                form.remove();
+        showConfirmationModal(
+            `Removing template`,
+            `Do you really want to remove selected template?`,
+            function () {
+                $.ajax({
+                    url: `${window.location.pathname}/@(nameof(DashboardsController.DeleteTemplate))/${formId}`,
+                    type: 'POST',
+                    success: function () {
+                        form.remove();
+                    }
+                })
             }
-        });
+        );
     });
 
     function updateTemplate(templateId) {
