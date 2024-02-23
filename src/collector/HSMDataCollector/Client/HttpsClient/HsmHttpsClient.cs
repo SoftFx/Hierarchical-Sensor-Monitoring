@@ -84,12 +84,7 @@ namespace HSMDataCollector.Client
 
         private Task<HttpResponseMessage> RequestToServer(object value, string uri)
         {
-            // var json = JsonConvert.SerializeObject(value);
-            //
-            // _logger.Debug($"{nameof(RequestToServer)}: {json}");
-
             var pipeline = _endpoints.IsCommandRequest(uri) ? _polly.CommandsPipeline : _polly.DataPipeline;
-            // var data = new StringContent(json, Encoding.UTF8, "application/json");
 
             return pipeline.ExecuteAsync(async token => await (PostAsync(uri, value, token)), _tokenSource.Token).AsTask();
         }
@@ -97,28 +92,24 @@ namespace HSMDataCollector.Client
         
         private async Task<HttpResponseMessage> PostAsync(string uri, object data, CancellationToken token)
         { 
-            Console.WriteLine("trying to connnect" + DateTime.Now);
             var testConnection = await TestConnection();
 
             if (!testConnection.Result)
                 return null;
-            Console.WriteLine("trying to send" + DateTime.Now);
             
             var json = JsonConvert.SerializeObject(data);
 
             try
             {
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                
+
                 var response = await _client.PostAsync(uri, content, token);
 
                 _queueManager.ThrowPackageSendingInfo(new PackageSendingInfo(json.Length, response));
 
                 if (!response.IsSuccessStatusCode)
                     _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
-                
-                if (response.IsSuccessStatusCode)
-                    Console.WriteLine("send"  + DateTime.Now);
+
                 return response;
             }
             catch (Exception exception)
