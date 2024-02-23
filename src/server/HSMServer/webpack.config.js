@@ -2,8 +2,6 @@
 const webpack = require('webpack');
 
 const CopyPlugin = require("copy-webpack-plugin");
-const MiniCssExtractPlugin = require("mini-css-extract-plugin");
-const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
 const MomentLocalesPlugin = require('moment-locales-webpack-plugin');
 
 module.exports = {
@@ -24,7 +22,7 @@ module.exports = {
             },
             {
                 test: /\.css$/,
-                use: [MiniCssExtractPlugin.loader, 'style-loader', 'css-loader']
+                use: ['style-loader', 'css-loader']
             }
         ]
     },
@@ -44,12 +42,9 @@ module.exports = {
                 }
             ]
         }),
-        new MomentLocalesPlugin(),
-        new MiniCssExtractPlugin()
+        new MomentLocalesPlugin()
     ],
     optimization: {
-        minimizer: [
-            new CssMinimizerPlugin(),
-        ],
+        minimize: false
     },
 };
