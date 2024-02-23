@@ -5,6 +5,7 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
 using Newtonsoft.Json;
+using Polly;
 using System;
 using System.Net;
 using System.Net.Http;
@@ -72,8 +73,8 @@ namespace HSMDataCollector.Client
                 var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token);
 
                 return connect.IsSuccessStatusCode
-                       ? ConnectionResult.Ok
-                       : new ConnectionResult(connect.StatusCode, $"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})");
+                    ? ConnectionResult.Ok
+                    : new ConnectionResult(connect.StatusCode, $"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})");
             }
             catch (Exception ex)
             {
@@ -86,37 +87,31 @@ namespace HSMDataCollector.Client
         {
             var pipeline = _endpoints.IsCommandRequest(uri) ? _polly.CommandsPipeline : _polly.DataPipeline;
 
-            return pipeline.ExecuteAsync(async token => await (PostAsync(uri, value, token)), _tokenSource.Token).AsTask();
+            return pipeline.ExecuteAsync(async context => await PostAsync(context, uri, value, _tokenSource.Token), ResilienceContextPool.Shared.Get(_tokenSource.Token)).AsTask();
         }
 
-        
-        private async Task<HttpResponseMessage> PostAsync(string uri, object data, CancellationToken token)
-        { 
-            var testConnection = await TestConnection();
 
-            if (!testConnection.Result)
-                return null;
-            
+        private async Task<HttpResponseMessage> PostAsync(ResilienceContext context, string uri, object data, CancellationToken token)
+        {
+            if (context.Properties.TryGetValue(PollyStrategy.Key, out var attemptNumber))
+            {
+                Console.WriteLine(attemptNumber + " " + DateTime.Now);
+                await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token);
+            }
+
             var json = JsonConvert.SerializeObject(data);
 
-            try
-            {
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            
+            context.Properties.Set(new ResiliencePropertyKey<string>("data"), json);
+            var response = await _client.PostAsync(uri, content, token);
 
-                var response = await _client.PostAsync(uri, content, token);
+            _queueManager.ThrowPackageSendingInfo(new PackageSendingInfo(json.Length, response));
 
-                _queueManager.ThrowPackageSendingInfo(new PackageSendingInfo(json.Length, response));
+            if (!response.IsSuccessStatusCode)
+                _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
 
-                if (!response.IsSuccessStatusCode)
-                    _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
-
-                return response;
-            }
-            catch (Exception exception)
-            {
-                _logger.Error($"Failed to send data. Error={exception.Message}. Data={json}.");
-                throw;
-            }
+            return response;
         }
     }
 }
