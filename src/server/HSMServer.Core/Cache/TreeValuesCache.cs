@@ -1036,6 +1036,8 @@ namespace HSMServer.Core.Cache
 
                     if (_tree.TryGetValue(parentId, out var parent) && _sensors.TryGetValue(sensorId, out var sensor))
                         parent.AddSensor(sensor);
+                    else
+                        RemoveSensor(sensorId);
                 }
             _logger.Info("Links between products and their sensors are built");
 

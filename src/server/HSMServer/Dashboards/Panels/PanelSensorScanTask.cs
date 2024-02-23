@@ -1,4 +1,6 @@
 ﻿using HSMServer.Core.Model;
+using NLog;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,6 +27,8 @@ namespace HSMServer.Dashboards
         public const int MaxVisibleMathedItems = 20;
         private const int BatchSize = 50;
 
+        private static readonly ILogger _logger = LogManager.GetCurrentClassLogger();
+
         private readonly List<ScannedSensorInfo> _matсhedResult = new(1 << 5);
         private readonly CancellationTokenSource _tokenSource = new();
 
@@ -40,18 +44,25 @@ namespace HSMServer.Dashboards
         {
             foreach (var sensor in sensors)
             {
-                if (_tokenSource.IsCancellationRequested)
-                    break;
-
-                if (Interlocked.Increment(ref _totalScanned) % BatchSize == 0)
-                    await Task.Yield();
-
-                if (subscription.IsMatch(sensor))
+                try
                 {
-                    MatchedSensors.Add(sensor);
+                    if (_tokenSource.IsCancellationRequested)
+                        break;
 
-                    if (Interlocked.Increment(ref _totalMatched) <= MaxVisibleMathedItems)
-                        _matсhedResult.Add(new ScannedSensorInfo(sensor.FullPath, subscription.BuildSensorLabel()));
+                    if (Interlocked.Increment(ref _totalScanned) % BatchSize == 0)
+                        await Task.Yield();
+
+                    if (subscription.IsMatch(sensor))
+                    {
+                        MatchedSensors.Add(sensor);
+
+                        if (Interlocked.Increment(ref _totalMatched) <= MaxVisibleMathedItems)
+                            _matсhedResult.Add(new ScannedSensorInfo(sensor.FullPath, subscription.BuildSensorLabel()));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error scanning sensor {sensor.Id} for template - {ex.Message}");
                 }
             }
 

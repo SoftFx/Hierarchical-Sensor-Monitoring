@@ -62,10 +62,14 @@
         <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
             <a class="dropdown-item text-decoration-none fw-normal button-link applyTemplate">
                 <span class="position-relative">
-                    Enable
                     @if (!Model.IsApplied)
                     {
+                        <span>Apply & Enable</span>
                         <span name="enableTemplateBadge" class="position-absolute top-0 start-100 p-1 bg-danger border border-light rounded-circle"></span>
+                    }
+                    else
+                    {
+                        <span>Reapply</span>
                     }
                 </span>
             </a>
