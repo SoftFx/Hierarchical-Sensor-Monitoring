@@ -270,10 +270,4 @@
             form.append(`${propertyName}`, value);
         });
     }
-
-    function tryValidate(element, propertyElement, propertyName) {
-        var input = element.find($(`${propertyElement}[name='${propertyName}']`));
-        
-        return input.length === 0 || input[0].reportValidity();
-    }
 </script>

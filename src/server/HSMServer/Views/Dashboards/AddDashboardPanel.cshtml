@@ -99,6 +99,7 @@
 </div>
 
 @await Html.PartialAsync("_ApplyTemplateModal")
+@await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
 
 <script>
@@ -215,13 +216,19 @@
     }
 
     function removeAllSources() {
-        $('#sources li').each(function (idx, li) {
-            let source = $(li);
+        showConfirmationModal(
+            `Removing sources`,
+            `Do you really want to remove all panel sources?`,
+            function () {
+                $('#sources li').each(function (idx, li) {
+                    let source = $(li);
 
-            let idAttr = source.attr('id');
-            let sourceId = idAttr.substring('source_'.length, idAttr.length);
+                    let idAttr = source.attr('id');
+                    let sourceId = idAttr.substring('source_'.length, idAttr.length);
 
-            deletePlot(sourceId);
-        });
+                    deletePlot(sourceId);
+                })
+            }
+        );
     }
 </script>
