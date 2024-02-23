@@ -28,15 +28,15 @@ jobs:
       VERSION: ${{ steps.save-version.outputs.version }}
       ARTIFACT_NAME: ${{ steps.build-artifact-name.outputs.name}}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup .NET Core
-        uses: actions/setup-dotnet@v2
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
@@ -58,7 +58,7 @@ jobs:
         run: echo "name=HSMServer v${{ steps.save-version.outputs.version }}" >> $env:GITHUB_OUTPUT
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: ${{ env.OUTPUT_FOLDER }}
           name: ${{ steps.build-artifact-name.outputs.name }}
@@ -70,7 +70,7 @@ jobs:
     outputs:
       BUILD_TAG: ${{ steps.save-tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - id: save-tag
         name: Create tag
@@ -97,10 +97,10 @@ jobs:
     env:
       ReleaseNote: "ReleaseNote.md"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.ARTIFACT_NAME }}
           path: ${{ env.OUTPUT_FOLDER }}
@@ -136,16 +136,16 @@ jobs:
     env:
       DockerfilePath: .github/docker/dockerfile_deps
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build and push docker deps
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true
@@ -159,17 +159,17 @@ jobs:
     env:
       DockerHubDepsRegistry: index.docker.io
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Log in to Docker Hub for deps repos pull
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.DockerHubDepsRegistry }}
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
