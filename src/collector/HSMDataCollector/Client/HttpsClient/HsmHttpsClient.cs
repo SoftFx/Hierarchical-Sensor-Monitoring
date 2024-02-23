@@ -18,7 +18,7 @@ namespace HSMDataCollector.Client
     internal sealed class HsmHttpsClient : IDisposable
     {
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
-        private readonly PollyStrategy _polly = new PollyStrategy();
+        private readonly PollyStrategy _polly;
 
         private readonly IQueueManager _queueManager;
         private readonly ILoggerManager _logger;
@@ -35,6 +35,8 @@ namespace HSMDataCollector.Client
             _endpoints = new Endpoints(options);
             _queueManager = queue;
             _logger = logger;
+
+            _polly = new PollyStrategy(_logger);
 
             ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, error) => true;
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
@@ -93,11 +95,8 @@ namespace HSMDataCollector.Client
 
         private async Task<HttpResponseMessage> PostAsync(ResilienceContext context, string uri, object data, CancellationToken token)
         {
-            if (context.Properties.TryGetValue(PollyStrategy.Key, out var attemptNumber))
-            {
-                Console.WriteLine(attemptNumber + " " + DateTime.Now);
+            if (context.Properties.TryGetValue(PollyStrategy.AttemptKey, out _))
                 await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token);
-            }
 
             var json = JsonConvert.SerializeObject(data);
 
