@@ -189,6 +189,39 @@ namespace HSMServer.Core.Cache
 
             return sensorChecking;
         }
+        
+        public bool TryCheckKeyWritePermissions(Guid key, string path, out string message)
+        {
+            var accessKeyModel = _keys.TryGetValue(key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey
+            
+            if (!accessKeyModel.IsValid(KeyPermissions.CanSendSensorData, out message))
+                return false;    
+                
+            if (accessKeyModel.IsMaster)
+            {
+                message = ErrorMasterKey;
+                return false;
+            }
+
+            var hasProduct = _tree.TryGetValue(accessKeyModel.ProductId, out var product);
+            message = hasProduct ? string.Empty : ErrorKeyNotFound;    
+            
+            if (product?.Parent is not null)
+            {
+                message = "Temporarily unavailable feature. Please select a product without a parent";
+                return false;
+            }
+            
+            var sensorChecking = TryGetSensor(request, product, accessKeyModel, out var sensor, out message);
+
+            if (sensor?.State == SensorState.Blocked)
+            {
+                message = $"Sensor {sensor.RootProductName}{sensor.Path} is blocked.";
+                return false;
+            }
+
+            return sensorChecking;
+        }
 
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
             TryGetProductByKey(request, out var product, out message) &&

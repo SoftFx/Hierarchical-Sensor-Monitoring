@@ -64,6 +64,7 @@ namespace HSMServer.Controllers
         /// </summary>
         /// <param name="sensorValue"></param>
         /// <returns></returns>
+        [TypeFilter<KeyPermissionFilter>]
         [HttpPost("bool")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
