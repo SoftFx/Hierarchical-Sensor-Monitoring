@@ -42,7 +42,7 @@ namespace HSMServer.Core.Cache
         List<ProductModel> GetAllNodes();
 
         bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
-        bool TryCheckKeyWritePermissions(Guid key, string path, out string message);
+        bool TryCheckKeyWritePermissions(Guid key, string[] pathParts, out string message);
         bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
         bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message);
 

@@ -11,6 +11,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace HSMServer.Middleware;
@@ -27,15 +28,19 @@ public class KeyPermissionFilter(ITreeValuesCache cache, IUpdatesQueue updatesQu
 
         var headers = context.HttpContext.Request.Headers;
 
-        var value = values.First() as SensorValueBase;
+        var value = values.FirstOrDefault() as SensorValueBase;
 
-        var path = value?.Path;
+        if (value is null)
+        {
+            context.HttpContext.Response.StatusCode = 406;
+            await next();
+        }
+        
         GetKey(value, headers, out var key);
         
-        if (CanAddToQueue(value, out var message))
+        if (CanAddToQueue(key, value?.Path, out var message))
         {
-            var a = 1;
-            // return Ok(se)
+            
         }
         
         await next();
@@ -43,45 +48,32 @@ public class KeyPermissionFilter(ITreeValuesCache cache, IUpdatesQueue updatesQu
     
     private bool CanAddToQueue(Guid key, string path ,out string message)
     {
-        if (TryCheckRequest(key, path, out message) &&
-            cache.TryCheckKeyWritePermissions(storeInfo, out message))
-        {
-            var a = 1;
-            //updatesQueue.AddItem(storeInfo);
-            return true;
-        }
+        return TryCheckRequest(key, path, out var pathParts, out message) &&
+               cache.TryCheckKeyWritePermissions(key, pathParts, out message);
 
-        return false;
     }
     
-    private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue, IHeaderDictionary headers) =>
-        new(GetKey(valueBase, headers), valueBase.Path) { BaseValue = baseValue };
-
-    
-    private bool GetKey(BaseRequest request, IHeaderDictionary headers, out Guid guidKey)
+    private static bool GetKey(BaseRequest request, IHeaderDictionary headers, out Guid guidKey)
     {
         headers.TryGetValue(nameof(BaseRequest.Key), out var key);
 
         if (string.IsNullOrEmpty(key))
             key = request?.Key;
 
-        if (Guid.TryParse(key, out guidKey))
-        {
-            return true;
-        }
-        
-        return false;
+        return Guid.TryParse(key, out guidKey);
     }
     
-    public bool TryCheckRequest(Guid key, string path, out string message)
+    public bool TryCheckRequest(Guid key, string path, out string[] pathParts, out string message)
     {
-        if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(path))
+        pathParts = [];
+        
+        if (Guid.Empty == key || string.IsNullOrEmpty(path))
         {
             message = ErrorPathKey;
             return false;
         }
 
-        var pathParts = GetPathParts(path);
+        pathParts = GetPathParts(path);
         
         if (pathParts.Contains(string.Empty) || path.Contains('\\') || path.Contains('\t'))
         {

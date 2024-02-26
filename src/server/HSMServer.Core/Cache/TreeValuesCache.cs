@@ -190,9 +190,9 @@ namespace HSMServer.Core.Cache
             return sensorChecking;
         }
         
-        public bool TryCheckKeyWritePermissions(Guid key, string path, out string message)
+        public bool TryCheckKeyWritePermissions(Guid key, string[] pathParts, out string message)
         {
-            var accessKeyModel = _keys.TryGetValue(key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey
+            var accessKeyModel = _keys.TryGetValue(key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
             
             if (!accessKeyModel.IsValid(KeyPermissions.CanSendSensorData, out message))
                 return false;    
@@ -212,7 +212,7 @@ namespace HSMServer.Core.Cache
                 return false;
             }
             
-            var sensorChecking = TryGetSensor(request, product, accessKeyModel, out var sensor, out message);
+            var sensorChecking = TryGetSensor(product, accessKeyModel, pathParts, out var sensor, out message);
 
             if (sensor?.State == SensorState.Blocked)
             {
@@ -221,6 +221,38 @@ namespace HSMServer.Core.Cache
             }
 
             return sensorChecking;
+            
+            static bool TryGetSensor(ProductModel product, AccessKeyModel accessKey, string[] pathParts, out BaseSensorModel sensor, out string message)
+            {
+                message = string.Empty;
+                sensor = null;
+                var parts = pathParts;
+
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    var expectedName = parts[i];
+
+                    if (i != parts.Length - 1)
+                    {
+                        product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
+
+                        if (product == null &&
+                            !TryCheckAccessKeyPermissions(accessKey,
+                            KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
+                            return false;
+                    }
+                    else
+                    {
+                        sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
+
+                        if (sensor == null &&
+                            !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddSensors, out message))
+                            return false;
+                    }
+                }
+
+                return true;
+            }
         }
 
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
