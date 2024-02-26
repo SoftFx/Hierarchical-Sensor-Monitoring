@@ -3,7 +3,6 @@ using HSMDataCollector.SyncQueue.BaseQueue;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Xml.Schema;
 
 namespace HSMDataCollector.SyncQueue
 {
@@ -70,9 +69,6 @@ namespace HSMDataCollector.SyncQueue
 
         protected void Enqueue(ConcurrentQueue<SyncQueueItem<T>> queue, T value)
         {
-            if (IsStopped)
-                return;
-
             queue.Enqueue(new SyncQueueItem<T>(value));
 
             var overflowCnt = 0;

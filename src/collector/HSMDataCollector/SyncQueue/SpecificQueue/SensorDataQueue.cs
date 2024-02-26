@@ -9,7 +9,10 @@ namespace HSMDataCollector.SyncQueue
     {
         private readonly HashSet<string> _prioritySensors = new HashSet<string>();
 
+        
+        private CollectorStatus _status = CollectorStatus.Stopped;
 
+        
         protected override string QueueName => "Sensor data";
 
 
@@ -39,7 +42,15 @@ namespace HSMDataCollector.SyncQueue
 
             return true;
         }
+        
+        public override void Flush()
+        {
+            if (_status == CollectorStatus.Running)
+                base.Flush();
+        }
 
         public void AddPrioritySensor(string path) => _prioritySensors.Add(path);
+
+        public void ToRunning() => _status = CollectorStatus.Running;
     }
 }

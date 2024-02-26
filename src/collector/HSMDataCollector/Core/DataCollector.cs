@@ -91,6 +91,7 @@ namespace HSMDataCollector.Core
             _hsmClient = new HsmHttpsClient(options, _queueManager, _logger);
 
             ToRunning += ToStartingCollector;
+            ToRunning += ((SensorDataQueue)_queueManager.Data).ToRunning;
             ToStopped += ToStoppedCollector;
         }
 
@@ -153,9 +154,7 @@ namespace HSMDataCollector.Core
                 foreach (var oldSensor in _nameToSensor.Values)
                     oldSensor.Start();
 
-                await Task.WhenAll(_sensorsStorage.Init(), customStartingTask);
-
-                ChangeStatus(CollectorStatus.Running);
+                _ = Task.WhenAll(_sensorsStorage.Init(), customStartingTask).ContinueWith(x => ChangeStatus(CollectorStatus.Running));
             }
             catch (Exception ex)
             {
