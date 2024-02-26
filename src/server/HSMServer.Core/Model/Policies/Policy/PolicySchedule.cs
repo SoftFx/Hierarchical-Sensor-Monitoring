@@ -59,7 +59,7 @@ namespace HSMServer.Core.Model.Policies
 
             var curTime = DateTime.UtcNow;
 
-            //shiftTime = TimeSpan.FromMinutes(5);
+            //shiftTime = TimeSpan.FromMinutes(5); //for test messages
 
             return curTime <= Time ? Time : Time + (curTime - Time).Ceil(shiftTime);
         }

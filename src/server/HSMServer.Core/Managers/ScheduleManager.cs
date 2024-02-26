@@ -23,7 +23,7 @@ namespace HSMServer.Core.Managers
 
                 if (!grouppedAlerts.TryGetValue(sensorId, out var sensorGroup))
                 {
-                    sensorGroup = grouppedAlerts[sensorId];
+                    sensorGroup = new ScheduleAlertMessage(sensorId);
                     grouppedAlerts.TryAdd(sensorId, sensorGroup);
                 }
 
