@@ -102,7 +102,7 @@ namespace HSMDataCollector.Client
 
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             
-            context.Properties.Set(new ResiliencePropertyKey<string>("data"), json);
+            context.Properties.Set(PollyStrategy.DataKey, json);
             var response = await _client.PostAsync(uri, content, token);
 
             _queueManager.ThrowPackageSendingInfo(new PackageSendingInfo(json.Length, response));
