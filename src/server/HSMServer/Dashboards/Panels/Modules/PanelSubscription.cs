@@ -104,6 +104,7 @@ namespace HSMServer.Dashboards
                 if (TryBuildSource(sensor, out var source))
                     yield return source;
 
+            IsSubscribed = true;
             IsApplied = true;
         }
 

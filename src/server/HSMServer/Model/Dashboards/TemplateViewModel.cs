@@ -33,8 +33,6 @@ namespace HSMServer.Model.Dashboards
 
         public string Path { get; set; }
 
-        public bool IsApplied { get; set; }
-
 
         public PlottedProperty Property { get; set; }
 
@@ -43,7 +41,9 @@ namespace HSMServer.Model.Dashboards
         public string Label { get; set; }
 
 
-        public bool IsSubscribed { get; set; }
+        //public bool IsSubscribed { get; set; }
+
+        public bool IsApplied { get; set; }
 
 
         public TemplateViewModel() { }
@@ -60,6 +60,8 @@ namespace HSMServer.Model.Dashboards
             Label = subscription.Label;
             Shape = subscription.Shape;
             Folders = subscription.Folders;
+
+            //IsSubscribed = subscription.IsSubscribed;
             IsApplied = subscription.IsApplied;
         }
 
@@ -67,14 +69,14 @@ namespace HSMServer.Model.Dashboards
         internal PanelSubscriptionUpdate ToUpdate() =>
             new()
             {
-                PathTemplate = Path,
+                PathTemplate = Path?.Trim(),
                 Property = Property.ToString(),
                 Shape = Shape.ToString(),
 
                 FoldersFilter = new(Folders),
-                Label = Label,
+                Label = Label?.Trim(),
 
-                IsSubscribed = IsSubscribed,
+                //IsSubscribed = IsSubscribed,
             };
     }
 }
