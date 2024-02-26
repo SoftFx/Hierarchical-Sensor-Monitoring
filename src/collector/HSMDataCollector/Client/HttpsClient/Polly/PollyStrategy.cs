@@ -44,7 +44,7 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
                 OnRetry = args => {
                     args.Context.Properties.Set(AttemptKey, args.AttemptNumber);
                     if (args.AttemptNumber != 0)
-                        _logger.Error("Failed to connect to the server");
+                        _logger.Error($"Failed to connect to the server. Attempt number {args.AttemptNumber + 1}");
                     else if (args.Context.Properties.TryGetValue(DataKey, out var data))
                         _logger.Error($"Failed to send data. StatusCode={args.Outcome.Result?.StatusCode}. Data={data}.");
                     
@@ -60,7 +60,7 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
                     : Outcome.FromExceptionAsValueTask<HttpResponseMessage>(args.Outcome.Exception),
                 OnFallback = arguments => {
                      ResilienceContextPool.Shared.Return(arguments.Context);
-                     _logger.Error("Couldn't establish connection for a long time."); // Do smth, mb create new fai; queue?
+                     _logger.Error($"Couldn't establish connection for a long time."); // Do smth, mb create new fai; queue?
                      
                      return default;
                 }

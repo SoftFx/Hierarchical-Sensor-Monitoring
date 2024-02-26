@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Core;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMDataCollector.Client
 {
@@ -64,6 +65,6 @@ namespace HSMDataCollector.Client
         }
 
 
-        internal bool IsCommandRequest(string uri) => _serverCommands.Contains(uri);
+        internal bool IsCommandRequest(string uri) => _serverCommands.Any(uri.Contains);
     }
 }
