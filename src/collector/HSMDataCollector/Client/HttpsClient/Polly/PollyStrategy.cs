@@ -1,3 +1,4 @@
+using HSMDataCollector.Client.HttpsClient.Polly.Strategy;
 using HSMDataCollector.Logging;
 using Polly;
 using Polly.Fallback;
@@ -19,7 +20,7 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
         
         private readonly PredicateBuilder<HttpResponseMessage> _fallbackHandle = new PredicateBuilder<HttpResponseMessage>()
             .Handle<HttpRequestException>()
-            .HandleResult(r =>r is null || r.StatusCode.IsRetryCode());
+            .HandleResult(r => r is null || r.StatusCode.IsRetryCode());
 
 
         internal ResiliencePipeline<HttpResponseMessage> CommandsPipeline { get; }
@@ -34,7 +35,7 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
             var retryOptions = new RetryStrategyOptions<HttpResponseMessage>()
             {
                 MaxRetryAttempts = MaxRetryAttempts,
-                ShouldHandle = arguments => new ValueTask<bool>(arguments.Outcome.Result?.StatusCode.IsRetryCode() ?? true),
+                ShouldHandle = arguments => new ValueTask<bool>(!PollyHelper.IsConnected ?? true),
                 DelayGenerator = args => new ValueTask<TimeSpan?>(BuildDelay(args.AttemptNumber)),
                 OnRetry = args => {
                     PollyHelper.InitRetry(args, out var id);
@@ -62,9 +63,18 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
                 }
             };
 
+            var resultStrategy = new ConnectionStrategyOptions<HttpResponseMessage>()
+            {
+                OnConnectionResult = args => {
+                    PollyHelper.IsConnected = args.Outcome.Result != null && !args.Outcome.Result.StatusCode.IsRetryCode();
+                    return default;
+                }
+            };
+
             DataPipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
                 .AddFallback(fallbackOptions)
                 .AddRetry(retryOptions)
+                .AddConnectionCheck(resultStrategy)
                 .Build();
 
             retryOptions.MaxRetryAttempts = int.MaxValue;
@@ -72,6 +82,7 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
             CommandsPipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
                 .AddFallback(fallbackOptions)
                 .AddRetry(retryOptions)
+                .AddConnectionCheck(resultStrategy)
                 .Build();
         }
 
@@ -79,7 +90,7 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
         private static TimeSpan BuildDelay(int curAttemptNumber) => TimeSpan.FromSeconds(Math.Pow(StartSecondsDelay, Math.Min(curAttemptNumber, MaxDelayPowerOfTwo)));
     }
 
-    public static class PollyHelper
+    internal static class PollyHelper
     {
         internal static readonly ResiliencePropertyKey<int> AttemptKey = new ResiliencePropertyKey<int>("attempt");
         
@@ -89,6 +100,8 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
 
         internal static ResilienceContext GetContext(CancellationTokenSource token) => ResilienceContextPool.Shared.Get(token.Token);
 
+        internal static bool? IsConnected { get; set; }
+        
         
         internal static void InitRetry(OnRetryArguments<HttpResponseMessage> args, out Guid id)
         {

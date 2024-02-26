@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Logging;
+﻿using HSMDataCollector.Client.HttpsClient.Polly;
+using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue;
 using System;
 using System.Collections.Generic;
@@ -34,16 +35,27 @@ namespace HSMDataCollector.Client.HttpsClient
 
         protected async Task<HttpResponseMessage> RequestToServer(object value, string uri)
         {
-            try
-            {
-                var response = await InvokeRequest(value, uri);
+            if (PollyHelper.IsConnected ?? true)
+                try
+                {
+                    var response = await InvokeRequest(value, uri);
 
-                return response;
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Failed to send data. Error={ex} Data={value}");
+                    return response;
+                }
+                catch (Exception ex)
+                {
+                    PushToFailQueue();
+                    _logger.Error($"Failed to send data. Error={ex} Data={value}");
 
+                    return null;
+                }
+            
+            PushToFailQueue();
+
+            return null;
+            
+            void PushToFailQueue()
+            {
                 if (value is IEnumerable<object> list)
                 {
                     foreach (var data in list)
@@ -52,8 +64,6 @@ namespace HSMDataCollector.Client.HttpsClient
                 }
                 else if (value is T single)
                     _queue.PushFailValue(single);
-
-                return null;
             }
         }
 
