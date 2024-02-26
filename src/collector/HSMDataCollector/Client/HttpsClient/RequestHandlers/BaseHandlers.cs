@@ -48,7 +48,7 @@ namespace HSMDataCollector.Client.HttpsClient
                 {
                     foreach (var data in list)
                         if (data is T tdata)
-                            _queue.PushFailValue(tdata); // addOrUpdate request is not saved to the queue
+                            _queue.PushFailValue(tdata);
                 }
                 else if (value is T single)
                     _queue.PushFailValue(single);

@@ -89,20 +89,20 @@ namespace HSMDataCollector.Client
         {
             var pipeline = _endpoints.IsCommandRequest(uri) ? _polly.CommandsPipeline : _polly.DataPipeline;
 
-            return pipeline.ExecuteAsync(async context => await PostAsync(context, uri, value, _tokenSource.Token), ResilienceContextPool.Shared.Get(_tokenSource.Token)).AsTask();
+            return pipeline.ExecuteAsync(async context => await PostAsync(context, uri, value, _tokenSource.Token), PollyHelper.GetContext(_tokenSource)).AsTask();
         }
 
 
         private async Task<HttpResponseMessage> PostAsync(ResilienceContext context, string uri, object data, CancellationToken token)
         {
-            if (context.Properties.TryGetValue(PollyStrategy.AttemptKey, out _))
+            if (context.Properties.TryGetValue(PollyHelper.AttemptKey, out _))
                 await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token);
 
             var json = JsonConvert.SerializeObject(data);
 
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             
-            context.Properties.Set(PollyStrategy.DataKey, json);
+            context.Properties.Set(PollyHelper.DataKey, json);
             var response = await _client.PostAsync(uri, content, token);
 
             _queueManager.ThrowPackageSendingInfo(new PackageSendingInfo(json.Length, response));

@@ -3,8 +3,8 @@ using Polly;
 using Polly.Fallback;
 using Polly.Retry;
 using System;
-using System.Collections.Concurrent;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMDataCollector.Client.HttpsClient.Polly
@@ -14,20 +14,12 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
         private const int MaxDelayPowerOfTwo = 8; //max delay is 1024 sec
         private const int StartSecondsDelay = 2;
         private const int MaxRetryAttempts = 12;
-        private const string UnknownId = "Unknown id";
 
         private readonly ILoggerManager _logger;
         
         private readonly PredicateBuilder<HttpResponseMessage> _fallbackHandle = new PredicateBuilder<HttpResponseMessage>()
             .Handle<HttpRequestException>()
             .HandleResult(r =>r is null || r.StatusCode.IsRetryCode());
-
-
-        internal static readonly ResiliencePropertyKey<int> AttemptKey = new ResiliencePropertyKey<int>("attempt");
-        
-        internal static readonly ResiliencePropertyKey<string> DataKey = new ResiliencePropertyKey<string>("data");
-        
-        internal static readonly ResiliencePropertyKey<Guid> RetryId = new ResiliencePropertyKey<Guid>("id");
 
 
         internal ResiliencePipeline<HttpResponseMessage> CommandsPipeline { get; }
@@ -45,16 +37,11 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
                 ShouldHandle = arguments => new ValueTask<bool>(arguments.Outcome.Result?.StatusCode.IsRetryCode() ?? true),
                 DelayGenerator = args => new ValueTask<TimeSpan?>(BuildDelay(args.AttemptNumber)),
                 OnRetry = args => {
-                    if (!args.Context.Properties.TryGetValue(RetryId, out var id))
-                    {
-                        id = Guid.NewGuid();
-                        args.Context.Properties.Set(RetryId, id);
-                    }
-                    
-                    args.Context.Properties.Set(AttemptKey, args.AttemptNumber);
+                    PollyHelper.InitRetry(args, out var id);
+
                     if (args.AttemptNumber != 0)
                         _logger.Error($"Failed to connect to the server. Attempt number {args.AttemptNumber + 1}. Id = {id}");
-                    else if (args.Context.Properties.TryGetValue(DataKey, out var data))
+                    else if (args.Context.Properties.TryGetValue(PollyHelper.DataKey, out var data))
                         _logger.Error($"Failed to send data. Id = {id}. StatusCode={args.Outcome.Result?.StatusCode}. Data={data}.");
                     
                     return default;
@@ -68,11 +55,10 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
                     ? Outcome.FromResultAsValueTask(args.Outcome.Result)
                     : Outcome.FromExceptionAsValueTask<HttpResponseMessage>(args.Outcome.Exception),
                 OnFallback = arguments => {
-                     ResilienceContextPool.Shared.Return(arguments.Context);
-                     arguments.Context.Properties.TryGetValue(RetryId, out var id);
-                     _logger.Error($"Couldn't establish connection for a long time. {(id == Guid.Empty ? UnknownId : id.ToString())}");
+                    PollyHelper.InitFallBack(arguments.Context, out var id);
+                    _logger.Error($"Couldn't establish connection for a long time. Id = {id}");
                      
-                     return default;
+                    return default;
                 }
             };
 
@@ -91,5 +77,41 @@ namespace HSMDataCollector.Client.HttpsClient.Polly
 
 
         private static TimeSpan BuildDelay(int curAttemptNumber) => TimeSpan.FromSeconds(Math.Pow(StartSecondsDelay, Math.Min(curAttemptNumber, MaxDelayPowerOfTwo)));
+    }
+
+    public static class PollyHelper
+    {
+        internal static readonly ResiliencePropertyKey<int> AttemptKey = new ResiliencePropertyKey<int>("attempt");
+        
+        internal static readonly ResiliencePropertyKey<string> DataKey = new ResiliencePropertyKey<string>("data");
+        
+        internal static readonly ResiliencePropertyKey<Guid> RetryId = new ResiliencePropertyKey<Guid>("id");
+
+        internal static ResilienceContext GetContext(CancellationTokenSource token) => ResilienceContextPool.Shared.Get(token.Token);
+
+        
+        internal static void InitRetry(OnRetryArguments<HttpResponseMessage> args, out Guid id)
+        {
+            GetId(args.Context, out id);
+            args.Context.Properties.Set(AttemptKey, args.AttemptNumber);
+        }
+        
+        internal static void InitFallBack(ResilienceContext context, out Guid id)
+        {
+            ReturnContext(context);
+            context.Properties.TryGetValue(RetryId, out id);
+        }
+        
+        
+        private static void ReturnContext(ResilienceContext context) =>  ResilienceContextPool.Shared.Return(context);
+
+        private static void GetId(ResilienceContext context ,out Guid id)
+        {
+            if (context.Properties.TryGetValue(RetryId, out id))
+                return;
+            
+            id = Guid.NewGuid();
+            context.Properties.Set(RetryId, id);
+        }
     }
 }
