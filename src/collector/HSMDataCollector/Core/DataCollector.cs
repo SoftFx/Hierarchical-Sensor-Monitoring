@@ -2,7 +2,6 @@
 using HSMDataCollector.Client;
 using HSMDataCollector.CustomFuncSensor;
 using HSMDataCollector.DefaultSensors;
-using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.InstantValue;
@@ -102,7 +101,14 @@ namespace HSMDataCollector.Core
         /// <param name="address">HSM server address to send data to (Do not forget https:// if needed)</param>
         /// <param name="port">HSM sensors API port, which defaults to 44330. Specify if your HSM server Docker container configured differently.</param>
         public DataCollector(string productKey, string address = CollectorOptions.LocalhostAddress, int port = CollectorOptions.DefaultPort, string clientName = null)
-            : this(new CollectorOptions() { AccessKey = productKey, ServerAddress = address, Port = port, ClientName = clientName }) { }
+            : this(new CollectorOptions()
+            {
+                AccessKey = productKey,
+                ServerAddress = address,
+                Port = port,
+                ClientName = clientName
+            })
+        { }
 
 
         public Task<ConnectionResult> TestConnection() => _hsmClient.TestConnection();
@@ -147,14 +153,21 @@ namespace HSMDataCollector.Core
                 if (!Status.IsStopped())
                     return;
 
-                _queueManager.Init();
+                //_queueManager.Init(); // not need???
 
                 ChangeStatus(CollectorStatus.Starting);
 
-                foreach (var oldSensor in _nameToSensor.Values)
+                var connect = await TestConnection();
+
+                if (!connect.IsOk)
+                    return;
+
+                await Task.WhenAll(_sensorsStorage.Init(), customStartingTask);
+
+                foreach (var oldSensor in _nameToSensor.Values) // can change?
                     oldSensor.Start();
 
-                _ = Task.WhenAll(_sensorsStorage.Init(), customStartingTask).ContinueWith(x => ChangeStatus(CollectorStatus.Running));
+                ChangeStatus(CollectorStatus.Running);
             }
             catch (Exception ex)
             {
@@ -211,9 +224,6 @@ namespace HSMDataCollector.Core
             _queueManager.Dispose();
             _hsmClient.Dispose();
         }
-
-
-        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _sensorsStorage.ContainsKey(path);
 
 
         private void StopSensors(string error = null)
@@ -468,43 +478,24 @@ namespace HSMDataCollector.Core
 
 
         [Obsolete]
-        public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")
-        {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
-        }
+        public ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
 
         [Obsolete]
-        public ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "")
-        {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
-        }
+        public ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
 
         [Obsolete]
-        public ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "")
-        {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
-        }
+        public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
 
         [Obsolete]
-        public ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "")
-        {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
-        }
+        public ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
+
 
         [Obsolete]
-        private ILastValueSensor<T> CreateLastValueSensorInternal<T>(string path, T defaultValue, string description = "")
-        {
-            var existingSensor = GetExistingSensor(path);
-            if (existingSensor is ILastValueSensor<T> lastValueSensor)
-                return lastValueSensor;
-
-            var upgradedPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, path);
-
-            var sensor = new DefaultValueSensor<T>(upgradedPath, _queueManager.Data as IValuesQueue, defaultValue, description);
-            AddNewSensor(sensor, path);
-
-            return sensor;
-        }
+        private ILastValueSensor<T> CreateLastValueSensor<T>(string path, T defaultValue, string description = "") =>
+            _sensorsStorage.CreateLastValueSensor(path, defaultValue, new InstantSensorOptions()
+            {
+                Description = description,
+            });
 
         #endregion
 

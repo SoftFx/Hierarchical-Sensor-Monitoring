@@ -14,6 +14,8 @@ namespace HSMDataCollector.Core
 
         public bool Result => string.IsNullOrEmpty(Error);
 
+        public bool IsOk => Code == HttpStatusCode.OK;
+
 
         public ConnectionResult(HttpStatusCode? code, string error)
         {
