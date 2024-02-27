@@ -102,7 +102,7 @@ namespace HSMDataCollector.Core
         /// <param name="address">HSM server address to send data to (Do not forget https:// if needed)</param>
         /// <param name="port">HSM sensors API port, which defaults to 44330. Specify if your HSM server Docker container configured differently.</param>
         public DataCollector(string productKey, string address = CollectorOptions.LocalhostAddress, int port = CollectorOptions.DefaultPort, string clientName = null)
-            : this(new CollectorOptions() { AccessKey = productKey, ServerAddress = address, Port = port, ClientName = clientName}) { }
+            : this(new CollectorOptions() { AccessKey = productKey, ServerAddress = address, Port = port, ClientName = clientName }) { }
 
 
         public Task<ConnectionResult> TestConnection() => _hsmClient.TestConnection();
@@ -395,13 +395,13 @@ namespace HSMDataCollector.Core
 
         public IMonitoringCounterSensor CreateM5CounterSensor(string path, string description = "") => CreateCounterSensor(path, 300000, description);
 
-        private IMonitoringCounterSensor CreateCounterSensor(string path, int postPeriod, string description = "") => CreateCounterSensor(path, new MonitoringInstantSensorOptions
+        public IMonitoringCounterSensor CreateCounterSensor(string path, CounterSensorOptions options) => _sensorsStorage.CreateCounterSensor(path, options);
+
+        private IMonitoringCounterSensor CreateCounterSensor(string path, int postPeriod, string description = "") => CreateCounterSensor(path, new CounterSensorOptions
         {
             PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
             Description = description,
         });
-
-        private IMonitoringCounterSensor CreateCounterSensor(string path, MonitoringInstantSensorOptions options) => _sensorsStorage.CreateCounterSensor(path, options);
 
 
         #endregion

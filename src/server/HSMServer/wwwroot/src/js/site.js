@@ -104,3 +104,9 @@ window.redirectToHome = function (id){
     window.localStorage.isDashboardRedirect = true;
     window.location.href = `/Home/${id}`;
 }
+
+window.tryValidate = function (element, propertyElement, propertyName) {
+    var input = element.find($(`${propertyElement}[name='${propertyName}']`));
+
+    return input.length === 0 || input[0].reportValidity();
+}

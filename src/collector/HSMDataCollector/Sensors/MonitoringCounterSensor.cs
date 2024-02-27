@@ -13,7 +13,7 @@ namespace HSMDataCollector.Sensors
         private double _sum = 0.0;
 
 
-        public MonitoringCounterSensor(MonitoringInstantSensorOptions options) : base(options) { }
+        public MonitoringCounterSensor(CounterSensorOptions options) : base(options) { }
 
 
         protected override double GetValue()

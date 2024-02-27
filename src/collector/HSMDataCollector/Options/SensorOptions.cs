@@ -88,7 +88,12 @@ namespace HSMDataCollector.Options
 
     public class MonitoringInstantSensorOptions : InstantSensorOptions, IMonitoringOptions
     {
-        public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
+        public virtual TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
+    }
+
+    public class CounterSensorOptions : MonitoringInstantSensorOptions
+    {
+        public override TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromMinutes(1);
     }
 
 

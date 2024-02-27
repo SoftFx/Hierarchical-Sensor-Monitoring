@@ -72,17 +72,12 @@
         <div id="multichart"></div>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center">
-            <label class="col-form-label fw-bold">Templates:</label>
-            <a href="javascript:addTemplate();" class="mx-2">
-                <i class="fa-solid fa-plus"></i> Add
-            </a>
-        </div>
 
-        <a id="templateHelp" data-bs-toggle="popover" data-bs-html="true" title="Template variables help" class="help-popover"
-           data-bs-content="<b>Path</b> supports 2 types of variables that help to create sensor path templates. The variable supports letters, digits and symbols '_', '.', '$'.<br/><br/>Variables:<br/><b>* -</b> unnamed;<br/><b>{piece} -</b> named (can be used in <b>Label</b> input).">
-            Template help
+    <div class="d-flex align-items-center">
+        <label class="col-form-label fw-bold">Templates:</label>
+        <i class='fas fa-question-circle mx-2' title="Templates provide the ability to connect several sources with the same path template at once.&#013;Path input supports 2 types of variables that help to create sensor path templates. The variable supports letters, digits and symbols '_', '.', '$'.&#013;&#013;Variables:&#013;* - unnamed;&#013;{piece} - named (can be used in Label input)."></i>
+        <a href="javascript:addTemplate();" class="mx-2">
+            <i class="fa-solid fa-plus"></i> Add
         </a>
     </div>
     <div id="templates">
@@ -92,12 +87,7 @@
         }
     </div>
 
-    <div class="d-flex align-items-center justify-content-between">
-        <label class="col-form-label fw-bold">Sources:</label>
-        <a href="javascript:removeAllSources()" class="mx-2">
-            <i class='fas fa-trash-alt'></i> Remove all
-        </a>
-    </div>
+    <label class="col-form-label fw-bold">Sources:</label>
     <div id="plots" class="mt-1">
         <ul id="sources" class="list-group">
         </ul>
@@ -109,6 +99,7 @@
 </div>
 
 @await Html.PartialAsync("_ApplyTemplateModal")
+@await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
 
 <script>
@@ -117,12 +108,7 @@
     var multichartRange;
     $(document).ready(function () {
         if ('@isYRangeAvailabe' !== 'True')
-            $('#y-range-settings').hide()
-    
-        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
-            return new bootstrap.Popover(popoverTriggerEl);
-        });
+            $('#y-range-settings').hide();
 
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         let ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
@@ -203,20 +189,6 @@
         return false;
     });
 
-    $('#templateHelp').on('show.bs.popover', () => {
-        $('html').on('click', hideNotFocusedHelp);
-    });
-
-    $('#templateHelp').on('hide.bs.popover', () => {
-        $('html').off('click', hideNotFocusedHelp);
-    });
-
-    function hideNotFocusedHelp(e) {
-        if (!$(e.target).parents().is('.popover')) {
-            $('#templateHelp').popover('hide');
-        }
-    }
-
     function showProductInLabels() {
         $('#sources li').each(function (idx, li) {
             let source = $(li);
@@ -244,13 +216,19 @@
     }
 
     function removeAllSources() {
-        $('#sources li').each(function (idx, li) {
-            let source = $(li);
+        showConfirmationModal(
+            `Removing sources`,
+            `Do you really want to remove all panel sources?`,
+            function () {
+                $('#sources li').each(function (idx, li) {
+                    let source = $(li);
 
-            let idAttr = source.attr('id');
-            let sourceId = idAttr.substring('source_'.length, idAttr.length);
+                    let idAttr = source.attr('id');
+                    let sourceId = idAttr.substring('source_'.length, idAttr.length);
 
-            deletePlot(sourceId);
-        });
+                    deletePlot(sourceId);
+                })
+            }
+        );
     }
 </script>

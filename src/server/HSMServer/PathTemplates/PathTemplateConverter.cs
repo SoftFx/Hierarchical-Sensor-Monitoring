@@ -50,6 +50,9 @@ namespace HSMServer.PathTemplates
 
         public bool IsMatch(string path)
         {
+            if (string.IsNullOrEmpty(_regexPattern))
+                return true;
+
             var match = Regex.Match(path, _regexPattern);
 
             if (match.Success)
@@ -61,7 +64,8 @@ namespace HSMServer.PathTemplates
             return match.Success;
         }
 
-        public string BuildStringByTempalte(string template) => NamedVariableToRegex().Replace(template, GetVariableByName);
+        public string BuildStringByTempalte(string template) =>
+            string.IsNullOrEmpty(template) ? string.Empty : NamedVariableToRegex().Replace(template, GetVariableByName);
 
 
         private string RegisterNamedVariable(string str)
