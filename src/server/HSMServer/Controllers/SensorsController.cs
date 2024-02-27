@@ -35,7 +35,7 @@ namespace HSMServer.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [AllowAnonymous]
-    //[TypeFilter<TelemetryResultFilter>]
+    [TypeFilter<PermissionFilter<BaseRequest>>]
     public class SensorsController : ControllerBase
     {
         private readonly ILogger<SensorsController> _logger;
@@ -64,7 +64,6 @@ namespace HSMServer.Controllers
         /// </summary>
         /// <param name="sensorValue"></param>
         /// <returns></returns>
-        [TypeFilter<PermissionFilter>]
         [HttpPost("bool")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -510,6 +509,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        // [TypeFilter<PermissionFilter<CommandRequestBase>>]
         public ActionResult<Dictionary<string, string>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
         {
             var result = new Dictionary<string, string>(sensorCommands.Count);
