@@ -21,10 +21,11 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Core.Interfaces.Services;
 
 namespace HSMServer.Core.Cache
 {
-    public sealed class TreeValuesCache : ITreeValuesCache, IDisposable
+    public sealed class TreeValuesCache : ITreeValuesCache, IPermissionService, IDisposable
     {
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
@@ -189,70 +190,62 @@ namespace HSMServer.Core.Cache
 
             return sensorChecking;
         }
-        
-        public bool TryCheckKeyWritePermissions(Guid key, string[] pathParts, out string message)
-        {
-            var accessKeyModel = _keys.TryGetValue(key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
-            
-            if (!accessKeyModel.IsValid(KeyPermissions.CanSendSensorData, out message))
-                return false;    
-                
-            if (accessKeyModel.IsMaster)
-            {
-                message = ErrorMasterKey;
-                return false;
-            }
 
-            var hasProduct = _tree.TryGetValue(accessKeyModel.ProductId, out var product);
-            message = hasProduct ? string.Empty : ErrorKeyNotFound;    
+        public bool TryGetKey(Guid id, out AccessKeyModel key, out string message)
+        {
+            key = _keys.TryGetValue(id, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
+
+            if (!key.IsValid(KeyPermissions.CanSendSensorData, out message))
+                return false;
+
+            if (!key.IsMaster) 
+                return true;
+            
+            message = ErrorMasterKey;
+            return false;
+        }
+
+        public bool TryGetProduct(Guid id, out ProductModel product, out string message)
+        {
+            var hasProduct = _tree.TryGetValue(id, out product);
+            message = hasProduct ? string.Empty : ErrorKeyNotFound;
             
             if (product?.Parent is not null)
             {
                 message = "Temporarily unavailable feature. Please select a product without a parent";
                 return false;
             }
-            
-            var sensorChecking = TryGetSensor(product, accessKeyModel, pathParts, out var sensor, out message);
 
-            if (sensor?.State == SensorState.Blocked)
+            return true;
+        }
+
+        public bool CheckWritePermissions(ProductModel product, AccessKeyModel accessKey, string[] pathParts, out string message)
+        {
+            message = string.Empty;
+
+            for (int i = 0; i < pathParts.Length; i++)
             {
-                message = $"Sensor {sensor.RootProductName}{sensor.Path} is blocked.";
-                return false;
-            }
+                var expectedName = pathParts[i];
 
-            return sensorChecking;
-            
-            static bool TryGetSensor(ProductModel product, AccessKeyModel accessKey, string[] pathParts, out BaseSensorModel sensor, out string message)
-            {
-                message = string.Empty;
-                sensor = null;
-                var parts = pathParts;
-
-                for (int i = 0; i < parts.Length; i++)
+                if (i != pathParts.Length - 1)
                 {
-                    var expectedName = parts[i];
+                    product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
 
-                    if (i != parts.Length - 1)
-                    {
-                        product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
-
-                        if (product == null &&
-                            !TryCheckAccessKeyPermissions(accessKey,
-                            KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
-                            return false;
-                    }
-                    else
-                    {
-                        sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
-
-                        if (sensor == null &&
-                            !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddSensors, out message))
-                            return false;
-                    }
+                    if (product == null &&
+                        !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
+                        return false;
                 }
+                else
+                {
+                    var sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
 
-                return true;
+                    if (sensor == null &&
+                        !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddSensors, out message))
+                        return false;
+                }
             }
+
+            return true;
         }
 
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>

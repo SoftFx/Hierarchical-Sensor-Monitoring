@@ -35,7 +35,7 @@ namespace HSMServer.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [AllowAnonymous]
-    [TypeFilter<TelemetryResultFilter>]
+    //[TypeFilter<TelemetryResultFilter>]
     public class SensorsController : ControllerBase
     {
         private readonly ILogger<SensorsController> _logger;
@@ -64,7 +64,7 @@ namespace HSMServer.Controllers
         /// </summary>
         /// <param name="sensorValue"></param>
         /// <returns></returns>
-        [TypeFilter<KeyPermissionFilter>]
+        [TypeFilter<PermissionFilter>]
         [HttpPost("bool")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]

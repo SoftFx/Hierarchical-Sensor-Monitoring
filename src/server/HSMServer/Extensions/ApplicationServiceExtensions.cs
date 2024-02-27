@@ -27,6 +27,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Authentication;
 using System.Threading.Tasks;
+using HSMServer.Core.Interfaces.Services;
 
 namespace HSMServer.ServiceExtensions;
 
@@ -44,6 +45,8 @@ public static class ApplicationServiceExtensions
                 .AddSingleton<IUpdatesQueue, UpdatesQueue>()
                 .AddSingleton<ITreeValuesCache, TreeValuesCache>()
                 .AddSingleton<IJournalService, JournalService>();
+
+        services.AddSingleton<IPermissionService, TreeValuesCache>();
 
         services.AddAsyncStorage<IUserManager, UserManager>()
                 .AddAsyncStorage<IFolderManager, FolderManager>()
