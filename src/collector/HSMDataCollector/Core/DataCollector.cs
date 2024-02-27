@@ -354,6 +354,7 @@ namespace HSMDataCollector.Core
 
         #endregion
 
+
         #region Custom instant sensors
 
         public IInstantValueSensor<Version> CreateVersionSensor(string path, string description = "") => CreateInstantSensor<Version>(path, description);
@@ -412,7 +413,8 @@ namespace HSMDataCollector.Core
 
         #endregion
 
-        #region Obsolete functions
+
+        #region File sensors
 
         public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "") =>
             CreateFileSensor(path, new FileSensorOptions()
@@ -432,21 +434,19 @@ namespace HSMDataCollector.Core
             return sensor.SendFile(filePath, status, comment);
         }
 
+        #endregion
 
-        [Obsolete]
+
+        #region Last value sensors
+
         public ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
 
-        [Obsolete]
         public ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
 
-        [Obsolete]
         public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
 
-        [Obsolete]
         public ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
 
-
-        [Obsolete]
         private ILastValueSensor<T> CreateLastValueSensor<T>(string path, T defaultValue, string description = "") =>
             _sensorsStorage.CreateLastValueSensor(path, defaultValue, new InstantSensorOptions()
             {

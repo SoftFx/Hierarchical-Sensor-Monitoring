@@ -47,7 +47,11 @@ namespace HSMDataCollector.Core
 
         IDataCollector AddCustomLogger(ICollectorLogger logger);
 
-        #region Common methods
+
+        IServiceCommandsSensor CreateServiceCommandsSensor();
+
+
+        #region Obsolete initializers
 
         /// <summary>
         /// The method sets the sending timer up. No data will be sent without calling this method
@@ -123,8 +127,17 @@ namespace HSMDataCollector.Core
         [Obsolete("Use method AddWindowsSensors(options) in Windows collection")]
         bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval, string specificPath = null);
 
+
+        /// <summary>
+        /// The event is fired after the values queue (current capacity is 100000 items) overflows
+        /// </summary>
+        [Obsolete("Will never be called")]
+        event EventHandler ValuesQueueOverflow;
+
         #endregion
 
+
+        #region Custom base sensors
 
         IMonitoringCounterSensor CreateCounterSensor(string path, CounterSensorOptions options = null);
 
@@ -183,6 +196,11 @@ namespace HSMDataCollector.Core
 
         IInstantValueSensor<TimeSpan> CreateTimeSensor(string path, InstantSensorOptions options);
 
+        #endregion
+
+
+        #region File sensors
+
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is string
         /// </summary>
@@ -197,7 +215,11 @@ namespace HSMDataCollector.Core
 
         Task<bool> SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "");
 
-        [Obsolete]
+        #endregion
+
+
+        #region Last value sensors
+
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is bool
         /// </summary>
@@ -207,7 +229,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is bool</returns>
         ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "");
 
-        [Obsolete]
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is int
         /// </summary>
@@ -217,7 +238,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is int</returns>
         ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "");
 
-        [Obsolete]
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is double
         /// </summary>
@@ -227,7 +247,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is double</returns>
         ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "");
 
-        [Obsolete]
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is string
         /// </summary>
@@ -237,8 +256,8 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is string</returns>
         ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "");
 
+        #endregion
 
-        IServiceCommandsSensor CreateServiceCommandsSensor();
 
         #region Bar sensors
 
@@ -374,6 +393,7 @@ namespace HSMDataCollector.Core
 
         #endregion
 
+
         #region Custom func sensors
 
         [Obsolete]
@@ -473,11 +493,5 @@ namespace HSMDataCollector.Core
         IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
 
         #endregion
-
-        /// <summary>
-        /// The event is fired after the values queue (current capacity is 100000 items) overflows
-        /// </summary>
-        [Obsolete("Will never be called")]
-        event EventHandler ValuesQueueOverflow;
     }
 }
