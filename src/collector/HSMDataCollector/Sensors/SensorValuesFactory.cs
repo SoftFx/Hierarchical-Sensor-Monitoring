@@ -1,6 +1,7 @@
 ﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.SensorsFactory
 {
@@ -80,6 +81,11 @@ namespace HSMDataCollector.SensorsFactory
                     return (val) => new CounterSensorValue()
                     {
                         Value = val is double doubleV ? doubleV : default
+                    };
+                case SensorType.FileSensor:
+                    return (val) => new FileSensorValue()
+                    {
+                        Value = val is List<byte> bytes ? bytes : default
                     };
                 default:
                     return null;

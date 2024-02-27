@@ -4,21 +4,17 @@ using HSMDataCollector.CustomFuncSensor;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.Extensions;
-using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading.Tasks;
 using OldSensorBase = HSMDataCollector.Base.SensorBase;
 
@@ -418,62 +414,22 @@ namespace HSMDataCollector.Core
 
         #region Obsolete functions
 
-        [Obsolete]
-        public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "")
+        public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "") =>
+            CreateFileSensor(path, new FileSensorOptions()
+            {
+                DefaultFileName = fileName,
+                Description = description,
+                Extension = extension,
+            });
+
+        public IInstantValueSensor<string> CreateFileSensor(string path, FileSensorOptions options) => _sensorsStorage.CreateFileSensor(path, options);
+
+        public Task<bool> SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
-            path = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, path);
+            var fullSensorPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, sensorPath);
+            var sensor = _sensorsStorage.CreateFileSensor(fullSensorPath, new FileSensorOptions());
 
-            var existingSensor = GetExistingSensor(path);
-            if (existingSensor is IInstantValueSensor<string> instantValueSensor)
-                return instantValueSensor;
-
-            var sensor = new InstantFileSensor(path, fileName, extension, _queueManager.Data as IValuesQueue, description);
-            AddNewSensor(sensor, path);
-
-            return sensor;
-        }
-
-        public async Task SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
-        {
-            var fileInfo = new FileInfo(filePath);
-
-            if (!fileInfo.Exists)
-            {
-                _logger.Error($"{filePath} does not exist");
-                return;
-            }
-
-            async Task<List<byte>> GetFileBytes()
-            {
-                try
-                {
-                    using (var file = File.Open(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                    {
-                        using (var stream = new StreamReader(file))
-                            return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync()).ToList();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex.Message);
-                    throw;
-                }
-            }
-
-            var value = new FileSensorValue()
-            {
-                Path = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, sensorPath),
-                Comment = comment,
-                Status = status,
-                Extension = fileInfo.Extension.TrimStart('.'),
-                Name = Path.GetFileNameWithoutExtension(fileInfo.FullName),
-                Time = DateTime.UtcNow,
-                Value = await GetFileBytes()
-            };
-
-            _logger.Info($"Sending {filePath} to {sensorPath}");
-
-            await _hsmClient.Data.SendRequest(value);
+            return sensor.SendFile(filePath, status, comment);
         }
 
 

@@ -193,7 +193,9 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is string</returns>
         IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "");
 
-        Task SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "");
+        IInstantValueSensor<string> CreateFileSensor(string path, FileSensorOptions options);
+
+        Task<bool> SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "");
 
         [Obsolete]
         /// <summary>

@@ -78,6 +78,14 @@ namespace HSMDataCollector.Options
     }
 
 
+    public class FileSensorOptions : InstantSensorOptions
+    {
+        public string DefaultFileName { get; set; }
+
+        public string Extension { get; set; }
+    }
+
+
     public class InstantSensorOptions : SensorOptions
     {
         public List<InstantAlertTemplate> Alerts { get; set; }
@@ -90,6 +98,7 @@ namespace HSMDataCollector.Options
     {
         public virtual TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
     }
+
 
     public class CounterSensorOptions : MonitoringInstantSensorOptions
     {

@@ -58,6 +58,13 @@ namespace HSMDataCollector.Core
             return (MonitoringCounterSensor)Register(new MonitoringCounterSensor(options));
         }
 
+        internal FileSensorInstant CreateFileSensor(string path, FileSensorOptions options)
+        {
+            options = FillOptions(path, SensorType.FileSensor, options);
+
+            return (FileSensorInstant)Register(new FileSensorInstant(options, Logger));
+        }
+
         internal LastValueSensorInstant<T> CreateLastValueSensor<T>(string path, T customDefault, InstantSensorOptions options)
         {
             options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
