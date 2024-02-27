@@ -14,7 +14,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook
 
     internal sealed class MessageBuilder : IMessageBuilder
     {
-        private readonly CDict<CDict<ConcurrentDictionary<Guid, AlertResult>>> _alertsTree = new(); //template -> policyId -> Message as string -> AlertResult
+        private readonly CStringDict<CStringDict<ConcurrentDictionary<Guid, AlertResult>>> _alertsTree = new(); //template -> policyId -> Message as string -> AlertResult
         private readonly AlertsGrouper _grouper = new();
 
 

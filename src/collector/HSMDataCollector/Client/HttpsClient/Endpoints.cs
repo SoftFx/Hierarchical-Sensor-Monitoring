@@ -1,10 +1,14 @@
 ﻿using HSMDataCollector.Core;
 using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Client
 {
     internal sealed class Endpoints
     {
+        private readonly HashSet<string> _serverCommands;
+
+
         internal string ConnectionAddress { get; }
 
 
@@ -24,6 +28,8 @@ namespace HSMDataCollector.Client
         internal string Timespan => $"{ConnectionAddress}/timespan";
 
         internal string Version => $"{ConnectionAddress}/version";
+
+        internal string Counter => $"{ConnectionAddress}/counter";
 
 
         internal string DoubleBar => $"{ConnectionAddress}/doubleBar";
@@ -48,7 +54,16 @@ namespace HSMDataCollector.Client
                 Path = "api/sensors",
             };
 
+            _serverCommands = new HashSet<string>()
+            {
+                AddOrUpdateSensor,
+                CommandsList,
+            };
+
             ConnectionAddress = $"{builder.Uri}";
         }
+
+
+        internal bool IsCommandRequest(string uri) => _serverCommands.Contains(uri);
     }
 }

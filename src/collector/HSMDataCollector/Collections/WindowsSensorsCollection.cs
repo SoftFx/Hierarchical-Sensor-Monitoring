@@ -5,6 +5,7 @@ using HSMDataCollector.DefaultSensors.Windows.WindowsInfo;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using System;
+using HSMDataCollector.DefaultSensors.Windows.Network;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -17,7 +18,7 @@ namespace HSMDataCollector.DefaultSensors
 
 
         public IWindowsCollection AddAllComputerSensors() =>
-            (this as IWindowsCollection).AddSystemMonitoringSensors().AddAllDisksMonitoringSensors().AddWindowsInfoMonitoringSensors();
+            (this as IWindowsCollection).AddSystemMonitoringSensors().AddAllDisksMonitoringSensors().AddWindowsInfoMonitoringSensors().AddAllNetworkSensors();
 
         public IWindowsCollection AddAllModuleSensors(Version productVersion)
         {
@@ -110,6 +111,11 @@ namespace HSMDataCollector.DefaultSensors
         {
             return ToWindows(new WindowsDiskQueueLength(_prototype.WindowsDiskQueueLength.Get(options)));
         }
+        
+        public IWindowsCollection AddDiskAverageWriteSpeed(DiskBarSensorOptions options)
+        {
+            return ToWindows(new WindowsDiskWriteSpeed(_prototype.WindowsAverageDiskWriteSpeed.Get(options)));
+        }
 
         public IWindowsCollection AddFreeDisksSpace(DiskSensorOptions options)
         {
@@ -143,11 +149,21 @@ namespace HSMDataCollector.DefaultSensors
             return this;
         }
 
+        public IWindowsCollection AddDisksAverageWriteSpeed(DiskBarSensorOptions options = null)
+        {
+            foreach (var diskOptions in _prototype.WindowsAverageDiskWriteSpeed.GetAllDisksOptions(options))
+                ToWindows(new WindowsDiskWriteSpeed(diskOptions));
+
+            return this;
+        }
+
         public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null) =>
-            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskBarOptions).AddDiskQueueLength(diskBarOptions);
+            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskBarOptions).AddDiskQueueLength(diskBarOptions)
+            .AddDiskAverageWriteSpeed(diskBarOptions);
 
         public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null) =>
-            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(diskBarOptions).AddDisksQueueLength(diskBarOptions);
+            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(diskBarOptions).AddDisksQueueLength(diskBarOptions)
+            .AddDisksAverageWriteSpeed(diskBarOptions);
 
         #endregion
 
@@ -209,6 +225,19 @@ namespace HSMDataCollector.DefaultSensors
 
         #endregion
 
+
+        #region Network
+
+        public IWindowsCollection AddNetworkConnectionsEstablished(NetworkSensorOptions options = null) => ToWindows(new ConnectionsEstablishedCountSensor(_prototype.ConnectionsEstablishedCount.Get(options)));
+        
+        public IWindowsCollection AddNetworkConnectionFailures(NetworkSensorOptions options = null) => ToWindows(new ConnectionFailuresCountSensor(_prototype.ConnectionsFailuresCount.Get(options)));
+        
+        public IWindowsCollection AddNetworkConnectionsReset(NetworkSensorOptions options = null) => ToWindows(new ConnectionsResetCountSensor(_prototype.ConnectionsResetCount.Get(options)));
+       
+        public IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null) => AddNetworkConnectionFailures(options).AddNetworkConnectionsEstablished(options).AddNetworkConnectionsReset(options);
+        
+        #endregion
+        
 
         public IWindowsCollection AddProductVersion(VersionSensorOptions options) => (IWindowsCollection)AddProductVersionCommon(options);
 

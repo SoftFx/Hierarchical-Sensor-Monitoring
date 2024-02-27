@@ -6,6 +6,17 @@ namespace HSMServer.Datasources
 {
     public static class DatasourceFactory
     {
+        public static bool IsSupportedPlotProperty(BaseSensorModel sensor, PlottedProperty property)
+            => sensor.Type switch
+            {
+                SensorType.IntegerBar or SensorType.DoubleBar => property.IsBarView() || property.IsBarLine() || property.IsBarIntLine() || property.IsBarDoubleLine(),
+                SensorType.Integer or SensorType.Double => property.IsInstantView() || property.IsInstantDoubleLine(),
+                SensorType.TimeSpan => property.IsInstantView(),
+
+                _ => false,
+            };
+
+
         public static SensorDatasourceBase Build(BaseSensorModel sensor, SourceSettings settings)
         {
             var property = settings.Property;
@@ -15,8 +26,8 @@ namespace HSMServer.Datasources
                 SensorType.Integer when property.IsInstantView() => new IntLineDatasource(),
                 SensorType.Integer when property.IsInstantDoubleLine() => new IntToNullDoubleLineDatasource(),
 
-                SensorType.Double when property.IsInstantView() => new DoubleLineDatasource(),
-                SensorType.Double when property.IsInstantDoubleLine() => new DoubleToNullDoubleDatasource(),
+                SensorType.Double or SensorType.Counter when property.IsInstantView() => new DoubleLineDatasource(),
+                SensorType.Double or SensorType.Counter when property.IsInstantDoubleLine() => new DoubleToNullDoubleDatasource(),
 
                 SensorType.TimeSpan when property.IsInstantView() => new TimespanLineDatasource(),
 
@@ -50,7 +61,7 @@ namespace HSMServer.Datasources
 
         private static bool IsBarIntLine(this PlottedProperty property) => property is PlottedProperty.Count;
 
-        private static bool IsBarDoubleLine(this PlottedProperty property) => property is PlottedProperty.EmaMin or 
+        private static bool IsBarDoubleLine(this PlottedProperty property) => property is PlottedProperty.EmaMin or
             PlottedProperty.EmaMean or PlottedProperty.EmaMax or PlottedProperty.EmaCount;
     }
 }

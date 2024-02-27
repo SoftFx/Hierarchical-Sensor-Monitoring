@@ -51,6 +51,8 @@
 <script>
     $(document).ready(function () {
         let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
+        let ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
+        let range = ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)];
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         let dashboardpanels = $('#dashboardPanels');
 
@@ -60,7 +62,7 @@
                 return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend).then(
                         (plot) => {
                                 values.forEach(function (x) {
-                                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId')
+                                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', range)
                                 })
 
                                 $('#panelChart_@Model.Id').on('plotly_relayout', function (e, updateData){

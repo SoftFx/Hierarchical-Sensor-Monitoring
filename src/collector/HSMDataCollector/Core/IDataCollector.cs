@@ -125,6 +125,13 @@ namespace HSMDataCollector.Core
 
         #endregion
 
+
+        IMonitoringCounterSensor CreateCounterSensor(string path, CounterSensorOptions options = null);
+
+        IMonitoringCounterSensor CreateM1CounterSensor(string path, string desctiption = "");
+
+        IMonitoringCounterSensor CreateM5CounterSensor(string path, string description = "");
+
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is bool
         /// </summary>

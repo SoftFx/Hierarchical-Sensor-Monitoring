@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.Alerts;
 using HSMDataCollector.Converters;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Prototypes;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
@@ -87,7 +88,21 @@ namespace HSMDataCollector.Options
 
     public class MonitoringInstantSensorOptions : InstantSensorOptions, IMonitoringOptions
     {
-        public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
+        public virtual TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
+    }
+
+    public class CounterSensorOptions : MonitoringInstantSensorOptions
+    {
+        public override TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromMinutes(1);
+    }
+
+
+    public class NetworkSensorOptions : MonitoringInstantSensorOptions
+    {
+        public NetworkSensorOptions()
+        {
+            PostDataPeriod = TimeSpan.FromMinutes(1);
+        }
     }
 
 
@@ -106,5 +121,8 @@ namespace HSMDataCollector.Options
 
 
         internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
+
+
+        internal string GetBarOptionsInfo() => $"Bar period is {BarPeriod.ToReadableView()} with updates every {BarTickPeriod.ToReadableView()}.";
     }
 }

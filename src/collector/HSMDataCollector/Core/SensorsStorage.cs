@@ -51,6 +51,13 @@ namespace HSMDataCollector.Core
         internal Task Stop() => Task.WhenAll(Values.Select(s => s.Stop()));
 
 
+        internal MonitoringCounterSensor CreateCounterSensor(string path, CounterSensorOptions options)
+        {
+            options = FillOptions(path, SensorType.CounterSensor, options);
+            
+            return (MonitoringCounterSensor)Register(new MonitoringCounterSensor(options));
+        }
+        
         internal SensorInstant<T> CreateInstantSensor<T>(string path, InstantSensorOptions options)
         {
             options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);

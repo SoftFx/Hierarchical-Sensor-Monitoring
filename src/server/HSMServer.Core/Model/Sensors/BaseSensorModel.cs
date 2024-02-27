@@ -52,6 +52,15 @@ namespace HSMServer.Core.Model
         Requests = 1101,
         [Display(Name = "responses")]
         Responses = 1102,
+
+        [Display(Name = "bits/sec")]
+        Bits_sec = 2100,
+        [Display(Name = "Bytes/sec")]
+        Bytes_sec = 2101,
+        [Display(Name = "KB/sec")]
+        KBytes_sec = 2102,
+        [Display(Name = "MB/sec")]
+        MBytes_sec = 2103,
     }
 
 
@@ -80,9 +89,6 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : BaseNodeModel
     {
-        public const string TimeoutComment = "#Timeout";
-
-
         private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
 
         public override SensorPolicyCollection Policies { get; }
@@ -119,7 +125,11 @@ namespace HSMServer.Core.Model
             }
         }
 
+
+        public PolicyResult Notifications => Policies.NotificationResult;
+
         public PolicyResult PolicyResult => Policies.PolicyResult;
+
 
         public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? false;
 

@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Datasources.Aggregators;
+﻿using HSMServer.Datasources.Aggregators;
 using System;
 
 namespace HSMServer.Datasources

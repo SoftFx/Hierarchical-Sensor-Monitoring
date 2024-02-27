@@ -1,6 +1,6 @@
 import { convertToGraphData } from "./plotting";
 import { pan } from "plotly.js/src/fonts/ploticon";
-import { Colors, Plot, TimeSpanPlot } from "./plots";
+import {Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot} from "./plots";
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();
@@ -87,7 +87,7 @@ export function getPlotSourceView(id) {
 export const currentPanel = {};
 export const plotColorDelay = 1000;
 
-export function Model(id, panelId, dashboardId, sensorId) {
+export function Model(id, panelId, dashboardId, sensorId, range = undefined) {
     this.id = id;
     this.oldIndex = id;
     this.sensorId = sensorId;
@@ -95,6 +95,7 @@ export function Model(id, panelId, dashboardId, sensorId) {
     this.dashboardId = dashboardId;
     this.updateTimeout = undefined;
     this.requestTimeout = undefined;
+    this.range = range;
 }
 
 window.insertSourceHtml = function (data) {
@@ -112,9 +113,20 @@ window.insertSourceHtml = function (data) {
     });
 }
 
-window.insertSourcePlot = function (data, id, panelId, dashboardId) {
-    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1);
+function checkForYRange(plot){
+    if ($('#multichart').length !== 0 &&
+        plot instanceof ErrorColorPlot &&
+        !(plot instanceof TimeSpanPlot))
+        $('#y-range-settings').show()
+    else
+        $('#y-range-settings').hide()
+}
 
+window.insertSourcePlot = function (data, id, panelId, dashboardId, range = undefined) {
+    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
+
+    checkForYRange(plot)
+    
     let layoutUpdate = {
         'xaxis.visible': true,
         'xaxis.type': 'date',
@@ -179,12 +191,12 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId) {
         }
     );
 
-    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId);
+    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
 }
 
 window.addNewSourceHtml = function (data, id) {
     insertSourceHtml(data);
-    insertSourcePlot(data, id);
+    insertSourcePlot(data, id, undefined, undefined, multichartRange);
 }
 
 export function initDropzone() {
@@ -338,7 +350,9 @@ window.initDashboard = function () {
                             y.push(j.value);
                             prevData.ids.push(j.id)
                             let custom = j.value;
-                            if (j.tooltip !== null)
+                            if (currentPanel[i].range !== undefined && currentPanel[i].range !== true)
+                                custom = j.tooltip;
+                            else if (j.tooltip !== null)
                                 custom += `<br>${j.tooltip}`;
 
                             customData.push(custom);
@@ -355,7 +369,7 @@ window.initDashboard = function () {
                         prevData.y.push(...y)
                         prevData.customdata.push(...customData)
                         Plotly.deleteTraces(plot, correctId);
-                        Plotly.addTraces(plot, prevData);
+                        Plotly.addTraces(plot, prevData, correctId);
                         DefaultRelayout(plot);
                     }
                     else {
@@ -620,7 +634,7 @@ function updatePlotSource(name, color, property, shape, showProduct, id) {
         contentType: 'application/json',
         url: window.location.pathname + '/' + id,
         data: JSON.stringify({
-            name: updatedName,
+            label: updatedName,
             color: color,
             property: property,
             shape: shape

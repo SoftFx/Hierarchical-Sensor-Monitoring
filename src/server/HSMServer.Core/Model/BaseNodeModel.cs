@@ -43,6 +43,8 @@ namespace HSMServer.Core.Model
 
         public string RootProductName => Parent?.RootProductName ?? DisplayName;
 
+        public ProductModel Root => Parent?.Root ?? (ProductModel)this;
+
 
         public event Action<JournalRecordModel> ChangesHandler;
 

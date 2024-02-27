@@ -83,6 +83,12 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
+    public sealed class CounterPolicy : SingleSensorPolicy<CounterValue, double>
+    {
+        protected override PolicyCondition<CounterValue, double> BasePolicyCondition => new PolicyDoubleCondition<CounterValue>();
+    }
+
+
     public sealed class FilePolicy : SingleSensorPolicy<FileValue, byte[]>
     {
         protected override PolicyCondition<FileValue, byte[]> BasePolicyCondition => new PolicyByteArrayCondition<FileValue>();

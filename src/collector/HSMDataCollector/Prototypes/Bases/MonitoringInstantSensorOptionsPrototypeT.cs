@@ -4,7 +4,7 @@ using System;
 namespace HSMDataCollector.Prototypes
 {
     internal abstract class MonitoringInstantSensorOptionsPrototype<T> : InstantSensorOptionsPrototype<T>
-            where T : MonitoringInstantSensorOptions, new()
+        where T : MonitoringInstantSensorOptions, new()
     {
         protected abstract TimeSpan DefaultPostDataPeriod { get; }
 

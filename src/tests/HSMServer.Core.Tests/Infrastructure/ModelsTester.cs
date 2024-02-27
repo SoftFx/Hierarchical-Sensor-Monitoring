@@ -266,6 +266,9 @@ namespace HSMServer.Core.Tests.Infrastructure
                 case SensorType.File:
                     AssertSensorValues<FileValue>(expected, actual);
                     break;
+                case SensorType.Counter:
+                    AssertSensorValues<CounterValue>(expected, actual);
+                    break;
                 case SensorType.IntegerBar:
                     AssertSensorValues<IntegerBarValue>(expected, actual);
                     break;
@@ -285,6 +288,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.Boolean => valueBytes.ToValue<BooleanValue>(),
                 SensorType.Integer => valueBytes.ToValue<IntegerValue>(),
                 SensorType.Double => valueBytes.ToValue<DoubleValue>(),
+                SensorType.Counter => valueBytes.ToValue<CounterValue>(),
                 SensorType.String => valueBytes.ToValue<StringValue>(),
                 SensorType.File => valueBytes.ToValue<FileValue>(),
                 SensorType.IntegerBar => valueBytes.ToValue<IntegerBarValue>(),
