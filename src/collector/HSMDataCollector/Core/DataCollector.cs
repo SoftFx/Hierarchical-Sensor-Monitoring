@@ -79,7 +79,6 @@ namespace HSMDataCollector.Core
             _hsmClient = new HsmHttpsClient(options, _queueManager, _logger);
 
             ToRunning += ToStartingCollector;
-            ToRunning += ((SensorDataQueue)_queueManager.Data).ToRunning;
             ToStopped += ToStoppedCollector;
         }
 

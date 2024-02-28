@@ -21,7 +21,7 @@ namespace HSMDataCollector.SyncQueue
         }
 
 
-        public Task<bool> CallServer(PriorityRequest request)
+        public Task<bool> WaitServerResponse(PriorityRequest request)
         {
             if (_requestStorage.TryRemove(request.Key, out var source))
             {
@@ -33,7 +33,7 @@ namespace HSMDataCollector.SyncQueue
 
             if (_requestStorage.TryAdd(request.Key, source))
             {
-                Push(request);
+                Add(request);
                 _logger.Info($"Command request by key {request.Key} has been added");
             }
 

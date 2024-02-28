@@ -60,10 +60,10 @@ namespace HSMDataCollector.Client.HttpsClient
                 {
                     foreach (var data in list)
                         if (data is T tdata)
-                            _queue.PushFailValue(tdata);
+                            _queue.AddFail(tdata);
                 }
                 else if (value is T single)
-                    _queue.PushFailValue(single);
+                    _queue.AddFail(single);
             }
         }
 

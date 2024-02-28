@@ -6,7 +6,7 @@ namespace HSMDataCollector.SyncQueue
 {
     public interface ICommandQueue : ISyncQueue<PriorityRequest>
     {
-        Task<bool> CallServer(PriorityRequest request);
+        Task<bool> WaitServerResponse(PriorityRequest request);
 
 
         void SetResult((Guid, string) key, bool result);

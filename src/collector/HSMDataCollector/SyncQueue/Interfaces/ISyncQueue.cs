@@ -11,8 +11,10 @@ namespace HSMDataCollector.SyncQueue
         event Action<string, int> OverflowCntEvent;
 
 
-        void Push(T value);
+        void AddFail(T value);
 
-        void PushFailValue(T value);
+        void Send(T value); //skip queue, send to server in separate request
+
+        void Add(T value); //value to queue, send to server in package
     }
 }

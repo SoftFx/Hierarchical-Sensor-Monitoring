@@ -9,8 +9,6 @@ namespace HSMDataCollector.SyncQueue
         private readonly TimeSpan _packageCollectPeriod;
         private Timer _sendTimer;
 
-        internal bool IsStopped => _sendTimer == null;
-
 
         protected abstract string QueueName { get; }
 

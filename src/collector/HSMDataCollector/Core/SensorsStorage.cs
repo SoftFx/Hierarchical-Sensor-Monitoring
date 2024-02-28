@@ -35,13 +35,17 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
-            foreach (var value in Values)
+            foreach (var sensor in Values)
             {
-                value.SensorCommandRequest -= QueueManager.Commands.CallServer;
-                value.ReceiveSensorValue -= QueueManager.Data.Push;
-                value.ExceptionThrowing -= WriteSensorException;
+                if (sensor.IsProiritySensor)
+                    sensor.ReceiveSensorValue -= QueueManager.Data.Send;
+                else
+                    sensor.ReceiveSensorValue -= QueueManager.Data.Add;
 
-                value.Dispose();
+                sensor.SensorCommandRequest -= QueueManager.Commands.WaitServerResponse;
+                sensor.ExceptionThrowing -= WriteSensorException;
+
+                sensor.Dispose();
             }
         }
 
@@ -147,8 +151,12 @@ namespace HSMDataCollector.Core
 
             if (TryAdd(path, sensor))
             {
-                sensor.SensorCommandRequest += QueueManager.Commands.CallServer;
-                sensor.ReceiveSensorValue += QueueManager.Data.Push;
+                if (sensor.IsProiritySensor)
+                    sensor.ReceiveSensorValue += QueueManager.Data.Send;
+                else
+                    sensor.ReceiveSensorValue += QueueManager.Data.Add;
+
+                sensor.SensorCommandRequest += QueueManager.Commands.WaitServerResponse;
                 sensor.ExceptionThrowing += WriteSensorException;
 
                 Logger.Info($"New sensor has been added {path}");
