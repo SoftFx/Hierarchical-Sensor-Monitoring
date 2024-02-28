@@ -173,7 +173,7 @@ namespace HSMServer.ApiObjectsConverters
         {
             return values[0] switch
             {
-                BooleanValue or IntegerValue or DoubleValue or StringValue or VersionValue or TimeSpanValue =>
+                BooleanValue or IntegerValue or DoubleValue or StringValue or VersionValue or TimeSpanValue or CounterValue =>
                     _simpleSensorHeader.Where(x => options.HasFlag(x.Value)).Select(x => x.Key).ToList(),
                 IntegerBarValue or DoubleBarValue =>
                     _barSensorHeader.Where(x => options.HasFlag(x.Value)).Select(x => x.Key).ToList(),
