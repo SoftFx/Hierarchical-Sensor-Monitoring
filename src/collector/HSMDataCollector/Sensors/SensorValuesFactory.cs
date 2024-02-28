@@ -24,7 +24,7 @@ namespace HSMDataCollector.SensorsFactory
                 case Type type when type == typeof(Version):
                     return SensorType.VersionSensor;
                 default:
-                    throw new ArgumentException($"Unsupported sensor value {typeof(T).Name}");
+                    throw new ArgumentException($"Unsupported instant sensor type {typeof(T).Name}");
             }
         }
 
@@ -38,7 +38,7 @@ namespace HSMDataCollector.SensorsFactory
                 case Type type when type == typeof(double):
                     return SensorType.DoubleBarSensor;
                 default:
-                    throw new ArgumentException($"Unsupported sensor value {typeof(T).Name}");
+                    throw new ArgumentException($"Unsupported bar sensor type {typeof(T).Name}");
             }
         }
 

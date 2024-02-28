@@ -8,6 +8,7 @@ using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -54,7 +55,7 @@ namespace HSMDataCollector.Core
         internal MonitoringCounterSensor CreateCounterSensor(string path, CounterSensorOptions options)
         {
             options = FillOptions(path, SensorType.CounterSensor, options);
-            
+
             return (MonitoringCounterSensor)Register(new MonitoringCounterSensor(options));
         }
 
@@ -64,6 +65,22 @@ namespace HSMDataCollector.Core
 
             return (FileSensorInstant)Register(new FileSensorInstant(options, Logger));
         }
+
+
+        internal FunctionSensorInstant<T> CreateFunctionSensor<T>(string path, Func<T> function, FunctionSensorOptions options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
+
+            return (FunctionSensorInstant<T>)Register(new FunctionSensorInstant<T>(function, options));
+        }
+
+        internal ValuesFunctionSensorInstant<T, U> CreateValuesFunctionSensor<T, U>(string path, Func<List<U>, T> function, ValuesFunctionSensorOptions options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
+
+            return (ValuesFunctionSensorInstant<T, U>)Register(new ValuesFunctionSensorInstant<T, U>(function, options));
+        }
+
 
         internal LastValueSensorInstant<T> CreateLastValueSensor<T>(string path, T customDefault, InstantSensorOptions options)
         {
@@ -78,6 +95,7 @@ namespace HSMDataCollector.Core
 
             return (SensorInstant<T>)Register(new SensorInstant<T>(options));
         }
+
 
         internal IntBarPublicSensor CreateIntBarSensor(string path, BarSensorOptions options)
         {

@@ -106,6 +106,20 @@ namespace HSMDataCollector.Options
     }
 
 
+    public class FunctionSensorOptions : MonitoringInstantSensorOptions
+    {
+        public override TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromMinutes(1);
+    }
+
+
+    public class ValuesFunctionSensorOptions : MonitoringInstantSensorOptions
+    {
+        public override TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromMinutes(1);
+
+        public int MaxCacheSize { get; set; } = 10000;
+    }
+
+
     public class NetworkSensorOptions : MonitoringInstantSensorOptions
     {
         public NetworkSensorOptions()

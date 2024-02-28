@@ -396,7 +396,6 @@ namespace HSMDataCollector.Core
 
         #region Custom func sensors
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="INoParamsFuncSensor{T}"/> with the specified parameters
         /// </summary>
@@ -408,7 +407,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="INoParamsFuncSensor{T}"/> with interval set via TimeSpan</returns>
         INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, TimeSpan interval);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="INoParamsFuncSensor{T}"/> with the specified parameters
         /// </summary>
@@ -420,7 +418,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="INoParamsFuncSensor{T}"/> with interval set via milliseconds</returns>
         INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, int millisecondsInterval = 15000);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="INoParamsFuncSensor{T}"/> with 1 minute interval 
         /// </summary>
@@ -431,7 +428,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="INoParamsFuncSensor{T}"/> with interval set to 1 min</returns>
         INoParamsFuncSensor<T> Create1MinNoParamsFuncSensor<T>(string path, string description, Func<T> function);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="INoParamsFuncSensor{T}"/> with 5 minutes interval 
         /// </summary>
@@ -442,7 +438,9 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="INoParamsFuncSensor{T}"/> with interval set to 5 min</returns>
         INoParamsFuncSensor<T> Create5MinNoParamsFuncSensor<T>(string path, string description, Func<T> function);
 
-        [Obsolete]
+        INoParamsFuncSensor<T> CreateFunctionSensor<T>(string path, Func<T> function, FunctionSensorOptions options);
+
+
         /// <summary>
         /// Create a new instance of <see cref="IParamsFuncSensor{T, U}"/> with the specified parameters
         /// </summary>
@@ -455,7 +453,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IParamsFuncSensor{T, U}"/> with interval set via TimeSpan</returns>
         IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, TimeSpan interval);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="IParamsFuncSensor{T, U}"/> with the specified parameters
         /// </summary>
@@ -468,7 +465,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IParamsFuncSensor{T, U}"/> with interval set via milliseconds</returns>
         IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, int millisecondsInterval = 15000);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="IParamsFuncSensor{T, U}"/> with 1 minute interval 
         /// </summary>
@@ -480,7 +476,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IParamsFuncSensor{T, U}"/> with interval set to 1 min</returns>
         IParamsFuncSensor<T, U> Create1MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="IParamsFuncSensor{T, U}"/> with 5 minutes interval 
         /// </summary>
@@ -491,6 +486,8 @@ namespace HSMDataCollector.Core
         /// <param name="function">The function that is invoked</param>
         /// <returns>A new instance of <see cref="IParamsFuncSensor{T, U}"/> with interval set to 5 min</returns>
         IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
+
+        IParamsFuncSensor<T, U> CreateValuesFunctionSensor<T, U>(string path, Func<List<U>, T> function, ValuesFunctionSensorOptions options);
 
         #endregion
     }

@@ -19,7 +19,7 @@ namespace HSMDataCollector.DefaultSensors
         private Timer _collectTimer;
         protected BarType _internalBar;
 
-        protected sealed override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
+        protected sealed override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
 
 
         protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)

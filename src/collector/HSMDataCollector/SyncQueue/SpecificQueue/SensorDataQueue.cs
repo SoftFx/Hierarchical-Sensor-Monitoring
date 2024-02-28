@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace HSMDataCollector.SyncQueue
 {
-    internal class SensorDataQueue : SyncQueue<SensorValueBase>, IValuesQueue
+    internal class SensorDataQueue : SyncQueue<SensorValueBase>
     {
         private readonly HashSet<string> _prioritySensors = new HashSet<string>();
 
