@@ -42,8 +42,6 @@ namespace HSMDataCollector.Client.HttpsClient
             }
         }
 
-        internal override Task SendRequest(List<SensorValueBase> values) => values.Count > 0
-            ? RequestToServer(values.Cast<object>().ToList(), _endpoints.List)
-            : Task.CompletedTask;
+        internal override Task SendRequest(List<SensorValueBase> values) => RequestToServer(values.Cast<object>().ToList(), _endpoints.List);
     }
 }

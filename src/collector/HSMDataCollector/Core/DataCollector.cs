@@ -217,8 +217,6 @@ namespace HSMDataCollector.Core
 
             _logger.Info($"DataCollector (v. {DataCollectorExtensions.Version}) -> {newStatus}");
 
-            CurrentCollection.StatusSensor?.BuildAndSendValue(_hsmClient, newStatus, error);
-
             switch (newStatus)
             {
                 case CollectorStatus.Starting:

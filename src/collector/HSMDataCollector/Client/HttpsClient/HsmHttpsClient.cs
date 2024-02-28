@@ -18,16 +18,15 @@ namespace HSMDataCollector.Client
     internal sealed class HsmHttpsClient : IDisposable
     {
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
+
+        private readonly CommandHandler _commandsHandler;
+        private readonly DataHandlers _dataHandler;
         private readonly PollyStrategy _polly;
 
         private readonly IQueueManager _queueManager;
         private readonly ILoggerManager _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
-
-        internal CommandHandler Commands { get; }
-
-        internal DataHandlers Data { get; }
 
 
         internal HsmHttpsClient(CollectorOptions options, IQueueManager queue, ILoggerManager logger)
@@ -49,11 +48,11 @@ namespace HSMDataCollector.Client
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.ClientName), options.ClientName);
 
-            Commands = new CommandHandler(queue.Commands, _endpoints, _logger);
-            Commands.InvokeRequest += RequestToServer;
+            _commandsHandler = new CommandHandler(queue.Commands, _endpoints, _logger);
+            _commandsHandler.InvokeRequest += RequestToServer;
 
-            Data = new DataHandlers(queue.Data, _endpoints, _logger);
-            Data.InvokeRequest += RequestToServer;
+            _dataHandler = new DataHandlers(queue.Data, _endpoints, _logger);
+            _dataHandler.InvokeRequest += RequestToServer;
         }
 
 
@@ -61,8 +60,8 @@ namespace HSMDataCollector.Client
         {
             _tokenSource.Cancel();
 
-            Commands.InvokeRequest -= RequestToServer;
-            Data.InvokeRequest -= RequestToServer;
+            _commandsHandler.InvokeRequest -= RequestToServer;
+            _dataHandler.InvokeRequest -= RequestToServer;
 
             _client.Dispose();
         }
@@ -101,14 +100,14 @@ namespace HSMDataCollector.Client
             var json = JsonConvert.SerializeObject(data);
 
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            
+
             context.Properties.Set(PollyHelper.DataKey, json);
             var response = await _client.PostAsync(uri, content, token);
 
             _queueManager.ThrowPackageSendingInfo(new PackageSendingInfo(json.Length, response));
 
             if (!response.IsSuccessStatusCode)
-                _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}.");
+                _logger.Error($"Failed to send data. StatusCode={response.StatusCode}. Data={json}."); //should be added?
 
             return response;
         }

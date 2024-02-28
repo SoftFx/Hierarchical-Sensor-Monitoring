@@ -20,20 +20,12 @@ namespace HSMDataCollector.Client.HttpsClient
         }
 
 
-        internal override Task SendRequest(List<PriorityRequest> values)
+        internal override async Task SendRequest(List<PriorityRequest> values)
         {
-            async Task RegisterRequest<T>(T apiValue, string uri)
+            var response = await RequestToServer(values.Select(u => u.Request), _endpoints.CommandsList);
+
+            if (response != null)
             {
-                var response = await RequestToServer(apiValue, uri);
-
-                if (response == null)
-                {
-                    foreach (var val in values)
-                        _commandQueue.SetCancel(val.Key);
-
-                    return;
-                }
-
                 var json = await response.Content.ReadAsStringAsync();
                 var errors = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
 
@@ -48,9 +40,13 @@ namespace HSMDataCollector.Client.HttpsClient
                     _commandQueue.SetResult(val.Key, !hasError);
                 }
             }
-
-            return RegisterRequest(values.Select(u => u.Request), _endpoints.CommandsList);
+            else
+            {
+                foreach (var val in values)
+                    _commandQueue.SetCancel(val.Key);
+            }
         }
+
 
         internal override Task SendRequest(PriorityRequest value)
         {

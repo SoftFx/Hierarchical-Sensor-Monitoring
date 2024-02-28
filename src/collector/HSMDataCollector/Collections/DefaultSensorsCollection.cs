@@ -23,8 +23,6 @@ namespace HSMDataCollector.DefaultSensors
         private QueueOverflowSensor _queueOverflowSensor;
 
 
-        internal CollectorStatusSensor StatusSensor { get; private set; }
-
         internal CollectorErrorsSensor CollectorErrors { get; private set; }
 
 
