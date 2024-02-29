@@ -209,6 +209,7 @@ namespace HSMServer.ApiObjectsConverters
                 IntegerBarValue sv => sv.Convert(),
                 DoubleBarValue sv => sv.Convert(),
                 FileValue sv => sv.Convert(),
+                CounterValue sv => sv.Convert(),
                 _ => null,
             };
 
