@@ -200,6 +200,7 @@
                     if (scheduleBlock.hasClass('d-flex')) {
                         setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "select", "ScheduleRepeatMode");
                         setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "input", "ScheduleStartTime");
+                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "input", "HasScheduleFirstMessage", 'checkbox');
                     }
                 }
 
@@ -219,9 +220,14 @@
         });
     }
 
-    function setFormDataAlertsListProperty(formData, type, i, j, block, list, element, propertyName) {
+    function setFormDataAlertsListProperty(formData, type, i, j, block, list, element, propertyName, elementType = undefined) {
         block.find(`${element}[name='${propertyName}']`).each(function () {
-            formData.append(`DataAlerts[${type}][${i}].${list}[${j}].${propertyName}`, $(this).val());
+            let value = $(this).val();
+            if (elementType == 'checkbox') {
+                value = this.checked;
+            }
+
+            formData.append(`DataAlerts[${type}][${i}].${list}[${j}].${propertyName}`, value);
         });
     }
 
