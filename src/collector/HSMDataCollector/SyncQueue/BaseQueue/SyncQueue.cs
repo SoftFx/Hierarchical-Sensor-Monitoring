@@ -13,6 +13,8 @@ namespace HSMDataCollector.SyncQueue
         protected abstract string QueueName { get; }
 
 
+        public event Action<PackageSendingInfo> PackageRequestInfoEvent;
+
         public event Action<string, PackageInfo> PackageInfoEvent;
 
         public event Action<string, int> OverflowCntEvent;
@@ -43,6 +45,8 @@ namespace HSMDataCollector.SyncQueue
 
         public void Dispose() => Stop();
 
+
+        public void ThrowPackageRequestInfo(PackageSendingInfo info) => PackageRequestInfoEvent?.Invoke(info);
 
         protected void ThrowPackageInfo(PackageInfo info)
         {

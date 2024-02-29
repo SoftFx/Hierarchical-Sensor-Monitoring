@@ -1,47 +1,50 @@
 ﻿using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects.SensorValueRequests;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using Polly;
+using System;
 
 namespace HSMDataCollector.Client.HttpsClient
 {
     internal class DataHandlers : BaseHandlers<SensorValueBase>
     {
+        protected override DelayBackoffType DelayStrategy => DelayBackoffType.Exponential;
+
+        protected override int MaxRequestAttempts => 10;
+
+
         public DataHandlers(ISyncQueue<SensorValueBase> queue, Endpoints endpoints, ICollectorLogger logger) : base(queue, endpoints, logger) { }
 
 
-        internal override Task SendRequest(SensorValueBase value)
+        internal override object ConvertToRequestData(SensorValueBase value) => value;
+
+        internal override string GetUri(object rawData)
         {
-            switch (value)
+            switch (rawData)
             {
-                case BoolSensorValue boolV:
-                    return RequestToServer(boolV, _endpoints.Bool);
-                case IntSensorValue intV:
-                    return RequestToServer(intV, _endpoints.Integer);
-                case DoubleSensorValue doubleV:
-                    return RequestToServer(doubleV, _endpoints.Double);
-                case StringSensorValue stringV:
-                    return RequestToServer(stringV, _endpoints.String);
-                case TimeSpanSensorValue timeSpanV:
-                    return RequestToServer(timeSpanV, _endpoints.Timespan);
-                case IntBarSensorValue intBarV:
-                    return RequestToServer(intBarV, _endpoints.IntBar);
-                case DoubleBarSensorValue doubleBarV:
-                    return RequestToServer(doubleBarV, _endpoints.DoubleBar);
-                case FileSensorValue fileV:
-                    return RequestToServer(fileV, _endpoints.File);
-                case VersionSensorValue versionV:
-                    return RequestToServer(versionV, _endpoints.Version);
-                case CounterSensorValue counterV:
-                    return RequestToServer(counterV, _endpoints.Counter);
+                case BoolSensorValue _:
+                    return _endpoints.Bool;
+                case IntSensorValue _:
+                    return _endpoints.Integer;
+                case DoubleSensorValue _:
+                    return _endpoints.Double;
+                case StringSensorValue _:
+                    return _endpoints.String;
+                case TimeSpanSensorValue _:
+                    return _endpoints.Timespan;
+                case IntBarSensorValue _:
+                    return _endpoints.IntBar;
+                case DoubleBarSensorValue _:
+                    return _endpoints.DoubleBar;
+                case FileSensorValue _:
+                    return _endpoints.File;
+                case VersionSensorValue _:
+                    return _endpoints.Version;
+                case CounterSensorValue _:
+                    return _endpoints.Counter;
                 default:
-                    _logger.Error($"Unsupported sensor type: {value.Path}");
-                    return Task.CompletedTask;
+                    throw new Exception($"Unsupported sensor type: {((SensorValueBase)rawData).Path}");
             }
         }
-
-        internal override Task SendRequest(List<SensorValueBase> values) => RequestToServer(values.Cast<object>().ToList(), _endpoints.List);
     }
 }

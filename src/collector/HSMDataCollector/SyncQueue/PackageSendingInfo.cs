@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.SyncQueue
 {
-    internal readonly struct PackageSendingInfo
+    public readonly struct PackageSendingInfo
     {
         public double ContentSize { get; }
 

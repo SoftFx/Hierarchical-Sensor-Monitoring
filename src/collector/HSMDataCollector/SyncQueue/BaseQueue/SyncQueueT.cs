@@ -3,6 +3,7 @@ using HSMDataCollector.SyncQueue.BaseQueue;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.SyncQueue
 {
@@ -16,8 +17,8 @@ namespace HSMDataCollector.SyncQueue
 
         private bool _flushing;
 
-        public event Action<List<T>> NewValuesEvent;
-        public event Action<T> NewValueEvent;
+        public event Func<List<T>, Task> NewValuesEvent;
+        public event Func<T, Task> NewValueEvent;
 
 
         protected SyncQueue(CollectorOptions options, TimeSpan collectPeriod) : base(collectPeriod)

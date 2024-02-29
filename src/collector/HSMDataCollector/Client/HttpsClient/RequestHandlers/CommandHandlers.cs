@@ -3,8 +3,10 @@ using HSMDataCollector.Requests;
 using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects.SensorRequests;
 using Newtonsoft.Json;
+using Polly;
+using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
 
 namespace HSMDataCollector.Client.HttpsClient
@@ -14,16 +16,34 @@ namespace HSMDataCollector.Client.HttpsClient
         private readonly ICommandQueue _commandQueue;
 
 
+        protected override DelayBackoffType DelayStrategy => DelayBackoffType.Linear;
+
+        protected override int MaxRequestAttempts => int.MaxValue;
+
+
         public CommandHandler(ICommandQueue queue, Endpoints endpoints, ICollectorLogger logger) : base(queue, endpoints, logger)
         {
             _commandQueue = queue;
         }
 
 
-        internal override async Task SendRequest(List<PriorityRequest> values)
-        {
-            var response = await RequestToServer(values.Select(u => u.Request), _endpoints.CommandsList);
+        internal override object ConvertToRequestData(PriorityRequest value) => value.Request;
 
+        internal override string GetUri(object rawData)
+        {
+            switch (rawData)
+            {
+                case IEnumerable<object> _:
+                    return _endpoints.CommandsList;
+                case AddOrUpdateSensorRequest _:
+                    return _endpoints.AddOrUpdateSensor;
+                default:
+                    throw new Exception($"Unsupported command type {rawData.GetType().FullName}");
+            }
+        }
+
+        internal override async Task HandleRequestResult(HttpResponseMessage response, List<PriorityRequest> values)
+        {
             if (response != null)
             {
                 var json = await response.Content.ReadAsStringAsync();
@@ -47,40 +67,23 @@ namespace HSMDataCollector.Client.HttpsClient
             }
         }
 
-
-        internal override Task SendRequest(PriorityRequest value)
+        internal override async Task HandleRequestResult(HttpResponseMessage response, PriorityRequest value)
         {
-            async Task RegisterRequest<T>(T apiValue, string uri)
+            if (response == null)
+                _commandQueue.SetCancel(value.Key);
+            else
             {
-                var response = await RequestToServer(apiValue, uri);
+                var isSuccess = response.IsSuccessStatusCode;
 
-                if (response == null)
-                    _commandQueue.SetCancel(value.Key);
-                else
+                if (!isSuccess)
                 {
-                    var isSuccess = response.IsSuccessStatusCode;
+                    var json = await response.Content.ReadAsStringAsync();
+                    var error = JsonConvert.DeserializeObject<string>(json);
 
-                    if (!isSuccess)
-                    {
-                        var json = await response.Content.ReadAsStringAsync();
-                        var error = JsonConvert.DeserializeObject<string>(json);
-
-                        _logger.Error($"Error command for {value.Request.Path} - {error}");
-                    }
-
-                    _commandQueue.SetResult(value.Key, isSuccess);
+                    _logger.Error($"Error command for {value.Request.Path} - {error}");
                 }
-            }
 
-            switch (value.Request)
-            {
-                case AddOrUpdateSensorRequest sensorUpdate:
-                    return RegisterRequest(sensorUpdate, _endpoints.AddOrUpdateSensor);
-                default:
-                    _commandQueue.SetCancel(value.Key);
-                    _logger.Error($"Unsupported request type: {value.Request.GetType().Name}");
-
-                    return Task.CompletedTask;
+                _commandQueue.SetResult(value.Key, isSuccess);
             }
         }
     }
