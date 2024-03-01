@@ -87,13 +87,13 @@ namespace HSMDataCollector.Client.HttpsClient
 
                 _retryLogBuilder.Clear()
                                 .Append($"Id = {_currentRequest.Id} ")
-                                .Append($"Attempt number = {curAttempt} ");
+                                .Append($"Attempt number = {curAttempt}| ");
 
                 if (result != null)
                     _retryLogBuilder.Append($"Failed to send data. Code = {result.StatusCode} ");
 
                 if (exception != null)
-                    _retryLogBuilder.Append($"Exception = {exception} ");
+                    _retryLogBuilder.Append($"Exception = {exception.Message}, Inner = {exception.InnerException.Message} ");
 
                 if (curAttempt == 1)
                     _retryLogBuilder.Append($"Uri = {_currentRequest.Uri} ")

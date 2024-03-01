@@ -13,7 +13,7 @@ namespace HSMDataCollector.Client.HttpsClient
 
         internal string Uri { get; }
 
-        internal Guid Id { get; } = new Guid();
+        internal Guid Id { get; } = Guid.NewGuid();
 
 
         internal ClientRequestModel(object rawData, string uri)

@@ -78,7 +78,7 @@ namespace HSMDataCollector.Core
 
             _hsmClient = new HsmHttpsClient(options, _queueManager, _logger);
 
-            ToStarting += ToStartingCollector;
+            ToRunning += ToRunningCollector;
             ToStopped += ToStoppedCollector;
         }
 
@@ -141,24 +141,19 @@ namespace HSMDataCollector.Core
                 if (!Status.IsStopped())
                     return;
 
-                //_queueManager.Init(); // not need???
+                _queueManager.Init();
 
                 ChangeStatus(CollectorStatus.Starting);
 
-                var connect = await TestConnection();
+                await customStartingTask;
 
-                if (!connect.IsOk)
-                    return;
-
-                await Task.WhenAll(_sensorsStorage.Init(), customStartingTask);
-
-                ChangeStatus(CollectorStatus.Running);
+                _ = _sensorsStorage.Init().ContinueWith(_ => ChangeStatus(CollectorStatus.Running));
             }
             catch (Exception ex)
             {
                 _logger.Error(ex);
 
-                ChangeStatus(CollectorStatus.Stopped, ex.Message);
+                ChangeStatus(CollectorStatus.Stopped);
             }
         }
 
@@ -182,7 +177,7 @@ namespace HSMDataCollector.Core
             {
                 _logger.Error(ex);
 
-                ChangeStatus(CollectorStatus.Stopped, ex.Message);
+                ChangeStatus(CollectorStatus.Stopped);
             }
             finally
             {
@@ -201,7 +196,7 @@ namespace HSMDataCollector.Core
 
             ChangeStatus(CollectorStatus.Stopped);
 
-            ToStarting -= ToStartingCollector;
+            ToRunning -= ToRunningCollector;
             ToStopped -= ToStoppedCollector;
 
             CurrentCollection?.Dispose();
@@ -211,7 +206,7 @@ namespace HSMDataCollector.Core
         }
 
 
-        private void ChangeStatus(CollectorStatus newStatus, string error = null)
+        private void ChangeStatus(CollectorStatus newStatus)
         {
             Status = newStatus;
 
@@ -234,17 +229,9 @@ namespace HSMDataCollector.Core
             }
         }
 
-        private void ToStartingCollector()
-        {
-            _queueManager.Init();
+        private void ToRunningCollector() => _ = _sensorsStorage.Start();
 
-            _ = _sensorsStorage.Start();
-        }
-
-        private void ToStoppedCollector()
-        {
-            _queueManager.Stop();
-        }
+        private void ToStoppedCollector() => _queueManager.Stop();
 
         #region Obsolets
 
