@@ -646,8 +646,5 @@ input[type="search"]::-webkit-search-cancel-button {
 
 .disabled-group {
     opacity: 0.5;
-}
-
-.disabled-group input, label {
     pointer-events: none;
 }

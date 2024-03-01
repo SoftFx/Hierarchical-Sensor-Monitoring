@@ -1,6 +1,8 @@
 import { convertToGraphData } from "./plotting";
 import { pan } from "plotly.js/src/fonts/ploticon";
-import {Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot} from "./plots";
+import { Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot } from "./plots";
+
+const updateDashboardInterval = 120000; // 2min
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();
@@ -388,7 +390,7 @@ window.initDashboard = function () {
                     }
                 }
             })
-        }, 30000)
+        }, updateDashboardInterval)
     }
 }
 
