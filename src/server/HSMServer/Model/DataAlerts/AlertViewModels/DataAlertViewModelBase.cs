@@ -156,7 +156,7 @@ namespace HSMServer.Model.DataAlerts
                 DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template,
                 ScheduleStartTime = policy.Schedule.Time.ToClientScheduleTime(),
                 ScheduleRepeatMode = policy.Schedule.RepeatMode.ToClient(),
-                //HasScheduleFirstMessage = policy.Schedule.SendFirst, //TODO: should be implemented
+                HasScheduleFirstMessage = policy.Schedule.SendFirst,
                 Chats = policy.Destination.AllChats
                     ? new HashSet<Guid>() { ActionViewModel.AllChatsId }
                     : new HashSet<Guid>(policy.Destination.Chats.Keys),
