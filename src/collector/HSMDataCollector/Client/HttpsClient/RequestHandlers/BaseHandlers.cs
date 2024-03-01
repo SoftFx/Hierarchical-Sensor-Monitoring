@@ -53,6 +53,7 @@ namespace HSMDataCollector.Client.HttpsClient
 
                 OnRetry = LogException,
                 ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                                  .Handle<HttpRequestException>()
                                   .HandleResult(result => result?.StatusCode.IsRetryCode() ?? true),
             };
 
@@ -81,11 +82,18 @@ namespace HSMDataCollector.Client.HttpsClient
             if (!CanSendRequest)
             {
                 var curAttempt = args.AttemptNumber + 1;
+                var exception = args.Outcome.Exception;
+                var result = args.Outcome.Result;
 
-                _retryLogBuilder.Clear();
-                _retryLogBuilder.Append($"Failed to send data. Code = {args.Outcome.Result?.StatusCode} ")
+                _retryLogBuilder.Clear()
                                 .Append($"Id = {_currentRequest.Id} ")
                                 .Append($"Attempt number = {curAttempt} ");
+
+                if (result != null)
+                    _retryLogBuilder.Append($"Failed to send data. Code = {result.StatusCode} ");
+
+                if (exception != null)
+                    _retryLogBuilder.Append($"Exception = {exception} ");
 
                 if (curAttempt == 1)
                     _retryLogBuilder.Append($"Uri = {_currentRequest.Uri} ")
@@ -130,15 +138,19 @@ namespace HSMDataCollector.Client.HttpsClient
                 var response = await _pipeline.ExecuteAsync(ExecutePipeline, _tokenSource.Token);
 
                 _queue.ThrowPackageRequestInfo(new PackageSendingInfo(_currentRequest.JsonMessage.Length, response));
-                _currentRequest = null;
 
                 return response;
             }
             catch (Exception ex)
             {
+                _queue.ThrowPackageRequestInfo(new PackageSendingInfo(_currentRequest.JsonMessage.Length, null, exception: ex.Message));
                 _logger.Error(ex);
 
                 return null;
+            }
+            finally
+            {
+                _currentRequest = null;
             }
         }
 

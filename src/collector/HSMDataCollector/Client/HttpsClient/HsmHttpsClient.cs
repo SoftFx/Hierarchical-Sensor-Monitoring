@@ -2,7 +2,6 @@ using HSMDataCollector.Client.HttpsClient;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue;
-using HSMSensorDataObjects;
 using System;
 using System.Net;
 using System.Net.Http;
@@ -13,6 +12,9 @@ namespace HSMDataCollector.Client
 {
     internal sealed class HsmHttpsClient : IDisposable
     {
+        private const string HeaderClientName = "ClientName";
+        private const string HeaderAccessKey = "Key";
+
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
 
         private readonly CommandHandler _commandsHandler;
@@ -36,8 +38,8 @@ namespace HSMDataCollector.Client
                 ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true
             });
 
-            _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
-            _client.DefaultRequestHeaders.Add(nameof(BaseRequest.ClientName), options.ClientName);
+            _client.DefaultRequestHeaders.Add(HeaderClientName, options.ClientName);
+            _client.DefaultRequestHeaders.Add(HeaderAccessKey, options.AccessKey);
 
             _commandsHandler = new CommandHandler(queue.Commands, _endpoints, _logger);
             _commandsHandler.SendRequestEvent += _client.PostAsync;

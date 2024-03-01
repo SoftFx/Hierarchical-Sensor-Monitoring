@@ -78,7 +78,7 @@ namespace HSMDataCollector.Core
 
             _hsmClient = new HsmHttpsClient(options, _queueManager, _logger);
 
-            ToRunning += ToStartingCollector;
+            ToStarting += ToStartingCollector;
             ToStopped += ToStoppedCollector;
         }
 
@@ -201,7 +201,7 @@ namespace HSMDataCollector.Core
 
             ChangeStatus(CollectorStatus.Stopped);
 
-            ToRunning -= ToStartingCollector;
+            ToStarting -= ToStartingCollector;
             ToStopped -= ToStoppedCollector;
 
             CurrentCollection?.Dispose();

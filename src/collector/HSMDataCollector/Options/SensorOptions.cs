@@ -28,9 +28,10 @@ namespace HSMDataCollector.Options
 
         internal string Path { get; set; }
 
-        internal bool IsComputerSensor { get; set; }
 
-        internal bool IsPrioritySensor { get; set; }
+        public bool IsComputerSensor { get; set; } // singltone options sets dy default and sensor adds to .computer node
+
+        public bool IsPrioritySensor { get; set; } // data sends in separate request
 
 
         public SpecialAlertTemplate TtlAlert { get; set; }

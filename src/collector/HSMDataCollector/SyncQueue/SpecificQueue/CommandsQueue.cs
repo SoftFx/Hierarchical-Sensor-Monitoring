@@ -15,7 +15,7 @@ namespace HSMDataCollector.SyncQueue
         protected override string QueueName => "Commands";
 
 
-        public CommandsQueue(CollectorOptions options, ILoggerManager logger) : base(options, TimeSpan.FromSeconds(1))
+        public CommandsQueue(CollectorOptions options, ILoggerManager logger) : base(options, TimeSpan.FromSeconds(5))
         {
             _logger = logger;
         }

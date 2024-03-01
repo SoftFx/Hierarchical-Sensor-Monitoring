@@ -3,6 +3,7 @@ using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects.SensorValueRequests;
 using Polly;
 using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Client.HttpsClient
 {
@@ -22,6 +23,8 @@ namespace HSMDataCollector.Client.HttpsClient
         {
             switch (rawData)
             {
+                case IEnumerable<object> _:
+                    return _endpoints.List;
                 case BoolSensorValue _:
                     return _endpoints.Bool;
                 case IntSensorValue _:
