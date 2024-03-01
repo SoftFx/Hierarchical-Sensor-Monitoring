@@ -76,6 +76,8 @@ namespace HSMDataCollector.Options
 
             return DefaultPrototype.BuildPath(computer, module, Path);
         }
+
+        internal object Copy() => MemberwiseClone();
     }
 
 
