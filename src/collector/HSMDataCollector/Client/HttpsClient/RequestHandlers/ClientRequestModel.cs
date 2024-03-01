@@ -7,8 +7,6 @@ namespace HSMDataCollector.Client.HttpsClient
 {
     internal sealed class ClientRequestModel
     {
-        internal StringContent Content { get; }
-
         internal string JsonMessage { get; }
 
         internal string Uri { get; }
@@ -18,10 +16,11 @@ namespace HSMDataCollector.Client.HttpsClient
 
         internal ClientRequestModel(object rawData, string uri)
         {
-            Uri = uri;
-
             JsonMessage = JsonConvert.SerializeObject(rawData);
-            Content = new StringContent(JsonMessage, Encoding.UTF8, "application/json");
+            Uri = uri;
         }
+
+
+        internal StringContent GetContent() => new StringContent(JsonMessage, Encoding.UTF8, "application/json");
     }
 }

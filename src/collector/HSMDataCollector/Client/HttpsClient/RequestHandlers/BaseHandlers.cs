@@ -93,7 +93,7 @@ namespace HSMDataCollector.Client.HttpsClient
                     _retryLogBuilder.Append($"Failed to send data. Code = {result.StatusCode} ");
 
                 if (exception != null)
-                    _retryLogBuilder.Append($"Exception = {exception.Message}, Inner = {exception.InnerException.Message} ");
+                    _retryLogBuilder.Append($"Exception = {exception.Message} Inner = {exception.InnerException.Message}| ");
 
                 if (curAttempt == 1)
                     _retryLogBuilder.Append($"Uri = {_currentRequest.Uri} ")
@@ -143,7 +143,7 @@ namespace HSMDataCollector.Client.HttpsClient
             }
             catch (Exception ex)
             {
-                _queue.ThrowPackageRequestInfo(new PackageSendingInfo(_currentRequest.JsonMessage.Length, null, exception: ex.Message));
+                _queue.ThrowPackageRequestInfo(new PackageSendingInfo(_currentRequest?.JsonMessage?.Length ?? 0, null, exception: ex.Message));
                 _logger.Error(ex);
 
                 return null;
@@ -155,7 +155,7 @@ namespace HSMDataCollector.Client.HttpsClient
         }
 
         private async ValueTask<HttpResponseMessage> ExecutePipeline(CancellationToken token) =>
-            await SendRequestEvent(_currentRequest.Uri, _currentRequest.Content, token);
+            await SendRequestEvent(_currentRequest.Uri, _currentRequest.GetContent(), token);
 
 
         public void Dispose()
