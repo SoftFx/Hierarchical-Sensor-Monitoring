@@ -444,7 +444,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="INoParamsFuncSensor{T}"/> with interval set to 5 min</returns>
         INoParamsFuncSensor<T> Create5MinNoParamsFuncSensor<T>(string path, string description, Func<T> function);
 
-        INoParamsFuncSensor<T> CreateFunctionSensor<T>(string path, Func<T> function, FunctionSensorOptions options);
+        INoParamsFuncSensor<T> CreateFunctionSensor<T>(string path, Func<T> function, FunctionSensorOptions options = null);
 
 
         /// <summary>
@@ -493,7 +493,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IParamsFuncSensor{T, U}"/> with interval set to 5 min</returns>
         IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
 
-        IParamsFuncSensor<T, U> CreateValuesFunctionSensor<T, U>(string path, Func<List<U>, T> function, ValuesFunctionSensorOptions options);
+        IParamsFuncSensor<T, U> CreateValuesFunctionSensor<T, U>(string path, Func<List<U>, T> function, ValuesFunctionSensorOptions options = null);
 
         #endregion
     }
