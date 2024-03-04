@@ -5,6 +5,12 @@ namespace HSMSensorDataObjects.SensorRequests
 {
     public enum AlertRepeatMode : byte
     {
+        FiveMinutes = 5,
+        TenMinutes = 6,
+        FifteenMinutes = 7,
+
+        ThirtyMinutes = 10,
+
         Hourly = 20,
         Daily = 50,
         Weekly = 100,

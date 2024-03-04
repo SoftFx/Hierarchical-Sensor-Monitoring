@@ -19,6 +19,14 @@ namespace HSMServer.Model.DataAlerts
 
     public enum ScheduleRepeatMode
     {
+        [Display(Name = "5 minutes")]
+        FiveMinutes,
+        [Display(Name = "10 minutes")]
+        TenMinutes,
+        [Display(Name = "15 minutes")]
+        FifteenMinutes,
+        [Display(Name = "30 minutes")]
+        ThirtyMinutes,
         [Display(Name = "Hour")]
         Hourly,
         [Display(Name = "Day")]

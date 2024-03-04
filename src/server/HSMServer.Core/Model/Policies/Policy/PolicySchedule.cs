@@ -10,6 +10,12 @@ namespace HSMServer.Core.Model.Policies
     {
         Immediately = 0,
 
+        FiveMinutes = 5,
+        TenMinutes = 6,
+        FifteenMinutes = 7,
+
+        ThirtyMinutes = 10,
+
         Hourly = 20,
         Daily = 50,
         Weekly = 100,
@@ -56,6 +62,10 @@ namespace HSMServer.Core.Model.Policies
 
             var shiftTime = RepeatMode switch
             {
+                AlertRepeatMode.FiveMinutes => TimeSpan.FromMinutes(5),
+                AlertRepeatMode.TenMinutes => TimeSpan.FromMinutes(10),
+                AlertRepeatMode.FifteenMinutes => TimeSpan.FromMinutes(15),
+                AlertRepeatMode.ThirtyMinutes => TimeSpan.FromMinutes(30),
                 AlertRepeatMode.Hourly => TimeSpan.FromHours(1),
                 AlertRepeatMode.Daily => TimeSpan.FromDays(1),
                 AlertRepeatMode.Weekly => TimeSpan.FromDays(7),
