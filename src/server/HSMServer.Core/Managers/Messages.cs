@@ -18,8 +18,6 @@ namespace HSMServer.Core.Managers
 
         public bool IsEmpty => _totalAlerts == 0;
 
-        public bool IsSingleAlert => _totalAlerts == 1;
-
 
         internal AlertMessage(Guid sensorId)
         {
@@ -65,6 +63,12 @@ namespace HSMServer.Core.Managers
                 foreach (var alert in policyAlerts)
                     yield return alert;
         }
+
+        public bool ShouldSend(Guid policyId) => GetNotificationCount(policyId) == 1 && _alerts[policyId][0].SendScheduleFirstMessage;
+
+
+        private int GetNotificationCount(Guid policyId) => _alerts.TryGetValue(policyId, out var list) ? list.Count : 0;
+
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
