@@ -1,6 +1,8 @@
 ﻿using HSMCommon.Collections;
 using HSMCommon.Extensions;
+using HSMServer.Core.Model.Policies;
 using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Core.Managers
 {
@@ -11,6 +13,7 @@ namespace HSMServer.Core.Managers
 
         internal void ProcessMessage(AlertMessage message)
         {
+            var sendFirstAlerts = new List<AlertResult>(1 << 2);
             var sensorId = message.SensorId;
 
             var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
@@ -25,6 +28,9 @@ namespace HSMServer.Core.Managers
                 {
                     sensorGroup = new ScheduleAlertMessage(sensorId);
                     grouppedAlerts.TryAdd(sensorId, sensorGroup);
+
+                    if (alert.ShouldSendFirstMessage)
+                        sendFirstAlerts.Add(alert);
                 }
 
                 if (alert.IsReplaceAlert)
@@ -32,6 +38,8 @@ namespace HSMServer.Core.Managers
 
                 sensorGroup.AddAlert(alert);
             }
+
+            SendAlertMessage(sensorId, sendFirstAlerts);
         }
 
 
@@ -41,7 +49,7 @@ namespace HSMServer.Core.Managers
                 if (sendTime < DateTime.UtcNow && _storage.TryRemove(sendTime, out _))
                 {
                     foreach (var (_, message) in branch)
-                        SendAlertMessage(message);
+                        SendAlertMessage(message.FilterMessage());
 
                     branch.Clear();
                 }

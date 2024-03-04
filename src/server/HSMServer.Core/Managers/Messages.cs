@@ -57,6 +57,16 @@ namespace HSMServer.Core.Managers
             return this;
         }
 
+        public AlertMessage FilterMessage()
+        {
+            foreach (var (policyId, messages) in _alerts)
+                if (messages[0].ShouldSendFirstMessage && messages.Count == 1)
+                    _alerts.Remove(policyId);
+
+            return this;
+        }
+
+
         public IEnumerator<AlertResult> GetEnumerator()
         {
             foreach (var (_, policyAlerts) in _alerts)
