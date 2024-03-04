@@ -74,7 +74,6 @@ namespace HSMServer.Core.Managers
                     yield return alert;
         }
 
-
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
