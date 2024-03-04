@@ -55,7 +55,9 @@ namespace HSMServer.Core.Managers
                 {
                     foreach (var (_, message) in branch)
                     {
-                        SendAlertMessage(message);
+                        if (!message.IsSingleAlert || !_sendFirstIds.Contains(message.PolicyId))
+                            SendAlertMessage(message);
+
                         _sendFirstIds.Remove(message.PolicyId);
                     }
 

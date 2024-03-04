@@ -18,6 +18,8 @@ namespace HSMServer.Core.Managers
 
         public bool IsEmpty => _totalAlerts == 0;
 
+        public bool IsSingleAlert => _totalAlerts == 1;
+
 
         internal AlertMessage(Guid sensorId)
         {
