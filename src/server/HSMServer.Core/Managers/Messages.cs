@@ -57,17 +57,22 @@ namespace HSMServer.Core.Managers
             return this;
         }
 
+        public AlertMessage FilterMessage()
+        {
+            foreach (var (policyId, messages) in _alerts)
+                if (messages[0].ShouldSendFirstMessage && messages.Count == 1)
+                    _alerts.Remove(policyId);
+
+            return this;
+        }
+
+
         public IEnumerator<AlertResult> GetEnumerator()
         {
             foreach (var (_, policyAlerts) in _alerts)
                 foreach (var alert in policyAlerts)
                     yield return alert;
         }
-
-        public bool ShouldSend(Guid policyId) => GetNotificationCount(policyId) == 1 && _alerts[policyId][0].SendScheduleFirstMessage;
-
-
-        private int GetNotificationCount(Guid policyId) => _alerts.TryGetValue(policyId, out var list) ? list.Count : 0;
 
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -76,14 +81,8 @@ namespace HSMServer.Core.Managers
 
     public sealed class ScheduleAlertMessage : AlertMessage
     {
-        public Guid PolicyId { get; }
-
-
         public ScheduleAlertMessage() : base(Guid.Empty) { }
 
-        internal ScheduleAlertMessage(Guid sensorId, Guid alertPolicyId) : base(sensorId)
-        {
-            PolicyId = alertPolicyId;
-        }
+        internal ScheduleAlertMessage(Guid sensorId) : base(sensorId) { }
     }
 }

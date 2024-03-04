@@ -27,12 +27,13 @@ namespace HSMServer.Core.Model.Policies
         public string Icon { get; }
 
 
+        public bool ShouldSendFirstMessage { get; }
+
+
         public bool IsStatusIsChangeResult { get; }
 
         public bool IsScheduleAlert { get; }
         
-        public bool SendScheduleFirstMessage { get; }
-
         public bool IsReplaceAlert { get; }
 
 
@@ -52,8 +53,9 @@ namespace HSMServer.Core.Model.Policies
 
             ConfirmationPeriod = policy.ConfirmationPeriod;
             SendTime = policy.Schedule.GetSendTime();
-            SendScheduleFirstMessage = policy.Schedule.SendFirst;
             BuildDate = DateTime.UtcNow;
+
+            ShouldSendFirstMessage = policy.Schedule.SendFirst;
 
             Template = policy.Template;
             PolicyId = policy.Id;

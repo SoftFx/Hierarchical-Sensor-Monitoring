@@ -13,20 +13,24 @@ namespace HSMServer.Core.Managers
 
         internal void ProcessMessage(AlertMessage message)
         {
+            var sendFirstAlerts = new List<AlertResult>(1 << 2);
             var sensorId = message.SensorId;
 
             var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
 
-            var sendFirstAlerts = new List<AlertResult>(1 << 2);
+            SendAlertMessage(sensorId, notApplyAlerts);
+
             foreach (var alert in applyAlerts)
             {
                 var grouppedAlerts = _storage[alert.SendTime];
 
                 if (!grouppedAlerts.TryGetValue(sensorId, out var sensorGroup))
                 {
-                    sensorGroup = new ScheduleAlertMessage(sensorId, alert.PolicyId);
+                    sensorGroup = new ScheduleAlertMessage(sensorId);
                     grouppedAlerts.TryAdd(sensorId, sensorGroup);
-                    sendFirstAlerts.Add(alert);
+
+                    if (alert.ShouldSendFirstMessage)
+                        sendFirstAlerts.Add(alert);
                 }
 
                 if (alert.IsReplaceAlert)
@@ -34,8 +38,7 @@ namespace HSMServer.Core.Managers
 
                 sensorGroup.AddAlert(alert);
             }
-            
-            SendAlertMessage(sensorId, notApplyAlerts);
+
             SendAlertMessage(sensorId, sendFirstAlerts);
         }
 
@@ -46,10 +49,7 @@ namespace HSMServer.Core.Managers
                 if (sendTime < DateTime.UtcNow && _storage.TryRemove(sendTime, out _))
                 {
                     foreach (var (_, message) in branch)
-                    {
-                        if (!message.ShouldSend(message.PolicyId))
-                            SendAlertMessage(message);
-                    }
+                        SendAlertMessage(message.FilterMessage());
 
                     branch.Clear();
                 }
