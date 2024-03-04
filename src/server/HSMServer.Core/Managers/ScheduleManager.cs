@@ -1,11 +1,13 @@
 ﻿using HSMCommon.Collections;
 using HSMCommon.Extensions;
+using HSMServer.Core.Model.Policies;
 using System;
 
 namespace HSMServer.Core.Managers
 {
     internal sealed class ScheduleManager : BaseTimeManager
     {
+        private readonly CHash<Guid> _firstMessages = new();
         private readonly CTimeDict<CDict<ScheduleAlertMessage>> _storage = new();
 
 
@@ -15,15 +17,15 @@ namespace HSMServer.Core.Managers
 
             var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
 
-            SendAlertMessage(sensorId, notApplyAlerts);
-
             foreach (var alert in applyAlerts)
             {
+                ExtendAlertMessage(alert);
+                
                 var grouppedAlerts = _storage[alert.SendTime];
 
                 if (!grouppedAlerts.TryGetValue(sensorId, out var sensorGroup))
                 {
-                    sensorGroup = new ScheduleAlertMessage(sensorId);
+                    sensorGroup = new ScheduleAlertMessage(sensorId, alert.PolicyId);
                     grouppedAlerts.TryAdd(sensorId, sensorGroup);
                 }
 
@@ -31,6 +33,17 @@ namespace HSMServer.Core.Managers
                     sensorGroup.RemovePolicyAlerts(alert.PolicyId);
 
                 sensorGroup.AddAlert(alert);
+            }
+            
+            SendAlertMessage(sensorId, notApplyAlerts);
+
+            void ExtendAlertMessage(AlertResult alert)
+            {
+                if (alert.HasScheduleFirstMessage && !_firstMessages.Contains(alert.PolicyId))
+                {
+                    notApplyAlerts.Add(alert);
+                    _firstMessages.Add(alert.PolicyId);
+                }
             }
         }
 
@@ -41,7 +54,10 @@ namespace HSMServer.Core.Managers
                 if (sendTime < DateTime.UtcNow && _storage.TryRemove(sendTime, out _))
                 {
                     foreach (var (_, message) in branch)
+                    {
                         SendAlertMessage(message);
+                        _firstMessages.Remove(message.PolicyId);
+                    }
 
                     branch.Clear();
                 }

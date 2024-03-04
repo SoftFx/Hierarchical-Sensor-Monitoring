@@ -70,8 +70,13 @@ namespace HSMServer.Core.Managers
 
     public sealed class ScheduleAlertMessage : AlertMessage
     {
+        public Guid PolicyId { get; }
+        
         public ScheduleAlertMessage() : base(Guid.Empty) { }
 
-        internal ScheduleAlertMessage(Guid sensorId) : base(sensorId) { }
+        internal ScheduleAlertMessage(Guid sensorId, Guid alertPolicyId) : base(sensorId)
+        {
+            PolicyId = alertPolicyId;
+        }
     }
 }

@@ -30,6 +30,8 @@ namespace HSMServer.Core.Model.Policies
         public bool IsStatusIsChangeResult { get; }
 
         public bool IsScheduleAlert { get; }
+        
+        public bool HasScheduleFirstMessage { get; }
 
         public bool IsReplaceAlert { get; }
 
@@ -58,6 +60,7 @@ namespace HSMServer.Core.Model.Policies
 
             IsStatusIsChangeResult = policy.Conditions.IsStatusChangeResult();
             IsScheduleAlert = policy.Schedule.RepeatMode is not AlertRepeatMode.Immediately;
+            HasScheduleFirstMessage = policy.Schedule.SendFirst;
             IsReplaceAlert = isReplace && IsScheduleAlert;
 
             AddPolicyResult(policy);
