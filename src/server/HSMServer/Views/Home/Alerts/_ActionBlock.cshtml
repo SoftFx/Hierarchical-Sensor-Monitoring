@@ -67,12 +67,8 @@
             <div class="alert-text-block operation-select">starting at</div>
             <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
 
-            <div class="form-check ms-1">
-                <input class="form-check-input" type="checkbox" asp-for="SendScheduleFirstMessage">
-                <label class="form-check-label" asp-for="SendScheduleFirstMessage">
-                    with first message
-                </label>
-            </div>
+            <div class="alert-text-block operation-select">and instant send</div>
+            <input class="form-check-input target-check" type="checkbox" asp-for="ScheduleInstantSend">
         </div>
     </div>
 

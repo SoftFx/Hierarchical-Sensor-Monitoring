@@ -28,7 +28,7 @@ namespace HSMServer.Model.DataAlerts
 
         public AlertRepeatMode? ScheduledRepeatMode { get; set; }
 
-        public bool SendScheduleFirstMessage { get; set; }
+        public bool ScheduledInstantSend { get; set; }
 
         public List<string> Chats { get; set; }
 
@@ -54,7 +54,7 @@ namespace HSMServer.Model.DataAlerts
             IsDisabled = policy.IsDisabled;
             ScheduledNotificationTime = policy.Schedule.Time == DateTime.MinValue ? null : policy.Schedule.Time.ToDefaultFormat();
             ScheduledRepeatMode = policy.Schedule.RepeatMode; // TODO: null if None or Immediatly?
-            SendScheduleFirstMessage = policy.Schedule.SendFirst;
+            ScheduledInstantSend = policy.Schedule.SendFirst;
 
             if (!policy.Destination.AllChats)
             {
@@ -82,7 +82,7 @@ namespace HSMServer.Model.DataAlerts
                 {
                     Time = ScheduledNotificationTime.ParseFromDefault(),
                     RepeatMode = ScheduledRepeatMode,
-                    InstantSend = SendScheduleFirstMessage,
+                    InstantSend = ScheduledInstantSend,
                 },
                 Destination = Chats is null
                     ? new PolicyDestinationUpdate(allChats: true)

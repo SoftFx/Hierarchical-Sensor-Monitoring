@@ -272,7 +272,7 @@ namespace HSMServer.ApiObjectsConverters
             {
                 RepeatMode = request.ScheduledRepeatMode?.Convert() ?? Core.Model.Policies.AlertRepeatMode.Immediately,
                 Time = request.ScheduledNotificationTime ?? DateTime.MinValue,
-                InstantSend = request.SendScheduleFirstMessage ?? false,
+                InstantSend = request.ScheduledInstantSend ?? false,
             },
 
             Id = Guid.Empty,

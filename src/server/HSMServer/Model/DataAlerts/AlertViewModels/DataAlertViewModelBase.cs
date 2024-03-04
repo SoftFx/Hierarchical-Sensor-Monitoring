@@ -116,7 +116,7 @@ namespace HSMServer.Model.DataAlerts
                     {
                         Time = action.ScheduleStartTime.ToCoreScheduleTime(),
                         RepeatMode = action.ScheduleRepeatMode.ToCore(),
-                        InstantSend = action.SendScheduleFirstMessage
+                        InstantSend = action.ScheduleInstantSend
                     };
                     destination = new PolicyDestinationUpdate(chats, allChats);
                     comment = action.Comment;
@@ -161,7 +161,7 @@ namespace HSMServer.Model.DataAlerts
                 DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template,
                 ScheduleStartTime = policy.Schedule.Time.ToClientScheduleTime(),
                 ScheduleRepeatMode = policy.Schedule.RepeatMode.ToClient(),
-                SendScheduleFirstMessage = policy.Schedule.SendFirst,
+                ScheduleInstantSend = policy.Schedule.SendFirst,
                 Chats = policy.Destination.AllChats
                     ? new HashSet<Guid>() { ActionViewModel.AllChatsId }
                     : new HashSet<Guid>(policy.Destination.Chats.Keys),

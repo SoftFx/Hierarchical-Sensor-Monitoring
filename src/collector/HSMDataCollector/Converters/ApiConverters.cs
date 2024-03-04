@@ -62,7 +62,7 @@ namespace HSMDataCollector.Converters
 
                 ScheduledNotificationTime = alert.ScheduledNotificationTime,
                 ScheduledRepeatMode = alert.ScheduledRepeatMode,
-                SendScheduleFirstMessage = alert.SendScheduleFirstMessage,
+                ScheduledInstantSend = alert.ScheduledInstantSend,
 
                 Template = alert.Template,
                 Status = alert.Status,

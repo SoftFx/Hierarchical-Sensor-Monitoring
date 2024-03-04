@@ -78,6 +78,6 @@ namespace HSMServer.Core.Model.Policies
 
         public override string ToString() => RepeatMode is AlertRepeatMode.Immediately
             ? string.Empty
-            : $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}{(SendFirst ? " with first message" : string.Empty)}";
+            : $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}{(SendFirst ? " and instant send" : string.Empty)}";
     }
 }

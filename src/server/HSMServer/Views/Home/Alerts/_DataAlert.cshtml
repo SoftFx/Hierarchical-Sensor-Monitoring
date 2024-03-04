@@ -73,8 +73,8 @@
                 if (action.ScheduleRepeatMode is not null)
                 {
                     schedule.Append($" scheduled every {action.ScheduleRepeatMode.GetDisplayName()} starting at {action.ScheduleStartTime?.ToDefaultFormat()}");
-                    if (action.SendScheduleFirstMessage)
-                        schedule.Append(" with first message");
+                    if (action.ScheduleInstantSend)
+                        schedule.Append(" and instant send");
                 }
 
                 actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: {color};'>{chats}</span>{schedule}"));

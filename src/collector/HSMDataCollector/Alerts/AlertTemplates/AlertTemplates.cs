@@ -26,7 +26,7 @@ namespace HSMDataCollector.Alerts
 
         public TimeSpan? ConfirmationPeriod { get; set; }
 
-        public bool? SendScheduleFirstMessage { get; set; }
+        public bool? ScheduledInstantSend { get; set; }
 
         public DateTime? ScheduledNotificationTime { get; set; }
 
