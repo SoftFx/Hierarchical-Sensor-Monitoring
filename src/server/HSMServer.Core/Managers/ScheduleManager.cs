@@ -7,7 +7,7 @@ namespace HSMServer.Core.Managers
 {
     internal sealed class ScheduleManager : BaseTimeManager
     {
-        private readonly CHash<Guid> _firstMessages = new();
+        private readonly CHash<Guid> _sendFirstIds = new();
         private readonly CTimeDict<CDict<ScheduleAlertMessage>> _storage = new();
 
 
@@ -39,10 +39,10 @@ namespace HSMServer.Core.Managers
 
             void ExtendAlertMessage(AlertResult alert)
             {
-                if (alert.HasScheduleFirstMessage && !_firstMessages.Contains(alert.PolicyId))
+                if (alert.HasScheduleFirstMessage && !_sendFirstIds.Contains(alert.PolicyId))
                 {
                     notApplyAlerts.Add(alert);
-                    _firstMessages.Add(alert.PolicyId);
+                    _sendFirstIds.Add(alert.PolicyId);
                 }
             }
         }
@@ -56,7 +56,7 @@ namespace HSMServer.Core.Managers
                     foreach (var (_, message) in branch)
                     {
                         SendAlertMessage(message);
-                        _firstMessages.Remove(message.PolicyId);
+                        _sendFirstIds.Remove(message.PolicyId);
                     }
 
                     branch.Clear();
