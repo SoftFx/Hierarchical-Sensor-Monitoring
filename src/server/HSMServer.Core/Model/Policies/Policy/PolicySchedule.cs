@@ -44,7 +44,7 @@ namespace HSMServer.Core.Model.Policies
                 return;
 
             Time = update.Time ?? Time;
-            SendFirst = update.SendFirst ?? SendFirst;
+            SendFirst = update.InstantSend ?? SendFirst;
             RepeatMode = update.RepeatMode ?? RepeatMode;
         }
 

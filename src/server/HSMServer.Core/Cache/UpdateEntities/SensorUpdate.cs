@@ -105,8 +105,12 @@ namespace HSMServer.Core.Cache.UpdateEntities
     }
 
 
-    public sealed record PolicyScheduleUpdate(
-        DateTime? Time,
-        AlertRepeatMode? RepeatMode,
-        bool? SendFirst);
+    public sealed record PolicyScheduleUpdate
+    {
+        public AlertRepeatMode? RepeatMode { get; init; }
+
+        public bool? InstantSend { get; init; }
+
+        public DateTime? Time { get; init; }
+    }
 }

@@ -112,7 +112,12 @@ namespace HSMServer.Model.DataAlerts
                         ? new(0)
                         : action.Chats?.ToDictionary(k => k, v => availavleChats[v]) ?? new(0);
 
-                    schedule = new PolicyScheduleUpdate(action.ScheduleStartTime.ToCoreScheduleTime(), action.ScheduleRepeatMode.ToCore(), action.SendScheduleFirstMessage);
+                    schedule = new PolicyScheduleUpdate()
+                    {
+                        Time = action.ScheduleStartTime.ToCoreScheduleTime(),
+                        RepeatMode = action.ScheduleRepeatMode.ToCore(),
+                        InstantSend = action.SendScheduleFirstMessage
+                    };
                     destination = new PolicyDestinationUpdate(chats, allChats);
                     comment = action.Comment;
                 }

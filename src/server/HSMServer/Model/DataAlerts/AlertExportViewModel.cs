@@ -77,8 +77,13 @@ namespace HSMServer.Model.DataAlerts
                 Template = Template,
                 IsDisabled = IsDisabled,
                 ConfirmationPeriod = ConfirmationPeriod?.Ticks,
-                Schedule = new PolicyScheduleUpdate(ScheduledNotificationTime.ParseFromDefault(), ScheduledRepeatMode, SendScheduleFirstMessage),
                 Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
+                Schedule = new PolicyScheduleUpdate()
+                {
+                    Time = ScheduledNotificationTime.ParseFromDefault(),
+                    RepeatMode = ScheduledRepeatMode,
+                    InstantSend = SendScheduleFirstMessage,
+                },
                 Destination = Chats is null
                     ? new PolicyDestinationUpdate(allChats: true)
                     : new PolicyDestinationUpdate(Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
