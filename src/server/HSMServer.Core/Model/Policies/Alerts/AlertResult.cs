@@ -33,7 +33,7 @@ namespace HSMServer.Core.Model.Policies
         public bool IsStatusIsChangeResult { get; }
 
         public bool IsScheduleAlert { get; }
-        
+
         public bool IsReplaceAlert { get; }
 
 
