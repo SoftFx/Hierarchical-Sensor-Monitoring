@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace HSMDataCollector.Sensors
 {
-    internal sealed class FileSensorInstant : SensorInstant<List<byte>>, IInstantValueSensor<string>
+    internal sealed class FileSensorInstant : SensorInstant<List<byte>>, IFileSensor
     {
         private readonly FileSensorOptions _options;
         private readonly ILoggerManager _logger;

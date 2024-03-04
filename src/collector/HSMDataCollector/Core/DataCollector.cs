@@ -377,7 +377,7 @@ namespace HSMDataCollector.Core
 
         #region File sensors
 
-        public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "") =>
+        public IFileSensor CreateFileSensor(string path, string fileName, string extension = "txt", string description = "") =>
             CreateFileSensor(path, new FileSensorOptions()
             {
                 DefaultFileName = fileName,
@@ -385,7 +385,7 @@ namespace HSMDataCollector.Core
                 Extension = extension,
             });
 
-        public IInstantValueSensor<string> CreateFileSensor(string path, FileSensorOptions options) => _sensorsStorage.CreateFileSensor(path, options);
+        public IFileSensor CreateFileSensor(string path, FileSensorOptions options) => _sensorsStorage.CreateFileSensor(path, options);
 
         public Task<bool> SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
