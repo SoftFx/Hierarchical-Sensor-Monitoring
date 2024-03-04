@@ -29,7 +29,7 @@ namespace HSMDataCollector.Alerts
         public TimeSpan? ConfirmationPeriod { get; }
 
 
-        public bool? HasScheduleFirstMessage { get; private set; }
+        public bool? SendScheduleFirstMessage { get; private set; }
 
         public DateTime? ScheduledNotificationTime { get; private set; }
 
@@ -65,7 +65,7 @@ namespace HSMDataCollector.Alerts
             Template = template;
             ScheduledNotificationTime = time;
             ScheduledRepeatMode = repeatMode;
-            HasScheduleFirstMessage = sendFirst;
+            SendScheduleFirstMessage = sendFirst;
 
             return this;
         }
@@ -109,7 +109,7 @@ namespace HSMDataCollector.Alerts
 
             ScheduledRepeatMode = ScheduledRepeatMode,
             ScheduledNotificationTime = ScheduledNotificationTime,
-            HasScheduleFirstMessage = HasScheduleFirstMessage,
+            SendScheduleFirstMessage = SendScheduleFirstMessage,
 
             IsDisabled = IsDisabled
         };

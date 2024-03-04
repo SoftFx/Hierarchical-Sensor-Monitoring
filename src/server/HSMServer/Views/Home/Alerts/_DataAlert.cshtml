@@ -73,7 +73,7 @@
                 if (action.ScheduleRepeatMode is not null)
                 {
                     schedule.Append($" scheduled every {action.ScheduleRepeatMode.GetDisplayName()} starting at {action.ScheduleStartTime?.ToDefaultFormat()}");
-                    if (action.HasScheduleFirstMessage)
+                    if (action.SendScheduleFirstMessage)
                         schedule.Append(" with first message");
                 }
 

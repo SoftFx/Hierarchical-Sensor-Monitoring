@@ -35,7 +35,7 @@ namespace HSMServer.Model.DataAlerts
 
         public ScheduleRepeatMode? ScheduleRepeatMode { get; set; }
 
-        public bool HasScheduleFirstMessage { get; set; }
+        public bool SendScheduleFirstMessage { get; set; }
 
         public DateTime? ScheduleStartTime { get; set; }
 

@@ -270,7 +270,7 @@ namespace HSMServer.ApiObjectsConverters
 
             Schedule = new PolicyScheduleUpdate(request.ScheduledNotificationTime ?? DateTime.MinValue,
                                                 request.ScheduledRepeatMode.HasValue ? request.ScheduledRepeatMode.Value.Convert() : Core.Model.Policies.AlertRepeatMode.Immediately,
-                                                request.HasScheduleFirstMessage ?? false),
+                                                request.SendScheduleFirstMessage ?? false),
 
             Id = Guid.Empty,
             Status = request.Status.Convert(),
