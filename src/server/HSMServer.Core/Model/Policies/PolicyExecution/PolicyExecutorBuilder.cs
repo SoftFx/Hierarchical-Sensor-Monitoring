@@ -94,7 +94,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyProperty.FirstValue or PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorNumber<double>(property),
 
             PolicyProperty.EmaValue when typeof(T) == typeof(IntegerValue) => new PolicyExecutorNullableDouble<int>(property),
-            PolicyProperty.EmaValue when typeof(T) == typeof(DoubleValue) => new PolicyExecutorNullableDouble<double>(property),
+            PolicyProperty.EmaValue when typeof(T) == typeof(DoubleValue) || typeof(T) == typeof(CounterValue) => new PolicyExecutorNullableDouble<double>(property),
 
             PolicyProperty.EmaMin or PolicyProperty.EmaMax or PolicyProperty.EmaMean or
             PolicyProperty.EmaCount when typeof(T) == typeof(IntegerBarValue) => new PolicyExecutorNullableDouble<int>(property),

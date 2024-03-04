@@ -32,6 +32,11 @@ namespace HSMServer.Datasources
         protected override long ConvertToChartType(TimeSpan value) => value.Ticks / TimeSpan.TicksPerMillisecond;
     }
 
+    public sealed class CounterLineDatasource : InstantBaseLineDatasource<CounterValue, double, double>
+    {
+        protected override double ConvertToChartType(double value) => value;
+    }
+
 
     public abstract class InstantBaseNullDoubleLineDatasource<TValue> : BaseLineDatasource<TValue, double?, double>
        where TValue : BaseInstantValue
@@ -49,4 +54,6 @@ namespace HSMServer.Datasources
     public sealed class IntToNullDoubleLineDatasource : InstantBaseNullDoubleLineDatasource<IntegerValue> { }
 
     public sealed class DoubleToNullDoubleDatasource : InstantBaseNullDoubleLineDatasource<DoubleValue> { }
+
+    public sealed class CounterToNullDoubleDatasource : InstantBaseNullDoubleLineDatasource<CounterValue> { }
 }

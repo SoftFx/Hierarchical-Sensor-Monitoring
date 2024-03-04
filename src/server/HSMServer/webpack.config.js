@@ -44,7 +44,4 @@ module.exports = {
         }),
         new MomentLocalesPlugin()
     ],
-    optimization: {
-        minimize: false
-    },
 };
