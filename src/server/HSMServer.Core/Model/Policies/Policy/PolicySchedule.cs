@@ -26,7 +26,7 @@ namespace HSMServer.Core.Model.Policies
     {
         public AlertRepeatMode RepeatMode { get; private set; }
 
-        public bool SendFirst { get; private set; }
+        public bool InstantSend { get; private set; }
 
         public DateTime Time { get; private set; }
 
@@ -38,7 +38,7 @@ namespace HSMServer.Core.Model.Policies
             if (entity is null)
                 return;
 
-            SendFirst = entity.SendFirst;
+            InstantSend = entity.InstantSend;
             Time = new DateTime(entity.TimeTicks);
             RepeatMode = (AlertRepeatMode)entity.RepeateMode;
         }
@@ -50,7 +50,7 @@ namespace HSMServer.Core.Model.Policies
                 return;
 
             Time = update.Time ?? Time;
-            SendFirst = update.InstantSend ?? SendFirst;
+            InstantSend = update.InstantSend ?? InstantSend;
             RepeatMode = update.RepeatMode ?? RepeatMode;
         }
 
@@ -81,13 +81,13 @@ namespace HSMServer.Core.Model.Policies
         internal PolicyScheduleEntity ToEntity() =>
             new()
             {
-                SendFirst = SendFirst,
+                InstantSend = InstantSend,
                 TimeTicks = Time.Ticks,
                 RepeateMode = (byte)RepeatMode,
             };
 
         public override string ToString() => RepeatMode is AlertRepeatMode.Immediately
             ? string.Empty
-            : $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}{(SendFirst ? " and instant send" : string.Empty)}";
+            : $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}{(InstantSend ? " and instant send" : string.Empty)}";
     }
 }

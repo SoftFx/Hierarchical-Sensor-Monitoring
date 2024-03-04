@@ -54,7 +54,7 @@ namespace HSMServer.Model.DataAlerts
             IsDisabled = policy.IsDisabled;
             ScheduledNotificationTime = policy.Schedule.Time == DateTime.MinValue ? null : policy.Schedule.Time.ToDefaultFormat();
             ScheduledRepeatMode = policy.Schedule.RepeatMode; // TODO: null if None or Immediatly?
-            ScheduledInstantSend = policy.Schedule.SendFirst;
+            ScheduledInstantSend = policy.Schedule.InstantSend;
 
             if (!policy.Destination.AllChats)
             {

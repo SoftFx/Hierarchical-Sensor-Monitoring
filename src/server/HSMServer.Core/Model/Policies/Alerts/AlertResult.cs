@@ -55,7 +55,7 @@ namespace HSMServer.Core.Model.Policies
             SendTime = policy.Schedule.GetSendTime();
             BuildDate = DateTime.UtcNow;
 
-            ShouldSendFirstMessage = policy.Schedule.SendFirst;
+            ShouldSendFirstMessage = policy.Schedule.InstantSend;
 
             Template = policy.Template;
             PolicyId = policy.Id;

@@ -29,7 +29,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     {
         public long TimeTicks { get; init; }
 
-        public bool SendFirst { get; init; }
+        public bool InstantSend { get; init; }
 
         public byte RepeateMode { get; init; }
     }
