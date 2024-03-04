@@ -408,11 +408,17 @@ namespace HSMDataCollector.Core
 
         public ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
 
+        public ILastValueSensor<Version> CreateLastValueVersionSensor(string path, Version defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
+
+        public ILastValueSensor<TimeSpan> CreateLastValueTimeSpanSensor(string path, TimeSpan defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
+
+        public ILastValueSensor<T> CreateLastValueSensor<T>(string path, InstantSensorOptions options, T defaultValue = default) => _sensorsStorage.CreateLastValueSensor(path, defaultValue, options);
+
         private ILastValueSensor<T> CreateLastValueSensor<T>(string path, T defaultValue, string description = "") =>
-            _sensorsStorage.CreateLastValueSensor(path, defaultValue, new InstantSensorOptions()
+            CreateLastValueSensor(path, new InstantSensorOptions()
             {
                 Description = description,
-            });
+            }, defaultValue);
 
         #endregion
 

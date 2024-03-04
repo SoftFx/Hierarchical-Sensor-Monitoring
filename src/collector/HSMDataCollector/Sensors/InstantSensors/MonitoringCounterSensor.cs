@@ -23,8 +23,6 @@ namespace HSMDataCollector.Sensors
 
             Interlocked.Exchange(ref _sum, 0d);
 
-            _needSendValue = value > 0.0;
-
             return value;
         }
 

@@ -167,9 +167,9 @@ namespace HSMDataCollector.Core
             throw new Exception($"Sensor with path {path} already exists");
         }
 
-        private T FillOptions<T>(string path, SensorType type, T options) where T : SensorOptions
+        private T FillOptions<T>(string path, SensorType type, T options) where T : SensorOptions, new()
         {
-            options = (T)options.Copy();
+            options = (T)options?.Copy() ?? new T();
 
             options.ComputerName = _collector.ComputerName;
             options.Module = _collector.Module;

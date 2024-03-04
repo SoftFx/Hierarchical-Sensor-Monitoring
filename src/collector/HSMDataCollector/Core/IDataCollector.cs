@@ -227,7 +227,7 @@ namespace HSMDataCollector.Core
         /// <param name="defaultValue">The default value that is sent to a server if no other values passed</param>
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is bool</returns>
-        ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "");
+        ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue = default, string description = "");
 
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is int
@@ -236,7 +236,7 @@ namespace HSMDataCollector.Core
         /// <param name="defaultValue">The default value that is sent to a server if no other values passed</param>
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is int</returns>
-        ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "");
+        ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue = default, string description = "");
 
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is double
@@ -245,7 +245,7 @@ namespace HSMDataCollector.Core
         /// <param name="defaultValue">The default value that is sent to a server if no other values passed</param>
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is double</returns>
-        ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "");
+        ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue = default, string description = "");
 
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is string
@@ -254,7 +254,13 @@ namespace HSMDataCollector.Core
         /// <param name="defaultValue">The default value that is sent to a server if no other values passed</param>
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is string</returns>
-        ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "");
+        ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue = default, string description = "");
+
+        ILastValueSensor<Version> CreateLastValueVersionSensor(string path, Version defaultValue = default, string description = "");
+
+        ILastValueSensor<TimeSpan> CreateLastValueTimeSpanSensor(string path, TimeSpan defaultValue = default, string description = "");
+
+        ILastValueSensor<T> CreateLastValueSensor<T>(string path, InstantSensorOptions options, T defaultValue = default);
 
         #endregion
 
