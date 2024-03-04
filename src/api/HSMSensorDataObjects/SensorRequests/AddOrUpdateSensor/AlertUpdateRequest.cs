@@ -96,6 +96,8 @@ namespace HSMSensorDataObjects.SensorRequests
         public DateTime? ScheduledNotificationTime { get; set; }
 
         public AlertRepeatMode? ScheduledRepeatMode { get; set; }
+
+        public bool? HasScheduleFirstMessage { get; set; }
     }
 
 
