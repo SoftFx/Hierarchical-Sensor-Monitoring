@@ -58,6 +58,8 @@ namespace HSMDataCollector.Sensors
                         SendValue(value);
                     }
                 }
+
+                _logger.Info($"File: {filePath} has been send");
             }
             catch (Exception ex)
             {
