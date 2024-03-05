@@ -299,9 +299,6 @@ window.initDashboard = function () {
     addDraggable(interactPanelDrag)
     addResizable(interactPanelResize)
 
-    console.log(currentPanel)
-    //let dict = [];
-    //console.log(currentPanel.map((x) => ({[x.panelId]: x})))
     let dict = {};
     for (let i in currentPanel) {
         if (dict[currentPanel[i].panelId] === undefined) {
@@ -331,8 +328,7 @@ window.initDashboard = function () {
             }).done(function (data) {
                 console.log(data)
                 let plot = $(`#panelChart_${i}`)[0];
-                for (let sourceUpdate in data) {
-                    //rebuild this
+                for (let sourceUpdate of data) {
                     updateSource(sourceUpdate, plot)
                 }
             })
@@ -340,8 +336,9 @@ window.initDashboard = function () {
     }
 
     function updateSource(sourceUpdate, plot) {
-        let visibleValues = sourceUpdate.update.visibleValues;
+        let visibleValues = sourceUpdate.update.newVisibleValues;
         let isTimeSpan = sourceUpdate.update.isTimeSpan !== undefined && sourceUpdate.update.isTimeSpan === true;
+        let sourceId = sourceUpdate.id;
         
         let correctId = 0;
         for (let j of plot.data) {
@@ -385,7 +382,7 @@ window.initDashboard = function () {
                 y.push(j.value);
                 prevData.ids.push(j.id)
                 let custom = j.value;
-                if (currentPanel[i].range !== undefined && currentPanel[i].range !== true)
+                if (currentPanel[sourceId].range !== undefined && currentPanel[sourceId].range !== true)
                     custom = j.tooltip;
                 else if (j.tooltip !== null)
                     custom += `<br>${j.tooltip}`;
@@ -422,104 +419,6 @@ window.initDashboard = function () {
         
         }
     }
-    
-    // for (let i in currentPanel) {
-    //     currentPanel[i].requestTimeout = setInterval(function () {
-    //         $.ajax({
-    //             type: 'get',
-    //             url: window.location.pathname + '/SourceUpdate' + `/${currentPanel[i].panelId}/${i}`,
-    //         }).done(function (data) {
-    //             if (!$.trim(data))
-    //                 return;
-    //
-    //             if (data.newVisibleValues.length > 0) {
-    //                 let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
-    //
-    //                 let correctId = 0;
-    //
-    //                 for (let j of plot.data) {
-    //                     if (j.id === i)
-    //                         break;
-    //
-    //                     correctId += 1;
-    //                 }
-    //
-    //                 let lastTime = new Date(0);
-    //
-    //                 if (plot.data[correctId] !== undefined && plot.data[correctId].x.length > 0)
-    //                     lastTime = new Date(plot.data[correctId].x.at(-1));
-    //
-    //                 let prevData = plot.data[correctId];
-    //                 let prevId = prevData.ids !== undefined && prevData.ids?.length !== 0 ? prevData.ids.at(-1) : undefined;
-    //                 if (prevData.ids === undefined)
-    //                     prevData.ids = [];
-    //                 let redraw = false;
-    //
-    //                 let x = [];
-    //                 let y = [];
-    //                 let customData = []
-    //                 let isTimeSpan = data.isTimeSpan !== undefined && data.isTimeSpan === true;
-    //                 for (let j of data.newVisibleValues) {
-    //                     if (lastTime >= new Date(j.time))
-    //                         continue;
-    //
-    //                     if (isTimeSpan) {
-    //                         let timespanValue = TimeSpanPlot.getTimeSpanValue(j);
-    //                         customData.push(Plot.checkError(j) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, j) + '<br>' + j.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, j))
-    //                         x.push(j.time)
-    //                         y.push(timespanValue === 'NaN' ? timespanValue : timespanValue.totalMilliseconds())
-    //                     }
-    //                     else {
-    //                         if (prevId !== undefined && j.id === prevId) {
-    //                             redraw = true;
-    //                             prevData.x.pop();
-    //                             prevData.y.pop();
-    //                             prevData.customdata.pop();
-    //                         }
-    //                         x.push(j.time);
-    //                         y.push(j.value);
-    //                         prevData.ids.push(j.id)
-    //                         let custom = j.value;
-    //                         if (currentPanel[i].range !== undefined && currentPanel[i].range !== true)
-    //                             custom = j.tooltip;
-    //                         else if (j.tooltip !== null)
-    //                             custom += `<br>${j.tooltip}`;
-    //
-    //                         customData.push(custom);
-    //                     }
-    //
-    //                 }
-    //
-    //                 if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null) {
-    //                     Plotly.update(plot, { x: [[]], y: [[]] }, { 'xaxis.autorange': true }, correctId)
-    //                 }
-    //
-    //                 if (redraw) {
-    //                     prevData.x.push(...x)
-    //                     prevData.y.push(...y)
-    //                     prevData.customdata.push(...customData)
-    //                     Plotly.deleteTraces(plot, correctId);
-    //                     Plotly.addTraces(plot, prevData, correctId);
-    //                     DefaultRelayout(plot);
-    //                 }
-    //                 else {
-    //                     Plotly.extendTraces(plot, {
-    //                         y: [y],
-    //                         x: [x],
-    //                         customdata: [customData]
-    //                     }, [correctId], maxPlottedPoints).then(
-    //                         (data) => {
-    //                             if (isTimeSpan)
-    //                                 TimespanRelayout(data);
-    //                             else
-    //                                 DefaultRelayout(data);
-    //                         }
-    //                     )
-    //                 }
-    //             }
-    //         })
-    //     }, updateDashboardInterval)
-    // }
 }
 
 function TimespanRelayout(data) {
