@@ -23,8 +23,6 @@ namespace HSMDataCollector.DefaultSensors
         private QueueOverflowSensor _queueOverflowSensor;
 
 
-        internal CollectorStatusSensor StatusSensor { get; private set; }
-
         internal CollectorErrorsSensor CollectorErrors { get; private set; }
 
 
@@ -108,7 +106,7 @@ namespace HSMDataCollector.DefaultSensors
 
             _packageSizeSensor = new PackageContentSizeSensor(_prototype.PackageContentSize.Get(options));
 
-            _storage.QueueManager.PackageSendingInfoEvent += _packageSizeSensor.AddValue;
+            _storage.QueueManager.PackageRequestInfoEvent += _packageSizeSensor.AddValue;
 
             return Register(_packageSizeSensor);
         }

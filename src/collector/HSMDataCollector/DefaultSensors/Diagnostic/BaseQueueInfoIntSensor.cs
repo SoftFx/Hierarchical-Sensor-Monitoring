@@ -1,5 +1,4 @@
 ﻿using HSMDataCollector.Options;
-using HSMSensorDataObjects.SensorValueRequests;
 using System.Collections.Concurrent;
 using System.Text;
 
@@ -53,14 +52,7 @@ namespace HSMDataCollector.DefaultSensors.Diagnostic
         }
 
 
-        protected override SensorValueBase BuildSensorValue()
-        {
-            var buildedValue = base.BuildSensorValue();
-
-            buildedValue.Comment = GetQueueStats();
-
-            return buildedValue;
-        }
+        protected override string GetComment() => GetQueueStats();
 
         protected override void BuildNewBar()
         {

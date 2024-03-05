@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.SyncQueue
 {
-    internal readonly struct PackageSendingInfo
+    public readonly struct PackageSendingInfo
     {
         public double ContentSize { get; }
 
@@ -11,12 +11,12 @@ namespace HSMDataCollector.SyncQueue
         public string Error { get; }
 
 
-        public PackageSendingInfo(double contentSize, HttpResponseMessage response)
+        public PackageSendingInfo(double contentSize, HttpResponseMessage response = null, string exception = null)
         {
             ContentSize = contentSize;
 
             IsSuccess = response?.IsSuccessStatusCode ?? false;
-            Error = !IsSuccess ? $"Code: {response.StatusCode}. {response.Content}" : null;
+            Error = !IsSuccess ? response == null ? exception : $"Code: {response.StatusCode}. {response.Content}" : null;
         }
     }
 }

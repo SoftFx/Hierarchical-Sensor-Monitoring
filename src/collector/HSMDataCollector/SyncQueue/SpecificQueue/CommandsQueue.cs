@@ -15,13 +15,13 @@ namespace HSMDataCollector.SyncQueue
         protected override string QueueName => "Commands";
 
 
-        public CommandsQueue(CollectorOptions options, ILoggerManager logger) : base(options, TimeSpan.FromSeconds(1))
+        public CommandsQueue(CollectorOptions options, ILoggerManager logger) : base(options, TimeSpan.FromSeconds(5))
         {
             _logger = logger;
         }
 
 
-        public Task<bool> CallServer(PriorityRequest request)
+        public Task<bool> WaitServerResponse(PriorityRequest request)
         {
             if (_requestStorage.TryRemove(request.Key, out var source))
             {
@@ -33,7 +33,7 @@ namespace HSMDataCollector.SyncQueue
 
             if (_requestStorage.TryAdd(request.Key, source))
             {
-                Push(request);
+                Add(request);
                 _logger.Info($"Command request by key {request.Key} has been added");
             }
 

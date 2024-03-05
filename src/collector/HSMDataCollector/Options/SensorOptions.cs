@@ -28,9 +28,10 @@ namespace HSMDataCollector.Options
 
         internal string Path { get; set; }
 
-        internal bool IsComputerSensor { get; set; }
 
-        internal bool IsPrioritySensor { get; set; }
+        public bool IsComputerSensor { get; set; } // singltone options sets dy default and sensor adds to .computer node
+
+        public bool IsPrioritySensor { get; set; } // data sends in separate request
 
 
         public SpecialAlertTemplate TtlAlert { get; set; }
@@ -75,6 +76,16 @@ namespace HSMDataCollector.Options
 
             return DefaultPrototype.BuildPath(computer, module, Path);
         }
+
+        internal object Copy() => MemberwiseClone();
+    }
+
+
+    public class FileSensorOptions : InstantSensorOptions
+    {
+        public string DefaultFileName { get; set; }
+
+        public string Extension { get; set; }
     }
 
 
@@ -91,9 +102,24 @@ namespace HSMDataCollector.Options
         public virtual TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
     }
 
+
     public class CounterSensorOptions : MonitoringInstantSensorOptions
     {
         public override TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromMinutes(1);
+    }
+
+
+    public class FunctionSensorOptions : MonitoringInstantSensorOptions
+    {
+        public override TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromMinutes(1);
+    }
+
+
+    public class ValuesFunctionSensorOptions : MonitoringInstantSensorOptions
+    {
+        public override TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromMinutes(1);
+
+        public int MaxCacheSize { get; set; } = 10000;
     }
 
 

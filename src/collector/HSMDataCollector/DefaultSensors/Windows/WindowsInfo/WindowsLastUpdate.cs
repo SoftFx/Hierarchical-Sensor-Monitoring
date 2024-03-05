@@ -11,7 +11,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         
         private readonly DateTime _lastUpdateDate;
 
-        protected override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
+        protected override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
 
 
         public WindowsLastUpdate(WindowsInfoSensorOptions options) : base(options)

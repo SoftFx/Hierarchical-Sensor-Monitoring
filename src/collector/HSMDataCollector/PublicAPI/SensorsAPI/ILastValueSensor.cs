@@ -5,8 +5,5 @@
     /// received. Only the last value is sent to a server.
     /// </summary>
     /// <typeparam name="T">Sensor type. Currently bool, int, double and string are supported</typeparam>
-    public interface ILastValueSensor<T> : IInstantValueSensor<T>
-    {
-        
-    }
+    public interface ILastValueSensor<T> : IInstantValueSensor<T> { }
 }

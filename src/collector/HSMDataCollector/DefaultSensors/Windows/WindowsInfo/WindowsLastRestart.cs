@@ -13,7 +13,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         private readonly PerformanceCounter _performanceCounter;
 
-        protected override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
+        protected override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
 
 
         public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options)

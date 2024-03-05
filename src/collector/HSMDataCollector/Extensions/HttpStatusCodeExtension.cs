@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Net;
 using static System.Net.HttpStatusCode;
 
-namespace HSMDataCollector.Client.HttpsClient.Polly
+namespace HSMDataCollector.Extensions
 {
     public static class HttpStatusCodeExtension
     {

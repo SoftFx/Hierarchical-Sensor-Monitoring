@@ -1,6 +1,7 @@
 ﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.SensorsFactory
 {
@@ -23,7 +24,7 @@ namespace HSMDataCollector.SensorsFactory
                 case Type type when type == typeof(Version):
                     return SensorType.VersionSensor;
                 default:
-                    throw new ArgumentException($"Unsupported sensor value {typeof(T).Name}");
+                    throw new ArgumentException($"Unsupported instant sensor type {typeof(T).Name}");
             }
         }
 
@@ -37,7 +38,7 @@ namespace HSMDataCollector.SensorsFactory
                 case Type type when type == typeof(double):
                     return SensorType.DoubleBarSensor;
                 default:
-                    throw new ArgumentException($"Unsupported sensor value {typeof(T).Name}");
+                    throw new ArgumentException($"Unsupported bar sensor type {typeof(T).Name}");
             }
         }
 
@@ -80,6 +81,11 @@ namespace HSMDataCollector.SensorsFactory
                     return (val) => new CounterSensorValue()
                     {
                         Value = val is double doubleV ? doubleV : default
+                    };
+                case SensorType.FileSensor:
+                    return (val) => new FileSensorValue()
+                    {
+                        Value = val is List<byte> bytes ? bytes : default
                     };
                 default:
                     return null;
