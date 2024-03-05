@@ -80,7 +80,7 @@ namespace HSMServer.ApiObjectsConverters
             };
         }
 
-        public static CounterValue Convert(this CounterSensorValue value)
+        public static RateValue Convert(this RateSensorValue value)
         {
             return new()
             {
@@ -151,7 +151,7 @@ namespace HSMServer.ApiObjectsConverters
                 TimeSpanSensorValue sv => sv.Convert(),
                 VersionSensorValue sv => sv.Convert(),
                 FileSensorValue sv => sv.Convert(),
-                CounterSensorValue sv => sv.Convert(),
+                RateSensorValue sv => sv.Convert(),
                 _ => null
             };
 
@@ -209,7 +209,7 @@ namespace HSMServer.ApiObjectsConverters
                 IntegerBarValue sv => sv.Convert(),
                 DoubleBarValue sv => sv.Convert(),
                 FileValue sv => sv.Convert(),
-                CounterValue sv => sv.Convert(),
+                RateValue sv => sv.Convert(),
                 _ => null,
             };
 
@@ -310,7 +310,7 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorType.FileSensor => SensorType.File,
                 HSMSensorDataObjects.SensorType.IntegerBarSensor => SensorType.IntegerBar,
                 HSMSensorDataObjects.SensorType.DoubleBarSensor => SensorType.DoubleBar,
-                HSMSensorDataObjects.SensorType.CounterSensor => SensorType.Counter,
+                HSMSensorDataObjects.SensorType.RateSensor => SensorType.Rate,
                 _ => throw new NotImplementedException(),
             };
 

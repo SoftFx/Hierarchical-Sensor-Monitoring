@@ -12,7 +12,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         [InlineData(SensorType.Boolean)]
         [InlineData(SensorType.Integer)]
         [InlineData(SensorType.Double)]
-        [InlineData(SensorType.Counter)]
+        [InlineData(SensorType.Rate)]
         [InlineData(SensorType.String)]
         [InlineData(SensorType.IntegerBar)]
         [InlineData(SensorType.DoubleBar)]
@@ -62,7 +62,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
                 case SensorType.Double:
                     TestBaseValue<double>(value);
                     break;
-                case SensorType.Counter:
+                case SensorType.Rate:
                     TestBaseValue<double>(value);
                     break;
                 case SensorType.String:

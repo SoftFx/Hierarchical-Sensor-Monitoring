@@ -25,7 +25,7 @@ namespace HSMDataCollector.Client
 
         internal string Version => $"{ConnectionAddress}/version";
 
-        internal string Counter => $"{ConnectionAddress}/counter";
+        internal string Rate => $"{ConnectionAddress}/rate";
 
 
         internal string DoubleBar => $"{ConnectionAddress}/doubleBar";

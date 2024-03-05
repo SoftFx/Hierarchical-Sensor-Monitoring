@@ -84,9 +84,9 @@
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.CounterSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.RateSensorValue)">
             <summary>
-            Receives value of counter sensor
+            Receives value of rate sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>

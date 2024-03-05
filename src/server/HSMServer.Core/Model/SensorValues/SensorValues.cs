@@ -69,9 +69,9 @@ namespace HSMServer.Core.Model
     }
 
 
-    public record CounterValue : BaseValue<double>
+    public record RateValue : BaseValue<double>
     {
-        public override SensorType Type => SensorType.Counter;
+        public override SensorType Type => SensorType.Rate;
 
 
         public override bool TryParseValue(string value, out double parsedValue) => double.TryParse(value, out parsedValue);
