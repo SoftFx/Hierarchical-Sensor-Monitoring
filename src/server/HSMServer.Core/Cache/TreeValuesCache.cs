@@ -33,6 +33,8 @@ namespace HSMServer.Core.Cache
 
         public const int MaxHistoryCount = 50000;
 
+        private readonly static MigrationManager _migrator = new();
+
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors = new();
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree = new();
@@ -846,7 +848,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
 
             _logger.Info($"Migrate sensors settings and alerts");
-            MigrateSensorsBaseSettingsToEma();
+            RunMigration();
             _logger.Info($"Migrate sensor settings and alerts finished");
 
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
@@ -858,111 +860,18 @@ namespace HSMServer.Core.Cache
             UpdateCacheState();
         }
 
-        private void MigrateSensorsBaseSettingsToEma()
+        private void RunMigration()
         {
-            static bool IsNessProperty(PolicyProperty prop) => prop is PolicyProperty.Value or PolicyProperty.Mean or
-                                                                       PolicyProperty.Max or PolicyProperty.Min or PolicyProperty.Count;
-
-            static bool IsNessAlert(Policy policy)
+            try
             {
-                if (policy.Conditions.Count == 1)
-                {
-                    var condition = policy.Conditions[0];
-
-                    return IsNessProperty(condition.Property);
-                }
-
-                return false;
+                foreach (var update in _migrator.GetMigrationUpdates([.. _sensors.Values]))
+                    TryUpdateSensor(update, out _);
             }
-
-            static PolicyProperty ConvertToEma(PolicyProperty property)
+            catch (Exception ex)
             {
-                if (!IsNessProperty(property))
-                    return property;
-
-                switch (property)
-                {
-                    case PolicyProperty.Value:
-                        return PolicyProperty.EmaValue;
-
-                    case PolicyProperty.Mean:
-                        return PolicyProperty.EmaMean;
-
-                    case PolicyProperty.Max:
-                        return PolicyProperty.EmaMax;
-
-                    case PolicyProperty.Min:
-                        return PolicyProperty.EmaMin;
-
-                    case PolicyProperty.Count:
-                        return PolicyProperty.EmaCount;
-
-                    default:
-                        return property;
-                }
-            }
-
-            var migrator = InitiatorInfo.AsSystemMigrator();
-
-            foreach (var (sensorId, sensor) in _sensors)
-            {
-                var path = sensor.Path;
-
-                var needMigration = path.Contains(".module") || path.Contains(".computer");
-
-                needMigration &= sensor.Type is SensorType.Integer or SensorType.Double or SensorType.DoubleBar or SensorType.IntegerBar;
-                //needMigration &= !sensor.Statistics.HasEma();
-
-                var hasOldAlerts = false;
-
-                foreach (var policy in sensor.Policies)
-                    if (IsNessAlert(policy))
-                        hasOldAlerts = true;
-
-                if (needMigration && hasOldAlerts)
-                {
-                    var alerts = new List<PolicyUpdate>();
-
-                    foreach (var policy in sensor.Policies)
-                    {
-                        var newConditions = new List<PolicyConditionUpdate>();
-                        var isNess = IsNessAlert(policy);
-
-                        foreach (var condition in policy.Conditions)
-                            newConditions.Add(new PolicyConditionUpdate()
-                            {
-                                Operation = condition.Operation,
-                                Target = condition.Target,
-                                Property = isNess ? ConvertToEma(condition.Property) : condition.Property
-                            });
-
-                        alerts.Add(new PolicyUpdate()
-                        {
-                            Conditions = newConditions,
-                            Destination = new PolicyDestinationUpdate(policy.Destination.Chats, policy.Destination.AllChats),
-
-                            ConfirmationPeriod = policy.ConfirmationPeriod,
-                            Id = policy.Id,
-                            Status = policy.Status,
-                            Template = policy.Template,
-                            IsDisabled = policy.IsDisabled,
-                            Icon = policy.Icon,
-
-                            Initiator = migrator
-                        });
-                    }
-
-                    TryUpdateSensor(new SensorUpdate()
-                    {
-                        Id = sensorId,
-                        Statistics = StatisticsOptions.EMA,
-                        Policies = alerts,
-                        Initiator = migrator,
-                    }, out _);
-                }
+                _logger.Error($"Migration is failed: {ex}");
             }
         }
-
 
         private List<ProductEntity> RequestProducts()
         {
