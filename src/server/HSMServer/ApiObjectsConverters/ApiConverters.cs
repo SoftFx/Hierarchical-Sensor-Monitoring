@@ -268,8 +268,12 @@ namespace HSMServer.ApiObjectsConverters
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
             Destination = new(),
 
-            Schedule = new PolicyScheduleUpdate(request.ScheduledNotificationTime ?? DateTime.MinValue,
-                                                request.ScheduledRepeatMode.HasValue ? request.ScheduledRepeatMode.Value.Convert() : Core.Model.Policies.AlertRepeatMode.Immediately),
+            Schedule = new PolicyScheduleUpdate()
+            {
+                RepeatMode = request.ScheduledRepeatMode?.Convert() ?? Core.Model.Policies.AlertRepeatMode.Immediately,
+                Time = request.ScheduledNotificationTime ?? DateTime.MinValue,
+                InstantSend = request.ScheduledInstantSend ?? false,
+            },
 
             Id = Guid.Empty,
             Status = request.Status.Convert(),
@@ -426,6 +430,10 @@ namespace HSMServer.ApiObjectsConverters
         private static Core.Model.Policies.AlertRepeatMode Convert(this HSMSensorDataObjects.SensorRequests.AlertRepeatMode repeatMode) =>
             repeatMode switch
             {
+                HSMSensorDataObjects.SensorRequests.AlertRepeatMode.FiveMinutes => Core.Model.Policies.AlertRepeatMode.FiveMinutes,
+                HSMSensorDataObjects.SensorRequests.AlertRepeatMode.TenMinutes => Core.Model.Policies.AlertRepeatMode.TenMinutes,
+                HSMSensorDataObjects.SensorRequests.AlertRepeatMode.FifteenMinutes => Core.Model.Policies.AlertRepeatMode.FifteenMinutes,
+                HSMSensorDataObjects.SensorRequests.AlertRepeatMode.ThirtyMinutes => Core.Model.Policies.AlertRepeatMode.ThirtyMinutes,
                 HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Hourly => Core.Model.Policies.AlertRepeatMode.Hourly,
                 HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Daily => Core.Model.Policies.AlertRepeatMode.Daily,
                 HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Weekly => Core.Model.Policies.AlertRepeatMode.Weekly,

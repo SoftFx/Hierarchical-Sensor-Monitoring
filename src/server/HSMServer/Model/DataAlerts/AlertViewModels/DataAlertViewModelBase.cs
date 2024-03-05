@@ -112,7 +112,12 @@ namespace HSMServer.Model.DataAlerts
                         ? new(0)
                         : action.Chats?.ToDictionary(k => k, v => availavleChats[v]) ?? new(0);
 
-                    schedule = new PolicyScheduleUpdate(action.ScheduleStartTime.ToCoreScheduleTime(), action.ScheduleRepeatMode.ToCore());
+                    schedule = new PolicyScheduleUpdate()
+                    {
+                        Time = action.ScheduleStartTime.ToCoreScheduleTime(),
+                        RepeatMode = action.ScheduleRepeatMode.ToCore(),
+                        InstantSend = action.ScheduleInstantSend
+                    };
                     destination = new PolicyDestinationUpdate(chats, allChats);
                     comment = action.Comment;
                 }
@@ -156,6 +161,7 @@ namespace HSMServer.Model.DataAlerts
                 DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template,
                 ScheduleStartTime = policy.Schedule.Time.ToClientScheduleTime(),
                 ScheduleRepeatMode = policy.Schedule.RepeatMode.ToClient(),
+                ScheduleInstantSend = policy.Schedule.InstantSend,
                 Chats = policy.Destination.AllChats
                     ? new HashSet<Guid>() { ActionViewModel.AllChatsId }
                     : new HashSet<Guid>(policy.Destination.Chats.Keys),

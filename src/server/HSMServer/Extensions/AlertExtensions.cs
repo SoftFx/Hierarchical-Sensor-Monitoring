@@ -60,6 +60,10 @@ namespace HSMServer.Extensions
         public static ScheduleRepeatMode? ToClient(this AlertRepeatMode repeatMode) =>
             repeatMode switch
             {
+                AlertRepeatMode.FiveMinutes => ScheduleRepeatMode.FiveMinutes,
+                AlertRepeatMode.TenMinutes => ScheduleRepeatMode.TenMinutes,
+                AlertRepeatMode.FifteenMinutes => ScheduleRepeatMode.FifteenMinutes,
+                AlertRepeatMode.ThirtyMinutes => ScheduleRepeatMode.ThirtyMinutes,
                 AlertRepeatMode.Hourly => ScheduleRepeatMode.Hourly,
                 AlertRepeatMode.Daily => ScheduleRepeatMode.Daily,
                 AlertRepeatMode.Weekly => ScheduleRepeatMode.Weekly,
@@ -69,6 +73,10 @@ namespace HSMServer.Extensions
         public static AlertRepeatMode ToCore(this ScheduleRepeatMode? repeatMode) =>
             repeatMode switch
             {
+                ScheduleRepeatMode.FiveMinutes => AlertRepeatMode.FiveMinutes,
+                ScheduleRepeatMode.TenMinutes => AlertRepeatMode.TenMinutes,
+                ScheduleRepeatMode.FifteenMinutes => AlertRepeatMode.FifteenMinutes,
+                ScheduleRepeatMode.ThirtyMinutes => AlertRepeatMode.ThirtyMinutes,
                 ScheduleRepeatMode.Hourly => AlertRepeatMode.Hourly,
                 ScheduleRepeatMode.Daily => AlertRepeatMode.Daily,
                 ScheduleRepeatMode.Weekly => AlertRepeatMode.Weekly,
