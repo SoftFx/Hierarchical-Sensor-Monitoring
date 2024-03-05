@@ -30,9 +30,19 @@ namespace HSMServer.Core.Managers
         }
 
 
+        public bool ShouldSendFirstMessage(AlertResult alert)
+        {
+            var messagesCnt = _alerts.TryGetValue(alert.PolicyId, out var alerts) ? alerts.Count : 0;
+
+            return alert.ShouldSendFirstMessage && messagesCnt == 0;
+        }
+
         public void AddAlert(AlertResult result)
         {
             var key = result.PolicyId;
+
+            if (result.IsReplaceAlert)
+                RemovePolicyAlerts(key);
 
             if (!_alerts.ContainsKey(key))
                 _alerts.Add(key, []);
@@ -61,7 +71,10 @@ namespace HSMServer.Core.Managers
         {
             foreach (var (policyId, messages) in _alerts)
                 if (messages[0].ShouldSendFirstMessage && messages.Count == 1)
+                {
+                    _totalAlerts -= messages.Count;
                     _alerts.Remove(policyId);
+                }
 
             return this;
         }

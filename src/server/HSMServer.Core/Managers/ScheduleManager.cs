@@ -28,13 +28,10 @@ namespace HSMServer.Core.Managers
                 {
                     sensorGroup = new ScheduleAlertMessage(sensorId);
                     grouppedAlerts.TryAdd(sensorId, sensorGroup);
-
-                    if (alert.ShouldSendFirstMessage)
-                        sendFirstAlerts.Add(alert);
                 }
 
-                if (alert.IsReplaceAlert)
-                    sensorGroup.RemovePolicyAlerts(alert.PolicyId);
+                if (sensorGroup.ShouldSendFirstMessage(alert))
+                    sendFirstAlerts.Add(alert);
 
                 sensorGroup.AddAlert(alert);
             }
