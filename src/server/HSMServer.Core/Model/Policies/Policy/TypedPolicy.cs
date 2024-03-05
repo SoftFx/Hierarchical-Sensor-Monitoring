@@ -83,9 +83,9 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    public sealed class CounterPolicy : SingleSensorPolicy<CounterValue, double>
+    public sealed class RatePolicy : SingleSensorPolicy<RateValue, double>
     {
-        protected override PolicyCondition<CounterValue, double> BasePolicyCondition => new PolicyDoubleCondition<CounterValue>();
+        protected override PolicyCondition<RateValue, double> BasePolicyCondition => new PolicyDoubleCondition<RateValue>();
     }
 
 

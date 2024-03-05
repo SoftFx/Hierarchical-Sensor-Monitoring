@@ -28,14 +28,14 @@ namespace HSMServer.BackgroundServices
         internal DatabaseSize DbSizeSensors { get; }
 
 
-        internal IMonitoringCounterSensor ResponseSizeSensor { get; }
+        internal IMonitoringRateSensor ResponseSizeSensor { get; }
 
-        internal IMonitoringCounterSensor RequestSizeSensor { get; }
+        internal IMonitoringRateSensor RequestSizeSensor { get; }
 
 
-        internal IMonitoringCounterSensor ReceivedDataCountSensor { get; }
+        internal IMonitoringRateSensor ReceivedDataCountSensor { get; }
 
-        internal IMonitoringCounterSensor RequestsCountSensor { get; }
+        internal IMonitoringRateSensor RequestsCountSensor { get; }
 
 
         public DataCollectorWrapper(IDatabaseCore database, ITreeValuesCache cache)
@@ -53,11 +53,11 @@ namespace HSMServer.BackgroundServices
             else
                 _collector.Unix.AddAllDefaultSensors(productVersion);
 
-            ResponseSizeSensor = _collector.CreateM1CounterSensor(ResponseSizePath);
-            RequestSizeSensor = _collector.CreateM1CounterSensor(RequestSizePath);
+            ResponseSizeSensor = _collector.CreateM1RateSensor(ResponseSizePath);
+            RequestSizeSensor = _collector.CreateM1RateSensor(RequestSizePath);
 
-            ReceivedDataCountSensor = _collector.CreateM1CounterSensor(DataCountPath);
-            RequestsCountSensor = _collector.CreateM1CounterSensor(RequestsCountPath);
+            ReceivedDataCountSensor = _collector.CreateM1RateSensor(DataCountPath);
+            RequestsCountSensor = _collector.CreateM1RateSensor(RequestsCountPath);
 
             DbSizeSensors = new DatabaseSize(_collector, database);
         }

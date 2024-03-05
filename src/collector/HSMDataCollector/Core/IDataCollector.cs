@@ -139,11 +139,11 @@ namespace HSMDataCollector.Core
 
         #region Custom base sensors
 
-        IMonitoringCounterSensor CreateCounterSensor(string path, CounterSensorOptions options = null);
+        IMonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options = null);
 
-        IMonitoringCounterSensor CreateM1CounterSensor(string path, string desctiption = "");
+        IMonitoringRateSensor CreateM1RateSensor(string path, string desctiption = "");
 
-        IMonitoringCounterSensor CreateM5CounterSensor(string path, string description = "");
+        IMonitoringRateSensor CreateM5RateSensor(string path, string description = "");
 
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is bool

@@ -1,6 +1,6 @@
 ﻿namespace HSMDataCollector.PublicInterface
 {
-    public interface IMonitoringCounterSensor : IInstantValueSensor<double>
+    public interface IMonitoringRateSensor : IInstantValueSensor<double>
     {
     }
 }

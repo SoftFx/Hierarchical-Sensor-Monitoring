@@ -12,7 +12,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.Boolean => BuildBooleanValue(),
                 SensorType.Integer => BuildIntegerValue(),
                 SensorType.Double => BuildDoubleValue(),
-                SensorType.Counter => BuildCounterValue(),
+                SensorType.Rate => BuildRateValue(),
                 SensorType.String => BuildStringValue(),
                 SensorType.IntegerBar => BuildIntegerBarValue(),
                 SensorType.DoubleBar => BuildDoubleBarValue(),
@@ -49,7 +49,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Value = RandomGenerator.GetRandomDouble(),
             };
 
-        internal static CounterValue BuildCounterValue() =>
+        internal static RateValue BuildRateValue() =>
             new()
             {
                 Comment = RandomGenerator.GetRandomString(),

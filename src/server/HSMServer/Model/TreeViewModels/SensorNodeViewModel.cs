@@ -49,7 +49,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public bool IsTableFormatSupported => Type is not SensorType.File;
 
-        public bool IsDatapointFormatSupported => Type is SensorType.Integer or SensorType.Double or SensorType.Counter or SensorType.Boolean
+        public bool IsDatapointFormatSupported => Type is SensorType.Integer or SensorType.Double or SensorType.Rate or SensorType.Boolean
                                                   or SensorType.String or SensorType.TimeSpan;
 
 
@@ -110,7 +110,7 @@ namespace HSMServer.Model.TreeViewModel
             TimeSpanPolicy p => new SingleDataAlertViewModel<TimeSpanValue>(p, this),
             IntegerPolicy p => new NumericDataAlertViewModel<IntegerValue>(p, this),
             DoublePolicy p => new NumericDataAlertViewModel<DoubleValue>(p, this),
-            CounterPolicy p => new NumericDataAlertViewModel<CounterValue>(p, this),
+            RatePolicy p => new NumericDataAlertViewModel<RateValue>(p, this),
             IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue>(p, this),
             DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue>(p, this),
             _ => null,

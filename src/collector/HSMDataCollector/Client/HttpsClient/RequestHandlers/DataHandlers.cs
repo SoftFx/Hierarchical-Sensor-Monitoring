@@ -43,8 +43,8 @@ namespace HSMDataCollector.Client.HttpsClient
                     return _endpoints.File;
                 case VersionSensorValue _:
                     return _endpoints.Version;
-                case CounterSensorValue _:
-                    return _endpoints.Counter;
+                case RateSensorValue _:
+                    return _endpoints.Rate;
                 default:
                     throw new Exception($"Unsupported sensor type: {((SensorValueBase)rawData).Path}");
             }

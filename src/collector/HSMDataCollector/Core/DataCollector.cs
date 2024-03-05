@@ -359,13 +359,13 @@ namespace HSMDataCollector.Core
         }
 
 
-        public IMonitoringCounterSensor CreateM1CounterSensor(string path, string desctiption = "") => CreateCounterSensor(path, 60000, desctiption);
+        public IMonitoringRateSensor CreateM1RateSensor(string path, string desctiption = "") => CreateRateSensor(path, 60000, desctiption);
 
-        public IMonitoringCounterSensor CreateM5CounterSensor(string path, string description = "") => CreateCounterSensor(path, 300000, description);
+        public IMonitoringRateSensor CreateM5RateSensor(string path, string description = "") => CreateRateSensor(path, 300000, description);
 
-        public IMonitoringCounterSensor CreateCounterSensor(string path, CounterSensorOptions options) => _sensorsStorage.CreateCounterSensor(path, options);
+        public IMonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options) => _sensorsStorage.CreateRateSensor(path, options);
 
-        private IMonitoringCounterSensor CreateCounterSensor(string path, int postPeriod, string description = "") => CreateCounterSensor(path, new CounterSensorOptions
+        private IMonitoringRateSensor CreateRateSensor(string path, int postPeriod, string description = "") => CreateRateSensor(path, new RateSensorOptions
         {
             PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
             Description = description,

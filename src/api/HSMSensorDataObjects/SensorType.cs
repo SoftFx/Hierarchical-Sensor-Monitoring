@@ -59,6 +59,6 @@
         /// <summary>
         /// Simple sensor which collects data of double type in speed format and sends the collected data instantly
         /// </summary>
-        CounterSensor = 9,
+        RateSensor = 9,
     }
 }

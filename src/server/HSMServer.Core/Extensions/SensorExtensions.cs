@@ -59,7 +59,7 @@ namespace HSMServer.Core
                 SensorType.Boolean => BuildDefault<BooleanValue>(),
                 SensorType.Integer => BuildDefault<IntegerValue>(),
                 SensorType.Double => BuildDefault<DoubleValue>(),
-                SensorType.Counter => BuildDefault<CounterValue>(),
+                SensorType.Rate => BuildDefault<RateValue>(),
                 SensorType.String => BuildDefault<StringValue>(),
                 SensorType.IntegerBar => BuildDefault<IntegerBarValue>().AddCurrentTime(),
                 SensorType.DoubleBar => BuildDefault<DoubleBarValue>().AddCurrentTime(),
