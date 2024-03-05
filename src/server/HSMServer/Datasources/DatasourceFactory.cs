@@ -29,8 +29,8 @@ namespace HSMServer.Datasources
                 SensorType.Double when property.IsInstantView() => new DoubleLineDatasource(),
                 SensorType.Double when property.IsInstantDoubleLine() => new DoubleToNullDoubleDatasource(),
 
-                SensorType.Counter when property.IsInstantView() => new CounterLineDatasource(),
-                SensorType.Counter when property.IsInstantDoubleLine() => new CounterToNullDoubleDatasource(),
+                SensorType.Rate when property.IsInstantView() => new RateLineDatasource(),
+                SensorType.Rate when property.IsInstantDoubleLine() => new RateToNullDoubleDatasource(),
 
                 SensorType.TimeSpan when property.IsInstantView() => new TimespanLineDatasource(),
 

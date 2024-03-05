@@ -2,9 +2,9 @@
 
 namespace HSMSensorDataObjects.SensorValueRequests
 {
-    public class CounterSensorValue : SensorValueBase<double>
+    public class RateSensorValue : SensorValueBase<double>
     {
-        [DefaultValue((int)SensorType.CounterSensor)]
-        public override SensorType Type => SensorType.CounterSensor;
+        [DefaultValue((int)SensorType.RateSensor)]
+        public override SensorType Type => SensorType.RateSensor;
     }
 }

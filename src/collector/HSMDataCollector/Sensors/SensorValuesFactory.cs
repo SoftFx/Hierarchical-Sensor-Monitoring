@@ -77,8 +77,8 @@ namespace HSMDataCollector.SensorsFactory
                     {
                         Value = val is Version version ? version : default
                     };
-                case SensorType.CounterSensor:
-                    return (val) => new CounterSensorValue()
+                case SensorType.RateSensor:
+                    return (val) => new RateSensorValue()
                     {
                         Value = val is double doubleV ? doubleV : default
                     };
