@@ -148,7 +148,7 @@ namespace HSMServer.Core.Cache
         private static bool IsModuleSensor(BaseSensorModel sensor) => sensor.Path.Contains(".module");
 
 
-        private static bool IsNumberSensor(SensorType type) => type.IsBar() || type is SensorType.Integer or SensorType.Double or SensorType.Counter;
+        private static bool IsNumberSensor(SensorType type) => type.IsBar() || type is SensorType.Integer or SensorType.Double or SensorType.Rate;
 
 
         private static PolicyUpdate ToUpdate(Policy policy) =>
