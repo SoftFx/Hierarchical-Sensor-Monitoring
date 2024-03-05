@@ -1,6 +1,7 @@
 import { convertToGraphData } from "./plotting";
 import { pan } from "plotly.js/src/fonts/ploticon";
 import { Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot } from "./plots";
+import {funcs} from "./test";
 
 const updateDashboardInterval = 120000; // 2min
 
@@ -287,6 +288,8 @@ export function initDropzone() {
 
 const maxPlottedPoints = 1500;
 window.initDashboard = function () {
+    funcs.hello();
+    
     const currentRange = getRangeDate();
     const layoutUpdate = {
         'xaxis.range': currentRange
