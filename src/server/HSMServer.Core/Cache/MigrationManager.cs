@@ -31,7 +31,7 @@ namespace HSMServer.Core.Cache
         ];
 
 
-        internal IEnumerable<SensorUpdate> GetMigrationUpdates(List<BaseSensorModel> sensors)
+        internal static IEnumerable<SensorUpdate> GetMigrationUpdates(List<BaseSensorModel> sensors)
         {
             foreach (var sensor in sensors)
                 if (IsDefaultSensor(sensor) && IsNumberSensor(sensor.Type))
@@ -80,7 +80,7 @@ namespace HSMServer.Core.Cache
 
         private static bool TryBuildNumberToScheduleMigration(BaseSensorModel sensor, out SensorUpdate update)
         {
-            static bool IsTarget(Policy policy) => IsTargetPolicy(policy, _emaToScheduleSet);
+            static bool IsTarget(Policy policy) => IsTargetPolicy(policy, _emaToScheduleSet) && policy.Schedule.RepeatMode == AlertRepeatMode.Immediately;
 
             static PolicyUpdate Migration(PolicyUpdate update) => update with
             {

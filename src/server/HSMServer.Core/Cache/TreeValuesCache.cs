@@ -864,7 +864,7 @@ namespace HSMServer.Core.Cache
         {
             try
             {
-                foreach (var update in _migrator.GetMigrationUpdates([.. _sensors.Values]))
+                foreach (var update in MigrationManager.GetMigrationUpdates([.. _sensors.Values]))
                     TryUpdateSensor(update, out _);
             }
             catch (Exception ex)
