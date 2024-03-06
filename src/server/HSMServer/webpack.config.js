@@ -32,10 +32,7 @@ module.exports = {
         ]
     },
     resolve: {
-        extensions: ['.ts', '.js'],
-        fallback: {
-            "stream": require.resolve("stream-browserify")
-        }
+        extensions: ['.ts', '.js']
     },
     plugins: [
         new webpack.ProvidePlugin({
