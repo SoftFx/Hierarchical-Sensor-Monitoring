@@ -198,6 +198,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
     );
 
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
+    currentPanel[data.id].isTimeSpan = plot instanceof TimeSpanPlot;
 }
 
 window.addNewSourceHtml = function (data, id) {
@@ -306,15 +307,16 @@ window.initDashboard = function () {
                 sources: [
                     {
                         id: i,
-                        range: currentPanel[i].range
                     }
                 ],
-                requestTimeout: undefined
+                range: currentPanel[i].range,
+                isTimeSpan: currentPanel[i].isTimeSpan,
+                requestTimeout: undefined,
+                id: currentPanel[i].panelId
             }
         } else {
             dict[currentPanel[i].panelId].sources.push({
-                id: i,
-                range: currentPanel[i].range
+                id: i
             })
         }
     }
