@@ -1,6 +1,5 @@
 import { convertToGraphData } from "./plotting";
 import { Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot } from "./plots";
-import {funcs} from "../ts/test";
 import {Dashboard} from "../ts/dashboardT";
 
 const updateDashboardInterval = 120000; // 2min
