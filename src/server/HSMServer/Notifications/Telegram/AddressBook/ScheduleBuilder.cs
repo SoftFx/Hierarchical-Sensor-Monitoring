@@ -12,7 +12,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook
         private const string DayTempalte = "d MMMM (dddd)";
 
         private readonly CTimeDict<MessageBuilder> _scheduleParts = new();
-        private readonly TimeSpan _grouppingPeriod = TimeSpan.FromHours(1);
+        private readonly TimeSpan _grouppingPeriod = TimeSpan.FromMinutes(5);
 
 
         public void AddMessage(AlertResult alert)
@@ -37,7 +37,9 @@ namespace HSMServer.Notifications.Telegram.AddressBook
                     sb.AppendLine(curDate.ToString(DayTempalte));
                 }
 
-                sb.AppendLine($"{time.Hour}:00-{time.Hour + 1}:00 (UTC)");
+                var nextTime = time + _grouppingPeriod;
+
+                sb.AppendLine($"{time.Hour}:{time.Minute}-{nextTime.Hour}:{nextTime.Minute} (UTC)");
                 sb.AppendLine(part.GetAggregateMessage());
             }
 
