@@ -8,6 +8,7 @@
   "author": "HSM team",
   "license": "MIT",
   "devDependencies": {
+    "@types/jquery": "3.5.29",
     "@types/plotly.js": "2.29.1",
     "copy-webpack-plugin": "12.0.2",
     "css-loader": "6.10.0",
