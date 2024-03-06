@@ -1,10 +1,12 @@
 {
   "compilerOptions": {
-    "outDir": "./wwwroot/dist/",
+    "outDir": "./wwwroot/dist",
     "noImplicitAny": true,
     "module": "es6",
     "target": "es5",
     "allowJs": true,
-    "moduleResolution": "node"
+    "checkJs": false,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": false
   }
 }

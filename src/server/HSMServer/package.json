@@ -8,15 +8,16 @@
   "author": "HSM team",
   "license": "MIT",
   "devDependencies": {
+    "@types/plotly.js": "2.29.1",
     "copy-webpack-plugin": "12.0.2",
     "css-loader": "6.10.0",
     "expose-loader": "5.0.0",
     "moment-locales-webpack-plugin": "1.2.0",
     "style-loader": "3.3.4",
-    "webpack": "5.90.3",
-    "webpack-cli": "5.1.4",
     "ts-loader": "9.5.1",
-    "typescript": "5.3"
+    "typescript": "5.3",
+    "webpack": "5.90.3",
+    "webpack-cli": "5.1.4"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "6.2.1",
@@ -32,7 +33,7 @@
     "jstree": "3.3.12",
     "marked": "4.3.0",
     "moment": "2.29.4",
-    "plotly.js": "2.28.0",
+    "plotly.js": "^2.28.0",
     "terser": "^5.28.1",
     "timespan": "2.3.0"
   }

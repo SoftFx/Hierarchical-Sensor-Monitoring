@@ -1,7 +1,7 @@
 import { convertToGraphData } from "./plotting";
-import { pan } from "plotly.js/src/fonts/ploticon";
 import { Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot } from "./plots";
-import {funcs} from "./test";
+import {funcs} from "../ts/test";
+import {Dashboard} from "../ts/dashboardT";
 
 const updateDashboardInterval = 120000; // 2min
 
@@ -288,8 +288,6 @@ export function initDropzone() {
 
 const maxPlottedPoints = 1500;
 window.initDashboard = function () {
-    funcs.hello();
-    
     const currentRange = getRangeDate();
     const layoutUpdate = {
         'xaxis.range': currentRange
@@ -321,134 +319,8 @@ window.initDashboard = function () {
             })
         }
     }
-    console.log(dict)
-
-    for (let i in dict) {
-        dict[i].requestTimeout = setInterval(function () {
-            $.ajax({
-                type: 'get',
-                url: window.location.pathname + '/PanelUpdate' + `/${i}`,
-            }).done(function (data) {
-                console.log(data)
-                let plot = $(`#panelChart_${i}`)[0];
-                for (let sourceUpdate of data) {
-                    updateSource(sourceUpdate, plot)
-                }
-            })
-        }, updateDashboardInterval)
-    }
-
-    function updateSource(sourceUpdate, plot) {
-        let visibleValues = sourceUpdate.update.newVisibleValues;
-        let isTimeSpan = sourceUpdate.update.isTimeSpan !== undefined && sourceUpdate.update.isTimeSpan === true;
-        let sourceId = sourceUpdate.id;
-        
-        let correctId = 0;
-        for (let j of plot.data) {
-            if (j.id === sourceId)
-                break;
-
-            correctId += 1;
-        }
-        
-        let lastTime = new Date(0);
-
-        if (plot.data[correctId] !== undefined && plot.data[correctId].x.length > 0)
-            lastTime = new Date(plot.data[correctId].x.at(-1));
-
-        let prevData = plot.data[correctId];
-        let prevId = prevData.ids !== undefined && prevData.ids?.length !== 0 ? prevData.ids.at(-1) : undefined;
-        if (prevData.ids === undefined)
-            prevData.ids = [];
-        let redraw = false;
-
-        let x = [];
-        let y = [];
-        let customData = []
-        for (let j of visibleValues) {
-            if (lastTime >= new Date(j.time))
-                continue;
-
-            if (isTimeSpan) {
-                let timespanValue = TimeSpanPlot.getTimeSpanValue(j);
-                customData.push(Plot.checkError(j) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, j) + '<br>' + j.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, j))
-                x.push(j.time)
-                y.push(timespanValue === 'NaN' ? timespanValue : timespanValue.totalMilliseconds())
-            } else {
-                if (prevId !== undefined && j.id === prevId) {
-                    redraw = true;
-                    prevData.x.pop();
-                    prevData.y.pop();
-                    prevData.customdata.pop();
-                }
-                x.push(j.time);
-                y.push(j.value);
-                prevData.ids.push(j.id)
-                let custom = j.value;
-                if (currentPanel[sourceId].range !== undefined && currentPanel[sourceId].range !== true)
-                    custom = j.tooltip;
-                else if (j.tooltip !== null)
-                    custom += `<br>${j.tooltip}`;
-
-                customData.push(custom);
-            }
-
-        }
-
-        if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null) {
-            Plotly.update(plot, {x: [[]], y: [[]]}, {'xaxis.autorange': true}, correctId)
-        }
-
-        if (redraw) {
-            prevData.x.push(...x)
-            prevData.y.push(...y)
-            prevData.customdata.push(...customData)
-            Plotly.deleteTraces(plot, correctId);
-            Plotly.addTraces(plot, prevData, correctId);
-            DefaultRelayout(plot);
-        } else {
-            Plotly.extendTraces(plot, {
-                y: [y],
-                x: [x],
-                customdata: [customData]
-            }, [correctId], maxPlottedPoints).then(
-                (data) => {
-                    if (isTimeSpan)
-                        TimespanRelayout(data);
-                    else
-                        DefaultRelayout(data);
-                }
-            )
-        
-        }
-    }
-}
-
-function TimespanRelayout(data) {
-    let y = [];
-    for (let i of data.data)
-        y.push(...i.y)
-
-    y = y.filter(element => {
-        return element !== null;
-    })
-
-    let layoutTicks = TimeSpanPlot.getLayoutTicks(y);
-    let layoutUpdate = {
-        'yaxis.ticktext': layoutTicks[1],
-        'yaxis.tickvals': layoutTicks[0]
-    }
-
-    Plotly.relayout(data.id, layoutUpdate)
-}
-
-function DefaultRelayout(data) {
-    let layoutUpdate = {
-        'xaxis.range': getRangeDate(),
-        'yaxis.autorange': true,
-    }
-
-    Plotly.relayout(data.id, layoutUpdate)
+    
+    Dashboard.initRequests(dict);
 }
 
 window.disableDragAndResize = function () {
