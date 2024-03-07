@@ -23,9 +23,3 @@ export interface SourceUpdate {
         isTimeSpan: boolean
     }
 }
-
-export class PlotUpdate {
-    x: any[] = [];
-    y: any[] = [];
-    customdata: any[] = [];
-}

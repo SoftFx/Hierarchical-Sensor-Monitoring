@@ -1,15 +1,16 @@
-import {PlotlyHTMLElement} from "plotly.js";
-import {Panel, PlotUpdate, SourceUpdate} from "./dashboard.interfaces";
+import {Data, PlotlyHTMLElement} from "plotly.js";
+import {Panel, SourceUpdate} from "./dashboard.interfaces";
 import {Plot, TimeSpanPlot} from "../js/plots";
+import {PlotUpdate, Redraw} from "./dashboard.classes";
 
 
 export namespace DataUpdate {
     export class Update {
         private panel: Panel;
-        
+
 
         updateData: { update: PlotUpdate, id: number }[] = [];
-        redrawData: { plot: Plot, id: number }[] = [];
+        redrawData: Redraw = new Redraw();
         singleUpdate: PlotUpdate = new PlotUpdate();
         isTimeSpan: boolean = false;
 
@@ -31,7 +32,16 @@ export namespace DataUpdate {
                     return result.status === "fulfilled";
                 })) {
                     let [update, ids] = this.getUpdates();
-                    this.extendTraces(plotDiv, update, ids);
+                    this.extendTraces(plotDiv, update, ids)
+                        .then(
+                            (res) => {
+                                this.redraw(plotDiv).then((res) => {
+                                        this.relayout(plotDiv)
+                                    })
+                            },
+                            (error) => {
+                                this.relayout(plotDiv)
+                            })
                 }
             })
         }
@@ -89,23 +99,30 @@ export namespace DataUpdate {
                 prevData.y.push(...this.singleUpdate.y)
                 prevData.customdata.push(...this.singleUpdate.customdata)
 
-                this.redrawData.push({plot: prevData, id: plotId});
-                
-                // window.Plotly.deleteTraces(plotDiv, plotId);
-                // window.Plotly.addTraces(plotDiv, prevData as Partial<Data>, plotId);
-                // DefaultRelayout(plotDiv);
+                this.redrawData.add(prevData, plotId);
             } else {
                 this.updateData.push({update: this.singleUpdate, id: plotId});
             }
-            
+
             this.singleUpdate = new PlotUpdate();
-            
+
             return new Promise<boolean>((resolve) => {
                 resolve(true);
             });
         }
 
-        private getUpdates() :[PlotUpdate, number[]] {
+        relayout(plotDiv: PlotlyHTMLElement) {
+            if (this.isTimeSpan)
+                Layout.TimespanRelayout(plotDiv);
+            else
+                Layout.DefaultRelayout(plotDiv);
+
+            this.singleUpdate = new PlotUpdate();
+            this.redrawData = new Redraw();
+            this.updateData = [];
+        }
+
+        private getUpdates(): [PlotUpdate, number[]] {
             let update: PlotUpdate = new PlotUpdate();
             let ids: number[] = [];
 
@@ -115,27 +132,23 @@ export namespace DataUpdate {
                 update.customdata.push(x.update.customdata);
                 ids.push(x.id);
             })
-            
+
             return [update, ids];
         }
-        
-        extendTraces(plotDiv: PlotlyHTMLElement, update: PlotUpdate, ids: number[]) {
-            window.Plotly.extendTraces(plotDiv, {
+
+        extendTraces(plotDiv: PlotlyHTMLElement, update: PlotUpdate, ids: number[]): Promise<PlotlyHTMLElement> {
+            return window.Plotly.extendTraces(plotDiv, {
                 y: update.y,
                 x: update.x,
                 customdata: update.customdata
-            }, ids, Layout.maxPlottedPoints).then(
-                (data) => {
-                    if (this.isTimeSpan)
-                        Layout.TimespanRelayout(data);
-                    else
-                        Layout.DefaultRelayout(data);
+            }, ids, Layout.maxPlottedPoints)
+        }
 
-                    this.singleUpdate = new PlotUpdate();
-                    this.updateData = [];
-                    this.redrawData = [];
-                }
-            )
+        redraw(plotDiv: PlotlyHTMLElement): Promise<PlotlyHTMLElement> {
+            return window.Plotly.deleteTraces(plotDiv, this.redrawData.traceIds)
+                .then((res) => {
+                    return window.Plotly.addTraces(plotDiv, this.redrawData.traces as Partial<Data>, this.redrawData.traceIds);
+                });
         }
     }
 }
