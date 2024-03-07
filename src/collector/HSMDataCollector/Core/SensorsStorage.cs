@@ -123,7 +123,7 @@ namespace HSMDataCollector.Core
             if (TryGetValue(path, out var oldSensor))
                 return oldSensor;
 
-            if (_collector.Status.IsRunning())
+            if (_collector.Status.IsStartingOrRunning())
             {
                 _ = AddAndStart(sensor);
                 return sensor;
