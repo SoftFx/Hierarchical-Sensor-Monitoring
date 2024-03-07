@@ -43,13 +43,19 @@ namespace HSMDataCollector.SyncQueue
         public void SetResult((Guid, string) key, bool result)
         {
             if (_requestStorage.TryGetValue(key, out var source))
+            {
                 source.SetResult(result);
+                _logger.Info($"Command request by key {key} has been accepted. Result = {result}.");
+            }
         }
 
         public void SetCancel((Guid, string) key)
         {
             if (_requestStorage.TryGetValue(key, out var source))
+            {
                 source.SetCanceled();
+                _logger.Info($"Command request by key {key} has been canceled.");
+            }
         }
     }
 }
