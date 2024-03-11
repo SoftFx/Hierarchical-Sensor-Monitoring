@@ -1,61 +1,86 @@
 # HSM Server
 
-## New entity **Template** for Panels has been added
-Panel templates allow you to quickly create and configure sensor sources. Template consists of 2 parts: Filter and Source settings.  
+## RATE - New sensor type has been added
+New sensor type has been added. Current sensor display data in double format as *eventns/sec* data. Datacollector consits templates for **Rate** sensors, whitch send data to server every 1 or 5 minetes. During this period sensor collects and saves information about different events (like requests count, responses, errors etc.) and send count of events divided by period size in seconds.
 
-Filter part includes 2 parameters:
-* **Folders** filter allows you to select in which folder you want to search for sensors. Supports multiselect logic. Default value is **Any**.
-* **Path** template - sensor path template to be added to the Panel. It supports 2 types of variables that help to create sensor path templates. The variable supports letters, digits and symbols _ . $  
-Variables:
-    * **\*** - unnamed;
-    * **{piece}** - named variable (can be used in **Label** input).  
-  
-   ***Example**. Folder filer = **Any**, Path template = **\*/Database/{db_name} size**. It means that all sensors will be added from any folder in any product where there is a **Database** node and the sensor name ends with **size**. Database name saved in **{db_name}** variable.*  
-
-Source settings:
-* **Label** - label for new source. It can use **Path template** variables.  
-   ***Example**. Sensor **Main product/Database/Journal size** found using path template = **\*/Database/{db_name} size**. If Label is **{db_name} folder** the source label will look like **Journal folder**.*  
-* **Property** - selected property for all sensors.
-* **Shape** - default shape for all sources.
-
-**How to create and apply panel Template**:
-1. Select **Panel**.
-1. Add new template by clicking on the **+Add** button next to the **Tempaltes** title.
-1. Сonfigure template fields.
-1. After configuring the template, you need to click **Apply and Enable** item in template context menu.
-1. The logic for scanning existing sensors starts. If everything is configured correctly, click to the **Enable** button.
-1. If you want to run scan again for existing template with new settings, you need to click **Reapply** button in template context menu.
-1. After the scanning logic, the template subscribes to updates from new sensors. If the new sensor matches the template, it will be added automatically with the configured **Source settings**.
-
-## Dashboards
-* Dropdown with all Dashboards entities has been added to **Dashboards** tab.
-* Autoupdate each 30 sec for Panel legend has been removed.
-
-## Panels
-* New logic with fixed Y boarders has been added. It consists of 3 items:
-   * Autoscale (checkbox) - default value is true. A chart adapts to **Value** of a points on the chart.
-   * Min Y - lower bound of chart **Value**
-   * Max Y - upper bound of chart **Value**
-
-  If **Value** has been updated by Y boarders, **Original value** has been added to the point tooltip.
-* Limit on the maximum number of sources has been added. Max sources count **is 100**.
-* Limit for uniq Id of source sensor has been removed. (You can add the same sensor with different **Properties**) 
-
-## Panel sources
-* **Remove all sources** item has been added in Source context menu.
-* **Shape** help link opens in a new tab.
-* Space trimming for **Path** and **Label** properties has been added.
+## Alerts migration
+All **EMA alerts** for **Integer**, **Double**, **IntBar**, **DoubleBar** sensors from **.computer** and **.module** node have been migrated to scheduled alerts with default period of **1 hour**.
 
 ## Notifications
-* TTL notification triggering after change **Last sensor value** has been fixed.
-* TTL recalculation after TTL policy update has been fixed.
+* New single notification before schedult groupping has been added. Current logic works only if **send instant message** is **True**.
 
-## Sensor metainfo
-* New format for database statistics has been added.
+## Scheduled alerts
+* New block **and instant send** has been added (send first message before groupping logic).
+* New predefine values have been added: **5 minutes**, **10 minutes**, **15 minutes** and **30 minutes**.
+
+## Import/export alerts
+* **ScheduledInstantSend** logic has been added.
+
+## Dashboards
+* Interval update has been increased from **30 sec** to **2 minutes**.
+* New display mode **One column** has been added.
+
+## Panels
+* Plot updates have been aggregated to 1 panel update request.
+* Strict dorders for Y axis have been added.
+* Y axis settings for source with **Count** setting has been fixed.
+* Multitrade update for high load panel has been fixed.
+
+## Journal
+* **Show entries** list has been fixed.
+* **Search** disabling has been fixed.
 
 ## Rest API
-* **Client name** for data requests has been added. Needed to identify different collector instanses/clients.
+* New sensor type **Rate** has been added to API.
+* **Instant send first message** logic for schedule alerts should be added.
 
-## Infrastructure
-* Base security TLS protocol for **Telegram Api** has been uploaded to v.1.2
-* All npm packages have been uploaded to Node.js v.20
+# Datacollector v.3.3.0
+
+## Reconnection logic has been improved
+* Retry logic for failed requests has been added. For data request max count of failed requests is **10 items**, for command requests - **1000 items**.
+* **Progressive delay** between failed request has been added. Start value is **2 sec** max value is **2 minutes**.
+* If previous request in retrying loop, current request saves to local failed queue.
+* After final request attempt current data will be skipped.
+* **Guid** for all requests has been added.
+* Log logic for error request has been improved.
+
+## Collector logic
+* **Module name** has been added as **Client name** to HEAD of all requests.
+* **IsPrioritySensor** logic has been added. If it's priority sensor then send data logic skips synchronization queue and all sensor data send to server as independent request.
+
+## Default sensors
+* All EMA alerts for **Integer**, **Double**, **IntBar**, **DoubleBar** sensors have been migrated to scheduled alerts with default period of **1 hour**.
+* **Confirmation period** has been removed for all schedule alerts.
+* **Windows last update** sensor has been fixed. It reads data from PowerShell comand.
+* **Keep sensor history** setting has been updated to **5 years** for *.module/Version* and *.module/Collector version* sensors.
+* **TTL** setting has been updated to **Never** for *Windows errors logs* and *Windows warnig logs*.
+* **Post and collect** time info has been added for all default bar sensors to description.
+
+## Alert API
+* New block **Send instant message** for scheduled alerts has been added.
+* **Client name** property for **BaseSensorValue** has been removed.
+
+## New sensors
+* **Avr disc write speed** sensor has been added.
+* **Connection Failures Count** sensor has been added to *.computer/Network* node.
+* **Connections Established Count** sensor has been added to *.computer/Network* node.
+* **Connections Reset Count** sensor has been added to *.computer/Network* node.
+* **CreateRateSensor**, **CreateM1RateSensor** and **CreateM5RateSensor** - new tempaltes for **Rate** type sensors have been added.
+
+## Windows collection
+* **AddDiskAverageWriteSpeed** method have been added.
+* **AddNetworkConnectionsEstablished** method have been added.
+* **AddNetworkConnectionFailures** method have been added.
+* **AddNetworkConnectionsReset** method have been added.
+* **AddDisksAverageWriteSpeed** facade for all computer disks has been added.
+* **AddAllNetworkSensors** facade for all Network sensors has been added.
+
+## Sensor migrations
+* All file sensors have been migrated to modern base. **IFileSensor** public interface has been added. This interface supports 2 methods:
+    * Send text as file.
+    * Send file by path. 
+* All last sensor value sensors have been migrated to modern base. New common method **CreateLastValueSensor\<T\>** has been added. This sensors send data to server only after collector stop event.
+* All function sensors have been migrated to modern base. **CreateFunctionSensor\<T\>** and **CreateValuesFunctionSensor\<T, U\>** commond methods have been added.
+    * **INoParamsFuncSensor** - calls set function and send value to a server by timer.
+    * **IParamsFuncSensor** - saves all data in local cache. Calls set function by timer and converts all local data to some value. After data send local storage is cleared.
+* All old obsolete classes have been removed. **Obsolete** tag for some methods have been removed.
