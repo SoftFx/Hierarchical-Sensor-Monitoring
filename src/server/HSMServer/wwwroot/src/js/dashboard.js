@@ -143,6 +143,9 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
         'yaxis.title.font.size': 14,
         'yaxis.title.font.color': '#7f7f7f',
     }
+    
+    if (plot.autoscaleY !== true && plot.autoscaleY !== undefined)
+        layoutUpdate['yaxis.range'] = plot.autoscaleY;
 
     if (data.values.length === 0) {
         plot.x = [null]
