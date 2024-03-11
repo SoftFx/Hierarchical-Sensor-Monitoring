@@ -19,16 +19,15 @@ export namespace DataUpdate {
             this.panel = panel;
         }
 
+        
         async updateSources(sourceUpdates: SourceUpdate[]) {
             let promises: Promise<boolean>[] = [];
             let plotDiv = $(`#panelChart_${this.panel.id}`)[0] as PlotlyHTMLElement;
-            console.log(plotDiv)
             for (let sourceUpdate of sourceUpdates)
                 promises.push(this.updateSource(sourceUpdate, plotDiv));
 
             await Promise.allSettled(promises).then((results) => {
                 if (results.every((result) => {
-                    console.log(result.status)
                     return result.status === "fulfilled";
                 })) {
                     let [update, ids] = this.getUpdates();

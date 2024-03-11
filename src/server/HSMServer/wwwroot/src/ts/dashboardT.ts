@@ -3,8 +3,6 @@ import {DataUpdate} from "./plotUpdate";
 
 export namespace Dashboard {
     const updateDashboardInterval = 120000; // 2min
-    const maxPlottedPoints = 1500;
-
     
     export function initRequests(panel: Panel[]) {
         for (let i in panel) {
