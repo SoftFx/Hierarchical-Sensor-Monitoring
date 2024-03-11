@@ -1,4 +1,7 @@
 ﻿using HSMServer.Attributes;
+using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.TableOfChanges;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using System;
 using System.ComponentModel.DataAnnotations;
@@ -28,5 +31,15 @@ namespace HSMServer.Model.ViewModel
             OldName = product.Name;
             Description = product.Description;
         }
+
+
+        internal ProductUpdate ToUpdate(InitiatorInfo initiator) =>
+            new()
+            {
+                Id = Id,
+                Name = OldName != Name ? Name : null,
+                Description = Description is null ? string.Empty : Description,
+                Initiator = initiator,
+            };
     }
 }

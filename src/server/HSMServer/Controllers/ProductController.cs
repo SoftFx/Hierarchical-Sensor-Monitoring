@@ -150,10 +150,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult EditProduct(ProductGeneralInfoViewModel product)
-        {
-            return Ok();
-        }
+        public void EditProduct(ProductGeneralInfoViewModel product) => _treeValuesCache.UpdateProduct(product.ToUpdate(CurrentInitiator));
 
         [HttpPost]
         public void AddUserRight([FromBody] UserRightViewModel model)
