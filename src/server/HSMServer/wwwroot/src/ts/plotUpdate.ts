@@ -114,7 +114,7 @@ export namespace DataUpdate {
             if (this.isTimeSpan)
                 Layout.TimespanRelayout(plotDiv);
             else
-                Layout.DefaultRelayout(plotDiv);
+                Layout.DefaultRelayout(plotDiv, this.panel.range);
 
             this.singleUpdate = new PlotUpdate();
             this.redrawData = new Redraw();
@@ -175,13 +175,11 @@ export namespace Layout {
         window.Plotly.relayout(data.id, layoutUpdate)
     }
 
-    export function DefaultRelayout(data: any) {
-        let layoutUpdate = {
-            'xaxis.range': (window as any).getRangeDate(),
-            'yaxis.autorange': true,
-        }
+    export function DefaultRelayout(data: PlotlyHTMLElement, range: boolean | [number, number]) {
+        data.layout.xaxis.range = (window as any).getRangeDate();
+        data.layout.yaxis.range = typeof (range) !== 'boolean' ? range : null
 
-        window.Plotly.relayout(data.id, layoutUpdate)
+        window.Plotly.relayout(data.id, data.layout)
     }
 
     export function findCorrectId(plots: Plot[], sourceId: string): number {
