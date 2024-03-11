@@ -9,7 +9,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    ViewData["Title"] = $"Product {Model.ProductName}";
+    ViewData["Title"] = $"Product {Model.GeneralInfo.Name}";
 }
 
 <script>
@@ -38,13 +38,14 @@
     </div>
 </div>
 
-<input id="productKey" value="@Model.ProductId" style="display: none"/>
-<input id="encodedProductId" value="@Model.EncodedProductId" style="display: none"/>
+<input id="productKey" value="@Model.GeneralInfo.Id" style="display: none" />
 
 <div class="container">
     <div class="row justify-content-center">
-        <h4 class="my-3 text-break">Edit product '@Model.ProductName'</h4>
-    
+        <h4 class="my-3 text-break">Edit product '@Model.GeneralInfo.Name'</h4>
+
+        @await Html.PartialAsync("_EditProductGeneralInfo", Model.GeneralInfo)
+
         @*<div style="margin: 10px">
                 <div class="row justify-content-start">
                     <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
@@ -340,7 +341,7 @@
 
 <script>
     function addAccessKeyButtonClick() {
-        let productId = $('#encodedProductId').val();
+        let productId = $('#productKey').val();
         let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
         showNewAccessKeyModal(`${newAccessKeyURL}?selectedId=${productId}&closeModal=true`, true);

@@ -150,6 +150,12 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public IActionResult EditProduct(ProductGeneralInfoViewModel product)
+        {
+            return Ok();
+        }
+
+        [HttpPost]
         public void AddUserRight([FromBody] UserRightViewModel model)
         {
             UserRightValidator validator = new UserRightValidator();
