@@ -1,6 +1,6 @@
 import { convertToGraphData } from "./plotting";
-import { pan } from "plotly.js/src/fonts/ploticon";
 import { Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot } from "./plots";
+import {Dashboard} from "../ts/dashboardT";
 
 const updateDashboardInterval = 120000; // 2min
 
@@ -100,6 +100,10 @@ export function Model(id, panelId, dashboardId, sensorId, range = undefined) {
     this.range = range;
 }
 
+export function Panel(){
+    
+}
+
 window.insertSourceHtml = function (data) {
     let sources = $('#sources');
 
@@ -139,6 +143,9 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
         'yaxis.title.font.size': 14,
         'yaxis.title.font.color': '#7f7f7f',
     }
+    
+    if (plot.autoscaleY !== true && plot.autoscaleY !== undefined)
+        layoutUpdate['yaxis.range'] = plot.autoscaleY;
 
     if (data.values.length === 0) {
         plot.x = [null]
@@ -194,6 +201,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
     );
 
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
+    currentPanel[data.id].isTimeSpan = plot instanceof TimeSpanPlot;
 }
 
 window.addNewSourceHtml = function (data, id) {
@@ -295,130 +303,28 @@ window.initDashboard = function () {
     addDraggable(interactPanelDrag)
     addResizable(interactPanelResize)
 
+    let dict = {};
     for (let i in currentPanel) {
-        currentPanel[i].requestTimeout = setInterval(function () {
-            $.ajax({
-                type: 'get',
-                url: window.location.pathname + '/SourceUpdate' + `/${currentPanel[i].panelId}/${i}`,
-            }).done(function (data) {
-                if (!$.trim(data))
-                    return;
-
-                if (data.newVisibleValues.length > 0) {
-                    let plot = $(`#panelChart_${currentPanel[i].panelId}`)[0];
-
-                    let correctId = 0;
-
-                    for (let j of plot.data) {
-                        if (j.id === i)
-                            break;
-
-                        correctId += 1;
+        if (dict[currentPanel[i].panelId] === undefined) {
+            dict[currentPanel[i].panelId] = {
+                sources: [
+                    {
+                        id: i,
                     }
-
-                    let lastTime = new Date(0);
-
-                    if (plot.data[correctId] !== undefined && plot.data[correctId].x.length > 0)
-                        lastTime = new Date(plot.data[correctId].x.at(-1));
-
-                    let prevData = plot.data[correctId];
-                    let prevId = prevData.ids !== undefined && prevData.ids?.length !== 0 ? prevData.ids.at(-1) : undefined;
-                    if (prevData.ids === undefined)
-                        prevData.ids = [];
-                    let redraw = false;
-
-                    let x = [];
-                    let y = [];
-                    let customData = []
-                    let isTimeSpan = data.isTimeSpan !== undefined && data.isTimeSpan === true;
-                    for (let j of data.newVisibleValues) {
-                        if (lastTime >= new Date(j.time))
-                            continue;
-
-                        if (isTimeSpan) {
-                            let timespanValue = TimeSpanPlot.getTimeSpanValue(j);
-                            customData.push(Plot.checkError(j) ? TimeSpanPlot.getTimeSpanCustomData(timespanValue, j) + '<br>' + j.comment : TimeSpanPlot.getTimeSpanCustomData(timespanValue, j))
-                            x.push(j.time)
-                            y.push(timespanValue === 'NaN' ? timespanValue : timespanValue.totalMilliseconds())
-                        }
-                        else {
-                            if (prevId !== undefined && j.id === prevId) {
-                                redraw = true;
-                                prevData.x.pop();
-                                prevData.y.pop();
-                                prevData.customdata.pop();
-                            }
-                            x.push(j.time);
-                            y.push(j.value);
-                            prevData.ids.push(j.id)
-                            let custom = j.value;
-                            if (currentPanel[i].range !== undefined && currentPanel[i].range !== true)
-                                custom = j.tooltip;
-                            else if (j.tooltip !== null)
-                                custom += `<br>${j.tooltip}`;
-
-                            customData.push(custom);
-                        }
-
-                    }
-
-                    if (x.length >= 1 && y.length >= 1 && plot.data[correctId].x[0] === null) {
-                        Plotly.update(plot, { x: [[]], y: [[]] }, { 'xaxis.autorange': true }, correctId)
-                    }
-
-                    if (redraw) {
-                        prevData.x.push(...x)
-                        prevData.y.push(...y)
-                        prevData.customdata.push(...customData)
-                        Plotly.deleteTraces(plot, correctId);
-                        Plotly.addTraces(plot, prevData, correctId);
-                        DefaultRelayout(plot);
-                    }
-                    else {
-                        Plotly.extendTraces(plot, {
-                            y: [y],
-                            x: [x],
-                            customdata: [customData]
-                        }, [correctId], maxPlottedPoints).then(
-                            (data) => {
-                                if (isTimeSpan)
-                                    TimespanRelayout(data);
-                                else
-                                    DefaultRelayout(data);
-                            }
-                        )
-                    }
-                }
+                ],
+                range: currentPanel[i].range,
+                isTimeSpan: currentPanel[i].isTimeSpan,
+                requestTimeout: undefined,
+                id: currentPanel[i].panelId
+            }
+        } else {
+            dict[currentPanel[i].panelId].sources.push({
+                id: i
             })
-        }, updateDashboardInterval)
+        }
     }
-}
-
-function TimespanRelayout(data) {
-    let y = [];
-    for (let i of data.data)
-        y.push(...i.y)
-
-    y = y.filter(element => {
-        return element !== null;
-    })
-
-    let layoutTicks = TimeSpanPlot.getLayoutTicks(y);
-    let layoutUpdate = {
-        'yaxis.ticktext': layoutTicks[1],
-        'yaxis.tickvals': layoutTicks[0]
-    }
-
-    Plotly.relayout(data.id, layoutUpdate)
-}
-
-function DefaultRelayout(data) {
-    let layoutUpdate = {
-        'xaxis.range': getRangeDate(),
-        'yaxis.autorange': true,
-    }
-
-    Plotly.relayout(data.id, layoutUpdate)
+    
+    Dashboard.initRequests(dict);
 }
 
 window.disableDragAndResize = function () {
