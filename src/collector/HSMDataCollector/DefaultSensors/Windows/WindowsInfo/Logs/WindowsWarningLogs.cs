@@ -3,7 +3,7 @@ using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    public class WindowsApplicationWarningLogs : WindowsLogsSensorBase
+    public sealed class WindowsApplicationWarningLogs : WindowsLogsSensorBase
     {
         protected override EventLogEntryType LogType => EventLogEntryType.Warning;
 
@@ -14,7 +14,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
     }
 
 
-    public class WindowsSystemWarningLogs : WindowsLogsSensorBase
+    public sealed class WindowsSystemWarningLogs : WindowsLogsSensorBase
     {
         protected override EventLogEntryType LogType => EventLogEntryType.Warning;
 
