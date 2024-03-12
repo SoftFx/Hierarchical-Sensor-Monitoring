@@ -34,6 +34,11 @@
     font-weight: bold;
 }
 
+.tree-unconfigured-alerts-icon {
+    color: lightcoral;
+    font-size: smaller;
+}
+
 .time-ago-div {
     color: grey;
 }

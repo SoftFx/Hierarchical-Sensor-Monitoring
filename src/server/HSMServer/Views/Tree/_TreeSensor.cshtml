@@ -19,6 +19,13 @@
 
     @if (showIcons)
     {
+        @if (Model.HasUnconfiguredAlerts)
+        {
+            <span>
+                <i class="fa-solid fa-comment-slash tree-unconfigured-alerts-icon"></i>
+            </span>
+        }
+
         @if (Model.IsGrafanaEnabled && !Model.Parent.IsGrafanaEnabled)
         {
             <span>

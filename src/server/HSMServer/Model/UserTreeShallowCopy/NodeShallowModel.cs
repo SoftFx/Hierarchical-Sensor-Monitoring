@@ -25,8 +25,12 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public IntegrationState GrafanaState { get; } = new();
 
+        public AlertsState AlertsState { get; } = new();
+
 
         public override bool IsGrafanaEnabled => GrafanaState.IsAllEnabled;
+
+        public override bool HasUnconfiguredAlerts => AlertsState.IsAnyEnabled;
 
 
         public int RenderWidthDifference { get; private set; }
@@ -65,6 +69,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             _nodeFilter = nodeFilter;
             _sensorFilter = sensorFilter;
+
+            AlertsState.CalculateState(data.TTLAlert.IsUnconfigured());
         }
 
 
@@ -80,6 +86,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             _mutedValue = !_mutedValue.HasValue ? isSensorMuted : _mutedValue & isSensorMuted;
 
             GrafanaState.CalculateState(shallowSensor);
+            AlertsState.CalculateState(shallowSensor.HasUnconfiguredAlerts);
 
             if (user.IsSensorVisible(sensor))
                 VisibleSubtreeSensorsCount++;
@@ -99,6 +106,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
                 _mutedValue = !_mutedValue.HasValue ? node._mutedValue : _mutedValue & node._mutedValue;
 
             GrafanaState.CalculateState(node.GrafanaState);
+            AlertsState.CalculateState(node.AlertsState);
 
             VisibleSubtreeSensorsCount += node.VisibleSubtreeSensorsCount;
             ErrorsCount += node.ErrorsCount;
