@@ -8,6 +8,7 @@ All **EMA alerts** for **Integer**, **Double**, **IntBar**, **DoubleBar** sensor
 
 ## Notifications
 * New single notification before schedult groupping has been added. Current logic works only if **send instant message** is **True**.
+* Notification groupping by **Schedule mode** has been added.
 
 ## Scheduled alerts
 * New block **and instant send** has been added (send first message before groupping logic).
