@@ -4,17 +4,33 @@ using System;
 
 namespace HSMDataCollector.Prototypes.Collections
 {
-    internal class WindowsErrorLogsPrototype : WindowsLogPrototype
+    internal class WindowsApplicationErrorLogsPrototype : WindowsLogPrototype
     {
-        protected override string SensorName => "Windows Error Logs";
+        protected override string EventViewerCategory => "Application";
 
         protected override string Status => "Error";
     }
 
 
-    internal class WindowsWarningLogsPrototype : WindowsLogPrototype
+    internal class WindowsSystemErrorLogsPrototype : WindowsLogPrototype
     {
-        protected override string SensorName => "Windows Warning Logs";
+        protected override string EventViewerCategory => "System";
+
+        protected override string Status => "Error";
+    }
+
+
+    internal class WindowsApplicationWarningLogsPrototype : WindowsLogPrototype
+    {
+        protected override string EventViewerCategory => "Application";
+
+        protected override string Status => "Warning";
+    }
+
+
+    internal class WindowsSystemWarningLogsPrototype : WindowsLogPrototype
+    {
+        protected override string EventViewerCategory => "System";
 
         protected override string Status => "Warning";
     }
@@ -22,17 +38,22 @@ namespace HSMDataCollector.Prototypes.Collections
 
     internal abstract class WindowsLogPrototype : InstantSensorOptionsPrototype<InstantSensorOptions>
     {
-        internal const string BaseDescription = "The sensor reads Windows Logs and sends all logs with {0} status. The information is read using " +
+        internal const string BaseDescription = "The sensor reads Windows Logs and sends all logs with **{0}** status from **{1}** category. The information is read using " +
                                                 "[**Event log**](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.eventlog?view=dotnet-plat-ext-7.0)";
 
-        protected override string Category => WindowsOsInfo;
+        protected abstract string EventViewerCategory { get; }
 
         protected abstract string Status { get; }
 
 
+        protected override string SensorName => $"Windows {Status} Logs ({EventViewerCategory})";
+
+        protected override string Category => WindowsOsInfo;
+
+
         protected WindowsLogPrototype() : base()
         {
-            Description = string.Format(BaseDescription, Status);
+            Description = string.Format(BaseDescription, Status, EventViewerCategory);
             IsComputerSensor = true;
 
             Type = SensorType.StringSensor;
