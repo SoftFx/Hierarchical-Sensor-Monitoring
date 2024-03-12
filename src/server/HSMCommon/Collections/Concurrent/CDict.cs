@@ -23,7 +23,7 @@ namespace HSMCommon.Collections
     }
 
 
-    public abstract class CDictBase<T, U> : ConcurrentDictionary<T, U> where U : new()
+    public class CDictBase<T, U> : ConcurrentDictionary<T, U> where U : new()
     {
         public new U this[T key]
         {
@@ -32,9 +32,9 @@ namespace HSMCommon.Collections
         }
 
 
-        protected CDictBase() : base() { }
+        public CDictBase() : base() { }
 
-        protected CDictBase(Dictionary<T, U> dict) : base(dict) { }
+        public CDictBase(Dictionary<T, U> dict) : base(dict) { }
 
 
         public U GetOrAdd(T key)
