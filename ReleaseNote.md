@@ -67,9 +67,9 @@ All **EMA alerts** for **Integer**, **Double**, **IntegerBar**, **DoubleBar** se
 * **Connections Established Count** sensor has been added to *.computer/Network* node.
 * **Connections Reset Count** sensor has been added to *.computer/Network* node.
 * **CreateRateSensor**, **CreateM1RateSensor** and **CreateM5RateSensor** - new tempaltes for **Rate** sensors have been added.
-* **Windows Error Logs (Application)** new sensor has been added to *.computer/Windows OS info* node.
-* **Windows Error Logs** has been added renamed to **Windows Error Logs (System)** for *.computer/Windows OS info* node.
-* **Windows Warning Logs (Application)** new sensor has been added to *.computer/Windows OS info* node.
+* **Windows Error Logs (Application)** sensor has been added to *.computer/Windows OS info* node.
+* **Windows Error Logs** has been renamed to **Windows Error Logs (System)** for *.computer/Windows OS info* node.
+* **Windows Warning Logs (Application)** sensor has been added to *.computer/Windows OS info* node.
 * **Windows Warning Logs** has been added renamed to **Windows Warning Logs (System)** for *.computer/Windows OS info* node.
 
 ## Windows collection
