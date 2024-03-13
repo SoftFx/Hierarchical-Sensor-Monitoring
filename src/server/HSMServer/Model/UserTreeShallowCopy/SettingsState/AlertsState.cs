@@ -5,9 +5,9 @@
         public bool IsAnyEnabled { get; private set; }
 
 
-        public void CalculateState(bool isEnabled)
+        public void CalculateState(SensorShallowModel sensor)
         {
-            ChangeEnableState(isEnabled);
+            ChangeEnableState(sensor.HasUnconfiguredAlerts);
         }
 
         public void CalculateState(AlertsState state)

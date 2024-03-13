@@ -3,7 +3,6 @@ using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
-using System.Linq;
 
 namespace HSMServer.Model.UserTreeShallowCopy
 {
@@ -17,7 +16,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         internal SensorShallowModel(SensorNodeViewModel data, User user) : base(data, user)
         {
             IsGrafanaEnabled = data.Integration.HasGrafana();
-            HasUnconfiguredAlerts = data.DataAlerts.Values.Any(d => d.Any(a => a.IsUnconfigured())) || data.TTLAlert.IsUnconfigured();
+            HasUnconfiguredAlerts = data.HasUnconfiguredAlerts();
 
             if (data.Status is TreeViewModel.SensorStatus.Error)
                 ErrorsCount = 1;

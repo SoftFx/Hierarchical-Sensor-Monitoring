@@ -69,8 +69,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             _nodeFilter = nodeFilter;
             _sensorFilter = sensorFilter;
-
-            AlertsState.CalculateState(data.TTLAlert.IsUnconfigured());
         }
 
 
@@ -86,7 +84,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             _mutedValue = !_mutedValue.HasValue ? isSensorMuted : _mutedValue & isSensorMuted;
 
             GrafanaState.CalculateState(shallowSensor);
-            AlertsState.CalculateState(shallowSensor.HasUnconfiguredAlerts);
+            AlertsState.CalculateState(shallowSensor);
 
             if (user.IsSensorVisible(sensor))
                 VisibleSubtreeSensorsCount++;
