@@ -2,6 +2,7 @@
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.UserFilters;
+using System.Linq;
 
 namespace HSMServer.Extensions
 {
@@ -18,10 +19,11 @@ namespace HSMServer.Extensions
             if (filterMask == 0)
                 return sensor.HasData;
 
-            if ((filterMask & sensor.GetStateMask(user)) == filterMask)
+            if ((filterMask & sensor.GetStateMask()) == filterMask)
             {
                 var filteredSensor = new FilteredSensor()
                 {
+                    HasUnconfiguredAlerts = sensor.DataAlerts.Values.Any(d => d.Any(a => a.IsUnconfigured())) || sensor.TTLAlert.IsUnconfigured(),
                     IsGrafanaEnabled = sensor.Integration.HasFlag(Integration.Grafana),
                     HasData = sensor.HasData,
                     Status = sensor.Status.ToCore(),
@@ -58,7 +60,7 @@ namespace HSMServer.Extensions
             return false;
         }
 
-        private static FilterGroupType GetStateMask(this SensorNodeViewModel sensor, User user)
+        private static FilterGroupType GetStateMask(this SensorNodeViewModel sensor)
         {
             var sensorStateMask = DefaultNodeMask;
 
@@ -67,6 +69,9 @@ namespace HSMServer.Extensions
 
             if (sensor.Integration.HasFlag(Integration.Grafana))
                 sensorStateMask |= FilterGroupType.Integrations;
+
+            if (sensor.DataAlerts.Values.Any(d => d.Any(a => a.IsUnconfigured())) || sensor.TTLAlert.IsUnconfigured())
+                sensorStateMask |= FilterGroupType.Alerts;
 
             return sensorStateMask;
         }

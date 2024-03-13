@@ -17,6 +17,9 @@ namespace HSMServer.Model.ViewModel
         public bool IsGrafanaEnabled { get; set; }
 
 
+        public bool HasUnconfiguredAlerts { get; set; }
+
+
         public bool IsSensorsCountVisible { get; set; }
 
         public bool IsErrorsCountVisible { get; set; }
@@ -47,6 +50,8 @@ namespace HSMServer.Model.ViewModel
 
             IsGrafanaEnabled = filter.ByIntegrations.GrafanaEnabled.Value;
 
+            HasUnconfiguredAlerts = filter.ByAlerts.HasUnconfiguredAlerts.Value;
+
             IsMutedSensorsState = filter.ByState.Muted.Value;
 
             TreeUpdateInterval = filter.TreeUpdateInterval;
@@ -72,6 +77,8 @@ namespace HSMServer.Model.ViewModel
             filter.ByVisibility.Icons.Value = AreIconsVisible;
 
             filter.ByIntegrations.GrafanaEnabled.Value = IsGrafanaEnabled;
+
+            filter.ByAlerts.HasUnconfiguredAlerts.Value = HasUnconfiguredAlerts;
 
             filter.ByState.Muted.Value = IsMutedSensorsState;
 
