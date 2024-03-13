@@ -67,6 +67,10 @@ All **EMA alerts** for **Integer**, **Double**, **IntegerBar**, **DoubleBar** se
 * **Connections Established Count** sensor has been added to *.computer/Network* node.
 * **Connections Reset Count** sensor has been added to *.computer/Network* node.
 * **CreateRateSensor**, **CreateM1RateSensor** and **CreateM5RateSensor** - new tempaltes for **Rate** sensors have been added.
+* **Windows Error Logs (Application)** sensor has been added to *.computer/Windows OS info* node.
+* **Windows Error Logs** has been renamed to **Windows Error Logs (System)** for *.computer/Windows OS info* node.
+* **Windows Warning Logs (Application)** sensor has been added to *.computer/Windows OS info* node.
+* **Windows Warning Logs** has been added renamed to **Windows Warning Logs (System)** for *.computer/Windows OS info* node.
 
 ## Windows collection
 * **AddDiskAverageWriteSpeed** method has been added.
@@ -75,6 +79,8 @@ All **EMA alerts** for **Integer**, **Double**, **IntegerBar**, **DoubleBar** se
 * **AddNetworkConnectionsReset** method has been added.
 * **AddDisksAverageWriteSpeed** facade for all computer disks has been added.
 * **AddAllNetworkSensors** facade for all Network sensors has been added.
+* **AddErrorWindowsLogs** has been migrated to facade for **AddApplicationErrorWindowsLogs** and **AddSystemErrorWindowsLogs** methods.
+* **AddWarningWindowsLogs** has been migrated to facade for **AddApplicationWarnignWindowsLogs** and **AddSystemWarnignWindowsLogs** methods.
 
 ## Sensor migrations
 * All file sensors have been migrated to modern base. **IFileSensor** public interface has been added. This interface supports 2 methods:
@@ -88,5 +94,6 @@ All **EMA alerts** for **Integer**, **Double**, **IntegerBar**, **DoubleBar** se
 
 # HSM DataObjects v.3.1.3
 
+* New sensor type **Rate** has been added.
 * New setting **ScheduledInstantSend** has been added for update alert request.
 * New predefined periods **5 minutes**, **10 minutes**, **15 minutes** and **30 minutes** for AlertRepeatMode have been added.

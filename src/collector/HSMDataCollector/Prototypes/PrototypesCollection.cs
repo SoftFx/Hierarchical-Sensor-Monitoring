@@ -56,9 +56,15 @@ namespace HSMDataCollector.Options
 
         internal WindowsVersionPrototype WindowsVersion { get; }
 
-        internal WindowsErrorLogsPrototype WindowsErrorLogsPrototype { get; }
 
-        internal WindowsWarningLogsPrototype WindowsWarningLogsPrototype { get; }
+        internal WindowsApplicationErrorLogsPrototype WindowsApplicationErrorLogsPrototype { get; }
+
+        internal WindowsSystemErrorLogsPrototype WindowsSystemErrorLogsPrototype { get; }
+
+
+        internal WindowsApplicationWarningLogsPrototype WindowsApplicationWarningLogsPrototype { get; }
+
+        internal WindowsSystemWarningLogsPrototype WindowsSystemWarningLogsPrototype { get; }
 
         #endregion
 
@@ -137,8 +143,11 @@ namespace HSMDataCollector.Options
             WindowsLastUpdate = Register<WindowsLastUpdatePrototype>();
             WindowsVersion = Register<WindowsVersionPrototype>();
 
-            WindowsWarningLogsPrototype = Register<WindowsWarningLogsPrototype>();
-            WindowsErrorLogsPrototype = Register<WindowsErrorLogsPrototype>();
+            WindowsApplicationWarningLogsPrototype = Register<WindowsApplicationWarningLogsPrototype>();
+            WindowsSystemWarningLogsPrototype = Register<WindowsSystemWarningLogsPrototype>();
+
+            WindowsApplicationErrorLogsPrototype = Register<WindowsApplicationErrorLogsPrototype>();
+            WindowsSystemErrorLogsPrototype = Register<WindowsSystemErrorLogsPrototype>();
 
             CollectorVersion = Register<CollectorVersionPrototype>();
             CollectorErrors = Register<CollectorErrorsPrototype>();
