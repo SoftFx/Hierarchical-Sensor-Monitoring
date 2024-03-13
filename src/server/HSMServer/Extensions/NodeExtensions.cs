@@ -49,6 +49,10 @@ namespace HSMServer.Extensions
         }
 
 
+        internal static bool HasUnconfiguredAlerts(this SensorNodeViewModel sensor) =>
+            sensor.DataAlerts.Values.Any(d => d.Any(a => a.IsUnconfigured())) || sensor.TTLAlert.IsUnconfigured();
+
+
         internal static string ToCssIconClass(this SensorStatus status) =>
             status switch
             {

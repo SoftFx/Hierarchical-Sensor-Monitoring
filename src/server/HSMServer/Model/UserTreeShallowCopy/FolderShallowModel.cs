@@ -13,11 +13,15 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public IntegrationState GrafanaState { get; } = new();
 
+        public AlertsState AlertsState { get; } = new();
+
 
         public override bool CurUserIsManager { get; }
 
 
         public override bool IsGrafanaEnabled => GrafanaState.IsAllEnabled;
+
+        public override bool HasUnconfiguredAlerts => AlertsState.IsAnyEnabled;
 
 
         public bool AllDataIsEmpty => Products.All(n => n.Data.IsEmpty);
@@ -38,6 +42,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             ErrorsCount += node.ErrorsCount;
 
             GrafanaState.CalculateState(node.GrafanaState);
+            AlertsState.CalculateState(node.AlertsState);
 
             if (node.VisibleSubtreeSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
                 Products.Add(node);
