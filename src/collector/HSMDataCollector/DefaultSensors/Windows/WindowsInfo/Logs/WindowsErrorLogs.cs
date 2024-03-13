@@ -7,7 +7,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
     {
         protected override EventLogEntryType LogType => EventLogEntryType.Error;
 
-        protected override string Category => "System";
+        protected override string Category => "Application";
 
 
         public WindowsApplicationErrorLogs(InstantSensorOptions options) : base(options) { }
