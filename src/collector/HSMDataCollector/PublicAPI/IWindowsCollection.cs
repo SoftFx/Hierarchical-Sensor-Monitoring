@@ -69,9 +69,9 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null);
 
-        IWindowsCollection AddWindowsApplicationWarnignLogs(InstantSensorOptions options = null);
+        IWindowsCollection AddWindowsApplicationWarningLogs(InstantSensorOptions options = null);
 
-        IWindowsCollection AddWindowsSystemWarnignLogs(InstantSensorOptions options = null);
+        IWindowsCollection AddWindowsSystemWarningLogs(InstantSensorOptions options = null);
 
         IWindowsCollection AddWarningWindowsLogs(InstantSensorOptions options = null);
 

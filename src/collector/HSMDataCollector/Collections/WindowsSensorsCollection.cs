@@ -201,18 +201,18 @@ namespace HSMDataCollector.DefaultSensors
         public IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null) =>
             AddWindowsApplicationErrorLogs(options).AddWindowsSystemErrorLogs(options);
 
-        public IWindowsCollection AddWindowsApplicationWarnignLogs(InstantSensorOptions options = null)
+        public IWindowsCollection AddWindowsApplicationWarningLogs(InstantSensorOptions options = null)
         {
             return ToWindows(new WindowsApplicationWarningLogs(_prototype.WindowsApplicationWarningLogsPrototype.Get(options)));
         }
 
-        public IWindowsCollection AddWindowsSystemWarnignLogs(InstantSensorOptions options = null)
+        public IWindowsCollection AddWindowsSystemWarningLogs(InstantSensorOptions options = null)
         {
             return ToWindows(new WindowsSystemWarningLogs(_prototype.WindowsSystemWarningLogsPrototype.Get(options)));
         }
 
         public IWindowsCollection AddWarningWindowsLogs(InstantSensorOptions options = null) =>
-            AddWindowsApplicationWarnignLogs(options).AddWindowsSystemWarnignLogs(options);
+            AddWindowsApplicationWarningLogs(options).AddWindowsSystemWarningLogs(options);
 
         public IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options) =>
             AddErrorWindowsLogs(options).AddWarningWindowsLogs(options);
