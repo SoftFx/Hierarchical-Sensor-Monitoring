@@ -188,31 +188,31 @@ namespace HSMDataCollector.DefaultSensors
         public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions, InstantSensorOptions logsOptions) =>
             AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
 
-        public IWindowsCollection AddApplicationErrorWindowsLogs(InstantSensorOptions options = null)
+        public IWindowsCollection AddWindowsApplicationErrorLogs(InstantSensorOptions options = null)
         {
             return ToWindows(new WindowsApplicationErrorLogs(_prototype.WindowsApplicationErrorLogsPrototype.Get(options)));
         }
 
-        public IWindowsCollection AddSystemErrorWindowsLogs(InstantSensorOptions options = null)
+        public IWindowsCollection AddWindowsSystemErrorLogs(InstantSensorOptions options = null)
         {
             return ToWindows(new WindowsSystemErrorLogs(_prototype.WindowsSystemErrorLogsPrototype.Get(options)));
         }
 
         public IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null) =>
-            AddApplicationErrorWindowsLogs(options).AddSystemErrorWindowsLogs(options);
+            AddWindowsApplicationErrorLogs(options).AddWindowsSystemErrorLogs(options);
 
-        public IWindowsCollection AddApplicationWarnignWindowsLogs(InstantSensorOptions options = null)
+        public IWindowsCollection AddWindowsApplicationWarnignLogs(InstantSensorOptions options = null)
         {
             return ToWindows(new WindowsApplicationWarningLogs(_prototype.WindowsApplicationWarningLogsPrototype.Get(options)));
         }
 
-        public IWindowsCollection AddSystemWarnignWindowsLogs(InstantSensorOptions options = null)
+        public IWindowsCollection AddWindowsSystemWarnignLogs(InstantSensorOptions options = null)
         {
             return ToWindows(new WindowsSystemWarningLogs(_prototype.WindowsSystemWarningLogsPrototype.Get(options)));
         }
 
         public IWindowsCollection AddWarningWindowsLogs(InstantSensorOptions options = null) =>
-            AddApplicationWarnignWindowsLogs(options).AddSystemWarnignWindowsLogs(options);
+            AddWindowsApplicationWarnignLogs(options).AddWindowsSystemWarnignLogs(options);
 
         public IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options) =>
             AddErrorWindowsLogs(options).AddWarningWindowsLogs(options);
