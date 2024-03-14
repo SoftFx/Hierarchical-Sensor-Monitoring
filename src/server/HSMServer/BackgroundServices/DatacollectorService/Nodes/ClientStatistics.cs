@@ -111,16 +111,16 @@ namespace HSMServer.BackgroundServices
         public void AddSensors(string path = null)
         {
             var id = path ?? TotalGroup;
-            SelfSensors.TryAdd(id, new SelfCollectSensor
-            {
-                RequestCount = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{RequestCount}"),
-                RequestSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{RequestSize}"),
-                RequestsCountPerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{RequestsPerSecond}"),
-                RequestsSizePerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{RequestSizePerSecond}"),
-                ResponseSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{ResponseSize}"),
-                SensorUpdatesPerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{SensorUpdatesPerSecond}"),
-                SensorUpdates = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{SensorUpdates}"),
-            });
+            // SelfSensors.TryAdd(id, new SelfCollectSensor
+            // {
+            //     RequestCount = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{RequestCount}"),
+            //     RequestSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{RequestSize}"),
+            //     RequestsCountPerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{RequestsPerSecond}"),
+            //     RequestsSizePerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{RequestSizePerSecond}"),
+            //     ResponseSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{ResponseSize}"),
+            //     SensorUpdatesPerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{SensorUpdatesPerSecond}"),
+            //     SensorUpdates = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{SensorUpdates}"),
+            // });
         }
     }
 }

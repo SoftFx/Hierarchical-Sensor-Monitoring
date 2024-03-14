@@ -25,6 +25,7 @@ using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Header=HSMSensorDataObjects.Header;
 using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Controllers
@@ -75,11 +76,8 @@ namespace HSMServer.Controllers
             {
                 // // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -104,11 +102,8 @@ namespace HSMServer.Controllers
             {
                 // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -131,13 +126,8 @@ namespace HSMServer.Controllers
         {
             try
             {
-                // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -162,10 +152,8 @@ namespace HSMServer.Controllers
             {
                 // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -190,11 +178,8 @@ namespace HSMServer.Controllers
             {
                 // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -219,10 +204,8 @@ namespace HSMServer.Controllers
             {
                 // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -245,12 +228,10 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
+                // _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -276,11 +257,8 @@ namespace HSMServer.Controllers
             {
                 // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -305,11 +283,8 @@ namespace HSMServer.Controllers
             {
                 // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -334,11 +309,8 @@ namespace HSMServer.Controllers
             {
                 // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -588,6 +560,11 @@ namespace HSMServer.Controllers
             }
 
             return false;
+        }
+        
+        private void AddToQueue(string key, SensorValueBase value)
+        {
+            _updatesQueue.AddItem(new StoreInfo(key, value.Path) { BaseValue = value.Convert() });
         }
 
         private bool TryCheckReadHistoryRequest(HistoryRequest request, out HistoryRequestModel requestModel, out string message)
