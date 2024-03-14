@@ -19,7 +19,7 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
             Alerts = new List<BarAlertTemplate>()
             {
                 AlertsFactory.IfEmaMean(AlertOperation.GreaterThanOrEqual, 100)
-                             .ThenSendNotification($"[$product]$path $property $operation $target $unit")
+                             .ThenSendInstantHourlyScheduledNotification($"[$product]$path $property $operation $target $unit")
                              .AndSetIcon(AlertIcon.Warning).Build()
             };
         }

@@ -10,13 +10,15 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringSensorBase<T> : SensorBase<T>
     {
+        private readonly IMonitoringOptions _options;
         private Timer _sendTimer;
 
-        protected readonly TimeSpan _receiveDataPeriod;
         protected bool _needSendValue = true;
 
 
-        protected virtual TimeSpan TimerDueTime => _receiveDataPeriod;
+        protected virtual TimeSpan TimerDueTime => PostTimePeriod;
+
+        protected TimeSpan PostTimePeriod => _options.PostDataPeriod;
 
         protected bool IsInitialized => _sendTimer != null;
 
@@ -24,7 +26,7 @@ namespace HSMDataCollector.DefaultSensors
         protected MonitoringSensorBase(SensorOptions options) : base(options)
         {
             if (options is IMonitoringOptions monitoringOptions)
-                _receiveDataPeriod = monitoringOptions.PostDataPeriod;
+                _options = monitoringOptions;
             else
                 throw new ArgumentNullException(nameof(monitoringOptions));
         }
@@ -37,7 +39,7 @@ namespace HSMDataCollector.DefaultSensors
                 var baseInit = await base.Init();
 
                 if (baseInit)
-                    _sendTimer = new Timer(OnTimerTick, null, TimerDueTime, _receiveDataPeriod);
+                    _sendTimer = new Timer(OnTimerTick, null, TimerDueTime, PostTimePeriod);
             }
 
             return IsInitialized;
@@ -73,7 +75,17 @@ namespace HSMDataCollector.DefaultSensors
                 SendValue(value);
         }
 
-        protected virtual SensorValueBase BuildSensorValue()
+        protected void RestartTimer(TimeSpan newPostPeriod)
+        {
+            if (IsInitialized)
+            {
+                _options.PostDataPeriod = newPostPeriod;
+                _sendTimer.Change(TimerDueTime, PostTimePeriod);
+            }
+        }
+
+
+        private SensorValueBase BuildSensorValue()
         {
             try
             {

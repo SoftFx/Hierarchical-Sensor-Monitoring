@@ -1,9 +1,11 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Collections.Reactive;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Dashboards
@@ -11,26 +13,36 @@ namespace HSMServer.Dashboards
     public sealed class Dashboard : BaseServerModel<DashboardEntity, DashboardUpdate>
     {
         private static readonly TimeSpan _defaultDataPeriod = new(0, 30, 0);
-        private Func<Guid, BaseSensorModel> _getSensorModel;
+        private readonly ITreeValuesCache _cache;
 
 
-        public ConcurrentDictionary<Guid, Panel> Panels { get; } = new();
+        public RDict<Panel> Panels { get; }
 
         public TimeSpan DataPeriod { get; private set; } = _defaultDataPeriod;
 
 
-        internal Dashboard(DashboardAdd addModel) : base(addModel) { }
-
-        internal Dashboard(DashboardEntity entity, Func<Guid, BaseSensorModel> getSensorModel) : base(entity)
+        internal Dashboard(DashboardAdd addModel, ITreeValuesCache cache) : base(addModel)
         {
-            _getSensorModel += getSensorModel;
+            _cache = cache;
+            _cache.ChangeSensorEvent += ChangeSensorHandler;
 
-            Panels = new ConcurrentDictionary<Guid, Panel>(entity.Panels.ToDictionary(k => new Guid(k.Id), AddPanel));
+            Panels = new RDict<Panel>(ThrowUpdateEvent);
+        }
+
+        internal Dashboard(DashboardEntity entity, ITreeValuesCache cache) : base(entity)
+        {
+            _cache = cache;
+            _cache.ChangeSensorEvent += ChangeSensorHandler;
+
+            Panels = new RDict<Panel>(ThrowUpdateEvent);
             DataPeriod = GetPeriod(entity.DataPeriod);
+
+            foreach (var panelEntity in entity.Panels)
+                AddPanel(panelEntity);
         }
 
 
-        protected override void UpdateCustom(DashboardUpdate update)
+        protected override void ApplyUpdate(DashboardUpdate update)
         {
             DataPeriod = update.FromPeriod;
         }
@@ -47,35 +59,18 @@ namespace HSMServer.Dashboards
 
         public override void Dispose()
         {
-            Unsubscribe();
+            _cache.ChangeSensorEvent -= ChangeSensorHandler;
+
+            base.Dispose();
 
             foreach (var (_, panel) in Panels)
                 panel.Dispose();
         }
 
 
-        public bool TryAddPanel(Panel panel)
-        {
-            var result = TrySaveAndSubscribePanel(panel);
+        public bool TryAddPanel(Panel panel) => Panels.TryCallAdd(panel.Id, panel, SubscribeToPanelUpdates);
 
-            if (result)
-                ThrowUpdateEvent();
-
-            return result;
-        }
-
-        public bool TryRemovePanel(Guid id)
-        {
-            var result = Panels.TryRemove(id, out var panel);
-
-            if (result)
-            {
-                panel.Dispose();
-                ThrowUpdateEvent();
-            }
-
-            return result;
-        }
+        public bool TryRemovePanel(Guid id) => Panels.TryCallRemoveAndDispose(id);
 
         public bool AutofitPanels(int panelsInRow)
         {
@@ -87,40 +82,42 @@ namespace HSMServer.Dashboards
             return ok;
         }
 
-
-        internal void Subscribe(Func<Guid, BaseSensorModel> getSensorModel) => _getSensorModel ??= getSensorModel;
-
-        internal void Unsubscribe()
-        {
-            _getSensorModel = null;
-            ClearSubscriptions();
-        }
-
         internal bool TryGetSensor(Guid id, out BaseSensorModel sensor)
         {
-            sensor = _getSensorModel?.Invoke(id);
+            sensor = _cache.GetSensor(id);
 
             return sensor is not null;
         }
 
+        internal IEnumerable<BaseSensorModel> GetSensorsByFolder(HashSet<Guid> foldersIds) => _cache.GetSensorsByFolder(foldersIds);
 
-        private Panel AddPanel(DashboardPanelEntity entity)
+
+        private bool AddPanel(DashboardPanelEntity entity)
         {
             var panel = new Panel(entity, this);
 
-            TrySaveAndSubscribePanel(panel);
-
-            return panel;
+            return Panels.IfTryAdd(panel.Id, panel, SubscribeToPanelUpdates).IsOk;
         }
 
-        private bool TrySaveAndSubscribePanel(Panel panel)
+        private void SubscribeToPanelUpdates(Panel panel)
         {
-            var result = panel is not null && Panels.TryAdd(panel.Id, panel);
-
-            if (result)
+            if (panel is not null)
                 panel.UpdatedEvent += ThrowUpdateEvent;
+        }
 
-            return result;
+        private void ChangeSensorHandler(BaseSensorModel sensor, ActionType action)
+        {
+            if (action == ActionType.Delete)
+            {
+                foreach (var (_, panel) in Panels)
+                    panel.RemoveSensor(sensor.Id);
+            }
+
+            if (action == ActionType.Add)
+            {
+                foreach (var (_, panel) in Panels)
+                    panel.AddSensor(sensor);
+            }
         }
 
 

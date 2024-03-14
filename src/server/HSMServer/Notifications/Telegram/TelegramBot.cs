@@ -161,7 +161,7 @@ namespace HSMServer.Notifications
             try
             {
                 if (CanSendNotifications && _folderManager.TryGetValue(message.FolderId, out var folder))
-                    foreach (var alert in message.Alerts)
+                    foreach (var alert in message)
                     {
                         var chatIds = alert.Destination.AllChats ? folder.TelegramChats : alert.Destination.Chats;
 

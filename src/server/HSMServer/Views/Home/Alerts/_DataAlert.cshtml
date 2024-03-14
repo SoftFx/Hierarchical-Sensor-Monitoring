@@ -1,4 +1,5 @@
-﻿@using HSMServer.Model.DataAlerts
+﻿@using System.Text
+@using HSMServer.Model.DataAlerts
 @using HSMServer.Extensions
 @using HSMCommon.Extensions
 @using HSMServer.Controllers
@@ -56,7 +57,7 @@
             @if (action.Action == ActionType.SendNotification)
             {
                 string chats = null;
-                string schedule = null;
+                StringBuilder schedule = new(1 << 2);
                 string color = "#0366d6";
 
                 if (action.Chats.Contains(ActionViewModel.AllChatsId))
@@ -70,7 +71,11 @@
                     chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch]));
 
                 if (action.ScheduleRepeatMode is not null)
-                    schedule = $" scheduled every {action.ScheduleRepeatMode.GetDisplayName()} starting at {action.ScheduleStartTime?.ToDefaultFormat()}";
+                {
+                    schedule.Append($" scheduled every {action.ScheduleRepeatMode.GetDisplayName()} starting at {action.ScheduleStartTime?.ToDefaultFormat()}");
+                    if (action.ScheduleInstantSend)
+                        schedule.Append(" and instant send");
+                }
 
                 actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: {color};'>{chats}</span>{schedule}"));
             }
@@ -269,11 +274,5 @@
 
             form.append(`${propertyName}`, value);
         });
-    }
-
-    function tryValidate(element, propertyElement, propertyName) {
-        var input = element.find($(`${propertyElement}[name='${propertyName}']`));
-        
-        return input.length === 0 || input[0].reportValidity();
     }
 </script>

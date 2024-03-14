@@ -16,10 +16,10 @@ jobs:
       VERSION: ${{ steps.save-version.outputs.version }}
       ARTIFACT_NAME: ${{ steps.build-artifact-name.outputs.name}}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup .NET Core
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
@@ -38,7 +38,7 @@ jobs:
         run: echo "name=HSMPingModule v${{ steps.save-version.outputs.version }}" >> $env:GITHUB_OUTPUT
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: ${{ env.OUTPUT_FOLDER }}
           name: ${{ steps.build-artifact-name.outputs.name }}
@@ -55,7 +55,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}

@@ -1,10 +1,14 @@
 ﻿using HSMServer.Core.Extensions;
 using System;
 using System.Collections.Generic;
+using System.Net.Sockets;
 using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
+    public sealed record AlertDestination(bool AllChats, HashSet<Guid> Chats);
+
+
     public sealed record AlertResult
     {
         public AlertDestination Destination { get; }
@@ -24,9 +28,16 @@ namespace HSMServer.Core.Model.Policies
         public string Icon { get; }
 
 
+        public AlertRepeatMode SchedulePeriod { get; }
+
+        public bool ShouldSendFirstMessage { get; }
+
+
         public bool IsStatusIsChangeResult { get; }
 
         public bool IsScheduleAlert { get; }
+
+        public bool IsReplaceAlert { get; }
 
 
         public AlertState LastState { get; private set; }
@@ -39,7 +50,7 @@ namespace HSMServer.Core.Model.Policies
         public (string, int) Key => (Icon, Count);
 
 
-        internal AlertResult(Policy policy)
+        internal AlertResult(Policy policy, bool isReplace = false)
         {
             Destination = new(policy.Destination.AllChats, new HashSet<Guid>(policy.Destination.Chats.Keys));
 
@@ -47,12 +58,16 @@ namespace HSMServer.Core.Model.Policies
             SendTime = policy.Schedule.GetSendTime();
             BuildDate = DateTime.UtcNow;
 
+            ShouldSendFirstMessage = policy.Schedule.InstantSend;
+            SchedulePeriod = policy.Schedule.RepeatMode;
+
             Template = policy.Template;
             PolicyId = policy.Id;
             Icon = policy.Icon;
 
             IsStatusIsChangeResult = policy.Conditions.IsStatusChangeResult();
             IsScheduleAlert = policy.Schedule.RepeatMode is not AlertRepeatMode.Immediately;
+            IsReplaceAlert = isReplace && IsScheduleAlert;
 
             AddPolicyResult(policy);
         }
@@ -118,7 +133,4 @@ namespace HSMServer.Core.Model.Policies
 
         public override string ToString() => BuildFullComment(LastComment);
     }
-
-
-    public sealed record AlertDestination(bool AllChats, HashSet<Guid> Chats);
 }

@@ -1,5 +1,4 @@
 using HSMDataCollector.Options;
-using HSMDataCollector.Prototypes;
 using HSMDataCollector.Requests;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;

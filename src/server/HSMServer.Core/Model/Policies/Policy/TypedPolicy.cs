@@ -83,6 +83,12 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
+    public sealed class RatePolicy : SingleSensorPolicy<RateValue, double>
+    {
+        protected override PolicyCondition<RateValue, double> BasePolicyCondition => new PolicyDoubleCondition<RateValue>();
+    }
+
+
     public sealed class FilePolicy : SingleSensorPolicy<FileValue, byte[]>
     {
         protected override PolicyCondition<FileValue, byte[]> BasePolicyCondition => new PolicyByteArrayCondition<FileValue>();

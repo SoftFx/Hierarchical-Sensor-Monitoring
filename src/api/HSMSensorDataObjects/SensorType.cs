@@ -55,5 +55,10 @@
         /// Simple sensor which collects data of Version type and sends the collected data instantly
         /// </summary>
         VersionSensor = 8,
+
+        /// <summary>
+        /// Simple sensor which collects data of double type in speed format and sends the collected data instantly
+        /// </summary>
+        RateSensor = 9,
     }
 }

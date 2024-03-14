@@ -18,11 +18,12 @@ namespace HSMServer.Extensions
             if (filterMask == 0)
                 return sensor.HasData;
 
-            if ((filterMask & sensor.GetStateMask(user)) == filterMask)
+            if ((filterMask & sensor.GetStateMask()) == filterMask)
             {
                 var filteredSensor = new FilteredSensor()
                 {
                     IsGrafanaEnabled = sensor.Integration.HasFlag(Integration.Grafana),
+                    HasUnconfiguredAlerts = sensor.HasUnconfiguredAlerts(),
                     HasData = sensor.HasData,
                     Status = sensor.Status.ToCore(),
                     State = sensor.State,
@@ -58,7 +59,7 @@ namespace HSMServer.Extensions
             return false;
         }
 
-        private static FilterGroupType GetStateMask(this SensorNodeViewModel sensor, User user)
+        private static FilterGroupType GetStateMask(this SensorNodeViewModel sensor)
         {
             var sensorStateMask = DefaultNodeMask;
 
@@ -67,6 +68,9 @@ namespace HSMServer.Extensions
 
             if (sensor.Integration.HasFlag(Integration.Grafana))
                 sensorStateMask |= FilterGroupType.Integrations;
+
+            if (sensor.HasUnconfiguredAlerts())
+                sensorStateMask |= FilterGroupType.Alerts;
 
             return sensorStateMask;
         }

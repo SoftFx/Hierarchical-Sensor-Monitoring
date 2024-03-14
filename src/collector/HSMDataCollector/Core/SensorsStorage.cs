@@ -8,6 +8,7 @@ using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -34,13 +35,17 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
-            foreach (var value in Values)
+            foreach (var sensor in Values)
             {
-                value.SensorCommandRequest -= QueueManager.Commands.CallServer;
-                value.ReceiveSensorValue -= QueueManager.Data.Push;
-                value.ExceptionThrowing -= WriteSensorException;
+                if (sensor.IsProiritySensor)
+                    sensor.ReceiveSensorValue -= QueueManager.Data.Send;
+                else
+                    sensor.ReceiveSensorValue -= QueueManager.Data.Add;
 
-                value.Dispose();
+                sensor.SensorCommandRequest -= QueueManager.Commands.WaitServerResponse;
+                sensor.ExceptionThrowing -= WriteSensorException;
+
+                sensor.Dispose();
             }
         }
 
@@ -51,19 +56,50 @@ namespace HSMDataCollector.Core
         internal Task Stop() => Task.WhenAll(Values.Select(s => s.Stop()));
 
 
-        internal MonitoringSpeedSensor CreateSpeedSensor(string path, MonitoringInstantSensorOptions options)
+        internal MonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options)
         {
-            options = FillOptions(path, SensorValuesFactory.GetInstantType<double>(), options);
-            
-            return (MonitoringSpeedSensor)Register(new MonitoringSpeedSensor(options));
+            options = FillOptions(path, SensorType.RateSensor, options);
+
+            return (MonitoringRateSensor)Register(new MonitoringRateSensor(options));
         }
-        
+
+        internal FileSensorInstant CreateFileSensor(string path, FileSensorOptions options)
+        {
+            options = FillOptions(path, SensorType.FileSensor, options);
+
+            return (FileSensorInstant)Register(new FileSensorInstant(options, Logger));
+        }
+
+
+        internal FunctionSensorInstant<T> CreateFunctionSensor<T>(string path, Func<T> function, FunctionSensorOptions options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
+
+            return (FunctionSensorInstant<T>)Register(new FunctionSensorInstant<T>(function, options));
+        }
+
+        internal ValuesFunctionSensorInstant<T, U> CreateValuesFunctionSensor<T, U>(string path, Func<List<U>, T> function, ValuesFunctionSensorOptions options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
+
+            return (ValuesFunctionSensorInstant<T, U>)Register(new ValuesFunctionSensorInstant<T, U>(function, options));
+        }
+
+
+        internal LastValueSensorInstant<T> CreateLastValueSensor<T>(string path, T customDefault, InstantSensorOptions options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
+
+            return (LastValueSensorInstant<T>)Register(new LastValueSensorInstant<T>(options, customDefault));
+        }
+
         internal SensorInstant<T> CreateInstantSensor<T>(string path, InstantSensorOptions options)
         {
             options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
 
             return (SensorInstant<T>)Register(new SensorInstant<T>(options));
         }
+
 
         internal IntBarPublicSensor CreateIntBarSensor(string path, BarSensorOptions options)
         {
@@ -87,7 +123,7 @@ namespace HSMDataCollector.Core
             if (TryGetValue(path, out var oldSensor))
                 return oldSensor;
 
-            if (_collector.Status.IsRunning())
+            if (_collector.Status.IsStartingOrRunning())
             {
                 _ = AddAndStart(sensor);
                 return sensor;
@@ -115,8 +151,12 @@ namespace HSMDataCollector.Core
 
             if (TryAdd(path, sensor))
             {
-                sensor.SensorCommandRequest += QueueManager.Commands.CallServer;
-                sensor.ReceiveSensorValue += QueueManager.Data.Push;
+                if (sensor.IsProiritySensor)
+                    sensor.ReceiveSensorValue += QueueManager.Data.Send;
+                else
+                    sensor.ReceiveSensorValue += QueueManager.Data.Add;
+
+                sensor.SensorCommandRequest += QueueManager.Commands.WaitServerResponse;
                 sensor.ExceptionThrowing += WriteSensorException;
 
                 Logger.Info($"New sensor has been added {path}");
@@ -127,8 +167,10 @@ namespace HSMDataCollector.Core
             throw new Exception($"Sensor with path {path} already exists");
         }
 
-        private T FillOptions<T>(string path, SensorType type, T options) where T : SensorOptions
+        private T FillOptions<T>(string path, SensorType type, T options) where T : SensorOptions, new()
         {
+            options = (T)options?.Copy() ?? new T();
+
             options.ComputerName = _collector.ComputerName;
             options.Module = _collector.Module;
             options.Path = path;

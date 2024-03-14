@@ -1,8 +1,6 @@
 ﻿using HSMSensorDataObjects;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
-using System.Collections.Generic;
-using Microsoft.Extensions.Options;
 
 namespace HSMServer.Filters
 {
@@ -13,7 +11,7 @@ namespace HSMServer.Filters
     {
         public void Apply(OpenApiOperation operation, OperationFilterContext context)
         {
-            operation.Parameters ??= new List<OpenApiParameter>();
+            operation.Parameters ??= [];
 
             operation.Parameters.Add(new OpenApiParameter
             {
@@ -28,7 +26,7 @@ namespace HSMServer.Filters
 
             operation.Parameters.Add(new OpenApiParameter
             {
-                Name = nameof(BaseRequest.ClientName),
+                Name = "ClientName",
                 In = ParameterLocation.Header,
                 Required = false,
                 Schema = new OpenApiSchema

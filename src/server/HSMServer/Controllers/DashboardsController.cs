@@ -1,27 +1,31 @@
 using HSMServer.Authentication;
 using HSMServer.Dashboards;
+using HSMServer.Datasources;
+using HSMServer.Folders;
 using HSMServer.Model.Dashboards;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
         private readonly IDashboardManager _dashboards;
+        private readonly IFolderManager _folders;
 
 
-        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, TreeViewModel _) : base(userManager)
+        public DashboardsController(IDashboardManager dashboardManager, IUserManager userManager, IFolderManager folderManager) : base(userManager)
         {
             _dashboards = dashboardManager;
+            _folders = folderManager;
         }
 
 
         [HttpGet("Dashboards")]
-        public IActionResult Index() => View(_dashboards.GetValues().Select(d => new DashboardViewModel(d).AttachUser(_userManager)).ToList());
+        public IActionResult Index() => View(_dashboards.GetValues().Select(d => new DashboardViewModel(d, GetAvailableFolders()).AttachUser(_userManager)).ToList());
 
 
         #region Dashboards
@@ -39,7 +43,7 @@ namespace HSMServer.Controllers
         {
             if (TryGetBoard(dashboardId, out var dashboard))
             {
-                var vm = new DashboardViewModel(dashboard, isModify);
+                var vm = new DashboardViewModel(dashboard, GetAvailableFolders(), isModify);
 
                 return View(nameof(EditDashboard), await vm.InitDashboardData());
             }
@@ -101,7 +105,7 @@ namespace HSMServer.Controllers
 
                 if (dashboard.TryAddPanel(newPanel))
                 {
-                    var vm = new PanelViewModel(newPanel, dashboard.Id);
+                    var vm = new PanelViewModel(newPanel, dashboard.Id, GetAvailableFolders());
 
                     return PartialView("_Panel", await vm.InitPanelData());
                 }
@@ -116,7 +120,7 @@ namespace HSMServer.Controllers
         {
             if (TryGetPanel(dashboardId, panelId, out var panel))
             {
-                var vm = new PanelViewModel(panel, dashboardId);
+                var vm = new PanelViewModel(panel, dashboardId, GetAvailableFolders());
 
                 return View("AddDashboardPanel", await vm.InitPanelData());
             }
@@ -149,6 +153,10 @@ namespace HSMServer.Controllers
                     Description = model.Description ?? string.Empty,
                     ShowProduct = model.ShowProduct,
                     IsAggregateValues = model.AggregateValues,
+
+                    AutoScale = model.YRange.AutoScale,
+                    MaxY = model.YRange.MaxValue,
+                    MinY = model.YRange.MinValue,
                 });
 
             return Ok(dashboardId);
@@ -176,6 +184,23 @@ namespace HSMServer.Controllers
             return BadRequest("Couldn't update panel");
         }
 
+        [HttpGet("Dashboards/{dashboardId:guid}/PanelUpdate/{panelId:guid}")]
+        public ActionResult<object> GetPanelUpdates(Guid dashboardId, Guid panelId)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+            {
+                var updates = panel.Sources.Select(x => new
+                {
+                    id = x.Key,
+                    update = x.Value.Source.GetSourceUpdates()
+                });
+                
+                return updates.ToList();
+            }
+
+            return _emptyResult;
+        }
+        
         #endregion
 
         #region Sources
@@ -210,14 +235,19 @@ namespace HSMServer.Controllers
             if (TryGetPanel(dashboardId, panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out var source))
             {
                 var oldProperty = source.Property;
-                var updatedSource = source.Update(update, panel.AggregateValues);
 
-                if (updatedSource.Property != oldProperty)
+                source.NotifyUpdate(update with
                 {
-                    var response = await updatedSource.Source.Initialize();
-                    return Json(new DatasourceViewModel(response, updatedSource, panel.ShowProduct));
+                    AggregateValues = panel.AggregateValues,
+                    YRange = panel.YRange
+                });
+
+                if (source.Property != oldProperty)
+                {
+                    var response = await source.Source.Initialize();
+                    return Json(new DatasourceViewModel(response, source, panel.ShowProduct));
                 }
-                
+
                 return Ok();
             }
 
@@ -235,6 +265,75 @@ namespace HSMServer.Controllers
 
         #endregion
 
+        #region Templates
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/AddTemplate")]
+        public IActionResult AddTemplate(Guid dashboardId, Guid panelId)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+            {
+                panel.TryAddSubscription(out var subscription);
+
+                return PartialView("_TemplateSettings", new TemplateViewModel(subscription, GetAvailableFolders()));
+            }
+
+            return NotFound("No such panel");
+        }
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/UpdateTemplate")]
+        public IActionResult UpdateTemplate(Guid dashboardId, Guid panelId, TemplateViewModel template)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel) && panel.Subscriptions.TryGetValue(template.Id, out var subscription))
+            {
+                subscription.NotifyUpdate(template.ToUpdate());
+
+                return Ok(subscription.Id);
+            }
+
+            return NotFound("No such template to update");
+        }
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/DeleteTemplate/{templateId:guid}")]
+        public IActionResult DeleteTemplate(Guid dashboardId, Guid panelId, Guid templateId)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+                panel.TryRemoveSubscription(templateId);
+
+            return Ok();
+        }
+
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplyTemplate/{templateId:guid}")]
+        public IActionResult ApplyTemplate(Guid dashboardId, Guid panelId, Guid templateId) =>
+            TryGetPanel(dashboardId, panelId, out var panel) && panel.TryStartScan(templateId)
+                ? Ok()
+                : NotFound("No such template to apply");
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/GetResultOfApplying/{templateId:guid}")]
+        public IActionResult GetResultOfApplying(Guid dashboardId, Guid panelId, Guid templateId) =>
+            TryGetSubscription(dashboardId, panelId, templateId, out var sub)
+                ? new JsonResult(sub.ScannedTask?.GetResult())
+                : NotFound("No such panel or tempalte");
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/CancelApplying/{templateId:guid}")]
+        public IActionResult CancelApplying(Guid dashboardId, Guid panelId, Guid templateId)
+        {
+            if (TryGetSubscription(dashboardId, panelId, templateId, out var sub))
+            {
+                sub.ScannedTask?.Cancel();
+                return Ok();
+            }
+
+            return NotFound("No such panel or tempalte");
+        }
+
+        [HttpPost("Dashboards/{dashboardId:guid}/{panelId:guid}/ApplySources/{templateId:guid}")]
+        public IActionResult ApplySources(Guid dashboardId, Guid panelId, Guid templateId) =>
+            TryGetPanel(dashboardId, panelId, out var panel) && panel.TryApplyScanResults(templateId, out var error)
+                ? Ok(error)
+                : NotFound("No such panel");
+
+        #endregion
 
         private bool TryGetBoard(Guid id, out Dashboard board) => _dashboards.TryGetValue(id, out board);
 
@@ -249,7 +348,17 @@ namespace HSMServer.Controllers
         {
             source = null;
 
-            return TryGetBoard(boardId, out var board) && board.Panels.TryGetValue(panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out source);
+            return TryGetPanel(boardId, panelId, out var panel) && panel.Sources.TryGetValue(sourceId, out source);
         }
+
+        private bool TryGetSubscription(Guid boardId, Guid panelId, Guid subscriptionId, out PanelSubscription subscription)
+        {
+            subscription = null;
+
+            return TryGetPanel(boardId, panelId, out var panel) && panel.Subscriptions.TryGetValue(subscriptionId, out subscription);
+        }
+
+
+        private Dictionary<Guid, string> GetAvailableFolders() => _folders.GetValues().ToDictionary(k => k.Id, v => v.Name);
     }
 }

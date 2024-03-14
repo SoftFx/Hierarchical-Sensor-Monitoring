@@ -10,6 +10,12 @@ namespace HSMServer.Core.Model.Policies
     {
         Immediately = 0,
 
+        FiveMinutes = 5,
+        TenMinutes = 6,
+        FifteenMinutes = 7,
+
+        ThirtyMinutes = 10,
+
         Hourly = 20,
         Daily = 50,
         Weekly = 100,
@@ -18,9 +24,11 @@ namespace HSMServer.Core.Model.Policies
 
     public sealed class PolicySchedule
     {
-        public DateTime Time { get; private set; }
-
         public AlertRepeatMode RepeatMode { get; private set; }
+
+        public bool InstantSend { get; private set; }
+
+        public DateTime Time { get; private set; }
 
 
         internal PolicySchedule() { }
@@ -30,6 +38,7 @@ namespace HSMServer.Core.Model.Policies
             if (entity is null)
                 return;
 
+            InstantSend = entity.InstantSend;
             Time = new DateTime(entity.TimeTicks);
             RepeatMode = (AlertRepeatMode)entity.RepeateMode;
         }
@@ -41,6 +50,7 @@ namespace HSMServer.Core.Model.Policies
                 return;
 
             Time = update.Time ?? Time;
+            InstantSend = update.InstantSend ?? InstantSend;
             RepeatMode = update.RepeatMode ?? RepeatMode;
         }
 
@@ -52,6 +62,10 @@ namespace HSMServer.Core.Model.Policies
 
             var shiftTime = RepeatMode switch
             {
+                AlertRepeatMode.FiveMinutes => TimeSpan.FromMinutes(5),
+                AlertRepeatMode.TenMinutes => TimeSpan.FromMinutes(10),
+                AlertRepeatMode.FifteenMinutes => TimeSpan.FromMinutes(15),
+                AlertRepeatMode.ThirtyMinutes => TimeSpan.FromMinutes(30),
                 AlertRepeatMode.Hourly => TimeSpan.FromHours(1),
                 AlertRepeatMode.Daily => TimeSpan.FromDays(1),
                 AlertRepeatMode.Weekly => TimeSpan.FromDays(7),
@@ -59,7 +73,7 @@ namespace HSMServer.Core.Model.Policies
 
             var curTime = DateTime.UtcNow;
 
-            //shiftTime = TimeSpan.FromMinutes(5);
+            //shiftTime = TimeSpan.FromMinutes(5); //for test messages
 
             return curTime <= Time ? Time : Time + (curTime - Time).Ceil(shiftTime);
         }
@@ -67,12 +81,13 @@ namespace HSMServer.Core.Model.Policies
         internal PolicyScheduleEntity ToEntity() =>
             new()
             {
+                InstantSend = InstantSend,
                 TimeTicks = Time.Ticks,
                 RepeateMode = (byte)RepeatMode,
             };
 
         public override string ToString() => RepeatMode is AlertRepeatMode.Immediately
             ? string.Empty
-            : $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}";
+            : $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}{(InstantSend ? " and instant send" : string.Empty)}";
     }
 }

@@ -138,7 +138,7 @@ namespace HSMDataCollector.Prototypes
             TTL = TimeSpan.FromMinutes(1);
             KeepHistory = TimeSpan.FromDays(180);
 
-            TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSendNotification($"[$product]$path").AndSetIcon(AlertIcon.Clock).AndSetSensorError().Build();
+            TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSendInstantHourlyScheduledNotification($"[$product]$path").AndSetIcon(AlertIcon.Clock).AndSetSensorError().Build();
         }
 
 

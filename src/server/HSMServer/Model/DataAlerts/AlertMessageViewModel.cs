@@ -37,6 +37,7 @@ public class AlertMessageViewModel
         {
             SensorType.Integer => AlertState.Build((BaseValue<int>)value, sensor),
             SensorType.Double => AlertState.Build((BaseValue<double>)value, sensor),
+            SensorType.Rate => AlertState.Build((BaseValue<double>)value, sensor),
             SensorType.DoubleBar => AlertState.Build((BarBaseValue<double>)value, sensor),
             SensorType.IntegerBar => AlertState.Build((BarBaseValue<int>)value, sensor),
             SensorType.String => AlertState.Build((BaseValue<string>)value, sensor),

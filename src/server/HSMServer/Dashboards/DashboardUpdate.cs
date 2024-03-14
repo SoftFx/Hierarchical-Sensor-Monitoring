@@ -1,5 +1,6 @@
 ﻿using HSMServer.ConcurrentStorage;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
 namespace HSMServer.Dashboards
@@ -28,6 +29,15 @@ namespace HSMServer.Dashboards
 
         public bool? IsAggregateValues { get; init; }
 
+        public double? MaxY { get; init; }
+
+        public double? MinY { get; init; }
+
+        public bool? AutoScale { get; set; }
+
+
+        public bool NeedSourceRebuild => IsAggregateValues.HasValue || MinY.HasValue || MaxY.HasValue || AutoScale.HasValue;
+
 
         [SetsRequiredMembers]
         public PanelUpdate(Guid panelId) : base()
@@ -37,5 +47,31 @@ namespace HSMServer.Dashboards
     }
 
 
-    public record PanelSourceUpdate(string Name, string Color, string Property, string Shape);
+    public record PanelSourceUpdate
+    {
+        public PanelRangeSettings YRange { get; init; }
+
+        public string Label { get; init; }
+
+        public string Color { get; init; }
+
+        public string Property { get; init; }
+
+        public string Shape { get; init; }
+
+        public bool AggregateValues { get; init; }
+    }
+
+
+    public sealed record PanelSubscriptionUpdate : PanelSourceUpdate
+    {
+        public SubscriptionFoldersUpdate FoldersFilter { get; init; }
+
+        public string PathTemplate { get; init; }
+
+        public bool? IsSubscribed { get; init; }
+    }
+
+
+    public record SubscriptionFoldersUpdate(HashSet<Guid> Folders);
 }

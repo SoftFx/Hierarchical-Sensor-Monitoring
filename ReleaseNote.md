@@ -1,63 +1,103 @@
 # HSM Server
 
-## Dashboards
-* Author information has been added to dashboards.
-* List of included **Panels** names has been added.
-* New period **last 30 days** has been added.
+## RATE - New sensor type has been added
+New sensor type has been added. Current sensor displays *events count per sec* data in double format. Datacollector contains templates for **Rate** sensors, which send data to server every 1 or 5 minetes. During this period sensor collects and saves information about different events (like requests count, responses, errors etc.) and then sends count of events divided by period in seconds.
 
-## Panels
-* Checkbox for disabling aggregation has been added.
-* Checkbox for autoapply **Product** name to sensor **Label** has been added.
-* Hidden plot by legend label click logic has been added.
-* Plot break for **NaN** values has been added.
-
-## Data sources
-* Aggregation has been improved. It depends on **Property** value:
-   * For **Min** -> Min
-   * For **Max** -> Max
-   * For **Count** -> Max
-   * For **Mean** -> Mean
-   * For **Value** -> Mean
-   * For **EMA** (all) -> Mean
-* Dropdown for line shape has been added. Available line shapes: **linear**, **spline**, **hv**, **vh**, **hvh**, **vhv**.
-
-## Tree search
-* **Match whole word** logic has been added. To activate, you should add quotes to the request (ex. "database").
-* Saving tree state before filtering. After clearing search input, the previous saved state is restored.
-* Freezing and "jumping" of filtered tree have been fixed.
-* Search with status filter has been fixed.
-* Search with empty sensors has been fixed.
-* Search input box size has been increased.
-
-## Product/node metainfo
-* Calculating sensors size logic has been added.
-* Downloading sensors statistics to CSV file has been added.
-
-## Sensor metaifo
-* Calculating sensors size logic has been added.
-
-## Edit sensor status
-* Last sensor value (and status) after server restart has been fixed.
-* **EMA** calculation for updated values has been fixed.
-* Filling inputs by Last value for **Value** and **Comment** inputs has been added.
-* **Edit status** menu item in context menu has been renamed to **Edit last value**.
-
-## Sensor chart
-* **Max** as aggregation function for Bar sensors Count properties has been added.
-* Reversing x-axis for **Custom** predefined period has been fixed.
-
-## Sensor history
-* Order of Bar sensors processing data has been fixed.
-* Updating of old values (previous week values) has been fixed.
-* Order of processing weekly databases has been changed (from newest to oldest).
+## Alerts migration
+All **EMA alerts** for **Integer**, **Double**, **IntegerBar**, **DoubleBar** sensors from **.computer** and **.module** nodes have been migrated to scheduled alerts with default period of **1 hour** and **instand send** setting.
 
 ## Notifications
-* Connections to Telegram servers with TLS 1.2 protocol has been fixed.
+* New single notification before schedule groupping has been added. Current logic works only if **instant send** is **True**.
+* Notification groupping by **Schedule mode** has been added.
 
-## Self monitoring. Database sensors
-* Descriptions and units have been added for all Database sensors.
-* New sensors **Config backups data size** and **Journals data size** have been added
-* Some old sensors have been renamed:
-    * **Environment data size MB** -> **Config data size**
-    * **Monitoring data size MB** -> **History data size**
-    * **All database size MB** -> **Total data size**
+## Scheduled alerts
+* New block **and instant send** has been added (send first message before groupping logic).
+* New predefined values have been added: **5 minutes**, **10 minutes**, **15 minutes** and **30 minutes**.
+
+## Import/export alerts
+* **ScheduledInstantSend** logic has been added.
+
+## Dashboards
+* Update interval has been increased from **30 sec** to **2 minutes**.
+* New display mode **One column** has been added.
+
+## Panels
+* Plot updates have been aggregated to 1 panel update request.
+* Strict borders for Y axis have been added.
+* Y axis settings for source with **Count** property has been fixed.
+* Multithread update for high load panel has been fixed.
+
+## Tree
+* Special icon for sensors with unconfigured alerts (with *send notification* action and *empty chats*) has been added.
+* Filtering sensors with unconfigured alerts has been added to Filters block (Alerts -> Without chats).
+
+## Journal
+* **Show entries** list has been fixed.
+* **Search** disabling has been fixed.
+
+## Rest API
+* New sensor type **Rate** has been added to API.
+* **Instant send** first message logic has be added for schedule alerts.
+
+# Datacollector v.3.3.0
+
+## Reconnection logic has been improved
+* Retry logic for failed requests has been added. For data requests max count of failed requests is **10 items**, for command requests - **1000 items**.
+* **Progressive delay** between failed requests has been added. Start value is **2 sec** max value is **2 minutes**.
+* If previous request is in retry loop, current request is stored in local failure queue.
+* After final request attempt, current data will be skipped.
+* **Guid** for all requests has been added.
+* Log logic for error requests has been improved.
+
+## Collector logic
+* **Module name** has been added as **Client name** to HEAD of all requests.
+* **IsPrioritySensor** logic has been added. If it's priority sensor then send data logic skips synchronization queue and all sensor data are sent to server as independent request.
+
+## Default sensors
+* All EMA alerts for **Integer**, **Double**, **IntegerBar**, **DoubleBar** sensors have been migrated to scheduled alerts with default period of **1 hour** and **instant send** setting.
+* **Confirmation period** has been removed for all schedule alerts.
+* **Windows last update** sensor has been fixed. It reads data from PowerShell comand.
+* **Keep sensor history** setting has been updated to **5 years** for *.module/Version* and *.module/Collector version* sensors.
+* **TTL** setting has been updated to **Never** for *Windows errors logs* and *Windows warnig logs*.
+* **Post and collect** time info has been added for all default bar sensors to description.
+
+## Alert API
+* New setting **ScheduledInstantSend** for scheduled alerts has been added.
+* **Client name** property for **BaseSensorValue** has been removed.
+
+## New sensors
+* **Avr disc write speed** sensor has been added.
+* **Connection Failures Count** sensor has been added to *.computer/Network* node.
+* **Connections Established Count** sensor has been added to *.computer/Network* node.
+* **Connections Reset Count** sensor has been added to *.computer/Network* node.
+* **CreateRateSensor**, **CreateM1RateSensor** and **CreateM5RateSensor** - new tempaltes for **Rate** sensors have been added.
+* **Windows Error Logs (Application)** sensor has been added to *.computer/Windows OS info* node.
+* **Windows Error Logs** has been renamed to **Windows Error Logs (System)** for *.computer/Windows OS info* node.
+* **Windows Warning Logs (Application)** sensor has been added to *.computer/Windows OS info* node.
+* **Windows Warning Logs** has been renamed to **Windows Warning Logs (System)** for *.computer/Windows OS info* node.
+
+## Windows collection
+* **AddDiskAverageWriteSpeed** method has been added.
+* **AddNetworkConnectionsEstablished** method has been added.
+* **AddNetworkConnectionFailures** method has been added.
+* **AddNetworkConnectionsReset** method has been added.
+* **AddDisksAverageWriteSpeed** facade for all computer disks has been added.
+* **AddAllNetworkSensors** facade for all Network sensors has been added.
+* **AddErrorWindowsLogs** has been migrated to facade for **AddApplicationErrorWindowsLogs** and **AddSystemErrorWindowsLogs** methods.
+* **AddWarningWindowsLogs** has been migrated to facade for **AddApplicationWarnignWindowsLogs** and **AddSystemWarnignWindowsLogs** methods.
+
+## Sensor migrations
+* All file sensors have been migrated to modern base. **IFileSensor** public interface has been added. This interface supports 2 methods:
+    * Send text as file.
+    * Send file by path. 
+* All last sensor value sensors have been migrated to modern base. New common method **CreateLastValueSensor\<T\>** has been added. This sensors send data to server only after collector stop event.
+* All function sensors have been migrated to modern base. **CreateFunctionSensor\<T\>** and **CreateValuesFunctionSensor\<T, U\>** common methods have been added.
+    * **INoParamsFuncSensor** - calls set function and sends value to a server by timer.
+    * **IParamsFuncSensor** - saves all data in local cache. Calls set function by timer and converts all local data to some value. After sending the data, local storage is cleared.
+* All old obsolete classes have been removed. **Obsolete** tag for some methods has been removed.
+
+# HSM DataObjects v.3.1.3
+
+* New sensor type **Rate** has been added.
+* New setting **ScheduledInstantSend** has been added for update alert request.
+* New predefined periods **5 minutes**, **10 minutes**, **15 minutes** and **30 minutes** for AlertRepeatMode have been added.

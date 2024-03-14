@@ -81,6 +81,16 @@
 
     <div class="dropdown-divider"></div>
 
+    <h6 class="dropdown-header px-0">Alerts</h6>
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="unconfiguredAlerts" asp-for="HasUnconfiguredAlerts" />
+        <label class="form-check-label" for="unconfiguredAlerts" title="Has sensor unconfigured alerts">
+            Without chats <i class="fa-solid fa-comment-slash tree-unconfigured-alerts-icon"></i>
+        </label>
+    </div>
+
+    <div class="dropdown-divider"></div>
+
     <h6 class="dropdown-header px-0">Sensor state</h6>
     <div class="form-check">
         <input type="checkbox" class="form-check-input" id="blocked" asp-for="IsMutedSensorsState" />

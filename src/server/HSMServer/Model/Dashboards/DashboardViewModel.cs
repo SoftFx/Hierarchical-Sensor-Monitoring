@@ -54,7 +54,7 @@ namespace HSMServer.Model.Dashboards
 
         public DashboardViewModel() { }
 
-        public DashboardViewModel(Dashboard dashboard, bool isModify = true)
+        public DashboardViewModel(Dashboard dashboard, Dictionary<Guid, string> availableFolders, bool isModify = true)
         {
             _dashboard = dashboard;
 
@@ -63,7 +63,7 @@ namespace HSMServer.Model.Dashboards
             AuthorId = dashboard.AuthorId;
             Description = dashboard.Description;
             FromPeriod = dashboard.DataPeriod;
-            Panels = dashboard.Panels.Select(x => new PanelViewModel(x.Value, Id.Value)).ToList();
+            Panels = dashboard.Panels.Select(x => new PanelViewModel(x.Value, Id.Value, availableFolders)).ToList();
 
             IsModify = isModify;
         }

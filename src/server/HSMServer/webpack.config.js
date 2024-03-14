@@ -1,9 +1,8 @@
 ﻿const path = require("path");
 const webpack = require('webpack');
+
 const CopyPlugin = require("copy-webpack-plugin");
-
 const MomentLocalesPlugin = require('moment-locales-webpack-plugin');
-
 
 module.exports = {
     entry: "./wwwroot/src/index.js",
@@ -24,8 +23,16 @@ module.exports = {
             {
                 test: /\.css$/,
                 use: ['style-loader', 'css-loader']
-            }
+            },
+            {
+                test: /\.tsx?$/,
+                use: 'ts-loader',
+                exclude: /node_modules/,
+            },
         ]
+    },
+    resolve: {
+        extensions: ['.ts', '.js']
     },
     plugins: [
         new webpack.ProvidePlugin({
@@ -37,12 +44,12 @@ module.exports = {
         }),
         new CopyPlugin({
             patterns: [
-                { 
+                {
                     from: path.resolve(__dirname, "wwwroot/src/svg"),
-                    to: "" 
+                    to: ""
                 }
             ]
         }),
-        new MomentLocalesPlugin(),
-    ]
+        new MomentLocalesPlugin()
+    ],
 };

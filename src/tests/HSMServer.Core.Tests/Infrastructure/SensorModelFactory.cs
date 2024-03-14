@@ -14,6 +14,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.Boolean => new BooleanSensorModel(entity),
                 SensorType.Integer => new IntegerSensorModel(entity),
                 SensorType.Double => new DoubleSensorModel(entity),
+                SensorType.Rate => new RateSensorModel(entity),
                 SensorType.String => new StringSensorModel(entity),
                 SensorType.IntegerBar => new IntegerBarSensorModel(entity),
                 SensorType.DoubleBar => new DoubleBarSensorModel(entity),

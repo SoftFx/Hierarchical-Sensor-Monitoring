@@ -10,7 +10,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.WindowsInfo
         private Version _lastVersion;
 
 
-        protected override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
+        protected override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
 
 
         public WindowsVersion(WindowsInfoSensorOptions options) : base(options) { }

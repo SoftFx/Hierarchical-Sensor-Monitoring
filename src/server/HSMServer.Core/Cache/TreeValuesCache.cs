@@ -34,11 +34,13 @@ namespace HSMServer.Core.Cache
 
         public const int MaxHistoryCount = 50000;
 
+        private readonly static MigrationManager _migrator = new();
+
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors = new();
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree = new();
 
-        private readonly CGuidDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
+        private readonly CDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -401,7 +403,9 @@ namespace HSMServer.Core.Cache
                     });
 
                     if (sensor.LastDbValue != null)
-                        SaveSensorValueToDb(sensor.LastDbValue, request.Id);
+                        SaveSensorValueToDb(sensor.LastDbValue, request.Id, true);
+
+                    SensorUpdateViewAndNotify(sensor);
                 }
             }
         }
@@ -525,6 +529,22 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
+        public IEnumerable<BaseSensorModel> GetSensorsByFolder(HashSet<Guid> folderIds = null)
+        {
+            bool GetAnySensor(BaseSensorModel _) => true;
+            bool GetSensorByFolder(BaseSensorModel sensor) => folderIds.Contains(sensor.Root.FolderId ?? Guid.Empty);
+
+            Predicate<BaseSensorModel> filter = folderIds switch
+            {
+                null => GetAnySensor,
+                _ => GetSensorByFolder,
+            };
+
+            foreach (var (_, sensor) in _sensors)
+                if (filter(sensor))
+                    yield return sensor;
+        }
+
         public bool TryGetSensorByPath(string productName, string path, out BaseSensorModel sensor)
         {
             sensor = null;
@@ -563,7 +583,15 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
+        private void SensorUpdateViewAndNotify(BaseSensorModel sensor)
+        {
+            SensorUpdateView(sensor);
+            SendNotification(sensor.Notifications);
+        }
+
+        private void SendNotification(PolicyResult result) => _confirmationManager.RegisterNotification(result);
+
+        private void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
 
         public IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request)
@@ -837,17 +865,15 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
-            _confirmationManager.SaveOrSendPolicies(sensor.PolicyResult);
-
-            SensorUpdateView(sensor);
+            SensorUpdateViewAndNotify(sensor);
         }
 
 
-        private void SaveSensorValueToDb(BaseValue value, Guid sensorId)
+        private void SaveSensorValueToDb(BaseValue value, Guid sensorId, bool ignoreSnapshot = false)
         {
             _database.AddSensorValue(value.ToEntity(sensorId));
 
-            if (!value.IsTimeout)
+            if (!value.IsTimeout && !ignoreSnapshot)
                 _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
         }
 
@@ -880,11 +906,11 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
 
             _logger.Info($"Migrate sensors settings and alerts");
-            MigrateSensorsBaseSettingsToEma();
+            RunMigration();
             _logger.Info($"Migrate sensor settings and alerts finished");
 
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
-            ApplyAccessKeys(accessKeysEntities.ToList());
+            ApplyAccessKeys([.. accessKeysEntities]);
             _logger.Info($"{nameof(accessKeysEntities)} applied");
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
@@ -892,111 +918,18 @@ namespace HSMServer.Core.Cache
             UpdateCacheState();
         }
 
-        private void MigrateSensorsBaseSettingsToEma()
+        private void RunMigration()
         {
-            static bool IsNessProperty(PolicyProperty prop) => prop is PolicyProperty.Value or PolicyProperty.Mean or
-                                                                       PolicyProperty.Max or PolicyProperty.Min or PolicyProperty.Count;
-
-            static bool IsNessAlert(Policy policy)
+            try
             {
-                if (policy.Conditions.Count == 1)
-                {
-                    var condition = policy.Conditions[0];
-
-                    return IsNessProperty(condition.Property);
-                }
-
-                return false;
+                foreach (var update in MigrationManager.GetMigrationUpdates([.. _sensors.Values]))
+                    TryUpdateSensor(update, out _);
             }
-
-            static PolicyProperty ConvertToEma(PolicyProperty property)
+            catch (Exception ex)
             {
-                if (!IsNessProperty(property))
-                    return property;
-
-                switch (property)
-                {
-                    case PolicyProperty.Value:
-                        return PolicyProperty.EmaValue;
-
-                    case PolicyProperty.Mean:
-                        return PolicyProperty.EmaMean;
-
-                    case PolicyProperty.Max:
-                        return PolicyProperty.EmaMax;
-
-                    case PolicyProperty.Min:
-                        return PolicyProperty.EmaMin;
-
-                    case PolicyProperty.Count:
-                        return PolicyProperty.EmaCount;
-
-                    default:
-                        return property;
-                }
-            }
-
-            var migrator = InitiatorInfo.AsSystemMigrator();
-
-            foreach (var (sensorId, sensor) in _sensors)
-            {
-                var path = sensor.Path;
-
-                var needMigration = path.Contains(".module") || path.Contains(".computer");
-
-                needMigration &= sensor.Type is SensorType.Integer or SensorType.Double or SensorType.DoubleBar or SensorType.IntegerBar;
-                //needMigration &= !sensor.Statistics.HasEma();
-
-                var hasOldAlerts = false;
-
-                foreach (var policy in sensor.Policies)
-                    if (IsNessAlert(policy))
-                        hasOldAlerts = true;
-
-                if (needMigration && hasOldAlerts)
-                {
-                    var alerts = new List<PolicyUpdate>();
-
-                    foreach (var policy in sensor.Policies)
-                    {
-                        var newConditions = new List<PolicyConditionUpdate>();
-                        var isNess = IsNessAlert(policy);
-
-                        foreach (var condition in policy.Conditions)
-                            newConditions.Add(new PolicyConditionUpdate()
-                            {
-                                Operation = condition.Operation,
-                                Target = condition.Target,
-                                Property = isNess ? ConvertToEma(condition.Property) : condition.Property
-                            });
-
-                        alerts.Add(new PolicyUpdate()
-                        {
-                            Conditions = newConditions,
-                            Destination = new PolicyDestinationUpdate(policy.Destination.Chats, policy.Destination.AllChats),
-
-                            ConfirmationPeriod = policy.ConfirmationPeriod,
-                            Id = policy.Id,
-                            Status = policy.Status,
-                            Template = policy.Template,
-                            IsDisabled = policy.IsDisabled,
-                            Icon = policy.Icon,
-
-                            Initiator = migrator
-                        });
-                    }
-
-                    TryUpdateSensor(new SensorUpdate()
-                    {
-                        Id = sensorId,
-                        Statistics = StatisticsOptions.EMA,
-                        Policies = alerts,
-                        Initiator = migrator,
-                    }, out _);
-                }
+                _logger.Error($"Migration is failed: {ex}");
             }
         }
-
 
         private List<ProductEntity> RequestProducts()
         {
@@ -1070,6 +1003,8 @@ namespace HSMServer.Core.Cache
 
                     if (_tree.TryGetValue(parentId, out var parent) && _sensors.TryGetValue(sensorId, out var sensor))
                         parent.AddSensor(sensor);
+                    else
+                        RemoveSensor(sensorId);
                 }
             _logger.Info("Links between products and their sensors are built");
 
@@ -1315,6 +1250,8 @@ namespace HSMServer.Core.Cache
                     {
                         sensor.AddDbValue(value);
 
+                        SendNotification(sensor.Notifications.LeftOnlyScheduled());
+
                         if (!_snapshot.IsFinal && sensor.LastValue is not null)
                             _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
                     }
@@ -1388,7 +1325,7 @@ namespace HSMServer.Core.Cache
                 var ttl = sensor.Policies.TimeToLive;
                 snapshot.IsExpired = timeout;
 
-                if (timeout)
+                if (timeout && sensor.LastValue is not null)
                 {
                     var value = sensor.GetTimeoutValue();
 
@@ -1396,7 +1333,7 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                _confirmationManager.SaveOrSendPolicies(timeout ? ttl.PolicyResult : ttl.Ok);
+                SendNotification(timeout ? ttl.PolicyResult : ttl.Ok);
             }
 
             SensorUpdateView(sensor);
