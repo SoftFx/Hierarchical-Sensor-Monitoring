@@ -13,28 +13,36 @@
 export const serviceAlivePlotName  = "ServiceAlive";
 export const serviceStatusPlotName  = "ServiceStatus";
 
-window.customReset =  function (plot = undefined, range = undefined){
+window.customReset =  function (plot = undefined, xaxisRange = undefined, yaxisRange = undefined){
     let currentPlot;
-    plot.data.forEach(function (x){
-        if (x.type !== 'heatmap')
-            currentPlot = x;
-    })
-
+    
+    if (plot.data.length === 1)
+        currentPlot = plot.data[0];
+    else 
+        plot.data.forEach(function (x){
+            if (x.type !== 'heatmap')
+                currentPlot = x;
+        })
+    
     if (currentPlot === undefined)
         return;
 
     let isPanelChart = plot.id.startsWith('panelChart');
     
-    Plotly.relayout(plot, {
-        'xaxis.range': [range[0], !isPanelChart ? getMinRangeTo() : range[1]],
-        'yaxis.autorange': true
-    });
+    plot.layout.xaxis.range = [xaxisRange[0], !isPanelChart ? getMinRangeTo() : xaxisRange[1]];
+    
+    if (yaxisRange === undefined || yaxisRange === true)
+        plot.layout.yaxis.autorange = true;
+    else 
+        plot.layout.yaxis.range = yaxisRange
+    
+    Plotly.relayout(plot, plot.layout);
     
     function getMinRangeTo(){
         if (currentPlot.x.length === 0)
-            return range[1];
+            return xaxisRange[1];
 
-        return 1000000 + Math.min(new Date(range[1]), new Date(currentPlot.x.at(-1)));
+        return 1000000 + Math.min(new Date(xaxisRange[1]), new Date(currentPlot.x.at(-1)));
     }
 }
 
@@ -120,7 +128,10 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
         }
     }
     
-    Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
+    if (!layout.xaxis.autorange && layout.xaxis.range === undefined)
+        layout.xaxis.autorange = true;
+    
+    Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config)
     customReset($(`#${graphElementId}`)[0], getCurrentFromTo(graphName))
     
     if (plot.name !== serviceAlivePlotName)

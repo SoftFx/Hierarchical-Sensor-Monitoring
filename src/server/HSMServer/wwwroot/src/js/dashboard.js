@@ -458,7 +458,7 @@ window.initMultyichartCordinates = function (settings, values, id) {
     })
 }
 
-window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false) {
+window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false, yaxisRange = true) {
     return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
         dragmode: 'zoom',
@@ -522,7 +522,7 @@ window.initMultichart = function (chartId, height = 300, showlegend = true, auto
             attr: 'zoom',
             val: 'reset',
             icon: Plotly.Icons.home,
-            click: (plot) => customReset(plot, getRangeDate())
+            click: (plot) => customReset(plot, getRangeDate(), yaxisRange)
         }],
         doubleClick: autorange ? 'reset+autosize' : autorange
     });
