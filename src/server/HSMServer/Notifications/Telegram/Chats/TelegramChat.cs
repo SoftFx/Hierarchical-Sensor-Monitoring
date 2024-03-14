@@ -70,7 +70,7 @@ namespace HSMServer.Notifications
         }
 
 
-        protected override void UpdateCustom(TelegramChatUpdate update)
+        protected override void ApplyUpdate(TelegramChatUpdate update)
         {
             SendMessages = update.SendMessages ?? SendMessages;
             MessagesAggregationTimeSec = update.MessagesAggregationTimeSec ?? MessagesAggregationTimeSec;
@@ -92,8 +92,10 @@ namespace HSMServer.Notifications
 
         internal IEnumerable<string> GetNotifications()
         {
+            foreach (var report in ScheduleMessageBuilder.GetReports())
+                yield return report;
+
             yield return MessageBuilder.GetAggregateMessage();
-            yield return ScheduleMessageBuilder.GetReport();
 
             _nextSendMessageTime = DateTime.UtcNow.Ceil(TimeSpan.FromSeconds(MessagesAggregationTimeSec));
         }

@@ -17,6 +17,8 @@ namespace HSMServer.Core.Model.Policies
 
         internal protected PolicyResult PolicyResult { get; protected set; } = PolicyResult.Ok;
 
+        internal protected PolicyResult NotificationResult { get; protected set; } = PolicyResult.Ok;
+
 
         internal Action<ActionType, Policy> Uploaded;
         internal Action<BaseSensorModel, bool> SensorExpired;
@@ -37,6 +39,7 @@ namespace HSMServer.Core.Model.Policies
         {
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
+            NotificationResult = PolicyResult.Ok;
         }
 
 
@@ -52,7 +55,7 @@ namespace HSMServer.Core.Model.Policies
         private protected BaseSensorModel _sensor;
 
 
-        protected abstract bool CalculateStorageResult(T value, bool updateSensor);
+        protected abstract bool CalculateStorageResult(T value, bool isLastValue, bool isRecalculate);
 
 
         internal override void Attach(BaseNodeModel sensor)
@@ -62,6 +65,7 @@ namespace HSMServer.Core.Model.Policies
             _sensor = (BaseSensorModel)_model;
             _typePolicy = new CorrectTypePolicy<T>(_sensor);
 
+            NotificationResult = new(sensor.Id);
             PolicyResult = new(sensor.Id);
 
             base.BuildDefault(sensor);
@@ -76,20 +80,11 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal bool TryValidate(BaseValue value, out T valueT, bool updateSensor = true)
-        {
-            valueT = value as T;
+        internal bool TryValidate(BaseValue value, out T valueT, bool isLastValue = true) =>
+            TryCheckValueType(value, out valueT) && CalculateStorageResult(valueT, isLastValue, false);
 
-            if (!CorrectTypePolicy<T>.Validate(valueT))
-            {
-                SensorResult = _typePolicy.SensorResult;
-                PolicyResult = _typePolicy.PolicyResult;
-
-                return false;
-            }
-
-            return CalculateStorageResult(valueT, updateSensor);
-        }
+        internal bool TryRevalidate(BaseValue value) => TryCheckValueType(value, out var valueT) &&
+            CalculateStorageResult(valueT, true, true);
 
         internal bool SensorTimeout(BaseValue value)
         {
@@ -116,10 +111,27 @@ namespace HSMServer.Core.Model.Policies
             return timeout;
         }
 
+
         private void RemoveAlert(Policy policy)
         {
             PolicyResult.RemoveAlert(policy);
             SensorResult -= policy.SensorResult;
+        }
+
+        private bool TryCheckValueType(BaseValue value, out T valueT)
+        {
+            valueT = value as T;
+
+            if (!CorrectTypePolicy<T>.Validate(valueT))
+            {
+                SensorResult = _typePolicy.SensorResult;
+                PolicyResult = _typePolicy.PolicyResult;
+                NotificationResult = _typePolicy.PolicyResult;
+
+                return false;
+            }
+
+            return true;
         }
     }
 
@@ -131,10 +143,11 @@ namespace HSMServer.Core.Model.Policies
         private readonly ConcurrentDictionary<Guid, PolicyType> _storage = new();
 
 
-        protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
+        protected override bool CalculateStorageResult(ValueType value, bool isLastValue, bool isReplace)
         {
             SensorResult = SensorResult.Ok;
             PolicyResult = new(_sensor.Id);
+            NotificationResult = new(_sensor.Id);
 
             if (!value.Status.IsOfftime())
             {
@@ -143,10 +156,17 @@ namespace HSMServer.Core.Model.Policies
                     {
                         PolicyResult.AddAlert(policy);
 
-                        if (updateStatus)
+                        if (isLastValue)
                             SensorResult += policy.SensorResult;
+
+                        if (isReplace)
+                            NotificationResult.AddSingleAlert(policy);
+                        else
+                            NotificationResult.AddAlert(policy);
                     }
             }
+
+            SensorTimeout(value);
 
             return true;
         }
@@ -215,10 +235,7 @@ namespace HSMServer.Core.Model.Policies
             }
 
             if (_sensor?.LastValue is ValueType valueT)
-            {
-                CalculateStorageResult(valueT);
-                SensorTimeout(valueT);
-            }
+                TryRevalidate(valueT);
 
             error = errors.Length > 0 ? errors.ToString() : null;
 
@@ -248,13 +265,13 @@ namespace HSMServer.Core.Model.Policies
                 Status = SensorStatus.Ok,
                 Template = $"$prevStatus->$status [$product]$path = $comment",
                 Destination = new(),
-                Conditions = new(1)
-                {
+                Conditions =
+                [
                     new PolicyConditionUpdate(
                         PolicyOperation.IsChanged,
                         PolicyProperty.Status,
                         new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
-                },
+                ],
                 IsDisabled = options.HasFlag(DefaultAlertsOptions.DisableStatusChange)
             };
 

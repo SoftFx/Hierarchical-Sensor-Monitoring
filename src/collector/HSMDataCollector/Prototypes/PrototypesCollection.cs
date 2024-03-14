@@ -32,7 +32,7 @@ namespace HSMDataCollector.Options
 
         internal WindowsFreeSpaceOnDiskPredictionPrototype WindowsFreeSpaceOnDiskPrediction { get; }
 
-        internal WindowsAverageDiskWriteSpeedPrototype WindowsAverageDiskWriteSpeed { get; }
+        internal WindowsDiskWriteSpeedPrototype WindowsAverageDiskWriteSpeed { get; }
 
         internal WindowsDiskQueueLengthPrototype WindowsDiskQueueLength { get; }
 
@@ -56,9 +56,15 @@ namespace HSMDataCollector.Options
 
         internal WindowsVersionPrototype WindowsVersion { get; }
 
-        internal WindowsErrorLogsPrototype WindowsErrorLogsPrototype { get; }
 
-        internal WindowsWarningLogsPrototype WindowsWarningLogsPrototype { get; }
+        internal WindowsApplicationErrorLogsPrototype WindowsApplicationErrorLogsPrototype { get; }
+
+        internal WindowsSystemErrorLogsPrototype WindowsSystemErrorLogsPrototype { get; }
+
+
+        internal WindowsApplicationWarningLogsPrototype WindowsApplicationWarningLogsPrototype { get; }
+
+        internal WindowsSystemWarningLogsPrototype WindowsSystemWarningLogsPrototype { get; }
 
         #endregion
 
@@ -128,7 +134,7 @@ namespace HSMDataCollector.Options
             WindowsFreeSpaceOnDisk = Register<WindowsFreeSpaceOnDiskPrototype>();
             WindowsActiveTimeDisk = Register<WindowsActiveTimeDiskPrototype>();
             WindowsDiskQueueLength = Register<WindowsDiskQueueLengthPrototype>();
-            WindowsAverageDiskWriteSpeed = Register<WindowsAverageDiskWriteSpeedPrototype>();
+            WindowsAverageDiskWriteSpeed = Register<WindowsDiskWriteSpeedPrototype>();
 
             UnixFreeSpaceOnDiskPrediction = Register<UnixFreeSpaceOnDiskPredictionPrototype>();
             UnixFreeSpaceOnDisk = Register<UnixFreeSpaceOnDiskPrototype>();
@@ -137,8 +143,11 @@ namespace HSMDataCollector.Options
             WindowsLastUpdate = Register<WindowsLastUpdatePrototype>();
             WindowsVersion = Register<WindowsVersionPrototype>();
 
-            WindowsWarningLogsPrototype = Register<WindowsWarningLogsPrototype>();
-            WindowsErrorLogsPrototype = Register<WindowsErrorLogsPrototype>();
+            WindowsApplicationWarningLogsPrototype = Register<WindowsApplicationWarningLogsPrototype>();
+            WindowsSystemWarningLogsPrototype = Register<WindowsSystemWarningLogsPrototype>();
+
+            WindowsApplicationErrorLogsPrototype = Register<WindowsApplicationErrorLogsPrototype>();
+            WindowsSystemErrorLogsPrototype = Register<WindowsSystemErrorLogsPrototype>();
 
             CollectorVersion = Register<CollectorVersionPrototype>();
             CollectorErrors = Register<CollectorErrorsPrototype>();

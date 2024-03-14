@@ -1,6 +1,7 @@
 ﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.SensorsFactory
 {
@@ -23,7 +24,7 @@ namespace HSMDataCollector.SensorsFactory
                 case Type type when type == typeof(Version):
                     return SensorType.VersionSensor;
                 default:
-                    throw new ArgumentException($"Unsupported sensor value {typeof(T).Name}");
+                    throw new ArgumentException($"Unsupported instant sensor type {typeof(T).Name}");
             }
         }
 
@@ -37,10 +38,59 @@ namespace HSMDataCollector.SensorsFactory
                 case Type type when type == typeof(double):
                     return SensorType.DoubleBarSensor;
                 default:
-                    throw new ArgumentException($"Unsupported sensor value {typeof(T).Name}");
+                    throw new ArgumentException($"Unsupported bar sensor type {typeof(T).Name}");
             }
         }
 
+
+        internal static Func<T, SensorValueBase> GetValueBuilder<T>(SensorType type)
+        {
+            switch (type)
+            {
+                case SensorType.BooleanSensor:
+                    return (val) => new BoolSensorValue()
+                    {
+                        Value = val is bool boolV && boolV
+                    };
+                case SensorType.IntSensor:
+                    return (val) => new IntSensorValue()
+                    {
+                        Value = val is int intV ? intV : default
+                    };
+                case SensorType.DoubleSensor:
+                    return (val) => new DoubleSensorValue()
+                    {
+                        Value = val is double doubleV ? doubleV : default
+                    };
+                case SensorType.StringSensor:
+                    return (val) => new StringSensorValue()
+                    {
+                        Value = val is string stringV ? stringV : default
+                    };
+                case SensorType.TimeSpanSensor:
+                    return (val) => new TimeSpanSensorValue()
+                    {
+                        Value = val is TimeSpan time ? time : default
+                    };
+                case SensorType.VersionSensor:
+                    return (val) => new VersionSensorValue()
+                    {
+                        Value = val is Version version ? version : default
+                    };
+                case SensorType.RateSensor:
+                    return (val) => new RateSensorValue()
+                    {
+                        Value = val is double doubleV ? doubleV : default
+                    };
+                case SensorType.FileSensor:
+                    return (val) => new FileSensorValue()
+                    {
+                        Value = val is List<byte> bytes ? bytes : default
+                    };
+                default:
+                    return null;
+            }
+        }
 
         internal static SensorValueBase BuildValue<T>(T val)
         {

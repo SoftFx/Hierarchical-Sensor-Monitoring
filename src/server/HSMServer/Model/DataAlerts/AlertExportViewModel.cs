@@ -28,6 +28,8 @@ namespace HSMServer.Model.DataAlerts
 
         public AlertRepeatMode? ScheduledRepeatMode { get; set; }
 
+        public bool ScheduledInstantSend { get; set; }
+
         public List<string> Chats { get; set; }
 
         public bool IsDisabled { get; set; }
@@ -52,6 +54,7 @@ namespace HSMServer.Model.DataAlerts
             IsDisabled = policy.IsDisabled;
             ScheduledNotificationTime = policy.Schedule.Time == DateTime.MinValue ? null : policy.Schedule.Time.ToDefaultFormat();
             ScheduledRepeatMode = policy.Schedule.RepeatMode; // TODO: null if None or Immediatly?
+            ScheduledInstantSend = policy.Schedule.InstantSend;
 
             if (!policy.Destination.AllChats)
             {
@@ -74,8 +77,13 @@ namespace HSMServer.Model.DataAlerts
                 Template = Template,
                 IsDisabled = IsDisabled,
                 ConfirmationPeriod = ConfirmationPeriod?.Ticks,
-                Schedule = new PolicyScheduleUpdate(ScheduledNotificationTime.ParseFromDefault(), ScheduledRepeatMode),
                 Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
+                Schedule = new PolicyScheduleUpdate()
+                {
+                    Time = ScheduledNotificationTime.ParseFromDefault(),
+                    RepeatMode = ScheduledRepeatMode,
+                    InstantSend = ScheduledInstantSend,
+                },
                 Destination = Chats is null
                     ? new PolicyDestinationUpdate(allChats: true)
                     : new PolicyDestinationUpdate(Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),

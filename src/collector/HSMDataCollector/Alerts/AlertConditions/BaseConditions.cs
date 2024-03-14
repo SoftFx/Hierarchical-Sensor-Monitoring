@@ -12,11 +12,18 @@ namespace HSMDataCollector.Alerts
 
         public AlertAction<T> ThenSendNotification(string template) => BuildAlertAction().AndSendNotification(template);
 
+        public AlertAction<T> ThenSendScheduledNotification(string template, DateTime time, AlertRepeatMode repeatMode, bool instantSend) =>
+            BuildAlertAction().AndSendScheduledNotification(template, time, repeatMode, instantSend);
+
         public AlertAction<T> ThenSetIcon(string icon) => BuildAlertAction().AndSetIcon(icon);
 
         public AlertAction<T> ThenSetIcon(AlertIcon icon) => BuildAlertAction().AndSetIcon(icon);
 
         public AlertAction<T> ThenSetSensorError() => BuildAlertAction().AndSetSensorError();
+
+
+        internal AlertAction<T> ThenSendInstantHourlyScheduledNotification(string template) =>
+            ThenSendScheduledNotification(template, DateTime.MinValue, AlertRepeatMode.Hourly, true);
 
 
         protected virtual AlertAction<T> BuildAlertAction() => new AlertAction<T>(_conditions, _confirmationPeriod);

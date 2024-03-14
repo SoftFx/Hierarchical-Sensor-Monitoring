@@ -3,19 +3,8 @@ using System.Collections.Generic;
 
 namespace HSMDataCollector.PublicInterface
 {
-    /// <summary>
-    /// The sensor invokes a Func which takes <c><list type="U"></list></c> as a parameter and returns <list type="T"></list> result
-    /// </summary>
-    /// <typeparam name="U">Func parameter type</typeparam>
-    /// <typeparam name="T">Result value type</typeparam>
-    public interface IParamsFuncSensor<T, U>
+    public interface IBaseFuncSensor
     {
-        /// <summary>
-        /// Gets the function, that is invoked within the specified interval
-        /// </summary>
-        /// <returns><see cref="Func{TResult}"/>Currently called function.</returns>
-        Func<List<U>, T> GetFunc();
-
         /// <summary>
         /// Get current interval, within the specified function is invoked. 
         /// </summary>
@@ -27,6 +16,22 @@ namespace HSMDataCollector.PublicInterface
         /// </summary>
         /// <param name="timeSpan">New invoke interval.</param>
         void RestartTimer(TimeSpan timeSpan);
+    }
+
+
+    /// <summary>
+    /// The sensor invokes a Func which takes <c><list type="U"></list></c> as a parameter and returns <list type="T"></list> result
+    /// </summary>
+    /// <typeparam name="U">Func parameter type</typeparam>
+    /// <typeparam name="T">Result value type</typeparam>
+    public interface IParamsFuncSensor<T, U> : IBaseFuncSensor
+    {
+        /// <summary>
+        /// Gets the function, that is invoked within the specified interval
+        /// </summary>
+        /// <returns><see cref="Func{TResult}"/>Currently called function.</returns>
+        Func<List<U>, T> GetFunc();
+
         /// <summary>
         /// Add new value to the params list.
         /// </summary>

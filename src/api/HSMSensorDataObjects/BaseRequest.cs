@@ -8,7 +8,5 @@ namespace HSMSensorDataObjects
         public string Key { get; set; }
 
         public string Path { get; set; }
-
-        public string ClientName { get; set; }
     }
 }

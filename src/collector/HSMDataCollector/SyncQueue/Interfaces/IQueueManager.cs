@@ -11,7 +11,7 @@ namespace HSMDataCollector.SyncQueue
         ICommandQueue Commands { get; }
 
 
-        event Action<PackageSendingInfo> PackageSendingInfoEvent;
+        event Action<PackageSendingInfo> PackageRequestInfoEvent;
         event Action<string, PackageInfo> PackageInfoEvent;
         event Action<string, int> OverflowInfoEvent;
 
@@ -19,7 +19,5 @@ namespace HSMDataCollector.SyncQueue
         void Init();
 
         void Stop();
-
-        void ThrowPackageSendingInfo(PackageSendingInfo info);
     }
 }

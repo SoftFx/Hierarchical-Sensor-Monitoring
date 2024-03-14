@@ -71,7 +71,7 @@ namespace HSMServer.Model.ViewModel
 
         private void RefreshTotalInfo()
         {
-            DisplayInfo = $"{TotalSize.ToReadableMemoryFormat()} ({ValuePercent:F2}% values from {DataCount} records) updated at {LastUpdate.ToDefaultFormat()}";
+            DisplayInfo = $"{TotalSize.ToReadableMemoryFormat()} ({ValuePercent:F2}% values from {DataCount:N0} records) updated at {LastUpdate.ToDefaultFormat()}";
         }
     }
 }

@@ -93,7 +93,7 @@ namespace HSMServer.Controllers
             try
             {
                 var importList = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _deserializeOptions);
-                var newAlerts = new CGuidDict<List<PolicyUpdate>>();
+                var newAlerts = new CDict<List<PolicyUpdate>>();
 
                 foreach (var importGroup in importList)
                 {
@@ -118,7 +118,7 @@ namespace HSMServer.Controllers
         }
 
 
-        private void ImportAlertsToProduct(Guid nodeId, AlertExportViewModel importGroup, CGuidDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
+        private void ImportAlertsToProduct(Guid nodeId, AlertExportViewModel importGroup, CDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
         {
             if (_tree.Nodes.TryGetValue(nodeId, out var targetNode))
             {
@@ -141,7 +141,7 @@ namespace HSMServer.Controllers
             }
         }
 
-        private void SendAlertUpdates(CGuidDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
+        private void SendAlertUpdates(CDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
         {
             foreach (var (sensorId, alertUpdates) in newAlerts)
             {

@@ -67,7 +67,7 @@ namespace HSMCommon.Extensions
         {
             var roundTicks = span.Ticks;
 
-            return new DateTime(time.Ticks / roundTicks * roundTicks, DateTimeKind.Utc);
+            return roundTicks == 0 ? time : new DateTime(time.Ticks / roundTicks * roundTicks, DateTimeKind.Utc);
         }
 
         public static bool TryParse(this string interval, out long ticks)

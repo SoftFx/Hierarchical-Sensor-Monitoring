@@ -11,11 +11,11 @@ namespace HSMServer.Core.Confirmation
 {
     internal sealed class ConfirmationManager : BaseTimeManager
     {
-        private readonly CGuidDict<CGuidDict<CPriorityQueue<AlertResult, DateTime>>> _tree = new(); //sensorId -> alertId -> alertResult
+        private readonly CDict<CDict<CPriorityQueue<AlertResult, DateTime>>> _tree = new(); //sensorId -> alertId -> alertResult
         private readonly ConcurrentDictionary<Guid, AlertResult> _lastStatusUpdates = new();
 
 
-        internal void SaveOrSendPolicies(PolicyResult policyResult)
+        internal void RegisterNotification(PolicyResult policyResult)
         {
             try
             {
@@ -41,7 +41,7 @@ namespace HSMServer.Core.Confirmation
                     }
                 }
 
-                SendAlertMessage(sensorId, [.. newAlerts.Values]);
+                SendAlertMessage(sensorId, [..newAlerts.Values]);
             }
             catch (Exception ex)
             {

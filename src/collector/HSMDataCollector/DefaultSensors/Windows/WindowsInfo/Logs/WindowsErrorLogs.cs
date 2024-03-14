@@ -3,8 +3,24 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    public class WindowsErrorLogs : WindowsLogsSensorBase
+    public sealed class WindowsApplicationErrorLogs : WindowsLogsSensorBase
     {
-        public WindowsErrorLogs(InstantSensorOptions options) : base(options, EventLogEntryType.Error) { }
+        protected override EventLogEntryType LogType => EventLogEntryType.Error;
+
+        protected override string Category => "Application";
+
+
+        public WindowsApplicationErrorLogs(InstantSensorOptions options) : base(options) { }
+    }
+
+
+    public sealed class WindowsSystemErrorLogs : WindowsLogsSensorBase
+    {
+        protected override EventLogEntryType LogType => EventLogEntryType.Error;
+
+        protected override string Category => "System";
+
+
+        public WindowsSystemErrorLogs(InstantSensorOptions options) : base(options) { }
     }
 }

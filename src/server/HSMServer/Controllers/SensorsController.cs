@@ -219,8 +219,7 @@ namespace HSMServer.Controllers
             {
                 // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                        out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -231,6 +230,35 @@ namespace HSMServer.Controllers
                 return BadRequest(sensorValue);
             }
         }
+
+        /// <summary>
+        /// Receives value of rate sensor
+        /// </summary>
+        /// <param name="sensorValue"></param>
+        /// <returns></returns>
+        [HttpPost("rate")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<RateSensorValue> Post([FromBody] RateSensorValue sensorValue)
+        {
+            try
+            {
+                _dataCollector.ReceivedDataCountSensor.AddValue(1);
+
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, message);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to put data!");
+                return BadRequest(sensorValue);
+            }
+        }
+
 
         /// <summary>
         /// Receives value of double bar sensor

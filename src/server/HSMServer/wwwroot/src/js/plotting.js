@@ -175,25 +175,27 @@ function getPreviousZoomData(graphElementId) {
     return window.sessionStorage.getItem(graphElementId);
 }
 
-export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, shape = undefined, asLine = false) {
+export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, shape = undefined, asLine = false, range = undefined) {
     let escapedData = JSON.parse(graphData);
 
     switch (sensorInfo.plotType) {
         case 0:
-            return new BoolPlot(escapedData, sensorInfo.units, color);
+            return new BoolPlot(escapedData, sensorInfo.units, color, range);
         case 1:
-            return new IntegerPlot(escapedData, sensorInfo.units, color, shape);
+            return new IntegerPlot(escapedData, sensorInfo.units, color, shape, range);
         case 2:
-            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape);
+            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range);
         case 4:
-            return asLine ? new IntegerPlot(escapedData, sensorInfo.units, color, shape)
+            return asLine ? new IntegerPlot(escapedData, sensorInfo.units, color, shape, range)
                           : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 5:
-            return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape) 
+            return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range) 
                           : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 7:
-            return new TimeSpanPlot(escapedData, sensorInfo.units, color);
+            return new TimeSpanPlot(escapedData, sensorInfo.units, color, range);
         case 9:
+            return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range);
+        case 10:
             if (sensorInfo.realType === 0)
                 return new EnumPlot(escapedData, false, false)
 

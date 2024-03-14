@@ -69,6 +69,15 @@ namespace HSMServer.Core.Model
     }
 
 
+    public record RateValue : BaseValue<double>
+    {
+        public override SensorType Type => SensorType.Rate;
+
+
+        public override bool TryParseValue(string value, out double parsedValue) => double.TryParse(value, out parsedValue);
+    }
+
+
     public record FileValue : BaseValue<byte[]>
     {
         public string Name { get; init; }

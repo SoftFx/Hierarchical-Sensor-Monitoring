@@ -10,6 +10,7 @@ namespace HSMServer.Model.History
                 SensorType.Boolean => new BoolHistoryProcessor(),
                 SensorType.Integer => new IntHistoryProcessor(),
                 SensorType.Double => new DoubleHistoryProcessor(),
+                SensorType.Rate => new DoubleHistoryProcessor(),
                 SensorType.String => new StringHistoryProcessor(),
                 SensorType.IntegerBar => new IntBarHistoryProcessor(),
                 SensorType.DoubleBar => new DoubleBarHistoryProcessor(),

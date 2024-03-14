@@ -4,10 +4,8 @@ using System;
 
 namespace HSMDataCollector.Requests
 {
-    public class PriorityRequest
+    public readonly struct PriorityRequest
     {
-        public Guid Id { get; }
-
         public (Guid, string) Key { get; }
 
         public CommandRequestBase Request { get; }
@@ -15,10 +13,8 @@ namespace HSMDataCollector.Requests
 
         public PriorityRequest(CommandRequestBase request)
         {
-            Id = Guid.NewGuid();
+            Key = (Guid.NewGuid(), request.Path);
             Request = request;
-
-            Key = (Id, request.Path);
         }
     }
 }

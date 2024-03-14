@@ -3,11 +3,8 @@ using HSMDatabase.AccessManager.DatabaseSettings;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Model;
-using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.Dashboards
@@ -33,47 +30,24 @@ namespace HSMServer.Dashboards
             _cache = cache;
 
             Added += AddDashboardSubscriptions;
-            Removed -= RemoveDashboardSubscriptions;
-
-            _cache.ChangeSensorEvent += ChangeSensorHandler;
         }
 
-
-        private void ChangeSensorHandler(BaseSensorModel model, ActionType action)
-        {
-            if (action == ActionType.Delete)
-                foreach (var (_, panel) in this.SelectMany(x => x.Value.Panels))
-                {
-                    var (_, source) = panel.Sources.FirstOrDefault(x => x.Value.SensorId == model.Id);
-
-                    if (source is not null)
-                        panel.TryRemoveSource(source.Id);
-                }
-        }
 
         public Task<bool> TryAdd(DashboardAdd dashboardAdd, out Dashboard dashboard)
         {
-            dashboard = new Dashboard(dashboardAdd);
+            dashboard = new Dashboard(dashboardAdd, _cache);
 
             return TryAdd(dashboard);
         }
 
-        protected override Dashboard FromEntity(DashboardEntity entity)
-        {
-            var newBoard = new Dashboard(entity, _cache.GetSensor);
-
-            AddDashboardSubscriptions(newBoard);
-
-            return newBoard;
-        }
+        protected override Dashboard FromEntity(DashboardEntity entity) => new(entity, _cache);
 
 
         private void AddDashboardSubscriptions(Dashboard board)
         {
-            board.Subscribe(_cache.GetSensor);
-            board.UpdatedEvent += () => TryUpdate(board);
-        }
+            void CallUpdate() => TryUpdate(board);
 
-        private void RemoveDashboardSubscriptions(Dashboard board, InitiatorInfo _) => board.Unsubscribe();
+            board.UpdatedEvent += CallUpdate;
+        }
     }
 }

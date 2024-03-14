@@ -17,7 +17,7 @@ namespace HSMDataCollector.SyncQueue
         public ICommandQueue Commands { get; }
 
 
-        public event Action<PackageSendingInfo> PackageSendingInfoEvent;
+        public event Action<PackageSendingInfo> PackageRequestInfoEvent;
         public event Action<string, PackageInfo> PackageInfoEvent;
         public event Action<string, int> OverflowInfoEvent;
 
@@ -33,14 +33,14 @@ namespace HSMDataCollector.SyncQueue
 
         public void Stop() => _queueList.ForEach(q => q.Stop());
 
-        public void ThrowPackageSendingInfo(PackageSendingInfo info) => PackageSendingInfoEvent?.Invoke(info);
 
         public void Dispose()
         {
             foreach (var queue in _queueList)
             {
-                queue.PackageInfoEvent -= ThrowPackageInfo;
+                queue.PackageRequestInfoEvent -= ThrowPackageRequestInfo;
                 queue.OverflowCntEvent -= ThrowOverflowInfo;
+                queue.PackageInfoEvent -= ThrowPackageInfo;
                 queue.Dispose();
             }
         }
@@ -50,15 +50,18 @@ namespace HSMDataCollector.SyncQueue
         {
             _queueList.Add(queue);
 
-            queue.PackageInfoEvent += ThrowPackageInfo;
+            queue.PackageRequestInfoEvent += ThrowPackageRequestInfo;
             queue.OverflowCntEvent += ThrowOverflowInfo;
+            queue.PackageInfoEvent += ThrowPackageInfo;
 
             return queue;
         }
 
 
-        private void ThrowOverflowInfo(string queue, int valuesCnt) => OverflowInfoEvent?.Invoke(queue, valuesCnt);
+        private void ThrowPackageRequestInfo(PackageSendingInfo info) => PackageRequestInfoEvent?.Invoke(info);
 
         private void ThrowPackageInfo(string queue, PackageInfo info) => PackageInfoEvent?.Invoke(queue, info);
+
+        private void ThrowOverflowInfo(string queue, int valuesCnt) => OverflowInfoEvent?.Invoke(queue, valuesCnt);
     }
 }

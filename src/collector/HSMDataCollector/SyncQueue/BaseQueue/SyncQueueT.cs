@@ -3,7 +3,7 @@ using HSMDataCollector.SyncQueue.BaseQueue;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Xml.Schema;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.SyncQueue
 {
@@ -17,8 +17,8 @@ namespace HSMDataCollector.SyncQueue
 
         private bool _flushing;
 
-        public event Action<List<T>> NewValuesEvent;
-        public event Action<T> NewValueEvent;
+        public event Func<List<T>, Task> NewValuesEvent;
+        public event Func<T, Task> NewValueEvent;
 
 
         protected SyncQueue(CollectorOptions options, TimeSpan collectPeriod) : base(collectPeriod)
@@ -58,21 +58,20 @@ namespace HSMDataCollector.SyncQueue
         }
 
 
-        public virtual void Push(T value) => Enqueue(_valuesQueue, value);
+        public void AddFail(T value) => Enqueue(_failedQueue, value);
 
-        public virtual void PushFailValue(T value) => Enqueue(_failedQueue, value);
+        public void Add(T value) => Enqueue(_valuesQueue, value);
+
+        public void Send(T value) => NewValueEvent?.Invoke(CompressValue(value));
 
 
-        protected virtual bool IsSendValue(T value) => true;
+        protected virtual bool IsValidValue(T value) => true;
 
+        protected virtual T CompressValue(T value) => value;
 
-        protected void InvokeNewValue(T value) => NewValueEvent?.Invoke(value);
 
         protected void Enqueue(ConcurrentQueue<SyncQueueItem<T>> queue, T value)
         {
-            if (IsStopped)
-                return;
-
             queue.Enqueue(new SyncQueueItem<T>(value));
 
             var overflowCnt = 0;
@@ -91,9 +90,9 @@ namespace HSMDataCollector.SyncQueue
         protected List<T> Dequeue(ConcurrentQueue<SyncQueueItem<T>> queue, List<T> dataList, ref double sumTime)
         {
             while (dataList.Count < _maxValuesInPackage && queue.TryDequeue(out var item))
-                if (IsSendValue(item.Value))
+                if (IsValidValue(item.Value))
                 {
-                    dataList.Add(item.Value);
+                    dataList.Add(CompressValue(item.Value));
                     sumTime += (DateTime.UtcNow - item.BuildDate).TotalSeconds;
                 }
 

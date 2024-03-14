@@ -1,27 +1,16 @@
-﻿using HSMDataCollector.Base;
-using HSMDataCollector.Client;
-using HSMDataCollector.CustomFuncSensor;
+﻿using HSMDataCollector.Client;
 using HSMDataCollector.DefaultSensors;
-using HSMDataCollector.DefaultValueSensor;
-using HSMDataCollector.Exceptions;
 using HSMDataCollector.Extensions;
-using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading.Tasks;
-using OldSensorBase = HSMDataCollector.Base.SensorBase;
 
 namespace HSMDataCollector.Core
 {
@@ -38,7 +27,6 @@ namespace HSMDataCollector.Core
     {
         private readonly LoggerManager _logger = new LoggerManager();
 
-        private readonly ConcurrentDictionary<string, ISensor> _nameToSensor = new ConcurrentDictionary<string, ISensor>();
         private readonly PrototypesCollection _prototypes;
         private readonly SensorsStorage _sensorsStorage;
         private readonly IQueueManager _queueManager;
@@ -90,7 +78,7 @@ namespace HSMDataCollector.Core
 
             _hsmClient = new HsmHttpsClient(options, _queueManager, _logger);
 
-            ToRunning += ToStartingCollector;
+            ToRunning += ToRunningCollector;
             ToStopped += ToStoppedCollector;
         }
 
@@ -101,7 +89,14 @@ namespace HSMDataCollector.Core
         /// <param name="address">HSM server address to send data to (Do not forget https:// if needed)</param>
         /// <param name="port">HSM sensors API port, which defaults to 44330. Specify if your HSM server Docker container configured differently.</param>
         public DataCollector(string productKey, string address = CollectorOptions.LocalhostAddress, int port = CollectorOptions.DefaultPort, string clientName = null)
-            : this(new CollectorOptions() { AccessKey = productKey, ServerAddress = address, Port = port, ClientName = clientName}) { }
+            : this(new CollectorOptions()
+            {
+                AccessKey = productKey,
+                ServerAddress = address,
+                Port = port,
+                ClientName = clientName
+            })
+        { }
 
 
         public Task<ConnectionResult> TestConnection() => _hsmClient.TestConnection();
@@ -150,18 +145,15 @@ namespace HSMDataCollector.Core
 
                 ChangeStatus(CollectorStatus.Starting);
 
-                foreach (var oldSensor in _nameToSensor.Values)
-                    oldSensor.Start();
+                await customStartingTask;
 
-                await Task.WhenAll(_sensorsStorage.Init(), customStartingTask);
-
-                ChangeStatus(CollectorStatus.Running);
+                _ = _sensorsStorage.Init().ContinueWith(_ => ChangeStatus(CollectorStatus.Running));
             }
             catch (Exception ex)
             {
                 _logger.Error(ex);
 
-                StopSensors(ex.Message);
+                ChangeStatus(CollectorStatus.Stopped);
             }
         }
 
@@ -179,13 +171,13 @@ namespace HSMDataCollector.Core
 
                 await Task.WhenAll(_sensorsStorage.Stop(), customStartingTask);
 
-                StopSensors();
+                ChangeStatus(CollectorStatus.Stopped);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex);
 
-                StopSensors(ex.Message);
+                ChangeStatus(CollectorStatus.Stopped);
             }
             finally
             {
@@ -202,9 +194,9 @@ namespace HSMDataCollector.Core
 
             _sensorsStorage.Dispose();
 
-            StopSensors();
+            ChangeStatus(CollectorStatus.Stopped);
 
-            ToRunning -= ToStartingCollector;
+            ToRunning -= ToRunningCollector;
             ToStopped -= ToStoppedCollector;
 
             CurrentCollection?.Dispose();
@@ -214,29 +206,11 @@ namespace HSMDataCollector.Core
         }
 
 
-        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _sensorsStorage.ContainsKey(path);
-
-
-        private void StopSensors(string error = null)
-        {
-            var lastData = _nameToSensor.Values.Where(v => v.HasLastValue).Select(v => v.GetLastValue()).ToList();
-
-            if (lastData.Count > 0)
-                _hsmClient.Data.SendRequest(lastData);
-
-            foreach (var pair in _nameToSensor.Values)
-                pair.Dispose();
-
-            ChangeStatus(CollectorStatus.Stopped, error);
-        }
-
-        private void ChangeStatus(CollectorStatus newStatus, string error = null)
+        private void ChangeStatus(CollectorStatus newStatus)
         {
             Status = newStatus;
 
             _logger.Info($"DataCollector (v. {DataCollectorExtensions.Version}) -> {newStatus}");
-
-            CurrentCollection.StatusSensor?.BuildAndSendValue(_hsmClient, newStatus, error);
 
             switch (newStatus)
             {
@@ -255,17 +229,9 @@ namespace HSMDataCollector.Core
             }
         }
 
-        private void ToStartingCollector()
-        {
-            _queueManager.Init();
+        private void ToRunningCollector() => _ = _sensorsStorage.Start();
 
-            _ = _sensorsStorage.Start();
-        }
-
-        private void ToStoppedCollector()
-        {
-            _queueManager.Stop();
-        }
+        private void ToStoppedCollector() => _queueManager.Stop();
 
         #region Obsolets
 
@@ -349,14 +315,8 @@ namespace HSMDataCollector.Core
 
         #endregion
 
-        #region Custom instant sensors
 
-        public IInstantValueSensor<double> CreateSpeedSensor(string path, string description = "") => CreateSpeedSensor(path, new MonitoringInstantSensorOptions()
-        {
-            Description = description
-        });
-        
-        public IInstantValueSensor<double> CreateSpeedSensor(string path, MonitoringInstantSensorOptions options) =>  CreateSpeedSensor<double>(path, options);
+        #region Custom instant sensors
 
         public IInstantValueSensor<Version> CreateVersionSensor(string path, string description = "") => CreateInstantSensor<Version>(path, description);
 
@@ -392,114 +352,73 @@ namespace HSMDataCollector.Core
 
         private IInstantValueSensor<T> CreateInstantSensor<T>(string path, InstantSensorOptions options) => _sensorsStorage.CreateInstantSensor<T>(path, options);
 
-        private IInstantValueSensor<T> CreateSpeedSensor<T>(string path, MonitoringInstantSensorOptions options) => (IInstantValueSensor<T>)_sensorsStorage.CreateSpeedSensor(path, options);
 
         public IServiceCommandsSensor CreateServiceCommandsSensor()
         {
             return (IServiceCommandsSensor)_sensorsStorage.Register(new ServiceCommandsSensor(_prototypes.ServiceCommands.Get(null)));
         }
 
+
+        public IMonitoringRateSensor CreateM1RateSensor(string path, string desctiption = "") => CreateRateSensor(path, 60000, desctiption);
+
+        public IMonitoringRateSensor CreateM5RateSensor(string path, string description = "") => CreateRateSensor(path, 300000, description);
+
+        public IMonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options) => _sensorsStorage.CreateRateSensor(path, options);
+
+        private IMonitoringRateSensor CreateRateSensor(string path, int postPeriod, string description = "") => CreateRateSensor(path, new RateSensorOptions
+        {
+            PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
+            Description = description,
+        });
+
+
         #endregion
 
-        #region Obsolete functions
 
-        [Obsolete]
-        public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "")
-        {
-            path = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, path);
+        #region File sensors
 
-            var existingSensor = GetExistingSensor(path);
-            if (existingSensor is IInstantValueSensor<string> instantValueSensor)
-                return instantValueSensor;
-
-            var sensor = new InstantFileSensor(path, fileName, extension, _queueManager.Data as IValuesQueue, description);
-            AddNewSensor(sensor, path);
-
-            return sensor;
-        }
-
-        public async Task SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
-        {
-            var fileInfo = new FileInfo(filePath);
-
-            if (!fileInfo.Exists)
+        public IFileSensor CreateFileSensor(string path, string fileName, string extension = "txt", string description = "") =>
+            CreateFileSensor(path, new FileSensorOptions()
             {
-                _logger.Error($"{filePath} does not exist");
-                return;
-            }
+                DefaultFileName = fileName,
+                Description = description,
+                Extension = extension,
+            });
 
-            async Task<List<byte>> GetFileBytes()
+        public IFileSensor CreateFileSensor(string path, FileSensorOptions options) => _sensorsStorage.CreateFileSensor(path, options);
+
+        public Task<bool> SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
+        {
+            var fullSensorPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, sensorPath);
+            var sensor = _sensorsStorage.CreateFileSensor(fullSensorPath, new FileSensorOptions());
+
+            return sensor.SendFile(filePath, status, comment);
+        }
+
+        #endregion
+
+
+        #region Last value sensors
+
+        public ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
+
+        public ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
+
+        public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
+
+        public ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
+
+        public ILastValueSensor<Version> CreateLastValueVersionSensor(string path, Version defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
+
+        public ILastValueSensor<TimeSpan> CreateLastValueTimeSpanSensor(string path, TimeSpan defaultValue, string description = "") => CreateLastValueSensor(path, defaultValue, description);
+
+        public ILastValueSensor<T> CreateLastValueSensor<T>(string path, InstantSensorOptions options, T defaultValue = default) => _sensorsStorage.CreateLastValueSensor(path, defaultValue, options);
+
+        private ILastValueSensor<T> CreateLastValueSensor<T>(string path, T defaultValue, string description = "") =>
+            CreateLastValueSensor(path, new InstantSensorOptions()
             {
-                try
-                {
-                    using (var file = File.Open(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                    {
-                        using (var stream = new StreamReader(file))
-                            return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync()).ToList();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex.Message);
-                    throw;
-                }
-            }
-
-            var value = new FileSensorValue()
-            {
-                Path = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, sensorPath),
-                Comment = comment,
-                Status = status,
-                Extension = fileInfo.Extension.TrimStart('.'),
-                Name = Path.GetFileNameWithoutExtension(fileInfo.FullName),
-                Time = DateTime.UtcNow,
-                Value = await GetFileBytes()
-            };
-
-            _logger.Info($"Sending {filePath} to {sensorPath}");
-
-            await _hsmClient.Data.SendRequest(value);
-        }
-
-
-        [Obsolete]
-        public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")
-        {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
-        }
-
-        [Obsolete]
-        public ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "")
-        {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
-        }
-
-        [Obsolete]
-        public ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "")
-        {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
-        }
-
-        [Obsolete]
-        public ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "")
-        {
-            return CreateLastValueSensorInternal(path, defaultValue, description);
-        }
-
-        [Obsolete]
-        private ILastValueSensor<T> CreateLastValueSensorInternal<T>(string path, T defaultValue, string description = "")
-        {
-            var existingSensor = GetExistingSensor(path);
-            if (existingSensor is ILastValueSensor<T> lastValueSensor)
-                return lastValueSensor;
-
-            var upgradedPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, path);
-
-            var sensor = new DefaultValueSensor<T>(upgradedPath, _queueManager.Data as IValuesQueue, defaultValue, description);
-            AddNewSensor(sensor, path);
-
-            return sensor;
-        }
+                Description = description,
+            }, defaultValue);
 
         #endregion
 
@@ -552,111 +471,45 @@ namespace HSMDataCollector.Core
 
         #region Generic func sensors
 
-        [Obsolete]
-        public INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, TimeSpan interval)
-        {
-            return CreateNoParamsFuncSensorInternal(path, description, function, interval);
-        }
+        public INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, int millisecondsInterval) =>
+            CreateNoParamsFuncSensor(path, description, function, TimeSpan.FromMilliseconds(millisecondsInterval));
 
-        [Obsolete]
-        public INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, int millisecondsInterval)
-        {
-            return CreateNoParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(millisecondsInterval));
-        }
+        public INoParamsFuncSensor<T> Create1MinNoParamsFuncSensor<T>(string path, string description, Func<T> function) =>
+            CreateNoParamsFuncSensor(path, description, function, TimeSpan.FromMilliseconds(60000));
 
-        [Obsolete]
-        public INoParamsFuncSensor<T> Create1MinNoParamsFuncSensor<T>(string path, string description, Func<T> function)
-        {
-            return CreateNoParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(60000));
-        }
+        public INoParamsFuncSensor<T> Create5MinNoParamsFuncSensor<T>(string path, string description, Func<T> function) =>
+            CreateNoParamsFuncSensor(path, description, function, TimeSpan.FromMilliseconds(300000));
 
-        [Obsolete]
-        public INoParamsFuncSensor<T> Create5MinNoParamsFuncSensor<T>(string path, string description, Func<T> function)
-        {
-            return CreateNoParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(300000));
-        }
+        public INoParamsFuncSensor<T> CreateFunctionSensor<T>(string path, Func<T> function, FunctionSensorOptions options) =>
+            _sensorsStorage.CreateFunctionSensor(path, function, options);
 
-        [Obsolete]
-        public IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, TimeSpan interval)
-        {
-            return CreateParamsFuncSensorInternal(path, description, function, interval);
-        }
+        public INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, TimeSpan interval) =>
+            CreateFunctionSensor(path, function, new FunctionSensorOptions()
+            {
+                PostDataPeriod = interval,
+                Description = description,
+            });
 
-        [Obsolete]
-        public IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, int millisecondsInterval)
-        {
-            return CreateParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(millisecondsInterval));
-        }
 
-        [Obsolete]
-        public IParamsFuncSensor<T, U> Create1MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function)
-        {
-            return CreateParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(60000));
-        }
+        public IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, int millisecondsInterval) =>
+            CreateParamsFuncSensor(path, description, function, TimeSpan.FromMilliseconds(millisecondsInterval));
 
-        [Obsolete]
-        public IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function)
-        {
-            return CreateParamsFuncSensorInternal(path, description, function, TimeSpan.FromMilliseconds(300000));
-        }
+        public IParamsFuncSensor<T, U> Create1MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function) =>
+            CreateParamsFuncSensor(path, description, function, TimeSpan.FromMilliseconds(60000));
 
-        [Obsolete]
-        private IParamsFuncSensor<T, U> CreateParamsFuncSensorInternal<T, U>(string path, string description,
-            Func<List<U>, T> function, TimeSpan interval)
-        {
-            var existingSensor = GetExistingSensor(path);
-            if (existingSensor is IParamsFuncSensor<T, U> typedSensor)
-                return typedSensor;
+        public IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function) =>
+            CreateParamsFuncSensor(path, description, function, TimeSpan.FromMilliseconds(300000));
 
-            var upgradedPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, path);
+        public IParamsFuncSensor<T, U> CreateValuesFunctionSensor<T, U>(string path, Func<List<U>, T> function, ValuesFunctionSensorOptions options) =>
+            _sensorsStorage.CreateValuesFunctionSensor(path, function, options);
 
-            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(upgradedPath, _queueManager.Data as IValuesQueue, description, interval, function, _logger);
-            AddNewSensor(sensor, path);
-
-            return sensor;
-        }
-
-        [Obsolete]
-        private INoParamsFuncSensor<T> CreateNoParamsFuncSensorInternal<T>(string path, string description, Func<T> function,
-            TimeSpan interval)
-        {
-            var existingSensor = GetExistingSensor(path);
-            if (existingSensor is INoParamsFuncSensor<T> typedSensor)
-                return typedSensor;
-
-            var upgradedPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, path);
-
-            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(upgradedPath, _queueManager.Data as IValuesQueue, description, interval, function, _logger);
-            AddNewSensor(sensor, path);
-
-            return sensor;
-        }
+        public IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, TimeSpan interval) =>
+            CreateValuesFunctionSensor(path, function, new ValuesFunctionSensorOptions()
+            {
+                PostDataPeriod = interval,
+                Description = description,
+            });
 
         #endregion
-
-        [Obsolete]
-        private OldSensorBase GetExistingSensor(string path)
-        {
-            if (_sensorsStorage.ContainsKey(path))
-            {
-                var message = $"Path {path} is used by standard performance sensor!";
-                _logger.Error(message);
-
-                throw new InvalidSensorPathException(message);
-            }
-
-            if (_nameToSensor.TryGetValue(path, out var readValue))
-                return readValue as OldSensorBase;
-
-            return null;
-        }
-
-        [Obsolete]
-        private void AddNewSensor(ISensor sensor, string path)
-        {
-            _nameToSensor[path] = sensor;
-
-            _logger.Info($"Added new sensor {path}");
-        }
     }
 }

@@ -84,6 +84,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.FileSensor => Model.SensorType.File,
                 SensorType.IntegerBarSensor => Model.SensorType.IntegerBar,
                 SensorType.DoubleBarSensor => Model.SensorType.DoubleBar,
+                SensorType.RateSensor => Model.SensorType.Rate,
                 _ => throw new NotImplementedException(),
             };
 

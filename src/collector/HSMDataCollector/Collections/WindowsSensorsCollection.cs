@@ -1,11 +1,11 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors.Windows;
+using HSMDataCollector.DefaultSensors.Windows.Network;
 using HSMDataCollector.DefaultSensors.Windows.Service;
 using HSMDataCollector.DefaultSensors.Windows.WindowsInfo;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using System;
-using HSMDataCollector.DefaultSensors.Windows.Network;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -111,10 +111,10 @@ namespace HSMDataCollector.DefaultSensors
         {
             return ToWindows(new WindowsDiskQueueLength(_prototype.WindowsDiskQueueLength.Get(options)));
         }
-        
+
         public IWindowsCollection AddDiskAverageWriteSpeed(DiskBarSensorOptions options)
         {
-            return ToWindows(new WindowsAverageDiskWriteSpeed(_prototype.WindowsAverageDiskWriteSpeed.Get(options)));
+            return ToWindows(new WindowsDiskWriteSpeed(_prototype.WindowsAverageDiskWriteSpeed.Get(options)));
         }
 
         public IWindowsCollection AddFreeDisksSpace(DiskSensorOptions options)
@@ -152,7 +152,7 @@ namespace HSMDataCollector.DefaultSensors
         public IWindowsCollection AddDisksAverageWriteSpeed(DiskBarSensorOptions options = null)
         {
             foreach (var diskOptions in _prototype.WindowsAverageDiskWriteSpeed.GetAllDisksOptions(options))
-                ToWindows(new WindowsAverageDiskWriteSpeed(diskOptions));
+                ToWindows(new WindowsDiskWriteSpeed(diskOptions));
 
             return this;
         }
@@ -188,11 +188,34 @@ namespace HSMDataCollector.DefaultSensors
         public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions, InstantSensorOptions logsOptions) =>
             AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
 
-        public IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options) => AddErrorWindowsLogs(_prototype.WindowsErrorLogsPrototype.Get(options)).AddWarningWindowsLogs(_prototype.WindowsWarningLogsPrototype.Get(options));
+        public IWindowsCollection AddWindowsApplicationErrorLogs(InstantSensorOptions options = null)
+        {
+            return ToWindows(new WindowsApplicationErrorLogs(_prototype.WindowsApplicationErrorLogsPrototype.Get(options)));
+        }
 
-        public IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null) => ToWindows(new WindowsErrorLogs(_prototype.WindowsErrorLogsPrototype.Get(options)));
+        public IWindowsCollection AddWindowsSystemErrorLogs(InstantSensorOptions options = null)
+        {
+            return ToWindows(new WindowsSystemErrorLogs(_prototype.WindowsSystemErrorLogsPrototype.Get(options)));
+        }
 
-        public IWindowsCollection AddWarningWindowsLogs(InstantSensorOptions options = null) => ToWindows(new WindowsWarningLogs(_prototype.WindowsWarningLogsPrototype.Get(options)));
+        public IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null) =>
+            AddWindowsApplicationErrorLogs(options).AddWindowsSystemErrorLogs(options);
+
+        public IWindowsCollection AddWindowsApplicationWarningLogs(InstantSensorOptions options = null)
+        {
+            return ToWindows(new WindowsApplicationWarningLogs(_prototype.WindowsApplicationWarningLogsPrototype.Get(options)));
+        }
+
+        public IWindowsCollection AddWindowsSystemWarningLogs(InstantSensorOptions options = null)
+        {
+            return ToWindows(new WindowsSystemWarningLogs(_prototype.WindowsSystemWarningLogsPrototype.Get(options)));
+        }
+
+        public IWindowsCollection AddWarningWindowsLogs(InstantSensorOptions options = null) =>
+            AddWindowsApplicationWarningLogs(options).AddWindowsSystemWarningLogs(options);
+
+        public IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options) =>
+            AddErrorWindowsLogs(options).AddWarningWindowsLogs(options);
 
         #endregion
 
@@ -229,15 +252,15 @@ namespace HSMDataCollector.DefaultSensors
         #region Network
 
         public IWindowsCollection AddNetworkConnectionsEstablished(NetworkSensorOptions options = null) => ToWindows(new ConnectionsEstablishedCountSensor(_prototype.ConnectionsEstablishedCount.Get(options)));
-        
+
         public IWindowsCollection AddNetworkConnectionFailures(NetworkSensorOptions options = null) => ToWindows(new ConnectionFailuresCountSensor(_prototype.ConnectionsFailuresCount.Get(options)));
-        
+
         public IWindowsCollection AddNetworkConnectionsReset(NetworkSensorOptions options = null) => ToWindows(new ConnectionsResetCountSensor(_prototype.ConnectionsResetCount.Get(options)));
-       
+
         public IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null) => AddNetworkConnectionFailures(options).AddNetworkConnectionsEstablished(options).AddNetworkConnectionsReset(options);
-        
+
         #endregion
-        
+
 
         public IWindowsCollection AddProductVersion(VersionSensorOptions options) => (IWindowsCollection)AddProductVersionCommon(options);
 

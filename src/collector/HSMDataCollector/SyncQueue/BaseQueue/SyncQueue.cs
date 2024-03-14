@@ -9,11 +9,11 @@ namespace HSMDataCollector.SyncQueue
         private readonly TimeSpan _packageCollectPeriod;
         private Timer _sendTimer;
 
-        internal bool IsStopped => _sendTimer == null;
-
 
         protected abstract string QueueName { get; }
 
+
+        public event Action<PackageSendingInfo> PackageRequestInfoEvent;
 
         public event Action<string, PackageInfo> PackageInfoEvent;
 
@@ -45,6 +45,8 @@ namespace HSMDataCollector.SyncQueue
 
         public void Dispose() => Stop();
 
+
+        public void ThrowPackageRequestInfo(PackageSendingInfo info) => PackageRequestInfoEvent?.Invoke(info);
 
         protected void ThrowPackageInfo(PackageInfo info)
         {

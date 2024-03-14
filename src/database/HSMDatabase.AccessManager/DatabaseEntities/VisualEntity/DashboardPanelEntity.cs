@@ -2,9 +2,14 @@
 
 namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 {
-    public record DashboardPanelEntity : BaseServerEntity
+    public sealed record DashboardPanelEntity : BaseServerEntity
     {
-        public List<PanelSourceEntity> Sources { get; init; } = new();
+        public List<PanelSubscriptionEntity> Subscriptions { get; init; } = [];
+
+        public List<PanelSourceEntity> Sources { get; init; } = [];
+
+
+        public ChartRangeEntity YRangeSettings { get; set; } = new();
 
         public PanelSettingsEntity Settings { get; set; }
 
@@ -14,7 +19,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
     }
 
 
-    public record PanelSettingsEntity
+    public sealed record PanelSettingsEntity
     {
         public double Width { get; init; }
 
@@ -27,5 +32,15 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 
 
         public bool ShowLegend { get; init; }
+    }
+
+
+    public sealed record ChartRangeEntity
+    {
+        public double MaxValue { get; set; }
+
+        public double MinValue { get; set; }
+
+        public bool FixedBorders { get; set; }
     }
 }

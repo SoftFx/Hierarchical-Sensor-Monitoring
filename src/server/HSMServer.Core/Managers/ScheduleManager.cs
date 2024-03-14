@@ -1,20 +1,22 @@
 ﻿using HSMCommon.Collections;
 using HSMCommon.Extensions;
+using HSMServer.Core.Model.Policies;
 using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Core.Managers
 {
     internal sealed class ScheduleManager : BaseTimeManager
     {
-        private readonly CTimeDict<CGuidDict<ScheduleAlertMessage>> _storage = new();
+        private readonly CTimeDict<CDict<ScheduleAlertMessage>> _storage = new();
 
 
         internal void ProcessMessage(AlertMessage message)
         {
+            var sendFirstAlerts = new List<AlertResult>(1 << 2);
             var sensorId = message.SensorId;
-            var utcTime = DateTime.UtcNow;
 
-            var (notApplyAlerts, applyAlerts) = message.Alerts.SplitByCondition(u => u.IsScheduleAlert);
+            var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
 
             SendAlertMessage(sensorId, notApplyAlerts);
 
@@ -22,11 +24,19 @@ namespace HSMServer.Core.Managers
             {
                 var grouppedAlerts = _storage[alert.SendTime];
 
-                if (!grouppedAlerts.ContainsKey(sensorId))
-                    grouppedAlerts.TryAdd(sensorId, new ScheduleAlertMessage(sensorId));
+                if (!grouppedAlerts.TryGetValue(sensorId, out var sensorGroup))
+                {
+                    sensorGroup = new ScheduleAlertMessage(sensorId);
+                    grouppedAlerts.TryAdd(sensorId, sensorGroup);
+                }
 
-                grouppedAlerts[sensorId].Alerts.Add(alert);
+                if (sensorGroup.ShouldSendFirstMessage(alert))
+                    sendFirstAlerts.Add(alert);
+
+                sensorGroup.AddAlert(alert);
             }
+
+            SendAlertMessage(sensorId, sendFirstAlerts);
         }
 
 
@@ -36,7 +46,7 @@ namespace HSMServer.Core.Managers
                 if (sendTime < DateTime.UtcNow && _storage.TryRemove(sendTime, out _))
                 {
                     foreach (var (_, message) in branch)
-                        SendAlertMessage(message);
+                        SendAlertMessage(message.FilterMessage());
 
                     branch.Clear();
                 }
