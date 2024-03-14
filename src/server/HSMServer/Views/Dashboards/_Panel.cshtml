@@ -59,7 +59,7 @@
         initMultyichartCordinates(settings, values, '@Model.Id').then(
             (data) => {
                 containerHeight = Math.max(containerHeight, data);
-                return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend).then(
+                return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend, yaxisRange).then(
                         (plot) => {
                                 values.forEach(function (x) {
                                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', yaxisRange)
