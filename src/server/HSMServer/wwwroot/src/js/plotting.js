@@ -15,11 +15,15 @@ export const serviceStatusPlotName  = "ServiceStatus";
 
 window.customReset =  function (plot = undefined, range = undefined){
     let currentPlot;
-    plot.data.forEach(function (x){
-        if (x.type !== 'heatmap')
-            currentPlot = x;
-    })
-
+a    
+    if (plot.data.length === 1)
+        currentPlot = plot.data[0];
+    else 
+        plot.data.forEach(function (x){
+            if (x.type !== 'heatmap')
+                currentPlot = x;
+        })
+    
     if (currentPlot === undefined)
         return;
 
@@ -120,7 +124,10 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
         }
     }
     
-    Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
+    if (!layout.xaxis.autorange && layout.xaxis.range === undefined)
+        layout.xaxis.autorange = true;
+    
+    Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config)
     customReset($(`#${graphElementId}`)[0], getCurrentFromTo(graphName))
     
     if (plot.name !== serviceAlivePlotName)
