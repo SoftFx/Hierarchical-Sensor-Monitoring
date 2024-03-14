@@ -27,6 +27,10 @@ All **EMA alerts** for **Integer**, **Double**, **IntegerBar**, **DoubleBar** se
 * Y axis settings for source with **Count** property has been fixed.
 * Multithread update for high load panel has been fixed.
 
+## Charts
+* **Service alive** sensor X axis has been fixed for specific from-to period.
+* Reset button has been fixed for **Service alive** sensors.
+
 ## Tree
 * Special icon for sensors with unconfigured alerts (with *send notification* action and *empty chats*) has been added.
 * Filtering sensors with unconfigured alerts has been added to Filters block (Alerts -> Without chats).
