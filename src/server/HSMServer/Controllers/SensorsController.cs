@@ -336,17 +336,10 @@ namespace HSMServer.Controllers
             try
             {
                 // _dataCollector.Statistics.ReceivedDataCountSensor.AddValue(values.Count);
-
-                var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values.OrderBy(u => u.Time))
-                {
-                    var storeInfo = BuildStoreInfo(value, value.Convert());
+                    AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], value);
 
-                    if (!CanAddToQueue(storeInfo, out var message))
-                        result[storeInfo.Path] = message;
-                }
-
-                return result.Count == 0 ? Ok(values) : StatusCode(406, result);
+                return Ok(values);
             }
             catch (Exception e)
             {

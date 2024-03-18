@@ -49,13 +49,12 @@ public class PermissionFilter<T>(IPermissionService service, DataCollectorWrappe
             return;
         } 
 
-        if (values is List<SensorValueBase> requestValues)
+        if (values is IEnumerable<SensorValueBase> requestValues)
         {
             context.ActionArguments.Remove("values");
-            foreach (var sensorValue in requestValues)
-                if (!service.CheckWritePermissions(product, key, GetPathParts(sensorValue?.Path), out message))
-                    return;
-            requestValues.RemoveAt(0);
+          
+            requestValues = requestValues.Where(x => !service.CheckWritePermissions(product, key, GetPathParts(x?.Path), out message));
+            
             context.ActionArguments.Add("values", requestValues);
         }
 
