@@ -48,7 +48,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook
 
                     var nextTime = time + period;
 
-                    sb.AppendLine($"{time.Hour}:{time.Minute}-{nextTime.Hour}:{nextTime.Minute} (UTC)");
+                    sb.AppendLine($"{time.Hour:00}:{time.Minute:00}-{nextTime.Hour:00}:{nextTime.Minute:00} (UTC)");
                     sb.AppendLine(part.GetAggregateMessage());
                 }
 

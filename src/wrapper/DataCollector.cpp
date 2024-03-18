@@ -23,11 +23,12 @@ using HSMSensorDataObjects::SensorStatus;
 using System::String;
 using System::Func;
 using System::Collections::Generic::List;
+using System::Threading::Tasks::Task;
 
 using namespace std;
 using namespace hsm_wrapper;
 
-hsm_wrapper::DataCollectorImpl::DataCollectorImpl(const std::string& product_key, const std::string& address, int port, const string& module)
+DataCollectorImpl::DataCollectorImpl(const std::string& product_key, const std::string& address, int port, const string& module)
 {
 	CollectorOptions^ options = gcnew CollectorOptions();
 	options->AccessKey = gcnew String(product_key.c_str());
@@ -35,6 +36,14 @@ hsm_wrapper::DataCollectorImpl::DataCollectorImpl(const std::string& product_key
 	options->Port = port;
 	options->Module = gcnew String(module.c_str());
 	data_collector = gcnew DataCollector(options);
+}
+
+DataCollectorImpl::~DataCollectorImpl()
+{
+	if (!!start_task)
+	{
+		start_task->GetAwaiter().GetResult();
+	}
 }
 
 void DataCollectorImpl::Initialize(const std::string& config_path, bool write_debug)
@@ -52,6 +61,10 @@ void DataCollectorImpl::Start()
 	data_collector->Start();
 }
 
+void DataCollectorImpl::StartAsync()
+{
+	start_task = Task::Run(gcnew System::Func<Task^>(data_collector.get(), &IDataCollector::Start));
+}
 
 void DataCollectorImpl::Stop()
 {
@@ -100,9 +113,9 @@ void hsm_wrapper::DataCollectorImpl::InitializeOsMonitoring(bool is_last_update,
  	if (is_last_restart) data_collector->Windows->AddWindowsLastRestart();
 }
 
-void hsm_wrapper::DataCollectorImpl::InitializeOsLogsMonitoring(bool is_warnig, bool is_error)
+void hsm_wrapper::DataCollectorImpl::InitializeOsLogsMonitoring(bool is_warning, bool is_error)
 {
-	if (is_warnig) data_collector->Windows->AddWarningWindowsLogs();
+	if (is_warning) data_collector->Windows->AddWarningWindowsLogs();
 	if (is_error) data_collector->Windows->AddErrorWindowsLogs();
 }
 
@@ -114,7 +127,7 @@ void hsm_wrapper::DataCollectorImpl::InitializeProductVersion(const std::string&
 	data_collector->Windows->AddProductVersion(options);
 }
 
-void hsm_wrapper::DataCollectorImpl::InitializeCollectorMonitoring(bool is_alive, bool version)
+void hsm_wrapper::DataCollectorImpl::InitializeCollectorMonitoring(bool is_alive /*= true*/, bool version /*= true*/, bool status /*= true*/)
 {
 	if (is_alive) data_collector->Windows->AddCollectorAlive();
 	if (version) data_collector->Windows->AddCollectorVersion();
@@ -288,10 +301,8 @@ HSMBarSensor<double> DataCollectorImpl::CreateDoubleBarSensor(const std::string&
 	return HSMBarSensor<double>{std::make_shared<HSMBarSensorImpl<double>>(double_bar_sensor)};
 }
 
-
-
 DataCollectorImplWrapper::DataCollectorImplWrapper(const std::string& product_key, const std::string& address, int port, const std::string& module) 
-try : impl( std::make_shared<DataCollectorImpl>(product_key, address, port, module))
+try : impl( new DataCollectorImpl(product_key, address, port, module))
 {
 }
 catch (System::Exception^ ex)
@@ -328,6 +339,18 @@ void DataCollectorImplWrapper::Start()
 	try
 	{
 		impl->Start();
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+void DataCollectorImplWrapper::StartAsync()
+{
+	try
+	{
+		impl->StartAsync();
 	}
 	catch (System::Exception^ ex)
 	{
@@ -682,7 +705,7 @@ shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>> DataCollectorImplWrapper::Creat
 #endif
 
 hsm_wrapper::DataCollectorProxy::DataCollectorProxy(const std::string& product_key, const std::string& address, int port, const std::string& module) 
-	: impl_wrapper(std::make_shared<DataCollectorImplWrapper>(product_key, address, port, module))
+	: impl_wrapper(new DataCollectorImplWrapper(product_key, address, port, module))
 {
 }
 
@@ -699,6 +722,11 @@ void DataCollectorProxy::Stop()
 void DataCollectorProxy::Start()
 {
 	impl_wrapper->Start();
+}
+
+void DataCollectorProxy::StartAsync()
+{
+	impl_wrapper->StartAsync();
 }
 
 void hsm_wrapper::DataCollectorProxy::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram)
