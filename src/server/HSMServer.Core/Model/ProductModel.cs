@@ -75,6 +75,8 @@ namespace HSMServer.Core.Model
         {
             base.Update(update);
 
+            DisplayName = UpdateProperty(DisplayName, update.Name ?? DisplayName, update.Initiator);
+
             if (update.FolderId is not null)
                 FolderId = update.FolderId != Guid.Empty ? update.FolderId : null;
 
