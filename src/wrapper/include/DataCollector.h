@@ -17,14 +17,16 @@
 namespace hsm_wrapper
 {
 	class DataCollectorImpl;
+	class DataCollectorProxy;
 
 	class HSMWRAPPER_API DataCollectorImplWrapper
 	{
-	public:
+	private:
 		DataCollectorImplWrapper(const std::string& product_key, const std::string& address, int port, const std::string& module);
 
 		void Initialize(const std::string& config_path = "", bool write_debug = false);
 		void Start();
+		void StartAsync();
 		void Stop();
 		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram);
 		void InitializeDiskMonitoring(const std::string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght);
@@ -63,6 +65,8 @@ namespace hsm_wrapper
 
 	private:
 		std::shared_ptr<DataCollectorImpl> impl;
+
+		friend DataCollectorProxy;
 	};
 
 	class HSMWRAPPER_API DataCollectorProxy
@@ -72,14 +76,16 @@ namespace hsm_wrapper
 
 		void Initialize(const std::string& config_path = "", bool write_debug = false);
 		void Start();
+		void StartAsync();
 		void Stop();
-		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram);
-		void InitializeDiskMonitoring(const std::string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght);
-		void InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght);
-		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads);
-		void InitializeOsMonitoring(bool is_last_update, bool is_last_restart);
-		void InitializeOsLogsMonitoring(bool is_warnig, bool is_error);
-		void InitializeCollectorMonitoring(bool is_alive, bool version, bool status);
+		void StopAsync();
+		void InitializeSystemMonitoring(bool is_cpu = true, bool is_free_ram = true);
+		void InitializeDiskMonitoring(const std::string& target, bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true);
+		void InitializeAllDisksMonitoring(bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true);
+		void InitializeProcessMonitoring(bool is_cpu = true, bool is_memory = true, bool is_threads = true);
+		void InitializeOsMonitoring(bool is_last_update = true, bool is_last_restart = true);
+		void InitializeOsLogsMonitoring(bool is_warning = true, bool is_error = true);
+		void InitializeCollectorMonitoring(bool is_alive = true, bool version = true, bool status = true);
 		void InitializeProductVersion(const std::string& version); // version should be like a.b.c.d
 		void AddServiceStateMonitoring(const std::string& service_name);
 
