@@ -10,7 +10,7 @@ namespace HSMServer.Datasources
             => sensor.Type switch
             {
                 SensorType.IntegerBar or SensorType.DoubleBar => property.IsBarView() || property.IsBarLine() || property.IsBarIntLine() || property.IsBarDoubleLine(),
-                SensorType.Integer or SensorType.Double => property.IsInstantView() || property.IsInstantDoubleLine(),
+                SensorType.Integer or SensorType.Double or SensorType.Rate => property.IsInstantView() || property.IsInstantDoubleLine(),
                 SensorType.TimeSpan => property.IsInstantView(),
 
                 _ => false,
@@ -26,8 +26,11 @@ namespace HSMServer.Datasources
                 SensorType.Integer when property.IsInstantView() => new IntLineDatasource(),
                 SensorType.Integer when property.IsInstantDoubleLine() => new IntToNullDoubleLineDatasource(),
 
-                SensorType.Double or SensorType.Counter when property.IsInstantView() => new DoubleLineDatasource(),
-                SensorType.Double or SensorType.Counter when property.IsInstantDoubleLine() => new DoubleToNullDoubleDatasource(),
+                SensorType.Double when property.IsInstantView() => new DoubleLineDatasource(),
+                SensorType.Double when property.IsInstantDoubleLine() => new DoubleToNullDoubleDatasource(),
+
+                SensorType.Rate when property.IsInstantView() => new RateLineDatasource(),
+                SensorType.Rate when property.IsInstantDoubleLine() => new RateToNullDoubleDatasource(),
 
                 SensorType.TimeSpan when property.IsInstantView() => new TimespanLineDatasource(),
 

@@ -241,6 +241,6 @@ namespace HSMServer.Dashboards
 
 
         private static bool IsSupportedType(SensorType type) => type is SensorType.Integer or SensorType.Double or
-            SensorType.Counter or SensorType.TimeSpan or SensorType.IntegerBar or SensorType.DoubleBar;
+            SensorType.Rate or SensorType.TimeSpan or SensorType.IntegerBar or SensorType.DoubleBar;
     }
 }

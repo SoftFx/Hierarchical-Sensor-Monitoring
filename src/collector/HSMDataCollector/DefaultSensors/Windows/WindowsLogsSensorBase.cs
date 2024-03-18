@@ -14,18 +14,23 @@ namespace HSMDataCollector.DefaultSensors.Windows
     {
         private readonly DateTime _startTime = DateTime.UtcNow;
         private readonly EventLogWatcher _eventLogWatcher;
-        private readonly EventLogEntryType _eventType;
         private readonly EventLog _eventLog;
 
 
-        protected WindowsLogsSensorBase(SensorOptions options, EventLogEntryType type) : base(options)
+        protected abstract EventLogEntryType LogType { get; }
+
+        protected abstract string Category { get; }
+
+
+        protected WindowsLogsSensorBase(SensorOptions options) : base(options)
         {
-            _eventType = type;
-            _eventLog = new EventLog("System", Environment.MachineName);
-            _eventLogWatcher = new EventLogWatcher(new EventLogQuery("System", PathType.LogName, $"*[System[({GetCurrentLogLevel()})]]"))
+            _eventLog = new EventLog(Category, Environment.MachineName);
+
+            _eventLogWatcher = new EventLogWatcher(new EventLogQuery(Category, PathType.LogName, $"*[{Category}[({GetCurrentLogLevel()})]]"))
             {
-                Enabled = true
+                Enabled = true,
             };
+
             _eventLogWatcher.EventRecordWritten += Handler;
         }
 
@@ -36,7 +41,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
             {
                 foreach (EventLogEntryCollection eventLogEntry in new List<object> { _eventLog.Entries })
                     foreach (var eventLog in eventLogEntry.Cast<EventLogEntry>())
-                        if (eventLog.TimeGenerated.ToUniversalTime() >= _startTime && eventLog.EntryType == _eventType)
+                        if (eventLog.TimeGenerated.ToUniversalTime() >= _startTime && eventLog.EntryType == LogType)
                             SendValue(BuildRecordValue(eventLog.InstanceId.ToString(), eventLog.TimeGenerated, eventLog.Source, eventLog.Message));
             }
             catch (Exception exception)
@@ -74,7 +79,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         private string GetCurrentLogLevel()
         {
-            switch (_eventType)
+            switch (LogType)
             {
                 case EventLogEntryType.Error:
                     return "Level=2";

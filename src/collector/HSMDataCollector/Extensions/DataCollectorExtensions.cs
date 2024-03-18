@@ -21,6 +21,11 @@ namespace HSMDataCollector.Extensions
             return status == CollectorStatus.Stopped;
         }
 
+        public static bool IsStartingOrRunning(this CollectorStatus status)
+        {
+            return status == CollectorStatus.Running || status == CollectorStatus.Starting;
+        }
+
         public static bool IsRunning(this CollectorStatus status)
         {
             return status == CollectorStatus.Running;

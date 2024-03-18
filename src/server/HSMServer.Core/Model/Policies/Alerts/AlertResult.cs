@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Extensions;
 using System;
 using System.Collections.Generic;
+using System.Net.Sockets;
 using System.Text;
 
 namespace HSMServer.Core.Model.Policies
@@ -27,6 +28,11 @@ namespace HSMServer.Core.Model.Policies
         public string Icon { get; }
 
 
+        public AlertRepeatMode SchedulePeriod { get; }
+
+        public bool ShouldSendFirstMessage { get; }
+
+
         public bool IsStatusIsChangeResult { get; }
 
         public bool IsScheduleAlert { get; }
@@ -51,6 +57,9 @@ namespace HSMServer.Core.Model.Policies
             ConfirmationPeriod = policy.ConfirmationPeriod;
             SendTime = policy.Schedule.GetSendTime();
             BuildDate = DateTime.UtcNow;
+
+            ShouldSendFirstMessage = policy.Schedule.InstantSend;
+            SchedulePeriod = policy.Schedule.RepeatMode;
 
             Template = policy.Template;
             PolicyId = policy.Id;

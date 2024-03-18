@@ -15,7 +15,7 @@ namespace HSMDataCollector.DefaultSensors
 
         public string SensorPath => _metainfo.Path;
 
-        internal bool IsProiritySensor => _metainfo.IsPrioritySensor; //priority logic isn't working because priority queue isn't used
+        internal bool IsProiritySensor => _metainfo.IsPrioritySensor;
 
 
         internal event Func<PriorityRequest, Task<bool>> SensorCommandRequest;

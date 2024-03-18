@@ -12,6 +12,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public abstract bool IsGrafanaEnabled { get; }
 
+        public abstract bool HasUnconfiguredAlerts { get; }
+
 
         public int ErrorsCount { get; protected set; }
 

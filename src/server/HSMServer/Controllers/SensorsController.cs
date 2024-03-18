@@ -230,16 +230,16 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
-        /// Receives value of counter sensor
+        /// Receives value of rate sensor
         /// </summary>
         /// <param name="sensorValue"></param>
         /// <returns></returns>
-        [HttpPost("counter")]
+        [HttpPost("rate")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<CounterSensorValue> Post([FromBody] CounterSensorValue sensorValue)
+        public ActionResult<RateSensorValue> Post([FromBody] RateSensorValue sensorValue)
         {
             try
             {

@@ -39,7 +39,7 @@ namespace HSMServer.Middleware
 
                     _logger.Error($"Path {request.Path}, access key = {key}, remote id, port: {context.Connection.RemoteIpAddress}:{context.Connection.RemotePort}, content size = {request.ContentLength}");
 
-                    if (request.ContentLength <= MaxSizeForDeserializeContent)
+                    if (request.ContentLength <= MaxSizeForDeserializeContent && request.Body.CanRead)
                     {
                         request.Body.Position = 0;
 

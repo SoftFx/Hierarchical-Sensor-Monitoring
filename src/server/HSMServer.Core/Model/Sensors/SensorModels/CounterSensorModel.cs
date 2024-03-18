@@ -4,16 +4,16 @@ using HSMServer.Core.Model.Storages.ValueStorages;
 
 namespace HSMServer.Core.Model
 {
-    internal class CounterSensorModel : BaseSensorModel<CounterValue>
+    internal sealed class RateSensorModel : BaseSensorModel<RateValue>
     {
-        internal override CounterValuesStorage Storage { get; } = new CounterValuesStorage();
+        internal override RateValuesStorage Storage { get; } = new RateValuesStorage();
 
 
-        public override SensorPolicyCollection<CounterValue, CounterPolicy> Policies { get; } = new();
+        public override SensorPolicyCollection<RateValue, RatePolicy> Policies { get; } = new();
 
-        public override SensorType Type { get; } = SensorType.Counter;
+        public override SensorType Type { get; } = SensorType.Rate;
 
 
-        public CounterSensorModel(SensorEntity entity) : base(entity) { }
+        public RateSensorModel(SensorEntity entity) : base(entity) { }
     }
 }

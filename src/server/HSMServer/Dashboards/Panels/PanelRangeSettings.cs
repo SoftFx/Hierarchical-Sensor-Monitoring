@@ -17,7 +17,7 @@ namespace HSMServer.Dashboards
         public double MinValue { get; set; }
 
 
-        internal bool IsRangeScalePossible(SensorType sensorType) => sensorType is (SensorType.Double or SensorType.Integer or SensorType.DoubleBar or SensorType.IntegerBar);
+        internal bool IsRangeScalePossible(SensorType sensorType) => sensorType is (SensorType.Double or SensorType.Integer or SensorType.DoubleBar or SensorType.IntegerBar or SensorType.Rate);
 
 
         public void Update(PanelUpdate update)

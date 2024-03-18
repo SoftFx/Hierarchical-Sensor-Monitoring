@@ -35,6 +35,9 @@ const MarkerSize = {
 }
 
 export class Plot {
+    id = undefined;
+    ids = undefined;
+    
     x = [];
     y = [];
     customdata = [];

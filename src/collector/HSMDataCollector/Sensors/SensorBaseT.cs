@@ -24,6 +24,6 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected SensorValueBase GetSensorValue(T value) => value is SensorValueBase valueB ? valueB : _valueBuilder?.Invoke(value);
+        protected virtual SensorValueBase GetSensorValue(T value) => value is SensorValueBase valueB ? valueB : _valueBuilder?.Invoke(value);
     }
 }

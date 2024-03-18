@@ -4,7 +4,6 @@ using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 
@@ -64,7 +63,7 @@ namespace HSMDataCollector.Prototypes
             Alerts = new List<BarAlertTemplate>()
             {
                 AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 30.GigobytesToMegabytes())
-                             .ThenSendNotification($"[$product]$path $property $operation $target $unit")
+                             .ThenSendInstantHourlyScheduledNotification($"[$product]$path $property $operation $target $unit")
                              .AndSetIcon(AlertIcon.Warning).Build(),
             };
         }
@@ -86,7 +85,7 @@ namespace HSMDataCollector.Prototypes
             Alerts = new List<BarAlertTemplate>()
             {
                 AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 2000)
-                             .ThenSendNotification("[$product]$path $property $operation $target")
+                             .ThenSendInstantHourlyScheduledNotification("[$product]$path $property $operation $target")
                              .AndSetIcon(AlertIcon.Warning).Build(),
             };
         }
@@ -105,7 +104,7 @@ namespace HSMDataCollector.Prototypes
             Alerts = new List<BarAlertTemplate>()
             {
                 AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 50)
-                             .ThenSendNotification("[$product]$path $property $operation $target")
+                             .ThenSendInstantHourlyScheduledNotification("[$product]$path $property $operation $target")
                              .AndSetIcon(AlertIcon.Warning).Build(),
             };
         }

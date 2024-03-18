@@ -1,5 +1,6 @@
 using HSMServer.Authentication;
 using HSMServer.Dashboards;
+using HSMServer.Datasources;
 using HSMServer.Folders;
 using HSMServer.Model.Dashboards;
 using Microsoft.AspNetCore.Mvc;
@@ -183,6 +184,23 @@ namespace HSMServer.Controllers
             return BadRequest("Couldn't update panel");
         }
 
+        [HttpGet("Dashboards/{dashboardId:guid}/PanelUpdate/{panelId:guid}")]
+        public ActionResult<object> GetPanelUpdates(Guid dashboardId, Guid panelId)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+            {
+                var updates = panel.Sources.Select(x => new
+                {
+                    id = x.Key,
+                    update = x.Value.Source.GetSourceUpdates()
+                });
+                
+                return updates.ToList();
+            }
+
+            return _emptyResult;
+        }
+        
         #endregion
 
         #region Sources

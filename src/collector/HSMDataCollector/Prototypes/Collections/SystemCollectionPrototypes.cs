@@ -4,7 +4,6 @@ using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
-using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
@@ -54,7 +53,7 @@ namespace HSMDataCollector.Prototypes
             Alerts = new List<BarAlertTemplate>()
             {
                 AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 50)
-                             .ThenSendNotification("[$product]$path $property $operation $target$unit")
+                             .ThenSendInstantHourlyScheduledNotification("[$product]$path $property $operation $target$unit")
                              .AndSetIcon(AlertIcon.Warning).Build(),
             };
         }

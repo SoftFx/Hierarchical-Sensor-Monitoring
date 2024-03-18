@@ -6,24 +6,22 @@ using System.Threading;
 
 namespace HSMDataCollector.Sensors
 {
-    internal sealed class MonitoringCounterSensor : MonitoringSensorBase<double>, IMonitoringCounterSensor
+    internal sealed class MonitoringRateSensor : MonitoringSensorBase<double>, IMonitoringRateSensor
     {
         private SensorStatus _lastStatus = SensorStatus.Ok;
         private string _lastComment = string.Empty;
         private double _sum = 0.0;
 
 
-        public MonitoringCounterSensor(CounterSensorOptions options) : base(options) { }
+        public MonitoringRateSensor(RateSensorOptions options) : base(options) { }
 
 
         protected override double GetValue()
         {
-            var sec = _receiveDataPeriod.TotalSeconds;
+            var sec = PostTimePeriod.TotalSeconds;
             var value = sec > 0 ? _sum / sec : 0;
 
             Interlocked.Exchange(ref _sum, 0d);
-
-            _needSendValue = value > 0.0;
 
             return value;
         }

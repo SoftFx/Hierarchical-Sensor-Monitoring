@@ -47,7 +47,11 @@ namespace HSMDataCollector.Core
 
         IDataCollector AddCustomLogger(ICollectorLogger logger);
 
-        #region Common methods
+
+        IServiceCommandsSensor CreateServiceCommandsSensor();
+
+
+        #region Obsolete initializers
 
         /// <summary>
         /// The method sets the sending timer up. No data will be sent without calling this method
@@ -123,14 +127,23 @@ namespace HSMDataCollector.Core
         [Obsolete("Use method AddWindowsSensors(options) in Windows collection")]
         bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval, string specificPath = null);
 
+
+        /// <summary>
+        /// The event is fired after the values queue (current capacity is 100000 items) overflows
+        /// </summary>
+        [Obsolete("Will never be called")]
+        event EventHandler ValuesQueueOverflow;
+
         #endregion
 
 
-        IMonitoringCounterSensor CreateCounterSensor(string path, CounterSensorOptions options = null);
+        #region Custom base sensors
 
-        IMonitoringCounterSensor CreateM1CounterSensor(string path, string desctiption = "");
+        IMonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options = null);
 
-        IMonitoringCounterSensor CreateM5CounterSensor(string path, string description = "");
+        IMonitoringRateSensor CreateM1RateSensor(string path, string desctiption = "");
+
+        IMonitoringRateSensor CreateM5RateSensor(string path, string description = "");
 
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is bool
@@ -183,6 +196,11 @@ namespace HSMDataCollector.Core
 
         IInstantValueSensor<TimeSpan> CreateTimeSensor(string path, InstantSensorOptions options);
 
+        #endregion
+
+
+        #region File sensors
+
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is string
         /// </summary>
@@ -191,11 +209,17 @@ namespace HSMDataCollector.Core
         /// <param name="extension">Extension of result file</param>
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is string</returns>
-        IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "");
+        IFileSensor CreateFileSensor(string path, string fileName, string extension = "txt", string description = "");
 
-        Task SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "");
+        IFileSensor CreateFileSensor(string path, FileSensorOptions options = null);
 
-        [Obsolete]
+        Task<bool> SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "");
+
+        #endregion
+
+
+        #region Last value sensors
+
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is bool
         /// </summary>
@@ -203,9 +227,8 @@ namespace HSMDataCollector.Core
         /// <param name="defaultValue">The default value that is sent to a server if no other values passed</param>
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is bool</returns>
-        ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "");
+        ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue = default, string description = "");
 
-        [Obsolete]
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is int
         /// </summary>
@@ -213,9 +236,8 @@ namespace HSMDataCollector.Core
         /// <param name="defaultValue">The default value that is sent to a server if no other values passed</param>
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is int</returns>
-        ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "");
+        ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue = default, string description = "");
 
-        [Obsolete]
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is double
         /// </summary>
@@ -223,9 +245,8 @@ namespace HSMDataCollector.Core
         /// <param name="defaultValue">The default value that is sent to a server if no other values passed</param>
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is double</returns>
-        ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "");
+        ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue = default, string description = "");
 
-        [Obsolete]
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is string
         /// </summary>
@@ -233,10 +254,16 @@ namespace HSMDataCollector.Core
         /// <param name="defaultValue">The default value that is sent to a server if no other values passed</param>
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is string</returns>
-        ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "");
+        ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue = default, string description = "");
 
+        ILastValueSensor<Version> CreateLastValueVersionSensor(string path, Version defaultValue = default, string description = "");
 
-        IServiceCommandsSensor CreateServiceCommandsSensor();
+        ILastValueSensor<TimeSpan> CreateLastValueTimeSpanSensor(string path, TimeSpan defaultValue = default, string description = "");
+
+        ILastValueSensor<T> CreateLastValueSensor<T>(string path, InstantSensorOptions options, T defaultValue = default);
+
+        #endregion
+
 
         #region Bar sensors
 
@@ -372,9 +399,9 @@ namespace HSMDataCollector.Core
 
         #endregion
 
+
         #region Custom func sensors
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="INoParamsFuncSensor{T}"/> with the specified parameters
         /// </summary>
@@ -386,7 +413,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="INoParamsFuncSensor{T}"/> with interval set via TimeSpan</returns>
         INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, TimeSpan interval);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="INoParamsFuncSensor{T}"/> with the specified parameters
         /// </summary>
@@ -398,7 +424,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="INoParamsFuncSensor{T}"/> with interval set via milliseconds</returns>
         INoParamsFuncSensor<T> CreateNoParamsFuncSensor<T>(string path, string description, Func<T> function, int millisecondsInterval = 15000);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="INoParamsFuncSensor{T}"/> with 1 minute interval 
         /// </summary>
@@ -409,7 +434,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="INoParamsFuncSensor{T}"/> with interval set to 1 min</returns>
         INoParamsFuncSensor<T> Create1MinNoParamsFuncSensor<T>(string path, string description, Func<T> function);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="INoParamsFuncSensor{T}"/> with 5 minutes interval 
         /// </summary>
@@ -420,7 +444,9 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="INoParamsFuncSensor{T}"/> with interval set to 5 min</returns>
         INoParamsFuncSensor<T> Create5MinNoParamsFuncSensor<T>(string path, string description, Func<T> function);
 
-        [Obsolete]
+        INoParamsFuncSensor<T> CreateFunctionSensor<T>(string path, Func<T> function, FunctionSensorOptions options = null);
+
+
         /// <summary>
         /// Create a new instance of <see cref="IParamsFuncSensor{T, U}"/> with the specified parameters
         /// </summary>
@@ -433,7 +459,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IParamsFuncSensor{T, U}"/> with interval set via TimeSpan</returns>
         IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, TimeSpan interval);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="IParamsFuncSensor{T, U}"/> with the specified parameters
         /// </summary>
@@ -446,7 +471,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IParamsFuncSensor{T, U}"/> with interval set via milliseconds</returns>
         IParamsFuncSensor<T, U> CreateParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function, int millisecondsInterval = 15000);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="IParamsFuncSensor{T, U}"/> with 1 minute interval 
         /// </summary>
@@ -458,7 +482,6 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IParamsFuncSensor{T, U}"/> with interval set to 1 min</returns>
         IParamsFuncSensor<T, U> Create1MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
 
-        [Obsolete]
         /// <summary>
         /// Create a new instance of <see cref="IParamsFuncSensor{T, U}"/> with 5 minutes interval 
         /// </summary>
@@ -470,12 +493,8 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IParamsFuncSensor{T, U}"/> with interval set to 5 min</returns>
         IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
 
-        #endregion
+        IParamsFuncSensor<T, U> CreateValuesFunctionSensor<T, U>(string path, Func<List<U>, T> function, ValuesFunctionSensorOptions options = null);
 
-        /// <summary>
-        /// The event is fired after the values queue (current capacity is 100000 items) overflows
-        /// </summary>
-        [Obsolete("Will never be called")]
-        event EventHandler ValuesQueueOverflow;
+        #endregion
     }
 }

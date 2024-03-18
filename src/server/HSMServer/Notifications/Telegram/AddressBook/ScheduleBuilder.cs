@@ -1,7 +1,10 @@
 ﻿using HSMCommon.Collections;
 using HSMCommon.Extensions;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Model.Policies;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
@@ -11,39 +14,48 @@ namespace HSMServer.Notifications.Telegram.AddressBook
     {
         private const string DayTempalte = "d MMMM (dddd)";
 
-        private readonly CTimeDict<MessageBuilder> _scheduleParts = new();
-        private readonly TimeSpan _grouppingPeriod = TimeSpan.FromHours(1);
+        private readonly CDictBase<AlertRepeatMode, CTimeDict<MessageBuilder>> _scheduleParts = new();
 
 
         public void AddMessage(AlertResult alert)
         {
-            var grouppingDate = alert.BuildDate.Floor(_grouppingPeriod);
+            var period = alert.SchedulePeriod;
+            var groupPeriod = alert.BuildDate.Floor(period.ToTime());
 
-            _scheduleParts[grouppingDate].AddMessage(alert);
+            _scheduleParts[period][groupPeriod].AddMessage(alert);
         }
 
-        internal string GetReport()
+        internal IEnumerable<string> GetReports()
         {
             var sb = new StringBuilder(1 << 10);
-            var lastDate = new DateOnly();
 
-            foreach (var (time, part) in _scheduleParts.OrderBy(u => u.Key).ToList())
+            foreach (var (mode, builder) in _scheduleParts)
             {
-                var curDate = DateOnly.FromDateTime(time);
+                var lastDate = new DateOnly();
+                var period = mode.ToTime();
 
-                if (lastDate != curDate)
+                sb.Clear();
+
+                foreach (var (time, part) in builder.OrderBy(u => u.Key).ToList())
                 {
-                    lastDate = curDate;
-                    sb.AppendLine(curDate.ToString(DayTempalte));
+                    var curDate = DateOnly.FromDateTime(time);
+
+                    if (lastDate != curDate)
+                    {
+                        lastDate = curDate;
+                        sb.AppendLine(curDate.ToString(DayTempalte));
+                    }
+
+                    var nextTime = time + period;
+
+                    sb.AppendLine($"{time.Hour:00}:{time.Minute:00}-{nextTime.Hour:00}:{nextTime.Minute:00} (UTC)");
+                    sb.AppendLine(part.GetAggregateMessage());
                 }
 
-                sb.AppendLine($"{time.Hour}:00-{time.Hour + 1}:00 (UTC)");
-                sb.AppendLine(part.GetAggregateMessage());
+                _scheduleParts.Clear();
+
+                yield return sb.ToString();
             }
-
-            _scheduleParts.Clear();
-
-            return sb.ToString();
         }
     }
 }
