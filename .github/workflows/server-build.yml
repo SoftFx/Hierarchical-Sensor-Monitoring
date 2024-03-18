@@ -187,5 +187,5 @@ jobs:
         run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
 
       - name: Push LATEST image to remote Docker
-        if: ${{ !github.event.inputs.isPreRelease }}
+      #  if: ${{ !github.event.inputs.isPreRelease }}
         run: docker push "${{ env.DockerMainName }}:latest"
