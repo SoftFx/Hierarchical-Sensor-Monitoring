@@ -185,3 +185,6 @@ jobs:
 
       - name: Push image to remote Docker
         run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
+
+      - name: Push LATEST image to remote Docker
+        run: docker push "${{ env.DockerMainName }}:${{ env.DOCKER_DEPS_TAG }}"
