@@ -23,18 +23,20 @@ namespace hsm_wrapper
 	{
 	public:
 		DataCollectorImpl(const std::string& product_key, const std::string& address, int port, const std::string& module);
+		~DataCollectorImpl();
 
 		void Initialize(const std::string& config_path = {}, bool write_debug = false);
 		void Start();
+		void StartAsync();
 		void Stop();
-		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram);
-		void InitializeDiskMonitoring(const std::string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght);
-		void InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght);
-		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads);
-		void InitializeOsMonitoring(bool is_last_update, bool is_last_restart);
-		void InitializeOsLogsMonitoring(bool is_warnig, bool is_error);
+		void InitializeSystemMonitoring(bool is_cpu = true, bool is_free_ram = true);
+		void InitializeDiskMonitoring(const std::string& target, bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true);
+		void InitializeAllDisksMonitoring(bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true);
+		void InitializeProcessMonitoring(bool is_cpu = true, bool is_memory = true, bool is_threads = true);
+		void InitializeOsMonitoring(bool is_last_update = true, bool is_last_restart = true);
+		void InitializeOsLogsMonitoring(bool is_warning = true, bool is_error = true);
 		void InitializeProductVersion(const std::string& version);
-		void InitializeCollectorMonitoring(bool is_alive, bool version);
+		void InitializeCollectorMonitoring(bool is_alive = true, bool version = true, bool status = true);
 		void AddServiceStateMonitoring(const std::string& service_name);
 
 		void SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status = HSMSensorStatus::Ok, const std::string& description = {});
@@ -92,6 +94,9 @@ namespace hsm_wrapper
 
 	private:
 		msclr::auto_gcroot<IDataCollector^> data_collector;
+		msclr::auto_gcroot<System::Threading::Tasks::Task^> start_task;
 	};
+
+
 
 }

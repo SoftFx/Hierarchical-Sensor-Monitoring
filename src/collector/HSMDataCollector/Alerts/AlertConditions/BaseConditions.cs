@@ -23,7 +23,7 @@ namespace HSMDataCollector.Alerts
 
 
         internal AlertAction<T> ThenSendInstantHourlyScheduledNotification(string template) =>
-            ThenSendScheduledNotification(template, DateTime.MinValue, AlertRepeatMode.Hourly, true);
+            ThenSendScheduledNotification(template, new DateTime(1, 1, 1, 12, 0, 0, DateTimeKind.Utc), AlertRepeatMode.Hourly, true);
 
 
         protected virtual AlertAction<T> BuildAlertAction() => new AlertAction<T>(_conditions, _confirmationPeriod);

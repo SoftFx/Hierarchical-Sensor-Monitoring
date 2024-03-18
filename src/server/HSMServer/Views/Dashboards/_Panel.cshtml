@@ -52,17 +52,17 @@
     $(document).ready(function () {
         let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         let ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
-        let range = ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)];
+        let yaxisRange = ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)];
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         let dashboardpanels = $('#dashboardPanels');
 
         initMultyichartCordinates(settings, values, '@Model.Id').then(
             (data) => {
                 containerHeight = Math.max(containerHeight, data);
-                return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend).then(
+                return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend, yaxisRange).then(
                         (plot) => {
                                 values.forEach(function (x) {
-                                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', range)
+                                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', yaxisRange)
                                 })
 
                                 $('#panelChart_@Model.Id').on('plotly_relayout', function (e, updateData){
@@ -72,7 +72,7 @@
                                 })
                                 
                                 $('#panelChart_@Model.Id').on('plotly_doubleclick', function(){
-                                    customReset($('#panelChart_@Model.Id')[0], getRangeDate())
+                                    customReset($('#panelChart_@Model.Id')[0], getRangeDate(), ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
                                 })
 
                                 Plotly.relayout(plot.id, { 
