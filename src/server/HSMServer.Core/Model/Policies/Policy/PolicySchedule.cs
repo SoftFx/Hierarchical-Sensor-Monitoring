@@ -88,7 +88,7 @@ namespace HSMServer.Core.Model.Policies
             };
 
         public override string ToString() => IsActive
-            ? string.Empty
-            : $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}{(InstantSend ? " and instant send" : string.Empty)}";
+            ? $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}{(InstantSend ? " and instant send" : string.Empty)}"
+            : string.Empty;
     }
 }
