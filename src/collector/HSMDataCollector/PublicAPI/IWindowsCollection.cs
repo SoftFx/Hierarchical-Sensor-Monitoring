@@ -63,11 +63,19 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddWindowsVersion(WindowsInfoSensorOptions options = null);
 
-        IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options = null);
+        IWindowsCollection AddWindowsApplicationErrorLogs(InstantSensorOptions options = null);
+
+        IWindowsCollection AddWindowsSystemErrorLogs(InstantSensorOptions options = null);
 
         IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null);
 
+        IWindowsCollection AddWindowsApplicationWarningLogs(InstantSensorOptions options = null);
+
+        IWindowsCollection AddWindowsSystemWarningLogs(InstantSensorOptions options = null);
+
         IWindowsCollection AddWarningWindowsLogs(InstantSensorOptions options = null);
+
+        IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options = null);
 
         IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions = null, InstantSensorOptions logsOptions = null);
 
@@ -96,14 +104,14 @@ namespace HSMDataCollector.PublicInterface
 
 
         IWindowsCollection AddNetworkConnectionsEstablished(NetworkSensorOptions options = null);
-        
+
         IWindowsCollection AddNetworkConnectionFailures(NetworkSensorOptions options = null);
-        
+
         IWindowsCollection AddNetworkConnectionsReset(NetworkSensorOptions options = null);
 
         IWindowsCollection AddAllNetworkSensors(NetworkSensorOptions options = null);
 
-        
+
         IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);
 
         IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options);

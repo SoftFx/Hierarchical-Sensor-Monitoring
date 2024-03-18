@@ -2,6 +2,7 @@
 using HSMServer.Core.Model.Policies;
 using HSMServer.Model.DataAlerts;
 using System;
+using System.Linq;
 
 namespace HSMServer.Extensions
 {
@@ -132,5 +133,8 @@ namespace HSMServer.Extensions
 
                 _ => true,
             };
+
+        public static bool IsUnconfigured(this DataAlertViewModelBase alert) =>
+            !alert.IsDisabled && alert.Actions.Any(a => a.Action == ActionType.SendNotification && a.Chats.Count == 0);
     }
 }

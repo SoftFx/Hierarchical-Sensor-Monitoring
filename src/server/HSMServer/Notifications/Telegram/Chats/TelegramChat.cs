@@ -92,8 +92,10 @@ namespace HSMServer.Notifications
 
         internal IEnumerable<string> GetNotifications()
         {
+            foreach (var report in ScheduleMessageBuilder.GetReports())
+                yield return report;
+
             yield return MessageBuilder.GetAggregateMessage();
-            yield return ScheduleMessageBuilder.GetReport();
 
             _nextSendMessageTime = DateTime.UtcNow.Ceil(TimeSpan.FromSeconds(MessagesAggregationTimeSec));
         }
