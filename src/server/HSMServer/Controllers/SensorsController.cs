@@ -36,7 +36,7 @@ namespace HSMServer.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [AllowAnonymous]
-    [TypeFilter<PermissionFilter<BaseRequest>>]
+    [TypeFilter<PermissionFilter>]
     public class SensorsController : ControllerBase
     {
         private readonly ILogger<SensorsController> _logger;

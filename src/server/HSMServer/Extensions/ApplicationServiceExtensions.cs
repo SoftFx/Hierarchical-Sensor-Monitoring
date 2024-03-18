@@ -174,7 +174,8 @@ public static class ApplicationServiceExtensions
             
             return new CollectorOptions()
             {
-                AccessKey = DataCollectorWrapper.GetSelfMonitoringKey(cache)
+                AccessKey = DataCollectorWrapper.GetSelfMonitoringKey(cache),
+                ClientName = "HSMServerMonitoring" // TODO: Mb create special key and hash it so no one knows it except us, then use it instead of selfmonitoring key?
             };
         });
 

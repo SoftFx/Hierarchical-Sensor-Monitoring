@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace HSMServer.Middleware;
 
-public class PermissionFilter<T>(IPermissionService service, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
+public class PermissionFilter(IPermissionService service, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
 {
     private const string ErrorTooLongPath = "Path for the sensor is too long.";
     private const string ErrorInvalidPath = "Path has an invalid format.";
