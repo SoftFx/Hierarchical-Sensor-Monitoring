@@ -9,5 +9,5 @@ public interface IPermissionService
 
     bool TryGetProduct(Guid id, out ProductModel product, out string message);
 
-    bool CheckWritePermissions(ProductModel product, AccessKeyModel accessKey, string[] pathParts, out string message);
+    bool CheckWritePermissions(ProductModel product, AccessKeyModel accessKey, ReadOnlySpan<string> pathParts, out string message);
 }

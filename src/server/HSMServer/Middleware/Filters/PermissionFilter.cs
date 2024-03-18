@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace HSMServer.Middleware;
 
-public class PermissionFilter<T>(IPermissionService service, DataCollectorWrapper collector) : IAsyncActionFilter
+public class PermissionFilter<T>(IPermissionService service, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
 {
     private const string ErrorTooLongPath = "Path for the sensor is too long.";
     private const string ErrorInvalidPath = "Path has an invalid format.";
@@ -35,27 +35,37 @@ public class PermissionFilter<T>(IPermissionService service, DataCollectorWrappe
 
         if (!productExist)
             return;
-
+        
         var values = context.ActionArguments.Values.FirstOrDefault();// objects from argumaents: sensor list / value;
         var collectorName = context.HttpContext.Request.Headers.TryGetValue(nameof(Header.ClientName), out var clientName) && !string.IsNullOrWhiteSpace(clientName) ? clientName.ToString() : "No name";
         var path = $"{product.DisplayName}/{key.DisplayName}/{collectorName}";
         context.HttpContext.Request.Headers["Path"] = path;
         
+        collector.Statistics[path].AddRequestData(context.HttpContext.Request);
+        collector.Statistics.Total.AddRequestData(context.HttpContext.Request);
+        
         if (values is BaseRequest request && !service.CheckWritePermissions(product, key, GetPathParts(request?.Path), out message))
         {
-            // collector.Statistics[path].AddRequestData(context.HttpContext.Request);
-            
             context.HttpContext.Response.StatusCode = 406;
             return;
-        } 
+        }
+        
 
-        if (values is IEnumerable<SensorValueBase> requestValues)
+        if (values is List<SensorValueBase> requestValues)
         {
             context.ActionArguments.Remove("values");
           
-            requestValues = requestValues.Where(x => !service.CheckWritePermissions(product, key, GetPathParts(x?.Path), out message));
+            requestValues = requestValues.Where(x => service.CheckWritePermissions(product, key, GetPathParts(x?.Path), out message)).ToList();
             
             context.ActionArguments.Add("values", requestValues);
+            
+            collector.Statistics.Total.AddReceiveData(requestValues.Count);
+            collector.Statistics[context.HttpContext.Request.Headers["Path"]].AddReceiveData(requestValues.Count);
+        }
+        else
+        {
+            collector.Statistics.Total.AddReceiveData(1);
+            collector.Statistics[context.HttpContext.Request.Headers["Path"]].AddReceiveData(1);
         }
 
         await next();
@@ -64,7 +74,7 @@ public class PermissionFilter<T>(IPermissionService service, DataCollectorWrappe
     
     private static bool GetKeyIdFromHeader(BaseRequest request, IHeaderDictionary headers, out Guid guidKey)
     {
-        headers.TryGetValue(nameof(BaseRequest.Key), out var key);
+        headers.TryGetValue(nameof(Header.Key), out var key);
 
         if (string.IsNullOrEmpty(key))
             key = request?.Key;
@@ -74,15 +84,20 @@ public class PermissionFilter<T>(IPermissionService service, DataCollectorWrappe
 
     private static bool GetKeyIdFromHeader(IHeaderDictionary headers, out Guid guidKey)
     {
-        headers.TryGetValue(nameof(BaseRequest.Key), out var key);
+        headers.TryGetValue(nameof(Header.Key), out var key);
 
         return Guid.TryParse(key, out guidKey);
     }
 
-    private static string[] GetPathParts(string path)
+    private static ReadOnlySpan<string> GetPathParts(string path)
     {
         path = path.FirstOrDefault() == CommonConstants.SensorPathSeparator ? path[1..] : path;
 
-        return path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
+        return path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries).AsSpan();
+    }
+    public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
+    {
+        collector.Statistics[context.HttpContext.Request.Headers["Path"]].AddResponseResult(context.HttpContext.Response);
+        await next();
     }
 }

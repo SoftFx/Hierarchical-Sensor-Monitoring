@@ -147,8 +147,6 @@ public static class ApplicationServiceExtensions
         applicationBuilder.UseAuthentication();
         applicationBuilder.UseAuthorization();
 
-        applicationBuilder.UseMiddleware<TelemetryMiddleware>();
-        // applicationBuilder.UseMiddleware<RequestStatisticsMiddleware>();
         applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
         applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
 

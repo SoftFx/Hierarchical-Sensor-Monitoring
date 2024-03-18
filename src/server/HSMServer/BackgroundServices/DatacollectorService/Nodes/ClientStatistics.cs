@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using HSMDataCollector.Sensors;
 
 namespace HSMServer.BackgroundServices
 {
@@ -55,11 +54,15 @@ namespace HSMServer.BackgroundServices
                 SensorUpdatesPerSecond.AddValue(1);
             }
         }
+
+        public void AddReceiveData(int count)
+        {
+            SensorUpdates.AddValue(count);
+            SensorUpdatesPerSecond.AddValue(count);
+        }
     }
     public class ClientStatistics
     {        
-        private readonly BarSensorOptions _barSensorOptions = new BarSensorOptions() { BarPeriod = new(0, 1, 0) };
-
         private readonly IDataCollector _collector;
         public readonly IOptionsMonitor<MonitoringOptions> _optionsMonitor;
 
@@ -111,16 +114,16 @@ namespace HSMServer.BackgroundServices
         public void AddSensors(string path = null)
         {
             var id = path ?? TotalGroup;
-            // SelfSensors.TryAdd(id, new SelfCollectSensor
-            // {
-            //     RequestCount = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{RequestCount}"),
-            //     RequestSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{RequestSize}"),
-            //     RequestsCountPerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{RequestsPerSecond}"),
-            //     RequestsSizePerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{RequestSizePerSecond}"),
-            //     ResponseSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{ResponseSize}"),
-            //     SensorUpdatesPerSecond = _collector.CreateSpeedSensor($"{ClientNode}/{id}/{SensorUpdatesPerSecond}"),
-            //     SensorUpdates = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{SensorUpdates}"),
-            // });
+            SelfSensors.TryAdd(id, new SelfCollectSensor
+            {
+                RequestCount = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{RequestCount}"),
+                RequestSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{RequestSize}"),
+                RequestsCountPerSecond = _collector.CreateRateSensor($"{ClientNode}/{id}/{RequestsPerSecond}"),
+                RequestsSizePerSecond = _collector.CreateRateSensor($"{ClientNode}/{id}/{RequestSizePerSecond}"),
+                ResponseSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{ResponseSize}"),
+                SensorUpdatesPerSecond = _collector.CreateRateSensor($"{ClientNode}/{id}/{SensorUpdatesPerSecond}"),
+                SensorUpdates = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{SensorUpdates}"),
+            });
         }
     }
 }

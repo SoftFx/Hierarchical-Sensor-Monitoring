@@ -221,7 +221,7 @@ namespace HSMServer.Core.Cache
             return true;
         }
 
-        public bool CheckWritePermissions(ProductModel product, AccessKeyModel accessKey, string[] pathParts, out string message)
+        public bool CheckWritePermissions(ProductModel product, AccessKeyModel accessKey, ReadOnlySpan<string> pathParts, out string message)
         {
             message = string.Empty;
 
