@@ -66,7 +66,7 @@ namespace HSMServer.Core.Model.Policies
             Icon = policy.Icon;
 
             IsStatusIsChangeResult = policy.Conditions.IsStatusChangeResult();
-            IsScheduleAlert = policy.Schedule.RepeatMode is not AlertRepeatMode.Immediately;
+            IsScheduleAlert = policy.Schedule.IsActive;
             IsReplaceAlert = isReplace && IsScheduleAlert;
 
             AddPolicyResult(policy);

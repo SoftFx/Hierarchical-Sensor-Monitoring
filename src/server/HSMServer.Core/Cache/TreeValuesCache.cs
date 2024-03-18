@@ -20,6 +20,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.Core.Cache
@@ -1237,7 +1238,7 @@ namespace HSMServer.Core.Cache
             _scheduleManager.FlushMessages();
 
             foreach (var sensor in GetSensors())
-                sensor.CheckTimeout();
+                CheckSensorTimeout(sensor);
 
             foreach (var key in GetAccessKeys())
                 if (key.IsExpired && key.State < KeyState.Expired)
@@ -1246,6 +1247,16 @@ namespace HSMServer.Core.Cache
             foreach (var sensor in GetSensors())
                 if (sensor.EndOfMuting <= DateTime.UtcNow)
                     UpdateMutedSensorState(sensor.Id, InitiatorInfo.System);
+        }
+
+        void CheckSensorTimeout(BaseSensorModel sensor)
+        {
+            sensor.CheckTimeout();
+
+            var ttl = sensor.Policies.TimeToLive;
+
+            if (ttl.ResendNotification())
+                SendNotification(ttl.GetNotification(true));
         }
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
@@ -1265,7 +1276,7 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                SendNotification(timeout ? ttl.PolicyResult : ttl.Ok);
+                SendNotification(ttl.GetNotification(timeout));
             }
 
             SensorUpdateView(sensor);
