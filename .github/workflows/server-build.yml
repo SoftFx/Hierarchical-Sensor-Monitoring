@@ -183,11 +183,9 @@ jobs:
       - name: Build Linux image for Docker
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
 
-      - name: Push image to remote Docker
-        run: |
-          docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
-          docker push "${{ env.DockerMainName }}:latest"
+      - name: Push VERSION image to remote Docker
+        run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
 
-      #- name: Push LATEST image to remote Docker
-      #  if: ${{ !github.event.inputs.isPreRelease }}
-      #  run: docker push "${{ env.DockerMainName }}:latest"
+      - name: Push LATEST image to remote Docker
+        if: ${{ !github.event.inputs.isPreRelease }}
+        run: docker push "${{ env.DockerMainName }}:latest"
