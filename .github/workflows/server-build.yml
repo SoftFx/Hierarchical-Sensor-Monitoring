@@ -16,7 +16,7 @@ env:
   SOLUTION_PATH: src/server/HSMServer/HSMServer.sln
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj
 
-  DOCKER_DOCKERHUB_ORG: palinash
+  DOCKER_DOCKERHUB_ORG: hsmonitoring
   DOCKER_DEPS_REPOS: hierarchical_sensor_monitoring_deps
   DOCKER_MAIN_REPOS: hierarchical_sensor_monitoring
   
