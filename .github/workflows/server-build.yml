@@ -192,8 +192,13 @@ jobs:
         env:
           GITHUB_EVENTS_PRERELEASE: ${{ github.event.inputs.isPreRelease }}
           IS_PRERELEASE_VARIABLE: ${{ env.IS_PRERELESE }}
-        run: echo "$GITHUB_EVENTS_PRERELEASE $IS_PRERELEASE_VARIABLE"
+          CONDITION_1: ${{ github.event.inputs.isPreRelease == 'false' }}
+          CONDITION_2: ${{ github.event.inputs.isPreRelease == false }}
+          CONDITION_3: ${{ github.event.inputs.isPreRelease == 'true' }}
+          CONDITION_4: ${{ github.event.inputs.isPreRelease == true }}
+          CONDITION_5: ${{ ! github.event.inputs.isPreRelease }}
+        run: echo "$GITHUB_EVENTS_PRERELEASE $IS_PRERELEASE_VARIABLE $CONDITION_1 $CONDITION_2 $CONDITION_3 $CONDITION_4 $CONDITION_5"
 
       - name: Push LATEST image to remote Docker
-        if: ${{ ! env.IS_PRERELESE }}
+        if: ${{ github.event.inputs.isPreRelease == 'false' }}
         run: docker push "${{ env.DockerMainName }}:latest"
