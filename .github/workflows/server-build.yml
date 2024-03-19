@@ -195,5 +195,5 @@ jobs:
         run: echo "$GITHUB_EVENTS_PRERELEASE $IS_PRERELEASE_VARIABLE"
 
       - name: Push LATEST image to remote Docker
-        if: ${{ ! github.event.inputs.isPreRelease }}
+        if: ${{ ! env.IS_PRERELESE }}
         run: docker push "${{ env.DockerMainName }}:latest"
