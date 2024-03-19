@@ -18,8 +18,9 @@ env:
 
   DOCKER_DOCKERHUB_ORG: palinash
   DOCKER_DEPS_REPOS: hierarchical_sensor_monitoring_deps
-  DOCKER_DEPS_TAG: latest
   DOCKER_MAIN_REPOS: hierarchical_sensor_monitoring
+  
+  LATEST_TAG: latest
 
 jobs:
   build:
@@ -150,7 +151,7 @@ jobs:
           context: .
           push: true
           file: ${{ env.DockerfilePath }}
-          tags: ${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}
+          tags: ${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.LATEST_TAG }}
 
   publish-docker-image:
     runs-on: ubuntu-latest
@@ -175,7 +176,7 @@ jobs:
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full deps url
-        run: echo "DockerDepsUrl=${{ env.DockerHubDepsRegistry }}/${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
+        run: echo "DockerDepsUrl=${{ env.DockerHubDepsRegistry }}/${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.LATEST_TAG }}" >> $GITHUB_ENV
 
       - name: Build full main repos name
         run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
@@ -188,4 +189,4 @@ jobs:
 
       - name: Push LATEST image to remote Docker
         if: ${{ github.event.inputs.isPreRelease == 'false' }}
-        run: docker push "${{ env.DockerMainName }}:latest"
+        run: docker push "${{ env.DockerMainName }}:${{ env.LATEST_TAG }}"
