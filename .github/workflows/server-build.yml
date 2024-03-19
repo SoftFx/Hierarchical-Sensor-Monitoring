@@ -13,6 +13,8 @@ on:
 env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildOutput
 
+  IS_PRERELESE: ${{ github.event.inputs.isPreRelease }}
+
   SOLUTION_PATH: src/server/HSMServer/HSMServer.sln
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj
 
@@ -185,6 +187,12 @@ jobs:
 
       - name: Push VERSION image to remote Docker
         run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
+
+      - name: Output variables
+        env:
+          GITHUB_EVENTS_PRERELEASE: ${{ github.event.inputs.isPreRelease }}
+          IS_PRERELEASE_VARIABLE: ${{ env.IS_PRERELESE }}
+        run: echo "$GITHUB_EVENTS_PRERELEASE $IS_PRERELEASE_VARIABLE"
 
       - name: Push LATEST image to remote Docker
       #  if: ${{ !github.event.inputs.isPreRelease }}
