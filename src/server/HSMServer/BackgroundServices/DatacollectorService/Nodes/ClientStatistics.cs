@@ -1,10 +1,7 @@
 using HSMDataCollector.Core;
-using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
-using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ServerConfiguration.Monitoring;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -16,13 +13,10 @@ namespace HSMServer.BackgroundServices
     {
         private const double KbDivisor = 1 << 10;
         
-        public required IBarSensor<int> RequestCount { get; init; }
-        public required IBarSensor<double> RequestSize { get; init; }
-        public required IInstantValueSensor<double> RequestsCountPerSecond { get; init; } //should be params
-        public required IInstantValueSensor<double> RequestsSizePerSecond { get; init; } //should be params
-        public required IBarSensor<double> ResponseSize { get; init; }
-        public required IInstantValueSensor<double> SensorUpdatesPerSecond { get; init; } //should be params
-        public required IBarSensor<int> SensorUpdates { get; init; }
+        public IBarSensor<double> SentBytes { get; set; }
+        public IBarSensor<double> ReceiveBytes { get; set; }
+        public IInstantValueSensor<double> SentSensors { get; set; }
+        public IInstantValueSensor<double> ReceiveSensors { get; set; }
         
 
         public SelfCollectSensor(){}
@@ -30,35 +24,17 @@ namespace HSMServer.BackgroundServices
 
         public void AddRequestData(HttpRequest request)
         {
-            RequestCount.AddValue(1);
-            RequestSize.AddValue((request.ContentLength ?? 0) / KbDivisor);
-            RequestsCountPerSecond.AddValue(1);
-            RequestsSizePerSecond.AddValue((request.ContentLength ?? 0) / KbDivisor);
+            ReceiveBytes.AddValue((request.ContentLength ?? 0) / KbDivisor);
         }
 
         public void AddResponseResult(HttpResponse response)
         {
-            ResponseSize.AddValue((response.ContentLength ?? 0) / KbDivisor);
+            SentBytes.AddValue((response.ContentLength ?? 0) / KbDivisor);
         }
-
-        public void AddReceiveData(ActionExecutingContext context)
-        {
-            if (context.ActionArguments.TryGetValue("values", out var values) && values is List<SensorValueBase> list)
-            {
-                SensorUpdates.AddValue(list.Count);
-                SensorUpdatesPerSecond.AddValue(list.Count);
-            }
-            else
-            {
-                SensorUpdates.AddValue(1);
-                SensorUpdatesPerSecond.AddValue(1);
-            }
-        }
-
+        
         public void AddReceiveData(int count)
         {
-            SensorUpdates.AddValue(count);
-            SensorUpdatesPerSecond.AddValue(count);
+            ReceiveSensors.AddValue(count);
         }
     }
     public class ClientStatistics
@@ -116,13 +92,10 @@ namespace HSMServer.BackgroundServices
             var id = path ?? TotalGroup;
             SelfSensors.TryAdd(id, new SelfCollectSensor
             {
-                RequestCount = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{RequestCount}"),
-                RequestSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{RequestSize}"),
-                RequestsCountPerSecond = _collector.CreateRateSensor($"{ClientNode}/{id}/{RequestsPerSecond}"),
-                RequestsSizePerSecond = _collector.CreateRateSensor($"{ClientNode}/{id}/{RequestSizePerSecond}"),
-                ResponseSize = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/{ResponseSize}"),
-                SensorUpdatesPerSecond = _collector.CreateRateSensor($"{ClientNode}/{id}/{SensorUpdatesPerSecond}"),
-                SensorUpdates = _collector.Create1MinIntBarSensor($"{ClientNode}/{id}/{SensorUpdates}"),
+                SentBytes = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/Sent bytes"),
+                ReceiveBytes = _collector.Create1MinDoubleBarSensor($"{ClientNode}/{id}/Recv bytes"),
+                SentSensors = _collector.CreateDoubleSensor($"{ClientNode}/{id}/Sent sensors"),
+                ReceiveSensors = _collector.CreateDoubleSensor($"{ClientNode}/{id}/Recv sensors"),
             });
         }
     }

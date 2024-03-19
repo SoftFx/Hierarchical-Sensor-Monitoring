@@ -197,7 +197,7 @@ namespace HSMServer.Core.Cache
         {
             key = _keys.TryGetValue(id, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
 
-            if (!key.IsValid(KeyPermissions.CanSendSensorData, out message))
+            if (!key.IsValid(KeyPermissions.CanSendSensorData & KeyPermissions.CanAddNodes & KeyPermissions.CanAddSensors & KeyPermissions.CanReadSensorData, out message))
                 return false;
 
             if (!key.IsMaster) 
@@ -221,7 +221,7 @@ namespace HSMServer.Core.Cache
             return true;
         }
 
-        public bool CheckWritePermissions(ProductModel product, AccessKeyModel accessKey, ReadOnlySpan<string> pathParts, out string message)
+        public bool CheckAddPermissions(ProductModel product, AccessKeyModel accessKey, ReadOnlySpan<string> pathParts, out string message)
         {
             message = string.Empty;
 
@@ -248,6 +248,11 @@ namespace HSMServer.Core.Cache
             }
 
             return true;
+        }
+
+        bool IPermissionService.CheckPermission(ProductModel product, AccessKeyModel accessKey, ReadOnlySpan<string> pathParts, KeyPermissions permissions, out string message)
+        {
+            return CheckAddPermissions(product, accessKey, pathParts, out message) && accessKey.IsValid(permissions, out message);
         }
 
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>

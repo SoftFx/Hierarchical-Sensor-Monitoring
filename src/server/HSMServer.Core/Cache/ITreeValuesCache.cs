@@ -52,6 +52,9 @@ namespace HSMServer.Core.Cache
         AccessKeyModel UpdateAccessKeyState(Guid id, KeyState state);
         AccessKeyModel GetAccessKey(Guid id);
         List<AccessKeyModel> GetMasterKeys();
+        
+        bool TryGetKey(Guid id, out AccessKeyModel key, out string message);
+        bool TryGetProduct(Guid id, out ProductModel product, out string message);
 
         bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);
         bool TryUpdateSensor(SensorUpdate updatedSensor, out string error);
