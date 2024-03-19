@@ -13,8 +13,6 @@ on:
 env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildOutput
 
-  IS_PRERELESE: ${{ github.event.inputs.isPreRelease }}
-
   SOLUTION_PATH: src/server/HSMServer/HSMServer.sln
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj
 
@@ -79,11 +77,11 @@ jobs:
         run: echo "tag=server-v${{ needs.build.outputs.VERSION }}" >> $GITHUB_OUTPUT
 
       - name: Build release tag message
-        if: ${{ !github.event.inputs.isPreRelease }}
+        if: ${{ github.event.inputs.isPreRelease == 'false' }}
         run: echo "TagMessage=Release version HSMServer-${{ needs.build.outputs.VERSION }}" >> $GITHUB_ENV
 
       - name: Build prerelease tag message
-        if: ${{ github.event.inputs.isPreRelease }}
+        if: ${{ github.event.inputs.isPreRelease == 'true' }}
         run: echo "TagMessage=PreRelease version HSMServer-${{ needs.build.outputs.VERSION }} for developers" >> $GITHUB_ENV
 
       - name: Push tag
@@ -187,17 +185,6 @@ jobs:
 
       - name: Push VERSION image to remote Docker
         run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
-
-      - name: Output variables
-        env:
-          GITHUB_EVENTS_PRERELEASE: ${{ github.event.inputs.isPreRelease }}
-          IS_PRERELEASE_VARIABLE: ${{ env.IS_PRERELESE }}
-          CONDITION_1: ${{ github.event.inputs.isPreRelease == 'false' }}
-          CONDITION_2: ${{ github.event.inputs.isPreRelease == false }}
-          CONDITION_3: ${{ github.event.inputs.isPreRelease == 'true' }}
-          CONDITION_4: ${{ github.event.inputs.isPreRelease == true }}
-          CONDITION_5: ${{ ! github.event.inputs.isPreRelease }}
-        run: echo "$GITHUB_EVENTS_PRERELEASE $IS_PRERELEASE_VARIABLE $CONDITION_1 $CONDITION_2 $CONDITION_3 $CONDITION_4 $CONDITION_5"
 
       - name: Push LATEST image to remote Docker
         if: ${{ github.event.inputs.isPreRelease == 'false' }}
