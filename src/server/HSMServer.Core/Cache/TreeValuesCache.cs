@@ -21,11 +21,10 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Core.Interfaces.Services;
 
 namespace HSMServer.Core.Cache
 {
-    public sealed class TreeValuesCache : ITreeValuesCache, IPermissionService, IDisposable
+    public sealed class TreeValuesCache : ITreeValuesCache, IDisposable
     {
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
@@ -250,10 +249,6 @@ namespace HSMServer.Core.Cache
             return true;
         }
 
-        bool IPermissionService.CheckPermission(ProductModel product, AccessKeyModel accessKey, ReadOnlySpan<string> pathParts, KeyPermissions permissions, out string message)
-        {
-            return CheckAddPermissions(product, accessKey, pathParts, out message) && accessKey.IsValid(permissions, out message);
-        }
 
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
             TryGetProductByKey(request, out var product, out message) &&
@@ -1222,7 +1217,7 @@ namespace HSMServer.Core.Cache
             return true;
         }
 
-        private static bool TryCheckAccessKeyPermissions(AccessKeyModel accessKey, KeyPermissions permissions,
+        public static bool TryCheckAccessKeyPermissions(AccessKeyModel accessKey, KeyPermissions permissions,
             out string message)
         {
             if (accessKey == null)

@@ -11,6 +11,10 @@ namespace HSMServer.Middleware
         
         public string TelemetryPath { get; set; }
         
+        public string Path { get; set; }
+        
         public Guid SensorId { get; set; }
+
+        public int Count { get; set; } = 0;
     }
 }

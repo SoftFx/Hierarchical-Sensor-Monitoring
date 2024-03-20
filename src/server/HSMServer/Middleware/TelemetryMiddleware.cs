@@ -1,15 +1,14 @@
 using HSMServer.BackgroundServices;
-using HSMServer.Core.Cache;
 using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 
 namespace HSMServer.Middleware
 {
-    public class TelemetryMiddleware(RequestDelegate next, DataCollectorWrapper collector, ITreeValuesCache cache)
+    public class TelemetryMiddleware(RequestDelegate next)
     {
         public const string RequestData = "RequestData";
         
-        public async Task InvokeAsync(HttpContext context)
+        public async Task InvokeAsync(HttpContext context, DataCollectorWrapper collector)
         {
             context.Items.Add(RequestData, new FilterRequestData());
             
@@ -18,7 +17,9 @@ namespace HSMServer.Middleware
             await next(context);
             
             collector.Statistics.Total.AddResponseResult(context.Response);
-            collector.Statistics.Total.AddReceiveData((int)context.Items["SensorsCount"]);
+            
+            if (context.Items.TryGetValue(RequestData, out var value) && value is FilterRequestData requestData)
+                collector.Statistics.Total.AddReceiveData(requestData.Count);
         }
     }
 }

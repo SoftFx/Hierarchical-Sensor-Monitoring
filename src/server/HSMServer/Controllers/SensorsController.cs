@@ -462,7 +462,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        // [TypeFilter<SendPermissionFilter>]
         public ActionResult<AddOrUpdateSensorRequest> Post([FromBody] AddOrUpdateSensorRequest sensorUpdate)
         {
             try
@@ -496,7 +496,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        // [TypeFilter<SendPermissionFilter>]
         public ActionResult<Dictionary<string, string>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
         {
             var result = new Dictionary<string, string>(sensorCommands.Count);

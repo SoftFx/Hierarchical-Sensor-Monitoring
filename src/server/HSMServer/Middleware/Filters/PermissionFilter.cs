@@ -6,15 +6,14 @@ using HSMCommon.Constants;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.BackgroundServices;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Interfaces.Services;
 using HSMServer.Core.Model;
+using HSMServer.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace HSMServer.Middleware;
 
-public abstract class PermissionFilter(ITreeValuesCache cache, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
+public abstract class PermissionFilter(IPermissionService service, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
 {
     protected abstract KeyPermissions Permissions { get; }
     
@@ -29,27 +28,33 @@ public abstract class PermissionFilter(ITreeValuesCache cache, DataCollectorWrap
         
         collector.Statistics[requestData.TelemetryPath].AddRequestData(context.HttpContext.Request);
         
-        if (values is BaseRequest request && !cache.CheckPermission(requestData.Product, requestData.Key, GetPathParts(request?.Path), Permissions, out message))
+        if (values is BaseRequest request)
         {
-            context.HttpContext.Response.StatusCode = 406;
-            return;
+            if (!service.CheckPermission(requestData, Permissions, out message))
+            {
+                context.HttpContext.Response.StatusCode = 406;
+                return;
+            }
+
+            requestData.Path = request.Path;
         }
+        
 
         if (values is List<SensorValueBase> requestValues)
         {
             context.ActionArguments.Remove("values");
           
-            requestValues = requestValues.Where(x => cache.CheckPermission(requestData.Product, requestData.Key, GetPathParts(x?.Path), Permissions, out _)).ToList();
+            requestValues = requestValues.Where(x => service.CheckPermission(requestData, Permissions, out _)).ToList();
             
             context.ActionArguments.Add("values", requestValues);
             
             collector.Statistics[requestData.TelemetryPath].AddReceiveData(requestValues.Count);
-            context.HttpContext.Items["SensorsCount"] = requestValues.Count;
+            requestData.Count = requestValues.Count;
         }
         else
         {
             collector.Statistics[requestData.TelemetryPath].AddReceiveData(1);
-            context.HttpContext.Items["SensorsCount"] = 1;
+            requestData.Count = 1;
         }
     }
     
@@ -64,14 +69,14 @@ public abstract class PermissionFilter(ITreeValuesCache cache, DataCollectorWrap
         if (!hasKey)
             return;
 
-        var keyExist = cache.TryGetKey(keyId, out var key, out var message);
+        var keyExist = service.TryGetKey(keyId, out var key, out var message);
 
         if (!keyExist)
             return;
         
         requestData.Key = key;
 
-        var productExist = cache.TryGetProduct(key.ProductId, out var product, out message);
+        var productExist = service.TryGetProduct(key.ProductId, out var product, out message);
 
         if (!productExist)
             return;
@@ -90,13 +95,12 @@ public abstract class PermissionFilter(ITreeValuesCache cache, DataCollectorWrap
         return Guid.TryParse(key, out guidKey);
     }
 
-    private static ReadOnlySpan<string> GetPathParts(string path)
+    public static ReadOnlySpan<string> GetPathParts(string path)
     {
         path = path.FirstOrDefault() == CommonConstants.SensorPathSeparator ? path[1..] : path;
 
         return path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries).AsSpan();
     }
-    
     
     public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
