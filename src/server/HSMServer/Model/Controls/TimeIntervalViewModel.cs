@@ -16,6 +16,7 @@ namespace HSMServer.Model
 
         private static long _id = 0L;
 
+        private readonly string NoneIntervalDisplayName = TimeInterval.None.GetDisplayName();
         private readonly ParentRequest _parentRequest;
 
         private TimeInterval? _interval;
@@ -95,7 +96,7 @@ namespace HSMServer.Model
         internal TimeInterval TimeInterval => Interval ?? default;
 
         internal bool IsIntervalNone => TimeInterval is TimeInterval.None ||
-                                        (TimeInterval.IsParent() && GetUsedValue(this) == TimeInterval.None.GetDisplayName());
+                                        (TimeInterval.IsParent() && GetUsedValue(this) == NoneIntervalDisplayName);
 
 
         // public constructor without parameters for post actions
