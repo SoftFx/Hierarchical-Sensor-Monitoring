@@ -94,6 +94,9 @@ namespace HSMServer.Model
 
         internal TimeInterval TimeInterval => Interval ?? default;
 
+        internal bool IsIntervalNone => TimeInterval is TimeInterval.None ||
+                                        (TimeInterval.IsParent() && GetUsedValue(this) == TimeInterval.None.GetDisplayName());
+
 
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
