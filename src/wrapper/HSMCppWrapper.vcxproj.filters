@@ -102,5 +102,8 @@
     <ClCompile Include="HSMSensorOptions.cpp">
       <Filter>Sensors</Filter>
     </ClCompile>
+    <ClCompile Include="DataCollectorImpl.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
