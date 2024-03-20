@@ -1,14 +1,20 @@
 Param(
-	[Parameter(Mandatory=$True)][string]$Version,
+	[string]$Version,
 	[string]$BaseDirectory
 )
+
+if ([string]::IsNullOrEmpty($Version))
+{
+	$Version = "latest"
+}
 
 if ([string]::IsNullOrEmpty($BaseDirectory))
 {
 	$BaseDirectory = "/usr/HSM/" # Unix base directory
-	#$BaseDirectory = "C:\HSM\" # Windows base directory
+	# $BaseDirectory = "C:\HSM\" # Windows base directory
 }
 
+Write-Host "Version:" $Version
 Write-Host "Base directory:" $BaseDirectory
 
 Write-Host $LogsFolder

@@ -1,4 +1,5 @@
-$Version = $args[0]
+$Version = if ($args.count -gt 0) { $args[0] } else { "latest" }
+
 $Repository = "hsmonitoring/hierarchical_sensor_monitoring"
 $ExpectedImageTag = "${Repository}:$Version"
 
