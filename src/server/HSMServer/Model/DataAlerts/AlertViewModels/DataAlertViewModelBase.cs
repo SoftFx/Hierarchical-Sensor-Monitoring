@@ -142,6 +142,21 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class DataAlertViewModel : DataAlertViewModelBase
     {
+        private bool _isActionMain = true;
+
+        private bool IsActionMain
+        {
+            get
+            {
+                var isActionMain = _isActionMain;
+
+                _isActionMain = false;
+
+                return isActionMain;
+            }
+        }
+
+
         protected virtual string DefaultCommentTemplate { get; } = "[$product]$path $operation $target";
 
         protected virtual string DefaultIcon { get; }
@@ -155,7 +170,7 @@ namespace HSMServer.Model.DataAlerts
             IsDisabled = policy.IsDisabled;
 
             if (!string.IsNullOrEmpty(policy.Template))
-                Actions.Add(new ActionViewModel(true, node)
+                Actions.Add(new ActionViewModel(IsActionMain, node)
                 {
                     Action = ActionType.SendNotification,
                     Comment = policy.Template,
@@ -169,10 +184,10 @@ namespace HSMServer.Model.DataAlerts
                 });
 
             if (!string.IsNullOrEmpty(policy.Icon))
-                Actions.Add(new ActionViewModel(false, node) { Action = ActionType.ShowIcon, Icon = policy.Icon });
+                Actions.Add(new ActionViewModel(IsActionMain, node) { Action = ActionType.ShowIcon, Icon = policy.Icon });
 
             if (policy.Status == Core.Model.SensorStatus.Error)
-                Actions.Add(new ActionViewModel(false, node) { Action = ActionType.SetStatus });
+                Actions.Add(new ActionViewModel(IsActionMain, node) { Action = ActionType.SetStatus });
         }
 
         public DataAlertViewModel(NodeViewModel node)
