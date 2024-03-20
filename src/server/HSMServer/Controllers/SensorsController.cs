@@ -570,7 +570,7 @@ namespace HSMServer.Controllers
         private string GetCollectorKeyName()
         {
             if (HttpContext.Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var keyVal))
-                return _cache.GetAccessKey(Guid.Parse(keyVal)).DisplayName;
+                return _cache.GetAccessKey(Guid.Parse(keyVal))?.DisplayName;
             else
                 throw new Exception("Key is required");
         }

@@ -73,7 +73,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool ResendNotification()
         {
-            if (_lastTTLNotificationTime is null || Schedule.IsActive)
+            if (_lastTTLNotificationTime is null || !Schedule.IsActive)
                 return false;
 
             return DateTime.UtcNow >= _lastTTLNotificationTime.Value.Add(Schedule.GetShiftTime());
