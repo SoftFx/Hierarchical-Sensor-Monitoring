@@ -28,6 +28,9 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
+        internal override bool UseScheduleManagerLogic => false;
+
+
         internal TTLPolicy(BaseNodeModel node, PolicyEntity entity)
         {
             _ttl = node.Settings.TTL;
@@ -58,13 +61,13 @@ namespace HSMServer.Core.Model.Policies
             FullUpdate(update, Sensor);
         }
 
-
         internal void FullUpdate(PolicyUpdate update, BaseSensorModel sensor = null)
         {
             TryUpdate(update, out _, sensor);
 
             _okPolicy.TryUpdate(update with { Template = _okPolicy.OkTemplate, Icon = null }, out _, sensor);
         }
+
 
         internal bool HasTimeout(DateTime? time) => !_ttl.IsEmpty && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 

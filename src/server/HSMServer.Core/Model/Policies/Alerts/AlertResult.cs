@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Extensions;
 using System;
 using System.Collections.Generic;
-using System.Net.Sockets;
 using System.Text;
 
 namespace HSMServer.Core.Model.Policies
@@ -66,7 +65,7 @@ namespace HSMServer.Core.Model.Policies
             Icon = policy.Icon;
 
             IsStatusIsChangeResult = policy.Conditions.IsStatusChangeResult();
-            IsScheduleAlert = policy.Schedule.IsActive;
+            IsScheduleAlert = policy.UseScheduleManagerLogic;
             IsReplaceAlert = isReplace && IsScheduleAlert;
 
             AddPolicyResult(policy);

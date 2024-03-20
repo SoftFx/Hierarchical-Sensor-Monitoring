@@ -58,6 +58,9 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
+        internal virtual bool UseScheduleManagerLogic => Schedule.IsActive;
+
+
         public Policy()
         {
             Id = Guid.NewGuid();
