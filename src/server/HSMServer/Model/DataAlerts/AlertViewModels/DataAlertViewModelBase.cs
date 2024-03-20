@@ -97,7 +97,7 @@ namespace HSMServer.Model.DataAlerts
 
         private ActionProperties GetActions(Dictionary<Guid, string> availavleChats)
         {
-            PolicyDestinationUpdate destination = null;
+            PolicyDestinationUpdate destination = new();
             SensorStatus status = SensorStatus.Ok;
             PolicyScheduleUpdate schedule = null;
             string comment = null;
@@ -154,18 +154,19 @@ namespace HSMServer.Model.DataAlerts
 
             IsDisabled = policy.IsDisabled;
 
-            Actions.Add(new ActionViewModel(true, node)
-            {
-                Action = ActionType.SendNotification,
-                Comment = policy.Template,
-                DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template,
-                ScheduleStartTime = policy.Schedule.Time.ToClientScheduleTime(),
-                ScheduleRepeatMode = policy.Schedule.RepeatMode.ToClient(),
-                ScheduleInstantSend = policy.Schedule.InstantSend,
-                Chats = policy.Destination.AllChats
-                    ? new HashSet<Guid>() { ActionViewModel.AllChatsId }
-                    : new HashSet<Guid>(policy.Destination.Chats.Keys),
-            });
+            if (!string.IsNullOrEmpty(policy.Template))
+                Actions.Add(new ActionViewModel(true, node)
+                {
+                    Action = ActionType.SendNotification,
+                    Comment = policy.Template,
+                    DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template,
+                    ScheduleStartTime = policy.Schedule.Time.ToClientScheduleTime(),
+                    ScheduleRepeatMode = policy.Schedule.RepeatMode.ToClient(),
+                    ScheduleInstantSend = policy.Schedule.InstantSend,
+                    Chats = policy.Destination.AllChats
+                        ? new HashSet<Guid>() { ActionViewModel.AllChatsId }
+                        : new HashSet<Guid>(policy.Destination.Chats.Keys),
+                });
 
             if (!string.IsNullOrEmpty(policy.Icon))
                 Actions.Add(new ActionViewModel(false, node) { Action = ActionType.ShowIcon, Icon = policy.Icon });
