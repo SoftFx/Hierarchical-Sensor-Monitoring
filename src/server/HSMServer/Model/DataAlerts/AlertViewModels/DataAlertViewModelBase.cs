@@ -142,19 +142,7 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class DataAlertViewModel : DataAlertViewModelBase
     {
-        private bool _isActionMain = true;
-
-        private bool IsActionMain
-        {
-            get
-            {
-                var isActionMain = _isActionMain;
-
-                _isActionMain = false;
-
-                return isActionMain;
-            }
-        }
+        private bool IsActionMain => Actions.Count == 0;
 
 
         protected virtual string DefaultCommentTemplate { get; } = "[$product]$path $operation $target";

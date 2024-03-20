@@ -137,13 +137,11 @@
 
     $("a.deleteAction").off("click").on("click", function () {
         let actionsBlock = $(this).parents(`div[name='actionsBlock']`);
-        let alertAction = actionsBlock.find($(`div[name='alertAction']`));
 
         $(this).parents("div[name='alertAction']:first").remove();
-        
-        if (alertAction.length == 2) {
-            alertAction.find($('div.alert-and')).remove();
-        }
+
+        let alertAction = actionsBlock.find(`div[name='alertAction']:first`);
+        alertAction.find('div.alert-and').remove();
     });
 
     $("a.addSchedule").off("click").on("click", function () {
