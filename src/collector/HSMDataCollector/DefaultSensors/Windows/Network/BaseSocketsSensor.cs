@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
-    internal abstract class BaseSocketsSensor : MonitoringSensorBase<double>
+    internal abstract class BaseSocketsSensor : MonitoringSensorBase<int>
     {
         private const string CategoryTcp4 = "TCPv4";
         private const string CategoryTcp6 = "TCPv6";
@@ -46,6 +46,6 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             return base.Stop();
         }
         
-        protected override double GetValue() => _counterTCPv4.NextValue() + _counterTCPv6.NextValue();
+        protected override int GetValue() => (int)(_counterTCPv4.NextValue() + _counterTCPv6.NextValue());
     }
 }
