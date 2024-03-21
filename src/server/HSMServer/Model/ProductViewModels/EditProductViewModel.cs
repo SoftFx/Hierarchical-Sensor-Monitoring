@@ -1,7 +1,6 @@
 ﻿using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -12,6 +11,7 @@ namespace HSMServer.Model.ViewModel
         private readonly List<UserViewModel> _usedUsers;
 
 
+        public ProductGeneralInfoViewModel GeneralInfo { get; }
 
         public List<AccessKeyViewModel> AccessKeys { get; }
 
@@ -19,20 +19,12 @@ namespace HSMServer.Model.ViewModel
 
         public HashSet<UserViewModel> NotAdminUsers { get; }
 
-        public string EncodedProductId { get; }
-
-        public string ProductName { get; }
-
-        public Guid ProductId { get; }
-
 
         public EditProductViewModel(ProductNodeViewModel product,
                                     List<(User, ProductRoleEnum)> usersRights,
                                     List<User> notAdminUsers)
         {
-            ProductId = product.Id;
-            ProductName = product.Name;
-            EncodedProductId = product.EncodedId;
+            GeneralInfo = new(product);
 
             UsersRights = usersRights.Select(x => (new UserViewModel(x.Item1), x.Item2)).ToList();
             AccessKeys = product.GetAccessKeys();

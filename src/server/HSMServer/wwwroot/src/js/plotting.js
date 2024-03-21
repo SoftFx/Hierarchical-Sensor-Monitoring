@@ -13,32 +13,40 @@
 export const serviceAlivePlotName  = "ServiceAlive";
 export const serviceStatusPlotName  = "ServiceStatus";
 
-window.customReset =  function (plot = undefined, xaxisRange = undefined, yaxisRange = undefined){
-    let currentPlot;
-    
-    if (plot.data.length === 1)
-        currentPlot = plot.data[0];
-    else 
-        plot.data.forEach(function (x){
-            if (x.type !== 'heatmap')
-                currentPlot = x;
-        })
-    
-    if (currentPlot === undefined)
-        return;
+window.customReset = async function (plot = undefined, xaxisRange = undefined, yaxisRange = undefined) {
+    await Plotly.relayout(plot, await getLayout(plot, xaxisRange, yaxisRange));
 
-    let isPanelChart = plot.id.startsWith('panelChart');
-    
-    plot.layout.xaxis.range = [xaxisRange[0], !isPanelChart ? getMinRangeTo() : xaxisRange[1]];
-    
-    if (yaxisRange === undefined || yaxisRange === true)
-        plot.layout.yaxis.autorange = true;
-    else 
-        plot.layout.yaxis.range = yaxisRange
-    
-    Plotly.relayout(plot, plot.layout);
-    
-    function getMinRangeTo(){
+    function getLayout(plot = undefined, xaxisRange = undefined, yaxisRange = undefined) {
+        let currentPlot;
+
+        let layout = {};
+
+        if (plot.data.length === 1)
+            currentPlot = plot.data[0];
+        else
+            plot.data.forEach(function (x) {
+                if (x.type !== 'heatmap')
+                    currentPlot = x;
+            })
+
+        if (currentPlot === undefined)
+            return;
+
+        let isPanelChart = plot.id.startsWith('panelChart');
+
+        layout['xaxis.range'] = [xaxisRange[0], !isPanelChart ? getMinRangeTo(currentPlot) : xaxisRange[1]];
+
+        if (yaxisRange === undefined || yaxisRange === true)
+            layout['yaxis.autorange'] = true;
+        else
+            layout['yaxis.range'] = yaxisRange
+
+        return new Promise(function (resolve, reject) {
+            resolve(layout)
+        })
+    }
+
+    function getMinRangeTo(currentPlot) {
         if (currentPlot.x.length === 0)
             return xaxisRange[1];
 

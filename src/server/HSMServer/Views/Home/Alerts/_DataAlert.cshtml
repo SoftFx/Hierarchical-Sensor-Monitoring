@@ -185,12 +185,13 @@
 
         $("a.addAction").off("click").on("click", function () {
             let element = $(this).parents("div.fullAction:first");
+            let actionsBlock = element.find($(`div[name='actionsBlock']`));
+            let isMainAction = actionsBlock.find($(`div[name='alertAction']`)).length == 0;
 
             $.ajax({
-                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?entityId=@Model.EntityId`,
+                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?entityId=@Model.EntityId&isMain=${isMainAction}`,
                 cache: false
             }).done(function (viewData) {
-                var actionsBlock = element.find($(`div[name='actionsBlock']`));
                 actionsBlock.append(viewData);
             });
         });
