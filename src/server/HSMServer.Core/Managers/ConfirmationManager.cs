@@ -31,7 +31,7 @@ namespace HSMServer.Core.Confirmation
                 {
                     var alert = newAlerts[alertId];
 
-                    if (!alert.Destination.HasChats)
+                    if (!alert.IsValidAlert)
                         newAlerts.Remove(alertId);
                     else if (alert.ConfirmationPeriod is not null)
                     {
