@@ -6,7 +6,7 @@ namespace HSMServer.Middleware
 {
     public class RequestData
     {
-        public List<SensorData> Data { get; set; }
+        public List<SensorData> Data { get; set; } = new();
 
         public ProductModel Product { get; set; }
 

@@ -45,12 +45,22 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
         {
             context.ActionArguments.Remove("values");
 
-            requestValues = requestValues.Where(x => service.CheckPermission(requestData, new SensorData(){Path = x.Path}, Permissions, out _)).ToList();
+            requestValues = requestValues.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
 
             context.ActionArguments.Add("values", requestValues);
 
             collector.Statistics[requestData.TelemetryPath].AddReceiveData(requestValues.Count);
             requestData.Count = requestValues.Count;
+        }
+        else if (values is List<CommandRequestBase> commands)
+        {
+            context.ActionArguments.Remove("sensorCommands");
+            commands = commands.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
+
+            context.ActionArguments.Add("sensorCommands", commands);
+
+            collector.Statistics[requestData.TelemetryPath].AddReceiveData(commands.Count);
+            requestData.Count = commands.Count;
         }
         else
         {

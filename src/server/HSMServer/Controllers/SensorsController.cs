@@ -462,20 +462,23 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        // [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<AddOrUpdateSensorRequest> Post([FromBody] AddOrUpdateSensorRequest sensorUpdate)
         {
             try
             {
-                var keyName = GetCollectorKeyName();
-
-                if (TryBuildSensorUpdate(sensorUpdate, keyName, out var update, out var message))
+                if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var data) && data is RequestData requestData)
                 {
-                    _cache.TryAddOrUpdateSensor(update, out var error);
-                    return Ok(error);
+                    if (TryBuildSensorUpdate(requestData, sensorUpdate, requestData.Data[0], out var update, out var message))
+                    {
+                        _cache.TryAddOrUpdateSensor(update, out var error);
+                        return Ok(error);
+                    }
+                    
+                    return StatusCode(406, message);
                 }
-
-                return StatusCode(406, message);
+               
+                return StatusCode(502);
             }
             catch (Exception e)
             {
@@ -496,29 +499,30 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        // [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<Dictionary<string, string>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
         {
             var result = new Dictionary<string, string>(sensorCommands.Count);
 
             try
             {
-                var keyName = GetCollectorKeyName();
-
-                foreach (var command in sensorCommands)
+                if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var data) && data is RequestData requestData)
                 {
-                    if (command is AddOrUpdateSensorRequest sensorUpdate)
+                    for (var i = 0; i < sensorCommands.Count; i++)
                     {
-                        if (TryBuildSensorUpdate(sensorUpdate, keyName, out var update, out var message))
-                            _cache.TryAddOrUpdateSensor(update, out message);
-
-                        if (!string.IsNullOrEmpty(message))
-                            result[sensorUpdate.Path] = message;
+                        if (sensorCommands[i] is AddOrUpdateSensorRequest sensorUpdate)
+                        {
+                            if (TryBuildSensorUpdate(requestData, sensorUpdate, requestData.Data[i], out var update, out var message))
+                                _cache.TryAddOrUpdateSensor(update, out var error);
+                            
+                            if (!string.IsNullOrEmpty(message))
+                                result[sensorUpdate.Path] = message;
+                        }
+                        else 
+                            result[sensorCommands[i].Path] = $"This type of command is not supported now";
                     }
-                    else
-                        result[command.Path] = $"This type of command is not supported now";
                 }
-
+                
                 return Ok(result);
             }
             catch (Exception e)
@@ -527,15 +531,7 @@ namespace HSMServer.Controllers
                 return BadRequest(result);
             }
         }
-
-
-        private string GetCollectorKeyName()
-        {
-            if (HttpContext.Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var keyVal))
-                return _cache.GetAccessKey(Guid.Parse(keyVal)).DisplayName;
-            else
-                throw new Exception("Key is required");
-        }
+        
 
         private bool CanAddToQueue(StoreInfo storeInfo, out string message)
         {
@@ -592,6 +588,29 @@ namespace HSMServer.Controllers
             return false;
         }
 
+        private bool TryBuildSensorUpdate(RequestData requestData, AddOrUpdateSensorRequest request, SensorData sensorData, out SensorAddOrUpdateRequestModel requestModel, out string message)
+        {
+            requestModel = new SensorAddOrUpdateRequestModel(requestData.Key.Id, request.Path);
+
+            if (requestModel.TryCheckRequest(out message))
+            { 
+                if (sensorData.Id == Guid.Empty && request.SensorType is null)
+                {
+                    message = $"{nameof(request.SensorType)} property is required, because sensor {request.Path} doesn't exist";
+                    return false;
+                }
+
+                requestModel.Update = request.Convert(sensorData.Id, requestData.Key.DisplayName);
+
+                if (request.SensorType.HasValue)
+                    requestModel.Type = request.SensorType.Value.Convert();
+
+                return true;
+            }
+                
+            return false;
+        }
+        
         private string GetKey(BaseRequest request)
         {
             Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
