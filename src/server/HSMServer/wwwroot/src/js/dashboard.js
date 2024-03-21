@@ -461,6 +461,7 @@ window.initMultyichartCordinates = function (settings, values, id) {
 window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false, yaxisRange = true) {
     return Plotly.newPlot(chartId, [], {
         hovermode: 'x',
+        hoverdistance: 1,
         dragmode: 'zoom',
         autosize: true,
         height: height,
