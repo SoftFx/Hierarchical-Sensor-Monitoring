@@ -550,15 +550,30 @@ namespace HSMServer.Controllers
             _updatesQueue.AddItem(new StoreInfo(key, value.Path) { BaseValue = value.Convert() });
         }
 
-        private bool TryCheckReadHistoryRequest(HistoryRequest request, out HistoryRequestModel requestModel, out string message)
+        // private bool TryCheckReadHistoryRequest(HistoryRequest request, out HistoryRequestModel requestModel, out string message)
+        // {
+        //     Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
+        //
+        //     requestModel = request.Convert(key);
+        //
+        //     return request.TryValidate(out message) &&
+        //            requestModel.TryCheckRequest(out message) &&
+        //            _cache.TryCheckKeyReadPermissions(requestModel, out message);
+        // }
+
+        private bool TryCheckReadHistoryRequest(HistoryRequest historyRequest, out HistoryRequestModel requestModel, out string message)
         {
-            Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
+            requestModel = null;
+            message = null;
+            
+            if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) && obj is RequestData requestData)
+            {
+                requestModel = historyRequest.Convert(requestData.Key.Id);
+                
+                return historyRequest.TryValidate(out message) && requestModel.TryCheckRequest(out message);
+            }
 
-            requestModel = request.Convert(key);
-
-            return request.TryValidate(out message) &&
-                   requestModel.TryCheckRequest(out message) &&
-                   _cache.TryCheckKeyReadPermissions(requestModel, out message);
+            return false;
         }
 
         private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>

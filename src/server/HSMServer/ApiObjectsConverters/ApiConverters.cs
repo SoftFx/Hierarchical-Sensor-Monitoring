@@ -237,6 +237,15 @@ namespace HSMServer.ApiObjectsConverters
                 Count = request.Count,
                 Options = request.Options
             };
+        
+        public static HistoryRequestModel Convert(this HistoryRequest request, Guid key) =>
+            new(key, request.Path)
+            {
+                From = request.From,
+                To = request.To,
+                Count = request.Count,
+                Options = request.Options
+            };
 
 
         public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, string keyName)
