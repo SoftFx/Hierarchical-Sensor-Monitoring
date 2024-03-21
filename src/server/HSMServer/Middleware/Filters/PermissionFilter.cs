@@ -115,7 +115,9 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
 
     public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
-        collector.Statistics[context.HttpContext.Request.Headers["Path"]].AddResponseResult(context.HttpContext.Response);
+        if (context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var value) && value is RequestData requestData)
+            collector.Statistics[requestData.TelemetryPath].AddResponseResult(context.HttpContext.Response);
+        
         await next();
     }
 }
