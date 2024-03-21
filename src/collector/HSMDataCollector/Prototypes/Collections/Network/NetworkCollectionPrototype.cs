@@ -15,7 +15,7 @@ namespace HSMDataCollector.Prototypes.Collections.Network
         {
             IsComputerSensor = true;
 
-            Type = SensorType.IntSensor;
+            Type = SensorType.DoubleSensor;
 
             KeepHistory = TimeSpan.FromDays(90);
             TTL = TimeSpan.FromMinutes(5);

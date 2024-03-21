@@ -25,7 +25,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             try
             {
                 _counterTCPv4 = new PerformanceCounter(CategoryTcp4, CounterName);
-                _counterTCPv6 = new PerformanceCounter(CategoryTcp4, CounterName);
+                _counterTCPv6 = new PerformanceCounter(CategoryTcp6, CounterName);
             }
             catch (Exception ex)
             {
