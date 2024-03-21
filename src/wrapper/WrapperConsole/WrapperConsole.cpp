@@ -4,22 +4,55 @@
 #include <iostream>
 
 #include "../include/HSMCppWrapper.h"
-
+#include <thread>
 
 using namespace hsm_wrapper;
 
 int main()
 {
     
-    DataCollectorProxy collector("bf9fc183-64bf-4c54-89e5-f129e34854d8", "https://hsm.dev.soft-fx.eu", 44330, "Feeder");
+    DataCollectorProxy collector("bf9fc183-64bf-4c54-89e5-f129e34854d8", "https://hsm.dev.soft-fx.eu", 44330, "console");
 
-    collector.Initialize("", true);
+	collector.Initialize("", true);
+	//collector.InitializeAllDisksMonitoring();
+	collector.InitializeOsMonitoring();
+	collector.InitializeNetworkMonitoring();
+	collector.InitializeSystemMonitoring();
+	collector.InitializeCollectorMonitoring();
+	collector.InitializeProcessMonitoring();
+	collector.InitializeQueueDiagnostic();
 
-    collector.Start();
+#define USE_ASYNC 1
 
-    int a;
+#ifdef USE_ASYNC
+	std::cout << " before startasync\n";
+	collector.StartAsync();
+	std::cout << " after startasync\n";
+#else
+	std::cout << " before start\n";
+	collector.Start();
+	std::cout << " after start\n";
+#endif
+	int a;
 
-    std::cin >> a;
+	auto intsensor = collector.CreateIntSensor("TestInt");
 
-    collector.Stop();
+	intsensor.AddValue(1);
+
+	std::cin >> a;
+
+	intsensor.AddValue(a);
+
+	std::this_thread::sleep_for(std::chrono::seconds(1));
+
+	intsensor.AddValue(0);
+
+	std::this_thread::sleep_for(std::chrono::seconds(1));
+
+#ifdef USE_ASYNC
+    collector.StopAsync();
+#else
+	collector.Stop();
+#endif
+
 }
