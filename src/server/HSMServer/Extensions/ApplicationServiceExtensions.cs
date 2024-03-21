@@ -46,8 +46,6 @@ public static class ApplicationServiceExtensions
                 .AddSingleton<ITreeValuesCache, TreeValuesCache>()
                 .AddSingleton<IJournalService, JournalService>();
 
-        services.AddScoped<IPermissionService, PermissionService>();
-
         services.AddAsyncStorage<IUserManager, UserManager>()
                 .AddAsyncStorage<IFolderManager, FolderManager>()
                 .AddAsyncStorage<ITelegramChatsManager, TelegramChatsManager>()
@@ -63,10 +61,12 @@ public static class ApplicationServiceExtensions
                 .AddHostedService<DatacollectorService>()
                 .AddHostedService<NotificationsBackgroundService>()
                 .AddHostedService<BackupDatabaseService>();
-
+        
         services.AddSingleton<ClientStatistics>();
         services.AddSingleton<DatabaseSize>();
-
+        
+        services.AddScoped<IPermissionService, PermissionService>();
+        
         services.ConfigureDataCollector();
         
         services.AddSwaggerGen(o =>
