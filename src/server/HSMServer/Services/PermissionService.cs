@@ -6,41 +6,34 @@ using System.Linq;
 
 namespace HSMServer.Services
 {
-    public class PermissionService : IPermissionService
+    public class PermissionService(ITreeValuesCache cache) : IPermissionService
     {
-        private readonly ITreeValuesCache _cache;
-        
-        
-        public PermissionService(ITreeValuesCache cache)
-        {
-            _cache = cache;
-        }
-
-        public bool CheckPermission(FilterRequestData data, KeyPermissions permissions, out string message)
+        public bool CheckPermission(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
         {
             message = string.Empty;
             
-            if (CheckInitPermissions(data, out message, out var sensor))
+            if (CheckInitPermissions(data, sensorData, out message, out var sensor))
             {
+                sensorData.Id = sensor?.Id ?? Guid.Empty;
                 if (data.Key.IsValid(permissions, out message))
                 {
-                    data.Data.Add(());
+                    data.Data.Add(sensorData);
                     return true;
                 }
 
                 return false;
             };
             
-            return true;
+            return false;
         }
 
-        private bool CheckInitPermissions(FilterRequestData data, out string message, out BaseSensorModel sensor)
+        private bool CheckInitPermissions(RequestData data, SensorData sensorData, out string message, out BaseSensorModel sensor)
         {
             message = string.Empty;
             sensor = null;
 
             var product = data.Product;
-            var pathParts = PermissionFilter.GetPathParts(data.Path);
+            var pathParts = PermissionFilter.GetPathParts(sensorData.Path);
             
             for (int i = 0; i < pathParts.Length; i++)
             {
@@ -69,12 +62,12 @@ namespace HSMServer.Services
         
         public bool TryGetKey(Guid id, out AccessKeyModel key, out string message)
         {
-            return _cache.TryGetKey(id, out key, out message);
+            return cache.TryGetKey(id, out key, out message);
         }
         
         public bool TryGetProduct(Guid id, out ProductModel product, out string message)
         {
-            return _cache.TryGetProduct(id, out product, out message);
+            return cache.TryGetProduct(id, out product, out message);
         }
     }
 }

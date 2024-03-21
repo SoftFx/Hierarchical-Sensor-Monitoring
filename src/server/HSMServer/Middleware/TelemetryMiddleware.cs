@@ -10,7 +10,7 @@ namespace HSMServer.Middleware
         
         public async Task InvokeAsync(HttpContext context, DataCollectorWrapper collector)
         {
-            context.Items.Add(RequestData, new FilterRequestData());
+            context.Items.Add(RequestData, new RequestData());
             
             collector.Statistics.Total.AddRequestData(context.Request);
             
@@ -18,7 +18,7 @@ namespace HSMServer.Middleware
             
             collector.Statistics.Total.AddResponseResult(context.Response);
             
-            if (context.Items.TryGetValue(RequestData, out var value) && value is FilterRequestData requestData)
+            if (context.Items.TryGetValue(RequestData, out var value) && value is RequestData requestData)
                 collector.Statistics.Total.AddReceiveData(requestData.Count);
         }
     }
