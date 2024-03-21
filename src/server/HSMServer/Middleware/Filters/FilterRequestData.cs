@@ -1,5 +1,6 @@
 using HSMServer.Core.Model;
 using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Middleware
 {
@@ -10,6 +11,8 @@ namespace HSMServer.Middleware
         public AccessKeyModel Key { get; set; }
         
         public string TelemetryPath { get; set; }
+
+        public List<(string Path, Guid Id)> Data { get; set; } = new();
         
         public string Path { get; set; }
         

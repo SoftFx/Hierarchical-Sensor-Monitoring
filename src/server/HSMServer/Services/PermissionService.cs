@@ -24,6 +24,7 @@ namespace HSMServer.Services
             {
                 if (data.Key.IsValid(permissions, out message))
                 {
+                    data.Data.Add(());
                     return true;
                 }
 
@@ -37,7 +38,8 @@ namespace HSMServer.Services
         {
             message = string.Empty;
             sensor = null;
-            
+
+            var product = data.Product;
             var pathParts = PermissionFilter.GetPathParts(data.Path);
             
             for (int i = 0; i < pathParts.Length; i++)
@@ -46,9 +48,9 @@ namespace HSMServer.Services
 
                 if (i != pathParts.Length - 1)
                 {
-                    data.Product = data.Product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
+                    product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
 
-                    if (data.Product == null &&
+                    if (product == null &&
                         !TreeValuesCache.TryCheckAccessKeyPermissions(data.Key, KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
                         return false;
                 }
