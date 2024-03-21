@@ -25,9 +25,6 @@ namespace hsm_wrapper
 		std::shared_ptr<HSMBarSensorImpl<T>> impl;
 	};
 
-
-
-
 	using IntBarSensor = HSMBarSensor<int>;
 	using DoubleBarSensor = HSMBarSensor<double>;
 }

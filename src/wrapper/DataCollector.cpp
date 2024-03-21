@@ -418,6 +418,31 @@ HSMBarSensor<double> DataCollectorImplWrapper::CreateDoubleBarSensor(const std::
 	}
 }
 
+HSMRateSensor<int> DataCollectorImplWrapper::CreateIntRateSensor(const std::string& path, int period, const std::string& description) const
+{
+	try
+	{
+		return impl->CreateIntRateSensor(path, period, description);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+HSMRateSensor<double> DataCollectorImplWrapper::CreateDoubleRateSensor(const std::string& path, int period, const std::string& description) const
+{
+	try
+	{
+		return impl->CreateDoubleRateSensor(path, period, description);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+
 template<class T>
 std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<T>> DataCollectorImplWrapper::CreateNoParamsFuncSensor(const std::string& path, const std::string& description, 
 	std::function<T()> function, const std::chrono::milliseconds& interval)
@@ -618,6 +643,18 @@ DoubleBarSensor DataCollectorProxy::CreateDoubleBarSensor(const std::string& pat
 {
 	return impl_wrapper->CreateDoubleBarSensor(path, options);
 }
+
+IntRateSensor DataCollectorProxy::CreateIntRateSensor(const std::string& path, int period /*= 15000*/, const std::string& description /*= {}*/)
+{
+	return impl_wrapper->CreateIntRateSensor(path, period, description);
+}
+
+DoubleRateSensor DataCollectorProxy::CreateDoubleRateSensor(const std::string& path, int period /*= 15000*/, const std::string& description /*= {}*/)
+{
+	return impl_wrapper->CreateDoubleRateSensor(path, period, description);
+}
+
+
 
 #define InstantiateOneParamTemplates(X)\
 template shared_ptr<HSMNoParamsFuncSensorImplWrapper<X>> DataCollectorImpl::CreateNoParamsFuncSensor<X>\
