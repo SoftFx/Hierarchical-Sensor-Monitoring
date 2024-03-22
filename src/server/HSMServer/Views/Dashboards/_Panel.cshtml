@@ -54,6 +54,7 @@
         let ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
         let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
 
+        addPanelToStorage('@Model.Id', settings, ySettings);
         initMultyichartCordinates(settings, values, '@Model.Id').then(
             (data) => {
                 containerHeight = Math.max(containerHeight, data);

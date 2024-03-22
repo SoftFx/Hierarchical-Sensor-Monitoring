@@ -1,3 +1,7 @@
+export interface Dictionary<T> {
+    [Key: string]: T;
+}
+
 export interface Panel {
     id: string,
     sources: Source[],

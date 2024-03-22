@@ -1,8 +1,24 @@
 import { convertToGraphData } from "./plotting";
 import { Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot } from "./plots";
 import {Dashboard} from "../ts/dashboardT";
+import {Panel} from "../ts/dashboard.panel";
+import {DashboardStorage} from "../ts/dashboard.storage";
+import {Source} from "../ts/dashboard.source";
 
 const updateDashboardInterval = 120000; // 2min
+export const storage = new DashboardStorage();
+
+window.boardSetId = (id) => {
+    storage.setId(id);
+    console.log(storage);
+}; 
+
+window.addPanelToStorage = function (id, settings, rangeSettings) {
+    console.log(storage)
+    storage.panels[id] = new Panel(id, settings, rangeSettings);
+    console.log(storage)
+}
+
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();
@@ -100,10 +116,6 @@ export function Model(id, panelId, dashboardId, sensorId, range = undefined) {
     this.range = range;
 }
 
-export function Panel(){
-    
-}
-
 window.insertSourceHtml = function (data) {
     let sources = $('#sources');
 
@@ -199,7 +211,9 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
             Plotly.relayout(id, layoutUpdate)
         }
     );
-
+    
+    storage.panels[panelId].addSource(new Source(data.id, plot));
+    
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
     currentPanel[data.id].isTimeSpan = plot instanceof TimeSpanPlot;
 }

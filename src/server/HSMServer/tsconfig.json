@@ -3,10 +3,9 @@
     "outDir": "./wwwroot/dist",
     "noImplicitAny": true,
     "module": "es6",
-    "target": "es5",
+    "target": "es6",
     "allowJs": true,
     "checkJs": false,
-    "moduleResolution": "node",
-    "allowSyntheticDefaultImports": false
+    "sourceMap": true,
   }
 }
