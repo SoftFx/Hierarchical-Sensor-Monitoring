@@ -80,7 +80,7 @@ namespace HSMServer.Core.Cache
 
         private static bool TryBuildNumberToScheduleMigration(BaseSensorModel sensor, out SensorUpdate update)
         {
-            static bool IsTarget(Policy policy) => IsTargetPolicy(policy, _emaToScheduleSet) && policy.Schedule.RepeatMode == AlertRepeatMode.Immediately;
+            static bool IsTarget(Policy policy) => IsTargetPolicy(policy, _emaToScheduleSet) && !policy.UseScheduleManagerLogic;
 
             static PolicyUpdate Migration(PolicyUpdate update) => update with
             {

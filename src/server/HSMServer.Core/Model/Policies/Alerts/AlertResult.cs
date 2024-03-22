@@ -79,7 +79,7 @@ namespace HSMServer.Core.Model.Policies
             Icon = policy.Icon;
 
             IsStatusIsChangeResult = policy.Conditions.IsStatusChangeResult();
-            IsScheduleAlert = policy.Schedule.RepeatMode is not AlertRepeatMode.Immediately;
+            IsScheduleAlert = policy.UseScheduleManagerLogic;
             IsReplaceAlert = isReplace && IsScheduleAlert;
             IsValidAlert = Destination.HasChats && Template is not null;
 
