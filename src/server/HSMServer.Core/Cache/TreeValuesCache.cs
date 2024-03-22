@@ -1270,6 +1270,8 @@ namespace HSMServer.Core.Cache
 
                 SendNotification(ttl.GetNotification(timeout));
             }
+            else if (timeout)
+                sensor.Policies.TimeToLive.InitLastTtlTime(); // setup last time for schedule logic
 
             SensorUpdateView(sensor);
         }

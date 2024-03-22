@@ -86,6 +86,11 @@ namespace HSMServer.Core.Model.Policies
             return timeout ? PolicyResult : Ok;
         }
 
+        internal void InitLastTtlTime()
+        {
+            _lastTTLNotificationTime ??= DateTime.UtcNow;
+        }
+
 
         public override string ToString()
         {
