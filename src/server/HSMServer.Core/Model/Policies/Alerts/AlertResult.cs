@@ -5,7 +5,15 @@ using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public sealed record AlertDestination(bool AllChats, HashSet<Guid> Chats);
+    public sealed record AlertDestination
+    {
+        public bool AllChats { get; init; }
+
+        public HashSet<Guid> Chats { get; init; }
+
+
+        internal bool HasChats => AllChats || Chats.Count > 0;
+    }
 
 
     public sealed record AlertResult
@@ -38,6 +46,8 @@ namespace HSMServer.Core.Model.Policies
 
         public bool IsReplaceAlert { get; }
 
+        public bool IsValidAlert { get; }
+
 
         public AlertState LastState { get; private set; }
 
@@ -51,7 +61,11 @@ namespace HSMServer.Core.Model.Policies
 
         internal AlertResult(Policy policy, bool isReplace = false)
         {
-            Destination = new(policy.Destination.AllChats, new HashSet<Guid>(policy.Destination.Chats.Keys));
+            Destination = new()
+            {
+                AllChats = policy.Destination.AllChats,
+                Chats = new HashSet<Guid>(policy.Destination.Chats.Keys)
+            };
 
             ConfirmationPeriod = policy.ConfirmationPeriod;
             SendTime = policy.Schedule.GetSendTime();
@@ -67,6 +81,7 @@ namespace HSMServer.Core.Model.Policies
             IsStatusIsChangeResult = policy.Conditions.IsStatusChangeResult();
             IsScheduleAlert = policy.UseScheduleManagerLogic;
             IsReplaceAlert = isReplace && IsScheduleAlert;
+            IsValidAlert = Destination.HasChats && Template is not null;
 
             AddPolicyResult(policy);
         }

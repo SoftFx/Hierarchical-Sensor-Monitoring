@@ -570,7 +570,16 @@ namespace HSMServer.Controllers
         private string GetCollectorKeyName()
         {
             if (HttpContext.Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var keyVal))
-                return _cache.GetAccessKey(Guid.Parse(keyVal))?.DisplayName;
+            {
+                if (Guid.TryParse(keyVal, out var key))
+                {
+                    var keyModel = _cache.GetAccessKey(key);
+
+                    return keyModel is null ? throw new Exception($"Current key doesn't exists: {key}") : keyModel.DisplayName;
+                }
+                else
+                    throw new Exception($"Invalid key: {keyVal}");
+            }
             else
                 throw new Exception("Key is required");
         }

@@ -31,7 +31,9 @@ namespace HSMServer.Core.Confirmation
                 {
                     var alert = newAlerts[alertId];
 
-                    if (alert.ConfirmationPeriod is not null)
+                    if (!alert.IsValidAlert)
+                        newAlerts.Remove(alertId);
+                    else if (alert.ConfirmationPeriod is not null)
                     {
                         branch[alertId].Enqueue(alert, DateTime.UtcNow);
                         newAlerts.Remove(alertId);
@@ -41,7 +43,7 @@ namespace HSMServer.Core.Confirmation
                     }
                 }
 
-                SendAlertMessage(sensorId, [..newAlerts.Values]);
+                SendAlertMessage(sensorId, [.. newAlerts.Values]);
             }
             catch (Exception ex)
             {

@@ -661,8 +661,8 @@ namespace HSMServer.Controllers
             ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(sensor))
             : _emptyResult;
 
-        public IActionResult AddAlertAction(Guid entityId) => TryGetSelectedNode(entityId, out var entity)
-            ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity))
+        public IActionResult AddAlertAction(Guid entityId, bool isMain) => TryGetSelectedNode(entityId, out var entity)
+            ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, entity))
             : _emptyResult;
 
         public IActionResult GetOperation(Guid sensorId, AlertProperty property)
