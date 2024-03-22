@@ -20,7 +20,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.Core.Cache
@@ -835,14 +834,8 @@ namespace HSMServer.Core.Cache
         {
             _logger.Info($"{nameof(TreeValuesCache)} is initializing");
 
-            var policies = RequestPolicies();
-
-            var productEntities = RequestProducts();
-            ApplyProducts(productEntities);
-
-            var sensorEntities = RequestSensors();
-
-            ApplySensors(productEntities, sensorEntities, policies);
+            ApplyProducts(RequestProducts());
+            ApplySensors(RequestSensors(), RequestPolicies());
 
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _database.GetAccessKeys();
@@ -930,11 +923,10 @@ namespace HSMServer.Core.Cache
             _logger.Info("Links between products are built");
         }
 
-        private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities,
-            Dictionary<string, PolicyEntity> policies)
+        private void ApplySensors(List<SensorEntity> sensorEntities, Dictionary<string, PolicyEntity> policies)
         {
             _logger.Info($"{nameof(sensorEntities)} are applying");
-            ApplySensors(sensorEntities, policies);
+            BuildAndSubscribeSensors(sensorEntities, policies);
             _logger.Info($"{nameof(sensorEntities)} applied");
 
             _logger.Info("Links between products and their sensors are building");
@@ -956,7 +948,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(FillSensorsData)} is finished");
         }
 
-        private void ApplySensors(List<SensorEntity> entities, Dictionary<string, PolicyEntity> policies)
+        private void BuildAndSubscribeSensors(List<SensorEntity> entities, Dictionary<string, PolicyEntity> policies)
         {
             foreach (var entity in entities)
             {
