@@ -72,7 +72,7 @@
 
                 if (action.ScheduleRepeatMode is not null)
                 {
-                    schedule.Append($" scheduled every {action.ScheduleRepeatMode.GetDisplayName()}");
+                    schedule.Append($" scheduled every <b>{action.ScheduleRepeatMode.GetDisplayName()}</b>");
                     if (!Model.Conditions.Any(c => c.Property == AlertProperty.TimeToLive))
                     {
                         if (action.ScheduleStartTime.HasValue && action.ScheduleStartTime.Value > DateTime.UtcNow)
