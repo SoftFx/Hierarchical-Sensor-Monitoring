@@ -149,6 +149,8 @@ namespace HSMServer.Model.DataAlerts
 
         protected virtual string DefaultIcon { get; }
 
+        protected virtual bool IsTtl { get; } = false;
+
 
         protected DataAlertViewModel(Policy policy, NodeViewModel node)
         {
@@ -158,7 +160,7 @@ namespace HSMServer.Model.DataAlerts
             IsDisabled = policy.IsDisabled;
 
             if (!string.IsNullOrEmpty(policy.Template))
-                Actions.Add(new ActionViewModel(IsActionMain, node)
+                Actions.Add(new ActionViewModel(IsActionMain, IsTtl, node)
                 {
                     Action = ActionType.SendNotification,
                     Comment = policy.Template,
@@ -172,10 +174,10 @@ namespace HSMServer.Model.DataAlerts
                 });
 
             if (!string.IsNullOrEmpty(policy.Icon))
-                Actions.Add(new ActionViewModel(IsActionMain, node) { Action = ActionType.ShowIcon, Icon = policy.Icon });
+                Actions.Add(new ActionViewModel(IsActionMain, IsTtl, node) { Action = ActionType.ShowIcon, Icon = policy.Icon });
 
             if (policy.Status == Core.Model.SensorStatus.Error)
-                Actions.Add(new ActionViewModel(IsActionMain, node) { Action = ActionType.SetStatus });
+                Actions.Add(new ActionViewModel(IsActionMain, IsTtl, node) { Action = ActionType.SetStatus });
         }
 
         public DataAlertViewModel(NodeViewModel node)
@@ -185,8 +187,8 @@ namespace HSMServer.Model.DataAlerts
 
             Conditions.Add(CreateCondition(true));
 
-            Actions.Add(new ActionViewModel(true, node) { Comment = DefaultCommentTemplate });
-            Actions.Add(new ActionViewModel(false, node) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
+            Actions.Add(new ActionViewModel(true, IsTtl, node) { Comment = DefaultCommentTemplate });
+            Actions.Add(new ActionViewModel(false, IsTtl, node) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
         }
 
 

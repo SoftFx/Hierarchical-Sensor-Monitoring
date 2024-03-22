@@ -662,7 +662,7 @@ namespace HSMServer.Controllers
             : _emptyResult;
 
         public IActionResult AddAlertAction(Guid entityId, bool isMain) => TryGetSelectedNode(entityId, out var entity)
-            ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, entity))
+            ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, false, entity))
             : _emptyResult;
 
         public IActionResult GetOperation(Guid sensorId, AlertProperty property)
