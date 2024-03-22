@@ -371,4 +371,11 @@ namespace hsm_wrapper
 		std::vector<HSMBarAlertTemplate> alerts;
 	};
 
+	class HSMWRAPPER_API HSMRateSensorOptions : public HSMBaseSensorOptions
+	{
+	public:
+		std::chrono::milliseconds post_data_period;
+		std::vector<HSMInstantAlertTemplate> alerts;
+	};
+
 }

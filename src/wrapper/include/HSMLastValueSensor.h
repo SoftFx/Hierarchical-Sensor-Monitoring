@@ -30,8 +30,6 @@ namespace hsm_wrapper
 	};
 
 
-
-
 	using BoolLastValueSensor = HSMLastValueSensor<bool>;
 	using IntLastValueSensor = HSMLastValueSensor<int>;
 	using DoubleLastValueSensor = HSMLastValueSensor<double>;

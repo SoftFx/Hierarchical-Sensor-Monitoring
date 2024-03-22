@@ -239,6 +239,18 @@ namespace {
 
 		return hsm_options;
 	}
+
+	HSMDataCollector::Options::RateSensorOptions^ ConvertRateOptions(const hsm_wrapper::HSMRateSensorOptions& options)
+	{
+		auto hsm_options = gcnew HSMDataCollector::Options::RateSensorOptions();
+
+		ConvertsBaseOptions(hsm_options, options);
+
+		hsm_options->PostDataPeriod = ToTimespan(options.post_data_period);
+		hsm_options->Alerts = ConvertAlerts<InstantAlertTemplate>(options.alerts);
+
+		return hsm_options;
+	}
 }
 
 HSMSensor<bool> DataCollectorImpl::CreateBoolSensor(const std::string& path, const std::string& description)
@@ -335,6 +347,34 @@ HSMBarSensor<double> DataCollectorImpl::CreateDoubleBarSensor(const std::string&
 {
 	auto double_bar_sensor = data_collector->CreateDoubleBarSensor(gcnew String(path.c_str()), ConvertBarOptions(options));
 	return HSMBarSensor<double>{std::make_shared<HSMBarSensorImpl<double>>(double_bar_sensor)};
+}
+
+HSMRateSensor<int> DataCollectorImpl::CreateIntRateSensor(const std::string& path, int period /*= 60000*/, const std::string& description /*= ""*/)
+{
+	RateSensorOptions^ options = gcnew RateSensorOptions();
+	options->PostDataPeriod = ToTimespan(chrono::milliseconds(period));
+	auto int_rate_sensor = data_collector->CreateRateSensor(gcnew String(path.c_str()), options);
+	return HSMRateSensor<int>{std::make_shared<HSMRateSensorImpl<int>>(int_rate_sensor)};
+}
+
+hsm_wrapper::HSMRateSensor<int> DataCollectorImpl::CreateIntRateSensor(const std::string& path, const HSMRateSensorOptions& options)
+{
+	auto int_rate_sensor = data_collector->CreateRateSensor(gcnew String(path.c_str()), ConvertRateOptions(options));
+	return HSMRateSensor<int>{std::make_shared<HSMRateSensorImpl<int>>(int_rate_sensor)};
+}
+
+HSMRateSensor<double> DataCollectorImpl::CreateDoubleRateSensor(const std::string& path, int period /*= 60000*/, const std::string& description /*= ""*/)
+{
+	RateSensorOptions^ options = gcnew RateSensorOptions();
+	options->PostDataPeriod = ToTimespan(chrono::milliseconds(period));
+	auto double_rate_sensor = data_collector->CreateRateSensor(gcnew String(path.c_str()), options);
+	return HSMRateSensor<double>{std::make_shared<HSMRateSensorImpl<double>>(double_rate_sensor)};
+}
+
+hsm_wrapper::HSMRateSensor<double> DataCollectorImpl::CreateDoubleRateSensor(const std::string& path, const HSMRateSensorOptions& options)
+{
+	auto double_rate_sensor = data_collector->CreateRateSensor(gcnew String(path.c_str()), ConvertRateOptions(options));
+	return HSMRateSensor<double>{std::make_shared<HSMRateSensorImpl<double>>(double_rate_sensor)};
 }
 
 
