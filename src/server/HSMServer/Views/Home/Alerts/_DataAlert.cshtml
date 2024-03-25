@@ -72,9 +72,14 @@
 
                 if (action.ScheduleRepeatMode is not null)
                 {
-                    schedule.Append($" scheduled every {action.ScheduleRepeatMode.GetDisplayName()} starting at {action.ScheduleStartTime?.ToDefaultFormat()}");
-                    if (action.ScheduleInstantSend)
-                        schedule.Append(" and instant send");
+                    schedule.Append($" scheduled every <b>{action.ScheduleRepeatMode.GetDisplayName()}</b>");
+                    if (!Model.Conditions.Any(c => c.Property == AlertProperty.TimeToLive))
+                    {
+                        if (action.ScheduleStartTime.HasValue && action.ScheduleStartTime.Value > DateTime.UtcNow)
+                            schedule.Append($" starting at {action.ScheduleStartTime?.ToDefaultFormat()}");
+                        if (action.ScheduleInstantSend)
+                            schedule.Append(" and instant send");
+                    }
                 }
 
                 actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: {color};'>{chats}</span>{schedule}"));
@@ -137,7 +142,7 @@
                 }
             </div>
 
-            <div class="d-flex flex-row align-items-center alert-blocks-group fullAction">
+            <div class="d-flex flex-row align-items-center alert-blocks-group fullAction @(Model.IsTtl ? "ttlAction" : string.Empty)">
                 <div class="alert-text-block alert-add">then</div>
 
                 <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center">
@@ -187,9 +192,10 @@
             let element = $(this).parents("div.fullAction:first");
             let actionsBlock = element.find($(`div[name='actionsBlock']`));
             let isMainAction = actionsBlock.find($(`div[name='alertAction']`)).length == 0;
+            let isTtlAlert = element.hasClass("ttlAction");
 
             $.ajax({
-                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?entityId=@Model.EntityId&isMain=${isMainAction}`,
+                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?entityId=@Model.EntityId&isMain=${isMainAction}&isTtl=${isTtlAlert}`,
                 cache: false
             }).done(function (viewData) {
                 actionsBlock.append(viewData);

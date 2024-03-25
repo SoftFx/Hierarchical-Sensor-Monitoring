@@ -64,14 +64,17 @@
             <div class="alert-text-block operation-select">scheduled every</div>
             <select class="alert-block alert-select target-input" asp-for="ScheduleRepeatMode" asp-items="Enum.GetValues<ScheduleRepeatMode>().ToSelectedItems(k => k.GetDisplayName())"></select>
 
-            <div class="alert-text-block operation-select">starting at</div>
-            <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
+            @if (!Model.IsTtl)
+            {
+                <div class="alert-text-block operation-select">starting at</div>
+                <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
 
-            <div class="alert-text-block operation-select">
-                and instant send
-                <i class='fas fa-question-circle' title='If the option is checked, the first alert message is sent immediately. And then at the end of scheduled period, the remaining alert messages will be sent, agregated into one message.'></i>
-            </div>
-            <input class="form-check-input target-check" type="checkbox" asp-for="ScheduleInstantSend">
+                <div class="alert-text-block operation-select">
+                    and instant send
+                    <i class='fas fa-question-circle' title='If the option is checked, the first alert message is sent immediately. And then at the end of scheduled period, the remaining alert messages will be sent, agregated into one message.'></i>
+                </div>
+                <input class="form-check-input target-check" type="checkbox" asp-for="ScheduleInstantSend">
+            }
         </div>
     </div>
 

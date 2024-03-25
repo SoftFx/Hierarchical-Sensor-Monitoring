@@ -1046,6 +1046,7 @@ namespace HSMServer.Core.Cache
                 Id = Guid.NewGuid().ToString(),
                 DisplayName = request.PathParts[^1],
                 Type = (byte)type,
+                CreationDate = DateTime.UtcNow.Ticks,
             };
 
             var sensor = SensorModelFactory.Build(entity);
