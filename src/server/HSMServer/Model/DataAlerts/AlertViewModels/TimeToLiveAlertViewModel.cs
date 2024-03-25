@@ -12,7 +12,7 @@ namespace HSMServer.Model.DataAlerts
 
         protected override string DefaultIcon { get; } = TTLPolicy.DefaultIcon;
 
-        protected override bool IsTtl { get; } = true;
+        public override bool IsTtl { get; } = true;
 
 
         public TimeToLiveAlertViewModel(NodeViewModel node) : base(node)

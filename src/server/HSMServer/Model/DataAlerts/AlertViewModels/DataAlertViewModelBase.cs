@@ -26,6 +26,8 @@ namespace HSMServer.Model.DataAlerts
 
         public bool IsModify { get; protected set; }
 
+        public virtual bool IsTtl { get; } = false;
+
 
         internal bool IsAlertDisplayed
         {
@@ -148,8 +150,6 @@ namespace HSMServer.Model.DataAlerts
         protected virtual string DefaultCommentTemplate { get; } = "[$product]$path $operation $target";
 
         protected virtual string DefaultIcon { get; }
-
-        protected virtual bool IsTtl { get; } = false;
 
 
         protected DataAlertViewModel(Policy policy, NodeViewModel node)
