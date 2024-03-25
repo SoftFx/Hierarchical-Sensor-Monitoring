@@ -1,5 +1,5 @@
-import { convertToGraphData } from "./plotting";
-import { Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot } from "./plots";
+import {convertToGraphData} from "./plotting";
+import {Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot} from "./plots";
 import {Dashboard} from "../ts/dashboardT";
 
 const updateDashboardInterval = 120000; // 2min
@@ -100,8 +100,8 @@ export function Model(id, panelId, dashboardId, sensorId, range = undefined) {
     this.range = range;
 }
 
-export function Panel(){
-    
+export function Panel() {
+
 }
 
 window.insertSourceHtml = function (data) {
@@ -119,7 +119,7 @@ window.insertSourceHtml = function (data) {
     });
 }
 
-function checkForYRange(plot){
+function checkForYRange(plot) {
     if ($('#multichart').length !== 0 &&
         plot instanceof ErrorColorPlot &&
         !(plot instanceof TimeSpanPlot))
@@ -132,7 +132,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)
-    
+
     let layoutUpdate = {
         'xaxis.visible': true,
         'xaxis.type': 'date',
@@ -143,7 +143,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
         'yaxis.title.font.size': 14,
         'yaxis.title.font.color': '#7f7f7f',
     }
-    
+
     if (plot.autoscaleY !== true && plot.autoscaleY !== undefined)
         layoutUpdate['yaxis.range'] = plot.autoscaleY;
 
@@ -323,7 +323,7 @@ window.initDashboard = function () {
             })
         }
     }
-    
+
     Dashboard.initRequests(dict);
 }
 
@@ -346,10 +346,10 @@ function addDraggable(interactable) {
             }),
             interact.modifiers.snap({
                 targets: [
-                    interact.snappers.grid({ x: 5, y: 5 })
+                    interact.snappers.grid({x: 5, y: 5})
                 ],
                 range: Infinity,
-                relativePoints: [{ x: 0, y: 0 }]
+                relativePoints: [{x: 0, y: 0}]
             }),
         ],
         autoScroll: true,
@@ -362,7 +362,7 @@ function addDraggable(interactable) {
 
 function addResizable(interactable) {
     interactable.resizable({
-        edges: { left: true, right: true, bottom: true, top: true },
+        edges: {left: true, right: true, bottom: true, top: true},
 
         listeners: {
             move(event) {
@@ -400,7 +400,7 @@ function addResizable(interactable) {
             }),
 
             interact.modifiers.restrictSize({
-                min: { width: 50, height: 100 }
+                min: {width: 50, height: 100}
             })
         ],
     })
@@ -460,73 +460,73 @@ window.initMultyichartCordinates = function (settings, values, id) {
 
 window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false, yaxisRange = true) {
     return Plotly.newPlot(chartId, [], {
-        hovermode: 'closest',
-        hoverdistance: 1,
-        dragmode: 'zoom',
-        autosize: true,
-        height: height,
-        margin: {
-            autoexpand: true,
-            l: 30,
-            r: 30,
-            t: 30,
-            b: 40,
-        },
-        showlegend: showlegend,
-        legend: {
-            y: 0,
-            x: 0,
-            orientation: "h",
-            yanchor: "bottom",
-            yref: "container",
-        },
-        xaxis: {
-            type: 'date',
-            autorange: autorange,
-            automargin: true,
-            range: getRangeDate(),
-            title: {
-                //text: 'Time',
-                font: {
-                    family: 'Courier New, monospace',
-                    size: 18,
-                    color: '#7f7f7f'
+            hovermode: 'closest',
+            hoverdistance: 1,
+            dragmode: 'zoom',
+            autosize: true,
+            height: height,
+            margin: {
+                autoexpand: true,
+                l: 30,
+                r: 30,
+                t: 30,
+                b: 40,
+            },
+            showlegend: showlegend,
+            legend: {
+                y: 0,
+                x: 0,
+                orientation: "h",
+                yanchor: "bottom",
+                yref: "container",
+            },
+            xaxis: {
+                type: 'date',
+                autorange: autorange,
+                automargin: true,
+                range: getRangeDate(),
+                title: {
+                    //text: 'Time',
+                    font: {
+                        family: 'Courier New, monospace',
+                        size: 18,
+                        color: '#7f7f7f'
+                    }
+                },
+                visible: false,
+                rangeslider: {
+                    visible: false
                 }
             },
-            visible: false,
-            rangeslider: {
-                visible: false
+            yaxis: {
+                visible: false,
+                automargin: 'width+right'
             }
         },
-        yaxis: {
-            visible: false,
-            automargin: 'width+right'
-        }
-    },
-    {
-        responsive: true,
-        displaylogo: false,
-        modeBarButtonsToRemove: [
-            'pan',
-            'lasso2d',
-            'pan2d',
-            'select2d',
-            'autoScale2d',
-            'autoScale2d',
-            'resetScale2d'
-        ],
-        modeBarButtonsToAdd: [
         {
-            name: 'resetaxes',
-            _cat: 'resetscale',
-            title: 'Reset axes',
-            attr: 'zoom',
-            val: 'reset',
-            icon: Plotly.Icons.home,
-            click: (plot) => customReset(plot, getRangeDate(), yaxisRange)
-        }],
-        doubleClick: autorange ? 'reset+autosize' : autorange
-    });
+            responsive: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: [
+                'pan',
+                'lasso2d',
+                'pan2d',
+                'select2d',
+                'autoScale2d',
+                'autoScale2d',
+                'resetScale2d'
+            ],
+            modeBarButtonsToAdd: [
+                {
+                    name: 'resetaxes',
+                    _cat: 'resetscale',
+                    title: 'Reset axes',
+                    attr: 'zoom',
+                    val: 'reset',
+                    icon: Plotly.Icons.home,
+                    click: (plot) => $(plot).trigger('plotly_doubleclick')
+                }],
+            doubleClick: autorange ? 'reset+autosize' : autorange
+        });
 }
 
 function showEventInfo(event) {
