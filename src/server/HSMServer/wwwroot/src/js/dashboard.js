@@ -100,10 +100,6 @@ export function Model(id, panelId, dashboardId, sensorId, range = undefined) {
     this.range = range;
 }
 
-export function Panel() {
-
-}
-
 window.insertSourceHtml = function (data) {
     let sources = $('#sources');
 
