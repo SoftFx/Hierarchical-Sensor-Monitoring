@@ -3,6 +3,7 @@
 #include "DataCollector.h"
 #include "HSMSensorImpl.h"
 #include "HSMBarSensorImpl.h"
+#include "HSMRateSensorImpl.h"
 #include "HSMLastValueSensorImpl.h"
 #include "HSMBaseParamsFuncSensor.h"
 #include "HSMBaseNoParamsFuncSensor.h"
@@ -52,6 +53,10 @@ namespace hsm_wrapper
 		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options);
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options);
+		HSMRateSensor<int> CreateIntRateSensor(const std::string& path, int period = 60000, const std::string& description = "");
+		HSMRateSensor<int> CreateIntRateSensor(const std::string& path, const HSMRateSensorOptions& options);
+		HSMRateSensor<double> CreateDoubleRateSensor(const std::string& path, int period = 60000, const std::string& description = "");
+		HSMRateSensor<double> CreateDoubleRateSensor(const std::string& path, const HSMRateSensorOptions& options);
 
 		HSMLastValueSensor<bool> CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description = "");
 		HSMLastValueSensor<int> CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description = "");

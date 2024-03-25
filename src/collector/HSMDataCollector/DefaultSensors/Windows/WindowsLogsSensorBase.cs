@@ -26,7 +26,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         {
             _eventLog = new EventLog(Category, Environment.MachineName);
 
-            _eventLogWatcher = new EventLogWatcher(new EventLogQuery(Category, PathType.LogName, $"*[{Category}[({GetCurrentLogLevel()})]]"))
+            _eventLogWatcher = new EventLogWatcher(new EventLogQuery(Category, PathType.LogName, $"*[System[({GetCurrentLogLevel()})]]"))
             {
                 Enabled = true,
             };

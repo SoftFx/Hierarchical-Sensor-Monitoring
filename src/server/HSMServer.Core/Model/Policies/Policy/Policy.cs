@@ -58,6 +58,9 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
+        internal virtual bool UseScheduleManagerLogic => Schedule.IsActive;
+
+
         public Policy()
         {
             Id = Guid.NewGuid();
@@ -225,13 +228,15 @@ namespace HSMServer.Core.Model.Policies
             var actions = new List<string>();
 
             if (!string.IsNullOrEmpty(Template))
+            {
                 actions.Add($"template={Template}");
 
-            if (Destination is not null)
-                actions.Add(Destination.ToString());
+                if (Destination is not null)
+                    actions.Add(Destination.ToString());
 
-            if (Schedule is not null)
-                actions.Add(Schedule.ToString());
+                if (Schedule is not null)
+                    actions.Add(Schedule.ToString());
+            }
 
             if (!string.IsNullOrEmpty(Icon))
                 actions.Add($"show icon={Icon}");

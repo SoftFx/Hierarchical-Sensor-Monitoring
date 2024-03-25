@@ -146,7 +146,7 @@ namespace HSMServer.Core.Model
 
                 return value switch
                 {
-                    SensorState state => state is SensorState.Muted ? $"{state.ToString()} until {(update.EndOfMutingPeriod ?? oldModel.EndOfMuting)?.ToDefaultFormat()}" : state.ToString(),
+                    SensorState state => state is SensorState.Muted ? $"{state} until {(update.EndOfMutingPeriod ?? oldModel.EndOfMuting)?.ToDefaultFormat()}" : state.ToString(),
                     _ => value.ToString()
                 };
             }

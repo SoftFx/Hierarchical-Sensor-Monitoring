@@ -892,14 +892,8 @@ namespace HSMServer.Core.Cache
         {
             _logger.Info($"{nameof(TreeValuesCache)} is initializing");
 
-            var policies = RequestPolicies();
-
-            var productEntities = RequestProducts();
-            ApplyProducts(productEntities);
-
-            var sensorEntities = RequestSensors();
-
-            ApplySensors(productEntities, sensorEntities, policies);
+            ApplyProducts(RequestProducts());
+            ApplySensors(RequestSensors(), RequestPolicies());
 
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _database.GetAccessKeys();
@@ -987,11 +981,10 @@ namespace HSMServer.Core.Cache
             _logger.Info("Links between products are built");
         }
 
-        private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities,
-            Dictionary<string, PolicyEntity> policies)
+        private void ApplySensors(List<SensorEntity> sensorEntities, Dictionary<string, PolicyEntity> policies)
         {
             _logger.Info($"{nameof(sensorEntities)} are applying");
-            ApplySensors(sensorEntities, policies);
+            BuildAndSubscribeSensors(sensorEntities, policies);
             _logger.Info($"{nameof(sensorEntities)} applied");
 
             _logger.Info("Links between products and their sensors are building");
@@ -1013,7 +1006,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(FillSensorsData)} is finished");
         }
 
-        private void ApplySensors(List<SensorEntity> entities, Dictionary<string, PolicyEntity> policies)
+        private void BuildAndSubscribeSensors(List<SensorEntity> entities, Dictionary<string, PolicyEntity> policies)
         {
             foreach (var entity in entities)
             {
@@ -1111,6 +1104,7 @@ namespace HSMServer.Core.Cache
                 Id = Guid.NewGuid().ToString(),
                 DisplayName = request.PathParts[^1],
                 Type = (byte)type,
+                CreationDate = DateTime.UtcNow.Ticks,
             };
 
             var sensor = SensorModelFactory.Build(entity);
@@ -1305,7 +1299,7 @@ namespace HSMServer.Core.Cache
             _scheduleManager.FlushMessages();
 
             foreach (var sensor in GetSensors())
-                sensor.CheckTimeout();
+                CheckSensorTimeout(sensor);
 
             foreach (var key in GetAccessKeys())
                 if (key.IsExpired && key.State < KeyState.Expired)
@@ -1314,6 +1308,16 @@ namespace HSMServer.Core.Cache
             foreach (var sensor in GetSensors())
                 if (sensor.EndOfMuting <= DateTime.UtcNow)
                     UpdateMutedSensorState(sensor.Id, InitiatorInfo.System);
+        }
+
+        void CheckSensorTimeout(BaseSensorModel sensor)
+        {
+            sensor.CheckTimeout();
+
+            var ttl = sensor.Policies.TimeToLive;
+
+            if (ttl.ResendNotification())
+                SendNotification(ttl.GetNotification(true));
         }
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
@@ -1333,8 +1337,10 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                SendNotification(timeout ? ttl.PolicyResult : ttl.Ok);
+                SendNotification(ttl.GetNotification(timeout));
             }
+            else if (timeout)
+                sensor.Policies.TimeToLive.InitLastTtlTime(); // setup last time for schedule logic
 
             SensorUpdateView(sensor);
         }

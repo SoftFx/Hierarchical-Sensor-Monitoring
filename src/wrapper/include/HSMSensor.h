@@ -29,9 +29,6 @@ namespace hsm_wrapper
 		std::shared_ptr<HSMSensorImpl<T>> impl;
 	};
 
-
-
-
 	using BoolSensor = HSMSensor<bool>;
 	using IntSensor = HSMSensor<int>;
 	using DoubleSensor = HSMSensor<double>;

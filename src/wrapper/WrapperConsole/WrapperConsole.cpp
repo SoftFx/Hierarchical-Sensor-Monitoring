@@ -15,12 +15,12 @@ int main()
 
 	collector.Initialize("", true);
 	//collector.InitializeAllDisksMonitoring();
-	collector.InitializeOsMonitoring();
-	collector.InitializeNetworkMonitoring();
-	collector.InitializeSystemMonitoring();
-	collector.InitializeCollectorMonitoring();
-	collector.InitializeProcessMonitoring();
-	collector.InitializeQueueDiagnostic();
+// 	collector.InitializeOsMonitoring();
+// 	collector.InitializeNetworkMonitoring();
+// 	collector.InitializeSystemMonitoring();
+// 	collector.InitializeCollectorMonitoring();
+// 	collector.InitializeProcessMonitoring();
+// 	collector.InitializeQueueDiagnostic();
 
 #define USE_ASYNC 1
 
@@ -37,17 +37,23 @@ int main()
 
 	auto intsensor = collector.CreateIntSensor("TestInt");
 
+	auto intratesensor = collector.CreateIntRateSensor("TestRateInt", 1000);
+
 	intsensor.AddValue(1);
 
-	std::cin >> a;
+	for (int i = 0; i < 50; i++)
+	{
+		intratesensor.AddValue(i);
+		std::cout << ".";
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
 
-	intsensor.AddValue(a);
+	std::cout << "OK.\n";
 
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 
 	intsensor.AddValue(0);
-
-	std::this_thread::sleep_for(std::chrono::seconds(1));
+	std::cout << "Done.\n";
 
 #ifdef USE_ASYNC
     collector.StopAsync();
