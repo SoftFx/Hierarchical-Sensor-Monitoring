@@ -4,7 +4,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class TimeToLiveConditionViewModel : ConditionViewModel
     {
-        protected override List<AlertProperty> Properties { get; } = new() { AlertProperty.TimeToLive };
+        protected override List<AlertProperty> Properties { get; } = [AlertProperty.TimeToLive];
 
 
         public TimeToLiveConditionViewModel(bool isMain = true) : base(isMain) { }

@@ -77,10 +77,13 @@ namespace HSMServer.Model.DataAlerts
 
         public bool IsMain { get; }
 
+        public bool IsTtl { get; }
 
-        public ActionViewModel(bool isMain, NodeViewModel node)
+
+        public ActionViewModel(bool isMain, bool isTtl, NodeViewModel node)
         {
             IsMain = isMain;
+            IsTtl = isTtl;
             Actions = _actions.ToSelectedItems(k => k.Value, v => v.Key.ToString());
             Node = node;
 

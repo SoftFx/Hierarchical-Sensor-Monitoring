@@ -50,9 +50,9 @@
 
 <script>
     $(document).ready(function () {
-        let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
-        let ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
-        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
+        const settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
+        const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
+        const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
 
         initMultyichartCordinates(settings, values, '@Model.Id').then(
             (data) => {
@@ -90,4 +90,5 @@
             (error) => showToast(error)
         )
     })
+
 </script>

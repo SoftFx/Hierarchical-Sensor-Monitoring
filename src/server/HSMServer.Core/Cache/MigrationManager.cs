@@ -34,16 +34,33 @@ namespace HSMServer.Core.Cache
         internal static IEnumerable<SensorUpdate> GetMigrationUpdates(List<BaseSensorModel> sensors)
         {
             foreach (var sensor in sensors)
-                if (IsDefaultSensor(sensor) && IsNumberSensor(sensor.Type))
+                if (IsDefaultSensor(sensor))
                 {
-                    if (TryBuildNumberToEmaMigration(sensor, out var update))
-                        yield return update;
+                    if (IsNumberSensor(sensor.Type))
+                    {
+                        if (TryBuildNumberToEmaMigration(sensor, out var update))
+                            yield return update;
 
-                    if (TryBuildNumberToScheduleMigration(sensor, out update))
-                        yield return update;
+                        if (TryBuildNumberToScheduleMigration(sensor, out update))
+                            yield return update;
+
+                    }
+
+                    if (IsBoolSensor(sensor.Type) && TryMigrateServiceAliveTtlToSchedule(sensor, out var updateTtl))
+                        yield return updateTtl;
                 }
         }
 
+
+        private static bool TryMigrateServiceAliveTtlToSchedule(BaseSensorModel sensor, out SensorUpdate update)
+        {
+            bool IsTarget(Policy policy) => sensor.DisplayName == "Service alive" && !policy.Schedule.IsActive;
+
+            static PolicyUpdate Migration(PolicyUpdate update) =>
+                update with { Schedule = GetDefaultScheduleUpdate() };
+
+            return TryMigrateTtlPolicy(sensor, IsTarget, Migration, out update);
+        }
 
         private static bool TryBuildNumberToEmaMigration(BaseSensorModel sensor, out SensorUpdate update)
         {
@@ -80,17 +97,10 @@ namespace HSMServer.Core.Cache
 
         private static bool TryBuildNumberToScheduleMigration(BaseSensorModel sensor, out SensorUpdate update)
         {
-            static bool IsTarget(Policy policy) => IsTargetPolicy(policy, _emaToScheduleSet) && policy.Schedule.RepeatMode == AlertRepeatMode.Immediately;
+            static bool IsTarget(Policy policy) => IsTargetPolicy(policy, _emaToScheduleSet) && !policy.UseScheduleManagerLogic;
 
-            static PolicyUpdate Migration(PolicyUpdate update) => update with
-            {
-                Schedule = new PolicyScheduleUpdate
-                {
-                    RepeatMode = AlertRepeatMode.Hourly,
-                    Time = new DateTime(1, 1, 1, 12, 0, 0, DateTimeKind.Utc),
-                    InstantSend = true,
-                }
-            };
+            static PolicyUpdate Migration(PolicyUpdate update) =>
+                update with { Schedule = GetDefaultScheduleUpdate() };
 
             return TryMigratePolicy(sensor, IsTarget, Migration, out update);
         }
@@ -128,6 +138,21 @@ namespace HSMServer.Core.Cache
             return true;
         }
 
+        private static bool TryMigrateTtlPolicy(BaseSensorModel sensor, Predicate<Policy> isTarget, Func<PolicyUpdate, PolicyUpdate> migrator, out SensorUpdate sensorUpdate)
+        {
+            var ttl = sensor.Policies.TimeToLive;
+            var needMigration = isTarget(ttl);
+
+            sensorUpdate = !needMigration ? null : new SensorUpdate()
+            {
+                Id = sensor.Id,
+                TTLPolicy = migrator(ToUpdate(ttl)),
+                Initiator = _migrator,
+            };
+
+            return needMigration;
+        }
+
         private static bool IsTargetPolicy(Policy policy, HashSet<PolicyProperty> targetProperties)
         {
             if (policy.Conditions.Count == 1)
@@ -149,6 +174,8 @@ namespace HSMServer.Core.Cache
 
 
         private static bool IsNumberSensor(SensorType type) => type.IsBar() || type is SensorType.Integer or SensorType.Double or SensorType.Rate;
+
+        private static bool IsBoolSensor(SensorType type) => type is SensorType.Boolean;
 
 
         private static PolicyUpdate ToUpdate(Policy policy) =>
@@ -186,5 +213,13 @@ namespace HSMServer.Core.Cache
                 Target = condition.Target,
                 Property = condition.Property
             };
+
+
+        private static PolicyScheduleUpdate GetDefaultScheduleUpdate() => new()
+        {
+            RepeatMode = AlertRepeatMode.Hourly,
+            InstantSend = false,
+            Time = new DateTime(1, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+        };
     }
 }

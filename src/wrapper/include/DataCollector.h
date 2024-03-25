@@ -9,6 +9,7 @@
 
 #include "HSMSensor.h"
 #include "HSMBarSensor.h"
+#include "HSMRateSensor.h"
 #include "HSMLastValueSensor.h"
 #include "HSMParamsFuncSensor.h"
 #include "HSMNoParamsFuncSensor.h"
@@ -60,6 +61,8 @@ namespace hsm_wrapper
 		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options);
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options);
+		HSMRateSensor<int> CreateIntRateSensor(const std::string& path, int period, const std::string& description) const;
+		HSMRateSensor<double> CreateDoubleRateSensor(const std::string& path, int period, const std::string& description) const;
 
 		template<class T>
 		std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<T>> CreateNoParamsFuncSensor(const std::string& path, const std::string& description, std::function<T()> function, const std::chrono::milliseconds& interval);
@@ -114,6 +117,8 @@ namespace hsm_wrapper
 		IntBarSensor CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options);
 		DoubleBarSensor CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = {});
 		DoubleBarSensor CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options);
+		IntRateSensor CreateIntRateSensor(const std::string& path, int period = 15000, const std::string& description = {});
+		DoubleRateSensor CreateDoubleRateSensor(const std::string& path, int period = 15000, const std::string& description = {});
 
 		template<class T>
 		HSMNoParamsFuncSensor<T> CreateNoParamsFuncSensor(const std::string& path, const std::string& description, std::function<T()> func, const std::chrono::milliseconds& interval)
