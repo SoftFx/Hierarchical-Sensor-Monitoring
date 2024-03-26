@@ -49,7 +49,7 @@ namespace HSMServer.Services
                 }
                 else
                 {
-                    sensor = data.Product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
+                    sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
 
                     if (sensor == null &&
                         !TreeValuesCache.TryCheckAccessKeyPermissions(data.Key, KeyPermissions.CanAddSensors, out message))
