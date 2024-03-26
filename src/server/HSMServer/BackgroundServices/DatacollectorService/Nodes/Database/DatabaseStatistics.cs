@@ -2,16 +2,19 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.ServerConfiguration.Monitoring;
 using Microsoft.Extensions.Options;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundServices
 {
     public sealed class DatabaseStatistics : DatabaseBase
     {
+        private readonly ITreeValuesCache _cache;
         private readonly TimeSpan _periodicity = TimeSpan.FromDays(1); // TODO: should be initialized from optionsMonitor
 
         private readonly IFileSensor _dbStatistics;
@@ -20,9 +23,12 @@ namespace HSMServer.BackgroundServices
         private DateTime _nextStart;
 
 
-        public DatabaseStatistics(IDataCollector collector, IDatabaseCore database, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+        public DatabaseStatistics(IDataCollector collector, IDatabaseCore database,
+            IOptionsMonitor<MonitoringOptions> optionsMonitor, ITreeValuesCache cache)
             : base(collector, database, optionsMonitor)
         {
+            _cache = cache;
+
             _dbStatistics = CreateFileSensor();
             _heaviestSensors = CreateDoubleSensor();
 
@@ -74,7 +80,20 @@ namespace HSMServer.BackgroundServices
 
         private async Task BuildStatistics()
         {
+            Directory.CreateDirectory($"{Environment.CurrentDirectory}/stats");
+            await using (var stream = new FileStream($"{Environment.CurrentDirectory}/stats/temp.csv", FileMode.Create, FileAccess.ReadWrite, FileShare.Read))
+            {
+                await using var writer = new StreamWriter(stream);
 
+                await writer.WriteLineAsync("Product,Path,Total,Values,Count");
+
+                foreach (var product in _cache.GetProducts())
+                {
+                    var info = _cache.GetNodeHistoryInfo(product.Id);
+                }
+            }
+
+            var result = await _dbStatistics.SendFile($"{Environment.CurrentDirectory}/stats/temp.csv");
         }
     }
 }
