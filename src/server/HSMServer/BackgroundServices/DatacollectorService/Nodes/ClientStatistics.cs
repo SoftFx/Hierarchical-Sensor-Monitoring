@@ -11,8 +11,6 @@ namespace HSMServer.BackgroundServices
         private readonly ConcurrentDictionary<string, WebRequestNode> _selfSensors = new();
         private readonly IDataCollector _collector;
 
-        public readonly IOptionsMonitor<MonitoringOptions> _optionsMonitor;
-
 
         private const string RecvBytes = "Recv Bytes";
         private const string SentBytes = "Sent Bytes";
@@ -28,10 +26,9 @@ namespace HSMServer.BackgroundServices
         public TotalWebRequestNode Total => this[TotalGroup] as TotalWebRequestNode;
 
 
-        internal ClientStatistics(IDataCollector collector, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+        internal ClientStatistics(IDataCollector collector)
         {
             _collector = collector;
-            _optionsMonitor = optionsMonitor;
         }
 
         
