@@ -18,7 +18,7 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
     protected abstract KeyPermissions Permissions { get; }
 
 
-    public virtual void CheckPermission(ActionExecutingContext context, RequestData requestData, out string message)
+    public void CheckPermission(ActionExecutingContext context, RequestData requestData, out string message)
     {
         message = string.Empty;
 
@@ -41,37 +41,37 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
         }
 
 
-        if (values is List<SensorValueBase> requestValues)
+        switch (values)
         {
-            context.ActionArguments.Remove("values");
+            case List<SensorValueBase> requestValues:
+                context.ActionArguments.Remove("values");
 
-            requestValues = requestValues.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
+                requestValues = requestValues.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
 
-            context.ActionArguments.Add("values", requestValues);
+                context.ActionArguments.Add("values", requestValues);
 
-            collector.Statistics[requestData.TelemetryPath].AddReceiveData(requestValues.Count);
-            requestData.Count = requestValues.Count;
-        }
-        else if (values is List<CommandRequestBase> commands)
-        {
-            context.ActionArguments.Remove("sensorCommands");
-            commands = commands.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
+                collector.Statistics[requestData.TelemetryPath].AddReceiveData(requestValues.Count);
+                requestData.Count = requestValues.Count;
+                break;
+            case List<CommandRequestBase> commands:
+                context.ActionArguments.Remove("sensorCommands");
+                commands = commands.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
 
-            context.ActionArguments.Add("sensorCommands", commands);
+                context.ActionArguments.Add("sensorCommands", commands);
 
-            collector.Statistics[requestData.TelemetryPath].AddReceiveData(commands.Count);
-            requestData.Count = commands.Count;
-        }
-        else
-        {
-            collector.Statistics[requestData.TelemetryPath].AddReceiveData(1);
-            requestData.Count = 1;
+                collector.Statistics[requestData.TelemetryPath].AddReceiveData(commands.Count);
+                requestData.Count = commands.Count;
+                break;
+            default:
+                collector.Statistics[requestData.TelemetryPath].AddReceiveData(1);
+                requestData.Count = 1;
+                break;
         }
     }
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var r) || r is not RequestData requestData)
+        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) || obj is not RequestData requestData)
             return;
 
         var headers = context.HttpContext.Request.Headers;

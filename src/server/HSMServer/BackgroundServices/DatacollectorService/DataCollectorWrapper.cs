@@ -35,10 +35,10 @@ namespace HSMServer.BackgroundServices
 
             _collector = collector.AddNLog(loggerOptions);
 
-            // if (OperatingSystem.IsWindows())
-            //     _collector.Windows.AddAllDefaultSensors(productVersion);
-            // else
-            //     _collector.Unix.AddAllDefaultSensors(productVersion);
+            if (OperatingSystem.IsWindows())
+                _collector.Windows.AddAllDefaultSensors(productVersion);
+            else
+                _collector.Unix.AddAllDefaultSensors(productVersion);
 
             Statistics = statistics;
             DbSizeSensors = databaseSize;
