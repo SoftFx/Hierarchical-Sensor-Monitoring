@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.BackgroundServices
 {
-    public sealed class DatabaseSize
+    internal sealed class DatabaseSize
     {
         private const double MbDivisor = 1 << 20;
         private const int DigitsCnt = 2;
@@ -39,7 +39,7 @@ namespace HSMServer.BackgroundServices
         };
 
 
-        public DatabaseSize(IDataCollector collector, IDatabaseCore database, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+        internal DatabaseSize(IDataCollector collector, IDatabaseCore database, IOptionsMonitor<MonitoringOptions> optionsMonitor)
         {
             _collector = collector;
             _database = database;

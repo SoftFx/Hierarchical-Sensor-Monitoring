@@ -1,12 +1,12 @@
-using System;
 using HSMDataCollector.Core;
+using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.ServerConfiguration.Monitoring;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using HSMDataCollector.Options;
 
 namespace HSMServer.BackgroundServices
 {
@@ -15,8 +15,11 @@ namespace HSMServer.BackgroundServices
         private const double KbDivisor = 1 << 10;
 
         public IInstantValueSensor<double> SentBytes { get; set; }
+
         public IInstantValueSensor<double> ReceiveBytes { get; set; }
+
         public IInstantValueSensor<double> SentSensors { get; set; }
+
         public IInstantValueSensor<double> ReceiveSensors { get; set; }
 
         public IInstantValueSensor<double> RPS { get; set; }
@@ -43,7 +46,7 @@ namespace HSMServer.BackgroundServices
         }
     }
 
-    public class ClientStatistics
+    internal sealed class ClientStatistics
     {
         private readonly IDataCollector _collector;
         public readonly IOptionsMonitor<MonitoringOptions> _optionsMonitor;
@@ -56,7 +59,7 @@ namespace HSMServer.BackgroundServices
         public const string RequestPerSecond = "RPS";
         public const string ClientNode = "Clients";
         public const string TotalGroup = "_Total";
-        
+
 
         public SelfCollectSensor this[string id]
         {
@@ -78,7 +81,7 @@ namespace HSMServer.BackgroundServices
         public ConcurrentDictionary<string, SelfCollectSensor> SelfSensors { get; set; } = new();
 
 
-        public ClientStatistics(IDataCollector collector, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+        internal ClientStatistics(IDataCollector collector, IOptionsMonitor<MonitoringOptions> optionsMonitor)
         {
             _collector = collector;
             _optionsMonitor = optionsMonitor;
@@ -101,7 +104,7 @@ namespace HSMServer.BackgroundServices
 
             if (path is TotalGroup)
                 selfCollect.RPS = _collector.CreateRateSensor($"{ClientNode}/{id}/{RequestPerSecond}",
-                    new RateSensorOptions(){Description = "Number of requests that were received", PostDataPeriod = TimeSpan.FromMinutes(1)});
+                    new RateSensorOptions() { Description = "Number of requests that were received", PostDataPeriod = TimeSpan.FromMinutes(1) });
 
             SelfSensors.TryAdd(id, selfCollect);
         }

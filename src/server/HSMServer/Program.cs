@@ -3,7 +3,6 @@ using HSMCommon.Constants;
 using HSMServer.Authentication;
 using HSMServer.Middleware;
 using HSMServer.ServerConfiguration;
-using HSMServer.ServerConfiguration.Monitoring;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -12,7 +11,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using NLog.Extensions.Logging;
 using NLog.LayoutRenderers;
 using NLog.Web;
@@ -74,7 +72,7 @@ builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.S
 
 builder.Services.AddApplicationServices(serverConfig);
 
-builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection(nameof(MonitoringOptions)));
+//builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection(nameof(MonitoringOptions))); should be removed???
 
 builder.Services.Configure<HostOptions>(hostOptions =>
 {

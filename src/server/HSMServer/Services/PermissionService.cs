@@ -10,8 +10,6 @@ namespace HSMServer.Services
     {
         public bool CheckPermission(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
         {
-            message = string.Empty;
-            
             if (CheckInitPermissions(data, sensorData, out message, out var sensor))
             {
                 sensorData.Id = sensor?.Id ?? Guid.Empty;
@@ -23,18 +21,18 @@ namespace HSMServer.Services
 
                 return false;
             };
-            
+
             return false;
         }
 
-        private bool CheckInitPermissions(RequestData data, SensorData sensorData, out string message, out BaseSensorModel sensor)
+        private static bool CheckInitPermissions(RequestData data, SensorData sensorData, out string message, out BaseSensorModel sensor)
         {
             message = string.Empty;
             sensor = null;
 
             var product = data.Product;
             var pathParts = PermissionFilter.GetPathParts(sensorData.Path);
-            
+
             for (int i = 0; i < pathParts.Length; i++)
             {
                 var expectedName = pathParts[i];
@@ -59,12 +57,12 @@ namespace HSMServer.Services
 
             return true;
         }
-        
+
         public bool TryGetKey(Guid id, out AccessKeyModel key, out string message)
         {
             return cache.TryGetKey(id, out key, out message);
         }
-        
+
         public bool TryGetProduct(Guid id, out ProductModel product, out string message)
         {
             return cache.TryGetProduct(id, out product, out message);
