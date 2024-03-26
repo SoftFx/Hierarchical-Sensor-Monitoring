@@ -846,7 +846,9 @@ namespace HSMServer.Core.Cache
 
         internal void AddNewSensorValue(StoreInfo storeInfo)
         {
-            if (!TryGetProductByKey(storeInfo, out var product, out _))
+            var product = storeInfo?.Product;
+            
+            if (product == null && !TryGetProductByKey(storeInfo, out product, out _))
                 return;
 
             var parentProduct = AddNonExistingProductsAndGetParentProduct(product, storeInfo);

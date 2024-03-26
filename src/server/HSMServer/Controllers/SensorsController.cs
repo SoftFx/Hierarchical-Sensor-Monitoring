@@ -25,7 +25,6 @@ using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Header=HSMSensorDataObjects.Header;
 using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Controllers
@@ -74,7 +73,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                AddToQueue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -99,7 +98,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                AddToQueue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -124,7 +123,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                AddToQueue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -149,7 +148,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                AddToQueue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -174,7 +173,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                AddToQueue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -199,7 +198,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                AddToQueue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -224,7 +223,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                AddToQueue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -250,7 +249,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                AddToQueue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -275,7 +274,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                AddToQueue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -300,7 +299,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], sensorValue);
+                AddToQueue(sensorValue);
                 return Ok(sensorValue);
             }
             catch (Exception e)
@@ -328,7 +327,7 @@ namespace HSMServer.Controllers
             try
             {
                 foreach (var value in values.OrderBy(u => u.Time))
-                    AddToQueue(HttpContext.Request.Headers[nameof(Header.Key)], value);
+                    AddToQueue(value);
 
                 return Ok(values);
             }
@@ -545,21 +544,18 @@ namespace HSMServer.Controllers
             return false;
         }
         
-        private void AddToQueue(string key, SensorValueBase value)
+        private void AddToQueue(SensorValueBase value)
         {
-            _updatesQueue.AddItem(new StoreInfo(key, value.Path) { BaseValue = value.Convert() });
+            if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) &&
+                obj is RequestData requestData)
+            {
+                _updatesQueue.AddItem(new StoreInfo(requestData.Key.Id, value.Path)
+                {
+                    BaseValue = value.Convert(),
+                    Product = requestData.Product
+                });
+            }
         }
-
-        // private bool TryCheckReadHistoryRequest(HistoryRequest request, out HistoryRequestModel requestModel, out string message)
-        // {
-        //     Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
-        //
-        //     requestModel = request.Convert(key);
-        //
-        //     return request.TryValidate(out message) &&
-        //            requestModel.TryCheckRequest(out message) &&
-        //            _cache.TryCheckKeyReadPermissions(requestModel, out message);
-        // }
 
         private bool TryCheckReadHistoryRequest(HistoryRequest historyRequest, out HistoryRequestModel requestModel, out string message)
         {
@@ -571,33 +567,6 @@ namespace HSMServer.Controllers
                 requestModel = historyRequest.Convert(requestData.Key.Id);
                 
                 return historyRequest.TryValidate(out message) && requestModel.TryCheckRequest(out message);
-            }
-
-            return false;
-        }
-
-        private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
-            new(GetKey(valueBase), valueBase.Path) { BaseValue = baseValue };
-
-        private bool TryBuildSensorUpdate(AddOrUpdateSensorRequest request, string keyName, out SensorAddOrUpdateRequestModel requestModel, out string message)
-        {
-            requestModel = new SensorAddOrUpdateRequestModel(GetKey(request), request.Path);
-
-            if (requestModel.TryCheckRequest(out message) &&
-                _cache.TryCheckSensorUpdateKeyPermission(requestModel, out var sensorId, out message))
-            {
-                if (sensorId == Guid.Empty && request.SensorType is null)
-                {
-                    message = $"{nameof(request.SensorType)} property is required, because sensor {request.Path} doesn't exist";
-                    return false;
-                }
-
-                requestModel.Update = request.Convert(sensorId, keyName);
-
-                if (request.SensorType.HasValue)
-                    requestModel.Type = request.SensorType.Value.Convert();
-
-                return true;
             }
 
             return false;
@@ -624,16 +593,6 @@ namespace HSMServer.Controllers
             }
                 
             return false;
-        }
-        
-        private string GetKey(BaseRequest request)
-        {
-            Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
-
-            if (string.IsNullOrEmpty(key))
-                key = request?.Key;
-
-            return key;
         }
 
         private bool TryCheckKey(out string message)
