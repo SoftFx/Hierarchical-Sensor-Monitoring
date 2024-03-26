@@ -22,7 +22,7 @@ namespace HSMServer.BackgroundServices
         protected override Task ServiceAction()
         {
             _cache.UpdateCacheState();
-            
+
             return Task.CompletedTask;
         }
     }

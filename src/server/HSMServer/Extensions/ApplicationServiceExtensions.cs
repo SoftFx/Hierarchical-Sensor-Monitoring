@@ -170,13 +170,12 @@ public static class ApplicationServiceExtensions
 
     private static IServiceCollection ConfigureDataCollector(this IServiceCollection services)
     {
-        services.AddSingleton<CollectorOptions>(sp => {
+        services.AddSingleton(sp => {
             var cache = sp.GetService<ITreeValuesCache>();
             
             return new CollectorOptions()
             {
                 AccessKey = DataCollectorWrapper.GetSelfMonitoringKey(cache),
-                MonitoringKey = DataCollectorWrapper.SelfMonitoringSpecialKey,
                 ClientName = "HSMServerMonitoring"
             };
         });

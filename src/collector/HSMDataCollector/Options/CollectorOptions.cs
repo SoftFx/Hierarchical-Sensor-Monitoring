@@ -15,9 +15,6 @@ namespace HSMDataCollector.Core
         
         public string ClientName { get; set; }
         
-        [Description("Only used for HSM selfmonitoring collecting statisctic. You should not assign that.")]
-        public string MonitoringKey { get; set; }
-
         public int Port { get; set; } = DefaultPort;
 
 
