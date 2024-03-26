@@ -350,7 +350,7 @@ namespace HSMServer.Core.Cache
             {
                 if (!TryGetProductByKey(request, out var product, out _))
                 {
-                    error = $"Product with this key {request.KeyGuid} doesn't exists";
+                    error = $"Product with this key {request.Key} doesn't exists";
                     return false;
                 }
 
@@ -1043,7 +1043,7 @@ namespace HSMServer.Core.Cache
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseRequestModel request)
         {
             var pathParts = request.PathParts;
-            var authorId = GetAccessKey(request.KeyGuid).AuthorId;
+            var authorId = GetAccessKey(request.Key).AuthorId;
 
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -1235,7 +1235,7 @@ namespace HSMServer.Core.Cache
         }
 
         private AccessKeyModel GetAccessKeyModel(BaseRequestModel request) =>
-            _keys.TryGetValue(request.KeyGuid, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
+            _keys.TryGetValue(request.Key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
 
         private void FillSensorsData()
         {

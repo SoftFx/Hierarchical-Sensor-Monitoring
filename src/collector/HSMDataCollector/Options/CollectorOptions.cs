@@ -1,5 +1,4 @@
 ﻿using System;
-using System.ComponentModel;
 
 namespace HSMDataCollector.Core
 {
@@ -12,9 +11,9 @@ namespace HSMDataCollector.Core
         public string ServerAddress { get; set; } = LocalhostAddress;
 
         public string AccessKey { get; set; }
-        
+
         public string ClientName { get; set; }
-        
+
         public int Port { get; set; } = DefaultPort;
 
 
