@@ -473,10 +473,10 @@ namespace HSMServer.Controllers
                         _cache.TryAddOrUpdateSensor(update, out var error);
                         return Ok(error);
                     }
-                    
+
                     return StatusCode(406, message);
                 }
-               
+
                 return StatusCode(502);
             }
             catch (Exception e)
@@ -513,15 +513,15 @@ namespace HSMServer.Controllers
                         {
                             if (TryBuildSensorUpdate(requestData, sensorUpdate, requestData.Data[i], out var update, out var message))
                                 _cache.TryAddOrUpdateSensor(update, out var error);
-                            
+
                             if (!string.IsNullOrEmpty(message))
                                 result[sensorUpdate.Path] = message;
                         }
-                        else 
+                        else
                             result[sensorCommands[i].Path] = $"This type of command is not supported now";
                     }
                 }
-                
+
                 return Ok(result);
             }
             catch (Exception e)
@@ -530,7 +530,7 @@ namespace HSMServer.Controllers
                 return BadRequest(result);
             }
         }
-        
+
 
         private bool CanAddToQueue(StoreInfo storeInfo, out string message)
         {
@@ -543,7 +543,7 @@ namespace HSMServer.Controllers
 
             return false;
         }
-        
+
         private void AddToQueue(SensorValueBase value)
         {
             if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) &&
@@ -561,11 +561,11 @@ namespace HSMServer.Controllers
         {
             requestModel = null;
             message = null;
-            
+
             if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) && obj is RequestData requestData)
             {
                 requestModel = historyRequest.Convert(requestData.Key.Id);
-                
+
                 return historyRequest.TryValidate(out message) && requestModel.TryCheckRequest(out message);
             }
 
@@ -577,7 +577,7 @@ namespace HSMServer.Controllers
             requestModel = new SensorAddOrUpdateRequestModel(requestData.Key.Id, request.Path);
 
             if (requestModel.TryCheckRequest(out message))
-            { 
+            {
                 if (sensorData.Id == Guid.Empty && request.SensorType is null)
                 {
                     message = $"{nameof(request.SensorType)} property is required, because sensor {request.Path} doesn't exist";
@@ -591,7 +591,7 @@ namespace HSMServer.Controllers
 
                 return true;
             }
-                
+
             return false;
         }
 

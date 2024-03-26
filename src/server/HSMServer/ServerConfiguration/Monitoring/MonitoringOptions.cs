@@ -1,6 +1,6 @@
 namespace HSMServer.ServerConfiguration.Monitoring
 {
-    public class MonitoringOptions
+    public sealed class MonitoringOptions
     {
         public bool UseDatabaseMonitoring { get; set; }
         
