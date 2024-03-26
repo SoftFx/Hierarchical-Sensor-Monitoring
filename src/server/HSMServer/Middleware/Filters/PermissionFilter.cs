@@ -15,6 +15,10 @@ namespace HSMServer.Middleware;
 
 public abstract class PermissionFilter(IPermissionService service, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
 {
+    private const string ValuesArgument = "values";
+    private const string CommandsArgument = "sensorCommands";
+    
+    
     protected abstract KeyPermissions Permissions { get; }
 
 
@@ -44,29 +48,34 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
         switch (values)
         {
             case List<SensorValueBase> requestValues:
-                context.ActionArguments.Remove("values");
-
-                requestValues = requestValues.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
-
-                context.ActionArguments.Add("values", requestValues);
-
-                collector.Statistics[requestData.TelemetryPath].AddReceiveData(requestValues.Count);
-                requestData.Count = requestValues.Count;
+                AddRequestData<SensorValueBase>(context, requestData, values: requestValues, argumentName: ValuesArgument);
                 break;
             case List<CommandRequestBase> commands:
-                context.ActionArguments.Remove("sensorCommands");
-                commands = commands.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
-
-                context.ActionArguments.Add("sensorCommands", commands);
-
-                collector.Statistics[requestData.TelemetryPath].AddReceiveData(commands.Count);
-                requestData.Count = commands.Count;
+                AddRequestData<CommandRequestBase>(context, requestData, values: commands, argumentName: CommandsArgument);
                 break;
             default:
+                AddRequestData<BaseRequest>(context, requestData);
+
                 collector.Statistics[requestData.TelemetryPath].AddReceiveData(1);
                 requestData.Count = 1;
                 break;
         }
+    }
+
+    private void AddRequestData<T>(ActionExecutingContext context, RequestData requestData, int count = 1, List<T> values = null, string argumentName = null) where T: BaseRequest
+    {
+        if (values is not null && !string.IsNullOrEmpty(argumentName))
+        {
+            context.ActionArguments.Remove(argumentName);
+            values = values.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
+
+            context.ActionArguments.Add(argumentName, values);
+
+            count = values.Count;
+        }
+        
+        collector.Statistics[requestData.TelemetryPath].AddReceiveData(count);
+        requestData.Count = count;
     }
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
