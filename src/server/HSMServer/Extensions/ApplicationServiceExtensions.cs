@@ -64,6 +64,7 @@ public static class ApplicationServiceExtensions
         
         services.AddSingleton<ClientStatistics>();
         services.AddSingleton<DatabaseSize>();
+        services.AddSingleton<DatabaseStatistics>();
         
         services.AddScoped<IPermissionService, PermissionService>();
         

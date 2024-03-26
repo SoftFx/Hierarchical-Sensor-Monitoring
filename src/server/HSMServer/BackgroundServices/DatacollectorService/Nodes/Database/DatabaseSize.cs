@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.BackgroundServices
 {
-    public sealed class DatabaseSize
+    public sealed class DatabaseSize : DatabaseBase
     {
         private const double MbDivisor = 1 << 20;
         private const int DigitsCnt = 2;
@@ -19,11 +19,6 @@ namespace HSMServer.BackgroundServices
         private const string HistoryDbName = "History";
         private const string ConfigDbName = "Config";
         private const string TotalDbName = "Total";
-
-
-        private readonly IDataCollector _collector;
-        private readonly IDatabaseCore _database;
-        private readonly IOptionsMonitor<MonitoringOptions> _optionsMonitor;
 
 
         private readonly Dictionary<string, DatabaseSizeSensor> Sensors = new()
@@ -40,11 +35,8 @@ namespace HSMServer.BackgroundServices
 
 
         public DatabaseSize(IDataCollector collector, IDatabaseCore database, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+            : base(collector, database, optionsMonitor)
         {
-            _collector = collector;
-            _database = database;
-            _optionsMonitor = optionsMonitor;
-
             CreateDataSizeSensor(HistoryDbName, () => _database.SensorHistoryDbSize);
             CreateDataSizeSensor(JournalsDbName, () => _database.JournalDbSize);
             CreateDataSizeSensor(ConfigDbName, () => _database.ConfigDbSize);
@@ -53,7 +45,7 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        internal void SendInfo()
+        internal override void SendInfo()
         {
             foreach (var (_, sensor) in Sensors)
                 sensor.SendInfo();
@@ -73,7 +65,7 @@ namespace HSMServer.BackgroundServices
             };
 
             sensor.GetSize = getSizeFunc;
-            sensor.Sensor = _collector.CreateDoubleSensor($"Database/{databaseName} data size", options);
+            sensor.Sensor = _collector.CreateDoubleSensor($"{NodeName}/{databaseName} data size", options);
         }
 
 

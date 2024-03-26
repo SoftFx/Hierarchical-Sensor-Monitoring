@@ -19,13 +19,16 @@ namespace HSMServer.BackgroundServices
         private const string SelfMonitoringProductName = "HSM Server Monitoring";
 
         private readonly IDataCollector _collector;
-        
+
+
+        internal DatabaseStatistics DbStatisticsSensors { get; }
 
         internal DatabaseSize DbSizeSensors { get; }
+
         internal ClientStatistics Statistics { get; }
 
 
-        public DataCollectorWrapper(IDataCollector collector, ClientStatistics statistics, DatabaseSize databaseSize)
+        public DataCollectorWrapper(IDataCollector collector, ClientStatistics statistics, DatabaseSize databaseSize, DatabaseStatistics databaseStatistics)
         {
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
             var loggerOptions = new LoggerOptions()
@@ -42,6 +45,7 @@ namespace HSMServer.BackgroundServices
 
             Statistics = statistics;
             DbSizeSensors = databaseSize;
+            DbStatisticsSensors = databaseStatistics;
         }
 
 
@@ -52,7 +56,11 @@ namespace HSMServer.BackgroundServices
         internal Task Stop() => _collector.Stop();
 
 
-        internal void SendDbInfo() => DbSizeSensors.SendInfo();
+        internal void SendDbInfo()
+        {
+            DbSizeSensors.SendInfo();
+            DbStatisticsSensors.SendInfo();
+        }
 
 
         public static string GetSelfMonitoringKey(ITreeValuesCache cache)
