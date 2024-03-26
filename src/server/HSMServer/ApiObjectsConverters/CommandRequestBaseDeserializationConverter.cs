@@ -22,6 +22,7 @@ namespace HSMServer.ApiObjectsConverters
                     continue;
 
                 string propertyName = readerClone.GetString();
+                
                 if (!string.Equals(propertyName, nameof(CommandRequestBase.Type), StringComparison.InvariantCultureIgnoreCase))
                     continue;
 

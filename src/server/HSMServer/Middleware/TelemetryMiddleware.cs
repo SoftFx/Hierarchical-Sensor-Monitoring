@@ -1,53 +1,25 @@
-using HSMSensorDataObjects;
 using HSMServer.BackgroundServices;
-using HSMServer.Core.Cache;
 using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 
 namespace HSMServer.Middleware
 {
-    public class TelemetryMiddleware
+    public class TelemetryMiddleware(RequestDelegate next)
     {
-        private const double KbDivisor = 1 << 10;
+        public const string RequestData = "RequestData";
         
-        private readonly RequestDelegate _next;
-        private readonly DataCollectorWrapper _collector;
-        private readonly ITreeValuesCache _cache;
-
-
-        public TelemetryMiddleware(RequestDelegate next, DataCollectorWrapper collector, ITreeValuesCache cache)
+        public async Task InvokeAsync(HttpContext context, DataCollectorWrapper collector)
         {
-            _collector = collector;
-            _cache = cache;
-            _next = next;
-        }
+            context.Items.Add(RequestData, new RequestData(context));
 
-        public Task InvokeAsync(HttpContext context)
-        {
-            var request = context.Request;
-            request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
+            collector.Statistics.Total.AddRequestData(context.Request);
 
-            if (_cache.TryGetProductByKey(key.ToString(), out var product, out var keyModel))
-            {
-                var collectorName = request.Headers.TryGetValue(nameof(BaseRequest.ClientName), out var clientName) && !string.IsNullOrWhiteSpace(clientName) ? clientName.ToString() : "No name";
-                var path = $"{product.DisplayName}/{keyModel.DisplayName}/{collectorName}";
-                context.Request.Headers["Path"] = path;
-                _collector.Statistics[path].AddRequestData(request);
-            }
+            await next(context);
             
-            _collector.Statistics.Total.AddRequestData(request);
+            collector.Statistics.Total.AddResponseResult(context.Response);
             
-            context.Response.OnCompleted(() =>
-            {
-                _collector.Statistics.Total.AddResponseResult(context.Response);
-                if (context.Request.Headers.TryGetValue("Path", out var path))
-                {
-                    _collector.Statistics[path.ToString()].AddResponseResult(context.Response);
-                }
-                return Task.CompletedTask;
-            });
-
-            return _next(context);
+            if (context.Items.TryGetValue(RequestData, out var value) && value is RequestData requestData)
+                collector.Statistics.Total.AddReceiveData(requestData.Count);
         }
     }
 }

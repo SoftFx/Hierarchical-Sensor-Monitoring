@@ -1,14 +1,10 @@
 ﻿using HSMCommon.Constants;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
-using HSMDataCollector.PublicInterface;
 using HSMServer.Core.Cache;
-using HSMServer.Core.DataLayer;
 using HSMServer.Extensions;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using System.Reflection;
 using System.Threading.Tasks;
 
@@ -17,6 +13,8 @@ namespace HSMServer.BackgroundServices
     public sealed class DataCollectorWrapper : IDisposable
     {
         private const string SelfMonitoringProductName = "HSM Server Monitoring";
+        internal const string SelfMonitoringSpecialKey = "8abc3081-e344-45d2-8974-b707ef343920";
+        
 
         private readonly IDataCollector _collector;
         
@@ -35,10 +33,10 @@ namespace HSMServer.BackgroundServices
 
             _collector = collector.AddNLog(loggerOptions);
 
-            // if (OperatingSystem.IsWindows())
-            //     _collector.Windows.AddAllDefaultSensors(productVersion);
-            // else
-            //     _collector.Unix.AddAllDefaultSensors(productVersion);
+            if (OperatingSystem.IsWindows())
+                _collector.Windows.AddAllDefaultSensors(productVersion);
+            else
+                _collector.Unix.AddAllDefaultSensors(productVersion);
 
             Statistics = statistics;
             DbSizeSensors = databaseSize;

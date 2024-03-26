@@ -30,6 +30,15 @@ namespace HSMServer.Core.Model.Requests
 
             PathParts = GetPathParts(Path);
         }
+        
+        public BaseRequestModel(Guid key, string path)
+        {
+            Key = key.ToString();
+            Path = path;
+            KeyGuid = key;
+
+            PathParts = GetPathParts(Path);
+        }
 
 
         public bool TryCheckRequest(out string message)

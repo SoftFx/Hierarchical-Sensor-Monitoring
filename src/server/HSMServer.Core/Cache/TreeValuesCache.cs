@@ -192,6 +192,64 @@ namespace HSMServer.Core.Cache
             return sensorChecking;
         }
 
+        public bool TryGetKey(Guid id, out AccessKeyModel key, out string message)
+        {
+            key = _keys.TryGetValue(id, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
+
+            if (!key.IsValid(KeyPermissions.CanSendSensorData & KeyPermissions.CanAddNodes & KeyPermissions.CanAddSensors & KeyPermissions.CanReadSensorData, out message))
+                return false;
+
+            if (!key.IsMaster) 
+                return true;
+            
+            message = ErrorMasterKey;
+            return false;
+        }
+
+        public bool TryGetProduct(Guid id, out ProductModel product, out string message)
+        {
+            var hasProduct = _tree.TryGetValue(id, out product);
+            message = hasProduct ? string.Empty : ErrorKeyNotFound;
+            
+            if (product?.Parent is not null)
+            {
+                message = "Temporarily unavailable feature. Please select a product without a parent";
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool CheckAddPermissions(ProductModel product, AccessKeyModel accessKey, ReadOnlySpan<string> pathParts, out string message)
+        {
+            message = string.Empty;
+
+            for (int i = 0; i < pathParts.Length; i++)
+            {
+                var expectedName = pathParts[i];
+
+                if (i != pathParts.Length - 1)
+                {
+                    product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
+
+                    if (product == null &&
+                        !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
+                        return false;
+                }
+                else
+                {
+                    var sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
+
+                    if (sensor == null &&
+                        !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddSensors, out message))
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
             TryGetProductByKey(request, out var product, out message) &&
             GetAccessKeyModel(request).IsValid(KeyPermissions.CanReadSensorData, out message) &&
@@ -788,7 +846,9 @@ namespace HSMServer.Core.Cache
 
         internal void AddNewSensorValue(StoreInfo storeInfo)
         {
-            if (!TryGetProductByKey(storeInfo, out var product, out _))
+            var product = storeInfo?.Product;
+            
+            if (product == null && !TryGetProductByKey(storeInfo, out product, out _))
                 return;
 
             var parentProduct = AddNonExistingProductsAndGetParentProduct(product, storeInfo);
@@ -1153,7 +1213,7 @@ namespace HSMServer.Core.Cache
             return true;
         }
 
-        private static bool TryCheckAccessKeyPermissions(AccessKeyModel accessKey, KeyPermissions permissions,
+        public static bool TryCheckAccessKeyPermissions(AccessKeyModel accessKey, KeyPermissions permissions,
             out string message)
         {
             if (accessKey == null)

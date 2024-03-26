@@ -27,6 +27,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Authentication;
 using System.Threading.Tasks;
+using HSMServer.Services;
 
 namespace HSMServer.ServiceExtensions;
 
@@ -60,10 +61,12 @@ public static class ApplicationServiceExtensions
                 .AddHostedService<DatacollectorService>()
                 .AddHostedService<NotificationsBackgroundService>()
                 .AddHostedService<BackupDatabaseService>();
-
+        
         services.AddSingleton<ClientStatistics>();
         services.AddSingleton<DatabaseSize>();
-
+        
+        services.AddScoped<IPermissionService, PermissionService>();
+        
         services.ConfigureDataCollector();
         
         services.AddSwaggerGen(o =>
@@ -145,7 +148,6 @@ public static class ApplicationServiceExtensions
         applicationBuilder.UseAuthorization();
 
         applicationBuilder.UseMiddleware<TelemetryMiddleware>();
-        // applicationBuilder.UseMiddleware<RequestStatisticsMiddleware>();
         applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
         applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
 
@@ -173,7 +175,9 @@ public static class ApplicationServiceExtensions
             
             return new CollectorOptions()
             {
-                AccessKey = DataCollectorWrapper.GetSelfMonitoringKey(cache)
+                AccessKey = DataCollectorWrapper.GetSelfMonitoringKey(cache),
+                MonitoringKey = DataCollectorWrapper.SelfMonitoringSpecialKey,
+                ClientName = "HSMServerMonitoring"
             };
         });
 
