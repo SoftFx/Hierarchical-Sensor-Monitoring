@@ -12,7 +12,7 @@ namespace HSMServer.BackgroundServices
 {
     public sealed class DatabaseStatistics : DatabaseBase
     {
-        private readonly TimeSpan _periodicity = TimeSpan.FromDays(1);
+        private readonly TimeSpan _periodicity = TimeSpan.FromDays(1); // TODO: should be initialized from optionsMonitor
 
         private readonly IFileSensor _dbStatistics;
         private readonly IInstantValueSensor<double> _heaviestSensors;
@@ -59,9 +59,9 @@ namespace HSMServer.BackgroundServices
 
         private IInstantValueSensor<double> CreateDoubleSensor()
         {
-            var options = new InstantSensorOptions
+            var options = new InstantSensorOptions // TODO: Grafana??
             {
-                Alerts = [],
+                Alerts = [], // TODO: alert '> 800 mb' should be added
                 TTL = TimeSpan.MaxValue,
                 SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.MB,
                 Description = $"The heaviest sensors.",
