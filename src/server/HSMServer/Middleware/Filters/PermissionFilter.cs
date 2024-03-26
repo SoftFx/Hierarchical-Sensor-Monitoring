@@ -17,8 +17,8 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
 {
     private const string ValuesArgument = "values";
     private const string CommandsArgument = "sensorCommands";
-    
-    
+
+
     protected abstract KeyPermissions Permissions { get; }
 
 
@@ -55,27 +55,23 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
                 break;
             default:
                 AddRequestData<BaseRequest>(context, requestData);
-
-                collector.Statistics[requestData.TelemetryPath].AddReceiveData(1);
-                requestData.Count = 1;
                 break;
         }
     }
 
-    private void AddRequestData<T>(ActionExecutingContext context, RequestData requestData, int count = 1, List<T> values = null, string argumentName = null) where T: BaseRequest
+    private void AddRequestData<T>(ActionExecutingContext context, RequestData requestData, List<T> values = null, string argumentName = null) where T : BaseRequest
     {
         if (values is not null && !string.IsNullOrEmpty(argumentName))
         {
             context.ActionArguments.Remove(argumentName);
-            values = values.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
+            values = values.Where(x => service.CheckPermission(requestData, new SensorData() {Path = x.Path}, Permissions, out _)).ToList();
 
             context.ActionArguments.Add(argumentName, values);
 
-            count = values.Count;
+            requestData.Count = string.IsNullOrEmpty(requestData.MonitoringKey) ? values.Count : values.Count(x => !x.Path.Contains(ClientStatistics.ClientNode));
         }
-        
-        collector.Statistics[requestData.TelemetryPath].AddReceiveData(count);
-        requestData.Count = count;
+
+        collector.Statistics[requestData.TelemetryPath].AddReceiveData(requestData.Count);
     }
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
@@ -126,7 +122,7 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
     {
         if (context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var value) && value is RequestData requestData)
             collector.Statistics[requestData.TelemetryPath].AddResponseResult(context.HttpContext.Response);
-        
+
         await next();
     }
 }

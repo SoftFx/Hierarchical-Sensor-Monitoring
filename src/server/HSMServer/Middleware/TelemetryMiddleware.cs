@@ -10,10 +10,10 @@ namespace HSMServer.Middleware
         
         public async Task InvokeAsync(HttpContext context, DataCollectorWrapper collector)
         {
-            context.Items.Add(RequestData, new RequestData());
-            
+            context.Items.Add(RequestData, new RequestData(context));
+
             collector.Statistics.Total.AddRequestData(context.Request);
-            
+
             await next(context);
             
             collector.Statistics.Total.AddResponseResult(context.Response);
