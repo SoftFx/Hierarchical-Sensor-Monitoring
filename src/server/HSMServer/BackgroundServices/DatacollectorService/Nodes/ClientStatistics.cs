@@ -1,6 +1,4 @@
 using HSMDataCollector.Core;
-using HSMServer.ServerConfiguration.Monitoring;
-using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using HSMServer.WebRequestsNodes;
 
