@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Constants;
-using HSMDatabase.AccessManager;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMServer.Core.Cache;

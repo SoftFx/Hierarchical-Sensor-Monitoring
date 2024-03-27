@@ -68,7 +68,7 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
 
             context.ActionArguments.Add(argumentName, values);
 
-            requestData.Count = string.IsNullOrEmpty(requestData.MonitoringKey) ? values.Count : values.Count(x => !x.Path.Contains(ClientStatistics.ClientNode));
+            requestData.Count = values.Count;
         }
 
         collector.Statistics[requestData.TelemetryPath].AddReceiveData(requestData.Count);
