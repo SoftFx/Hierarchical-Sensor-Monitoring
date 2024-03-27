@@ -8,6 +8,7 @@ using HSMServer.Core.StatisticInfo;
 using HSMServer.ServerConfiguration.Monitoring;
 using Microsoft.Extensions.Options;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -16,6 +17,7 @@ namespace HSMServer.BackgroundServices
     public sealed class DatabaseStatistics : DatabaseBase
     {
         private readonly TimeSpan _periodicity = TimeSpan.FromDays(1); // TODO: should be initialized from optionsMonitor
+        private readonly int _heaviestSensorsCount = 10; // TODO: should be initialized from optionsMonitor
 
         private readonly ITreeValuesCache _cache;
 
@@ -83,34 +85,50 @@ namespace HSMServer.BackgroundServices
         private async Task BuildStatistics()
         {
             var tempFilePath = Path.GetTempFileName(); // TODO: or use Environment.CurrentDirectory??
+            var heaviestSensors = new PriorityQueue<string, long>();
 
             await using (var stream = new FileStream(tempFilePath, FileMode.Create, FileAccess.ReadWrite))
             {
                 await using var writer = new StreamWriter(stream);
 
+
+                async Task WriteStats(NodeHistoryInfo nodeInfo)
+                {
+                    foreach (var (sensorId, sensorInfo) in nodeInfo.SensorsInfo)
+                    {
+                        var sensor = _cache.GetSensor(sensorId);
+
+                        if (sensor is not null)
+                        {
+                            await writer.WriteLineAsync($"{sensor.RootProductName},{sensor.Path},{sensorInfo.TotalSizeBytes},{sensorInfo.ValuesSizeBytes},{sensorInfo.DataCount}");
+
+                            heaviestSensors.Enqueue(sensor.FullPath, sensorInfo.TotalSizeBytes);
+                            if (heaviestSensors.Count > _heaviestSensorsCount)
+                                heaviestSensors.Dequeue();
+                        }
+                    }
+
+                    foreach (var (_, subnodeInfo) in nodeInfo.SubnodesInfo)
+                        await WriteStats(subnodeInfo);
+                }
+
+
                 await writer.WriteLineAsync("Product,Path,Total size (bytes),Values size (bytes),Data count");
 
                 foreach (var product in _cache.GetProducts())
-                    await WriteStats(_cache.GetNodeHistoryInfo(product.Id), writer);
+                    await WriteStats(_cache.GetNodeHistoryInfo(product.Id));
             }
 
             await _dbStatistics.SendFile(tempFilePath);
 
-            File.Delete(tempFilePath);
-        }
-
-        private async Task WriteStats(NodeHistoryInfo nodeInfo, StreamWriter writer)
-        {
-            foreach (var (sensorId, sensorInfo) in nodeInfo.SensorsInfo)
+            var heaviestSensorsCount = Math.Min(_heaviestSensorsCount, heaviestSensors.Count);
+            for (var i = 0; i < heaviestSensorsCount; ++i)
             {
-                var sensor = _cache.GetSensor(sensorId);
-
-                if (sensor is not null)
-                    await writer.WriteLineAsync($"{sensor.RootProductName},{sensor.Path},{sensorInfo.TotalSizeBytes},{sensorInfo.ValuesSizeBytes},{sensorInfo.DataCount}");
+                if (heaviestSensors.TryDequeue(out var sensorPath, out var totalBytes))
+                    _heaviestSensors.AddValue(totalBytes, sensorPath);
             }
 
-            foreach (var (_, subnodeInfo) in nodeInfo.SubnodesInfo)
-                await WriteStats(subnodeInfo, writer);
+            File.Delete(tempFilePath);
         }
     }
 }
