@@ -25,12 +25,22 @@ namespace HSMServer.Services
             return false;
         }
 
-        private static bool CheckInitPermissions(RequestData data, SensorData sensorData, out string message, out BaseSensorModel sensor)
+        private bool CheckInitPermissions(RequestData data, SensorData sensorData, out string message, out BaseSensorModel sensor)
         {
             message = string.Empty;
             sensor = null;
 
             var product = data.Product;
+            var key = data.Key;
+            
+            if (key is null && !TryGetKey(sensorData.KeyId, out key, out message))
+                return false;
+            
+            if (product is null && !TryGetProduct(key.ProductId, out product, out message))
+                return false;
+
+            sensorData.Key = key;
+            
             var pathParts = PermissionFilter.GetPathParts(sensorData.Path);
 
             for (int i = 0; i < pathParts.Length; i++)
@@ -42,7 +52,7 @@ namespace HSMServer.Services
                     product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
 
                     if (product == null &&
-                        !TreeValuesCache.TryCheckAccessKeyPermissions(data.Key, KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
+                        !TreeValuesCache.TryCheckAccessKeyPermissions(key, KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
                         return false;
                 }
                 else
@@ -50,7 +60,7 @@ namespace HSMServer.Services
                     sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
 
                     if (sensor == null &&
-                        !TreeValuesCache.TryCheckAccessKeyPermissions(data.Key, KeyPermissions.CanAddSensors, out message))
+                        !TreeValuesCache.TryCheckAccessKeyPermissions(key, KeyPermissions.CanAddSensors, out message))
                         return false;
                 }
             }
@@ -66,6 +76,19 @@ namespace HSMServer.Services
         public bool TryGetProduct(Guid id, out ProductModel product, out string message)
         {
             return cache.TryGetProduct(id, out product, out message);
+        }
+        
+        private bool TryGetKey(string id, out AccessKeyModel key, out string message)
+        {
+            key = null;
+
+            if (!Guid.TryParse(id, out var keyId))
+            {
+                message = "Invalid key";
+                return false;
+            }
+
+            return TryGetKey(keyId, out key, out message);
         }
     }
 }

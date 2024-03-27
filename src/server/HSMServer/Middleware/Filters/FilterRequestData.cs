@@ -24,6 +24,10 @@ namespace HSMServer.Middleware
     {
         public string Path { get; set; }
         
+        public string KeyId { get; set; }
+        
+        public AccessKeyModel Key { get; set; }
+        
         public Guid Id { get; set; }
     }
 }

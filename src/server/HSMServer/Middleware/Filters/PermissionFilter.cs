@@ -10,6 +10,7 @@ using HSMServer.Core.Model;
 using HSMServer.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Header = HSMSensorDataObjects.Header;
 
 namespace HSMServer.Middleware;
 
@@ -36,14 +37,14 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
         {
             if (!service.CheckPermission(requestData, new SensorData()
                 {
-                    Path = request.Path
+                    Path = request.Path,
+                    KeyId = request.Key
                 }, Permissions, out message))
             {
                 context.HttpContext.Response.StatusCode = 406;
                 return;
             }
         }
-
 
         switch (values)
         {
@@ -59,12 +60,13 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
         }
     }
 
+
     private void AddRequestData<T>(ActionExecutingContext context, RequestData requestData, List<T> values = null, string argumentName = null) where T : BaseRequest
     {
         if (values is not null && !string.IsNullOrEmpty(argumentName))
         {
             context.ActionArguments.Remove(argumentName);
-            values = values.Where(x => service.CheckPermission(requestData, new SensorData() {Path = x.Path}, Permissions, out _)).ToList();
+            values = values.Where(x => service.CheckPermission(requestData, new SensorData() {Path = x.Path, KeyId = x.Key}, Permissions, out _)).ToList();
 
             context.ActionArguments.Add(argumentName, values);
 
@@ -76,26 +78,27 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) || obj is not RequestData requestData)
+        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) ||
+            obj is not RequestData requestData)
             return;
 
         var headers = context.HttpContext.Request.Headers;
         var hasKey = GetKeyIdFromHeader(headers, out var keyId);
 
-        if (!hasKey)
-            return;
+        // if (!hasKey)
+        //     return;
 
         var keyExist = service.TryGetKey(keyId, out var key, out var message);
 
-        if (!keyExist)
-            return;
+        // if (!keyExist)
+        //     return;
 
         requestData.Key = key;
 
         var productExist = service.TryGetProduct(key.ProductId, out var product, out message);
 
-        if (!productExist)
-            return;
+        // if (!productExist)
+        //     return;
 
         requestData.Product = product;
 
