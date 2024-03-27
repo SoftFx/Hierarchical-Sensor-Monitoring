@@ -1,7 +1,6 @@
 using HSMServer.Core.Model;
 using System;
 using System.Collections.Generic;
-using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.Middleware
 {
@@ -17,15 +16,8 @@ namespace HSMServer.Middleware
 
         public int Count { get; set; } = 1;
         
-        public string MonitoringKey { get; set; }
 
         public RequestData() { }
-
-        public RequestData(HttpContext context)
-        {
-            if (context.Request.Headers.TryGetValue("MonitoringKey", out var key))
-                MonitoringKey = key;
-        }
     }
 
     public class SensorData
