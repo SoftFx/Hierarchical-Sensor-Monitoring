@@ -1,10 +1,13 @@
 ﻿using HSMCommon.Extensions;
+using HSMDataCollector.Alerts;
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using HSMSensorDataObjects.SensorRequests;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.StatisticInfo;
+using HSMServer.Extensions;
 using HSMServer.ServerConfiguration.Monitoring;
 using Microsoft.Extensions.Options;
 using System;
@@ -14,10 +17,15 @@ using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundServices
 {
-    public sealed class DatabaseStatistics : DatabaseBase
+    public sealed class DatabaseSensorsStatistics : DatabaseSensorsBase
     {
+        private const string FullStatisticsSensorName = "Full sensors size statistics";
+        private const string TopHeaviestSensorName = "Top heaviest sensors";
+
         private readonly TimeSpan _periodicity = TimeSpan.FromDays(1); // TODO: should be initialized from optionsMonitor
         private readonly int _heaviestSensorsCount = 10; // TODO: should be initialized from optionsMonitor
+        private readonly int _maxSensorSizeMegabytes = 500;
+        private readonly string _tempDirectory = Path.GetTempPath();
 
         private readonly ITreeValuesCache _cache;
 
@@ -27,7 +35,7 @@ namespace HSMServer.BackgroundServices
         private DateTime _nextStart;
 
 
-        public DatabaseStatistics(IDataCollector collector, IDatabaseCore database,
+        public DatabaseSensorsStatistics(IDataCollector collector, IDatabaseCore database,
             IOptionsMonitor<MonitoringOptions> optionsMonitor, ITreeValuesCache cache)
             : base(collector, database, optionsMonitor)
         {
@@ -57,34 +65,38 @@ namespace HSMServer.BackgroundServices
             {
                 Alerts = [],
                 TTL = TimeSpan.MaxValue,
+                EnableForGrafana = true,
                 KeepHistory = TimeSpan.FromDays(7),
-                Description = $"File with extended statistics of sensors history database memory.",
-
-                DefaultFileName = "Database statistics",
-                Extension = "csv",
+                Description = $"File with extended statistics of sensors history database memory.", // TODO
             };
 
-            return _collector.CreateFileSensor($"{NodeName}/Sensors statistics", options);
+            return _collector.CreateFileSensor($"{NodeName}/{FullStatisticsSensorName}", options);
         }
 
         private IInstantValueSensor<double> CreateDoubleSensor()
         {
-            var options = new InstantSensorOptions // TODO: Grafana??
+            var options = new InstantSensorOptions
             {
-                Alerts = [], // TODO: alert '> 800 mb' should be added
                 TTL = TimeSpan.MaxValue,
-                SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.MB,
-                Description = $"The heaviest sensors.",
+                EnableForGrafana = true,
+                SensorUnit = Unit.MB,
+                Description = $"The heaviest sensors.", // TODO
+                Alerts =
+                [
+                    AlertsFactory.IfValue(AlertOperation.GreaterThan, _maxSensorSizeMegabytes)
+                                 .ThenSendNotification($"$comment sensor size in the database has exceeded $target $unit")
+                                 .AndSetIcon(AlertIcon.Warning).Build()
+                ],
             };
 
-            return _collector.CreateDoubleSensor($"{NodeName}/The heaviest sensors", options);
+            return _collector.CreateDoubleSensor($"{NodeName}/{TopHeaviestSensorName}", options);
         }
 
         private void UpdateNextStart() => _nextStart = DateTime.UtcNow.Ceil(_periodicity);
 
         private async Task BuildStatistics()
         {
-            var tempFilePath = Path.GetTempFileName(); // TODO: or use Environment.CurrentDirectory??
+            var tempFilePath = Path.Combine(_tempDirectory, $"database_stats_{DateTime.UtcNow.ToWindowsDateFormat()}.csv");
             var heaviestSensors = new PriorityQueue<string, long>();
 
             await using (var stream = new FileStream(tempFilePath, FileMode.Create, FileAccess.ReadWrite))
@@ -125,7 +137,7 @@ namespace HSMServer.BackgroundServices
             for (var i = 0; i < heaviestSensorsCount; ++i)
             {
                 if (heaviestSensors.TryDequeue(out var sensorPath, out var totalBytes))
-                    _heaviestSensors.AddValue(totalBytes, sensorPath);
+                    _heaviestSensors.AddValue(GetRoundedDouble(totalBytes), sensorPath);
             }
 
             File.Delete(tempFilePath);

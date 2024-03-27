@@ -9,11 +9,8 @@ using System.Collections.Generic;
 
 namespace HSMServer.BackgroundServices
 {
-    public sealed class DatabaseSize : DatabaseBase
+    public sealed class DatabaseSensorsSize : DatabaseSensorsBase
     {
-        private const double MbDivisor = 1 << 20;
-        private const int DigitsCnt = 2;
-
         private const string BackupsDbName = "Config backups";
         private const string JournalsDbName = "Journals";
         private const string HistoryDbName = "History";
@@ -34,7 +31,7 @@ namespace HSMServer.BackgroundServices
         };
 
 
-        public DatabaseSize(IDataCollector collector, IDatabaseCore database, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+        public DatabaseSensorsSize(IDataCollector collector, IDatabaseCore database, IOptionsMonitor<MonitoringOptions> optionsMonitor)
             : base(collector, database, optionsMonitor)
         {
             CreateDataSizeSensor(HistoryDbName, () => _database.SensorHistoryDbSize);
@@ -82,15 +79,7 @@ namespace HSMServer.BackgroundServices
             internal DatabaseSizeSensor(string description) => Description = description;
 
 
-            internal void SendInfo()
-            {
-                static double GetRoundedDouble(long sizeInBytes)
-                {
-                    return Math.Round(sizeInBytes / MbDivisor, DigitsCnt, MidpointRounding.AwayFromZero);
-                }
-
-                Sensor.AddValue(GetRoundedDouble(GetSize()));
-            }
+            internal void SendInfo() => Sensor.AddValue(GetRoundedDouble(GetSize()));
         }
     }
 }

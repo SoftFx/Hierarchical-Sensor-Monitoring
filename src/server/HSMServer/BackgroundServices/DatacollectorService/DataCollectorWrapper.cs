@@ -21,14 +21,14 @@ namespace HSMServer.BackgroundServices
         private readonly IDataCollector _collector;
 
 
-        internal DatabaseStatistics DbStatisticsSensors { get; }
+        internal DatabaseSensorsStatistics DbStatisticsSensors { get; }
 
-        internal DatabaseSize DbSizeSensors { get; }
+        internal DatabaseSensorsSize DbSizeSensors { get; }
 
         internal ClientStatistics Statistics { get; }
 
 
-        public DataCollectorWrapper(IDataCollector collector, ClientStatistics statistics, DatabaseSize databaseSize, DatabaseStatistics databaseStatistics)
+        public DataCollectorWrapper(IDataCollector collector, ClientStatistics statistics, DatabaseSensorsSize databaseSize, DatabaseSensorsStatistics databaseStatistics)
         {
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
             var loggerOptions = new LoggerOptions()

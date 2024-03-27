@@ -63,8 +63,8 @@ public static class ApplicationServiceExtensions
                 .AddHostedService<BackupDatabaseService>();
         
         services.AddSingleton<ClientStatistics>();
-        services.AddSingleton<DatabaseSize>();
-        services.AddSingleton<DatabaseStatistics>();
+        services.AddSingleton<DatabaseSensorsSize>();
+        services.AddSingleton<DatabaseSensorsStatistics>();
         
         services.AddScoped<IPermissionService, PermissionService>();
         
