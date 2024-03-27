@@ -4,6 +4,7 @@ using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.StatisticInfo;
 using HSMServer.ServerConfiguration.Monitoring;
 using Microsoft.Extensions.Options;
 using System;
@@ -14,8 +15,9 @@ namespace HSMServer.BackgroundServices
 {
     public sealed class DatabaseStatistics : DatabaseBase
     {
-        private readonly ITreeValuesCache _cache;
         private readonly TimeSpan _periodicity = TimeSpan.FromDays(1); // TODO: should be initialized from optionsMonitor
+
+        private readonly ITreeValuesCache _cache;
 
         private readonly IFileSensor _dbStatistics;
         private readonly IInstantValueSensor<double> _heaviestSensors;
@@ -80,20 +82,35 @@ namespace HSMServer.BackgroundServices
 
         private async Task BuildStatistics()
         {
-            Directory.CreateDirectory($"{Environment.CurrentDirectory}/stats");
-            await using (var stream = new FileStream($"{Environment.CurrentDirectory}/stats/temp.csv", FileMode.Create, FileAccess.ReadWrite, FileShare.Read))
+            var tempFilePath = Path.GetTempFileName(); // TODO: or use Environment.CurrentDirectory??
+
+            await using (var stream = new FileStream(tempFilePath, FileMode.Create, FileAccess.ReadWrite))
             {
                 await using var writer = new StreamWriter(stream);
 
-                await writer.WriteLineAsync("Product,Path,Total,Values,Count");
+                await writer.WriteLineAsync("Product,Path,Total size (bytes),Values size (bytes),Data count");
 
                 foreach (var product in _cache.GetProducts())
-                {
-                    var info = _cache.GetNodeHistoryInfo(product.Id);
-                }
+                    await WriteStats(_cache.GetNodeHistoryInfo(product.Id), writer);
             }
 
-            var result = await _dbStatistics.SendFile($"{Environment.CurrentDirectory}/stats/temp.csv");
+            await _dbStatistics.SendFile(tempFilePath);
+
+            File.Delete(tempFilePath);
+        }
+
+        private async Task WriteStats(NodeHistoryInfo nodeInfo, StreamWriter writer)
+        {
+            foreach (var (sensorId, sensorInfo) in nodeInfo.SensorsInfo)
+            {
+                var sensor = _cache.GetSensor(sensorId);
+
+                if (sensor is not null)
+                    await writer.WriteLineAsync($"{sensor.RootProductName},{sensor.Path},{sensorInfo.TotalSizeBytes},{sensorInfo.ValuesSizeBytes},{sensorInfo.DataCount}");
+            }
+
+            foreach (var (_, subnodeInfo) in nodeInfo.SubnodesInfo)
+                await WriteStats(subnodeInfo, writer);
         }
     }
 }
