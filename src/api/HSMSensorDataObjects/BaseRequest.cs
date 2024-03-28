@@ -10,6 +10,7 @@ namespace HSMSensorDataObjects
         public string Path { get; set; }
     }
 
+
     public abstract class Header
     {
         public string Key { get; set; }

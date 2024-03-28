@@ -35,8 +35,8 @@ namespace HSMServer.BackgroundServices
         private DateTime _nextStart;
 
 
-        public DatabaseSensorsStatistics(IDataCollector collector, IDatabaseCore database,
-            IOptionsMonitor<MonitoringOptions> optionsMonitor, ITreeValuesCache cache)
+        internal DatabaseSensorsStatistics(IDataCollector collector, IDatabaseCore database,
+            ITreeValuesCache cache, IOptionsMonitor<MonitoringOptions> optionsMonitor)
             : base(collector, database, optionsMonitor)
         {
             _cache = cache;

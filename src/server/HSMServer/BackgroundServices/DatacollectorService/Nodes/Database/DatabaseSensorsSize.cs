@@ -31,7 +31,7 @@ namespace HSMServer.BackgroundServices
         };
 
 
-        public DatabaseSensorsSize(IDataCollector collector, IDatabaseCore database, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+        internal DatabaseSensorsSize(IDataCollector collector, IDatabaseCore database, IOptionsMonitor<MonitoringOptions> optionsMonitor)
             : base(collector, database, optionsMonitor)
         {
             CreateDataSizeSensor(HistoryDbName, () => _database.SensorHistoryDbSize);

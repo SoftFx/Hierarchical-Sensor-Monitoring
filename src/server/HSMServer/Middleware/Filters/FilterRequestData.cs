@@ -14,7 +14,10 @@ namespace HSMServer.Middleware
 
         public string TelemetryPath { get; set; }
 
-        public int Count { get; set; }
+        public int Count { get; set; } = 1;
+        
+
+        public RequestData() { }
     }
 
     public class SensorData

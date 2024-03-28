@@ -1,5 +1,4 @@
 using HSMDatabase.DatabaseWorkCore;
-using HSMDataCollector.Core;
 using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
 using HSMServer.ConcurrentStorage;
@@ -15,6 +14,7 @@ using HSMServer.Middleware;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
+using HSMServer.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -27,7 +27,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Authentication;
 using System.Threading.Tasks;
-using HSMServer.Services;
 
 namespace HSMServer.ServiceExtensions;
 
@@ -61,15 +60,9 @@ public static class ApplicationServiceExtensions
                 .AddHostedService<DatacollectorService>()
                 .AddHostedService<NotificationsBackgroundService>()
                 .AddHostedService<BackupDatabaseService>();
-        
-        services.AddSingleton<ClientStatistics>();
-        services.AddSingleton<DatabaseSensorsSize>();
-        services.AddSingleton<DatabaseSensorsStatistics>();
-        
+
         services.AddScoped<IPermissionService, PermissionService>();
-        
-        services.ConfigureDataCollector();
-        
+
         services.AddSwaggerGen(o =>
         {
             o.UseInlineDefinitionsForEnums();
@@ -168,24 +161,6 @@ public static class ApplicationServiceExtensions
             if (services.GetService(type) is IAsyncStorage storage)
                 await storage.Initialize();
     }
-
-    private static IServiceCollection ConfigureDataCollector(this IServiceCollection services)
-    {
-        services.AddSingleton<CollectorOptions>(sp => {
-            var cache = sp.GetService<ITreeValuesCache>();
-            
-            return new CollectorOptions()
-            {
-                AccessKey = DataCollectorWrapper.GetSelfMonitoringKey(cache),
-                ClientName = "HSMServerMonitoring" // TODO: Mb create special key and hash it so no one knows it except us, then use it instead of selfmonitoring key?
-            };
-        });
-
-        services.AddSingleton<IDataCollector, DataCollector>();
-
-        return services;
-    }
-
 
     private static Action<ListenOptions> KestrelListenOptions(ServerCertificateConfig config) =>
         options =>

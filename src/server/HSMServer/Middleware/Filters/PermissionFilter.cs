@@ -15,10 +15,14 @@ namespace HSMServer.Middleware;
 
 public abstract class PermissionFilter(IPermissionService service, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
 {
+    private const string ValuesArgument = "values";
+    private const string CommandsArgument = "sensorCommands";
+
+
     protected abstract KeyPermissions Permissions { get; }
 
 
-    public virtual void CheckPermission(ActionExecutingContext context, RequestData requestData, out string message)
+    public void CheckPermission(ActionExecutingContext context, RequestData requestData, out string message)
     {
         message = string.Empty;
 
@@ -41,37 +45,38 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
         }
 
 
-        if (values is List<SensorValueBase> requestValues)
+        switch (values)
         {
-            context.ActionArguments.Remove("values");
-
-            requestValues = requestValues.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
-
-            context.ActionArguments.Add("values", requestValues);
-
-            collector.Statistics[requestData.TelemetryPath].AddReceiveData(requestValues.Count);
-            requestData.Count = requestValues.Count;
+            case List<SensorValueBase> requestValues:
+                AddRequestData<SensorValueBase>(context, requestData, values: requestValues, argumentName: ValuesArgument);
+                break;
+            case List<CommandRequestBase> commands:
+                AddRequestData<CommandRequestBase>(context, requestData, values: commands, argumentName: CommandsArgument);
+                break;
+            default:
+                AddRequestData<BaseRequest>(context, requestData);
+                break;
         }
-        else if (values is List<CommandRequestBase> commands)
+    }
+
+    private void AddRequestData<T>(ActionExecutingContext context, RequestData requestData, List<T> values = null, string argumentName = null) where T : BaseRequest
+    {
+        if (values is not null && !string.IsNullOrEmpty(argumentName))
         {
-            context.ActionArguments.Remove("sensorCommands");
-            commands = commands.Where(x => service.CheckPermission(requestData, new SensorData() { Path = x.Path }, Permissions, out _)).ToList();
+            context.ActionArguments.Remove(argumentName);
+            values = values.Where(x => service.CheckPermission(requestData, new SensorData() {Path = x.Path}, Permissions, out _)).ToList();
 
-            context.ActionArguments.Add("sensorCommands", commands);
+            context.ActionArguments.Add(argumentName, values);
 
-            collector.Statistics[requestData.TelemetryPath].AddReceiveData(commands.Count);
-            requestData.Count = commands.Count;
+            requestData.Count = values.Count;
         }
-        else
-        {
-            collector.Statistics[requestData.TelemetryPath].AddReceiveData(1);
-            requestData.Count = 1;
-        }
+
+        collector.Statistics[requestData.TelemetryPath].AddReceiveData(requestData.Count);
     }
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var r) || r is not RequestData requestData)
+        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) || obj is not RequestData requestData)
             return;
 
         var headers = context.HttpContext.Request.Headers;
@@ -117,7 +122,7 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
     {
         if (context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var value) && value is RequestData requestData)
             collector.Statistics[requestData.TelemetryPath].AddResponseResult(context.HttpContext.Response);
-        
+
         await next();
     }
 }

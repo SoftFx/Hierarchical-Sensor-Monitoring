@@ -10,32 +10,26 @@ namespace HSMServer.Core.Model.Requests
         private const string ErrorInvalidPath = "Path has an invalid format.";
         private const string ErrorPathKey = "Path or key is empty.";
 
+        private readonly bool _failKey;
 
-        public string Key { get; }
 
         public string Path { get; }
 
-        public Guid KeyGuid { get; }
+        public Guid Key { get; }
 
         public string[] PathParts { get; }
 
 
+        public BaseRequestModel(Guid key, string path) : this(key.ToString(), path) { }
+
         public BaseRequestModel(string key, string path)
         {
-            Key = key;
             Path = path;
 
-            if (Guid.TryParse(Key, out var guid))
-                KeyGuid = guid;
+            _failKey = !Guid.TryParse(key, out var guid);
 
-            PathParts = GetPathParts(Path);
-        }
-        
-        public BaseRequestModel(Guid key, string path)
-        {
-            Key = key.ToString();
-            Path = path;
-            KeyGuid = key;
+            if (!_failKey)
+                Key = guid;
 
             PathParts = GetPathParts(Path);
         }
@@ -43,7 +37,7 @@ namespace HSMServer.Core.Model.Requests
 
         public bool TryCheckRequest(out string message)
         {
-            if (string.IsNullOrEmpty(Key) || string.IsNullOrEmpty(Path))
+            if (_failKey || string.IsNullOrEmpty(Path))
             {
                 message = ErrorPathKey;
                 return false;
