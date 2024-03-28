@@ -85,7 +85,7 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
         GetKeyIdFromHeader(context.HttpContext.Request.Headers, out var keyId);
         service.TryGetKey(keyId, out var key, out var message);
         requestData.Key = key;
-        
+
         service.TryGetProduct(key.ProductId, out var product, out message);
         requestData.Product = product;
 
