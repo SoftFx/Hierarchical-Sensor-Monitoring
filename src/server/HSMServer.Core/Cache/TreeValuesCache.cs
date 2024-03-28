@@ -1248,7 +1248,7 @@ namespace HSMServer.Core.Cache
 
             var ttl = sensor.Policies.TimeToLive;
 
-            if (ttl.ResendNotification())
+            if (ttl.ResendNotification() && sensor.HasData)
                 SendNotification(ttl.GetNotification(true));
         }
 
@@ -1261,7 +1261,7 @@ namespace HSMServer.Core.Cache
                 var ttl = sensor.Policies.TimeToLive;
                 snapshot.IsExpired = timeout;
 
-                if (timeout && sensor.LastValue is not null)
+                if (timeout && sensor.HasData)
                 {
                     var value = sensor.GetTimeoutValue();
 

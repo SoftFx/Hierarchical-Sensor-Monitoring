@@ -28,9 +28,6 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal override bool UseScheduleManagerLogic => false;
-
-
         internal TTLPolicy(BaseNodeModel node, PolicyEntity entity)
         {
             _ttl = node.Settings.TTL;
