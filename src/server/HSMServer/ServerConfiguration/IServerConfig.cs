@@ -6,6 +6,8 @@
 
         BackupDatabaseConfig BackupDatabase { get; }
 
+        MonitoringOptions MonitoringOptions { get; }
+
 
         void ResaveSettings();
     }

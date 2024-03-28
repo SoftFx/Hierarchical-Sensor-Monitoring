@@ -1,6 +1,5 @@
 ﻿using HSMCommon;
 using HSMServer.Extensions;
-using HSMServer.ServerConfiguration.Monitoring;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.IO;
@@ -49,7 +48,7 @@ namespace HSMServer.ServerConfiguration
         public TelegramConfig Telegram { get; }
 
         public KestrelConfig Kestrel { get; }
-        
+
         public MonitoringOptions MonitoringOptions { get; }
 
 
@@ -75,7 +74,7 @@ namespace HSMServer.ServerConfiguration
             Telegram = Register<TelegramConfig>(nameof(Telegram));
             Kestrel = Register<KestrelConfig>(nameof(Kestrel));
             MonitoringOptions = Register<MonitoringOptions>(nameof(MonitoringOptions));
-            
+
             ResaveSettings();
         }
 

@@ -7,6 +7,7 @@ namespace HSMServer.Extensions
     {
         private const string DateTimeDefaultFormat = "dd/MM/yyyy HH:mm:ss";
         private const string DateTimeWindowsFormat = "dd.MM.yyyyTHH.mm";
+        private const string DateWindowsFormat = "dd_MM_yyyy";
 
 
         public static string ToDefaultFormat(this DateTime dateTime) => dateTime.ToString(DateTimeDefaultFormat);
@@ -18,6 +19,8 @@ namespace HSMServer.Extensions
             DateTime.TryParseExact(str, DateTimeDefaultFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time) ? time : DateTime.MinValue;
 
         public static string ToWindowsFormat(this DateTime dateTime) => dateTime.ToString(DateTimeWindowsFormat);
+
+        public static string ToWindowsDateFormat(this DateTime dateTime) => dateTime.Date.ToString(DateWindowsFormat);
 
 
         public static string GetTimeAgo(this DateTime lastUpdateDate)
