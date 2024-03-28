@@ -8,6 +8,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Extensions;
+using HSMServer.ServerConfiguration;
 using HSMServer.ServerConfiguration.Monitoring;
 using Microsoft.Extensions.Options;
 using NLog;
@@ -23,10 +24,11 @@ namespace HSMServer.BackgroundServices
         private const string FullStatisticsSensorName = "Full sensors size statistics";
         private const string TopHeaviestSensorName = "Top heaviest sensors";
 
-        private readonly TimeSpan _periodicity = TimeSpan.FromDays(1); // TODO: should be initialized from optionsMonitor
-        private readonly int _heaviestSensorsCount = 10; // TODO: should be initialized from optionsMonitor
         private readonly int _maxSensorSizeMegabytes = 500;
         private readonly string _tempDirectory = Path.GetTempPath();
+
+        private readonly TimeSpan _periodicity;
+        private readonly int _heaviestSensorsCount;
 
         private readonly ITreeValuesCache _cache;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -37,11 +39,13 @@ namespace HSMServer.BackgroundServices
         private DateTime _nextStart;
 
 
-        internal DatabaseSensorsStatistics(IDataCollector collector, IDatabaseCore database,
-            ITreeValuesCache cache, IOptionsMonitor<MonitoringOptions> optionsMonitor)
-            : base(collector, database, optionsMonitor)
+        internal DatabaseSensorsStatistics(IDataCollector collector, IDatabaseCore database, ITreeValuesCache cache, IServerConfig config)
+            : base(collector, database, config)
         {
             _cache = cache;
+
+            _periodicity = TimeSpan.FromDays(_serverConfig.MonitoringOptions.DatabaseStatisticsPeriodDays);
+            _heaviestSensorsCount = _serverConfig.MonitoringOptions.TopHeaviestSensorsCount;
 
             _dbStatistics = CreateFileSensor();
             _heaviestSensors = CreateDoubleSensor();

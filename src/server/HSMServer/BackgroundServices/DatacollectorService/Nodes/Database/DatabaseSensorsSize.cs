@@ -2,8 +2,7 @@
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.Core.DataLayer;
-using HSMServer.ServerConfiguration.Monitoring;
-using Microsoft.Extensions.Options;
+using HSMServer.ServerConfiguration;
 using System;
 using System.Collections.Generic;
 
@@ -31,8 +30,8 @@ namespace HSMServer.BackgroundServices
         };
 
 
-        internal DatabaseSensorsSize(IDataCollector collector, IDatabaseCore database, IOptionsMonitor<MonitoringOptions> optionsMonitor)
-            : base(collector, database, optionsMonitor)
+        internal DatabaseSensorsSize(IDataCollector collector, IDatabaseCore database, IServerConfig config)
+            : base(collector, database, config)
         {
             CreateDataSizeSensor(HistoryDbName, () => _database.SensorHistoryDbSize);
             CreateDataSizeSensor(JournalsDbName, () => _database.JournalDbSize);
