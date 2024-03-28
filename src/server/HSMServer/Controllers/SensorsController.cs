@@ -549,7 +549,7 @@ namespace HSMServer.Controllers
             if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) &&
                 obj is RequestData requestData)
             {
-                _updatesQueue.AddItem(new StoreInfo(requestData.Key.Id, value.Path)
+                _updatesQueue.AddItem(new StoreInfo(requestData.Key?.Id.ToString() ?? value?.Key, value.Path)
                 {
                     BaseValue = value.Convert(),
                     Product = requestData.Product
@@ -584,7 +584,7 @@ namespace HSMServer.Controllers
                     return false;
                 }
 
-                requestModel.Update = request.Convert(sensorData.Id, requestData.Key.DisplayName);
+                requestModel.Update = request.Convert(sensorData.Id, requestData?.Key.DisplayName ?? sensorData.Key?.DisplayName);
 
                 if (request.SensorType.HasValue)
                     requestModel.Type = request.SensorType.Value.Convert();
