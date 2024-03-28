@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Cache.UpdateEntities;
+using System;
 
 namespace HSMServer.Core.Model.Requests
 {
@@ -10,5 +11,7 @@ namespace HSMServer.Core.Model.Requests
 
 
         public SensorAddOrUpdateRequestModel(string key, string path) : base(key, path) { }
+        
+        public SensorAddOrUpdateRequestModel(Guid key, string path) : base(key, path) { }
     }
 }

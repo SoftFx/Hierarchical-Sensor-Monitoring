@@ -1,10 +1,11 @@
 ﻿using HSMCommon.Constants;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
-using HSMDataCollector.PublicInterface;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Extensions;
+using HSMServer.ServerConfiguration.Monitoring;
+using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
 using System.Reflection;
@@ -15,30 +16,17 @@ namespace HSMServer.BackgroundServices
     public sealed class DataCollectorWrapper : IDisposable
     {
         private const string SelfMonitoringProductName = "HSM Server Monitoring";
-
-        private const string RequestsCountPath = "Load/Requests per second";
-        private const string DataCountPath = "Load/Received data count per second";
-
-        private const string ResponseSizePath = "Load/Sent data per second KB";
-        private const string RequestSizePath = "Load/Received data per second KB";
+        private const string SelfCollectorName = "Self monitoring";
 
         private readonly IDataCollector _collector;
 
 
         internal DatabaseSize DbSizeSensors { get; }
 
-
-        internal IMonitoringRateSensor ResponseSizeSensor { get; }
-
-        internal IMonitoringRateSensor RequestSizeSensor { get; }
+        internal ClientStatistics Statistics { get; }
 
 
-        internal IMonitoringRateSensor ReceivedDataCountSensor { get; }
-
-        internal IMonitoringRateSensor RequestsCountSensor { get; }
-
-
-        public DataCollectorWrapper(IDatabaseCore database, ITreeValuesCache cache)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IOptionsMonitor<MonitoringOptions> optionsMonitor)
         {
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
             var loggerOptions = new LoggerOptions()
@@ -46,20 +34,21 @@ namespace HSMServer.BackgroundServices
                 WriteDebug = false,
             };
 
-            _collector = new DataCollector(GetSelfMonitoringKey(cache)).AddNLog(loggerOptions);
+            var options = new CollectorOptions
+            {
+                AccessKey = GetSelfMonitoringKey(cache),
+                ClientName = SelfCollectorName,
+            };
+
+            _collector = new DataCollector(options).AddNLog(loggerOptions);
 
             if (OperatingSystem.IsWindows())
                 _collector.Windows.AddAllDefaultSensors(productVersion);
             else
                 _collector.Unix.AddAllDefaultSensors(productVersion);
 
-            ResponseSizeSensor = _collector.CreateM1RateSensor(ResponseSizePath);
-            RequestSizeSensor = _collector.CreateM1RateSensor(RequestSizePath);
-
-            ReceivedDataCountSensor = _collector.CreateM1RateSensor(DataCountPath);
-            RequestsCountSensor = _collector.CreateM1RateSensor(RequestsCountPath);
-
-            DbSizeSensors = new DatabaseSize(_collector, database);
+            Statistics = new ClientStatistics(_collector, optionsMonitor);
+            DbSizeSensors = new DatabaseSize(_collector, db, optionsMonitor);
         }
 
 

@@ -15,6 +15,8 @@ namespace HSMServer.Core.Model.Requests
 
 
         public HistoryRequestModel(string key, string path) : base(key, path) { }
+        
+        public HistoryRequestModel(Guid key, string path) : base(key, path) { }
     }
 
 

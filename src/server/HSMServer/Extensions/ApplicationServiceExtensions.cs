@@ -14,6 +14,7 @@ using HSMServer.Middleware;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
+using HSMServer.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -59,6 +60,8 @@ public static class ApplicationServiceExtensions
                 .AddHostedService<DatacollectorService>()
                 .AddHostedService<NotificationsBackgroundService>()
                 .AddHostedService<BackupDatabaseService>();
+
+        services.AddScoped<IPermissionService, PermissionService>();
 
         services.AddSwaggerGen(o =>
         {
@@ -138,7 +141,7 @@ public static class ApplicationServiceExtensions
         applicationBuilder.UseAuthentication();
         applicationBuilder.UseAuthorization();
 
-        applicationBuilder.UseMiddleware<RequestStatisticsMiddleware>();
+        applicationBuilder.UseMiddleware<TelemetryMiddleware>();
         applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
         applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
 
@@ -158,7 +161,6 @@ public static class ApplicationServiceExtensions
             if (services.GetService(type) is IAsyncStorage storage)
                 await storage.Initialize();
     }
-
 
     private static Action<ListenOptions> KestrelListenOptions(ServerCertificateConfig config) =>
         options =>

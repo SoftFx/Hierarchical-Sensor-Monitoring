@@ -10,6 +10,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
+using HSMServer.Middleware;
 using HSMServer.ModelBinders;
 using HSMServer.ObsoleteUnitedSensorValue;
 using HSMServer.Validation;
@@ -67,17 +68,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<BoolSensorValue> Post([FromBody] BoolSensorValue sensorValue)
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -96,17 +93,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<IntSensorValue> Post([FromBody] IntSensorValue sensorValue)
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -125,17 +118,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<DoubleSensorValue> Post([FromBody] DoubleSensorValue sensorValue)
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -154,16 +143,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<StringSensorValue> Post([FromBody] StringSensorValue sensorValue)
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -182,17 +168,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<TimeSpanSensorValue> Post([FromBody] TimeSpanSensorValue sensorValue)
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -211,16 +193,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<VersionSensorValue> Post([FromBody] VersionSensor sensorValue)
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -239,16 +218,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<RateSensorValue> Post([FromBody] RateSensorValue sensorValue)
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -268,17 +244,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<DoubleBarSensorValue> Post([FromBody] DoubleBarSensorValue sensorValue)
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -297,17 +269,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<IntBarSensorValue> Post([FromBody] IntBarSensorValue sensorValue)
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -326,17 +294,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<FileSensorValue> Post([FromBody] FileSensorValue sensorValue)
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(1);
-
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
-                    return Ok(sensorValue);
-
-                return StatusCode(406, message);
+                AddToQueue(sensorValue);
+                return Ok(sensorValue);
             }
             catch (Exception e)
             {
@@ -357,22 +321,15 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<List<SensorValueBase>> Post([FromBody, ModelBinder(typeof(SensorValueModelBinder))] List<SensorValueBase> values)
         {
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(values.Count);
-
-                var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values.OrderBy(u => u.Time))
-                {
-                    var storeInfo = BuildStoreInfo(value, value.Convert());
+                    AddToQueue(value);
 
-                    if (!CanAddToQueue(storeInfo, out var message))
-                        result[storeInfo.Path] = message;
-                }
-
-                return result.Count == 0 ? Ok(values) : StatusCode(406, result);
+                return Ok(values);
             }
             catch (Exception e)
             {
@@ -399,7 +356,7 @@ namespace HSMServer.Controllers
 
             try
             {
-                _dataCollector.ReceivedDataCountSensor.AddValue(values.Count);
+                _dataCollector.Statistics.Total.AddReceiveData(values.Count);
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)
@@ -439,6 +396,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<ReadPermissionFilter>]
         public async Task<ActionResult<string>> Get([FromBody] HistoryRequest request)
         {
             try
@@ -468,6 +426,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<ReadPermissionFilter>]
         public async Task<IActionResult> Get([FromBody] FileHistoryRequest request) //TODO merge with ExportHistory History controller
         {
             try
@@ -502,19 +461,23 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<AddOrUpdateSensorRequest> Post([FromBody] AddOrUpdateSensorRequest sensorUpdate)
         {
             try
             {
-                var keyName = GetCollectorKeyName();
-
-                if (TryBuildSensorUpdate(sensorUpdate, keyName, out var update, out var message))
+                if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var data) && data is RequestData requestData)
                 {
-                    _cache.TryAddOrUpdateSensor(update, out var error);
-                    return Ok(error);
+                    if (TryBuildSensorUpdate(requestData, sensorUpdate, requestData.Data[0], out var update, out var message))
+                    {
+                        _cache.TryAddOrUpdateSensor(update, out var error);
+                        return Ok(error);
+                    }
+
+                    return StatusCode(406, message);
                 }
 
-                return StatusCode(406, message);
+                return StatusCode(502);
             }
             catch (Exception e)
             {
@@ -535,26 +498,28 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [TypeFilter<SendPermissionFilter>]
         public ActionResult<Dictionary<string, string>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
         {
             var result = new Dictionary<string, string>(sensorCommands.Count);
 
             try
             {
-                var keyName = GetCollectorKeyName();
-
-                foreach (var command in sensorCommands)
+                if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var data) && data is RequestData requestData)
                 {
-                    if (command is AddOrUpdateSensorRequest sensorUpdate)
+                    for (var i = 0; i < sensorCommands.Count; i++)
                     {
-                        if (TryBuildSensorUpdate(sensorUpdate, keyName, out var update, out var message))
-                            _cache.TryAddOrUpdateSensor(update, out message);
+                        if (sensorCommands[i] is AddOrUpdateSensorRequest sensorUpdate)
+                        {
+                            if (TryBuildSensorUpdate(requestData, sensorUpdate, requestData.Data[i], out var update, out var message))
+                                _cache.TryAddOrUpdateSensor(update, out var error);
 
-                        if (!string.IsNullOrEmpty(message))
-                            result[sensorUpdate.Path] = message;
+                            if (!string.IsNullOrEmpty(message))
+                                result[sensorUpdate.Path] = message;
+                        }
+                        else
+                            result[sensorCommands[i].Path] = $"This type of command is not supported now";
                     }
-                    else
-                        result[command.Path] = $"This type of command is not supported now";
                 }
 
                 return Ok(result);
@@ -566,23 +531,6 @@ namespace HSMServer.Controllers
             }
         }
 
-
-        private string GetCollectorKeyName()
-        {
-            if (HttpContext.Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var keyVal))
-            {
-                if (Guid.TryParse(keyVal, out var key))
-                {
-                    var keyModel = _cache.GetAccessKey(key);
-
-                    return keyModel is null ? throw new Exception($"Current key doesn't exists: {key}") : keyModel.DisplayName;
-                }
-                else
-                    throw new Exception($"Invalid key: {keyVal}");
-            }
-            else
-                throw new Exception("Key is required");
-        }
 
         private bool CanAddToQueue(StoreInfo storeInfo, out string message)
         {
@@ -596,34 +544,47 @@ namespace HSMServer.Controllers
             return false;
         }
 
-        private bool TryCheckReadHistoryRequest(HistoryRequest request, out HistoryRequestModel requestModel, out string message)
+        private void AddToQueue(SensorValueBase value)
         {
-            Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
-
-            requestModel = request.Convert(key);
-
-            return request.TryValidate(out message) &&
-                   requestModel.TryCheckRequest(out message) &&
-                   _cache.TryCheckKeyReadPermissions(requestModel, out message);
+            if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) &&
+                obj is RequestData requestData)
+            {
+                _updatesQueue.AddItem(new StoreInfo(requestData.Key.Id, value.Path)
+                {
+                    BaseValue = value.Convert(),
+                    Product = requestData.Product
+                });
+            }
         }
 
-        private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
-            new(GetKey(valueBase), valueBase.Path) { BaseValue = baseValue };
-
-        private bool TryBuildSensorUpdate(AddOrUpdateSensorRequest request, string keyName, out SensorAddOrUpdateRequestModel requestModel, out string message)
+        private bool TryCheckReadHistoryRequest(HistoryRequest historyRequest, out HistoryRequestModel requestModel, out string message)
         {
-            requestModel = new SensorAddOrUpdateRequestModel(GetKey(request), request.Path);
+            requestModel = null;
+            message = null;
 
-            if (requestModel.TryCheckRequest(out message) &&
-                _cache.TryCheckSensorUpdateKeyPermission(requestModel, out var sensorId, out message))
+            if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) && obj is RequestData requestData)
             {
-                if (sensorId == Guid.Empty && request.SensorType is null)
+                requestModel = historyRequest.Convert(requestData.Key.Id);
+
+                return historyRequest.TryValidate(out message) && requestModel.TryCheckRequest(out message);
+            }
+
+            return false;
+        }
+
+        private bool TryBuildSensorUpdate(RequestData requestData, AddOrUpdateSensorRequest request, SensorData sensorData, out SensorAddOrUpdateRequestModel requestModel, out string message)
+        {
+            requestModel = new SensorAddOrUpdateRequestModel(requestData.Key.Id, request.Path);
+
+            if (requestModel.TryCheckRequest(out message))
+            {
+                if (sensorData.Id == Guid.Empty && request.SensorType is null)
                 {
                     message = $"{nameof(request.SensorType)} property is required, because sensor {request.Path} doesn't exist";
                     return false;
                 }
 
-                requestModel.Update = request.Convert(sensorId, keyName);
+                requestModel.Update = request.Convert(sensorData.Id, requestData.Key.DisplayName);
 
                 if (request.SensorType.HasValue)
                     requestModel.Type = request.SensorType.Value.Convert();
@@ -632,16 +593,6 @@ namespace HSMServer.Controllers
             }
 
             return false;
-        }
-
-        private string GetKey(BaseRequest request)
-        {
-            Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
-
-            if (string.IsNullOrEmpty(key))
-                key = request?.Key;
-
-            return key;
         }
 
         private bool TryCheckKey(out string message)
