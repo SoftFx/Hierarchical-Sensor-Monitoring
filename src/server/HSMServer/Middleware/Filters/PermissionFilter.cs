@@ -31,7 +31,7 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
         var collectorName = context.HttpContext.Request.Headers.TryGetValue(nameof(Header.ClientName), out var clientName) && !string.IsNullOrWhiteSpace(clientName) ? clientName.ToString() : "No name";
         requestData.TelemetryPath = $"{requestData.Product.DisplayName}/{requestData.Key.DisplayName}/{collectorName}";
 
-        collector.Statistics[requestData.TelemetryPath].AddRequestData(context.HttpContext.Request);
+        collector.Statistics[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
 
         if (values is BaseRequest request)
         {
@@ -73,7 +73,7 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
             requestData.Count = values.Count;
         }
 
-        collector.Statistics[requestData.TelemetryPath].AddReceiveData(requestData.Count);
+        collector.Statistics[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
     }
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
@@ -111,7 +111,7 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
     public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
         if (context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var value) && value is RequestData requestData)
-            collector.Statistics[requestData.TelemetryPath].AddResponseResult(context.HttpContext.Response);
+            collector.Statistics[requestData.TelemetryPath]?.AddResponseResult(context.HttpContext.Response);
 
         await next();
     }
