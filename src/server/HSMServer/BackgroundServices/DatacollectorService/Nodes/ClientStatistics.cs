@@ -1,19 +1,19 @@
 using HSMDataCollector.Core;
-using System.Collections.Concurrent;
-using HSMServer.ServerConfiguration.Monitoring;
+using HSMServer.ServerConfiguration;
 using HSMServer.WebRequestsNodes;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 
 namespace HSMServer.BackgroundServices
 {
     internal sealed class ClientStatistics
     {
         private const string TotalGroup = "_Total";
-        
+
         private readonly ConcurrentDictionary<string, WebRequestNode> _selfSensors = new();
         private readonly IDataCollector _collector;
         private readonly IOptionsMonitor<MonitoringOptions> _optionsMonitor;
-        
+
 
         public WebRequestNode this[string id] => _selfSensors.GetOrAdd(id, AddSensors);
 
@@ -26,7 +26,7 @@ namespace HSMServer.BackgroundServices
             _optionsMonitor = optionsMonitor;
         }
 
-        
+
         private WebRequestNode AddSensors(string path = null)
         {
             var id = path ?? TotalGroup;

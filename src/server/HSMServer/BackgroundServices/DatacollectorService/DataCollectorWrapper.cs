@@ -5,7 +5,6 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
-using HSMServer.ServerConfiguration.Monitoring;
 using Microsoft.Extensions.Options;
 using System;
 using System.Linq;

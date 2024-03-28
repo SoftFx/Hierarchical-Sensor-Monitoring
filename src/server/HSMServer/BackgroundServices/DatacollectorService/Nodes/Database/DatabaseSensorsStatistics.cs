@@ -9,8 +9,6 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
-using HSMServer.ServerConfiguration.Monitoring;
-using Microsoft.Extensions.Options;
 using NLog;
 using System;
 using System.Collections.Generic;
