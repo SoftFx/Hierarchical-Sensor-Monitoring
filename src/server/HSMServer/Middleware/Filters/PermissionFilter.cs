@@ -82,24 +82,11 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
             obj is not RequestData requestData)
             return;
 
-        var headers = context.HttpContext.Request.Headers;
-        var hasKey = GetKeyIdFromHeader(headers, out var keyId);
-
-        // if (!hasKey)
-        //     return;
-
-        var keyExist = service.TryGetKey(keyId, out var key, out var message);
-
-        // if (!keyExist)
-        //     return;
-
+        GetKeyIdFromHeader(context.HttpContext.Request.Headers, out var keyId);
+        service.TryGetKey(keyId, out var key, out var message);
         requestData.Key = key;
-
-        var productExist = service.TryGetProduct(key.ProductId, out var product, out message);
-
-        // if (!productExist)
-        //     return;
-
+        
+        service.TryGetProduct(key.ProductId, out var product, out message);
         requestData.Product = product;
 
         CheckPermission(context, requestData, out message);
