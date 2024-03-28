@@ -235,7 +235,12 @@ namespace HSMServer.Core.Model.Policies
                     actions.Add(Destination.ToString());
 
                 if (Schedule is not null)
-                    actions.Add(Schedule.ToString());
+                {
+                    var schedule = UseScheduleManagerLogic ? Schedule.ToString() : Schedule.ToTtlString();
+
+                    if (!string.IsNullOrEmpty(schedule))
+                        actions.Add(schedule);
+                }
             }
 
             if (!string.IsNullOrEmpty(Icon))
