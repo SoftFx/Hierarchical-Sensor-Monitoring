@@ -115,6 +115,8 @@
     })
     
     $(document).ready(() => {
+        boardSetId('@Model.Id')
+    
         replaceHtmlToMarkdown('markdown_description');
         initDashboard();
 
