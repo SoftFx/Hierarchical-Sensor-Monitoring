@@ -14,7 +14,7 @@ public sealed record TotalWebRequestNode : WebRequestNode
 
     public TotalWebRequestNode(IDataCollector collector) : base(collector, ClientStatistics.TotalGroup)
     {
-        _rps = collector.CreateM1RateSensor(BuildSensorPath(ClientStatistics.TotalGroup, RequestPerSecondNode), "Number of requests that were receive");
+        _rps = collector.CreateM1RateSensor(BuildSensorPath(ClientStatistics.TotalGroup, RequestPerSecondNode), "Number of requests that were received.");
     }
 
 
