@@ -1,3 +1,4 @@
+using HSMSensorDataObjects;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Middleware;
@@ -43,12 +44,12 @@ namespace HSMServer.Services
             return false;
         }
 
-        public IEnumerable<T> GetPendingChecked<T>(RequestData requestData, KeyPermissions permissions)
+        public IEnumerable<T> GetPendingChecked<T>(RequestData requestData, KeyPermissions permissions) where T : BaseRequest
         {
             if (requestData.Key is null)
                 return [];
 
-            return _pendingCheck.Where(x => CheckKeyPermission(requestData, x, permissions, out _)).Select(x => x.Request) as IEnumerable<T>;
+            return _pendingCheck.Where(x => CheckKeyPermission(requestData, x, permissions, out _)).Select(x => (T)x.Request);
         }
 
         private bool CheckPermissions(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
