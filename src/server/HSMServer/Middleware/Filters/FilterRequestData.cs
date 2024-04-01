@@ -1,32 +1,35 @@
+using HSMSensorDataObjects;
 using HSMServer.Core.Model;
 using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Middleware
 {
-    public class RequestData
+    public sealed class RequestData
     {
-        public List<SensorData> Data { get; set; } = new();
+        public List<SensorData> Data { get; } = [];
 
         public ProductModel Product { get; set; }
 
         public AccessKeyModel Key { get; set; }
 
-        public string TelemetryPath { get; set; }
-
-        public int Count { get; set; } = 1;
+        public string CollectorName { get; set; }
         
+        public int Count { get; set; } = 1;
 
-        public RequestData() { }
+        public string TelemetryPath { get; private set; }
+
+
+        public void BuildTelemetryPath() => TelemetryPath = Key is null ? null : $"{Product.DisplayName}/{Key.DisplayName}/{CollectorName}";
     }
 
-    public class SensorData
+    public sealed class SensorData
     {
-        public string Path { get; set; }
+        public BaseRequest Request { get; init; }
         
-        public string KeyId { get; set; }
+        public string Path { get; init; }
         
-        public AccessKeyModel Key { get; set; }
+        public string KeyId { get; init; }
         
         public Guid Id { get; set; }
     }

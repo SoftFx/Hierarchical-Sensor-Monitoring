@@ -6,6 +6,7 @@ using HSMCommon.Constants;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.BackgroundServices;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Services;
 using Microsoft.AspNetCore.Http;
@@ -14,7 +15,7 @@ using Header = HSMSensorDataObjects.Header;
 
 namespace HSMServer.Middleware;
 
-public abstract class PermissionFilter(IPermissionService service, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
+public abstract class PermissionFilter(IPermissionService service, ITreeValuesCache cache, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
 {
     private const string ValuesArgument = "values";
     private const string CommandsArgument = "sensorCommands";
@@ -28,10 +29,8 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
         message = string.Empty;
 
         var values = context.ActionArguments.Values.FirstOrDefault();
-        var collectorName = context.HttpContext.Request.Headers.TryGetValue(nameof(Header.ClientName), out var clientName) && !string.IsNullOrWhiteSpace(clientName) ? clientName.ToString() : "No name";
-        requestData.TelemetryPath = $"{requestData.Product.DisplayName}/{requestData.Key.DisplayName}/{collectorName}";
-
-        collector.Statistics[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
+        requestData.CollectorName = context.HttpContext.Request.Headers.TryGetValue(nameof(Header.ClientName), out var clientName) && !string.IsNullOrWhiteSpace(clientName) ? clientName.ToString() : "No name";
+        requestData.BuildTelemetryPath();
 
         if (values is BaseRequest request)
         {
@@ -58,6 +57,9 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
                 AddRequestData<BaseRequest>(context, requestData);
                 break;
         }
+        
+        collector.Statistics[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
+        collector.Statistics[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
     }
 
 
@@ -66,27 +68,27 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
         if (values is not null && !string.IsNullOrEmpty(argumentName))
         {
             context.ActionArguments.Remove(argumentName);
-            values = values.Where(x => service.CheckPermission(requestData, new SensorData() {Path = x.Path, KeyId = x.Key}, Permissions, out _)).ToList();
+            values = values.Where(x => service.CheckPermission(requestData, new SensorData() {Path = x.Path, KeyId = x.Key, Request = x}, Permissions, out _)).ToList();
 
+            values.AddRange(service.CheckPending<T>(requestData, Permissions));
+            
             context.ActionArguments.Add(argumentName, values);
 
             requestData.Count = values.Count;
         }
-
-        collector.Statistics[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
     }
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) ||
-            obj is not RequestData requestData)
+        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) || obj is not RequestData requestData)
             return;
 
+        // TODO: Replace for actual header key check in collector v4
         GetKeyIdFromHeader(context.HttpContext.Request.Headers, out var keyId);
-        service.TryGetKey(keyId, out var key, out var message);
+        cache.TryGetKey(keyId, out var key, out var message);
         requestData.Key = key;
 
-        service.TryGetProduct(key.ProductId, out var product, out message);
+        cache.TryGetProduct(key.ProductId, out var product, out message);
         requestData.Product = product;
 
         CheckPermission(context, requestData, out message);

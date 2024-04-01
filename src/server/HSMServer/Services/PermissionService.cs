@@ -2,45 +2,67 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Middleware;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Services
 {
     public class PermissionService(ITreeValuesCache cache) : IPermissionService
     {
+        private readonly List<SensorData> _pendingCheck = new(1 << 2);
+
+
         public bool CheckPermission(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
         {
-            if (CheckInitPermissions(data, sensorData, out message, out var sensor))
+            if (data.Key is not null)
+                return CheckKeyPermission(data, sensorData, permissions, out message);
+            
+            if (TryGetKey(sensorData.KeyId, out var key, out message) && cache.TryGetProduct(key.ProductId, out var product, out message))
             {
-                sensorData.Id = sensor?.Id ?? Guid.Empty;
-                if (data.Key.IsValid(permissions, out message))
-                {
-                    data.Data.Add(sensorData);
-                    return true;
-                }
-
+                data.Key = key;
+                data.Product = product;
+                data.BuildTelemetryPath();
+            }
+            else
+            {
+                _pendingCheck.Add(sensorData);
                 return false;
-            };
+            }
+
+            return CheckKeyPermission(data, sensorData, permissions, out message);
+        }
+
+        private bool CheckKeyPermission(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
+        {
+            if (CheckPermissions(data, sensorData, permissions, out message))
+            {
+                data.Data.Add(sensorData);
+                return true;
+            }
 
             return false;
         }
 
-        private bool CheckInitPermissions(RequestData data, SensorData sensorData, out string message, out BaseSensorModel sensor)
+        public IEnumerable<T> CheckPending<T>(RequestData requestData, KeyPermissions permissions)
+        {
+            if (requestData.Key is null)
+                return [];
+
+            return _pendingCheck.Where(x => CheckKeyPermission(requestData, x, permissions, out _)).Select(x => x.Request) as IEnumerable<T>;
+        }
+
+        private bool CheckPermissions(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
         {
             message = string.Empty;
-            sensor = null;
+
+            if (!data.Key.IsValid(permissions, out message))
+                return false;
+            
+            BaseSensorModel sensor = null;
 
             var product = data.Product;
             var key = data.Key;
-            
-            if (key is null && !TryGetKey(sensorData.KeyId, out key, out message))
-                return false;
-            
-            if (product is null && !TryGetProduct(key.ProductId, out product, out message))
-                return false;
 
-            sensorData.Key = key;
-            
             var pathParts = PermissionFilter.GetPathParts(sensorData.Path);
 
             for (int i = 0; i < pathParts.Length; i++)
@@ -65,19 +87,11 @@ namespace HSMServer.Services
                 }
             }
 
+            sensorData.Id = sensor?.Id ?? Guid.Empty;
+
             return true;
         }
 
-        public bool TryGetKey(Guid id, out AccessKeyModel key, out string message)
-        {
-            return cache.TryGetKey(id, out key, out message);
-        }
-
-        public bool TryGetProduct(Guid id, out ProductModel product, out string message)
-        {
-            return cache.TryGetProduct(id, out product, out message);
-        }
-        
         private bool TryGetKey(string id, out AccessKeyModel key, out string message)
         {
             key = null;
@@ -88,7 +102,7 @@ namespace HSMServer.Services
                 return false;
             }
 
-            return TryGetKey(keyId, out key, out message);
+            return cache.TryGetKey(keyId, out key, out message);
         }
     }
 }

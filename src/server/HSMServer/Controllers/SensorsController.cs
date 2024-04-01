@@ -584,7 +584,7 @@ namespace HSMServer.Controllers
                     return false;
                 }
 
-                requestModel.Update = request.Convert(sensorData.Id, requestData?.Key.DisplayName ?? sensorData.Key?.DisplayName);
+                requestModel.Update = request.Convert(sensorData.Id, requestData.Key.DisplayName);
 
                 if (request.SensorType.HasValue)
                     requestModel.Type = request.SensorType.Value.Convert();
