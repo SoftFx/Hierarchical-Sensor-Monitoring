@@ -24,7 +24,33 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
     protected abstract KeyPermissions Permissions { get; }
 
 
-    public void CheckPermission(ActionExecutingContext context, RequestData requestData, out string message)
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) || obj is not RequestData requestData)
+            return;
+
+        // TODO: Replace for actual header key check in collector v4
+        GetKeyIdFromHeader(context.HttpContext.Request.Headers, out var keyId);
+        cache.TryGetKey(keyId, out var key, out var message);
+        requestData.Key = key;
+
+        cache.TryGetProduct(key.ProductId, out var product, out message);
+        requestData.Product = product;
+
+        CheckPermission(context, requestData, out message);
+        await next();
+    }
+    
+    public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
+    {
+        if (context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var value) && value is RequestData requestData)
+            collector.Statistics[requestData.TelemetryPath]?.AddResponseResult(context.HttpContext.Response);
+
+        await next();
+    }
+
+
+    private void CheckPermission(ActionExecutingContext context, RequestData requestData, out string message)
     {
         message = string.Empty;
 
@@ -74,24 +100,6 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
         }
     }
 
-    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
-    {
-        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) || obj is not RequestData requestData)
-            return;
-
-        // TODO: Replace for actual header key check in collector v4
-        GetKeyIdFromHeader(context.HttpContext.Request.Headers, out var keyId);
-        cache.TryGetKey(keyId, out var key, out var message);
-        requestData.Key = key;
-
-        cache.TryGetProduct(key.ProductId, out var product, out message);
-        requestData.Product = product;
-
-        CheckPermission(context, requestData, out message);
-        await next();
-    }
-
-
     private static bool GetKeyIdFromHeader(IHeaderDictionary headers, out Guid guidKey)
     {
         headers.TryGetValue(nameof(Header.Key), out var key);
@@ -104,13 +112,5 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
         path = path.FirstOrDefault() == CommonConstants.SensorPathSeparator ? path[1..] : path;
 
         return path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries).AsSpan();
-    }
-
-    public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
-    {
-        if (context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var value) && value is RequestData requestData)
-            collector.Statistics[requestData.TelemetryPath]?.AddResponseResult(context.HttpContext.Response);
-
-        await next();
     }
 }

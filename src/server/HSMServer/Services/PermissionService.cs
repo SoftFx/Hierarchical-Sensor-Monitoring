@@ -8,7 +8,7 @@ using System.Linq;
 
 namespace HSMServer.Services
 {
-    public class PermissionService(ITreeValuesCache cache) : IPermissionService
+    public sealed class PermissionService(ITreeValuesCache cache) : IPermissionService
     {
         private readonly List<SensorData> _pendingCheck = new(1 << 2);
 
@@ -33,6 +33,15 @@ namespace HSMServer.Services
             return CheckKeyPermission(data, sensorData, permissions, out message);
         }
 
+        public IEnumerable<T> GetPendingChecked<T>(RequestData requestData, KeyPermissions permissions) where T : BaseRequest
+        {
+            if (requestData.Key is null)
+                return [];
+
+            return _pendingCheck.Where(x => CheckKeyPermission(requestData, x, permissions, out _)).Select(x => (T)x.Request);
+        }
+
+
         private bool CheckKeyPermission(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
         {
             if (CheckPermissions(data, sensorData, permissions, out message))
@@ -42,14 +51,6 @@ namespace HSMServer.Services
             }
 
             return false;
-        }
-
-        public IEnumerable<T> GetPendingChecked<T>(RequestData requestData, KeyPermissions permissions) where T : BaseRequest
-        {
-            if (requestData.Key is null)
-                return [];
-
-            return _pendingCheck.Where(x => CheckKeyPermission(requestData, x, permissions, out _)).Select(x => (T)x.Request);
         }
 
         private bool CheckPermissions(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
