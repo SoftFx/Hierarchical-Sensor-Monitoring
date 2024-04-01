@@ -1,4 +1,4 @@
-import {Plot} from "../js/plots";
+import {Plot} from "../../js/plots";
 
 export class Source {
     //plot data

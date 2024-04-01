@@ -1,9 +1,11 @@
 import { convertToGraphData } from "./plotting";
 import { Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot } from "./plots";
 import {Dashboard} from "../ts/dashboardT";
-import {Panel} from "../ts/dashboard.panel";
-import {DashboardStorage} from "../ts/dashboard.storage";
-import {Source} from "../ts/dashboard.source";
+import {Panel} from "../ts/dashboards/dashboard.panel";
+import {DashboardStorage} from "../ts/dashboards/dashboard.storage";
+import {Source} from "../ts/dashboards/dashboard.source";
+import {PlotTest} from "../ts/plots/plot";
+import {DoublePlotTest} from "../ts/plots/double-plot";
 
 const updateDashboardInterval = 120000; // 2min
 export const storage = new DashboardStorage();
@@ -141,6 +143,7 @@ function checkForYRange(plot){
 }
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId, range = undefined) {
+    new DoublePlotTest(data);
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)

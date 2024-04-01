@@ -1,5 +1,6 @@
+
+import {Dictionary} from "../dashboard.interfaces";
 import {Panel} from "./dashboard.panel";
-import {Dictionary} from "./dashboard.interfaces";
 
 export class DashboardStorage{
     panels: Dictionary<Panel> = {};

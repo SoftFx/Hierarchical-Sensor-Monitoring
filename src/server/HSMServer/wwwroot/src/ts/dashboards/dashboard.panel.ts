@@ -11,7 +11,7 @@ export class Panel {
 
     public constructor(id: string, settings: Settings, rangeSettings: RangeSettings) {
         this.id = id;
-        this.divId = `panelChart_panelChart_${this.id}`;
+        this.divId = `panelChart_${this.id}`;
         this.settings = settings;
         this.rangeSettings = rangeSettings;
     }
