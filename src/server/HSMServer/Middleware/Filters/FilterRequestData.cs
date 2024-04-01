@@ -25,12 +25,20 @@ namespace HSMServer.Middleware
 
     public sealed class SensorData
     {
-        public BaseRequest Request { get; init; }
+        public BaseRequest Request { get; }
         
-        public string Path { get; init; }
+        public string Path { get; }
         
-        public string KeyId { get; init; }
+        public string KeyId { get; }
         
         public Guid Id { get; set; }
+
+
+        public SensorData(BaseRequest request)
+        {
+            Request = request;
+            Path = request?.Path;
+            KeyId = request?.Key;
+        }
     }
 }

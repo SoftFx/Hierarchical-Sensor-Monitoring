@@ -43,7 +43,7 @@ namespace HSMServer.Services
             return false;
         }
 
-        public IEnumerable<T> CheckPending<T>(RequestData requestData, KeyPermissions permissions)
+        public IEnumerable<T> GetPendingChecked<T>(RequestData requestData, KeyPermissions permissions)
         {
             if (requestData.Key is null)
                 return [];

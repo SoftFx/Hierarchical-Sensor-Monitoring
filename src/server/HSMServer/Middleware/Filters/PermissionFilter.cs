@@ -34,11 +34,7 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
 
         if (values is BaseRequest request)
         {
-            if (!service.CheckPermission(requestData, new SensorData()
-                {
-                    Path = request.Path,
-                    KeyId = request.Key
-                }, Permissions, out message))
+            if (!service.CheckPermission(requestData, new SensorData(request), Permissions, out message))
             {
                 context.HttpContext.Response.StatusCode = 406;
                 return;
@@ -68,9 +64,9 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
         if (values is not null && !string.IsNullOrEmpty(argumentName))
         {
             context.ActionArguments.Remove(argumentName);
-            values = values.Where(x => service.CheckPermission(requestData, new SensorData() {Path = x.Path, KeyId = x.Key, Request = x}, Permissions, out _)).ToList();
+            values = values.Where(x => service.CheckPermission(requestData, new SensorData(x), Permissions, out _)).ToList();
 
-            values.AddRange(service.CheckPending<T>(requestData, Permissions));
+            values.AddRange(service.GetPendingChecked<T>(requestData, Permissions));
             
             context.ActionArguments.Add(argumentName, values);
 
