@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Middleware
 {
-    public class TelemetryMiddleware(RequestDelegate next)
+    public sealed class TelemetryMiddleware(RequestDelegate next)
     {
         public const string RequestData = "RequestData";
         

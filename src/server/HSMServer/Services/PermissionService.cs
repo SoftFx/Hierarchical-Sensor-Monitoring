@@ -1,36 +1,70 @@
+using HSMSensorDataObjects;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Middleware;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Services
 {
-    public class PermissionService(ITreeValuesCache cache) : IPermissionService
+    public sealed class PermissionService(ITreeValuesCache cache) : IPermissionService
     {
+        private readonly List<SensorData> _pendingCheck = new(1 << 2);
+
+
         public bool CheckPermission(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
         {
-            if (CheckInitPermissions(data, sensorData, out message, out var sensor))
+            if (data.Key is not null)
+                return CheckKeyPermission(data, sensorData, permissions, out message);
+            
+            if (TryGetKey(sensorData.KeyId, out var key, out message) && cache.TryGetProduct(key.ProductId, out var product, out message))
             {
-                sensorData.Id = sensor?.Id ?? Guid.Empty;
-                if (data.Key.IsValid(permissions, out message))
-                {
-                    data.Data.Add(sensorData);
-                    return true;
-                }
-
+                data.Key = key;
+                data.Product = product;
+                data.BuildTelemetryPath();
+            }
+            else
+            {
+                _pendingCheck.Add(sensorData);
                 return false;
-            };
+            }
+
+            return CheckKeyPermission(data, sensorData, permissions, out message);
+        }
+
+        public IEnumerable<T> GetPendingChecked<T>(RequestData requestData, KeyPermissions permissions) where T : BaseRequest
+        {
+            if (requestData.Key is null)
+                return [];
+
+            return _pendingCheck.Where(x => CheckKeyPermission(requestData, x, permissions, out _)).Select(x => (T)x.Request);
+        }
+
+
+        private bool CheckKeyPermission(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
+        {
+            if (CheckPermissions(data, sensorData, permissions, out message))
+            {
+                data.Data.Add(sensorData);
+                return true;
+            }
 
             return false;
         }
 
-        private static bool CheckInitPermissions(RequestData data, SensorData sensorData, out string message, out BaseSensorModel sensor)
+        private bool CheckPermissions(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
         {
             message = string.Empty;
-            sensor = null;
+
+            if (!data.Key.IsValid(permissions, out message))
+                return false;
+            
+            BaseSensorModel sensor = null;
 
             var product = data.Product;
+            var key = data.Key;
+
             var pathParts = PermissionFilter.GetPathParts(sensorData.Path);
 
             for (int i = 0; i < pathParts.Length; i++)
@@ -42,7 +76,7 @@ namespace HSMServer.Services
                     product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
 
                     if (product == null &&
-                        !TreeValuesCache.TryCheckAccessKeyPermissions(data.Key, KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
+                        !TreeValuesCache.TryCheckAccessKeyPermissions(key, KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
                         return false;
                 }
                 else
@@ -50,22 +84,27 @@ namespace HSMServer.Services
                     sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
 
                     if (sensor == null &&
-                        !TreeValuesCache.TryCheckAccessKeyPermissions(data.Key, KeyPermissions.CanAddSensors, out message))
+                        !TreeValuesCache.TryCheckAccessKeyPermissions(key, KeyPermissions.CanAddSensors, out message))
                         return false;
                 }
             }
 
+            sensorData.Id = sensor?.Id ?? Guid.Empty;
+
             return true;
         }
 
-        public bool TryGetKey(Guid id, out AccessKeyModel key, out string message)
+        private bool TryGetKey(string id, out AccessKeyModel key, out string message)
         {
-            return cache.TryGetKey(id, out key, out message);
-        }
+            key = null;
 
-        public bool TryGetProduct(Guid id, out ProductModel product, out string message)
-        {
-            return cache.TryGetProduct(id, out product, out message);
+            if (!Guid.TryParse(id, out var keyId))
+            {
+                message = "Invalid key";
+                return false;
+            }
+
+            return cache.TryGetKey(keyId, out key, out message);
         }
     }
 }
