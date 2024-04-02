@@ -1,4 +1,5 @@
 using HSMServer.Attributes;
+using HSMServer.Model.Controls;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
@@ -40,6 +41,8 @@ namespace HSMServer.Model.ViewModel
 
         public HistoryStatisticViewModel HistoryStatistic { get; }
 
+        public DefaultChatViewModel DefaultChat { get; set; }
+
 
         public string EncodedId { get; set; }
 
@@ -73,6 +76,7 @@ namespace HSMServer.Model.ViewModel
             SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
 
             HistoryStatistic = model.HistoryStatistic;
+            DefaultChat = new(model);
 
             AlertIcons = model.AlertIcons;
             HasTimeToLive = model.TTL.TimeInterval is not TimeInterval.None;

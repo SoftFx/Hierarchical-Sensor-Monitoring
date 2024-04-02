@@ -36,11 +36,28 @@ namespace HSMServer.Extensions
             return availableChats;
         }
 
-        internal static bool TryGetChats(this NodeViewModel node, out HashSet<Guid> chats)
+        //internal static bool TryGetChats(this NodeViewModel node, out HashSet<Guid> chats)
+        //{
+        //    if (node.RootProduct.Parent is FolderModel folder)
+        //    {
+        //        chats = folder.TelegramChats;
+        //        return true;
+        //    }
+
+        //    chats = new();
+        //    return false;
+        //}
+
+        internal static bool TryGetChats(this BaseNodeViewModel model, out HashSet<Guid> chats)
         {
-            if (node.RootProduct.Parent is FolderModel folder)
+            if (model is FolderModel folder)
             {
                 chats = folder.TelegramChats;
+                return true;
+            }
+            else if (model is NodeViewModel node && node.RootProduct.Parent is FolderModel parent)
+            {
+                chats = parent.TelegramChats;
                 return true;
             }
 

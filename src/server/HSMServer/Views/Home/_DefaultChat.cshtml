@@ -1,0 +1,50 @@
+﻿@using HSMServer.Model.Controls
+@using HSMServer.Notifications
+@using HSMServer.Extensions
+
+@model DefaultChatViewModel
+
+@inject ITelegramChatsManager ChatsManager
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var chats = new List<TelegramChat>();
+    foreach (var chat in ChatsManager.GetValues())
+    {
+        if (Model.AvailableChats.Contains(chat.Id))
+            chats.Add(chat);
+    }
+}
+
+
+<div class="d-flex flex-row text-nowrap align-items-center ms-3">
+    <span class="meta-info-label">Default telegram chat</span>
+
+    <span id="labelDefaultChat" class="meta-info-value">@Model.SelectedChat</span>
+    <div id="defaultChatControl" class="d-none meta-info-interval">
+        <select asp-for="SelectedChat" class="selectpicker">
+            <option disabled>Groups</option>
+            @foreach (var chat in chats.GetGroups())
+            {
+                <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+            }
+
+            <option data-divider="true"></option>
+            <option disabled>Users</option>
+            @foreach (var chat in chats.GetPrivates())
+            {
+                <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+            }
+        </select>
+    </div>
+
+    <i class='fas fa-question-circle mx-2' title='Telegram chat that will be default for new sensors.'></i>
+</div>
+
+
+<script>
+     $(document).ready(function () {
+        $("select[name='SelectedChat']").selectpicker();
+     });
+</script>
