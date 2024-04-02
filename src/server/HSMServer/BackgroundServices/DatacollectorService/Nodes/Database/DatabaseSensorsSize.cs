@@ -2,28 +2,19 @@
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.Core.DataLayer;
-using HSMServer.ServerConfiguration.Monitoring;
-using Microsoft.Extensions.Options;
+using HSMServer.ServerConfiguration;
 using System;
 using System.Collections.Generic;
 
 namespace HSMServer.BackgroundServices
 {
-    internal sealed class DatabaseSize
+    public sealed class DatabaseSensorsSize : DatabaseSensorsBase
     {
-        private const double MbDivisor = 1 << 20;
-        private const int DigitsCnt = 2;
-
         private const string BackupsDbName = "Config backups";
         private const string JournalsDbName = "Journals";
         private const string HistoryDbName = "History";
         private const string ConfigDbName = "Config";
         private const string TotalDbName = "Total";
-
-
-        private readonly IDataCollector _collector;
-        private readonly IDatabaseCore _database;
-        private readonly IOptionsMonitor<MonitoringOptions> _optionsMonitor;
 
 
         private readonly Dictionary<string, DatabaseSizeSensor> Sensors = new()
@@ -39,12 +30,9 @@ namespace HSMServer.BackgroundServices
         };
 
 
-        internal DatabaseSize(IDataCollector collector, IDatabaseCore database, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+        internal DatabaseSensorsSize(IDataCollector collector, IDatabaseCore database, IServerConfig config)
+            : base(collector, database, config)
         {
-            _collector = collector;
-            _database = database;
-            _optionsMonitor = optionsMonitor;
-
             CreateDataSizeSensor(HistoryDbName, () => _database.SensorHistoryDbSize);
             CreateDataSizeSensor(JournalsDbName, () => _database.JournalDbSize);
             CreateDataSizeSensor(ConfigDbName, () => _database.ConfigDbSize);
@@ -53,7 +41,7 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        internal void SendInfo()
+        internal override void SendInfo()
         {
             foreach (var (_, sensor) in Sensors)
                 sensor.SendInfo();
@@ -73,7 +61,7 @@ namespace HSMServer.BackgroundServices
             };
 
             sensor.GetSize = getSizeFunc;
-            sensor.Sensor = _collector.CreateDoubleSensor($"Database/{databaseName} data size", options);
+            sensor.Sensor = _collector.CreateDoubleSensor($"{NodeName}/{databaseName} data size", options);
         }
 
 
@@ -90,15 +78,7 @@ namespace HSMServer.BackgroundServices
             internal DatabaseSizeSensor(string description) => Description = description;
 
 
-            internal void SendInfo()
-            {
-                static double GetRoundedDouble(long sizeInBytes)
-                {
-                    return Math.Round(sizeInBytes / MbDivisor, DigitsCnt, MidpointRounding.AwayFromZero);
-                }
-
-                Sensor.AddValue(GetRoundedDouble(GetSize()));
-            }
+            internal void SendInfo() => Sensor.AddValue(GetRoundedDouble(GetSize()));
         }
     }
 }

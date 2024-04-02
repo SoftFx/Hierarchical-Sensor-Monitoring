@@ -4,7 +4,7 @@ using HSMDataCollector.Logging;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Extensions;
-using HSMServer.ServerConfiguration.Monitoring;
+using HSMServer.ServerConfiguration;
 using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
@@ -21,12 +21,14 @@ namespace HSMServer.BackgroundServices
         private readonly IDataCollector _collector;
 
 
-        internal DatabaseSize DbSizeSensors { get; }
+        internal DatabaseSensorsStatistics DbStatisticsSensors { get; }
+
+        internal DatabaseSensorsSize DbSizeSensors { get; }
 
         internal ClientStatistics Statistics { get; }
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor)
         {
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
             var loggerOptions = new LoggerOptions()
@@ -48,7 +50,8 @@ namespace HSMServer.BackgroundServices
                 _collector.Unix.AddAllDefaultSensors(productVersion);
 
             Statistics = new ClientStatistics(_collector, optionsMonitor);
-            DbSizeSensors = new DatabaseSize(_collector, db, optionsMonitor);
+            DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
+            DbStatisticsSensors = new DatabaseSensorsStatistics(_collector, db, cache, config);
         }
 
 
@@ -59,7 +62,11 @@ namespace HSMServer.BackgroundServices
         internal Task Stop() => _collector.Stop();
 
 
-        internal void SendDbInfo() => DbSizeSensors.SendInfo();
+        internal void SendDbInfo()
+        {
+            DbSizeSensors.SendInfo();
+            DbStatisticsSensors.SendInfo();
+        }
 
 
         private static string GetSelfMonitoringKey(ITreeValuesCache cache)
