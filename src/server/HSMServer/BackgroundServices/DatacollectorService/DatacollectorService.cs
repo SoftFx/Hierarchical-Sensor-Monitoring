@@ -9,7 +9,7 @@ namespace HSMServer.BackgroundServices
         private readonly DataCollectorWrapper _collector;
 
 
-        public override TimeSpan Delay { get; } = TimeSpan.FromMinutes(1); // TODO: return FromMinutes(5);
+        public override TimeSpan Delay { get; } = TimeSpan.FromMinutes(5);
 
 
         public DatacollectorService(DataCollectorWrapper collector)

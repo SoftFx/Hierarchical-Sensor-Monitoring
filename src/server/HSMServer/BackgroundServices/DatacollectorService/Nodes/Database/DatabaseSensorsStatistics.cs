@@ -71,7 +71,10 @@ namespace HSMServer.BackgroundServices
                 TTL = TimeSpan.MaxValue,
                 EnableForGrafana = true,
                 KeepHistory = TimeSpan.FromDays(7),
-                Description = $"File with extended statistics of sensors history database memory.", // TODO
+                Description = $"This sensor sends information about extended database memory statistics that sensors history occupies. " +
+                              $"It is a file in CSV format that has 5 columns: Product, Path, Total size in bytes (number of bytes occupied by sensor keys and values ​​in the sensors history database), " +
+                              $"Values size in bytes (number of bytes occupied by sensor values only ​​in the sensor history database), Data count (number of sensor historical records). " +
+                              $"The memory check is carried out every {_serverConfig.MonitoringOptions.DatabaseStatisticsPeriodDays} day(s).",
             };
 
             return _collector.CreateFileSensor($"{NodeName}/{FullStatisticsSensorName}", options);
@@ -79,12 +82,15 @@ namespace HSMServer.BackgroundServices
 
         private IInstantValueSensor<double> CreateDoubleSensor()
         {
+            const Unit sensorUnit = Unit.MB;
+
             var options = new InstantSensorOptions
             {
                 TTL = TimeSpan.MaxValue,
                 EnableForGrafana = true,
-                SensorUnit = Unit.MB,
-                Description = $"The heaviest sensors.", // TODO
+                SensorUnit = sensorUnit,
+                Description = $"This sensor sends information about the top {_heaviestSensorsCount} heaviest sensors (sensors that take up the most database memory) in {sensorUnit}. " +
+                              $"The memory check is carried out every {_serverConfig.MonitoringOptions.DatabaseStatisticsPeriodDays} day(s).",
                 Alerts =
                 [
                     AlertsFactory.IfValue(AlertOperation.GreaterThan, _maxSensorSizeMegabytes)
