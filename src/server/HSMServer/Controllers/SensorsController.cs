@@ -549,7 +549,7 @@ namespace HSMServer.Controllers
             if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) &&
                 obj is RequestData requestData)
             {
-                _updatesQueue.AddItem(new StoreInfo(requestData.Key.Id, value.Path)
+                _updatesQueue.AddItem(new StoreInfo(requestData.Key?.Id.ToString(), value.Path)
                 {
                     BaseValue = value.Convert(),
                     Product = requestData.Product

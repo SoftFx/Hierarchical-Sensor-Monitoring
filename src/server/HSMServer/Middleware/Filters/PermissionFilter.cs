@@ -6,14 +6,16 @@ using HSMCommon.Constants;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.BackgroundServices;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Header = HSMSensorDataObjects.Header;
 
 namespace HSMServer.Middleware;
 
-public abstract class PermissionFilter(IPermissionService service, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
+public abstract class PermissionFilter(IPermissionService service, ITreeValuesCache cache, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
 {
     private const string ValuesArgument = "values";
     private const string CommandsArgument = "sensorCommands";
@@ -22,28 +24,48 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
     protected abstract KeyPermissions Permissions { get; }
 
 
-    public void CheckPermission(ActionExecutingContext context, RequestData requestData, out string message)
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) || obj is not RequestData requestData)
+            return;
+
+        // TODO: Replace for actual header key check in collector v4
+        GetKeyIdFromHeader(context.HttpContext.Request.Headers, out var keyId);
+        cache.TryGetKey(keyId, out var key, out var message);
+        requestData.Key = key;
+
+        cache.TryGetProduct(key.ProductId, out var product, out message);
+        requestData.Product = product;
+
+        CheckPermission(context, requestData, out message);
+        await next();
+    }
+    
+    public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
+    {
+        if (context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var value) && value is RequestData requestData)
+            collector.Statistics[requestData.TelemetryPath]?.AddResponseResult(context.HttpContext.Response);
+
+        await next();
+    }
+
+
+    private void CheckPermission(ActionExecutingContext context, RequestData requestData, out string message)
     {
         message = string.Empty;
 
         var values = context.ActionArguments.Values.FirstOrDefault();
-        var collectorName = context.HttpContext.Request.Headers.TryGetValue(nameof(Header.ClientName), out var clientName) && !string.IsNullOrWhiteSpace(clientName) ? clientName.ToString() : "No name";
-        requestData.TelemetryPath = $"{requestData.Product.DisplayName}/{requestData.Key.DisplayName}/{collectorName}";
-
-        collector.Statistics[requestData.TelemetryPath].AddRequestData(context.HttpContext.Request);
+        requestData.CollectorName = context.HttpContext.Request.Headers.TryGetValue(nameof(Header.ClientName), out var clientName) && !string.IsNullOrWhiteSpace(clientName) ? clientName.ToString() : "No name";
+        requestData.BuildTelemetryPath();
 
         if (values is BaseRequest request)
         {
-            if (!service.CheckPermission(requestData, new SensorData()
-                {
-                    Path = request.Path
-                }, Permissions, out message))
+            if (!service.CheckPermission(requestData, new SensorData(request), Permissions, out message))
             {
                 context.HttpContext.Response.StatusCode = 406;
                 return;
             }
         }
-
 
         switch (values)
         {
@@ -57,52 +79,26 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
                 AddRequestData<BaseRequest>(context, requestData);
                 break;
         }
+        
+        collector.Statistics[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
+        collector.Statistics[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
     }
+
 
     private void AddRequestData<T>(ActionExecutingContext context, RequestData requestData, List<T> values = null, string argumentName = null) where T : BaseRequest
     {
         if (values is not null && !string.IsNullOrEmpty(argumentName))
         {
             context.ActionArguments.Remove(argumentName);
-            values = values.Where(x => service.CheckPermission(requestData, new SensorData() {Path = x.Path}, Permissions, out _)).ToList();
+            values = values.Where(x => service.CheckPermission(requestData, new SensorData(x), Permissions, out _)).ToList();
 
+            values.AddRange(service.GetPendingChecked<T>(requestData, Permissions));
+            
             context.ActionArguments.Add(argumentName, values);
 
             requestData.Count = values.Count;
         }
-
-        collector.Statistics[requestData.TelemetryPath].AddReceiveData(requestData.Count);
     }
-
-    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
-    {
-        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) || obj is not RequestData requestData)
-            return;
-
-        var headers = context.HttpContext.Request.Headers;
-        var hasKey = GetKeyIdFromHeader(headers, out var keyId);
-
-        if (!hasKey)
-            return;
-
-        var keyExist = service.TryGetKey(keyId, out var key, out var message);
-
-        if (!keyExist)
-            return;
-
-        requestData.Key = key;
-
-        var productExist = service.TryGetProduct(key.ProductId, out var product, out message);
-
-        if (!productExist)
-            return;
-
-        requestData.Product = product;
-
-        CheckPermission(context, requestData, out message);
-        await next();
-    }
-
 
     private static bool GetKeyIdFromHeader(IHeaderDictionary headers, out Guid guidKey)
     {
@@ -116,13 +112,5 @@ public abstract class PermissionFilter(IPermissionService service, DataCollector
         path = path.FirstOrDefault() == CommonConstants.SensorPathSeparator ? path[1..] : path;
 
         return path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries).AsSpan();
-    }
-
-    public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
-    {
-        if (context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var value) && value is RequestData requestData)
-            collector.Statistics[requestData.TelemetryPath].AddResponseResult(context.HttpContext.Response);
-
-        await next();
     }
 }
