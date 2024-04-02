@@ -46,6 +46,10 @@ namespace HSMServer.Core.Model
         public KeyPermissions Permissions { get; private set; }
 
         public string DisplayName { get; private set; }
+        
+        public DateTime LastUseTime { get; set; }
+        
+        public string IP { get;  set; }
 
 
         public bool IsExpired => DateTime.UtcNow >= ExpirationTime;
@@ -79,6 +83,8 @@ namespace HSMServer.Core.Model
             DisplayName = entity.DisplayName;
             CreationTime = new DateTime(entity.CreationTime);
             ExpirationTime = new DateTime(entity.ExpirationTime);
+            LastUseTime = new DateTime(entity.LastUseTime);
+            IP = entity.IP;
         }
 
         public AccessKeyModel(Guid authorId, Guid productId) : this()
@@ -116,7 +122,9 @@ namespace HSMServer.Core.Model
                 Permissions = (long)Permissions,
                 DisplayName = DisplayName,
                 CreationTime = CreationTime.Ticks,
-                ExpirationTime = ExpirationTime.Ticks
+                ExpirationTime = ExpirationTime.Ticks,
+                LastUseTime = LastUseTime.Ticks,
+                IP = IP
             };
 
         internal static AccessKeyModel BuildDefault(ProductModel product) => new(product);

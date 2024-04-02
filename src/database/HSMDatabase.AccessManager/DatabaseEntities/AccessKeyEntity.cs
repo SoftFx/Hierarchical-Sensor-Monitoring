@@ -21,5 +21,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public long CreationTime { get; init; }
 
         public long ExpirationTime { get; init; }
+        
+        public long LastUseTime { get; init; }
+        
+        public string IP { get; init; }
     }
 }

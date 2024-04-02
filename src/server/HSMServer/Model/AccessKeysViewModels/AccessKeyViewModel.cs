@@ -26,6 +26,10 @@ namespace HSMServer.Model.AccessKeysViewModels
         public string NodePath => ParentProduct?.FullPath;
 
         public string StatusTitle { get; private set; }
+        
+        public string IP { get; set; }
+        
+        public DateTime LastUseTime { get; set; }
 
 
         internal AccessKeyViewModel(AccessKeyModel accessKey, ProductNodeViewModel parent, Guid? authorId)
@@ -33,8 +37,10 @@ namespace HSMServer.Model.AccessKeysViewModels
             Id = accessKey.Id;
             ParentProduct = parent;
             AuthorId = authorId;
+            IP = accessKey.IP;
+            LastUseTime = accessKey.LastUseTime;
             ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
-
+            
             Update(accessKey);
         }
 
@@ -44,6 +50,9 @@ namespace HSMServer.Model.AccessKeysViewModels
             Permissions = BuildPermissions(accessKey.Permissions);
             State = accessKey.State;
             StatusTitle = $"Status : {State}{Environment.NewLine}Expiration date : {ExpirationDate}";
+
+            IP = accessKey.IP;
+            LastUseTime = accessKey.LastUseTime;
         }
 
         internal static string BuildExpiration(DateTime expirationTime) =>

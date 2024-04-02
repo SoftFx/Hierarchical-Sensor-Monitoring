@@ -7,6 +7,7 @@ using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
+using System.Net;
 
 
 namespace HSMServer.Core.Cache
@@ -56,7 +57,7 @@ namespace HSMServer.Core.Cache
         bool TryGetKey(Guid id, out AccessKeyModel key, out string message);
         bool TryGetProduct(Guid id, out ProductModel product, out string message);
 
-        bool CheckAddPermissions(ProductModel product, AccessKeyModel accessKey, ReadOnlySpan<string> pathParts, out string message);
+        void UpdateKeyUseState(AccessKeyModel keyModel, IPAddress ip);
         
         
         bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);

@@ -1,6 +1,7 @@
 ﻿using System;
 using HSMSensorDataObjects;
 using HSMServer.Core.Cache;
+using HSMServer.Core.TreeStateSnapshot;
 using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.Middleware;
@@ -28,6 +29,8 @@ public abstract class BaseKeyFilter(ITreeValuesCache cache)
         cache.TryGetProduct(key.ProductId, out var product, out message);
         requestData.Product = product;
 
+        cache.UpdateKeyUseState(requestData.Key, context.Request.HttpContext.Connection.RemoteIpAddress);
+        
         return requestData;
         
         static bool GetKeyIdFromHeader(IHeaderDictionary headers, out Guid guidKey)

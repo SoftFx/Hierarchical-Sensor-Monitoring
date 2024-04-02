@@ -35,6 +35,9 @@
                 <th class="text-center">State</th>
                 @if (UserRoleHelper.IsManager(user) || UserRoleHelper.IsProductCRUDAllowed(user))
                 {
+                    <th class="text-center">IP</th>
+                    <th class="text-center">Last access date</th>
+                    
                     <th class="text-center">Actions</th>
                 }
             </tr>
@@ -132,6 +135,9 @@
 
                     @if (UserRoleHelper.IsManager(user) || UserRoleHelper.IsProductCRUDAllowed(user))
                     {
+                        <td>@key.IP</td>
+                        <td>@key.LastUseTime</td>
+                        
                         <td nowrap class="text-center">
                             <div class='btn-group'>
                                 @if (isParentEditAvailable || user.IsAdmin)
