@@ -9,13 +9,12 @@ using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Services;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Header = HSMSensorDataObjects.Header;
 
 namespace HSMServer.Middleware;
 
-public abstract class PermissionFilter(IPermissionService service, ITreeValuesCache cache, DataCollectorWrapper collector) : IAsyncActionFilter, IAsyncResultFilter
+public abstract class PermissionFilter(IPermissionService service, ITreeValuesCache cache, DataCollectorWrapper collector) : BaseKeyFilter(cache), IAsyncActionFilter, IAsyncResultFilter
 {
     private const string ValuesArgument = "values";
     private const string CommandsArgument = "sensorCommands";
@@ -26,18 +25,9 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) || obj is not RequestData requestData)
-            return;
+         base.OnActionExecutionAsync(context.HttpContext);
 
-        // TODO: Replace for actual header key check in collector v4
-        GetKeyIdFromHeader(context.HttpContext.Request.Headers, out var keyId);
-        cache.TryGetKey(keyId, out var key, out var message);
-        requestData.Key = key;
-
-        cache.TryGetProduct(key.ProductId, out var product, out message);
-        requestData.Product = product;
-
-        CheckPermission(context, requestData, out message);
+        CheckPermission(context, RequestData, out _);
         await next();
     }
     
@@ -48,7 +38,6 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
 
         await next();
     }
-
 
     private void CheckPermission(ActionExecutingContext context, RequestData requestData, out string message)
     {
@@ -83,8 +72,8 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
         collector.Statistics[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
         collector.Statistics[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
     }
-
-
+    
+    
     private void AddRequestData<T>(ActionExecutingContext context, RequestData requestData, List<T> values = null, string argumentName = null) where T : BaseRequest
     {
         if (values is not null && !string.IsNullOrEmpty(argumentName))
@@ -98,13 +87,6 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
 
             requestData.Count = values.Count;
         }
-    }
-
-    private static bool GetKeyIdFromHeader(IHeaderDictionary headers, out Guid guidKey)
-    {
-        headers.TryGetValue(nameof(Header.Key), out var key);
-
-        return Guid.TryParse(key, out guidKey);
     }
 
     public static ReadOnlySpan<string> GetPathParts(string path)
