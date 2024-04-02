@@ -946,6 +946,11 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(FillSensorsData)} is started");
             FillSensorsData();
             _logger.Info($"{nameof(FillSensorsData)} is finished");
+
+            _logger.Info($"Set initial sensor state is started");
+            foreach (var (_, sensor) in _sensors)
+                sensor.Policies.TimeToLive.InitLastTtlTime(sensor.CheckTimeout());
+            _logger.Info($"Set initial sensor state is finished");
         }
 
         private void BuildAndSubscribeSensors(List<SensorEntity> entities, Dictionary<string, PolicyEntity> policies)
@@ -1271,8 +1276,8 @@ namespace HSMServer.Core.Cache
 
                 SendNotification(ttl.GetNotification(timeout));
             }
-            else
-                sensor.Policies.TimeToLive.InitLastTtlTime(timeout); // setup last time for schedule logic
+            //else
+            //    sensor.Policies.TimeToLive.InitLastTtlTime(timeout); // setup last time for schedule logic
 
             SensorUpdateView(sensor);
         }
