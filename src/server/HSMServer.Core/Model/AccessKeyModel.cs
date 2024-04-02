@@ -47,9 +47,9 @@ namespace HSMServer.Core.Model
 
         public string DisplayName { get; private set; }
         
-        public DateTime LastUseTime { get; set; }
+        public DateTime LastUseTime { get; private set; }
         
-        public string IP { get;  set; }
+        public string IP { get; private set; }
 
 
         public bool IsExpired => DateTime.UtcNow >= ExpirationTime;
@@ -106,6 +106,12 @@ namespace HSMServer.Core.Model
                 State = model.State.Value;
 
             return this;
+        }
+
+        public void UpdateUseTime(string ip, DateTime time)
+        {
+            IP = ip;
+            LastUseTime = time;
         }
         
         public virtual bool IsValid(KeyPermissions permissions, out string message) =>

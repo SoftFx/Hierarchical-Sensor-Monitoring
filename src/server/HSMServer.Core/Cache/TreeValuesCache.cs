@@ -197,11 +197,9 @@ namespace HSMServer.Core.Cache
         {
             if (keyModel is null)
                 return;
-            keyModel.IP = ip.ToString();
-            keyModel.LastUseTime = DateTime.UtcNow;
-
-            _snapshot.Keys[keyModel.Id].IP = keyModel.IP;
-            _snapshot.Keys[keyModel.Id].LastUse = keyModel.LastUseTime;
+            
+            keyModel.UpdateUseTime(ip.ToString(), DateTime.UtcNow);
+            _snapshot.Keys[keyModel.Id].Update(keyModel);
             
             ChangeAccessKeyEvent?.Invoke(keyModel, ActionType.Update);
         }
@@ -1124,11 +1122,10 @@ namespace HSMServer.Core.Cache
 
             if (isSuccess && _tree.TryGetValue(key.ProductId, out var product))
             {
+                key.UpdateUseTime(_snapshot.Keys[key.Id].IP, _snapshot.Keys[key.Id].LastUse);
+
                 isSuccess &= product.AccessKeys.TryAdd(key.Id, key);
                 ChangeProductEvent?.Invoke(product, ActionType.Update);
-
-                key.IP = _snapshot.Keys[key.Id].IP;
-                key.LastUseTime = _snapshot.Keys[key.Id].LastUse;
             }
 
             return isSuccess;

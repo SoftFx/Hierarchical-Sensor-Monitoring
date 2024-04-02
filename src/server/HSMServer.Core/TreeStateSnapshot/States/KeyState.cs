@@ -1,13 +1,14 @@
 ﻿using System;
 using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
+using HSMServer.Core.Model;
 
 namespace HSMServer.Core.TreeStateSnapshot.States;
 
 public class KeyState : ILastState<KeyStateEntity>
 {
-    public string IP { get; set; }
+    public string IP { get; private set; }
     
-    public DateTime LastUse { get; set; }
+    public DateTime LastUse { get; private set; }
 
     public bool IsDefault => false;
     
@@ -23,4 +24,10 @@ public class KeyState : ILastState<KeyStateEntity>
         IP = IP,
         LastUseTime = LastUse.Ticks
     };
+    
+    public void Update(AccessKeyModel key)
+    {
+        IP = key.IP;
+        LastUse = key.LastUseTime;
+    }
 }
