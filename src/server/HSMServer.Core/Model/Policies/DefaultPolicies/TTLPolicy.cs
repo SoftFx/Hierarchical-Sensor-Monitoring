@@ -14,7 +14,7 @@ namespace HSMServer.Core.Model.Policies
         private readonly SettingProperty<TimeIntervalModel> _ttl;
         private readonly OkPolicy _okPolicy;
 
-        private DateTime? _lastTTLNotificationTime = DateTime.MinValue;
+        private bool IsActive => !_ttl.IsEmpty && !IsDisabled;
 
 
         internal PolicyResult Ok
@@ -66,27 +66,12 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal bool HasTimeout(DateTime? time) => !_ttl.IsEmpty && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
+        internal bool HasTimeout(DateTime? time) => IsActive && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 
-        internal bool ResendNotification()
-        {
-            if (_lastTTLNotificationTime is null || !Schedule.IsActive)
-                return false;
+        internal bool ResendNotification(DateTime? time) => Schedule.IsActive && HasTimeout(time) &&
+            DateTime.UtcNow >= time.Value.Add(Schedule.GetShiftTime());
 
-            return DateTime.UtcNow >= _lastTTLNotificationTime.Value.Add(Schedule.GetShiftTime());
-        }
-
-        internal PolicyResult GetNotification(bool timeout)
-        {
-            _lastTTLNotificationTime = timeout ? DateTime.UtcNow : null;
-
-            return timeout ? PolicyResult : Ok;
-        }
-
-        internal void InitLastTtlTime()
-        {
-            _lastTTLNotificationTime ??= DateTime.UtcNow;
-        }
+        internal PolicyResult GetNotification(bool timeout) => timeout ? PolicyResult : Ok;
 
 
         public override string ToString()

@@ -1248,8 +1248,8 @@ namespace HSMServer.Core.Cache
 
             var ttl = sensor.Policies.TimeToLive;
 
-            if (ttl.ResendNotification() && sensor.HasData)
-                SendNotification(ttl.GetNotification(true));
+            if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.Time))
+                SendNotification(ttl.PolicyResult);
         }
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
@@ -1271,8 +1271,6 @@ namespace HSMServer.Core.Cache
 
                 SendNotification(ttl.GetNotification(timeout));
             }
-            else if (timeout)
-                sensor.Policies.TimeToLive.InitLastTtlTime(); // setup last time for schedule logic
 
             SensorUpdateView(sensor);
         }
