@@ -44,7 +44,9 @@
     <div class="row justify-content-center">
         <h4 class="my-3 text-break">Edit product '@Model.GeneralInfo.Name'</h4>
 
-        @await Html.PartialAsync("_EditProductGeneralInfo", Model.GeneralInfo)
+        <div id="editProductGeneralInfo_div">
+            @await Html.PartialAsync("_EditProductGeneralInfo", Model.GeneralInfo)
+        </div>
 
         @*<div style="margin: 10px">
                 <div class="row justify-content-start">
@@ -233,6 +235,28 @@
         });
     });
 </script>*@
+
+<script>
+    $(document).on("submit", "#generalProductInfo_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            url: $(`#generalProductInfo_form`).attr("action"),
+            type: 'POST',
+            data: $(`#generalProductInfo_form`).serialize(),
+            datatype: 'json',
+            async: true,
+            success: function (viewData) {
+                $(`#editProductGeneralInfo_div`).html(viewData);
+            }
+        }).done(function () {
+            if (document.getElementsByClassName("field-validation-error").length === 0) {
+                document.location.reload();
+            }
+        });
+    });
+</script>
 
 <script>
     function createUserRightData(userId, role, productKey) {

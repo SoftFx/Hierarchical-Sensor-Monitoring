@@ -7,6 +7,9 @@ namespace HSMServer.Core.Model.Policies
         internal new PolicyResult PolicyResult => new(Sensor.Id, this); //policy always should generate new Result
 
 
+        internal override bool UseScheduleManagerLogic => false;
+
+
         protected override AlertState GetState(BaseValue value) => AlertState.BuildBase(value, Sensor);
 
         protected override PolicyCondition GetCondition(PolicyProperty _) => throw new NotImplementedException();

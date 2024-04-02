@@ -106,6 +106,11 @@ namespace HSMDataCollector.Options
     public class RateSensorOptions : MonitoringInstantSensorOptions
     {
         public override TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromMinutes(1);
+
+        public RateSensorOptions()
+        {
+            SensorUnit = Unit.ValueInSecond;
+        }
     }
 
 
