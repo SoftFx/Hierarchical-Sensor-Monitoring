@@ -192,6 +192,17 @@ namespace HSMServer.Core.Cache
             return sensorChecking;
         }
 
+        public void UpdateKeyUseState(AccessKeyModel keyModel, string ip)
+        {
+            if (keyModel is null)
+                return;
+            
+            keyModel.UpdateUseTime(ip, DateTime.UtcNow);
+            _snapshot.Keys[keyModel.Id].Update(keyModel);
+            
+            ChangeAccessKeyEvent?.Invoke(keyModel, ActionType.Update);
+        }
+        
         public bool TryGetKey(Guid id, out AccessKeyModel key, out string message)
         {
             key = _keys.TryGetValue(id, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
@@ -219,36 +230,6 @@ namespace HSMServer.Core.Cache
 
             return true;
         }
-
-        public bool CheckAddPermissions(ProductModel product, AccessKeyModel accessKey, ReadOnlySpan<string> pathParts, out string message)
-        {
-            message = string.Empty;
-
-            for (int i = 0; i < pathParts.Length; i++)
-            {
-                var expectedName = pathParts[i];
-
-                if (i != pathParts.Length - 1)
-                {
-                    product = product?.SubProducts.FirstOrDefault(sp => sp.Value.DisplayName == expectedName).Value;
-
-                    if (product == null &&
-                        !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors, out message))
-                        return false;
-                }
-                else
-                {
-                    var sensor = product?.Sensors.FirstOrDefault(s => s.Value.DisplayName == expectedName).Value;
-
-                    if (sensor == null &&
-                        !TryCheckAccessKeyPermissions(accessKey, KeyPermissions.CanAddSensors, out message))
-                        return false;
-                }
-            }
-
-            return true;
-        }
-
 
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
             TryGetProductByKey(request, out var product, out message) &&
@@ -312,7 +293,8 @@ namespace HSMServer.Core.Cache
                 }
 
                 _database.RemoveAccessKey(id);
-
+                _snapshot.Keys.Remove(id);
+                
                 ChangeAccessKeyEvent?.Invoke(key, ActionType.Delete);
             }
 
@@ -1144,6 +1126,9 @@ namespace HSMServer.Core.Cache
 
             if (isSuccess && _tree.TryGetValue(key.ProductId, out var product))
             {
+                if (_snapshot.Keys.TryGetValue(key.Id, out var snapKey))
+                    key.UpdateUseTime(snapKey.IP, snapKey.LastUseTime);
+
                 isSuccess &= product.AccessKeys.TryAdd(key.Id, key);
                 ChangeProductEvent?.Invoke(product, ActionType.Update);
             }

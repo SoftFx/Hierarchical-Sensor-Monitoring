@@ -9,13 +9,12 @@ using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Services;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Header = HSMSensorDataObjects.Header;
 
 namespace HSMServer.Middleware;
 
-public abstract class KeyPermissionFilterBase(IPermissionService _service, ITreeValuesCache _cache, DataCollectorWrapper _collector) : IAsyncActionFilter, IAsyncResultFilter
+public abstract class KeyPermissionFilterBase(IPermissionService _service, ITreeValuesCache _cache, DataCollectorWrapper _collector) : BaseKeyFilter(_cache), IAsyncActionFilter, IAsyncResultFilter
 {
     private const string CommandsArgument = "sensorCommands";
     private const string ValuesArgument = "values";
@@ -26,17 +25,9 @@ public abstract class KeyPermissionFilterBase(IPermissionService _service, ITree
 
     public Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        if (!context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) || obj is not RequestData requestData)
-            return Task.CompletedTask;
+        base.OnActionExecutionAsync(context.HttpContext);
 
-        // TODO: Replace for actual header key check in collector v4
-        GetKeyIdFromHeader(context.HttpContext.Request.Headers, out var keyId);
-        _cache.TryGetKey(keyId, out var key, out _);
-        requestData.Key = key;
-        _cache.TryGetProduct(key.ProductId, out var product, out _);
-        requestData.Product = product;
-
-        CheckPermission(context, requestData, out _);
+        CheckPermission(context, RequestData, out _);
         return next();
     }
     
@@ -47,7 +38,6 @@ public abstract class KeyPermissionFilterBase(IPermissionService _service, ITree
 
         return next();
     }
-
 
     private void CheckPermission(ActionExecutingContext context, RequestData requestData, out string message)
     {
@@ -78,7 +68,7 @@ public abstract class KeyPermissionFilterBase(IPermissionService _service, ITree
                 AddRequestData<BaseRequest>(context, requestData);
                 break;
         }
-        
+
         _collector.WebRequestsSensors[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
         _collector.WebRequestsSensors[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
     }
@@ -92,18 +82,11 @@ public abstract class KeyPermissionFilterBase(IPermissionService _service, ITree
             values = values.Where(x => _service.CheckPermission(requestData, new SensorData(x), Permissions, out _)).ToList();
 
             values.AddRange(_service.GetPendingChecked<T>(requestData, Permissions));
-            
+
             context.ActionArguments.Add(argumentName, values);
 
             requestData.Count = values.Count;
         }
-    }
-
-    private static bool GetKeyIdFromHeader(IHeaderDictionary headers, out Guid guidKey)
-    {
-        headers.TryGetValue(nameof(Header.Key), out var key);
-
-        return Guid.TryParse(key, out guidKey);
     }
 
     public static ReadOnlySpan<string> GetPathParts(string path)

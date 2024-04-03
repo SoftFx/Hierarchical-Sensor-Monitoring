@@ -19,6 +19,8 @@ namespace HSMDatabase.AccessManager
     public interface IEntitySnapshotNode
     {
         IEntitySnapshotCollection<SensorStateEntity> Sensors { get; }
+        
+        IEntitySnapshotCollection<LastKeyStateEntity> Keys { get; }
 
         bool IsFinal { get; }
 
