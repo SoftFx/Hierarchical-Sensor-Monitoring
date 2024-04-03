@@ -40,7 +40,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             IP = accessKey.IP;
             LastUseTime = accessKey.LastUseTime;
             ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
-            
+
             Update(accessKey);
         }
 

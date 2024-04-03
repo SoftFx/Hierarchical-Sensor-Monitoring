@@ -8,7 +8,7 @@ public class KeyState : ILastState<KeyStateEntity>
 {
     public string IP { get; private set; }
     
-    public DateTime LastUse { get; private set; }
+    public DateTime LastUseTime { get; private set; }
 
     public bool IsDefault => false;
     
@@ -16,18 +16,18 @@ public class KeyState : ILastState<KeyStateEntity>
     public void FromEntity(KeyStateEntity entity)
     {
         IP = entity.IP;
-        LastUse = new DateTime(entity.LastUseTime);
+        LastUseTime = new DateTime(entity.LastUseTicks);
     }
 
     public KeyStateEntity ToEntity() => new()
     {
         IP = IP,
-        LastUseTime = LastUse.Ticks
+        LastUseTicks = LastUseTime.Ticks
     };
     
     public void Update(AccessKeyModel key)
     {
         IP = key.IP;
-        LastUse = key.LastUseTime;
+        LastUseTime = key.LastUseTime;
     }
 }

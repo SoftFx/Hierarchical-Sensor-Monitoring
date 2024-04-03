@@ -1,4 +1,4 @@
-﻿using HSMCommon.Collections;
+﻿Rusing HSMCommon.Collections;
 using HSMCommon.Constants;
 using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
@@ -20,7 +20,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
 
 namespace HSMServer.Core.Cache
@@ -1122,7 +1121,7 @@ namespace HSMServer.Core.Cache
 
             if (isSuccess && _tree.TryGetValue(key.ProductId, out var product))
             {
-                key.UpdateUseTime(_snapshot.Keys[key.Id].IP, _snapshot.Keys[key.Id].LastUse);
+                key.UpdateUseTime(_snapshot.Keys[key.Id].IP, _snapshot.Keys[key.Id].LastUseTime);
 
                 isSuccess &= product.AccessKeys.TryAdd(key.Id, key);
                 ChangeProductEvent?.Invoke(product, ActionType.Update);

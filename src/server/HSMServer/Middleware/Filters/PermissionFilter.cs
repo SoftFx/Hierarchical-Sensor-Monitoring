@@ -68,12 +68,12 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
                 AddRequestData<BaseRequest>(context, requestData);
                 break;
         }
-        
+
         collector.Statistics[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
         collector.Statistics[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
     }
-    
-    
+
+
     private void AddRequestData<T>(ActionExecutingContext context, RequestData requestData, List<T> values = null, string argumentName = null) where T : BaseRequest
     {
         if (values is not null && !string.IsNullOrEmpty(argumentName))
@@ -82,7 +82,7 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
             values = values.Where(x => service.CheckPermission(requestData, new SensorData(x), Permissions, out _)).ToList();
 
             values.AddRange(service.GetPendingChecked<T>(requestData, Permissions));
-            
+
             context.ActionArguments.Add(argumentName, values);
 
             requestData.Count = values.Count;
