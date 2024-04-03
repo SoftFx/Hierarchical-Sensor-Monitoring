@@ -21,8 +21,8 @@ namespace HSMServer.BackgroundServices
     {
         private const string FullStatisticsSensorName = "Full sensors size statistics";
         private const string TopHeaviestSensorName = "Top heaviest sensors";
+        private const int MaxSensorSizeMegabytes = 500;
 
-        private readonly int _maxSensorSizeMegabytes = 500;
         private readonly string _tempDirectory = Path.GetTempPath();
 
         private readonly TimeSpan _periodicity;
@@ -93,7 +93,7 @@ namespace HSMServer.BackgroundServices
                               $"The memory check is carried out every {_serverConfig.MonitoringOptions.DatabaseStatisticsPeriodDays} day(s).",
                 Alerts =
                 [
-                    AlertsFactory.IfValue(AlertOperation.GreaterThan, _maxSensorSizeMegabytes)
+                    AlertsFactory.IfValue(AlertOperation.GreaterThan, MaxSensorSizeMegabytes)
                                  .ThenSendNotification($"$comment sensor size in the database has exceeded $target $unit")
                                  .AndSetIcon(AlertIcon.Warning).Build()
                 ],

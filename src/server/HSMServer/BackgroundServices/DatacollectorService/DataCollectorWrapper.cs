@@ -23,9 +23,9 @@ namespace HSMServer.BackgroundServices
 
         internal DatabaseSensorsStatistics DbStatisticsSensors { get; }
 
-        internal DatabaseSensorsSize DbSizeSensors { get; }
+        internal ClientStatisticsSensors WebRequestsSensors { get; }
 
-        internal ClientStatistics Statistics { get; }
+        internal DatabaseSensorsSize DbSizeSensors { get; }
 
 
         public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor)
@@ -49,9 +49,9 @@ namespace HSMServer.BackgroundServices
             else
                 _collector.Unix.AddAllDefaultSensors(productVersion);
 
-            Statistics = new ClientStatistics(_collector, optionsMonitor);
-            DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
             DbStatisticsSensors = new DatabaseSensorsStatistics(_collector, db, cache, config);
+            DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
+            WebRequestsSensors = new ClientStatisticsSensors(_collector);
         }
 
 

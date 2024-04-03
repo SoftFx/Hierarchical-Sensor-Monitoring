@@ -6,13 +6,12 @@ using System.Collections.Concurrent;
 
 namespace HSMServer.BackgroundServices
 {
-    internal sealed class ClientStatistics
+    internal sealed class ClientStatisticsSensors
     {
         public const string TotalGroup = "_Total";
 
         private readonly ConcurrentDictionary<string, WebRequestNode> _selfSensors = new();
         private readonly IDataCollector _collector;
-        private readonly IOptionsMonitor<MonitoringOptions> _optionsMonitor;
 
 
         public WebRequestNode this[string id] => id is null ? null : _selfSensors.GetOrAdd(id, new WebRequestNode(_collector, id));
@@ -20,10 +19,9 @@ namespace HSMServer.BackgroundServices
         public TotalWebRequestNode Total { get; }
 
 
-        internal ClientStatistics(IDataCollector collector, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+        internal ClientStatisticsSensors(IDataCollector collector)
         {
             _collector = collector;
-            _optionsMonitor = optionsMonitor;
 
             Total = new TotalWebRequestNode(collector);
         }

@@ -12,14 +12,14 @@ namespace HSMServer.Middleware
         {
             context.Items.Add(RequestData, new RequestData());
 
-            collector.Statistics.Total.AddRequestData(context.Request);
+            collector.WebRequestsSensors.Total.AddRequestData(context.Request);
 
             await next(context);
             
-            collector.Statistics.Total.AddResponseResult(context.Response);
+            collector.WebRequestsSensors.Total.AddResponseResult(context.Response);
             
             if (context.Items.TryGetValue(RequestData, out var value) && value is RequestData requestData)
-                collector.Statistics.Total.AddReceiveData(requestData.Count);
+                collector.WebRequestsSensors.Total.AddReceiveData(requestData.Count);
         }
     }
 }

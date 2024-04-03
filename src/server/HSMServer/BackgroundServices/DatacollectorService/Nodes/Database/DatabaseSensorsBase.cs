@@ -7,8 +7,9 @@ namespace HSMServer.BackgroundServices
 {
     public abstract class DatabaseSensorsBase(IDataCollector collector, IDatabaseCore database, IServerConfig config)
     {
-        private const int DigitsCnt = 2;
         private const double MbDivisor = 1 << 20;
+        private const int DigitsCnt = 2;
+
         protected const string NodeName = "Database";
 
         protected readonly IDataCollector _collector = collector;

@@ -356,7 +356,7 @@ namespace HSMServer.Controllers
 
             try
             {
-                _dataCollector.Statistics.Total.AddReceiveData(values.Count);
+                _dataCollector.WebRequestsSensors.Total.AddReceiveData(values.Count);
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)

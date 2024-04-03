@@ -44,7 +44,7 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
     public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
         if (context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var value) && value is RequestData requestData)
-            collector.Statistics[requestData.TelemetryPath]?.AddResponseResult(context.HttpContext.Response);
+            collector.WebRequestsSensors[requestData.TelemetryPath]?.AddResponseResult(context.HttpContext.Response);
 
         await next();
     }
@@ -80,8 +80,8 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
                 break;
         }
         
-        collector.Statistics[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
-        collector.Statistics[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
+        collector.WebRequestsSensors[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
+        collector.WebRequestsSensors[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
     }
 
 
