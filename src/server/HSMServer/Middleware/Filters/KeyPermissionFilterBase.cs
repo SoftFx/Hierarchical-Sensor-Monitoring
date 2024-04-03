@@ -68,7 +68,7 @@ public abstract class KeyPermissionFilterBase(IPermissionService _service, ITree
                 AddRequestData<BaseRequest>(context, requestData);
                 break;
         }
-        
+
         _collector.WebRequestsSensors[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
         _collector.WebRequestsSensors[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
     }
@@ -82,7 +82,7 @@ public abstract class KeyPermissionFilterBase(IPermissionService _service, ITree
             values = values.Where(x => _service.CheckPermission(requestData, new SensorData(x), Permissions, out _)).ToList();
 
             values.AddRange(_service.GetPendingChecked<T>(requestData, Permissions));
-            
+
             context.ActionArguments.Add(argumentName, values);
 
             requestData.Count = values.Count;
