@@ -193,12 +193,12 @@ namespace HSMServer.Core.Cache
             return sensorChecking;
         }
 
-        public void UpdateKeyUseState(AccessKeyModel keyModel, IPAddress ip)
+        public void UpdateKeyUseState(AccessKeyModel keyModel, string ip)
         {
             if (keyModel is null)
                 return;
             
-            keyModel.UpdateUseTime(ip.ToString(), DateTime.UtcNow);
+            keyModel.UpdateUseTime(ip, DateTime.UtcNow);
             _snapshot.Keys[keyModel.Id].Update(keyModel);
             
             ChangeAccessKeyEvent?.Invoke(keyModel, ActionType.Update);

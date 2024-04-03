@@ -57,7 +57,7 @@ namespace HSMServer.Core.Cache
         bool TryGetKey(Guid id, out AccessKeyModel key, out string message);
         bool TryGetProduct(Guid id, out ProductModel product, out string message);
 
-        void UpdateKeyUseState(AccessKeyModel keyModel, IPAddress ip);
+        void UpdateKeyUseState(AccessKeyModel keyModel, string ip);
         
         
         bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);

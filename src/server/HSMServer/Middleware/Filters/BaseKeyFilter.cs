@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using HSMSensorDataObjects;
 using HSMServer.Core.Cache;
-using HSMServer.Core.TreeStateSnapshot;
 using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.Middleware;
@@ -29,7 +32,8 @@ public abstract class BaseKeyFilter(ITreeValuesCache cache)
         cache.TryGetProduct(key.ProductId, out var product, out message);
         requestData.Product = product;
 
-        cache.UpdateKeyUseState(requestData.Key, context.Request.HttpContext.Connection.RemoteIpAddress);
+        if (TryGetIp(context, out var ip))
+            cache.UpdateKeyUseState(requestData.Key, ip);
         
         return requestData;
         
@@ -39,5 +43,26 @@ public abstract class BaseKeyFilter(ITreeValuesCache cache)
 
             return Guid.TryParse(key, out guidKey);
         }
+    }
+
+    private static bool TryGetIp(HttpContext context, out string ip)
+    {
+        ip = context.Request.HttpContext.Connection.RemoteIpAddress?.ToString();
+
+        if (ip is not null)
+            return true;
+        
+        var forwardedFor = context.Request.Headers["X-Forwarded-For"].AsReadOnly().FirstOrDefault();
+        if (string.IsNullOrEmpty(forwardedFor)) 
+            return false;
+        
+        foreach (ReadOnlySpan<char> i in forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries).AsReadOnly())
+            if (IPAddress.TryParse(i.Trim(), out var address) && address.AddressFamily is AddressFamily.InterNetwork or AddressFamily.InterNetworkV6)
+            {
+                ip = address.ToString();
+                return ip is not null;
+            }
+
+        return false;
     }
 }
