@@ -1,6 +1,8 @@
 ﻿@using HSMServer.Model.Controls
 @using HSMServer.Notifications
 @using HSMServer.Extensions
+@using System
+@using System.Collections.Generic
 
 @model DefaultChatViewModel
 
@@ -9,30 +11,38 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var chats = new List<TelegramChat>();
+    var chats = new Dictionary<Guid, TelegramChat>();
     foreach (var chat in ChatsManager.GetValues())
     {
         if (Model.AvailableChats.Contains(chat.Id))
-            chats.Add(chat);
+            chats.Add(chat.Id, chat);
     }
+
+    var selectedChatName = chats.TryGetValue(Model.SelectedChat, out var selectedChat) ? selectedChat.Name : string.Empty;
+    var displayedFromParentChat = chats.TryGetValue(Model.ParentChat, out var parentChat) ? $"From parent ({parentChat.Name})" : string.Empty;
+
+    var chatsList = chats.Values.ToList();
 }
 
 
 <div class="d-flex flex-row text-nowrap align-items-center ms-3">
     <span class="meta-info-label">Default telegram chat</span>
 
-    <span id="labelDefaultChat" class="meta-info-value">@Model.SelectedChat</span>
+    <span id="labelDefaultChat" class="meta-info-value">@(Model.IsFromParent ? displayedFromParentChat : selectedChatName)</span>
     <div id="defaultChatControl" class="d-none meta-info-interval">
         <select asp-for="SelectedChat" class="selectpicker">
+            <option value="@Model.FromParentChat" selected="@Model.IsFromParent">@displayedFromParentChat</option>
+
+            <option data-divider="true"></option>
             <option disabled>Groups</option>
-            @foreach (var chat in chats.GetGroups())
+            @foreach (var chat in chatsList.GetGroups())
             {
                 <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
             }
 
             <option data-divider="true"></option>
             <option disabled>Users</option>
-            @foreach (var chat in chats.GetPrivates())
+            @foreach (var chat in chatsList.GetPrivates())
             {
                 <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
             }

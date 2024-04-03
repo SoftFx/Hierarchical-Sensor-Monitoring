@@ -10,7 +10,14 @@ namespace HSMServer.Model.Controls
     {
         public HashSet<Guid> AvailableChats { get; } = new();
 
+        public Guid FromParentChat { get; } = Guid.Empty;
+
         public Guid SelectedChat { get; set; }
+
+
+        public Guid ParentChat { get; } // TODO: parent chat should be calculated
+
+        public bool IsFromParent => SelectedChat == FromParentChat;
 
 
         public DefaultChatViewModel() { }
