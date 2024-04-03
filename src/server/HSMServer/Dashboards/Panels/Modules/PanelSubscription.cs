@@ -81,8 +81,11 @@ namespace HSMServer.Dashboards
         public bool IsPropertySuitable(BaseSensorModel sensor) => DatasourceFactory.IsSupportedPlotProperty(sensor, Property);
 
         public bool IsEmaPropertySuitable(BaseSensorModel sensor) =>
-            Property is PlottedProperty.EmaValue or PlottedProperty.EmaMin or PlottedProperty.EmaMean or PlottedProperty.EmaMax or PlottedProperty.EmaCount &&
-            sensor.Statistics.HasEma();
+             Property switch
+             {
+                 PlottedProperty.EmaValue or PlottedProperty.EmaMin or PlottedProperty.EmaMean or PlottedProperty.EmaMax or PlottedProperty.EmaCount => sensor.Statistics.HasEma(),
+                 _ => true
+             };
 
         public bool IsMatchTemplate(BaseSensorModel sensor) =>
             _pathTemplate.IsMatch(sensor.FullPath) && AreFoldersContain(sensor.Root.FolderId);
