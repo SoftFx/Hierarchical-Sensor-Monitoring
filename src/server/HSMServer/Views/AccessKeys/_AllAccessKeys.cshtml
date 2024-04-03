@@ -33,11 +33,10 @@
                     <th>Author</th>
                 }
                 <th class="text-center">State</th>
+                <th class="text-center">Last access date</th>
                 @if (UserRoleHelper.IsManager(user) || UserRoleHelper.IsProductCRUDAllowed(user))
                 {
                     <th class="text-center">IP</th>
-                    <th class="text-center">Last access date</th>
-                    
                     <th class="text-center">Actions</th>
                 }
             </tr>
@@ -133,10 +132,11 @@
                         </td>
                     }
 
+                    <td nowrap class="text-center">@(key.LastUseTime == DateTime.MinValue ? "Never" : key.LastUseTime.ToDefaultFormat())</td>
+
                     @if (UserRoleHelper.IsManager(user) || UserRoleHelper.IsProductCRUDAllowed(user))
                     {
                         <td nowrap class="text-center">@key.IP</td>
-                        <td nowrap class="text-center">@(key.LastUseTime == DateTime.MinValue ? "Never" : key.LastUseTime.ToDefaultFormat())</td>
                         
                         <td nowrap class="text-center">
                             <div class='btn-group'>
