@@ -87,6 +87,8 @@ namespace HSMServer.Core.Model.Policies
                 RepeateMode = (byte)RepeatMode,
             };
 
+        internal string ToTtlString() => IsActive ? $"scheduled {RepeatMode}" : string.Empty;
+
         public override string ToString() => IsActive
             ? $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}{(InstantSend ? " and instant send" : string.Empty)}"
             : string.Empty;

@@ -184,6 +184,7 @@ namespace HSMServer.Model.History
         {
             VersionValue version => version.Value?.RemoveTailZeroes() ?? string.Empty,
             TimeSpanValue timespan => timespan.Value.ToReadableView(),
+            RateValue rate => Math.Round(rate.Value, 5).ToString(),
             _ => value.Value?.ToString(),
         };
     }

@@ -16,6 +16,8 @@ namespace HSMServer.Core.Model.Policies
 
         private DateTime? _lastTTLNotificationTime = DateTime.MinValue;
 
+        private bool IsActive => !_ttl.IsEmpty && !IsDisabled;
+
 
         internal PolicyResult Ok
         {
@@ -26,9 +28,6 @@ namespace HSMServer.Core.Model.Policies
                 return _okPolicy.PolicyResult;
             }
         }
-
-
-        internal override bool UseScheduleManagerLogic => false;
 
 
         internal TTLPolicy(BaseNodeModel node, PolicyEntity entity)
@@ -69,15 +68,10 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal bool HasTimeout(DateTime? time) => !_ttl.IsEmpty && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
+        internal bool HasTimeout(DateTime? time) => IsActive && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 
-        internal bool ResendNotification()
-        {
-            if (_lastTTLNotificationTime is null || !Schedule.IsActive)
-                return false;
-
-            return DateTime.UtcNow >= _lastTTLNotificationTime.Value.Add(Schedule.GetShiftTime());
-        }
+        internal bool ResendNotification(DateTime? time) => HasTimeout(time) && Schedule.IsActive
+            && DateTime.UtcNow >= _lastTTLNotificationTime?.Add(Schedule.GetShiftTime());
 
         internal PolicyResult GetNotification(bool timeout)
         {
@@ -86,9 +80,9 @@ namespace HSMServer.Core.Model.Policies
             return timeout ? PolicyResult : Ok;
         }
 
-        internal void InitLastTtlTime()
+        internal void InitLastTtlTime(bool timeout)
         {
-            _lastTTLNotificationTime ??= DateTime.UtcNow;
+            _lastTTLNotificationTime = timeout ? DateTime.UtcNow : null;
         }
 
 

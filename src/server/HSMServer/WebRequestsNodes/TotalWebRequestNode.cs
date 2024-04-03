@@ -12,9 +12,9 @@ public sealed record TotalWebRequestNode : WebRequestNode
     private readonly IInstantValueSensor<double> _rps;
 
 
-    public TotalWebRequestNode(IDataCollector collector) : base(collector, ClientStatistics.TotalGroup)
+    public TotalWebRequestNode(IDataCollector collector) : base(collector, ClientStatisticsSensors.TotalGroup)
     {
-        _rps = collector.CreateM1RateSensor(BuildSensorPath(ClientStatistics.TotalGroup, RequestPerSecondNode), "Number of requests that were received.");
+        _rps = collector.CreateM1RateSensor(BuildSensorPath(ClientStatisticsSensors.TotalGroup, RequestPerSecondNode), "Number of requests that were received.");
     }
 
 

@@ -61,6 +61,9 @@ namespace HSMServer.Core.Model
         KBytes_sec = 2102,
         [Display(Name = "MB/sec")]
         MBytes_sec = 2103,
+        
+        [Display(Name = "# per sec")]
+        ValueInSecond = 3000,
     }
 
 

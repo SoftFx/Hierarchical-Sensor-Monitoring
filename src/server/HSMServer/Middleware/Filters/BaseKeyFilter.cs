@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace HSMServer.Middleware;
 
-public abstract class BaseKeyFilter(ITreeValuesCache cache)
+public abstract class BaseKeyFilter(ITreeValuesCache _cache)
 {
     protected RequestData RequestData { get; set; }
 
@@ -19,7 +19,7 @@ public abstract class BaseKeyFilter(ITreeValuesCache cache)
         if (!context.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) || obj is not RequestData requestData)
             return;
 
-        RequestData = GetInitializedRequest(requestData, context, cache);
+        RequestData = GetInitializedRequest(requestData, context, _cache);
     }
     
     private static RequestData GetInitializedRequest(RequestData requestData, HttpContext context, ITreeValuesCache cache)

@@ -14,29 +14,29 @@ using Header = HSMSensorDataObjects.Header;
 
 namespace HSMServer.Middleware;
 
-public abstract class PermissionFilter(IPermissionService service, ITreeValuesCache cache, DataCollectorWrapper collector) : BaseKeyFilter(cache), IAsyncActionFilter, IAsyncResultFilter
+public abstract class KeyPermissionFilterBase(IPermissionService _service, ITreeValuesCache _cache, DataCollectorWrapper _collector) : BaseKeyFilter(_cache), IAsyncActionFilter, IAsyncResultFilter
 {
-    private const string ValuesArgument = "values";
     private const string CommandsArgument = "sensorCommands";
+    private const string ValuesArgument = "values";
 
 
     protected abstract KeyPermissions Permissions { get; }
 
 
-    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    public Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-         base.OnActionExecutionAsync(context.HttpContext);
+        base.OnActionExecutionAsync(context.HttpContext);
 
         CheckPermission(context, RequestData, out _);
-        await next();
+        return next();
     }
     
-    public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
+    public Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
         if (context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var value) && value is RequestData requestData)
-            collector.Statistics[requestData.TelemetryPath]?.AddResponseResult(context.HttpContext.Response);
+            _collector.WebRequestsSensors[requestData.TelemetryPath]?.AddResponseResult(context.HttpContext.Response);
 
-        await next();
+        return next();
     }
 
     private void CheckPermission(ActionExecutingContext context, RequestData requestData, out string message)
@@ -49,7 +49,7 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
 
         if (values is BaseRequest request)
         {
-            if (!service.CheckPermission(requestData, new SensorData(request), Permissions, out message))
+            if (!_service.CheckPermission(requestData, new SensorData(request), Permissions, out message))
             {
                 context.HttpContext.Response.StatusCode = 406;
                 return;
@@ -59,18 +59,18 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
         switch (values)
         {
             case List<SensorValueBase> requestValues:
-                AddRequestData<SensorValueBase>(context, requestData, values: requestValues, argumentName: ValuesArgument);
+                AddRequestData(context, requestData, values: requestValues, argumentName: ValuesArgument);
                 break;
             case List<CommandRequestBase> commands:
-                AddRequestData<CommandRequestBase>(context, requestData, values: commands, argumentName: CommandsArgument);
+                AddRequestData(context, requestData, values: commands, argumentName: CommandsArgument);
                 break;
             default:
                 AddRequestData<BaseRequest>(context, requestData);
                 break;
         }
-
-        collector.Statistics[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
-        collector.Statistics[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
+        
+        _collector.WebRequestsSensors[requestData.TelemetryPath]?.AddRequestData(context.HttpContext.Request);
+        _collector.WebRequestsSensors[requestData.TelemetryPath]?.AddReceiveData(requestData.Count);
     }
 
 
@@ -79,10 +79,10 @@ public abstract class PermissionFilter(IPermissionService service, ITreeValuesCa
         if (values is not null && !string.IsNullOrEmpty(argumentName))
         {
             context.ActionArguments.Remove(argumentName);
-            values = values.Where(x => service.CheckPermission(requestData, new SensorData(x), Permissions, out _)).ToList();
+            values = values.Where(x => _service.CheckPermission(requestData, new SensorData(x), Permissions, out _)).ToList();
 
-            values.AddRange(service.GetPendingChecked<T>(requestData, Permissions));
-
+            values.AddRange(_service.GetPendingChecked<T>(requestData, Permissions));
+            
             context.ActionArguments.Add(argumentName, values);
 
             requestData.Count = values.Count;

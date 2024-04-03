@@ -14,7 +14,7 @@ namespace HSMServer.Middleware
         public AccessKeyModel Key { get; set; }
 
         public string CollectorName { get; set; }
-        
+
         public int Count { get; set; } = 1;
 
         public string TelemetryPath { get; private set; }
@@ -23,14 +23,15 @@ namespace HSMServer.Middleware
         public void BuildTelemetryPath() => TelemetryPath = Key is null ? null : $"{Product?.DisplayName}/{Key.DisplayName}/{CollectorName}";
     }
 
+
     public sealed class SensorData
     {
         public BaseRequest Request { get; }
-        
+
         public string Path { get; }
-        
+
         public string KeyId { get; }
-        
+
         public Guid Id { get; set; }
 
 

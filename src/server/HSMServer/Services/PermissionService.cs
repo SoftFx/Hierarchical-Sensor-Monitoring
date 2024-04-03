@@ -65,7 +65,7 @@ namespace HSMServer.Services
             var product = data.Product;
             var key = data.Key;
 
-            var pathParts = PermissionFilter.GetPathParts(sensorData.Path);
+            var pathParts = KeyPermissionFilterBase.GetPathParts(sensorData.Path);
 
             for (int i = 0; i < pathParts.Length; i++)
             {
