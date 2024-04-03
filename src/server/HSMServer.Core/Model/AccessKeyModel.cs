@@ -27,8 +27,7 @@ namespace HSMServer.Core.Model
         internal static InvalidAccessKey InvalidKey { get; } = new();
 
 
-        public static KeyPermissions FullPermissions { get; } =
-            (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length) - 1;
+        public static KeyPermissions FullPermissions { get; } = (KeyPermissions)(1 << Enum.GetValues<KeyPermissions>().Length) - 1;
 
 
         public Guid Id { get; }
@@ -46,14 +45,14 @@ namespace HSMServer.Core.Model
         public KeyPermissions Permissions { get; private set; }
 
         public string DisplayName { get; private set; }
-        
+
         public DateTime LastUseTime { get; private set; }
-        
+
         public string IP { get; private set; }
 
 
         public bool IsExpired => DateTime.UtcNow >= ExpirationTime;
-        
+
         public bool IsMaster => ProductId == Guid.Empty;
 
 
@@ -113,10 +112,10 @@ namespace HSMServer.Core.Model
             IP = ip;
             LastUseTime = time;
         }
-        
+
         public virtual bool IsValid(KeyPermissions permissions, out string message) =>
             !CheckBlocked(out message) && !CheckExpired(out message) && IsHasPermissions(permissions, out message);
-        
+
 
         internal AccessKeyEntity ToAccessKeyEntity() =>
             new()

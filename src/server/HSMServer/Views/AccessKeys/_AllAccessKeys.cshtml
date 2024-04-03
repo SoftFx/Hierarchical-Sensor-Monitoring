@@ -135,8 +135,8 @@
 
                     @if (UserRoleHelper.IsManager(user) || UserRoleHelper.IsProductCRUDAllowed(user))
                     {
-                        <td>@key.IP</td>
-                        <td>@key.LastUseTime</td>
+                        <td nowrap class="text-center">@key.IP</td>
+                        <td nowrap class="text-center">@(key.LastUseTime == DateTime.MinValue ? "Never" : key.LastUseTime.ToDefaultFormat())</td>
                         
                         <td nowrap class="text-center">
                             <div class='btn-group'>
