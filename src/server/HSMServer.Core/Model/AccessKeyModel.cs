@@ -109,8 +109,8 @@ namespace HSMServer.Core.Model
 
         public void UpdateUseTime(string ip, DateTime time)
         {
-            IP = ip;
-            LastUseTime = time;
+            IP = ip ?? IP;
+            LastUseTime = time == DateTime.MinValue ? LastUseTime : time;
         }
 
         public virtual bool IsValid(KeyPermissions permissions, out string message) =>

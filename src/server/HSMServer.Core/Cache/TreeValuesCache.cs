@@ -1121,7 +1121,8 @@ namespace HSMServer.Core.Cache
 
             if (isSuccess && _tree.TryGetValue(key.ProductId, out var product))
             {
-                key.UpdateUseTime(_snapshot.Keys[key.Id].IP, _snapshot.Keys[key.Id].LastUseTime);
+                if (_snapshot.Keys.TryGetValue(key.Id, out var snapKey))
+                    key.UpdateUseTime(snapKey.IP, snapKey.LastUseTime);
 
                 isSuccess &= product.AccessKeys.TryAdd(key.Id, key);
                 ChangeProductEvent?.Invoke(product, ActionType.Update);

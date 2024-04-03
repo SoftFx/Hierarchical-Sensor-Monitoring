@@ -20,7 +20,7 @@ namespace HSMServer.Middleware
         public string TelemetryPath { get; private set; }
 
 
-        public void BuildTelemetryPath() => TelemetryPath = Key is null ? null : $"{Product.DisplayName}/{Key.DisplayName}/{CollectorName}";
+        public void BuildTelemetryPath() => TelemetryPath = Key is null ? null : $"{Product?.DisplayName}/{Key.DisplayName}/{CollectorName}";
     }
 
     public sealed class SensorData
