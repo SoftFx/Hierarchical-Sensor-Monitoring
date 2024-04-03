@@ -30,6 +30,8 @@ namespace HSMServer.Core.Model.Policies
 
         public DateTime Time { get; private set; }
 
+        public bool IsActive => RepeatMode is not AlertRepeatMode.Immediately;
+
 
         internal PolicySchedule() { }
 
@@ -60,23 +62,22 @@ namespace HSMServer.Core.Model.Policies
             if (RepeatMode == AlertRepeatMode.Immediately)
                 return Time;
 
-            var shiftTime = RepeatMode switch
-            {
-                AlertRepeatMode.FiveMinutes => TimeSpan.FromMinutes(5),
-                AlertRepeatMode.TenMinutes => TimeSpan.FromMinutes(10),
-                AlertRepeatMode.FifteenMinutes => TimeSpan.FromMinutes(15),
-                AlertRepeatMode.ThirtyMinutes => TimeSpan.FromMinutes(30),
-                AlertRepeatMode.Hourly => TimeSpan.FromHours(1),
-                AlertRepeatMode.Daily => TimeSpan.FromDays(1),
-                AlertRepeatMode.Weekly => TimeSpan.FromDays(7),
-            };
-
             var curTime = DateTime.UtcNow;
 
-            //shiftTime = TimeSpan.FromMinutes(5); //for test messages
-
-            return curTime <= Time ? Time : Time + (curTime - Time).Ceil(shiftTime);
+            return curTime <= Time ? Time : Time + (curTime - Time).Ceil(GetShiftTime());
         }
+
+        internal TimeSpan GetShiftTime() => RepeatMode switch
+        {
+            AlertRepeatMode.FiveMinutes => TimeSpan.FromMinutes(5),
+            AlertRepeatMode.TenMinutes => TimeSpan.FromMinutes(10),
+            AlertRepeatMode.FifteenMinutes => TimeSpan.FromMinutes(15),
+            AlertRepeatMode.ThirtyMinutes => TimeSpan.FromMinutes(30),
+            AlertRepeatMode.Hourly => TimeSpan.FromHours(1),
+            AlertRepeatMode.Daily => TimeSpan.FromDays(1),
+            AlertRepeatMode.Weekly => TimeSpan.FromDays(7),
+            _ => TimeSpan.Zero,
+        };
 
         internal PolicyScheduleEntity ToEntity() =>
             new()
@@ -86,8 +87,10 @@ namespace HSMServer.Core.Model.Policies
                 RepeateMode = (byte)RepeatMode,
             };
 
-        public override string ToString() => RepeatMode is AlertRepeatMode.Immediately
-            ? string.Empty
-            : $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}{(InstantSend ? " and instant send" : string.Empty)}";
+        internal string ToTtlString() => IsActive ? $"scheduled {RepeatMode}" : string.Empty;
+
+        public override string ToString() => IsActive
+            ? $"scheduled {RepeatMode} starting at {Time.ToDefaultFormat()}{(InstantSend ? " and instant send" : string.Empty)}"
+            : string.Empty;
     }
 }

@@ -150,6 +150,15 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public IActionResult EditProduct(ProductGeneralInfoViewModel product)
+        {
+            if (ModelState.IsValid)
+                _treeValuesCache.UpdateProduct(product.ToUpdate(CurrentInitiator));
+
+            return PartialView("_EditProductGeneralInfo", product);
+        }
+
+        [HttpPost]
         public void AddUserRight([FromBody] UserRightViewModel model)
         {
             UserRightValidator validator = new UserRightValidator();

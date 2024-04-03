@@ -1,21 +1,18 @@
 #pragma once
 
-#include "msclr/auto_gcroot.h"
-
 #include "DataCollector.h"
 #include "HSMSensorImpl.h"
 #include "HSMBarSensorImpl.h"
+#include "HSMRateSensorImpl.h"
 #include "HSMLastValueSensorImpl.h"
 #include "HSMBaseParamsFuncSensor.h"
 #include "HSMBaseNoParamsFuncSensor.h"
 #include "HSMParamsFuncSensorImpl.h"
 #include "HSMNoParamsFuncSensorImpl.h"
+#include "HSMSensorOptionsImpl.h"
 
-using System::String;
-using System::Func;
-
-using namespace HSMDataCollector::Core;
-using namespace HSMDataCollector::PublicInterface;
+#include "msclr/auto_gcroot.h"
+#include "msclr/marshal_cppstd.h"
 
 namespace hsm_wrapper
 {
@@ -29,14 +26,17 @@ namespace hsm_wrapper
 		void Start();
 		void StartAsync();
 		void Stop();
-		void InitializeSystemMonitoring(bool is_cpu = true, bool is_free_ram = true);
-		void InitializeDiskMonitoring(const std::string& target, bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true);
-		void InitializeAllDisksMonitoring(bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true);
-		void InitializeProcessMonitoring(bool is_cpu = true, bool is_memory = true, bool is_threads = true);
-		void InitializeOsMonitoring(bool is_last_update = true, bool is_last_restart = true);
-		void InitializeOsLogsMonitoring(bool is_warning = true, bool is_error = true);
+		void StopAsync();
+		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, bool is_time_in_gc);
+		void InitializeDiskMonitoring(const std::string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght, bool is_average_speed);
+		void InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght, bool is_average_speed);
+		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, bool is_time_in_gc);
+		void InitializeOsMonitoring(bool is_last_update, bool is_last_restart, bool is_version);
+		void InitializeOsLogsMonitoring(bool is_warning, bool is_error);
 		void InitializeProductVersion(const std::string& version);
-		void InitializeCollectorMonitoring(bool is_alive = true, bool version = true, bool status = true);
+		void InitializeNetworkMonitoring(bool is_failures_count, bool is_established_count, bool is_reset_count);
+		void InitializeQueueDiagnostic(bool is_overflow, bool is_process_time, bool is_values_count, bool is_content_size);
+		void InitializeCollectorMonitoring(bool is_alive, bool is_version, bool is_errors);
 		void AddServiceStateMonitoring(const std::string& service_name);
 
 		void SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status = HSMSensorStatus::Ok, const std::string& description = {});
@@ -53,8 +53,11 @@ namespace hsm_wrapper
 		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options);
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options);
+		HSMRateSensor<int> CreateIntRateSensor(const std::string& path, int period = 60000, const std::string& description = "");
+		HSMRateSensor<int> CreateIntRateSensor(const std::string& path, const HSMRateSensorOptions& options);
+		HSMRateSensor<double> CreateDoubleRateSensor(const std::string& path, int period = 60000, const std::string& description = "");
+		HSMRateSensor<double> CreateDoubleRateSensor(const std::string& path, const HSMRateSensorOptions& options);
 
-#ifdef ENABLE_OBSOLETE
 		HSMLastValueSensor<bool> CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description = "");
 		HSMLastValueSensor<int> CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description = "");
 		HSMLastValueSensor<double> CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description = "");
@@ -90,13 +93,11 @@ namespace hsm_wrapper
 			params_func_sensor_impl->SetParamsFuncSensor(params_func_sensor);
 			return std::make_shared<HSMParamsFuncSensorImplWrapper<T, U>>(params_func_sensor_impl);
 		}
-#endif
 
 	private:
-		msclr::auto_gcroot<IDataCollector^> data_collector;
+		msclr::auto_gcroot<HSMDataCollector::Core::IDataCollector^> data_collector;
 		msclr::auto_gcroot<System::Threading::Tasks::Task^> start_task;
+		msclr::auto_gcroot<System::Threading::Tasks::Task^> stop_task;
 	};
-
-
 
 }

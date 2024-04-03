@@ -61,6 +61,9 @@ namespace HSMServer.Core.Model
         KBytes_sec = 2102,
         [Display(Name = "MB/sec")]
         MBytes_sec = 2103,
+        
+        [Display(Name = "# per sec")]
+        ValueInSecond = 3000,
     }
 
 
@@ -131,7 +134,7 @@ namespace HSMServer.Core.Model
         public PolicyResult PolicyResult => Policies.PolicyResult;
 
 
-        public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? false;
+        public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(HasData ? LastUpdate : CreationDate) ?? false;
 
         public bool CanSendNotifications => State is SensorState.Available && (!Status?.IsOfftime ?? true);
 

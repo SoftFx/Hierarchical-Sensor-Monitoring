@@ -9,6 +9,7 @@
 
 #include "HSMSensor.h"
 #include "HSMBarSensor.h"
+#include "HSMRateSensor.h"
 #include "HSMLastValueSensor.h"
 #include "HSMParamsFuncSensor.h"
 #include "HSMNoParamsFuncSensor.h"
@@ -28,14 +29,18 @@ namespace hsm_wrapper
 		void Start();
 		void StartAsync();
 		void Stop();
-		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram);
-		void InitializeDiskMonitoring(const std::string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght);
-		void InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght);
-		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads);
-		void InitializeOsMonitoring(bool is_last_update, bool is_last_restart);
+		void StopAsync();
+		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, bool is_time_in_gc);
+		void InitializeDiskMonitoring(const std::string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght, bool is_average_speed);
+		void InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght, bool is_average_speed);
+		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, bool is_time_in_gc);
+		void InitializeOsMonitoring(bool is_last_update, bool is_last_restart, bool is_version);
 		void InitializeOsLogsMonitoring(bool is_warnig, bool is_error);
-		void InitializeCollectorMonitoring(bool is_alive, bool version, bool status);
+		void InitializeCollectorMonitoring(bool is_alive, bool is_version, bool is_errors);
 		void InitializeProductVersion(const std::string& version);
+		void InitializeNetworkMonitoring(bool is_failures_count, bool is_established_count, bool is_reset_count);
+		void InitializeQueueDiagnostic(bool is_overflow, bool is_process_time, bool is_values_count, bool is_content_size);
+
 		void AddServiceStateMonitoring(const std::string& service_name);
 		
 		void SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status = HSMSensorStatus::Ok, const std::string& description = {});
@@ -56,6 +61,8 @@ namespace hsm_wrapper
 		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options);
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options);
+		HSMRateSensor<int> CreateIntRateSensor(const std::string& path, int period, const std::string& description) const;
+		HSMRateSensor<double> CreateDoubleRateSensor(const std::string& path, int period, const std::string& description) const;
 
 		template<class T>
 		std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<T>> CreateNoParamsFuncSensor(const std::string& path, const std::string& description, std::function<T()> function, const std::chrono::milliseconds& interval);
@@ -79,14 +86,17 @@ namespace hsm_wrapper
 		void StartAsync();
 		void Stop();
 		void StopAsync();
-		void InitializeSystemMonitoring(bool is_cpu = true, bool is_free_ram = true);
-		void InitializeDiskMonitoring(const std::string& target, bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true);
-		void InitializeAllDisksMonitoring(bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true);
-		void InitializeProcessMonitoring(bool is_cpu = true, bool is_memory = true, bool is_threads = true);
-		void InitializeOsMonitoring(bool is_last_update = true, bool is_last_restart = true);
+		void InitializeSystemMonitoring(bool is_cpu = true, bool is_free_ram = true, bool is_time_in_gc = true);
+		void InitializeDiskMonitoring(const std::string& target, bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true, bool is_average_speed = true);
+		void InitializeAllDisksMonitoring(bool is_free_space = true, bool is_free_space_prediction = true, bool is_active_time = true, bool is_queue_lenght = true, bool is_average_speed = true);
+		void InitializeProcessMonitoring(bool is_cpu = true, bool is_memory = true, bool is_threads = true, bool is_time_in_gc = true);
+		void InitializeOsMonitoring(bool is_last_update = true, bool is_last_restart = true, bool is_version = true);
 		void InitializeOsLogsMonitoring(bool is_warning = true, bool is_error = true);
-		void InitializeCollectorMonitoring(bool is_alive = true, bool version = true, bool status = true);
+		void InitializeCollectorMonitoring(bool is_alive = true, bool version = true, bool is_errors = true);
+		void InitializeNetworkMonitoring(bool is_failures_count = true, bool is_established_count = true, bool is_reset_count = true);
 		void InitializeProductVersion(const std::string& version); // version should be like a.b.c.d
+		void InitializeQueueDiagnostic(bool is_overflow = true, bool is_process_time = true, bool is_values_count = true, bool is_content_size = true);
+		
 		void AddServiceStateMonitoring(const std::string& service_name);
 
 		void SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status = HSMSensorStatus::Ok, const std::string& description = {});
@@ -107,6 +117,8 @@ namespace hsm_wrapper
 		IntBarSensor CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options);
 		DoubleBarSensor CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = {});
 		DoubleBarSensor CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options);
+		IntRateSensor CreateIntRateSensor(const std::string& path, int period = 15000, const std::string& description = {});
+		DoubleRateSensor CreateDoubleRateSensor(const std::string& path, int period = 15000, const std::string& description = {});
 
 		template<class T>
 		HSMNoParamsFuncSensor<T> CreateNoParamsFuncSensor(const std::string& path, const std::string& description, std::function<T()> func, const std::chrono::milliseconds& interval)

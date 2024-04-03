@@ -4,16 +4,16 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
     internal abstract class ConnectionsDifferenceSensor : BaseSocketsSensor
     {
-        private double? _prevValue;
+        private int? _prevValue;
 
 
         internal ConnectionsDifferenceSensor(MonitoringInstantSensorOptions options) : base(options) { }
 
 
-        protected override double GetValue()
+        protected override int GetValue()
         {
             var currentValue = base.GetValue();
-            var returnValue = 0d;
+            var returnValue = 0;
 
             if (_prevValue.HasValue)
                 returnValue = currentValue - _prevValue.Value;

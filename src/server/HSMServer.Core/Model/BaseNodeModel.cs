@@ -1,12 +1,12 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using System;
 using System.Runtime.CompilerServices;
-using HSMServer.Core.Extensions;
 
 namespace HSMServer.Core.Model
 {
@@ -32,7 +32,7 @@ namespace HSMServer.Core.Model
         public ProductModel Parent { get; private set; }
 
 
-        public string DisplayName { get; private set; }
+        public string DisplayName { get; protected set; }
 
         public string Description { get; private set; }
 
@@ -143,10 +143,10 @@ namespace HSMServer.Core.Model
             {
                 if (update is null || oldModel is null)
                     return value.ToString();
-                
+
                 return value switch
                 {
-                    SensorState state => state is SensorState.Muted ? $"{state.ToString()} until {(update.EndOfMutingPeriod ?? oldModel.EndOfMuting)?.ToDefaultFormat()}" : state.ToString(),
+                    SensorState state => state is SensorState.Muted ? $"{state} until {(update.EndOfMutingPeriod ?? oldModel.EndOfMuting)?.ToDefaultFormat()}" : state.ToString(),
                     _ => value.ToString()
                 };
             }

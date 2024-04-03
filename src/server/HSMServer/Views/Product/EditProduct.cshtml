@@ -9,7 +9,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    ViewData["Title"] = $"Product {Model.ProductName}";
+    ViewData["Title"] = $"Product {Model.GeneralInfo.Name}";
 }
 
 <script>
@@ -38,13 +38,16 @@
     </div>
 </div>
 
-<input id="productKey" value="@Model.ProductId" style="display: none"/>
-<input id="encodedProductId" value="@Model.EncodedProductId" style="display: none"/>
+<input id="productKey" value="@Model.GeneralInfo.Id" style="display: none" />
 
 <div class="container">
     <div class="row justify-content-center">
-        <h4 class="my-3 text-break">Edit product '@Model.ProductName'</h4>
-    
+        <h4 class="my-3 text-break">Edit product '@Model.GeneralInfo.Name'</h4>
+
+        <div id="editProductGeneralInfo_div">
+            @await Html.PartialAsync("_EditProductGeneralInfo", Model.GeneralInfo)
+        </div>
+
         @*<div style="margin: 10px">
                 <div class="row justify-content-start">
                     <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
@@ -81,7 +84,6 @@
                 <table class='table table-striped'>
                     <thead>
                     <tr>
-                        <th scope='col'>#</th>
                         <th scope='col'>Account</th>
                         <th scope='col'>Role</th>
                         <th scope='col'>Action</th>
@@ -89,7 +91,6 @@
                     </thead>
                     <tbody>
                     <tr>
-                        <th>0</th>
                         <th>
                             @if (Model.NotAdminUsers.Count != 0)
                             {
@@ -124,7 +125,6 @@
                         {
                             var userRight = Model.UsersRights[i];
                             <tr>
-                                <th scope='row'>@(i + 1)</th>
                                 <td class="text-break">@userRight.Item1.Username</td>
                                 <td>
                                     <select class='form-select' disabled id='role_@userRight.Item1.UserId'>
@@ -237,6 +237,28 @@
 </script>*@
 
 <script>
+    $(document).on("submit", "#generalProductInfo_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            url: $(`#generalProductInfo_form`).attr("action"),
+            type: 'POST',
+            data: $(`#generalProductInfo_form`).serialize(),
+            datatype: 'json',
+            async: true,
+            success: function (viewData) {
+                $(`#editProductGeneralInfo_div`).html(viewData);
+            }
+        }).done(function () {
+            if (document.getElementsByClassName("field-validation-error").length === 0) {
+                document.location.reload();
+            }
+        });
+    });
+</script>
+
+<script>
     function createUserRightData(userId, role, productKey) {
         return { "EntityId": productKey, "UserId": userId, "ProductRole": role }
     }
@@ -340,7 +362,7 @@
 
 <script>
     function addAccessKeyButtonClick() {
-        let productId = $('#encodedProductId').val();
+        let productId = $('#productKey').val();
         let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
         showNewAccessKeyModal(`${newAccessKeyURL}?selectedId=${productId}&closeModal=true`, true);

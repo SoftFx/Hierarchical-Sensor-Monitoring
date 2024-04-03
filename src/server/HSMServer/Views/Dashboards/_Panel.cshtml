@@ -50,19 +50,17 @@
 
 <script>
     $(document).ready(function () {
-        let settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
-        let ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
-        let yaxisRange = ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)];
-        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
-        let dashboardpanels = $('#dashboardPanels');
+        const settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
+        const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
+        const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
 
         initMultyichartCordinates(settings, values, '@Model.Id').then(
             (data) => {
                 containerHeight = Math.max(containerHeight, data);
-                return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend, yaxisRange).then(
+                return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend, false, ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)]).then(
                         (plot) => {
                                 values.forEach(function (x) {
-                                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', yaxisRange)
+                                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
                                 })
 
                                 $('#panelChart_@Model.Id').on('plotly_relayout', function (e, updateData){
@@ -92,4 +90,5 @@
             (error) => showToast(error)
         )
     })
+
 </script>

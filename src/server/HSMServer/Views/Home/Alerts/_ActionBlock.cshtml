@@ -30,9 +30,9 @@
 
 
 <div name="alertAction" class="d-flex flex-row align-items-center alert-blocks-group py-1 ms-3">
-    <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add me-3">and</div>
+    <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add alert-and me-3">and</div>
 
-    <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions" disabled="@(Model.IsMain ? true : false)"></select>
+    <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions"></select>
 
     <div name="sendNotificationAction" class="@isSendAction.ToVisibility() align-items-center">
         <input type="text" class="alert-block target-input target-comment" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)">
@@ -64,14 +64,17 @@
             <div class="alert-text-block operation-select">scheduled every</div>
             <select class="alert-block alert-select target-input" asp-for="ScheduleRepeatMode" asp-items="Enum.GetValues<ScheduleRepeatMode>().ToSelectedItems(k => k.GetDisplayName())"></select>
 
-            <div class="alert-text-block operation-select">starting at</div>
-            <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
+            @if (!Model.IsTtl)
+            {
+                <div class="alert-text-block operation-select">starting at</div>
+                <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
 
-            <div class="alert-text-block operation-select">
-                and instant send
-                <i class='fas fa-question-circle' title='If the option is checked, the first alert message is sent immediately. And then at the end of scheduled period, the remaining alert messages will be sent, agregated into one message.'></i>
-            </div>
-            <input class="form-check-input target-check" type="checkbox" asp-for="ScheduleInstantSend">
+                <div class="alert-text-block operation-select">
+                    and instant send
+                    <i class='fas fa-question-circle' title='If the option is checked, the first alert message is sent immediately. And then at the end of scheduled period, the remaining alert messages will be sent, agregated into one message.'></i>
+                </div>
+                <input class="form-check-input target-check" type="checkbox" asp-for="ScheduleInstantSend">
+            }
         </div>
     </div>
 
@@ -79,9 +82,7 @@
         <div name="emoji" class="target-input">@Model.Icon</div>
     </div>
 
-    <a class="deleteAction">
-        <i class="@isSecondaryCondition.ToVisibility() fa-solid fa-xmark alert-delete-button"></i>
-    </a>
+    <a class="deleteAction"><i class="fa-solid fa-xmark alert-delete-button"></i></a>
 </div>
 
 
@@ -138,7 +139,12 @@
     });
 
     $("a.deleteAction").off("click").on("click", function () {
+        let actionsBlock = $(this).parents(`div[name='actionsBlock']`);
+
         $(this).parents("div[name='alertAction']:first").remove();
+
+        let alertAction = actionsBlock.find(`div[name='alertAction']:first`);
+        alertAction.find('div.alert-and').remove();
     });
 
     $("a.addSchedule").off("click").on("click", function () {
