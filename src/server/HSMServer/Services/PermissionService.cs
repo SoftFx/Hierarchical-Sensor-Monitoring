@@ -1,3 +1,4 @@
+using HSMCommon.Constants;
 using HSMSensorDataObjects;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
@@ -65,7 +66,7 @@ namespace HSMServer.Services
             var product = data.Product;
             var key = data.Key;
 
-            var pathParts = PermissionFilter.GetPathParts(sensorData.Path);
+            var pathParts = GetPathParts(sensorData.Path);
 
             for (int i = 0; i < pathParts.Length; i++)
             {
@@ -105,6 +106,13 @@ namespace HSMServer.Services
             }
 
             return cache.TryGetKey(keyId, out key, out message);
+        }
+
+        public static ReadOnlySpan<string> GetPathParts(string path)
+        {
+            path = path.FirstOrDefault() == CommonConstants.SensorPathSeparator ? path[1..] : path;
+
+            return path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries).AsSpan();
         }
     }
 }

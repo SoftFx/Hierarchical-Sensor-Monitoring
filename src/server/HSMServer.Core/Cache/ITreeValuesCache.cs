@@ -68,6 +68,7 @@ namespace HSMServer.Core.Cache
         void ClearSensorHistory(ClearHistoryRequest request);
         void CheckSensorHistory(Guid sensorId);
         void ClearNodeHistory(ClearHistoryRequest request);
+
         BaseSensorModel GetSensor(Guid sensorId);
         IEnumerable<BaseSensorModel> GetSensorsByFolder(HashSet<Guid> folderIds = null);
 

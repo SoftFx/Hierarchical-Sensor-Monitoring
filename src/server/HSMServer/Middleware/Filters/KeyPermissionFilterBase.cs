@@ -105,11 +105,4 @@ public abstract class KeyPermissionFilterBase(IPermissionService _service, ITree
 
         return Guid.TryParse(key, out guidKey);
     }
-
-    public static ReadOnlySpan<string> GetPathParts(string path)
-    {
-        path = path.FirstOrDefault() == CommonConstants.SensorPathSeparator ? path[1..] : path;
-
-        return path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries).AsSpan();
-    }
 }
