@@ -13,6 +13,9 @@
                 <div class="d-flex flex-column">
                     <h5 id="applyingResults"></h5>
 
+                    <div id="applyingIncorrectPropertyError" style="color:red;font-size:smaller;"></div>
+                    <div id="applyingIncorrectEmaPropertyError" style="color:red;font-size:smaller;"></div>
+
                     <div id="applyingProgress" class="progress-bar align-self-end">
                         <div class="progress-bar-value"></div>
                     </div>
@@ -32,7 +35,7 @@
             </div>
 
             <div class="modal-footer">
-                <button class="btn btn-primary col-2 col-lg-1 disabled" id="applyTemplate_okButton" onclick="javascript:apply()">Enable</button>
+                <button class="btn btn-primary col-2 col-lg-1 disabled" id="applyTemplate_okButton" onclick="javascript:apply()" title="Only valid sources will be applied">Enable</button>
                 <button class="btn btn-primary col-2 col-lg-1 px-2" id="applyTemplate_cancelButton" onclick="javascript:cancel()">Cancel</button>
             </div>
         </div>
@@ -54,16 +57,24 @@
 
     function getResult() {
         let templateId = $(`#applyTemplate_modal`).attr("name");
-        let maxVisibleMatchedSensors = parseInt('@PanelSensorScanTask.MaxVisibleMathedItems');
+        let maxVisibleMatchedSensors = parseInt('@PanelSensorScanTask.MaxVisibleMatchedItems');
 
         $.ajax({
             url: `${window.location.pathname}/@(nameof(DashboardsController.GetResultOfApplying))/${templateId}`,
             type: 'POST',
             success: function (result) {
                 $('#applyingResults').html(`Total scanned: ${result.totalScanned}, matched: ${result.totalMatched}`);
+
+                if (Number(result.incorrectProperty) > 0)
+                    $('#applyingIncorrectPropertyError').html(`There is ${result.incorrectProperty} sensors that don't have selected property.`);
+                if (Number(result.incorrectEmaProperty) > 0)
+                    $('#applyingIncorrectEmaPropertyError').html(`There is ${result.incorrectEmaProperty} sensors with disabled EMA statistics.`);
                 
+                let invalidStyle = `style="color:red;"`
                 result.matсhedSensors.forEach(function (sensor) {
-                    $('#matchedSensors').append(`<tr><td>${sensor.path}</td><td>${sensor.label}</td></tr>`);
+                    let sensorStyle = sensor.isPropertyIncorrect || sensor.isEmaPropertyIncorrect ? invalidStyle : "";
+
+                    $('#matchedSensors').append(`<tr><td ${sensorStyle}>${sensor.path}</td><td ${sensorStyle}>${sensor.label}</td></tr>`);
                 });
 
                 if (result.totalMatched > maxVisibleMatchedSensors) {
@@ -117,6 +128,8 @@
         $('#matchedSensors').empty();
         $('#applyingResults').empty();
         $('#moreMatchedSensors').empty();
+        $('#applyingIncorrectPropertyError').empty();
+        $('#applyingIncorrectEmaPropertyError').empty();
         $('#applyingProgress').removeClass('d-none');
         $('#applyTemplate_okButton').addClass('disabled');
     }

@@ -7,12 +7,25 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Dashboards
 {
-    public sealed record ScannedSensorInfo(string Path, string Label);
+    public sealed record ScannedSensorInfo
+    {
+        public string Path { get; init; }
+
+        public string Label { get; init; }
+
+        public bool IsPropertyIncorrect { get; init; }
+
+        public bool IsEmaPropertyIncorrect { get; init; }
+    }
 
 
     public sealed record SensorScanResult
     {
         public List<ScannedSensorInfo> MatсhedSensors { get; init; }
+
+        public long IncorrectEmaProperty { get; init; }
+
+        public long IncorrectProperty { get; init; }
 
         public long TotalScanned { get; init; }
 
@@ -24,7 +37,7 @@ namespace HSMServer.Dashboards
 
     public sealed class PanelSensorScanTask : TaskCompletionSource
     {
-        public const int MaxVisibleMathedItems = 20;
+        public const int MaxVisibleMatchedItems = 20;
         private const int BatchSize = 50;
 
         private static readonly ILogger _logger = LogManager.GetCurrentClassLogger();
@@ -32,7 +45,7 @@ namespace HSMServer.Dashboards
         private readonly List<ScannedSensorInfo> _matсhedResult = new(1 << 5);
         private readonly CancellationTokenSource _tokenSource = new();
 
-        private long _totalScanned, _totalMatched;
+        private long _totalScanned, _totalMatched, _incorrectProperty, _incorrectEmaProperty;
 
 
         public List<BaseSensorModel> MatchedSensors { get; } = new(1 << 4);
@@ -52,12 +65,32 @@ namespace HSMServer.Dashboards
                     if (Interlocked.Increment(ref _totalScanned) % BatchSize == 0)
                         await Task.Yield();
 
-                    if (subscription.IsMatch(sensor))
+                    if (subscription.IsMatchTemplate(sensor))
                     {
+                        bool isPropertyIncorrect = false;
+                        bool isEmaIncorrect = false;
+
+                        if (!subscription.IsPropertySuitable(sensor))
+                        {
+                            Interlocked.Increment(ref _incorrectProperty);
+                            isPropertyIncorrect = true;
+                        }
+                        else if (!subscription.IsEmaPropertySuitable(sensor))
+                        {
+                            Interlocked.Increment(ref _incorrectEmaProperty);
+                            isEmaIncorrect = true;
+                        }
+
                         MatchedSensors.Add(sensor);
 
-                        if (Interlocked.Increment(ref _totalMatched) <= MaxVisibleMathedItems)
-                            _matсhedResult.Add(new ScannedSensorInfo(sensor.FullPath, subscription.BuildSensorLabel()));
+                        if (Interlocked.Increment(ref _totalMatched) <= MaxVisibleMatchedItems)
+                            _matсhedResult.Add(new ScannedSensorInfo()
+                            {
+                                Path = sensor.FullPath,
+                                Label = subscription.BuildSensorLabel(),
+                                IsPropertyIncorrect = isPropertyIncorrect,
+                                IsEmaPropertyIncorrect = isEmaIncorrect
+                            });
                     }
                 }
                 catch (Exception ex)
@@ -76,6 +109,8 @@ namespace HSMServer.Dashboards
                 MatсhedSensors = [.. _matсhedResult],
                 TotalScanned = Interlocked.Read(ref _totalScanned),
                 TotalMatched = Interlocked.Read(ref _totalMatched),
+                IncorrectProperty = Interlocked.Read(ref _incorrectProperty),
+                IncorrectEmaProperty = Interlocked.Read(ref _incorrectEmaProperty),
                 IsFinish = IsFinish,
             };
 
@@ -91,14 +126,6 @@ namespace HSMServer.Dashboards
 
             _tokenSource.Cancel();
             TrySetCanceled(_tokenSource.Token);
-        }
-
-        private void AddMathedSensor(BaseSensorModel sensor, PanelSubscription subscription)
-        {
-            var info = new ScannedSensorInfo(sensor.FullPath, subscription.BuildSensorLabel());
-
-            _matсhedResult.Add(info);
-            MatchedSensors.Add(sensor);
         }
     }
 }
