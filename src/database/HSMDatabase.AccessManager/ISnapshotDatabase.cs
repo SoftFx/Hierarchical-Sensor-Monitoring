@@ -20,7 +20,7 @@ namespace HSMDatabase.AccessManager
     {
         IEntitySnapshotCollection<SensorStateEntity> Sensors { get; }
         
-        IEntitySnapshotCollection<KeyStateEntity> Keys { get; }
+        IEntitySnapshotCollection<LastKeyStateEntity> Keys { get; }
 
         bool IsFinal { get; }
 

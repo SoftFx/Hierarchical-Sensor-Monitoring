@@ -1,6 +1,6 @@
 ﻿namespace HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
 
-public record KeyStateEntity
+public sealed record LastKeyStateEntity
 {
     public string IP { get; set; }
     

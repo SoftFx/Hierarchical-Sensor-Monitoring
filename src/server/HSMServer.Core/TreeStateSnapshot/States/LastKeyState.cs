@@ -4,22 +4,22 @@ using HSMServer.Core.Model;
 
 namespace HSMServer.Core.TreeStateSnapshot.States;
 
-public class KeyState : ILastState<KeyStateEntity>
+public sealed class LastKeyState : ILastState<LastKeyStateEntity>
 {
     public string IP { get; private set; }
     
     public DateTime LastUseTime { get; private set; }
 
-    public bool IsDefault => false;
+    public bool IsDefault => IP is null && LastUseTime == DateTime.MinValue;
     
     
-    public void FromEntity(KeyStateEntity entity)
+    public void FromEntity(LastKeyStateEntity entity)
     {
         IP = entity.IP;
         LastUseTime = new DateTime(entity.LastUseTicks);
     }
 
-    public KeyStateEntity ToEntity() => new()
+    public LastKeyStateEntity ToEntity() => new()
     {
         IP = IP,
         LastUseTicks = LastUseTime.Ticks

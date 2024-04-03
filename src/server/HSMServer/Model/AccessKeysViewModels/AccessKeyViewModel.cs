@@ -2,7 +2,6 @@
 using HSMServer.Model.TreeViewModel;
 using System;
 using HSMServer.Extensions;
-using HSMServer.Model.Authentication;
 
 namespace HSMServer.Model.AccessKeysViewModels
 {
@@ -27,9 +26,9 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string StatusTitle { get; private set; }
         
-        public string IP { get; set; }
+        public string IP { get; private set; }
         
-        public DateTime LastUseTime { get; set; }
+        public DateTime LastUseTime { get; private set; }
 
 
         internal AccessKeyViewModel(AccessKeyModel accessKey, ProductNodeViewModel parent, Guid? authorId)

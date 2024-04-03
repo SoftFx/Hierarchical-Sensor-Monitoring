@@ -82,8 +82,6 @@ namespace HSMServer.Core.Model
             DisplayName = entity.DisplayName;
             CreationTime = new DateTime(entity.CreationTime);
             ExpirationTime = new DateTime(entity.ExpirationTime);
-            LastUseTime = new DateTime(entity.LastUseTime);
-            IP = entity.IP;
         }
 
         public AccessKeyModel(Guid authorId, Guid productId) : this()
@@ -128,8 +126,6 @@ namespace HSMServer.Core.Model
                 DisplayName = DisplayName,
                 CreationTime = CreationTime.Ticks,
                 ExpirationTime = ExpirationTime.Ticks,
-                LastUseTime = LastUseTime.Ticks,
-                IP = IP
             };
 
         internal static AccessKeyModel BuildDefault(ProductModel product) => new(product);
