@@ -68,7 +68,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<BoolSensorValue> Post([FromBody] BoolSensorValue sensorValue)
         {
             try
@@ -93,7 +93,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<IntSensorValue> Post([FromBody] IntSensorValue sensorValue)
         {
             try
@@ -118,7 +118,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<DoubleSensorValue> Post([FromBody] DoubleSensorValue sensorValue)
         {
             try
@@ -143,7 +143,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<StringSensorValue> Post([FromBody] StringSensorValue sensorValue)
         {
             try
@@ -168,7 +168,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<TimeSpanSensorValue> Post([FromBody] TimeSpanSensorValue sensorValue)
         {
             try
@@ -193,7 +193,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<VersionSensorValue> Post([FromBody] VersionSensor sensorValue)
         {
             try
@@ -218,7 +218,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<RateSensorValue> Post([FromBody] RateSensorValue sensorValue)
         {
             try
@@ -244,7 +244,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<DoubleBarSensorValue> Post([FromBody] DoubleBarSensorValue sensorValue)
         {
             try
@@ -269,7 +269,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<IntBarSensorValue> Post([FromBody] IntBarSensorValue sensorValue)
         {
             try
@@ -294,7 +294,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<FileSensorValue> Post([FromBody] FileSensorValue sensorValue)
         {
             try
@@ -321,7 +321,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<List<SensorValueBase>> Post([FromBody, ModelBinder(typeof(SensorValueModelBinder))] List<SensorValueBase> values)
         {
             try
@@ -396,7 +396,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<ReadPermissionFilter>]
+        [TypeFilter<ReadKeyPermissionFilter>]
         public async Task<ActionResult<string>> Get([FromBody] HistoryRequest request)
         {
             try
@@ -426,7 +426,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<ReadPermissionFilter>]
+        [TypeFilter<ReadKeyPermissionFilter>]
         public async Task<IActionResult> Get([FromBody] FileHistoryRequest request) //TODO merge with ExportHistory History controller
         {
             try
@@ -461,7 +461,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<AddOrUpdateSensorRequest> Post([FromBody] AddOrUpdateSensorRequest sensorUpdate)
         {
             try
@@ -498,7 +498,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [TypeFilter<SendPermissionFilter>]
+        [TypeFilter<SendKeyPermissionFilter>]
         public ActionResult<Dictionary<string, string>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
         {
             var result = new Dictionary<string, string>(sensorCommands.Count);

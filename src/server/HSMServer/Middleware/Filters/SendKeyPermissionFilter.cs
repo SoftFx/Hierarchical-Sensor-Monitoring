@@ -5,7 +5,7 @@ using HSMServer.Services;
 
 namespace HSMServer.Middleware
 {
-    public sealed class SendPermissionFilter(IPermissionService service,ITreeValuesCache cache, DataCollectorWrapper collector) : PermissionFilter(service, cache, collector)
+    public sealed class SendKeyPermissionFilter(IPermissionService service,ITreeValuesCache cache, DataCollectorWrapper collector) : KeyPermissionFilterBase(service, cache, collector)
     {
         protected override KeyPermissions Permissions => KeyPermissions.CanSendSensorData;
     }
