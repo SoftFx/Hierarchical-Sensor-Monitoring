@@ -1,5 +1,4 @@
 ﻿using HSMDatabase.AccessManager;
-using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace HSMDatabase.SnapshotsDb
 {
-    internal sealed class SnapshotCollection<T> : IEntitySnapshotCollection<SensorStateEntity>
+    internal sealed class SnapshotCollection<T> : IEntitySnapshotCollection<T>
     {
         private static readonly JsonSerializerOptions _options = new()
         {
@@ -17,16 +16,16 @@ namespace HSMDatabase.SnapshotsDb
         };
 
 
-        public Dictionary<Guid, SensorStateEntity> Data { get; set; }
+        public Dictionary<Guid, T> Data { get; set; }
 
 
         internal required string FilePath { get; init; }
 
 
-        public Dictionary<Guid, SensorStateEntity> Read()
+        public Dictionary<Guid, T> Read()
         {
             Data = File.Exists(FilePath)
-                   ? JsonSerializer.Deserialize<Dictionary<Guid, SensorStateEntity>>(File.ReadAllBytes(FilePath))
+                   ? JsonSerializer.Deserialize<Dictionary<Guid, T>>(File.ReadAllBytes(FilePath))
                    : new();
 
             return Data;

@@ -8,7 +8,6 @@ using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
 
-
 namespace HSMServer.Core.Cache
 {
     public enum ActionType
@@ -56,7 +55,7 @@ namespace HSMServer.Core.Cache
         bool TryGetKey(Guid id, out AccessKeyModel key, out string message);
         bool TryGetProduct(Guid id, out ProductModel product, out string message);
 
-        bool CheckAddPermissions(ProductModel product, AccessKeyModel accessKey, ReadOnlySpan<string> pathParts, out string message);
+        void UpdateKeyUseState(AccessKeyModel keyModel, string ip);
         
         
         bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);
