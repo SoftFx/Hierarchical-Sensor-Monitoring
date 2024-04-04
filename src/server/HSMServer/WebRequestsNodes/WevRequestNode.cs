@@ -9,8 +9,8 @@ public record WebRequestNode
     private const double KbDivisor = 1 << 10;
 
     private const string RecvSensorsNode = "Recv Sensors";
-    private const string RecvBytesNode = "Recv Bytes";
-    private const string SentBytesNode = "Sent Bytes";
+    private const string RecvBytesNode = "Recv KiloBytes";
+    private const string SentBytesNode = "Sent KiloBytes";
     private const string ClientNode = "Clients";
 
     private readonly IInstantValueSensor<double> _receiveSensors;
@@ -21,8 +21,8 @@ public record WebRequestNode
     public WebRequestNode(IDataCollector collector, string id)
     {
         _receiveSensors = collector.CreateM1RateSensor(BuildSensorPath(id, RecvSensorsNode), "Number of sensors that were received from client.");
-        _receiveBytes = collector.CreateM1RateSensor(BuildSensorPath(id, RecvBytesNode), "Number of bytes that were received from client.");
-        _sentBytes = collector.CreateM1RateSensor(BuildSensorPath(id, SentBytesNode), "Number of bytes that were sent from server to client.");
+        _receiveBytes = collector.CreateM1RateSensor(BuildSensorPath(id, RecvBytesNode), "Number of kilobytes that were received from client.");
+        _sentBytes = collector.CreateM1RateSensor(BuildSensorPath(id, SentBytesNode), "Number of kilobytes that were sent from server to client.");
     }
 
 
