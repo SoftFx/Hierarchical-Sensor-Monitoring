@@ -7,7 +7,6 @@ using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -64,6 +63,8 @@ public class DatasourceViewModel
 
     public Guid SensorId { get; set; }
 
+    public Guid? Folder { get; set; }
+
     public string Path { get; set; }
 
     public Unit? Unit { get; set; }
@@ -103,6 +104,7 @@ public class DatasourceViewModel
         var sensor = source.Sensor;
 
         Path = sensor.FullPath;
+        Folder = sensor.Root.FolderId;
         ProductName = sensor.RootProductName;
         SensorName = sensor.DisplayName;
         Unit = sensor.OriginalUnit;

@@ -1,6 +1,9 @@
-﻿@using HSMServer.Model.Dashboards
+﻿@using HSMServer.Folders
+@using HSMServer.Model.Dashboards
 
 @model DatasourceViewModel
+
+@inject IFolderManager Folders
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -25,14 +28,18 @@
                         <input id='color_@Model.Id' type="color" asp-for="Color" class="form-control form-control-color mx-1" oninput="javascript:realtimeUpdate('@Model.Id')" />
                     </div>
                     <div class="d-flex align-items-center">
+                        @if (Folders.TryGetValueById(Model.Folder, out var folder))
+                        {
+                            <span  style="color: grey;font-size: x-small;"><i class="fa-regular fa-folder"></i> @folder.Name -</span>
+                        }
                         <span class="ms-1" style="color: grey;font-size: x-small;text-decoration-line: underline;cursor: pointer;" onclick="javascript:redirectToHome('@Model.SensorId')">
                             @Model.Path
                         </span>
                     </div>
                 </div>
             </div>
-        </div>    
-    
+        </div>
+
         <div>
             <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
                 <i class="fa-solid fa-ellipsis-vertical button-link"></i>
