@@ -50,7 +50,7 @@ namespace HSMServer.Extensions
 
 
         internal static bool HasUnconfiguredAlerts(this SensorNodeViewModel sensor) =>
-            sensor.State is not Core.Model.SensorState.Muted &&
+            sensor.HasData && sensor.State is not Core.Model.SensorState.Muted &&
             (sensor.DataAlerts.Values.Any(d => d.Any(a => a.IsUnconfigured())) ||
             (!sensor.TTL.IsIntervalNone && sensor.TTLAlert.IsUnconfigured()));
 

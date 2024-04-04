@@ -1300,7 +1300,7 @@ namespace HSMServer.Core.Cache
 
             var ttl = sensor.Policies.TimeToLive;
 
-            if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.Time))
+            if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
                 SendNotification(ttl.GetNotification(true));
         }
 
