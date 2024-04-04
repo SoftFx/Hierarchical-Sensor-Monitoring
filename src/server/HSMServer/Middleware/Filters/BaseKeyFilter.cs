@@ -33,7 +33,7 @@ public abstract class BaseKeyFilter(ITreeValuesCache _cache)
         requestData.Product = product;
 
         if (TryGetIp(context, out var ip))
-            cache.UpdateKeyUseState(requestData.Key, ip);
+            cache.SetLastKeyUsage(keyId, ip);
         
         return requestData;
         

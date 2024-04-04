@@ -26,7 +26,8 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string StatusTitle { get; private set; }
         
-        public string IP { get; private set; }
+
+        public string LastIP { get; private set; }
         
         public DateTime LastUseTime { get; private set; }
 
@@ -36,7 +37,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             Id = accessKey.Id;
             ParentProduct = parent;
             AuthorId = authorId;
-            IP = accessKey.IP;
+            LastIP = accessKey.LastIP;
             LastUseTime = accessKey.LastUseTime;
             ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
 
@@ -50,7 +51,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             State = accessKey.State;
             StatusTitle = $"Status : {State}{Environment.NewLine}Expiration date : {ExpirationDate}";
 
-            IP = accessKey.IP;
+            LastIP = accessKey.LastIP;
             LastUseTime = accessKey.LastUseTime;
         }
 

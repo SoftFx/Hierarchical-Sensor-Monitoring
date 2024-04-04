@@ -192,17 +192,19 @@ namespace HSMServer.Core.Cache
             return sensorChecking;
         }
 
-        public void UpdateKeyUseState(AccessKeyModel keyModel, string ip)
+        public void SetLastKeyUsage(Guid key, string ip)
         {
-            if (keyModel is null)
+            if (!TryGetKey(key, out var keyModel, out _))
                 return;
-            
-            keyModel.UpdateUseTime(ip, DateTime.UtcNow);
-            _snapshot.Keys[keyModel.Id].Update(keyModel);
-            
+
+            var usageTime = DateTime.UtcNow;
+
+            keyModel.UpdateUsageInfo(ip, usageTime);
+            _snapshot.Keys[key].Update(ip, usageTime);
+
             ChangeAccessKeyEvent?.Invoke(keyModel, ActionType.Update);
         }
-        
+
         public bool TryGetKey(Guid id, out AccessKeyModel key, out string message)
         {
             key = _keys.TryGetValue(id, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
@@ -210,9 +212,9 @@ namespace HSMServer.Core.Cache
             if (!key.IsValid(KeyPermissions.CanSendSensorData & KeyPermissions.CanAddNodes & KeyPermissions.CanAddSensors & KeyPermissions.CanReadSensorData, out message))
                 return false;
 
-            if (!key.IsMaster) 
+            if (!key.IsMaster)
                 return true;
-            
+
             message = ErrorMasterKey;
             return false;
         }
@@ -221,7 +223,7 @@ namespace HSMServer.Core.Cache
         {
             var hasProduct = _tree.TryGetValue(id, out product);
             message = hasProduct ? string.Empty : ErrorKeyNotFound;
-            
+
             if (product?.Parent is not null)
             {
                 message = "Temporarily unavailable feature. Please select a product without a parent";
@@ -294,7 +296,7 @@ namespace HSMServer.Core.Cache
 
                 _database.RemoveAccessKey(id);
                 _snapshot.Keys.Remove(id);
-                
+
                 ChangeAccessKeyEvent?.Invoke(key, ActionType.Delete);
             }
 
@@ -829,7 +831,7 @@ namespace HSMServer.Core.Cache
         internal void AddNewSensorValue(StoreInfo storeInfo)
         {
             var product = storeInfo?.Product;
-            
+
             if (product == null && !TryGetProductByKey(storeInfo, out product, out _))
                 return;
 
@@ -1127,7 +1129,7 @@ namespace HSMServer.Core.Cache
             if (isSuccess && _tree.TryGetValue(key.ProductId, out var product))
             {
                 if (_snapshot.Keys.TryGetValue(key.Id, out var snapKey))
-                    key.UpdateUseTime(snapKey.IP, snapKey.LastUseTime);
+                    key.UpdateUsageInfo(snapKey.IP, snapKey.LastUseTime);
 
                 isSuccess &= product.AccessKeys.TryAdd(key.Id, key);
                 ChangeProductEvent?.Invoke(product, ActionType.Update);

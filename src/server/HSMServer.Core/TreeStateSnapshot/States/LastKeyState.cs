@@ -1,18 +1,17 @@
-﻿using System;
-using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
-using HSMServer.Core.Model;
+﻿using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
+using System;
 
 namespace HSMServer.Core.TreeStateSnapshot.States;
 
 public sealed class LastKeyState : ILastState<LastKeyStateEntity>
 {
     public string IP { get; private set; }
-    
+
     public DateTime LastUseTime { get; private set; }
 
     public bool IsDefault => IP is null && LastUseTime == DateTime.MinValue;
-    
-    
+
+
     public void FromEntity(LastKeyStateEntity entity)
     {
         IP = entity.IP;
@@ -24,10 +23,10 @@ public sealed class LastKeyState : ILastState<LastKeyStateEntity>
         IP = IP,
         LastUseTicks = LastUseTime.Ticks
     };
-    
-    public void Update(AccessKeyModel key)
+
+    public void Update(string ip, DateTime time)
     {
-        IP = key.IP;
-        LastUseTime = key.LastUseTime;
+        IP = ip;
+        LastUseTime = time;
     }
 }
