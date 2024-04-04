@@ -26,10 +26,10 @@ public abstract class BaseKeyFilter(ITreeValuesCache _cache)
     {
         GetKeyIdFromHeader(context.Request.Headers, out var keyId);
 
-        cache.TryGetKey(keyId, out var key, out var message);
+        cache.TryGetKey(keyId, out var key, out _);
         requestData.Key = key;
-        
-        cache.TryGetProduct(key.ProductId, out var product, out message);
+
+        cache.TryGetProduct(key.ProductId, out var product, out _);
         requestData.Product = product;
 
         if (TryGetIp(context, out var ip))

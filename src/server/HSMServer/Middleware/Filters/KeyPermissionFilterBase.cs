@@ -1,16 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using HSMCommon.Constants;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Services;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Header = HSMSensorDataObjects.Header;
 
 namespace HSMServer.Middleware;
@@ -31,7 +28,7 @@ public abstract class KeyPermissionFilterBase(IPermissionService _service, ITree
         CheckPermission(context, RequestData, out _);
         return next();
     }
-    
+
     public Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
         if (context.HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var value) && value is RequestData requestData)
