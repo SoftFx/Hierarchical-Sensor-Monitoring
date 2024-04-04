@@ -1,28 +1,50 @@
 ﻿using HSMDataCollector.Core;
+using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using HSMSensorDataObjects.SensorRequests;
 using Microsoft.AspNetCore.Http;
+using System;
 
 namespace HSMServer.WebRequestsNodes;
 
 public record WebRequestNode
 {
+    private const int OneMinute = 60000;
     private const double KbDivisor = 1 << 10;
 
     private const string RecvSensorsNode = "Recv Sensors";
-    private const string RecvBytesNode = "Recv KiloBytes";
-    private const string SentBytesNode = "Sent KiloBytes";
+    private const string RecvBytesNode = "Received";
+    private const string SentBytesNode = "Sent";
     private const string ClientNode = "Clients";
 
     private readonly IInstantValueSensor<double> _receiveSensors;
     private readonly IInstantValueSensor<double> _receiveBytes;
     private readonly IInstantValueSensor<double> _sentBytes;
 
+    private readonly TimeSpan _postDataPeriod = TimeSpan.FromMilliseconds(OneMinute);
+
 
     public WebRequestNode(IDataCollector collector, string id)
     {
-        _receiveSensors = collector.CreateM1RateSensor(BuildSensorPath(id, RecvSensorsNode), "Number of sensors that were received from client.");
-        _receiveBytes = collector.CreateM1RateSensor(BuildSensorPath(id, RecvBytesNode), "Number of kilobytes that were received from client.");
-        _sentBytes = collector.CreateM1RateSensor(BuildSensorPath(id, SentBytesNode), "Number of kilobytes that were sent from server to client.");
+        _receiveSensors = collector.CreateRateSensor(BuildSensorPath(id, RecvSensorsNode), new RateSensorOptions
+        {
+            PostDataPeriod = _postDataPeriod,
+            Description = "Number of sensors that were received from client."
+        });
+
+        _receiveBytes = collector.CreateRateSensor(BuildSensorPath(id, RecvBytesNode), new RateSensorOptions
+        {
+            SensorUnit = Unit.KBytes_sec,
+            PostDataPeriod = _postDataPeriod,
+            Description = "Number of KB that were received from client."
+        });
+
+        _sentBytes = collector.CreateRateSensor(BuildSensorPath(id, SentBytesNode), new RateSensorOptions
+        {
+            SensorUnit = Unit.KBytes_sec,
+            PostDataPeriod = _postDataPeriod,
+            Description = "Number of KB that were sent from server to client."
+        }); 
     }
 
 
