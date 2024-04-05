@@ -11,6 +11,8 @@ namespace HSMServer.Dashboards
     {
         public string Path { get; init; }
 
+        public string Type { get; init; }
+
         public string Label { get; init; }
 
         public bool IsPropertyIncorrect { get; init; }
@@ -87,6 +89,7 @@ namespace HSMServer.Dashboards
                             _matсhedResult.Add(new ScannedSensorInfo()
                             {
                                 Path = sensor.FullPath,
+                                Type = sensor.Type.ToString(),
                                 Label = subscription.BuildSensorLabel(),
                                 IsPropertyIncorrect = isPropertyIncorrect,
                                 IsEmaPropertyIncorrect = isEmaIncorrect

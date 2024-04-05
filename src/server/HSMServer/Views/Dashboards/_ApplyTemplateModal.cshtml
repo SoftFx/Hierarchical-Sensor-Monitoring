@@ -24,6 +24,7 @@
                         <thead>
                             <tr>
                                 <th>Path</th>
+                                <th>Sensor type</th>
                                 <th>Label</th>
                             </tr>
                         </thead>
@@ -74,7 +75,7 @@
                 result.matсhedSensors.forEach(function (sensor) {
                     let sensorStyle = sensor.isPropertyIncorrect || sensor.isEmaPropertyIncorrect ? invalidStyle : "";
 
-                    $('#matchedSensors').append(`<tr><td ${sensorStyle}>${sensor.path}</td><td ${sensorStyle}>${sensor.label}</td></tr>`);
+                    $('#matchedSensors').append(`<tr><td ${sensorStyle}>${sensor.path}</td><td ${sensorStyle}>${sensor.type}</td><td ${sensorStyle}>${sensor.label}</td></tr>`);
                 });
 
                 if (result.totalMatched > maxVisibleMatchedSensors) {
