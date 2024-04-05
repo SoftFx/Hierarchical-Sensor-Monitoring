@@ -9,8 +9,8 @@ namespace HSMServer.WebRequestsNodes;
 
 public record WebRequestNode
 {
-    private const int OneMinute = 60000;
     private const double KbDivisor = 1 << 10;
+    private const int OneMinute = 60000;
 
     private const string RecvSensorsNode = "Recv Sensors";
     private const string RecvBytesNode = "Received";
@@ -28,12 +28,14 @@ public record WebRequestNode
     {
         _receiveSensors = collector.CreateRateSensor(BuildSensorPath(id, RecvSensorsNode), new RateSensorOptions
         {
+            Alerts = [],
             PostDataPeriod = _postDataPeriod,
             Description = "Number of sensors that were received from client."
         });
 
         _receiveBytes = collector.CreateRateSensor(BuildSensorPath(id, RecvBytesNode), new RateSensorOptions
         {
+            Alerts = [],
             SensorUnit = Unit.KBytes_sec,
             PostDataPeriod = _postDataPeriod,
             Description = "Number of KB that were received from client."
@@ -41,10 +43,11 @@ public record WebRequestNode
 
         _sentBytes = collector.CreateRateSensor(BuildSensorPath(id, SentBytesNode), new RateSensorOptions
         {
+            Alerts = [],
             SensorUnit = Unit.KBytes_sec,
             PostDataPeriod = _postDataPeriod,
             Description = "Number of KB that were sent from server to client."
-        }); 
+        });
     }
 
 
