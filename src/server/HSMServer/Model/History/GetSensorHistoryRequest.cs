@@ -30,5 +30,7 @@ namespace HSMServer.Model.Model.History
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public RequestOptions Options { get; set; }
+        
+        public int? GraphLimit { get; set; }
     }
 }

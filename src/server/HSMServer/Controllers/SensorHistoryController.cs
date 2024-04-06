@@ -123,9 +123,9 @@ namespace HSMServer.Controllers
             if (localValue is not null && (values.Count == 0 || values[0].Time != localValue.Time))
                 values.Add(localValue);
 
-            return new JsonResult(HistoryProcessorFactory.BuildProcessor(model.Type)
-                                                         .ProcessingAndCompression(sensor, values, model.BarsCount)
-                                                         .Select(v => (object)v));
+            var historyProcess = HistoryProcessorFactory.BuildProcessor(model.Type);
+            
+            return historyProcess.GetResultFromValues(sensor, values, model.BarsCount);
         }
 
 

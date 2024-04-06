@@ -3,11 +3,15 @@ using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Mvc;
 
 namespace HSMServer.Model.History
 {
     internal abstract class HistoryProcessorBase
     {
+        private const int ValuesLimit = 2000;
+        private bool _showMessage = false;
+
         public List<BaseValue> ProcessingAndCompression(SensorNodeViewModel sensor, List<BaseValue> values, int compressedValuesCount)
         {
             DateTime ByReceivingTime(BaseValue value) => value.ReceivingTime;
@@ -22,15 +26,15 @@ namespace HSMServer.Model.History
 
             if (values.Count < compressedValuesCount)
                 return tempValues
-                        .Select(v => v switch
-                        {
-                            DoubleBarValue doubleBarValue => new NotCompressedValue<double>(doubleBarValue, v.Time),
-                            IntegerBarValue integerBarValue => new NotCompressedValue<int>(integerBarValue, v.Time),
-                            _ => v with { Time = v.Time.ToUniversalTime() }
-                        })
-                        .ToList();
+                    .Select(v => v switch
+                    {
+                        DoubleBarValue doubleBarValue => new NotCompressedValue<double>(doubleBarValue, v.Time),
+                        IntegerBarValue integerBarValue => new NotCompressedValue<int>(integerBarValue, v.Time),
+                        _ => v with {Time = v.Time.ToUniversalTime()}
+                    })
+                    .ToList();
 
-            values = tempValues.Select(v => v with { Time = v.Time.ToUniversalTime() }).ToList();
+            values = tempValues.Select(v => v with {Time = v.Time.ToUniversalTime()}).ToList();
 
             var interval = CountInterval(values, compressedValuesCount);
             if (interval == TimeSpan.Zero)
@@ -39,7 +43,23 @@ namespace HSMServer.Model.History
             return Compress(values, interval);
         }
 
-        protected virtual List<BaseValue> Compress(List<BaseValue> history, TimeSpan compressionInterval) => history;
+        public JsonResult GetResultFromValues(SensorNodeViewModel sensor, List<BaseValue> values, int compressedValuesCount)
+        {
+            values = ProcessingAndCompression(sensor, values, compressedValuesCount);
+
+            return new JsonResult(new
+            {
+                error = _showMessage,
+                values = values.Select(x => (object) x)
+            });
+        }
+
+        protected virtual List<BaseValue> Compress(List<BaseValue> history, TimeSpan compressionInterval)
+        {
+            _showMessage = history.Count > ValuesLimit;
+
+            return history;
+        }
 
         private static TimeSpan CountInterval(List<BaseValue> values, int compressedValuesCount)
         {

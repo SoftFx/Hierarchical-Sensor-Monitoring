@@ -258,9 +258,16 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
     }).done(function (data) {
         $("#tableHistoryRefreshButton").addClass("d-none");
         $('#allColumnsButton').addClass("d-none");
+
         let parsedData = JSON.parse(data);
 
-        if (parsedData.length === 0) {
+        if (parsedData.error === true) {
+            showInfoModal("Graph info", 
+                "Current history period contains more than 2000 points. Only last 2000 point will be displayed.");
+        }
+
+        let values = parsedData.values;
+        if (values.length === 0) {
             $('#history_' + encodedId).hide();
             $('#no_data_' + encodedId).show();
         }
@@ -269,7 +276,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
             $('#no_data_' + encodedId).hide();
 
             if (needFillFromTo) {
-                let from = new Date(parsedData[0].receivingTime);
+                let from = new Date(values[0].receivingTime);
                 let to = getToDate();
 
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
@@ -277,7 +284,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
 
                 reloadHistoryRequest(from, to, body);
             }
-            displayGraph(data, sensorInfo, `graph_${encodedId}`, encodedId);
+            displayGraph(JSON.stringify(values), sensorInfo, `graph_${encodedId}`, encodedId);
         }
 
         $("#sensorHistorySpinner").addClass("d-none");
