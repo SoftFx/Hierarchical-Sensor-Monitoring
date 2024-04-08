@@ -30,6 +30,16 @@ namespace HSMServer.Core.Cache
             PolicyProperty.EmaCount,
         ];
 
+        private static readonly PolicyUpdate _timeInGcPolicy = new()
+        {
+            Conditions = [new PolicyConditionUpdate(PolicyOperation.GreaterThan, PolicyProperty.EmaMean, new TargetValue(TargetType.Const, "20"))],
+            Destination = new PolicyDestinationUpdate(),
+            Icon = "⚠",
+            Initiator = _migrator,
+            Schedule = GetDefaultScheduleUpdate(),
+            Template = "[$product]$path $property $operation $target $unit",
+        };
+
 
         internal static IEnumerable<SensorUpdate> GetMigrationUpdates(List<BaseSensorModel> sensors)
         {
@@ -44,6 +54,8 @@ namespace HSMServer.Core.Cache
                         if (TryBuildNumberToScheduleMigration(sensor, out update))
                             yield return update;
 
+                        if (TryBuildTimeInGcSensorMigration(sensor, out update))
+                            yield return update;
                     }
 
                     if (IsBoolSensor(sensor.Type) && TryMigrateServiceAliveTtlToSchedule(sensor, out var updateTtl))
@@ -57,7 +69,7 @@ namespace HSMServer.Core.Cache
             bool IsTarget(Policy policy) => sensor.DisplayName == "Service alive" && !policy.Schedule.IsActive;
 
             static PolicyUpdate Migration(PolicyUpdate update) =>
-                update with { Schedule = GetDefaultScheduleUpdate() };
+                update with { Schedule = GetDefaultScheduleUpdate(false) };
 
             return TryMigrateTtlPolicy(sensor, IsTarget, Migration, out update);
         }
@@ -105,10 +117,21 @@ namespace HSMServer.Core.Cache
             return TryMigratePolicy(sensor, IsTarget, Migration, out update);
         }
 
+        private static bool TryBuildTimeInGcSensorMigration(BaseSensorModel sensor, out SensorUpdate update)
+        {
+            static bool IsTarget(BaseSensorModel sensor) => sensor.DisplayName == "Time in GC" && !sensor.Statistics.HasEma();
+
+
+            var result = TryAddPolicy(sensor, IsTarget, _timeInGcPolicy, out update);
+
+            if (result)
+                update = update with { Statistics = StatisticsOptions.EMA };
+
+            return result;
+        }
+
         private static bool TryMigratePolicy(BaseSensorModel sensor, Predicate<Policy> isTarget, Func<PolicyUpdate, PolicyUpdate> migrator, out SensorUpdate sensorUpdate)
         {
-            sensorUpdate = null;
-
             var alerts = new List<PolicyUpdate>();
             var hasMigrations = false;
 
@@ -125,9 +148,6 @@ namespace HSMServer.Core.Cache
                 alerts.Add(update);
             }
 
-            if (!hasMigrations)
-                return false;
-
             sensorUpdate = new SensorUpdate()
             {
                 Id = sensor.Id,
@@ -135,7 +155,28 @@ namespace HSMServer.Core.Cache
                 Initiator = _migrator,
             };
 
-            return true;
+            return hasMigrations;
+        }
+
+        private static bool TryAddPolicy(BaseSensorModel sensor, Predicate<BaseSensorModel> isTarget, PolicyUpdate policyToAdd, out SensorUpdate sensorUpdate)
+        {
+            static bool IsTargetPolicy(Policy policy) => false;
+
+            static PolicyUpdate ExistingPoliciesMigration(PolicyUpdate update) => update;
+
+
+            sensorUpdate = null;
+
+            if (isTarget(sensor))
+            {
+                TryMigratePolicy(sensor, IsTargetPolicy, ExistingPoliciesMigration, out sensorUpdate);
+
+                sensorUpdate.Policies.Add(policyToAdd);
+
+                return true;
+            }
+
+            return false;
         }
 
         private static bool TryMigrateTtlPolicy(BaseSensorModel sensor, Predicate<Policy> isTarget, Func<PolicyUpdate, PolicyUpdate> migrator, out SensorUpdate sensorUpdate)
@@ -215,10 +256,10 @@ namespace HSMServer.Core.Cache
             };
 
 
-        private static PolicyScheduleUpdate GetDefaultScheduleUpdate() => new()
+        private static PolicyScheduleUpdate GetDefaultScheduleUpdate(bool instantSend = true) => new()
         {
             RepeatMode = AlertRepeatMode.Hourly,
-            InstantSend = false,
+            InstantSend = instantSend,
             Time = new DateTime(1, 1, 1, 12, 0, 0, DateTimeKind.Utc),
         };
     }
