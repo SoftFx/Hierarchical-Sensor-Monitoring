@@ -204,7 +204,7 @@ namespace HSMServer.Core.Cache
             };
 
         private static PolicyDestinationUpdate ToUpdate(PolicyDestination destination) =>
-            new(destination.Chats, destination.AllChats);
+            new(new Dictionary<Guid, string>(destination.Chats), destination.AllChats);
 
         private static PolicyConditionUpdate ToUpdate(PolicyCondition condition) =>
             new()
