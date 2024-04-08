@@ -7,7 +7,7 @@ namespace HSMServer.Middleware
 {
     public sealed class PublicApiRequestInfo
     {
-        public List<SensorData> Data { get; } = [];
+        //public List<SensorData> Data { get; } = [];
 
         public ProductModel Product { get; set; }
 
@@ -17,7 +17,7 @@ namespace HSMServer.Middleware
 
         public string RemoteIP { get; set; }
 
-        public int Count { get; set; } = 1;
+        //public int Count { get; set; } = 1;
 
         public string TelemetryPath { get; private set; }
 

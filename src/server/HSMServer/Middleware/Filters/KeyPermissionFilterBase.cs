@@ -83,7 +83,7 @@ public abstract class KeyPermissionFilterBase(IPermissionService _service, ITree
 
             context.ActionArguments.Add(argumentName, values);
 
-            requestData.Count = values.Count;
+            //requestData.Count = values.Count;
         }
     }
 }

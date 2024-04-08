@@ -468,7 +468,7 @@ namespace HSMServer.Controllers
             {
                 if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo requestData))
                 {
-                    if (TryBuildSensorUpdate(requestData, sensorUpdate, requestData.Data[0], out var update, out var message))
+                    if (TryBuildSensorUpdate(requestData, sensorUpdate, null, out var update, out var message))
                     {
                         _cache.TryAddOrUpdateSensor(update, out var error);
                         return Ok(error);
@@ -511,7 +511,7 @@ namespace HSMServer.Controllers
                     {
                         if (sensorCommands[i] is AddOrUpdateSensorRequest sensorUpdate)
                         {
-                            if (TryBuildSensorUpdate(requestData, sensorUpdate, requestData.Data[i], out var update, out var message))
+                            if (TryBuildSensorUpdate(requestData, sensorUpdate, null, out var update, out var message))
                                 _cache.TryAddOrUpdateSensor(update, out var error);
 
                             if (!string.IsNullOrEmpty(message))

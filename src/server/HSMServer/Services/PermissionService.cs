@@ -18,7 +18,7 @@ namespace HSMServer.Services
         {
             if (data.Key is not null)
                 return CheckKeyPermission(data, sensorData, permissions, out message);
-            
+
             if (TryGetKey(sensorData.KeyId, out var key, out message) && cache.TryGetProduct(key.ProductId, out var product, out message))
             {
                 data.Key = key;
@@ -47,7 +47,7 @@ namespace HSMServer.Services
         {
             if (CheckPermissions(data, sensorData, permissions, out message))
             {
-                data.Data.Add(sensorData);
+                //data.Data.Add(sensorData);
                 return true;
             }
 
@@ -60,7 +60,7 @@ namespace HSMServer.Services
 
             if (!data.Key.IsValid(permissions, out message))
                 return false;
-            
+
             BaseSensorModel sensor = null;
 
             var product = data.Product;
