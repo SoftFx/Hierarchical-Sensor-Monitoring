@@ -21,8 +21,7 @@ window.hideInfoModal = function () {
 
 
 function setInfoModalTitle(title) {
-    $(`#${infoTitle}`).empty();
-    $(`#${infoTitle}`).append(title);
+    $(`#${infoTitle}`).empty().append(title);
 }
 
 function setInfoModalBody(viewData) {
@@ -30,8 +29,7 @@ function setInfoModalBody(viewData) {
 }
 
 function setInfoModalOkButton(name) {
-    $(`#${infoOkButton}`).html(name);
     $(`#${infoOkButton}`).off('click').on('click', () => {
         hideInfoModal();
-    });
+    }).html(name);
 }
