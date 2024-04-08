@@ -56,7 +56,7 @@ window.initialize = function () {
 
 window.searchHistory = function (encodedId) {
     const {from, to} = getFromAndTo(encodedId);
-    GetSensortInfo(encodedId).done(function (types){
+    GetSensortInfo(encodedId).done(function (types) {
         if (Object.keys(types).length === 0)
             return;
 
@@ -86,11 +86,9 @@ window.InitializeHistory = function () {
 
             setFromAndTo(encodedId, from, to);
             searchHistory(encodedId);
-        }
-        else
+        } else
             $('#history_period').trigger('change');
-    }
-    else {
+    } else {
         GetSensortInfo(encodedId).done(function (sensorInfo) {
             if (Object.keys(sensorInfo).length === 0)
                 return;
@@ -100,8 +98,7 @@ window.InitializeHistory = function () {
 
             if (isGraphAvailable(sensorInfo.realType)) {
                 initializeGraph(encodedId, rawHistoryLatestAction, sensorInfo, Data(date, date, sensorInfo.realType, encodedId), true);
-            }
-            else if (isTableAvailable(sensorInfo.realType)) {
+            } else if (isTableAvailable(sensorInfo.realType)) {
                 initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true);
             }
         });
@@ -144,13 +141,13 @@ function initializeTabLinksRequests() {
 function requestGraph() {
     let encodedId = this.id.substring("link_graph_".length);
     const {from, to} = getFromAndTo(encodedId);
-    
+
     showBarsCount(encodedId);
     enableHistoryPeriod()
-    GetSensortInfo(encodedId).done(function (types){
+    GetSensortInfo(encodedId).done(function (types) {
         if (Object.keys(types).length === 0)
             return;
-        
+
         let body = Data(to, from, types.realType, encodedId);
         initializeGraph(encodedId, rawHistoryAction, types, body);
     })
@@ -162,7 +159,7 @@ function requestTable() {
 
     hideBarsCount(encodedId);
     enableHistoryPeriod()
-    GetSensortInfo(encodedId).done(function (types){
+    GetSensortInfo(encodedId).done(function (types) {
         if (Object.keys(types).length === 0)
             return;
 
@@ -197,7 +194,7 @@ function exportCsv() {
     let encodedId = this.id.substring("button_export_csv_".length);
     const {from, to} = getFromAndTo(encodedId);
 
-    GetSensortInfo(encodedId).done(function (types){
+    GetSensortInfo(encodedId).done(function (types) {
         if (Object.keys(types).length === 0)
             return;
 
@@ -224,8 +221,7 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
         if (noValuesElement != null) {
             $('#history_' + encodedId).hide();
             $('#no_data_' + encodedId).show();
-        }
-        else {
+        } else {
             $('#history_' + encodedId).show();
             $('#no_data_' + encodedId).hide();
 
@@ -247,7 +243,6 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
 }
 
 function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFillFromTo = false) {
-    let parsedData;
     $.ajax({
         type: 'POST',
         data: JSON.stringify(body),
@@ -260,13 +255,15 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         $("#tableHistoryRefreshButton").addClass("d-none");
         $('#allColumnsButton').addClass("d-none");
 
-        parsedData = JSON.parse(data);
+        let parsedData = JSON.parse(data);
+        if (parsedData.error === true)
+            $('#points_limit').show();
+
         let values = parsedData.values;
         if (values.length === 0) {
             $('#history_' + encodedId).hide();
             $('#no_data_' + encodedId).show();
-        }
-        else {
+        } else {
             $('#history_' + encodedId).show();
             $('#no_data_' + encodedId).hide();
 
@@ -284,11 +281,6 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
 
         $("#sensorHistorySpinner").addClass("d-none");
         $('#historyDataPanel').removeClass('hidden_element');
-    }).always(function (data){
-        if (parsedData.error === true) {
-            showInfoModal("Graph info",
-                "Current history period contains more than 1500 points. Only last 1500 point will be displayed.");
-        }
     });
 }
 

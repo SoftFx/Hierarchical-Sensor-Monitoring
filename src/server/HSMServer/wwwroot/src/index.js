@@ -42,7 +42,6 @@ import './js/interact.js'
 import './js/plots.js'
 import './js/accessKey.js';
 import './js/confirmation.js';
-import './js/info';
 import './js/file.js';
 import './js/history.js';
 import './js/plotting.js';

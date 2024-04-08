@@ -9,7 +9,6 @@ namespace HSMServer.Model.History
 {
     internal abstract class HistoryProcessorBase
     {
-        private const int ValuesLimit = 1500;
         private bool _showMessage = false;
 
         public List<BaseValue> ProcessingAndCompression(SensorNodeViewModel sensor, List<BaseValue> values, int compressedValuesCount)
@@ -50,15 +49,15 @@ namespace HSMServer.Model.History
             return new JsonResult(new
             {
                 error = _showMessage,
-                values = values.Take(ValuesLimit).Select(x => (object) x)
+                values = values.Select(x => (object) x)
             });
         }
 
         protected virtual List<BaseValue> Compress(List<BaseValue> history, TimeSpan compressionInterval)
         {
-            _showMessage = history.Count > ValuesLimit;
+            _showMessage = history.Count > SensorNodeViewModel.ValuesLimit;
 
-            return history;
+            return history.Take(SensorNodeViewModel.ValuesLimit).ToList();
         }
 
         private static TimeSpan CountInterval(List<BaseValue> values, int compressedValuesCount)
