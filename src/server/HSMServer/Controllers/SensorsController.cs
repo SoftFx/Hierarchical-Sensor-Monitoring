@@ -466,7 +466,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var data) && data is PublicApiRequestInfo requestData)
+                if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo requestData))
                 {
                     if (TryBuildSensorUpdate(requestData, sensorUpdate, requestData.Data[0], out var update, out var message))
                     {
@@ -505,7 +505,7 @@ namespace HSMServer.Controllers
 
             try
             {
-                if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var data) && data is PublicApiRequestInfo requestData)
+                if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo requestData))
                 {
                     for (var i = 0; i < sensorCommands.Count; i++)
                     {
@@ -546,8 +546,7 @@ namespace HSMServer.Controllers
 
         private void AddToQueue(SensorValueBase value)
         {
-            if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) &&
-                obj is PublicApiRequestInfo requestData)
+            if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo requestData))
             {
                 _updatesQueue.AddItem(new StoreInfo(requestData.Key?.Id.ToString(), value.Path)
                 {
@@ -562,7 +561,7 @@ namespace HSMServer.Controllers
             requestModel = null;
             message = null;
 
-            if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) && obj is PublicApiRequestInfo requestData)
+            if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo requestData))
             {
                 requestModel = historyRequest.Convert(requestData.Key.Id);
 

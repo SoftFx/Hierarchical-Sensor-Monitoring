@@ -15,11 +15,6 @@ namespace HSMServer.Middleware
         private const string XForvardHeader = "X-Forwarded-For"; // real ip without vpn redirection
         private const string EmptyClient = "No name";
 
-        public const string RequestData = "RequestData";
-
-        //private readonly IUserManager _userManager = userManager;
-        //private readonly RequestDelegate _next = next;
-
 
         public async Task InvokeAsync(HttpContext context)
         {
