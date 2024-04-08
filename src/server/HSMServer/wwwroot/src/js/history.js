@@ -247,6 +247,7 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
 }
 
 function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFillFromTo = false) {
+    let parsedData;
     $.ajax({
         type: 'POST',
         data: JSON.stringify(body),
@@ -259,13 +260,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         $("#tableHistoryRefreshButton").addClass("d-none");
         $('#allColumnsButton').addClass("d-none");
 
-        let parsedData = JSON.parse(data);
-
-        if (parsedData.error === true) {
-            showInfoModal("Graph info", 
-                "Current history period contains more than 2000 points. Only last 2000 point will be displayed.");
-        }
-
+        parsedData = JSON.parse(data);
         let values = parsedData.values;
         if (values.length === 0) {
             $('#history_' + encodedId).hide();
@@ -289,6 +284,11 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
 
         $("#sensorHistorySpinner").addClass("d-none");
         $('#historyDataPanel').removeClass('hidden_element');
+    }).always(function (data){
+        if (parsedData.error === true) {
+            showInfoModal("Graph info",
+                "Current history period contains more than 1500 points. Only last 1500 point will be displayed.");
+        }
     });
 }
 

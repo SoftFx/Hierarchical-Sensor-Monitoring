@@ -9,7 +9,7 @@ namespace HSMServer.Model.History
 {
     internal abstract class HistoryProcessorBase
     {
-        private const int ValuesLimit = 2000;
+        private const int ValuesLimit = 1500;
         private bool _showMessage = false;
 
         public List<BaseValue> ProcessingAndCompression(SensorNodeViewModel sensor, List<BaseValue> values, int compressedValuesCount)
@@ -50,7 +50,7 @@ namespace HSMServer.Model.History
             return new JsonResult(new
             {
                 error = _showMessage,
-                values = values.Select(x => (object) x)
+                values = values.Take(ValuesLimit).Select(x => (object) x)
             });
         }
 
