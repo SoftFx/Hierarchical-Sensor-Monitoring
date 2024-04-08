@@ -14,7 +14,7 @@ namespace HSMServer.Services
         private readonly List<SensorData> _pendingCheck = new(1 << 2);
 
 
-        public bool CheckPermission(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
+        public bool CheckPermission(PublicApiRequestInfo data, SensorData sensorData, KeyPermissions permissions, out string message)
         {
             if (data.Key is not null)
                 return CheckKeyPermission(data, sensorData, permissions, out message);
@@ -34,7 +34,7 @@ namespace HSMServer.Services
             return CheckKeyPermission(data, sensorData, permissions, out message);
         }
 
-        public IEnumerable<T> GetPendingChecked<T>(RequestData requestData, KeyPermissions permissions) where T : BaseRequest
+        public IEnumerable<T> GetPendingChecked<T>(PublicApiRequestInfo requestData, KeyPermissions permissions) where T : BaseRequest
         {
             if (requestData.Key is null)
                 return [];
@@ -43,7 +43,7 @@ namespace HSMServer.Services
         }
 
 
-        private bool CheckKeyPermission(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
+        private bool CheckKeyPermission(PublicApiRequestInfo data, SensorData sensorData, KeyPermissions permissions, out string message)
         {
             if (CheckPermissions(data, sensorData, permissions, out message))
             {
@@ -54,7 +54,7 @@ namespace HSMServer.Services
             return false;
         }
 
-        private bool CheckPermissions(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message)
+        private bool CheckPermissions(PublicApiRequestInfo data, SensorData sensorData, KeyPermissions permissions, out string message)
         {
             message = string.Empty;
 

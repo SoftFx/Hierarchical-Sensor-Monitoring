@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Middleware
 {
-    public sealed class RequestData
+    public sealed class PublicApiRequestInfo
     {
         public List<SensorData> Data { get; } = [];
 
@@ -14,6 +14,8 @@ namespace HSMServer.Middleware
         public AccessKeyModel Key { get; set; }
 
         public string CollectorName { get; set; }
+
+        public string RemoteIP { get; set; }
 
         public int Count { get; set; } = 1;
 

@@ -466,7 +466,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var data) && data is RequestData requestData)
+                if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var data) && data is PublicApiRequestInfo requestData)
                 {
                     if (TryBuildSensorUpdate(requestData, sensorUpdate, requestData.Data[0], out var update, out var message))
                     {
@@ -505,7 +505,7 @@ namespace HSMServer.Controllers
 
             try
             {
-                if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var data) && data is RequestData requestData)
+                if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var data) && data is PublicApiRequestInfo requestData)
                 {
                     for (var i = 0; i < sensorCommands.Count; i++)
                     {
@@ -547,7 +547,7 @@ namespace HSMServer.Controllers
         private void AddToQueue(SensorValueBase value)
         {
             if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) &&
-                obj is RequestData requestData)
+                obj is PublicApiRequestInfo requestData)
             {
                 _updatesQueue.AddItem(new StoreInfo(requestData.Key?.Id.ToString(), value.Path)
                 {
@@ -562,7 +562,7 @@ namespace HSMServer.Controllers
             requestModel = null;
             message = null;
 
-            if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) && obj is RequestData requestData)
+            if (HttpContext.Items.TryGetValue(TelemetryMiddleware.RequestData, out var obj) && obj is PublicApiRequestInfo requestData)
             {
                 requestModel = historyRequest.Convert(requestData.Key.Id);
 
@@ -572,7 +572,7 @@ namespace HSMServer.Controllers
             return false;
         }
 
-        private bool TryBuildSensorUpdate(RequestData requestData, AddOrUpdateSensorRequest request, SensorData sensorData, out SensorAddOrUpdateRequestModel requestModel, out string message)
+        private bool TryBuildSensorUpdate(PublicApiRequestInfo requestData, AddOrUpdateSensorRequest request, SensorData sensorData, out SensorAddOrUpdateRequestModel requestModel, out string message)
         {
             requestModel = new SensorAddOrUpdateRequestModel(requestData.Key.Id, request.Path);
 

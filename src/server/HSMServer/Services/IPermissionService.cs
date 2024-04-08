@@ -7,8 +7,8 @@ namespace HSMServer.Services
 {
     public interface IPermissionService
     {
-        bool CheckPermission(RequestData data, SensorData sensorData, KeyPermissions permissions, out string message);
+        bool CheckPermission(PublicApiRequestInfo data, SensorData sensorData, KeyPermissions permissions, out string message);
 
-        IEnumerable<T> GetPendingChecked<T>(RequestData requestData, KeyPermissions permissions) where T : BaseRequest;
+        IEnumerable<T> GetPendingChecked<T>(PublicApiRequestInfo requestData, KeyPermissions permissions) where T : BaseRequest;
     }
 }
