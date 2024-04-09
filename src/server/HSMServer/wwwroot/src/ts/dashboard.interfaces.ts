@@ -1,17 +1,21 @@
-export interface Panel {
+export interface Dictionary<T> {
+    [Key: string]: T;
+}
+
+export interface IPanel {
     id: string,
-    sources: Source[],
+    sources: ISource[],
     requestTimeout: number,
     range: boolean | [number, number],
     isTimeSpan: boolean
 }
 
-export interface Source {
+export interface ISource {
     id: string,
     range: boolean | [number, number]
 }
 
-export interface SourceUpdate {
+export interface ISourceUpdate {
     id: string,
     update: {
         newVisibleValues: Array<{

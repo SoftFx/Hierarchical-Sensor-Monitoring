@@ -1,8 +1,11 @@
 import {convertToGraphData} from "./plotting";
 import {Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot} from "./plots";
 import {Dashboard} from "../ts/dashboardT";
+import {DashboardStorage} from "../ts/dashboard.storage";
 
 const updateDashboardInterval = 120000; // 2min
+export const dashboardStorage = new DashboardStorage();
+
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();
@@ -322,6 +325,10 @@ window.initDashboard = function () {
 
     Dashboard.initRequests(dict);
 }
+
+window.addPanelToStorage = function (id) {
+    dashboardStorage.addPanel(id)
+};
 
 window.disableDragAndResize = function () {
     interact('.resize-draggable').options.resize.enabled = false;

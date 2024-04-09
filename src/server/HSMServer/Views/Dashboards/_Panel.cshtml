@@ -32,6 +32,7 @@
                 }
             </div>
             <div class="align-self-start">
+                <span id="lastUpdate_@Model.Id"></span>
                 <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
                     <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                 </button>
@@ -50,6 +51,8 @@
 
 <script>
     $(document).ready(function () {
+        window.addPanelToStorage('@Model.Id');
+        
         const settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
         const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
