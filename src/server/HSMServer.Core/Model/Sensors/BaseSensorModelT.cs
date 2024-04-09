@@ -16,6 +16,12 @@ namespace HSMServer.Core.Model
         protected BaseSensorModel(SensorEntity entity) : base(entity) { }
 
 
+        internal override void Revalidate()
+        {
+            if (LastValue is not null)
+                Policies.TryRevalidate(LastValue);
+        }
+
         internal override bool TryAddValue(BaseValue value)
         {
             if (value?.IsTimeout ?? false)

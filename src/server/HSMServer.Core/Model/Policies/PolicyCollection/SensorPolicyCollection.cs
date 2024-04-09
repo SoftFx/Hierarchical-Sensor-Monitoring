@@ -149,7 +149,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyResult = new(_sensor.Id);
             NotificationResult = new(_sensor.Id);
 
-            if (!value.Status.IsOfftime())
+            if (!value.Status.IsOfftime() && _sensor.State != SensorState.Muted)
             {
                 foreach (var policy in _storage.Values)
                     if (!policy.IsDisabled && !policy.Validate(value))

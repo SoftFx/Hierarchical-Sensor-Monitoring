@@ -61,7 +61,7 @@ namespace HSMServer.Core.Model
         KBytes_sec = 2102,
         [Display(Name = "MB/sec")]
         MBytes_sec = 2103,
-        
+
         [Display(Name = "# per sec")]
         ValueInSecond = 3000,
     }
@@ -173,6 +173,8 @@ namespace HSMServer.Core.Model
 
 
         protected override void UpdateTTL(PolicyUpdate update) => Policies.UpdateTTL(update);
+
+        internal abstract void Revalidate();
 
         internal abstract bool TryAddValue(BaseValue value);
 
