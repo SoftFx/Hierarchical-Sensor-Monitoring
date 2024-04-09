@@ -6,17 +6,13 @@ namespace HSMServer.Middleware
 {
     public sealed class PublicApiRequestInfo
     {
-        //public List<SensorData> Data { get; } = [];
+        public ProductModel Product { get; init; }
 
-        public ProductModel Product { get; set; }
+        public AccessKeyModel Key { get; init; }
 
-        public AccessKeyModel Key { get; set; }
+        public string CollectorName { get; init; }
 
-        public string CollectorName { get; set; }
-
-        public string RemoteIP { get; set; }
-
-        //public int Count { get; set; } = 1;
+        public string RemoteIP { get; init; }
 
         public string TelemetryPath { get; private set; }
 

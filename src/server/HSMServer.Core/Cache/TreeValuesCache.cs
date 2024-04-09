@@ -178,6 +178,7 @@ namespace HSMServer.Core.Cache
                 return false;
 
             var accessKey = GetAccessKeyModel(request);
+
             if (!accessKey.IsValid(KeyPermissions.CanSendSensorData, out message))
                 return false;
 
@@ -837,8 +838,9 @@ namespace HSMServer.Core.Cache
 
             var parentProduct = AddNonExistingProductsAndGetParentProduct(product, storeInfo);
 
+            var sensorName = storeInfo.SensorName;
             var value = storeInfo.BaseValue;
-            var sensorName = storeInfo.PathParts[^1];
+
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
 
             if (sensor == null)
@@ -1093,7 +1095,7 @@ namespace HSMServer.Core.Cache
             SensorEntity entity = new()
             {
                 Id = Guid.NewGuid().ToString(),
-                DisplayName = request.PathParts[^1],
+                DisplayName = request.SensorName,
                 Type = (byte)type,
                 CreationDate = DateTime.UtcNow.Ticks,
             };

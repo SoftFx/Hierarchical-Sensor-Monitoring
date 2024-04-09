@@ -8,7 +8,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
     {
         public BaseValue BaseValue { get; init; }
 
-        public ProductModel Product { get; set; }
+        public ProductModel Product { get; init; }
 
         
         public StoreInfo(string key, string path) : base(key, path) { }

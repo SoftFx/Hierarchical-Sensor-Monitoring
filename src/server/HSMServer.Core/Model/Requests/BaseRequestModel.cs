@@ -13,11 +13,14 @@ namespace HSMServer.Core.Model.Requests
         private readonly bool _failKey;
 
 
+        public string[] PathParts { get; }
+
         public string Path { get; }
 
         public Guid Key { get; }
 
-        public string[] PathParts { get; }
+
+        public string SensorName => PathParts[^1];
 
 
         public BaseRequestModel(Guid key, string path) : this(key.ToString(), path) { }

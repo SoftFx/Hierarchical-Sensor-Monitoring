@@ -73,8 +73,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(sensorValue);
-                return Ok(sensorValue);
+                return GetAddDataResult(sensorValue);
             }
             catch (Exception e)
             {
@@ -98,8 +97,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(sensorValue);
-                return Ok(sensorValue);
+                return GetAddDataResult(sensorValue);
             }
             catch (Exception e)
             {
@@ -123,8 +121,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(sensorValue);
-                return Ok(sensorValue);
+                return GetAddDataResult(sensorValue);
             }
             catch (Exception e)
             {
@@ -148,8 +145,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(sensorValue);
-                return Ok(sensorValue);
+                return GetAddDataResult(sensorValue);
             }
             catch (Exception e)
             {
@@ -173,8 +169,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(sensorValue);
-                return Ok(sensorValue);
+                return GetAddDataResult(sensorValue);
             }
             catch (Exception e)
             {
@@ -194,12 +189,11 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         [SendDataKeyPermissionFilter]
-        public ActionResult<VersionSensorValue> Post([FromBody] VersionSensor sensorValue)
+        public ActionResult<VersionSensor> Post([FromBody] VersionSensor sensorValue)
         {
             try
             {
-                AddToQueue(sensorValue);
-                return Ok(sensorValue);
+                return GetAddDataResult(sensorValue);
             }
             catch (Exception e)
             {
@@ -223,8 +217,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(sensorValue);
-                return Ok(sensorValue);
+                return GetAddDataResult(sensorValue);
             }
             catch (Exception e)
             {
@@ -249,8 +242,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(sensorValue);
-                return Ok(sensorValue);
+                return GetAddDataResult(sensorValue);
             }
             catch (Exception e)
             {
@@ -274,8 +266,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(sensorValue);
-                return Ok(sensorValue);
+                return GetAddDataResult(sensorValue);
             }
             catch (Exception e)
             {
@@ -299,8 +290,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                AddToQueue(sensorValue);
-                return Ok(sensorValue);
+                return GetAddDataResult(sensorValue);
             }
             catch (Exception e)
             {
@@ -326,10 +316,13 @@ namespace HSMServer.Controllers
         {
             try
             {
-                foreach (var value in values.OrderBy(u => u.Time))
-                    AddToQueue(value);
+                var result = new Dictionary<string, string>(values.Count);
 
-                return Ok(values);
+                foreach (var value in values.OrderBy(u => u.Time))
+                    if (!TryBuildAndAddData(value, out var message))
+                        result[value.Path] = message;
+
+                return Ok(result);
             }
             catch (Exception e)
             {
@@ -349,6 +342,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        [SendDataKeyPermissionFilter]
         public ActionResult<List<UnitedSensorValue>> Post([FromBody] List<UnitedSensorValue> values)
         {
             if (values == null || values.Count == 0)
@@ -534,8 +528,7 @@ namespace HSMServer.Controllers
 
         private bool CanAddToQueue(StoreInfo storeInfo, out string message)
         {
-            if (storeInfo.TryCheckRequest(out message) &&
-                _cache.TryCheckKeyWritePermissions(storeInfo, out message))
+            if (storeInfo.TryCheckRequest(out message) && _cache.TryCheckKeyWritePermissions(storeInfo, out message))
             {
                 _updatesQueue.AddItem(storeInfo);
                 return true;
@@ -544,16 +537,25 @@ namespace HSMServer.Controllers
             return false;
         }
 
-        private void AddToQueue(SensorValueBase value)
+        private ActionResult<T> GetAddDataResult<T>(T value) where T : SensorValueBase =>
+            TryBuildAndAddData(value, out var error) ? Ok(value) : StatusCode(406, error);
+
+        private bool TryBuildAndAddData<T>(T value, out string error) where T : SensorValueBase
         {
-            if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo requestData))
+            if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo info))
             {
-                _updatesQueue.AddItem(new StoreInfo(requestData.Key?.Id.ToString(), value.Path)
+                var storeInfo = new StoreInfo(info.Key.Id, value.Path)
                 {
                     BaseValue = value.Convert(),
-                    Product = requestData.Product
-                });
+                    Product = info.Product
+                };
+
+                return CanAddToQueue(storeInfo, out error);
             }
+            else
+                error = "Public API request info not found";
+
+            return false;
         }
 
         private bool TryCheckReadHistoryRequest(HistoryRequest historyRequest, out HistoryRequestModel requestModel, out string message)
