@@ -81,7 +81,7 @@ namespace HSMServer.Middleware
                 CollectorName = GetClientName(context),
             };
 
-            return true; //add build properties
+            return true; //add build telemetry properties
         }
 
         private static bool TryGetApiKey(HttpContext context, out Guid apiKey)

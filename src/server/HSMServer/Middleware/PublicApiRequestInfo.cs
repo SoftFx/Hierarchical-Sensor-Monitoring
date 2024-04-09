@@ -1,6 +1,4 @@
-using HSMSensorDataObjects;
 using HSMServer.Core.Model;
-using System;
 
 namespace HSMServer.Middleware
 {
@@ -17,26 +15,6 @@ namespace HSMServer.Middleware
         public string TelemetryPath { get; private set; }
 
 
-        public void BuildTelemetryPath() => TelemetryPath = Key is null ? null : $"{Product?.DisplayName}/{Key.DisplayName}/{CollectorName}";
-    }
-
-
-    public sealed class SensorData
-    {
-        public BaseRequest Request { get; }
-
-        public string Path { get; }
-
-        public string KeyId { get; }
-
-        public Guid Id { get; set; }
-
-
-        public SensorData(BaseRequest request)
-        {
-            Request = request;
-            Path = request?.Path;
-            KeyId = request?.Key;
-        }
+        public void BuildTelemetryPath() => TelemetryPath = $"{Product.DisplayName}/{Key.DisplayName}/{CollectorName}";
     }
 }
