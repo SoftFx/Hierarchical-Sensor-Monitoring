@@ -14,7 +14,6 @@ using HSMServer.Middleware;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
-using HSMServer.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -32,7 +31,7 @@ namespace HSMServer.ServiceExtensions;
 
 public static class ApplicationServiceExtensions
 {
-    private static readonly HashSet<Type> _asyncStorageTypes = new();
+    private static readonly HashSet<Type> _asyncStorageTypes = [];
 
 
     public static IServiceCollection AddApplicationServices(this IServiceCollection services, IServerConfig config)
@@ -60,8 +59,6 @@ public static class ApplicationServiceExtensions
                 .AddHostedService<DatacollectorService>()
                 .AddHostedService<NotificationsBackgroundService>()
                 .AddHostedService<BackupDatabaseService>();
-
-        services.AddScoped<IPermissionService, PermissionService>();
 
         services.AddSwaggerGen(o =>
         {
@@ -91,10 +88,10 @@ public static class ApplicationServiceExtensions
             o.TagActionsBy(api =>
             {
                 if (api.GroupName != null)
-                    return new[] { api.GroupName };
+                    return [api.GroupName];
 
                 if (api.ActionDescriptor is ControllerActionDescriptor controllerActionDescriptor)
-                    return new[] { controllerActionDescriptor.ControllerName };
+                    return [controllerActionDescriptor.ControllerName];
 
                 throw new InvalidOperationException("Unable to determine tag for endpoint.");
             });
