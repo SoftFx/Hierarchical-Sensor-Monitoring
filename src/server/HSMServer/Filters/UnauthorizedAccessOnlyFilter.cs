@@ -11,6 +11,7 @@ namespace HSMServer.Filters
         public void OnActionExecuting(ActionExecutingContext context)
         {
             var user = context.HttpContext.User as User;
+
             if (user != null)
             {
                 context.Result = new RedirectToActionResult(ViewConstants.IndexAction, ViewConstants.HomeController, null);

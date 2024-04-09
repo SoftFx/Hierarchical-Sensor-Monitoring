@@ -1,5 +1,6 @@
 ﻿using HSMServer.Middleware;
 using Microsoft.AspNetCore.Http;
+using System.Threading.Tasks;
 
 namespace HSMServer.Extensions
 {
@@ -25,6 +26,13 @@ namespace HSMServer.Extensions
             info = context.Items.TryGetValue(RequestInfoKey, out var rawValue) && rawValue is PublicApiRequestInfo value ? value : null;
 
             return info is not null;
+        }
+
+        public static Task SetAccessError(this HttpContext context, string error)
+        {
+            context.Response.StatusCode = 406;
+
+            return context.Response.WriteAsync(error);
         }
     }
 }

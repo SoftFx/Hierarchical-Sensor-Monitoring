@@ -12,44 +12,57 @@ namespace HSMServer.Middleware
 {
     public sealed class TelemetryMiddleware(RequestDelegate _next, DataCollectorWrapper _collector, ITreeValuesCache _cache)
     {
+        private const string ClientNameHeader = nameof(Header.ClientName);
+        private const string AccessKeyHeader = nameof(Header.Key);
+
         private const string XForvardHeader = "X-Forwarded-For"; // real ip without vpn redirection
         private const string EmptyClient = "No name";
 
 
         public async Task InvokeAsync(HttpContext context)
         {
-            var isApiRequest = IsPublicApiRequest(context, out var info);
-
-            if (isApiRequest)
+            if (IsPublicApiRequest(context))
             {
-                context.SetPublicApiInfo(info);
+                _collector.WebRequestsSensors.Total.AddRequestData(context.Request);
 
-                _collector.WebRequestsSensors[info.TelemetryPath]?.AddRequestData(context.Request);
-                //_collector.WebRequestsSensors[info.TelemetryPath]?.AddReceiveData(requestData.Count);
+                if (TryBuildPublicApiInfo(context, out var info, out var error))
+                {
+                    context.SetPublicApiInfo(info);
+
+                    _collector.WebRequestsSensors[info.TelemetryPath]?.AddRequestData(context.Request);
+                    //_collector.WebRequestsSensors[info.TelemetryPath]?.AddReceiveData(requestData.Count);
+                }
+                else
+                {
+                    await context.SetAccessError(error);
+
+                    return;
+                }
             }
-
-            _collector.WebRequestsSensors.Total.AddRequestData(context.Request);
 
             await _next(context);
 
-            _collector.WebRequestsSensors.Total.AddResponseResult(context.Response);
-
-            if (isApiRequest)
+            if (context.TryGetPublicApiInfo(out var requestInfo))
             {
+                _collector.WebRequestsSensors.Total.AddResponseResult(context.Response);
+
                 //_collector.WebRequestsSensors.Total.AddReceiveData(requestData.Count);
-                _collector.WebRequestsSensors[info.TelemetryPath]?.AddResponseResult(context.Response);
+                _collector.WebRequestsSensors[requestInfo.TelemetryPath]?.AddResponseResult(context.Response);
             }
         }
 
 
-        private bool IsPublicApiRequest(HttpContext context, out PublicApiRequestInfo info)
+        private static bool IsPublicApiRequest(HttpContext context) => context.TryReadInfo(AccessKeyHeader, out _);
+
+        private bool TryBuildPublicApiInfo(HttpContext context, out PublicApiRequestInfo info, out string error)
         {
             info = null;
+            error = null;
 
             if (!TryGetApiKey(context, out var apiKeyId))
                 return false;
 
-            if (_cache.TryGetKey(apiKeyId, out var apiKey, out var error))
+            if (_cache.TryGetKey(apiKeyId, out var apiKey, out error))
                 return false;
 
             if (_cache.TryGetProduct(apiKey.ProductId, out var product, out error))
@@ -75,7 +88,7 @@ namespace HSMServer.Middleware
         {
             apiKey = Guid.Empty;
 
-            return context.TryReadInfo(nameof(Header.Key), out var key) && Guid.TryParse(key.ToString(), out apiKey);
+            return context.TryReadInfo(AccessKeyHeader, out var key) && Guid.TryParse(key.ToString(), out apiKey);
         }
 
         private static bool TryGetRemoteIP(HttpContext context, out string remoteIp)
@@ -95,6 +108,6 @@ namespace HSMServer.Middleware
             return remoteIp is not null;
         }
 
-        private static string GetClientName(HttpContext context) => context.TryReadInfo(nameof(Header.ClientName), out var name) && !string.IsNullOrWhiteSpace(name) ? name.ToString() : EmptyClient;
+        private static string GetClientName(HttpContext context) => context.TryReadInfo(ClientNameHeader, out var name) && !string.IsNullOrWhiteSpace(name) ? name.ToString() : EmptyClient;
     }
 }
