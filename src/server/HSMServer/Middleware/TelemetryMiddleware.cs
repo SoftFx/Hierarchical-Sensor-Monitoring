@@ -62,7 +62,7 @@ namespace HSMServer.Middleware
             if (!TryGetApiKey(context, out var apiKeyId))
                 return false;
 
-            if (_cache.TryGetKey(apiKeyId, out var apiKey, out error))
+            if (_cache.TryGetKey(apiKeyId, out var apiKey, out error)) //add key check
                 return false;
 
             if (_cache.TryGetProduct(apiKey.ProductId, out var product, out error))
@@ -81,7 +81,7 @@ namespace HSMServer.Middleware
                 CollectorName = GetClientName(context),
             };
 
-            return true;
+            return true; //add build properties
         }
 
         private static bool TryGetApiKey(HttpContext context, out Guid apiKey)

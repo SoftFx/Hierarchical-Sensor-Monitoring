@@ -37,6 +37,8 @@ namespace HSMServer.Controllers
     [AllowAnonymous]
     public class SensorsController : ControllerBase
     {
+        private const string InvalidRequest = "Public API request info not found";
+
         private readonly DataCollectorWrapper _dataCollector;
         private readonly ILogger<SensorsController> _logger;
         private readonly IUpdatesQueue _updatesQueue;
@@ -55,8 +57,7 @@ namespace HSMServer.Controllers
 
 
         [HttpGet("testConnection")]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public ActionResult TestConnection() => TryCheckKey(out var message) ? _emptyResult : BadRequest(message);
+        public ActionResult TestConnection() => Ok();
 
         /// <summary>
         /// Receives value of bool sensor
@@ -460,24 +461,14 @@ namespace HSMServer.Controllers
         {
             try
             {
-                if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo requestData))
-                {
-                    if (TryBuildSensorUpdate(requestData, sensorUpdate, null, out var update, out var message))
-                    {
-                        _cache.TryAddOrUpdateSensor(update, out var error);
-                        return Ok(error);
-                    }
-
-                    return StatusCode(406, message);
-                }
-
-                return StatusCode(502);
+                return TryBuildAndApplySensorUpdateRequest(sensorUpdate, out var error) ? Ok() : StatusCode(406, error);
             }
             catch (Exception e)
             {
                 var message = $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}";
 
                 _logger.LogError(e, message);
+
                 return BadRequest(message);
             }
         }
@@ -505,14 +496,11 @@ namespace HSMServer.Controllers
                     {
                         if (sensorCommands[i] is AddOrUpdateSensorRequest sensorUpdate)
                         {
-                            if (TryBuildSensorUpdate(requestData, sensorUpdate, null, out var update, out var message))
-                                _cache.TryAddOrUpdateSensor(update, out var error);
-
-                            if (!string.IsNullOrEmpty(message))
-                                result[sensorUpdate.Path] = message;
+                            if (!TryBuildAndApplySensorUpdateRequest(sensorUpdate, out var error))
+                                result[sensorUpdate.Path] = error;
                         }
                         else
-                            result[sensorCommands[i].Path] = $"This type of command is not supported now";
+                            result[sensorCommands[i].Path] = $"This type of command is not supported";
                     }
                 }
 
@@ -553,58 +541,50 @@ namespace HSMServer.Controllers
                 return CanAddToQueue(storeInfo, out error);
             }
             else
-                error = "Public API request info not found";
+                error = InvalidRequest;
 
             return false;
         }
 
-        private bool TryCheckReadHistoryRequest(HistoryRequest historyRequest, out HistoryRequestModel requestModel, out string message)
+        private bool TryCheckReadHistoryRequest(HistoryRequest apiRequest, out HistoryRequestModel coreRequest, out string error)
         {
-            requestModel = null;
-            message = null;
+            coreRequest = null;
 
-            if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo requestData))
+            if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo info))
             {
-                requestModel = historyRequest.Convert(requestData.Key.Id);
+                coreRequest = apiRequest.Convert(info.Key.Id);
 
-                return historyRequest.TryValidate(out message) && requestModel.TryCheckRequest(out message);
+                return apiRequest.TryValidate(out error) && coreRequest.TryCheckRequest(out error);
             }
+            else
+                error = InvalidRequest;
 
             return false;
         }
 
-        private bool TryBuildSensorUpdate(PublicApiRequestInfo requestData, AddOrUpdateSensorRequest request, SensorData sensorData, out SensorAddOrUpdateRequestModel requestModel, out string message)
+        private bool TryBuildAndApplySensorUpdateRequest(AddOrUpdateSensorRequest apiRequest, out string error)
         {
-            requestModel = new SensorAddOrUpdateRequestModel(requestData.Key.Id, request.Path);
-
-            if (requestModel.TryCheckRequest(out message))
+            if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo info))
             {
-                if (sensorData.Id == Guid.Empty && request.SensorType is null)
+                var coreRequest = new SensorAddOrUpdateRequestModel(info.Key.Id, apiRequest.Path);
+
+                if (!_cache.TryGetSensorByPath(info.Product.DisplayName, apiRequest.Path, out var sensor) && apiRequest.SensorType is null)
                 {
-                    message = $"{nameof(request.SensorType)} property is required, because sensor {request.Path} doesn't exist";
+                    error = $"{nameof(apiRequest.SensorType)} property is required, because sensor {apiRequest.Path} doesn't exist";
                     return false;
                 }
 
-                requestModel.Update = request.Convert(sensorData.Id, requestData.Key.DisplayName);
+                coreRequest.Update = apiRequest.Convert(sensor.Id, info.Key.DisplayName);
 
-                if (request.SensorType.HasValue)
-                    requestModel.Type = request.SensorType.Value.Convert();
+                if (apiRequest.SensorType.HasValue)
+                    coreRequest.Type = apiRequest.SensorType.Value.Convert();
 
-                return true;
+                return _cache.TryAddOrUpdateSensor(coreRequest, out error);
             }
+            else
+                error = InvalidRequest;
 
             return false;
-        }
-
-        private bool TryCheckKey(out string message)
-        {
-            message = Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var keyStr)
-                   && Guid.TryParse(keyStr, out var keyId)
-                   && _cache.GetAccessKey(keyId) != null
-                ? null
-                : "Invalid key";
-
-            return message == null;
         }
     }
 }
