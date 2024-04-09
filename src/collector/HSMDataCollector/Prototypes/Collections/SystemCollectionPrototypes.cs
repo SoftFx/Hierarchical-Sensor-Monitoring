@@ -68,6 +68,14 @@ namespace HSMDataCollector.Prototypes
         public TimeInGCPrototype() : base()
         {
             SensorUnit = Unit.Percents;
+            Statistics = StatisticsOptions.EMA;
+
+            Alerts = new List<BarAlertTemplate>()
+            {
+                AlertsFactory.IfEmaMean(AlertOperation.GreaterThan, 20)
+                             .ThenSendInstantHourlyScheduledNotification("[$product]$path $property $operation $target $unit")
+                             .AndSetIcon(AlertIcon.Warning).Build(),
+            };
         }
 
 
