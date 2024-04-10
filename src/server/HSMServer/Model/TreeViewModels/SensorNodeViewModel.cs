@@ -14,6 +14,7 @@ namespace HSMServer.Model.TreeViewModel
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
 
+        public const int ValuesLimit = 4000;
 
         public SensorType Type { get; private set; }
 

@@ -210,6 +210,9 @@
                                     <a id='link_journal_@sensorId' class='nav-link @(Model.IsJournalEmpty ? "hidden_element": "")' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
                                  </li>
                             </ul>
+                            <div class="mt-1" id='points_limit' style="display: none">
+                                <span class="m-2" style="color: red">Current history period contains more than @SensorNodeViewModel.ValuesLimit points. Only last @SensorNodeViewModel.ValuesLimit point will be displayed.</span>
+                            </div>
                             <div class='tab-content'>
                                 <div class='tab-pane fade show active' id=@graphParentDivId>
                                     <div class="graph-with-plot-button" id='@graphElementId'></div>

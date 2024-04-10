@@ -8,6 +8,7 @@ namespace HSMServer.BackgroundServices
     {
         private readonly ITreeValuesCache _cache;
 
+
         public override TimeSpan Delay { get; } = new TimeSpan(0, 1, 1); // 1 extra second to apply all updates
 
 
