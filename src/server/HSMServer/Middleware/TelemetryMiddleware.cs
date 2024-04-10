@@ -78,9 +78,9 @@ namespace HSMServer.Middleware
                 Key = apiKey,
                 RemoteIP = remoteIp,
                 CollectorName = GetClientName(context),
-            };
+            }.Init();
 
-            return true; //add build telemetry properties
+            return true;
         }
 
         private static bool TryGetApiKey(HttpContext context, out Guid apiKey)

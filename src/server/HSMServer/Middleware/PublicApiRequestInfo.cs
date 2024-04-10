@@ -1,3 +1,4 @@
+using HSMCommon.Constants;
 using HSMServer.Core.Model;
 
 namespace HSMServer.Middleware
@@ -15,6 +16,11 @@ namespace HSMServer.Middleware
         public string TelemetryPath { get; private set; }
 
 
-        public void BuildTelemetryPath() => TelemetryPath = $"{Product.DisplayName}/{Key.DisplayName}/{CollectorName}";
+        public PublicApiRequestInfo Init()
+        {
+            TelemetryPath = string.Join(CommonConstants.SensorPathSeparator, Product.DisplayName, Key.DisplayName, CollectorName);
+
+            return this;
+        }
     }
 }
