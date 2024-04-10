@@ -39,7 +39,7 @@ namespace HSMServer.Controllers
     {
         private const string InvalidRequest = "Public API request info not found";
 
-        private readonly DataCollectorWrapper _dataCollector;
+        private readonly DataCollectorWrapper _collector;
         private readonly ILogger<SensorsController> _logger;
         private readonly IUpdatesQueue _updatesQueue;
         private readonly ITreeValuesCache _cache;
@@ -50,7 +50,7 @@ namespace HSMServer.Controllers
         public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector, ILogger<SensorsController> logger, ITreeValuesCache cache)
         {
             _updatesQueue = updatesQueue;
-            _dataCollector = dataCollector;
+            _collector = dataCollector;
             _logger = logger;
             _cache = cache;
         }
@@ -351,7 +351,7 @@ namespace HSMServer.Controllers
 
             try
             {
-                _dataCollector.WebRequestsSensors.Total.AddReceiveData(values.Count);
+                _collector.WebRequestsSensors.Total.AddReceiveData(values.Count);
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)
@@ -538,7 +538,15 @@ namespace HSMServer.Controllers
                     Product = info.Product
                 };
 
-                return CanAddToQueue(storeInfo, out error);
+                var result = CanAddToQueue(storeInfo, out error);
+
+                if (result)
+                {
+                    _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(1);
+                    _collector.WebRequestsSensors.Total.AddReceiveData(1);
+                }
+
+                return result;
             }
             else
                 error = InvalidRequest;

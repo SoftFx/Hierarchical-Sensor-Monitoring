@@ -18,19 +18,20 @@ namespace HSMServer.Middleware
         private const string XForvardHeader = "X-Forwarded-For"; // real ip without vpn redirection
         private const string EmptyClient = "No name";
 
+        private readonly ClientStatisticsSensors _statistics = _collector.WebRequestsSensors;
+
 
         public async Task InvokeAsync(HttpContext context)
         {
             if (IsPublicApiRequest(context))
             {
-                _collector.WebRequestsSensors.Total.AddRequestData(context.Request);
+                _statistics.Total.AddRequestData(context.Request);
 
                 if (TryBuildPublicApiInfo(context, out var info, out var error))
                 {
                     context.SetPublicApiInfo(info);
 
-                    _collector.WebRequestsSensors[info.TelemetryPath]?.AddRequestData(context.Request);
-                    //_collector.WebRequestsSensors[info.TelemetryPath]?.AddReceiveData(requestData.Count);
+                    _statistics[info.TelemetryPath].AddRequestData(context.Request);
                 }
                 else
                 {
@@ -44,10 +45,8 @@ namespace HSMServer.Middleware
 
             if (context.TryGetPublicApiInfo(out var requestInfo))
             {
-                _collector.WebRequestsSensors.Total.AddResponseResult(context.Response);
-
-                //_collector.WebRequestsSensors.Total.AddReceiveData(requestData.Count);
-                _collector.WebRequestsSensors[requestInfo.TelemetryPath]?.AddResponseResult(context.Response);
+                _statistics.Total.AddResponseResult(context.Response);
+                _statistics[requestInfo.TelemetryPath].AddResponseResult(context.Response);
             }
         }
 

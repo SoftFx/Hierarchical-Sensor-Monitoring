@@ -21,6 +21,7 @@ public sealed record TotalWebRequestNode : WebRequestNode
     public override void AddRequestData(HttpRequest request)
     {
         _rps.AddValue(1);
+
         base.AddRequestData(request);
     }
 }

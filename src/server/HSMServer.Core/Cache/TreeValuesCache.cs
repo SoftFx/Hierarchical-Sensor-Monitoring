@@ -1192,7 +1192,7 @@ namespace HSMServer.Core.Cache
             return true;
         }
 
-        public static bool TryCheckAccessKeyPermissions(AccessKeyModel accessKey, KeyPermissions permissions,
+        private static bool TryCheckAccessKeyPermissions(AccessKeyModel accessKey, KeyPermissions permissions,
             out string message)
         {
             if (accessKey == null)
