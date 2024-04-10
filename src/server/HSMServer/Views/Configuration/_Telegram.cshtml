@@ -1,4 +1,6 @@
 ﻿@using HSMCommon.Constants
+@using HSMServer.Constants
+@using HSMServer.Controllers
 
 
 Telegram settings
@@ -24,7 +26,7 @@ Telegram settings
     $('[id^=restartButton]').on('click', function() {
         $.ajax({
             type: 'GET',
-            url: restartBotAction,
+            url: '@Html.Raw(Url.Action(nameof(ConfigurationController.RestartTelegramBot), ViewConstants.ConfigurationController))',
             dataType: 'html',
             contentType: 'text',
             cache: false,

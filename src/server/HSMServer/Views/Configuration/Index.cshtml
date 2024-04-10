@@ -2,6 +2,7 @@
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Model.ViewModel
+
 @model Dictionary<string, ConfigurationViewModel>
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -13,21 +14,9 @@
 <script>
     var setToDefaultAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SetToDefault), ViewConstants.ConfigurationController))";
     var saveAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SaveConfig), ViewConstants.ConfigurationController))";
-    var restartBotAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.RestartTelegramBot), ViewConstants.ConfigurationController))";
+    var restartBotAction = "";
 </script>
 
-<style>
-    .default-text-field {
-        font-weight: normal;
-        color: grey;
-        font-size: inherit;
-        margin-left: 1vh;
-    }
-
-    .config-name {
-        margin-right: 1vh;
-    }
-</style>
 
 <div class="container">
     <div class="row w-100 justify-content-center">
