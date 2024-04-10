@@ -1,10 +1,9 @@
 ﻿using HSMServer.Attributes;
-using HSMServer.Model.ViewModel;
+using HSMServer.Model.Configuration;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
@@ -12,33 +11,19 @@ namespace HSMServer.Controllers
     [Authorize]
     [AuthorizeIsAdmin]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class ConfigurationController : Controller
+    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications) : Controller
     {
-        private static Dictionary<string, ConfigurationViewModel> _configViewModel = new();
-
-        private readonly IServerConfig _config;
-        private readonly TelegramBot _telegramBot;
+        private readonly IServerConfig _config = config;
+        private readonly TelegramBot _telegramBot = notifications.TelegramBot;
 
 
-        public ConfigurationController(IServerConfig config, NotificationsCenter notifications)
-        {
-            _config = config;
-            _configViewModel = ConfigurationViewModel.TelegramSettings(new TelegramConfigurationViewModel(_config.Telegram));
+        public IActionResult Index() => View(new ConfigurationViewModel(_config));
 
-            _telegramBot = notifications.TelegramBot;
-        }
+        //[HttpPost]
+        //public void SaveConfig([FromBody] ConfigurationViewModel viewModel) => ChangeConfigValue(viewModel.PropertyName, viewModel.Value);
 
-
-        public IActionResult Index()
-        {
-            return View(_configViewModel);
-        }
-
-        [HttpPost]
-        public void SaveConfig([FromBody] ConfigurationViewModel viewModel) => ChangeConfigValue(viewModel.PropertyName, viewModel.Value);
-
-        [HttpPost]
-        public void SetToDefault([FromQuery] string name) => ChangeConfigValue(name, _configViewModel[name].DefaultValue);
+        //[HttpPost]
+        //public void SetToDefault([FromQuery] string name) => ChangeConfigValue(name, _configViewModel[name].DefaultValue);
 
         [HttpGet]
         public Task<string> RestartTelegramBot() => _telegramBot.StartBot();

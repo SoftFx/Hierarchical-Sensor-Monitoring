@@ -6,8 +6,6 @@ namespace HSMServer.ServerConfiguration
 
         public int TopHeaviestSensorsCount { get; set; } = 10;
 
-        public bool UseDatabaseMonitoring { get; set; }
-
-        public bool UseRequestMonitoring { get; set; }
+        public bool IsMonitoringEnabled { get; set; } = true;
     }
 }
