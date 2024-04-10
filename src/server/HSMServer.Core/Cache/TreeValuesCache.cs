@@ -1295,7 +1295,7 @@ namespace HSMServer.Core.Cache
                     UpdateMutedSensorState(sensor.Id, InitiatorInfo.System);
         }
 
-        void CheckSensorTimeout(BaseSensorModel sensor)
+        private void CheckSensorTimeout(BaseSensorModel sensor)
         {
             sensor.CheckTimeout();
 
@@ -1324,8 +1324,6 @@ namespace HSMServer.Core.Cache
 
                 SendNotification(ttl.GetNotification(timeout));
             }
-            //else
-            //    sensor.Policies.TimeToLive.InitLastTtlTime(timeout); // setup last time for schedule logic
 
             SensorUpdateView(sensor);
         }
