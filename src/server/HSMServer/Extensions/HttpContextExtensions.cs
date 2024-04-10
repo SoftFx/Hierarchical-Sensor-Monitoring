@@ -13,7 +13,7 @@ namespace HSMServer.Extensions
         {
             value = context.Request.Headers.TryGetValue(key, out var rawValue) ? rawValue.ToString() : null;
 
-            return value is null;
+            return value is not null;
         }
 
         public static void SetPublicApiInfo(this HttpContext context, PublicApiRequestInfo info)

@@ -61,10 +61,10 @@ namespace HSMServer.Middleware
             if (!TryGetApiKey(context, out var apiKeyId))
                 return false;
 
-            if (_cache.TryGetKey(apiKeyId, out var apiKey, out error))
+            if (!_cache.TryGetKey(apiKeyId, out var apiKey, out error))
                 return false;
 
-            if (_cache.TryGetProduct(apiKey.ProductId, out var product, out error))
+            if (!_cache.TryGetProduct(apiKey.ProductId, out var product, out error))
                 return false;
 
             if (TryGetRemoteIP(context, out var remoteIp))
@@ -87,7 +87,7 @@ namespace HSMServer.Middleware
         {
             apiKey = Guid.Empty;
 
-            return context.TryReadInfo(AccessKeyHeader, out var key) && Guid.TryParse(key.ToString(), out apiKey);
+            return context.TryReadInfo(AccessKeyHeader, out var key) && !string.IsNullOrEmpty(key) && Guid.TryParse(key, out apiKey);
         }
 
         private static bool TryGetRemoteIP(HttpContext context, out string remoteIp)

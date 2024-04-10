@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Core;
+using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.BackgroundServices;
 using Microsoft.AspNetCore.Http;
@@ -7,14 +8,19 @@ namespace HSMServer.WebRequestsNodes;
 
 public sealed record TotalWebRequestNode : WebRequestNode
 {
-    private const string RequestPerSecondNode = "RPS";
+    private const string RequestPerSecondNode = "Clients requests count";
 
     private readonly IInstantValueSensor<double> _rps;
 
 
     public TotalWebRequestNode(IDataCollector collector) : base(collector, ClientStatisticsSensors.TotalGroup)
     {
-        _rps = collector.CreateM1RateSensor(BuildSensorPath(ClientStatisticsSensors.TotalGroup, RequestPerSecondNode), "Number of requests that were received.");
+        _rps = collector.CreateRateSensor(BuildSensorPath(ClientStatisticsSensors.TotalGroup, RequestPerSecondNode), new RateSensorOptions
+        {
+            Alerts = [],
+            EnableForGrafana = true,
+            Description = "Total number of public API client requests."
+        });
     }
 
 
