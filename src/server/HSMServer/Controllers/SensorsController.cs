@@ -566,18 +566,20 @@ namespace HSMServer.Controllers
         {
             if (HttpContext.TryGetPublicApiInfo(out PublicApiRequestInfo info))
             {
-                var coreRequest = new SensorAddOrUpdateRequestModel(info.Key.Id, apiRequest.Path);
+                var relatedPath = apiRequest.Path;
+                var sensorType = apiRequest.SensorType;
 
-                if (!_cache.TryGetSensorByPath(info.Product.DisplayName, apiRequest.Path, out var sensor) && apiRequest.SensorType is null)
+                if (!_cache.TryGetSensorByPath(info.Product.DisplayName, relatedPath, out var sensor) && sensorType is null)
                 {
-                    error = $"{nameof(apiRequest.SensorType)} property is required, because sensor {apiRequest.Path} doesn't exist";
+                    error = $"{nameof(apiRequest.SensorType)} property is required, because sensor {relatedPath} doesn't exist";
                     return false;
                 }
 
-                coreRequest.Update = apiRequest.Convert(sensor.Id, info.Key.DisplayName);
-
-                if (apiRequest.SensorType.HasValue)
-                    coreRequest.Type = apiRequest.SensorType.Value.Convert();
+                var coreRequest = new SensorAddOrUpdateRequestModel(info.Key.Id, relatedPath)
+                {
+                    Update = apiRequest.Convert(sensor.Id, info.Key.DisplayName),
+                    Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,
+                };
 
                 return _cache.TryAddOrUpdateSensor(coreRequest, out error);
             }
