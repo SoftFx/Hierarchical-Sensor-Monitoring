@@ -211,4 +211,12 @@ export namespace Layout {
 
         return lastTime;
     }
+    
+    export function relayout(id: string, hovermode: false | "x" | "y" | "closest" | "x unified" | "y unified", hoverdistance: number) {
+        let plotDiv = $('#panelChart_' + id)[0] as PlotlyHTMLElement;
+        plotDiv.layout.hovermode = hovermode;
+        plotDiv.layout.hoverdistance = hoverdistance;
+        
+        window.Plotly.relayout(plotDiv, plotDiv.layout)
+    }
 }

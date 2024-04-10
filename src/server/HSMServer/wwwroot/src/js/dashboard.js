@@ -2,6 +2,7 @@ import {convertToGraphData} from "./plotting";
 import {Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot} from "./plots";
 import {Dashboard} from "../ts/dashboardT";
 import {DashboardStorage} from "../ts/dashboard.storage";
+import {Layout} from "../ts/plotUpdate";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
@@ -459,6 +460,10 @@ window.initMultyichartCordinates = function (settings, values, id) {
 
         resolve(transitionY + currHeight * 2);
     })
+}
+
+window.test = function (id, mode, distance) {
+    Layout.relayout(id, mode, distance);
 }
 
 window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false, yaxisRange = true) {
