@@ -13,7 +13,8 @@ export class DashboardStorage {
 
     public addPanel(id: string) {
         this.panels[id] = new Panel(id);
-        
+        this.panels[id].updateNotify();
+
         window.clearInterval(this._intervalId)
         this._intervalId = this.checkForUpdate(this.panels);
     }
