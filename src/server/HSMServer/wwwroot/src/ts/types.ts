@@ -1,0 +1,1 @@
+﻿export type Hovermode = false | "x" | "y" | "closest" | "x unified" | "y unified";

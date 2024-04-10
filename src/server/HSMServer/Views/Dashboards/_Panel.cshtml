@@ -11,7 +11,7 @@
     var jsonOptions = new JsonSerializerOptions()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new PlotlyDoubleConverter() }
+        Converters = {new PlotlyDoubleConverter()}
     };
     var legendsTitle = @Model.Settings.ShowLegend ? "Hide legends" : "Show legends";
 }
@@ -40,6 +40,28 @@
                     <a id="toggle_@Model.Id" class="toggle-legend dropdown-item text-decoration-none fw-normal button-link">@legendsTitle</a>
                     <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
                     <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+
+                    <div class="dropdown-submenu">
+                        <a tabindex="-1">Hover me for more options</a>
+                       <div class="dropdown-menu p-4">
+                           <div class="mb-3">
+                               <label for="selecthovermode_@Model.Id" class="form-label">Hover Mode</label>
+                               <select id="selecthovermode_@Model.Id" class="form-control">
+                                   <option value="x">x</option>
+                                   <option value="y">y</option>
+                                   <option value="false">false</option>
+                                   <option value="closest">closest</option>
+                                   <option value="x unified">x unified</option>
+                                   <option value="y unified">y unified</option>
+                               </select>
+                           </div>
+                           <div class="mb-3">
+                             <label for="hoverdistance_@Model.Id" class="form-label">Hover Distance</label>
+                             <input type="number" class="form-control" id="hoverdistance_@Model.Id" placeholder="Password">
+                           </div>
+                           <button id="button_save_settings_@Model.Id" type="submit" class="btn btn-primary">Save</button>
+                         </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -51,8 +73,6 @@
 
 <script>
     $(document).ready(function () {
-        window.addPanelToStorage('@Model.Id');
-        
         const settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
         const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
@@ -65,6 +85,9 @@
                                 values.forEach(function (x) {
                                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
                                 })
+
+                                window.addPanelToStorage('@Model.Id');
+                                        
 
                                 $('#panelChart_@Model.Id').on('plotly_relayout', function (e, updateData){
                                     let emptypanel = $('#emptypanel_@Model.Id');

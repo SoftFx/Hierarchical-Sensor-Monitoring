@@ -3,6 +3,7 @@ import {IPanel, ISourceUpdate} from "./dashboard.interfaces";
 import {Plot, TimeSpanPlot} from "../js/plots";
 import {PlotUpdate, Redraw} from "./dashboard.classes";
 import {dashboardStorage} from "../js/dashboard";
+import {PanelSettings} from "./dashboard.storage";
 
 
 export namespace DataUpdate {
@@ -212,10 +213,13 @@ export namespace Layout {
         return lastTime;
     }
     
-    export function relayout(id: string, hovermode: false | "x" | "y" | "closest" | "x unified" | "y unified", hoverdistance: number) {
+    export function relayout(id: string, settings: PanelSettings) {
+        if (settings === null)
+            return;
+        
         let plotDiv = $('#panelChart_' + id)[0] as PlotlyHTMLElement;
-        plotDiv.layout.hovermode = hovermode;
-        plotDiv.layout.hoverdistance = hoverdistance;
+        plotDiv.layout.hovermode = settings.hovermode;
+        plotDiv.layout.hoverdistance = settings.hoverdistance;
         
         window.Plotly.relayout(plotDiv, plotDiv.layout)
     }
