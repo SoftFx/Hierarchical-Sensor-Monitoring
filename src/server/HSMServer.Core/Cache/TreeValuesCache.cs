@@ -1295,6 +1295,15 @@ namespace HSMServer.Core.Cache
                     UpdateMutedSensorState(sensor.Id, InitiatorInfo.System);
         }
 
+        public void ClearEmptyNodes(ProductModel product)
+        {
+            foreach (var (_, node) in product.SubProducts)
+                ClearEmptyNodes(node);
+
+            if (product.IsEmpty && product.Settings.SelfDestroy.Value.GetShiftedTime(product.CreationDate) < DateTime.UtcNow)
+                RemoveProduct(product.Id, InitiatorInfo.AsSystemForce("Old empty node"));
+        }
+
         private void CheckSensorTimeout(BaseSensorModel sensor)
         {
             sensor.CheckTimeout();

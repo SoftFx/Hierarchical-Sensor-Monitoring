@@ -79,7 +79,7 @@ namespace HSMServer.Core.Cache
 
         void UpdateCacheState();
 
-        //void ClearEmptyNodes(ProductModel product);
+        void ClearEmptyNodes(ProductModel product);
 
         void SaveLastStateToDb();
 
