@@ -49,6 +49,8 @@ namespace HSMServer.ServerConfiguration
 
         public KestrelConfig Kestrel { get; }
 
+        public MonitoringOptions MonitoringOptions { get; }
+
 
         static ServerConfig()
         {
@@ -71,6 +73,7 @@ namespace HSMServer.ServerConfiguration
             BackupDatabase = Register<BackupDatabaseConfig>(nameof(BackupDatabase));
             Telegram = Register<TelegramConfig>(nameof(Telegram));
             Kestrel = Register<KestrelConfig>(nameof(Kestrel));
+            MonitoringOptions = Register<MonitoringOptions>(nameof(MonitoringOptions));
 
             ResaveSettings();
         }

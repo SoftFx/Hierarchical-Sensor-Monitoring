@@ -28,6 +28,7 @@ namespace HSMServer.Core.Cache
     {
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
+        private const string ErrorProductNotFound = "Product doesn't exist.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
         private const string ErrorMasterKey = "Master key is invalid for this request because product is not specified.";
 
@@ -178,6 +179,7 @@ namespace HSMServer.Core.Cache
                 return false;
 
             var accessKey = GetAccessKeyModel(request);
+
             if (!accessKey.IsValid(KeyPermissions.CanSendSensorData, out message))
                 return false;
 
@@ -190,6 +192,41 @@ namespace HSMServer.Core.Cache
             }
 
             return sensorChecking;
+        }
+
+        public void SetLastKeyUsage(Guid key, string ip)
+        {
+            if (!TryGetKey(key, out var keyModel, out _))
+                return;
+
+            var usageTime = DateTime.UtcNow;
+
+            keyModel.UpdateUsageInfo(ip, usageTime);
+            _snapshot.Keys[key].Update(ip, usageTime);
+
+            ChangeAccessKeyEvent?.Invoke(keyModel, ActionType.Update);
+        }
+
+        public bool TryGetKey(Guid id, out AccessKeyModel key, out string message)
+        {
+            key = _keys.TryGetValue(id, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
+
+            if (!key.IsValidState(out message))
+                return false;
+
+            if (!key.IsMaster)
+                return true;
+
+            message = ErrorMasterKey;
+            return false;
+        }
+
+        public bool TryGetProduct(Guid id, out ProductModel product, out string error)
+        {
+            var ok = _tree.TryGetValue(id, out product) && product.Parent is null;
+            error = !ok ? ErrorProductNotFound : null;
+
+            return ok;
         }
 
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
@@ -254,6 +291,7 @@ namespace HSMServer.Core.Cache
                 }
 
                 _database.RemoveAccessKey(id);
+                _snapshot.Keys.Remove(id);
 
                 ChangeAccessKeyEvent?.Invoke(key, ActionType.Delete);
             }
@@ -292,7 +330,7 @@ namespace HSMServer.Core.Cache
             {
                 if (!TryGetProductByKey(request, out var product, out _))
                 {
-                    error = $"Product with this key {request.KeyGuid} doesn't exists";
+                    error = $"Product with this key {request.Key} doesn't exists";
                     return false;
                 }
 
@@ -792,13 +830,16 @@ namespace HSMServer.Core.Cache
 
         internal void AddNewSensorValue(StoreInfo storeInfo)
         {
-            if (!TryGetProductByKey(storeInfo, out var product, out _))
+            var product = storeInfo?.Product;
+
+            if (product == null && !TryGetProductByKey(storeInfo, out product, out _))
                 return;
 
             var parentProduct = AddNonExistingProductsAndGetParentProduct(product, storeInfo);
 
+            var sensorName = storeInfo.SensorName;
             var value = storeInfo.BaseValue;
-            var sensorName = storeInfo.PathParts[^1];
+
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
 
             if (sensor == null)
@@ -992,7 +1033,7 @@ namespace HSMServer.Core.Cache
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseRequestModel request)
         {
             var pathParts = request.PathParts;
-            var authorId = GetAccessKey(request.KeyGuid).AuthorId;
+            var authorId = GetAccessKey(request.Key).AuthorId;
 
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -1053,7 +1094,7 @@ namespace HSMServer.Core.Cache
             SensorEntity entity = new()
             {
                 Id = Guid.NewGuid().ToString(),
-                DisplayName = request.PathParts[^1],
+                DisplayName = request.SensorName,
                 Type = (byte)type,
                 CreationDate = DateTime.UtcNow.Ticks,
             };
@@ -1088,6 +1129,9 @@ namespace HSMServer.Core.Cache
 
             if (isSuccess && _tree.TryGetValue(key.ProductId, out var product))
             {
+                if (_snapshot.Keys.TryGetValue(key.Id, out var snapKey))
+                    key.UpdateUsageInfo(snapKey.IP, snapKey.LastUseTime);
+
                 isSuccess &= product.AccessKeys.TryAdd(key.Id, key);
                 ChangeProductEvent?.Invoke(product, ActionType.Update);
             }
@@ -1174,7 +1218,7 @@ namespace HSMServer.Core.Cache
         }
 
         private AccessKeyModel GetAccessKeyModel(BaseRequestModel request) =>
-            _keys.TryGetValue(request.KeyGuid, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
+            _keys.TryGetValue(request.Key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
 
         private void FillSensorsData()
         {

@@ -8,7 +8,6 @@ using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
 
-
 namespace HSMServer.Core.Cache
 {
     public enum ActionType
@@ -46,11 +45,18 @@ namespace HSMServer.Core.Cache
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         AccessKeyModel RemoveAccessKey(Guid id);
+        
         AccessKeyModel UpdateAccessKey(AccessKeyUpdate key);
         AccessKeyModel UpdateAccessKeyState(Guid id, KeyState state);
         AccessKeyModel GetAccessKey(Guid id);
         List<AccessKeyModel> GetMasterKeys();
+        
+        bool TryGetKey(Guid id, out AccessKeyModel key, out string message);
+        bool TryGetProduct(Guid id, out ProductModel product, out string message);
 
+        void SetLastKeyUsage(Guid key, string ip);
+        
+        
         bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);
         bool TryUpdateSensor(SensorUpdate updatedSensor, out string error);
         bool TryGetSensorByPath(string product, string path, out BaseSensorModel sensor);
@@ -60,6 +66,7 @@ namespace HSMServer.Core.Cache
         void ClearSensorHistory(ClearHistoryRequest request);
         void CheckSensorHistory(Guid sensorId);
         void ClearNodeHistory(ClearHistoryRequest request);
+
         BaseSensorModel GetSensor(Guid sensorId);
         IEnumerable<BaseSensorModel> GetSensorsByFolder(HashSet<Guid> folderIds = null);
 
