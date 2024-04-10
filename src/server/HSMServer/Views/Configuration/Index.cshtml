@@ -30,13 +30,39 @@
 </style>
 
 <div class="container">
-    <div class="row justify-content-center">
+    <div class="row w-100 justify-content-center">
+        <div class="d-flex justify-content-start my-3 p-0">
+            <h5>Configuration parameters</h5>
+        </div>
 
-        <div class="m-10">
-            <div class="row justify-content-start">
-                <div class="col-auto">
-                    <h5 class="my-3 ms-5">Configuration parameters</h5>
-                </div>
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="server-tab" data-bs-toggle="tab" data-bs-target="#server" type="button" role="tab" aria-controls="server" aria-selected="true">Server</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="monitoring-tab" data-bs-toggle="tab" data-bs-target="#monitoring" type="button" role="tab" aria-controls="monitoring" aria-selected="false">Self monitoring</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="telegram-tab" data-bs-toggle="tab" data-bs-target="#telegram" type="button" role="tab" aria-controls="telegram" aria-selected="false">Telegram</button>
+            </li>
+        </ul>
+        <div class="tab-content w-100">
+            <div class="tab-pane fade show active" id="server" role="tabpanel" aria-labelledby="server-tab">
+                <form id="serverSettings_form" method="post" asp-action="">
+                    @await Html.PartialAsync("_Server")
+                </form>
+            </div>
+
+            <div class="tab-pane fade" id="monitoring" role="tabpanel" aria-labelledby="monitoring-tab">
+                <form id="selfMonitoringSettings_form" method="post" asp-action="">
+                    @await Html.PartialAsync("_SelfMonitoring")
+                </form>
+            </div>
+
+            <div class="tab-pane fade" id="telegram" role="tabpanel" aria-labelledby="telegram-tab">
+                <form id="telegramSettings_form" asp-action="">
+                    @await Html.PartialAsync("_Telegram")
+                </form>
             </div>
         </div>
 
@@ -99,29 +125,6 @@
                 </tbody>
             </table>
         </div>
-
-        <div class="m-10">
-            <div class="row justify-content-start">
-                <div class="col-auto">
-                    <h5 class="my-3 ms-5">Telegram</h5>
-                </div>
-
-                <div>
-                    You can configure a Telegram bot. Please install it via Telegram and put configuration
-                    parameters (@ConfigurationConstants.BotName, @ConfigurationConstants.BotToken, @ConfigurationConstants.AreBotMessagesEnabled) in the table below.
-                    <b>Warning!</b> It will stop current bot.
-                    Installation link <a href='https://core.telegram.org/bots/features#botfather' target='_blank'>Bot Installation</a>.
-                </div>
-
-                <div class="row ms-5 mt-1 mb-1">
-                    <button id="restartButton" type="button" class="col-auto btn btn-secondary" style="background-color: #e35478">
-                        <i class="fab fa-telegram"></i> Restart Telegram Bot
-                    </button>
-
-                    <div class="mt-1" id="message" style="color: red; display: none;"></div>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -181,28 +184,6 @@
             async: true,
             success: function() {
                 document.location.reload();
-            }
-        });
-    });
-
-    $('[id^=restartButton]').on('click', function() {
-        $.ajax({
-            type: 'GET',
-            url: restartBotAction,
-            dataType: 'html',
-            contentType: 'text',
-            cache: false,
-            async: true,
-            success: function(data) {
-                let message = $("#message");
-                message.css("display", "block");
-
-                if (data == "") {
-                    message.empty().css("color", "green").append("Success.");
-                }
-                else {
-                    message.empty().css("color", "red").append(data);
-                }
             }
         });
     });
