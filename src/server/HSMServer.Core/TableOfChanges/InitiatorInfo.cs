@@ -41,7 +41,7 @@ namespace HSMServer.Core.TableOfChanges
         }
 
 
-        public static InitiatorInfo AsSystemForce() => new(InitiatorType.System, isForce: true);
+        public static InitiatorInfo AsSystemForce(string info) => new(InitiatorType.System, info, isForce: true);
 
         public static InitiatorInfo AsSystemInfo(string info) => new (InitiatorType.System, info);
 

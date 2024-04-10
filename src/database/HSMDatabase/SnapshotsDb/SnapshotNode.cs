@@ -17,6 +17,8 @@ namespace HSMDatabase.SnapshotsDb
 
 
         public IEntitySnapshotCollection<SensorStateEntity> Sensors { get; }
+        
+        public IEntitySnapshotCollection<LastKeyStateEntity> Keys { get; }
 
         public string FolderName { get; }
 
@@ -29,6 +31,7 @@ namespace HSMDatabase.SnapshotsDb
             IsFinal = Path.GetFileNameWithoutExtension(folder).EndsWith(FinalSuffix);
 
             Sensors = Register<SensorStateEntity>(nameof(Sensors));
+            Keys = Register<LastKeyStateEntity>(nameof(Keys));
         }
 
         internal SnapshotNode(string mainFolder, bool isFinal) : this(Path.Combine(mainFolder, BuildFolderName(isFinal)))

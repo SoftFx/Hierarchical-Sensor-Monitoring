@@ -228,9 +228,8 @@ namespace HSMServer.ApiObjectsConverters
             return apiValues;
         }
 
-
-        public static HistoryRequestModel Convert(this HistoryRequest request, string key) =>
-            new(string.IsNullOrEmpty(key) ? request.Key : key, request.Path)
+        public static HistoryRequestModel Convert(this HistoryRequest request, Guid key) =>
+            new(key, request.Path)
             {
                 From = request.From,
                 To = request.To,

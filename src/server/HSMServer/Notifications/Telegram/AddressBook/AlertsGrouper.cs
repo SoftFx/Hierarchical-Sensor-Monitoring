@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Collections;
 using HSMServer.Core.Model.Policies;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Notifications.Telegram.AddressBook
 {
@@ -11,7 +12,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook
             var groups = GetOrAdd(result.Key);
 
             foreach (var group in groups)
-                if (group.TryApply(result.LastState))
+                if (group.TryApply(result))
                     return;
 
             groups.Add(new GroupedNotification(result));
@@ -19,9 +20,8 @@ namespace HSMServer.Notifications.Telegram.AddressBook
 
         internal IEnumerable<string> GetGroups()
         {
-            foreach (var (_, groups) in this)
-                foreach (var group in groups)
-                    yield return group.ToString();
+            foreach (var group in this.SelectMany(p => p.Value).OrderBy(g => g.FirstNotifyTime))
+                yield return group.ToString();
 
             Clear();
         }

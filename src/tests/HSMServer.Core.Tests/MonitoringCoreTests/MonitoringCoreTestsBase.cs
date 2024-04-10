@@ -9,6 +9,7 @@ using Moq;
 using System.Threading.Tasks;
 using HSMServer.Core.Journal;
 using Xunit;
+using HSMServer.Core.TreeStateSnapshot.States;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
@@ -40,6 +41,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var snaphot = new Mock<ITreeStateSnapshot>();
 
             snaphot.Setup(a => a.Sensors).Returns(new StateCollection<LastSensorState, SensorStateEntity>());
+            snaphot.Setup(a => a.Keys).Returns(new StateCollection<LastKeyState, LastKeyStateEntity>());
 
             _updatesQueue = new Mock<IUpdatesQueue>().Object;
             _journalService = new JournalService(_databaseCoreManager.DatabaseCore);
