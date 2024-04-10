@@ -423,6 +423,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             if (sensor.EndOfMuting != endOfMuting)
+            {
                 TryUpdateSensor(new SensorUpdate
                 {
                     Id = sensorId,
@@ -430,6 +431,9 @@ namespace HSMServer.Core.Cache
                     EndOfMutingPeriod = endOfMuting,
                     Initiator = initiator
                 }, out _);
+
+                sensor.Revalidate();
+            }
         }
 
         public void ClearNodeHistory(ClearHistoryRequest request)
