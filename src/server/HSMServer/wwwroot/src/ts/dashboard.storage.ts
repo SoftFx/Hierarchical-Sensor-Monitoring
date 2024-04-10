@@ -56,6 +56,10 @@ class Panel {
         this._lastUpdateDiv = $('#lastUpdate_' + this.id);
         
         this.settings = Helper.read<PanelSettings>('panel_' + id);
+        if (this.settings !== null) {
+            $('#selecthovermode_' + id).val(this.settings.hovermode as string);
+            $('#hoverdistance_' + id).val(this.settings.hoverdistance);
+        }
         Layout.relayout(this.id, this.settings);
         
         this._savebutton = $('#button_save_settings_' + id);
@@ -63,6 +67,7 @@ class Panel {
             this.settings = new PanelSettings($('#selecthovermode_' + id).val() as Hovermode, $('#hoverdistance_' + id).val() as number);
             Helper.save("panel_" + this.id, this.settings);
             Layout.relayout(this.id, this.settings);
+            $('#actionButton').trigger('click')
         }.bind(this))
     }
     

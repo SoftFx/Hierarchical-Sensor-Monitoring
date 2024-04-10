@@ -33,7 +33,7 @@
             </div>
             <div class="align-self-start">
                 <span id="lastUpdate_@Model.Id"></span>
-                <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false">
                     <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
@@ -42,8 +42,8 @@
                     <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
 
                     <div class="dropdown-submenu">
-                        <a tabindex="-1">Hover me for more options</a>
-                       <div class="dropdown-menu p-4">
+                        <a class="dropdown-item">Hover settingss</a>
+                       <div class="dropdown-menu p-4 pt-2">
                            <div class="mb-3">
                                <label for="selecthovermode_@Model.Id" class="form-label">Hover Mode</label>
                                <select id="selecthovermode_@Model.Id" class="form-control">
@@ -57,9 +57,9 @@
                            </div>
                            <div class="mb-3">
                              <label for="hoverdistance_@Model.Id" class="form-label">Hover Distance</label>
-                             <input type="number" class="form-control" id="hoverdistance_@Model.Id" placeholder="Password">
+                             <input type="number" class="form-control" id="hoverdistance_@Model.Id" placeholder="1">
                            </div>
-                           <button id="button_save_settings_@Model.Id" type="submit" class="btn btn-primary">Save</button>
+                           <button id="button_save_settings_@Model.Id" type="button" class="btn btn-primary">Save</button>
                          </div>
                     </div>
                 </div>

@@ -4,7 +4,7 @@
 }
 
 .dropdown-submenu>.dropdown-menu {
-    top: 0;
+    top: -250%;
     right: 100%;
     margin-top: -6px;
     margin-left: -1px;
