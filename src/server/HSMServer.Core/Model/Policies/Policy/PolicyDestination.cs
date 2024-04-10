@@ -8,16 +8,21 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed class PolicyDestination
     {
-        public Dictionary<Guid, string> Chats { get; } = new();
+        public Dictionary<Guid, string> Chats { get; } = [];
+
+
+        public bool UseDefaultChats { get; private set; }
 
         public bool AllChats { get; private set; }
 
 
-        internal PolicyDestination() { }
+        public PolicyDestination() { }
 
         internal PolicyDestination(PolicyDestinationEntity entity)
         {
+            UseDefaultChats = entity.UseDefaultChats;
             AllChats = entity.AllChats;
+
             Chats.Clear();
 
             if (entity.Chats is not null)
@@ -28,7 +33,9 @@ namespace HSMServer.Core.Model.Policies
 
         internal void Update(PolicyDestinationUpdate update)
         {
+            UseDefaultChats = update.UseDefaultChats ?? UseDefaultChats;
             AllChats = update.AllChats;
+
             Chats.Clear();
 
             if (update.Chats is not null)
@@ -39,9 +46,16 @@ namespace HSMServer.Core.Model.Policies
         internal PolicyDestinationEntity ToEntity() => new()
         {
             Chats = Chats?.ToDictionary(k => k.Key.ToString(), v => v.Value),
+            UseDefaultChats = UseDefaultChats,
             AllChats = AllChats,
         };
 
-        public override string ToString() => $"chats={(AllChats ? "all chats" : string.Join(", ", Chats.Values))}";
+        public override string ToString()
+        {
+            if (AllChats)
+                return "all chats";
+            else
+                return UseDefaultChats ? "default charts" : string.Join(", ", Chats.Values);
+        }
     }
 }

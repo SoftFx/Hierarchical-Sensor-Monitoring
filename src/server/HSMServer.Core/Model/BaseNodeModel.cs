@@ -79,7 +79,7 @@ namespace HSMServer.Core.Model
             ChangeTable.FromEntity(entity.ChangeTable);
 
             if (entity.Settings is not null)
-                Settings.SetSettings(entity.Settings);
+                Settings.SetSettings(entity.Settings, entity.DefaultChatsSettings);
         }
 
 

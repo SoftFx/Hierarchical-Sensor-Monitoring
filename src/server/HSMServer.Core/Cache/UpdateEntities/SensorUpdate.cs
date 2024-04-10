@@ -88,7 +88,9 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
     public sealed record PolicyDestinationUpdate
     {
-        public Dictionary<Guid, string> Chats { get; } = new();
+        public Dictionary<Guid, string> Chats { get; } = [];
+
+        public bool? UseDefaultChats { get; }
 
         public bool AllChats { get; }
 

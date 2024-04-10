@@ -4,9 +4,12 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public abstract record BaseNodeEntity
     {
-        public Dictionary<string, TimeIntervalEntity> Settings { get; init; } = new();
+        public Dictionary<string, TimeIntervalEntity> Settings { get; init; } = [];
 
-        public List<string> Policies { get; init; } = new();
+        public List<string> Policies { get; init; } = [];
+
+
+        public PolicyDestinationEntity DefaultChatsSettings { get; init; } = new();
 
 
         public required string Id { get; init; }

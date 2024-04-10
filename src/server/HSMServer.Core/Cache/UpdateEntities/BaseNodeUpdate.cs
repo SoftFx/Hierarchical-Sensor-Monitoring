@@ -9,6 +9,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public required Guid Id { get; init; }
 
 
+        public PolicyDestinationUpdate DefaultChats { get; init; }
+
         public TimeIntervalModel KeepHistory { get; init; }
 
         public TimeIntervalModel SelfDestroy { get; init; }

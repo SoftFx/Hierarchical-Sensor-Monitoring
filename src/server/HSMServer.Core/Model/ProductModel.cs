@@ -106,6 +106,7 @@ namespace HSMServer.Core.Model
             DisplayName = DisplayName,
             Description = Description,
             CreationDate = CreationDate.Ticks,
+            DefaultChatsSettings = Settings.DefaultChats.ToEntity(),
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
             ChangeTable = ChangeTable.ToEntity(),
