@@ -111,8 +111,10 @@ namespace HSMServer.Core.Model
             LastIP = lastIP ?? LastIP;
         }
 
+        public bool IsValidState(out string message) => !CheckBlocked(out message) && !CheckExpired(out message);
+
         public virtual bool IsValid(KeyPermissions permissions, out string message) =>
-            !CheckBlocked(out message) && !CheckExpired(out message) && IsHasPermissions(permissions, out message);
+             IsValidState(out message) && IsHasPermissions(permissions, out message);
 
 
         internal AccessKeyEntity ToAccessKeyEntity() =>

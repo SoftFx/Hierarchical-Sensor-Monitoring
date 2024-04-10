@@ -62,7 +62,7 @@ namespace HSMServer.Middleware
             if (!TryGetApiKey(context, out var apiKeyId))
                 return false;
 
-            if (_cache.TryGetKey(apiKeyId, out var apiKey, out error)) //add key check
+            if (_cache.TryGetKey(apiKeyId, out var apiKey, out error))
                 return false;
 
             if (_cache.TryGetProduct(apiKey.ProductId, out var product, out error))

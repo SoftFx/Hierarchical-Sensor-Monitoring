@@ -28,6 +28,7 @@ namespace HSMServer.Core.Cache
     {
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
+        private const string ErrorProductNotFound = "Product doesn't exist.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
         private const string ErrorMasterKey = "Master key is invalid for this request because product is not specified.";
 
@@ -210,7 +211,7 @@ namespace HSMServer.Core.Cache
         {
             key = _keys.TryGetValue(id, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
 
-            if (!key.IsValid(KeyPermissions.CanSendSensorData & KeyPermissions.CanAddNodes & KeyPermissions.CanAddSensors & KeyPermissions.CanReadSensorData, out message))
+            if (!key.IsValidState(out message))
                 return false;
 
             if (!key.IsMaster)
@@ -220,18 +221,12 @@ namespace HSMServer.Core.Cache
             return false;
         }
 
-        public bool TryGetProduct(Guid id, out ProductModel product, out string message)
+        public bool TryGetProduct(Guid id, out ProductModel product, out string error)
         {
-            var hasProduct = _tree.TryGetValue(id, out product);
-            message = hasProduct ? string.Empty : ErrorKeyNotFound;
+            var ok = _tree.TryGetValue(id, out product) && product.Parent is null;
+            error = !ok ? ErrorProductNotFound : null;
 
-            if (product?.Parent is not null)
-            {
-                message = "Temporarily unavailable feature. Please select a product without a parent";
-                return false;
-            }
-
-            return true;
+            return ok;
         }
 
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
