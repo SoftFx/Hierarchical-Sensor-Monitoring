@@ -1,30 +1,24 @@
 ﻿namespace HSMServer.Core.Model.NodeSettings
 {
-    public abstract class SettingPropertyBase
+    public abstract class SettingPropertyBase<T> where T : class, new()
     {
-        internal SettingPropertyBase ParentProperty { get; set; }
+        private SettingPropertyBase<T> _parent;
 
 
-        public abstract bool IsEmpty { get; }
+        protected abstract T EmptyValue { get; }
 
         public abstract bool IsSet { get; }
-    }
 
 
-    public abstract class SettingPropertyBase<TModel> : SettingPropertyBase where TModel : class, new()
-    {
-        protected abstract TModel EmptyValue { get; }
+        public T CurValue { get; private set; } = new T();
 
 
-        public override bool IsEmpty => Value is null;
+        public T Value => IsSet ? CurValue : _parent?.Value ?? EmptyValue;
+
+        public bool IsEmpty => Value is null;
 
 
-        public TModel CurValue { get; private set; } = new TModel();
-
-        public TModel Value => IsSet ? CurValue : ((SettingPropertyBase<TModel>)ParentProperty)?.Value ?? EmptyValue;
-
-
-        internal bool TrySetValue(TModel newValue)
+        internal bool TrySetValue(T newValue)
         {
             if (newValue is not null && CurValue.ToString() != newValue.ToString())
             {
@@ -35,5 +29,7 @@
 
             return false;
         }
+
+        internal void SetParent(SettingPropertyBase<T> parent) => _parent = parent;
     }
 }

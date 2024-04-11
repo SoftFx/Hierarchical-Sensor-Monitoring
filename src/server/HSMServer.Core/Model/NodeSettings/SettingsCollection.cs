@@ -79,9 +79,9 @@ namespace HSMServer.Core.Model.NodeSettings
         internal void SetParentSettings(SettingsCollection parentCollection)
         {
             foreach (var (name, property) in _intervalProperties)
-                property.ParentProperty = parentCollection._intervalProperties[name];
+                property.SetParent(parentCollection._intervalProperties[name]);
 
-            DefaultChats.ParentProperty = parentCollection.DefaultChats;
+            DefaultChats.SetParent(parentCollection.DefaultChats);
         }
 
         internal Dictionary<string, TimeIntervalEntity> ToEntity() =>

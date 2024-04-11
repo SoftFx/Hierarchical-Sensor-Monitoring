@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model.NodeSettings
         protected override TimeIntervalModel EmptyValue => TimeIntervalModel.None;
 
 
-        public override bool IsSet => CurValue?.IsFromParent ?? false;
+        public override bool IsSet => !CurValue?.IsFromParent ?? false;
 
 
         internal TimeIntervalEntity ToEntity() => CurValue?.ToEntity();
@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model.NodeSettings
         protected override PolicyDestination EmptyValue { get; } = new PolicyDestination();
 
 
-        public override bool IsSet => CurValue?.UseDefaultChats ?? false;
+        public override bool IsSet => !CurValue?.UseDefaultChats ?? false;
 
 
         internal PolicyDestinationEntity ToEntity() => CurValue?.ToEntity();
