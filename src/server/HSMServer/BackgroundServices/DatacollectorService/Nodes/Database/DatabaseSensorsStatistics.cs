@@ -19,9 +19,9 @@ namespace HSMServer.BackgroundServices
 {
     public sealed class DatabaseSensorsStatistics : DatabaseSensorsBase
     {
-        private const string FullStatisticsSensorName = "Full sensors size statistics";
-        private const string TopHeaviestSensorName = "Top heaviest sensors";
         private const int MaxSensorSizeMegabytes = 500;
+        public const string TopHeaviestSensorName = "Top heaviest sensors";
+        public const string FullStatisticsSensorName = "Full sensors size statistics";
 
         private readonly string _tempDirectory = Path.GetTempPath();
 

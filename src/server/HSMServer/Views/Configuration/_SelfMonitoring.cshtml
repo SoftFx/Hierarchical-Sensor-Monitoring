@@ -1,5 +1,40 @@
 ﻿@using HSMServer.Model.Configuration
+@using HSMServer.BackgroundServices
 
 @model MonitoringSettingsViewModel
 
-Self monitoring settings
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="row mt-2">
+    <div class="col-3">
+        <label class="col-form-label" asp-for="IsMonitoringEnabled"></label>
+        <i class='fas fa-question-circle ms-2' title='Will self-monitoring statistics be collected (product "@DataCollectorWrapper.SelfMonitoringProductName").'></i>
+    </div>
+    <div class="col-auto form-check form-switch ms-3 mt-2">
+        <input class="form-check-input" type="checkbox" asp-for="IsMonitoringEnabled">
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-3">
+        <label class="col-form-label" asp-for="DatabaseStatisticsPeriodDays"></label>
+        <i class='fas fa-question-circle ms-2' title='Frequency of collecting statistics on memory occupied by sensors in the database (sensors "@DatabaseSensorsStatistics.FullStatisticsSensorName" and "@DatabaseSensorsStatistics.TopHeaviestSensorName").'></i>
+    </div>
+    <div class="col-2">
+        <input class="form-control" asp-for="DatabaseStatisticsPeriodDays">
+    </div>
+    <div class="col">
+        <label class="col-form-label">day(s)</label>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-3 d-flex align-items-center">
+        <label class="col-form-label" asp-for="TopHeaviestSensorsCount"></label>
+        <i class='fas fa-question-circle ms-2' title='Number of sensors that are collected by the sensor "@DatabaseSensorsStatistics.TopHeaviestSensorName".'></i>
+    </div>
+    <div class="col-2">
+        <input class="form-control" asp-for="TopHeaviestSensorsCount">
+    </div>
+</div>
