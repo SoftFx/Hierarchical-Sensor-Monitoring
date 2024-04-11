@@ -9,7 +9,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public List<string> Policies { get; init; } = [];
 
 
-        public PolicyDestinationEntity DefaultChatsSettings { get; init; } = new();
+        public PolicyDestinationSettingsEntity DefaultChatsSettings { get; init; } = new();
 
 
         public required string Id { get; init; }
@@ -29,5 +29,11 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public ChangeInfoTableEntity ChangeTable { get; init; }
 
         public PolicyEntity TTLPolicy { get; init; }
+    }
+
+
+    public sealed record PolicyDestinationSettingsEntity : PolicyDestinationEntity
+    {
+        public bool IsFromParent { get; init; }
     }
 }

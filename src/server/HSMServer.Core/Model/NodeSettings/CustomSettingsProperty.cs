@@ -1,5 +1,4 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Model.Policies;
 
 namespace HSMServer.Core.Model.NodeSettings
 {
@@ -15,14 +14,14 @@ namespace HSMServer.Core.Model.NodeSettings
     }
 
 
-    public sealed class DestinationSettingProperty : SettingPropertyBase<PolicyDestination>
+    public sealed class DestinationSettingProperty : SettingPropertyBase<PolicyDestinationSettings>
     {
-        protected override PolicyDestination EmptyValue { get; } = new PolicyDestination();
+        protected override PolicyDestinationSettings EmptyValue { get; } = new();
 
 
-        public override bool IsSet => !CurValue?.UseDefaultChats ?? false;
+        public override bool IsSet => !CurValue?.IsFromParent ?? false;
 
 
-        internal PolicyDestinationEntity ToEntity() => CurValue?.ToEntity();
+        internal PolicyDestinationSettingsEntity ToEntity() => CurValue?.ToEntity();
     }
 }

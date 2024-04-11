@@ -86,7 +86,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
     }
 
 
-    public sealed record PolicyDestinationUpdate
+    public record PolicyDestinationUpdate
     {
         public Dictionary<Guid, string> Chats { get; } = [];
 
@@ -104,6 +104,12 @@ namespace HSMServer.Core.Cache.UpdateEntities
         {
             Chats = chats;
         }
+    }
+
+
+    public sealed record PolicyDestinationSettingsUpdate : PolicyDestinationUpdate
+    {
+        public bool? IsFromParent { get; }
     }
 
 

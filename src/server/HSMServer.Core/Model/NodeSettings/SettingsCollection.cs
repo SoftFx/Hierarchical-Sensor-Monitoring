@@ -1,7 +1,6 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
@@ -67,13 +66,13 @@ namespace HSMServer.Core.Model.NodeSettings
         }
 
 
-        internal void SetSettings(Dictionary<string, TimeIntervalEntity> settingsEntity, PolicyDestinationEntity defaultChats)
+        internal void SetSettings(Dictionary<string, TimeIntervalEntity> settingsEntity, PolicyDestinationSettingsEntity defaultChats)
         {
             foreach (var (name, setting) in settingsEntity)
                 if (_intervalProperties.TryGetValue(name, out var property))
                     property.TrySetValue(new TimeIntervalModel(setting));
 
-            DefaultChats.TrySetValue(new PolicyDestination(defaultChats));
+            DefaultChats.TrySetValue(new PolicyDestinationSettings(defaultChats));
         }
 
         internal void SetParentSettings(SettingsCollection parentCollection)
