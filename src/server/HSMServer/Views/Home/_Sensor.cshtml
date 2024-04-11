@@ -207,14 +207,14 @@
                                     </div>
                                 </li>
                                 <li class='nav-item'>
-                                    <a id='link_journal_@sensorId' class='nav-link @(Model.IsJournalEmpty ? "hidden_element": "")' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
-                                 </li>
+                                    <a id='link_journal_@sensorId' class='nav-link @(Model.IsJournalEmpty ? "hidden_element" : "")' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
+                                </li>
                             </ul>
-                            <div class="mt-1" id='points_limit' style="display: none">
-                                <span class="m-2" style="color: red">Current history period contains more than @SensorNodeViewModel.ValuesLimit points. Only last @SensorNodeViewModel.ValuesLimit point will be displayed.</span>
-                            </div>
                             <div class='tab-content'>
                                 <div class='tab-pane fade show active' id=@graphParentDivId>
+                                    <div class="mt-1" id='points_limit' style="display: none">
+                                        <span class="m-2" style="color: red">Current history period contains more than @SensorNodeViewModel.ValuesLimit points. Only last @SensorNodeViewModel.ValuesLimit point will be displayed.</span>
+                                    </div>
                                     <div class="graph-with-plot-button" id='@graphElementId'></div>
                                     @if (Model.Type.IsBar())
                                     {
@@ -261,11 +261,11 @@
                                 <div class='tab-pane fade mt-2' id=@journalParentDivId>
                                     <table class="display w-100" id="journal_table_@sensorId">
                                         <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Initiator</th>
-                                                <th>Text</th>
-                                            </tr>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Initiator</th>
+                                            <th>Text</th>
+                                        </tr>
                                         </thead>
                                     </table>
                                 </div>
@@ -286,7 +286,7 @@
                                     </div>
                                 </li>
                                 <li class='nav-item'>
-                                    <a id='link_journal_@sensorId' class='nav-link @(Model.IsJournalEmpty ? "hidden_element": "")' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
+                                    <a id='link_journal_@sensorId' class='nav-link @(Model.IsJournalEmpty ? "hidden_element" : "")' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
                                 </li>
                             </ul>
                             <div class='tab-content'>
@@ -296,11 +296,11 @@
                                 <div class='tab-pane fade mt-2' id=@journalParentDivId>
                                     <table class="display w-100" id="journal_table_@sensorId">
                                         <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Initiator</th>
-                                                <th>Text</th>
-                                            </tr>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Initiator</th>
+                                            <th>Text</th>
+                                        </tr>
                                         </thead>
                                     </table>
                                 </div>
@@ -312,7 +312,7 @@
         }
     }
 
-    <div id="recentValues_@sensorId"></div>
+<div id="recentValues_@sensorId"></div>
 </div>
 
 
