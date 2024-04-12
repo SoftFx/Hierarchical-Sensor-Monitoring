@@ -161,7 +161,7 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
 
     let plotData = plot.getPlotData();
     dashboardStorage.getPanel(panelId).lastUpdateTime = new Date(plotData[0].x.at(-1));
-    console.log( dashboardStorage.getPanel(panelId).lastUpdateTime)
+
     Plotly.addTraces(id, plotData).then(
         (data) => {
             if (plot instanceof TimeSpanPlot) {
@@ -331,8 +331,6 @@ window.initDashboard = function () {
 }
 
 window.addPanelToStorage = function (id, settings) {
-    console.log(id)
-    console.log(settings)
     dashboardStorage.addPanel(new Panel(id, settings))
 };
 

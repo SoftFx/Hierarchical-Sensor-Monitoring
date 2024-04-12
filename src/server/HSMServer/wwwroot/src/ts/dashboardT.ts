@@ -9,7 +9,6 @@ export namespace Dashboard {
         for (let i in panel) {
             let update = new DataUpdate.Update(panel[i]);
             panel[i].requestTimeout = window.setInterval(function () {
-                console.log(dashboardStorage)
                 fetch(window.location.pathname + '/PanelUpdate' + `/${i}`, {
                     method: 'GET'
                 }).then(res => res.json())

@@ -35,8 +35,7 @@ namespace HSMServer.Dashboards
         public double? MinY { get; init; }
 
         public bool? AutoScale { get; set; }
-        
-        [MaxLength(10)]
+
         public string Hovermode { get;  init; }
         
         public int? HoverDistance { get;  init; }

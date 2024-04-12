@@ -18,7 +18,7 @@ public sealed class PanelSettingsViewModel
 
 
     public bool ShowLegend { get; set; }
-    
+
 
     public PanelUpdate ToUpdate(Guid panelId) =>
         new(panelId)
