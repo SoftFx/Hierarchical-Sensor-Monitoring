@@ -1,6 +1,7 @@
 ﻿using HSMServer.ConcurrentStorage;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 
 namespace HSMServer.Dashboards
@@ -34,6 +35,11 @@ namespace HSMServer.Dashboards
         public double? MinY { get; init; }
 
         public bool? AutoScale { get; set; }
+        
+        [MaxLength(10)]
+        public string Hovermode { get;  init; }
+        
+        public int? HoverDistance { get;  init; }
 
 
         public bool NeedSourceRebuild => IsAggregateValues.HasValue || MinY.HasValue || MaxY.HasValue || AutoScale.HasValue;

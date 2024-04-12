@@ -1,3 +1,5 @@
+import {Hovermode} from "./types";
+
 export interface Dictionary<T> {
     [Key: string]: T;
 }
@@ -26,4 +28,16 @@ export interface ISourceUpdate {
         }>,
         isTimeSpan: boolean
     }
+}
+
+export interface IPanelSettings {
+    hovermode: Hovermode
+    hoverDistance: number
+
+    showLegend: boolean
+
+    width: number
+    height: number
+    x: number
+    y:number
 }

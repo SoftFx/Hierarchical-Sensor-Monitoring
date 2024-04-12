@@ -1,7 +1,7 @@
 import {convertToGraphData} from "./plotting";
 import {Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot} from "./plots";
 import {Dashboard} from "../ts/dashboardT";
-import {DashboardStorage} from "../ts/dashboard.storage";
+import {DashboardStorage, Panel} from "../ts/dashboard.storage";
 import {Layout} from "../ts/plotUpdate";
 
 const updateDashboardInterval = 120000; // 2min
@@ -327,8 +327,10 @@ window.initDashboard = function () {
     Dashboard.initRequests(dict);
 }
 
-window.addPanelToStorage = function (id) {
-    dashboardStorage.addPanel(id)
+window.addPanelToStorage = function (id, settings) {
+    console.log(id)
+    console.log(settings)
+    dashboardStorage.addPanel(new Panel(id, settings))
 };
 
 window.disableDragAndResize = function () {

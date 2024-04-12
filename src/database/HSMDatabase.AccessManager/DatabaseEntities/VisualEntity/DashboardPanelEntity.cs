@@ -32,6 +32,10 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 
 
         public bool ShowLegend { get; init; }
+        
+        public string Hovermode { get; init; }
+        
+        public int HoverDistance { get; init; }
     }
 
 
