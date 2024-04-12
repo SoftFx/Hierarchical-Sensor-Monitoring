@@ -1,9 +1,8 @@
 import {Data, PlotlyHTMLElement} from "plotly.js";
 import {IPanel, ISourceUpdate} from "./dashboard.interfaces";
 import {Plot, TimeSpanPlot} from "../js/plots";
-import {PlotUpdate, Redraw} from "./dashboard.classes";
+import {PanelSettings, PlotUpdate, Redraw} from "./dashboard.classes";
 import {dashboardStorage} from "../js/dashboard";
-import {PanelSettings} from "./dashboard.storage";
 
 
 export namespace DataUpdate {
@@ -218,8 +217,8 @@ export namespace Layout {
             return;
         
         let plotDiv = $('#panelChart_' + id)[0] as PlotlyHTMLElement;
-        plotDiv.layout.hovermode = settings.hovermode;
-        plotDiv.layout.hoverdistance = settings.hoverdistance;
+        plotDiv.layout.hovermode = settings.hovermode ?? 'x';
+        plotDiv.layout.hoverdistance = settings.hoverDistance;
         
         window.Plotly.relayout(plotDiv, plotDiv.layout)
     }

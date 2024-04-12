@@ -1,8 +1,11 @@
-﻿import {Dictionary} from "./dashboard.interfaces";
+﻿import {Dictionary, IPanelSettings} from "./dashboard.interfaces";
 import * as moment from "moment";
-import {Helper} from "./localStorage.helper";
-import {Hovermode} from "./types";
 import {Layout} from "./plotUpdate";
+import {PanelSettings} from "./dashboard.classes";
+import {HttpPanelService} from "./services/http-panel-service";
+import {Hovermode} from "./types";
+
+export const httpPanelService : HttpPanelService = new HttpPanelService();
 
 export class DashboardStorage {
     private _intervalId: number;
@@ -14,18 +17,15 @@ export class DashboardStorage {
         this._intervalId = this.checkForUpdate(this.panels);
     }
 
-    public addPanel(id: string) {
-        this.panels[id] = new Panel(id);
-        this.panels[id].updateNotify();
+    public addPanel(panel: Panel) {
+        this.panels[panel.id] = panel;
+        this.panels[panel.id].updateNotify();
 
         window.clearInterval(this._intervalId)
         this._intervalId = this.checkForUpdate(this.panels);
     }
 
     public getPanel(id: string): Panel {
-        if (this.panels[id] === undefined)
-            this.panels[id] = new Panel(id);
-
         return this.panels[id];
     }
     
@@ -38,7 +38,7 @@ export class DashboardStorage {
     }
 }
 
-class Panel {
+export class Panel {
     private _lastUpdateTime: Date = new Date();
     private _lastUpdateDiv: JQuery<HTMLElement>;
 
@@ -48,24 +48,25 @@ class Panel {
     id: string
     settings: PanelSettings
 
-    
-    
-    
-    constructor(id: string) {
+
+
+    constructor(id: string, settings: IPanelSettings) {
         this.id = id;
         this._lastUpdateDiv = $('#lastUpdate_' + this.id);
         
-        this.settings = Helper.read<PanelSettings>('panel_' + id);
-        if (this.settings !== null) {
-            $('#selecthovermode_' + id).val(this.settings.hovermode as string);
-            $('#hoverdistance_' + id).val(this.settings.hoverdistance);
-        }
-        Layout.relayout(this.id, this.settings);
+        this.settings = new PanelSettings(this.id, settings);
+
+        $('#selecthovermode_' + id).val(this.settings.hovermode as string);
+        $('#hoverdistance_' + id).val(this.settings.hoverDistance);
         
+        Layout.relayout(this.id, this.settings);
+
         this._savebutton = $('#button_save_settings_' + id);
-        this._savebutton.on('click', function (){
-            this.settings = new PanelSettings($('#selecthovermode_' + id).val() as Hovermode, $('#hoverdistance_' + id).val() as number);
-            Helper.save("panel_" + this.id, this.settings);
+        this._savebutton.on('click', async function (){
+            this.settings.hovermode = $('#selecthovermode_' + id).val() as Hovermode;
+            this.settings.hoverDistance = $('#hoverdistance_' + id).val() as number;
+            
+            await httpPanelService.updateSettings(this.settings);
             Layout.relayout(this.id, this.settings);
             $('#actionButton').trigger('click')
         }.bind(this))
@@ -86,15 +87,4 @@ class Panel {
     updateNotify() {
         this._lastUpdateDiv.html(moment(this._lastUpdateTime).fromNow());
     }
-}
-
-export class PanelSettings {
-    hovermode: Hovermode
-    hoverdistance: number
-
-    constructor(hovermode: Hovermode, hoverdistance: number) {
-        this.hovermode = hovermode;
-        this.hoverdistance = hoverdistance;
-    }
-
 }

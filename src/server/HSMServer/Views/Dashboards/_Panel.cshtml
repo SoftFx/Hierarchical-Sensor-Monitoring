@@ -86,7 +86,7 @@
                                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
                                 })
 
-                                window.addPanelToStorage('@Model.Id');
+                                window.addPanelToStorage('@Model.Id', settings);
 
                                 $('#panelChart_@Model.Id').on('plotly_relayout', function (e, updateData){
                                     let emptypanel = $('#emptypanel_@Model.Id');

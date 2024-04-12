@@ -200,6 +200,19 @@ namespace HSMServer.Controllers
 
             return _emptyResult;
         }
+
+        [HttpPut("Dashboards/{dashboardId:guid}/Panels")]
+        public IActionResult UpdatePanelSettings([FromBody] PanelUpdateDto panelUpdate, Guid dashboardId)
+        {
+            if (TryGetPanel(dashboardId, panelUpdate.Id, out var panel))
+            {
+                panel.NotifyUpdate(panelUpdate.ToUpdate());
+
+                return Ok("Successfully updated");
+            }
+
+            return BadRequest("Couldn't update panel");
+        }
         
         #endregion
 
