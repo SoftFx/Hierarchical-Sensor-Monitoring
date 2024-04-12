@@ -159,7 +159,10 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
     plot.showlegend = true;
     plot['marker']['color'] = data.color;
 
-    Plotly.addTraces(id, plot.getPlotData()).then(
+    let plotData = plot.getPlotData();
+    dashboardStorage.getPanel(panelId).lastUpdateTime = new Date(plotData[0].x.at(-1));
+    console.log( dashboardStorage.getPanel(panelId).lastUpdateTime)
+    Plotly.addTraces(id, plotData).then(
         (data) => {
             if (plot instanceof TimeSpanPlot) {
                 let y = [];

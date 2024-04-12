@@ -39,7 +39,7 @@ export class DashboardStorage {
 }
 
 export class Panel {
-    private _lastUpdateTime: Date = new Date();
+    private _lastUpdateTime: Date = new Date(0);
     private _lastUpdateDiv: JQuery<HTMLElement>;
 
     private _savebutton: JQuery<HTMLElement>;
@@ -70,6 +70,8 @@ export class Panel {
             Layout.relayout(this.id, this.settings);
             $('#actionButton').trigger('click')
         }.bind(this))
+        
+        this.updateNotify();
     }
     
     get lastUpdateTime(): Date {
@@ -79,12 +81,14 @@ export class Panel {
     set lastUpdateTime(time: Date) {
         if (time > this._lastUpdateTime) {
             this._lastUpdateTime = time;
-            console.log(this)
             this.updateNotify();
         }
     }
 
     updateNotify() {
-        this._lastUpdateDiv.html(moment(this._lastUpdateTime).fromNow());
+        if (this._lastUpdateTime.getTime() === 0)
+            this._lastUpdateDiv.html("Never updated");
+        else
+            this._lastUpdateDiv.html(moment(this._lastUpdateTime).fromNow());
     }
 }
