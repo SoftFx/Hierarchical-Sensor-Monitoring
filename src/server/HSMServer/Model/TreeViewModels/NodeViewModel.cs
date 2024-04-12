@@ -43,6 +43,7 @@ namespace HSMServer.Model.TreeViewModel
             TTL = new(() => (Parent?.TTL, ParentIsFolder));
             KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder));
             SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder));
+            DefaultChat = new(() => (Parent?.DefaultChat, ParentIsFolder));
         }
 
 
@@ -55,6 +56,7 @@ namespace HSMServer.Model.TreeViewModel
             TTL.FromModel(model.Settings.TTL.CurValue, PredefinedIntervals.ForTimeout);
             KeepHistory.FromModel(model.Settings.KeepHistory.CurValue, PredefinedIntervals.ForKeepHistory);
             SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue, PredefinedIntervals.ForSelfDestory);
+            DefaultChat.FromModel(model.Settings.DefaultChats.CurValue);
 
             TTLAlert = new TimeToLiveAlertViewModel(model.Policies.TimeToLive, this);
         }

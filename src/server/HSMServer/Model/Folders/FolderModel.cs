@@ -49,6 +49,7 @@ namespace HSMServer.Model.Folders
             KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)));
             SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
             TTL = LoadTTL(entity.Settings.GetValueOrDefault(nameof(TTL)));
+            DefaultChat = new Controls.DefaultChatViewModel().FromModel(new(entity.DefaultChatsSettings));
 
             if (entity.TelegramChats is not null)
                 TelegramChats = new HashSet<Guid>(entity.TelegramChats.Select(c => new Guid(c)));
