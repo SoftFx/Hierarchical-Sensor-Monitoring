@@ -29,7 +29,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public TimeToLiveAlertViewModel TTLAlert { get; protected set; }
 
-        public DefaultChatViewModel DefaultChat { get; protected set; }
+        public DefaultChatViewModel DefaultChats { get; protected set; }
 
 
         public Guid Id { get; protected set; }

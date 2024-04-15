@@ -1,7 +1,7 @@
-﻿using HSMServer.Core.Model.NodeSettings;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +13,7 @@ namespace HSMServer.Model.Controls
         public const string NotInitialized = "Not initialized";
 
         private readonly ParentRequest _parentRequest;
+        public readonly Guid NotInitializedId = Guid.Empty;
 
 
         internal delegate (DefaultChatViewModel Value, bool IsFolder) ParentRequest();
@@ -26,7 +27,7 @@ namespace HSMServer.Model.Controls
 
         internal DefaultChatViewModel ParentValue => _parentRequest?.Invoke().Value;
 
-        public Guid ParentChat => ParentValue?.SelectedChat ?? Guid.Empty;
+        public Guid ParentChat => GetUsedValue(ParentValue);
 
         public bool HasParentValue => ParentValue is not null;
 
@@ -40,16 +41,16 @@ namespace HSMServer.Model.Controls
             _parentRequest = parentRequest;
         }
 
-        public DefaultChatViewModel(BaseNodeViewModel node) : this(node.DefaultChat._parentRequest)
+        public DefaultChatViewModel(BaseNodeViewModel node) : this(node.DefaultChats._parentRequest)
         {
             if (node.TryGetChats(out var availableChats))
                 AvailableChats = availableChats;
 
-            SelectedChat = node.DefaultChat.SelectedChat;
+            SelectedChat = node.DefaultChats.SelectedChat;
         }
 
 
-        public bool ChatIsSelected(TelegramChat chat) => SelectedChat == chat.Id;
+        public bool ChatIsSelected(Guid chatId) => SelectedChat == chatId;
 
         internal DefaultChatViewModel FromModel(PolicyDestinationSettings model)
         {
@@ -65,7 +66,18 @@ namespace HSMServer.Model.Controls
             if (SelectedChat.HasValue && availableChats.TryGetValue(SelectedChat.Value, out var chatName))
                 chats.Add(SelectedChat.Value, chatName);
 
-            return new(SelectedChat is null, chats);
+            return new PolicyDestinationSettings().Initialize(chats, SelectedChat is null);
+        }
+
+        internal PolicyDestinationSettingsEntity ToEntity(Dictionary<Guid, string> availableChats) =>
+            ToModel(availableChats).ToEntity();
+
+        private Guid GetUsedValue(DefaultChatViewModel model)
+        {
+            if (model is not null && model.SelectedChat is null && model.HasParentValue)
+                return GetUsedValue(model.ParentValue);
+
+            return model?.SelectedChat ?? NotInitializedId;
         }
     }
 }

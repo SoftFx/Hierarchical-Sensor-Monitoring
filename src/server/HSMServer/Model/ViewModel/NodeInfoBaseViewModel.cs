@@ -41,7 +41,7 @@ namespace HSMServer.Model.ViewModel
 
         public HistoryStatisticViewModel HistoryStatistic { get; }
 
-        public DefaultChatViewModel DefaultChat { get; set; }
+        public DefaultChatViewModel DefaultChats { get; set; }
 
 
         public string EncodedId { get; set; }
@@ -76,7 +76,7 @@ namespace HSMServer.Model.ViewModel
             SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
 
             HistoryStatistic = model.HistoryStatistic;
-            DefaultChat = new(model);
+            DefaultChats = new(model);
 
             AlertIcons = model.AlertIcons;
             HasTimeToLive = model.TTL.TimeInterval is not TimeInterval.None;

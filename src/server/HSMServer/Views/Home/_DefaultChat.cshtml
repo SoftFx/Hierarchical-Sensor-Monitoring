@@ -36,20 +36,20 @@
                 <option value="" selected="@Model.IsFromParent">@displayedFromParentChat</option>
             }
 
-            <option value="@Guid.Empty" selected="@(Model.SelectedChat == Guid.Empty)">@DefaultChatViewModel.NotInitialized</option>
+            <option value="@Model.NotInitializedId" selected="@Model.ChatIsSelected(Model.NotInitializedId)">@DefaultChatViewModel.NotInitialized</option>
 
             <option data-divider="true"></option>
             <option disabled>Groups</option>
             @foreach (var chat in chatsList.GetGroups())
             {
-                <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+                <option value="@chat.Id" selected="@Model.ChatIsSelected(chat.Id)">@chat.Name</option>
             }
 
             <option data-divider="true"></option>
             <option disabled>Users</option>
             @foreach (var chat in chatsList.GetPrivates())
             {
-                <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+                <option value="@chat.Id" selected="@Model.ChatIsSelected(chat.Id)">@chat.Name</option>
             }
         </select>
     </div>
@@ -60,6 +60,6 @@
 
 <script>
      $(document).ready(function () {
-        $("select[name='DefaultChat.SelectedChat']").selectpicker();
+       $("select[name='DefaultChats.SelectedChat']").selectpicker();
      });
 </script>
