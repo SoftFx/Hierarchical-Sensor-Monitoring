@@ -7,9 +7,18 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed record AlertDestination
     {
+        public HashSet<Guid> Chats { get; init; }
+
         public bool AllChats { get; init; }
 
-        public HashSet<Guid> Chats { get; init; }
+
+        public AlertDestination(Policy policy)
+        {
+            var dest = policy.UsedDestination;
+
+            Chats = new HashSet<Guid>(dest.Chats.Keys);
+            AllChats = dest.AllChats;
+        }
 
 
         internal bool HasChats => AllChats || Chats.Count > 0;
@@ -61,11 +70,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal AlertResult(Policy policy, bool isReplace = false)
         {
-            Destination = new()
-            {
-                AllChats = policy.Destination.AllChats,
-                Chats = new HashSet<Guid>(policy.Destination.Chats.Keys)
-            };
+            Destination = new(policy);
 
             ConfirmationPeriod = policy.ConfirmationPeriod;
             SendTime = policy.Schedule.GetSendTime();
@@ -130,7 +135,6 @@ namespace HSMServer.Core.Model.Policies
 
             return false;
         }
-
 
         public string BuildFullComment(string comment, int extraCnt = 0)
         {
