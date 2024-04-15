@@ -50,7 +50,7 @@ window.customReset = async function (plot = undefined, xaxisRange = undefined, y
         if (currentPlot.x.length === 0)
             return xaxisRange[1];
 
-        return 1000000 + Math.min(new Date(xaxisRange[1]), new Date(currentPlot.x.at(-1)));
+        return moment.utc(Math.min(new Date(xaxisRange[1]), new Date(currentPlot.x.at(-1)))).toISOString();
     }
 }
 
