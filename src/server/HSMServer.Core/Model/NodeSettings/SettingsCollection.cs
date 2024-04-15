@@ -37,18 +37,20 @@ namespace HSMServer.Core.Model.NodeSettings
 
         internal void Update(BaseNodeUpdate update, ChangeInfoTable table)
         {
-            void Update(SettingPropertyBase<TimeIntervalModel> setting, TimeIntervalModel newVal, [CallerArgumentExpression(nameof(setting))] string propName = "", NoneValues none = NoneValues.Never)
+            void Update<T>(SettingPropertyBase<T> setting, T newVal, [CallerArgumentExpression(nameof(setting))] string propName = "", object emptyValue = null)
+                where T : class, new()
             {
                 var nodeInfo = table.Settings[propName];
-                var oldVal = setting.CurValue;
+                var defaultValue = emptyValue?.ToString();
+                var oldVal = setting.GetJournalValue(defaultValue);
 
                 if (nodeInfo.CanChange(update.Initiator) && setting.TrySetValue(newVal))
                 {
                     ChangesHandler?.Invoke(new JournalRecordModel(update.Id, update.Initiator)
                     {
                         Enviroment = "Settings update",
-                        OldValue = oldVal.IsNone ? $"{none}" : $"{oldVal}",
-                        NewValue = newVal.IsNone ? $"{none}" : $"{newVal}",
+                        OldValue = oldVal,
+                        NewValue = setting.GetJournalValue(defaultValue),
 
                         PropertyName = propName,
                         Path = table.Path,
@@ -58,34 +60,10 @@ namespace HSMServer.Core.Model.NodeSettings
                 }
             }
 
-            Update(TTL, update.TTL);
-            Update(SelfDestroy, update.SelfDestroy, "Remove sensor after inactivity");
+            Update(TTL, update.TTL, emptyValue: NoneValues.Never);
+            Update(SelfDestroy, update.SelfDestroy, "Remove sensor after inactivity", NoneValues.Never);
             Update(KeepHistory, update.KeepHistory, "Keep sensor history", NoneValues.Forever);
-
-            UpdateDefaultChat(DefaultChats, update, table);
-        }
-
-        internal void UpdateDefaultChat(SettingPropertyBase<PolicyDestinationSettings> setting, BaseNodeUpdate update, ChangeInfoTable table)
-        {
-            const string PropertyName = "Default telegram chat";
-
-            var nodeInfo = table.Settings[PropertyName];
-            var oldVal = setting.CurValue;
-
-            if (nodeInfo.CanChange(update.Initiator) && setting.TrySetValue(update.DefaultChats))
-            {
-                ChangesHandler?.Invoke(new JournalRecordModel(update.Id, update.Initiator)
-                {
-                    Enviroment = "Settings update",
-                    OldValue = $"{oldVal}",
-                    NewValue = $"{update.DefaultChats}",
-
-                    PropertyName = PropertyName,
-                    Path = table.Path,
-                });
-
-                nodeInfo.SetUpdate(update.Initiator);
-            }
+            Update(DefaultChats, update.DefaultChats, "Default telegram chats");
         }
 
 

@@ -11,6 +11,13 @@ namespace HSMServer.Core.Model.NodeSettings
 
 
         internal TimeIntervalEntity ToEntity() => CurValue?.ToEntity();
+
+        public override string GetJournalValue(string customNone = null)
+        {
+            string GetEmpty() => customNone ?? EmptyValue.ToString();
+
+            return CurValue is null ? GetEmpty() : CurValue.IsNone ? GetEmpty() : CurValue.ToString();
+        }
     }
 
 
@@ -23,5 +30,10 @@ namespace HSMServer.Core.Model.NodeSettings
 
 
         internal PolicyDestinationSettingsEntity ToEntity() => CurValue?.ToEntity();
+
+        public override string GetJournalValue(string customNone = null)
+        {
+            return CurValue is null ? customNone ?? EmptyValue.ToString() : CurValue.ToString();
+        }
     }
 }

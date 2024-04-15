@@ -18,6 +18,9 @@
         public bool IsEmpty => Value is null;
 
 
+        public abstract string GetJournalValue(string customNone = null);
+
+
         internal bool TrySetValue(T newValue)
         {
             if (newValue is not null && CurValue.ToString() != newValue.ToString())

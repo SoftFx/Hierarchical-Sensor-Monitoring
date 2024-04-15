@@ -6,7 +6,7 @@ namespace HSMServer.Core.Model.NodeSettings
 {
     public sealed class PolicyDestinationSettings : PolicyDestination
     {
-        public bool IsFromParent { get; private set; }
+        public bool IsFromParent { get; }
 
 
         public PolicyDestinationSettings() : base() { }
