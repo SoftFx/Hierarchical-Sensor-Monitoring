@@ -18,8 +18,8 @@
             chats.Add(chat.Id, chat);
     }
 
-    var selectedChatName = chats.TryGetValue(Model.SelectedChat, out var selectedChat) ? selectedChat.Name : DefaultChatViewModel.NotInitialized;
     var displayedFromParentChat = chats.TryGetValue(Model.ParentChat, out var parentChat) ? $"From parent ({parentChat.Name})" : $"From parent ({DefaultChatViewModel.NotInitialized})";
+    var selectedChatName = Model.IsFromParent ? displayedFromParentChat : chats.TryGetValue(Model.SelectedChat.Value, out var selectedChat) ? selectedChat.Name : DefaultChatViewModel.NotInitialized;
 
     var chatsList = chats.Values.ToList();
 }
@@ -33,7 +33,7 @@
         <select asp-for="SelectedChat" class="selectpicker">
             @if (Model.HasParentValue)
             {
-                <option value="null" selected="@Model.IsFromParent">@displayedFromParentChat</option>
+                <option value="" selected="@Model.IsFromParent">@displayedFromParentChat</option>
             }
 
             <option value="@Guid.Empty" selected="@(Model.SelectedChat == Guid.Empty)">@DefaultChatViewModel.NotInitialized</option>
@@ -60,6 +60,6 @@
 
 <script>
      $(document).ready(function () {
-        $("select[name='SelectedChat']").selectpicker();
+        $("select[name='DefaultChat.SelectedChat']").selectpicker();
      });
 </script>

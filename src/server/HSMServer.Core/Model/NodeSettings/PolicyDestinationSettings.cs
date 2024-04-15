@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model.NodeSettings
@@ -12,18 +13,19 @@ namespace HSMServer.Core.Model.NodeSettings
 
         public PolicyDestinationSettings() : base() { }
 
+        public PolicyDestinationSettings(bool isFromParent, Dictionary<Guid, string> chats)
+        {
+            IsFromParent = isFromParent;
+
+            foreach (var chat in chats)
+                Chats.Add(chat.Key, chat.Value);
+        }
+
         public PolicyDestinationSettings(PolicyDestinationSettingsEntity entity) : base(entity)
         {
             IsFromParent = entity.IsFromParent;
         }
 
-
-        internal void Update(PolicyDestinationSettingsUpdate update)
-        {
-            IsFromParent = update?.IsFromParent ?? IsFromParent;
-
-            base.Update(update);
-        }
 
         internal new PolicyDestinationSettingsEntity ToEntity() => new()
         {
@@ -34,6 +36,6 @@ namespace HSMServer.Core.Model.NodeSettings
         };
 
         public override string ToString() =>
-            IsFromParent ? "Is from parent" : base.ToString();
+            IsFromParent ? "From parent" : base.ToString();
     }
 }

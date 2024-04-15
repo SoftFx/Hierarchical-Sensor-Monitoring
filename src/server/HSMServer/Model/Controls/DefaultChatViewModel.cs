@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.NodeSettings;
+﻿using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
@@ -22,9 +21,7 @@ namespace HSMServer.Model.Controls
         public HashSet<Guid> AvailableChats { get; } = new();
 
 
-        public Guid SelectedChat { get; set; }
-
-        public bool IsFromParent { get; set; }
+        public Guid? SelectedChat { get; set; }
 
 
         internal DefaultChatViewModel ParentValue => _parentRequest?.Invoke().Value;
@@ -32,6 +29,8 @@ namespace HSMServer.Model.Controls
         public Guid ParentChat => ParentValue?.SelectedChat ?? Guid.Empty;
 
         public bool HasParentValue => ParentValue is not null;
+
+        public bool IsFromParent => SelectedChat is null;
 
 
         public DefaultChatViewModel() { }
@@ -45,6 +44,8 @@ namespace HSMServer.Model.Controls
         {
             if (node.TryGetChats(out var availableChats))
                 AvailableChats = availableChats;
+
+            SelectedChat = node.DefaultChat.SelectedChat;
         }
 
 
@@ -52,10 +53,19 @@ namespace HSMServer.Model.Controls
 
         internal DefaultChatViewModel FromModel(PolicyDestinationSettings model)
         {
-            SelectedChat = model.Chats.FirstOrDefault().Key;
-            IsFromParent = model.IsFromParent;
+            SelectedChat = model.IsFromParent ? null : model.Chats.FirstOrDefault().Key;
 
             return this;
+        }
+
+        internal PolicyDestinationSettings ToModel(Dictionary<Guid, string> availableChats)
+        {
+            var chats = new Dictionary<Guid, string>(1);
+
+            if (SelectedChat.HasValue && availableChats.TryGetValue(SelectedChat.Value, out var chatName))
+                chats.Add(SelectedChat.Value, chatName);
+
+            return new(SelectedChat is null, chats);
         }
     }
 }
