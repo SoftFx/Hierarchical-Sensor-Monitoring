@@ -50,7 +50,7 @@ namespace HSMServer.Core.Model.Policies
         {
             var update = new PolicyUpdate()
             {
-                Destination = new PolicyDestinationUpdate(parent.Destination.Chats, parent.Destination.AllChats),
+                Destination = new PolicyDestinationUpdate(parent.Destination),
                 Id = Id,
                 Template = parent.Template,
                 Icon = parent.Icon,

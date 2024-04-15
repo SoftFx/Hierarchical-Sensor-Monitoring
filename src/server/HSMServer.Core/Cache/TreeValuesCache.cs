@@ -709,7 +709,7 @@ namespace HSMServer.Core.Cache
                     foreach (var policy in sensor.Policies)
                     {
                         if (!TryGetPolicyUpdate(policy, chats, initiator, out var policyUpdate))
-                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination.Chats, policy.Destination.AllChats), initiator);
+                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), initiator);
 
                         policiesUpdate.Add(policyUpdate);
                     }

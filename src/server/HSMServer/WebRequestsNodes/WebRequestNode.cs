@@ -11,8 +11,8 @@ public record WebRequestNode
     private const double KbDivisor = 1 << 10;
 
     private const string RecvSensorsNode = "Sensors updates";
-    private const string RecvBytesNode = "Client requests size";
-    private const string SentBytesNode = "Server responses size";
+    private const string SentBytesNode = "Traffic Out";
+    private const string RecvBytesNode = "Traffic In";
     private const string ClientNode = "Clients";
 
     private readonly IInstantValueSensor<double> _receiveSensors;

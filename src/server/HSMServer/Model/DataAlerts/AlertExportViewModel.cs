@@ -58,7 +58,7 @@ namespace HSMServer.Model.DataAlerts
 
             if (!policy.Destination.AllChats)
             {
-                Chats = new();
+                Chats = [];
 
                 foreach (var (id, _) in policy.Destination.Chats)
                     if (availableChats.TryGetValue(id, out var name))
