@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public class PolicyDestination
+    public sealed class PolicyDestination
     {
         public Dictionary<Guid, string> Chats { get; } = [];
 
@@ -16,7 +16,7 @@ namespace HSMServer.Core.Model.Policies
         public bool AllChats { get; private set; }
 
 
-        public PolicyDestination() { }
+        internal PolicyDestination() { }
 
         internal PolicyDestination(PolicyDestinationEntity entity)
         {
