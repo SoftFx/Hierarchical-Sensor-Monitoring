@@ -112,12 +112,6 @@ namespace HSMServer.Core.Cache.UpdateEntities
     }
 
 
-    public sealed record PolicyDestinationSettingsUpdate : PolicyDestinationUpdate
-    {
-        public bool? IsFromParent { get; }
-    }
-
-
     public sealed record PolicyScheduleUpdate
     {
         public AlertRepeatMode? RepeatMode { get; init; }

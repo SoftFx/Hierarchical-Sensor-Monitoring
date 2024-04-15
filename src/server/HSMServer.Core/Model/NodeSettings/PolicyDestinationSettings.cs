@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model.NodeSettings
@@ -12,28 +13,30 @@ namespace HSMServer.Core.Model.NodeSettings
 
         public PolicyDestinationSettings() : base() { }
 
-        internal PolicyDestinationSettings(PolicyDestinationSettingsEntity entity) : base(entity)
+        public PolicyDestinationSettings(PolicyDestinationSettingsEntity entity) : base(entity)
         {
             IsFromParent = entity.IsFromParent;
         }
 
 
-        internal void Update(PolicyDestinationSettingsUpdate update)
+        public PolicyDestinationSettings Initialize(Dictionary<Guid, string> chats = null, bool isFromParent = false)
         {
-            IsFromParent = update?.IsFromParent ?? IsFromParent;
+            IsFromParent = isFromParent;
 
-            base.Update(update);
+            if (chats is not null)
+                foreach (var chat in chats)
+                    Chats.Add(chat.Key, chat.Value);
+
+            return this;
         }
 
-        internal new PolicyDestinationSettingsEntity ToEntity() => new()
+        public new PolicyDestinationSettingsEntity ToEntity() => new()
         {
             Chats = Chats?.ToDictionary(k => k.Key.ToString(), v => v.Value),
-            UseDefaultChats = UseDefaultChats,
             IsFromParent = IsFromParent,
-            AllChats = AllChats,
         };
 
         public override string ToString() =>
-            IsFromParent ? "Is from parent" : base.ToString();
+            IsFromParent ? "From parent" : base.ToString();
     }
 }

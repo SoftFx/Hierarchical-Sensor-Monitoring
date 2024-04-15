@@ -62,7 +62,30 @@ namespace HSMServer.Core.Model.NodeSettings
             Update(SelfDestroy, update.SelfDestroy, "Remove sensor after inactivity");
             Update(KeepHistory, update.KeepHistory, "Keep sensor history", NoneValues.Forever);
 
-            //add default chats update
+            UpdateDefaultChat(DefaultChats, update, table);
+        }
+
+        internal void UpdateDefaultChat(SettingPropertyBase<PolicyDestinationSettings> setting, BaseNodeUpdate update, ChangeInfoTable table)
+        {
+            const string PropertyName = "Default telegram chat";
+
+            var nodeInfo = table.Settings[PropertyName];
+            var oldVal = setting.CurValue;
+
+            if (nodeInfo.CanChange(update.Initiator) && setting.TrySetValue(update.DefaultChats))
+            {
+                ChangesHandler?.Invoke(new JournalRecordModel(update.Id, update.Initiator)
+                {
+                    Enviroment = "Settings update",
+                    OldValue = $"{oldVal}",
+                    NewValue = $"{update.DefaultChats}",
+
+                    PropertyName = PropertyName,
+                    Path = table.Path,
+                });
+
+                nodeInfo.SetUpdate(update.Initiator);
+            }
         }
 
 

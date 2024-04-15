@@ -2,9 +2,11 @@
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Controls;
 using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
@@ -49,6 +51,7 @@ namespace HSMServer.Model.Folders
             KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)));
             SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
             TTL = LoadTTL(entity.Settings.GetValueOrDefault(nameof(TTL)));
+            DefaultChats = LoadDefaultChat(new(entity.DefaultChatsSettings));
 
             if (entity.TelegramChats is not null)
                 TelegramChats = new HashSet<Guid>(entity.TelegramChats.Select(c => new Guid(c)));
@@ -69,6 +72,7 @@ namespace HSMServer.Model.Folders
             KeepHistory = LoadKeepHistory();
             SelfDestroy = LoadSelfDestroy();
             TTL = LoadTTL();
+            DefaultChats = LoadDefaultChat(new PolicyDestinationSettings().Initialize());
         }
 
 
@@ -89,6 +93,9 @@ namespace HSMServer.Model.Folders
 
             if (update.TelegramChats is not null)
                 TelegramChats = UpdateChats(TelegramChats, update.TelegramChats, update.Initiator);
+
+            if (update.DefaultChats != null)
+                DefaultChats = UpdateSetting(DefaultChats, update.DefaultChats, update.Initiator);
         }
 
         private TimeIntervalViewModel UpdateSetting(TimeIntervalViewModel currentValue, TimeIntervalViewModel newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(currentValue))] string propName = "", NoneValues none = NoneValues.Never)
@@ -105,6 +112,29 @@ namespace HSMServer.Model.Folders
                     NewValue = newModel.IsNone ? $"{none}" : $"{newModel}",
 
                     PropertyName = propName,
+                    Path = Name,
+                });
+            }
+
+            return newValue;
+        }
+
+        private DefaultChatViewModel UpdateSetting(DefaultChatViewModel currentValue, DefaultChatViewModel newValue, InitiatorInfo initiator)
+        {
+            const string PropertyName = "Default telegram chat";
+
+            var oldChat = currentValue.SelectedChat;
+            var newChat = newValue.SelectedChat;
+
+            if (oldChat != newChat)
+            {
+                ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
+                {
+                    Enviroment = "Folder settings update",
+                    OldValue = oldChat.HasValue && oldChat != currentValue.NotInitializedId ? GetChatName(oldChat.Value) : DefaultChatViewModel.NotInitialized,
+                    NewValue = newChat.HasValue && newChat != currentValue.NotInitializedId ? GetChatName(newChat.Value) : DefaultChatViewModel.NotInitialized,
+
+                    PropertyName = PropertyName,
                     Path = Name,
                 });
             }
@@ -165,7 +195,8 @@ namespace HSMServer.Model.Folders
                     [nameof(TTL)] = TTL.ToEntity(),
                     [nameof(KeepHistory)] = KeepHistory.ToEntity(),
                     [nameof(SelfDestroy)] = SelfDestroy.ToEntity(),
-                }
+                },
+                DefaultChatsSettings = DefaultChats.ToEntity(TelegramChats.ToDictionary(k => k, v => GetChatName(v))),
             };
 
         internal FolderModel RecalculateState()
@@ -176,6 +207,9 @@ namespace HSMServer.Model.Folders
 
             return this;
         }
+
+
+        private static DefaultChatViewModel LoadDefaultChat(PolicyDestinationSettings settings) => new DefaultChatViewModel().FromModel(settings);
 
 
         private static TimeIntervalViewModel LoadTTL(TimeIntervalEntity entity = null) => LoadSetting(entity, PredefinedIntervals.ForFolderTimeout, Core.Model.TimeInterval.None);
@@ -191,6 +225,7 @@ namespace HSMServer.Model.Folders
 
             return new TimeIntervalViewModel(entity, predefinedIntervals);
         }
+
 
         public void Dispose() { }
     }

@@ -624,6 +624,7 @@ namespace HSMServer.Controllers
                 SelectedUnit = newModel.SelectedUnit,
                 AggregateValues = newModel.AggregateValues,
                 Statistics = newModel.GetOptions(),
+                DefaultChats = newModel.DefaultChats.ToModel(availableChats),
                 Initiator = CurrentInitiator
             };
 
@@ -801,7 +802,7 @@ namespace HSMServer.Controllers
                 Id = product.Id,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
                 TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
-
+                DefaultChats = newModel.DefaultChats.ToModel(availableChats),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
                 Description = newModel.Description ?? string.Empty,
@@ -834,6 +835,7 @@ namespace HSMServer.Controllers
                 TTL = newModel.ExpectedUpdateInterval,
                 KeepHistory = newModel.SavedHistoryPeriod,
                 SelfDestroy = newModel.SelfDestroyPeriod,
+                DefaultChats = newModel.DefaultChats,
                 Initiator = CurrentInitiator,
             };
 

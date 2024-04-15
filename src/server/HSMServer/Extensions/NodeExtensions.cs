@@ -18,7 +18,7 @@ namespace HSMServer.Extensions
         private const int IconSize = 3;
 
 
-        internal static Dictionary<Guid, string> GetAvailableChats(this NodeViewModel node, ITelegramChatsManager chatsManager)
+        internal static Dictionary<Guid, string> GetAvailableChats(this BaseNodeViewModel node, ITelegramChatsManager chatsManager)
         {
             node.TryGetChats(out var folderChats);
 
@@ -35,18 +35,6 @@ namespace HSMServer.Extensions
 
             return availableChats;
         }
-
-        //internal static bool TryGetChats(this NodeViewModel node, out HashSet<Guid> chats)
-        //{
-        //    if (node.RootProduct.Parent is FolderModel folder)
-        //    {
-        //        chats = folder.TelegramChats;
-        //        return true;
-        //    }
-
-        //    chats = new();
-        //    return false;
-        //}
 
         internal static bool TryGetChats(this BaseNodeViewModel model, out HashSet<Guid> chats)
         {
