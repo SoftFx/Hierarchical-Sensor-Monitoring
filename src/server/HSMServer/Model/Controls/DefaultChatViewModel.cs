@@ -59,18 +59,21 @@ namespace HSMServer.Model.Controls
             return this;
         }
 
-        internal PolicyDestinationSettings ToModel(Dictionary<Guid, string> availableChats)
+        internal PolicyDestinationSettings ToModel(Dictionary<Guid, string> availableChats) => new(ToEntity(availableChats));
+
+        internal PolicyDestinationSettingsEntity ToEntity(Dictionary<Guid, string> availableChats)
         {
             var chats = new Dictionary<Guid, string>(1);
 
             if (SelectedChat.HasValue && availableChats.TryGetValue(SelectedChat.Value, out var chatName))
                 chats.Add(SelectedChat.Value, chatName);
 
-            return new PolicyDestinationSettings().Initialize(chats, SelectedChat is null);
+            return new()
+            {
+                Chats = chats.ToDictionary(k => k.Key.ToString(), v => v.Value),
+                IsFromParent = IsFromParent,
+            };
         }
-
-        internal PolicyDestinationSettingsEntity ToEntity(Dictionary<Guid, string> availableChats) =>
-            ToModel(availableChats).ToEntity();
 
         private Guid GetUsedValue(DefaultChatViewModel model)
         {

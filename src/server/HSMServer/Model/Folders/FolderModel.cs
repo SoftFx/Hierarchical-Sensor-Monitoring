@@ -72,7 +72,7 @@ namespace HSMServer.Model.Folders
             KeepHistory = LoadKeepHistory();
             SelfDestroy = LoadSelfDestroy();
             TTL = LoadTTL();
-            DefaultChats = LoadDefaultChat(new PolicyDestinationSettings().Initialize());
+            DefaultChats = LoadDefaultChat(new PolicyDestinationSettings());
         }
 
 

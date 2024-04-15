@@ -1,7 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model.Policies;
-using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model.NodeSettings
@@ -18,17 +16,6 @@ namespace HSMServer.Core.Model.NodeSettings
             IsFromParent = entity.IsFromParent;
         }
 
-
-        public PolicyDestinationSettings Initialize(Dictionary<Guid, string> chats = null, bool isFromParent = false)
-        {
-            IsFromParent = isFromParent;
-
-            if (chats is not null)
-                foreach (var chat in chats)
-                    Chats.Add(chat.Key, chat.Value);
-
-            return this;
-        }
 
         public new PolicyDestinationSettingsEntity ToEntity() => new()
         {
