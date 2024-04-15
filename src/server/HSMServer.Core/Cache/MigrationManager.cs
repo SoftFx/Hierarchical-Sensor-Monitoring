@@ -244,8 +244,7 @@ namespace HSMServer.Core.Cache
                 Time = schedule.Time,
             };
 
-        private static PolicyDestinationUpdate ToUpdate(PolicyDestination destination) =>
-            new(new Dictionary<Guid, string>(destination.Chats), destination.AllChats);
+        private static PolicyDestinationUpdate ToUpdate(PolicyDestination destination) => new(destination);
 
         private static PolicyConditionUpdate ToUpdate(PolicyCondition condition) =>
             new()

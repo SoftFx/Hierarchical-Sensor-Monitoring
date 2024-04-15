@@ -104,6 +104,11 @@ namespace HSMServer.Core.Cache.UpdateEntities
         {
             Chats = chats;
         }
+
+        public PolicyDestinationUpdate(PolicyDestination destination) : this(destination.AllChats)
+        {
+            Chats = new Dictionary<Guid, string>(destination.Chats);
+        }
     }
 
 
