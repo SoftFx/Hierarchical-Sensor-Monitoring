@@ -48,10 +48,11 @@ namespace HSMServer.Model.Folders
             AuthorId = Guid.Parse(entity.AuthorId);
             CreationDate = new DateTime(entity.CreationDate);
 
+            DefaultChats = LoadDefaultChats(entity.DefaultChatsSettings);
+
             KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)));
             SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
             TTL = LoadTTL(entity.Settings.GetValueOrDefault(nameof(TTL)));
-            DefaultChats = LoadDefaultChat(new(entity.DefaultChatsSettings));
 
             if (entity.TelegramChats is not null)
                 TelegramChats = new HashSet<Guid>(entity.TelegramChats.Select(c => new Guid(c)));
@@ -69,10 +70,11 @@ namespace HSMServer.Model.Folders
             Products = addModel.Products;
             Description = addModel.Description;
 
+            DefaultChats = LoadDefaultChats();
+
             KeepHistory = LoadKeepHistory();
             SelfDestroy = LoadSelfDestroy();
             TTL = LoadTTL();
-            DefaultChats = LoadDefaultChat(new PolicyDestinationSettings());
         }
 
 
@@ -209,7 +211,12 @@ namespace HSMServer.Model.Folders
         }
 
 
-        private static DefaultChatViewModel LoadDefaultChat(PolicyDestinationSettings settings) => new DefaultChatViewModel().FromModel(settings);
+        private static DefaultChatViewModel LoadDefaultChats(PolicyDestinationSettingsEntity entity = null)
+        {
+            var model = entity is null ? new PolicyDestinationSettings() : new PolicyDestinationSettings(entity);
+
+            return new DefaultChatViewModel().FromModel(model);
+        }
 
 
         private static TimeIntervalViewModel LoadTTL(TimeIntervalEntity entity = null) => LoadSetting(entity, PredefinedIntervals.ForFolderTimeout, Core.Model.TimeInterval.None);
