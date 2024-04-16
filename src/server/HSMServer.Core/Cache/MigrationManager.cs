@@ -33,7 +33,7 @@ namespace HSMServer.Core.Cache
         private static readonly PolicyUpdate _timeInGcPolicy = new()
         {
             Conditions = [new PolicyConditionUpdate(PolicyOperation.GreaterThan, PolicyProperty.EmaMean, new TargetValue(TargetType.Const, "20"))],
-            Destination = new PolicyDestinationUpdate(),
+            Destination = new PolicyDestinationUpdate(useDefaultChat: true),
             Icon = "⚠",
             Initiator = _migrator,
             Schedule = GetDefaultScheduleUpdate(),

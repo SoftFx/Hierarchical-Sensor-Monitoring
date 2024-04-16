@@ -34,7 +34,7 @@ namespace HSMServer.Core.Model.Policies
         internal void Update(PolicyDestinationUpdate update)
         {
             UseDefaultChats = update.UseDefaultChats ?? UseDefaultChats;
-            AllChats = update.AllChats;
+            AllChats = update.AllChats ?? AllChats;
 
             Chats.Clear();
 
@@ -55,7 +55,7 @@ namespace HSMServer.Core.Model.Policies
             if (AllChats)
                 return "all chats";
             else
-                return UseDefaultChats ? "default charts" : string.Join(", ", Chats.Values);
+                return UseDefaultChats ? "default chat" : string.Join(", ", Chats.Values);
         }
     }
 }

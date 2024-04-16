@@ -233,10 +233,10 @@ namespace HSMServer.Core.Model.Policies
 
             if (!string.IsNullOrEmpty(Template))
             {
-                actions.Add($"template={Template}");
+                actions.Add($"send notifictaion with template={Template}");
 
                 if (Destination is not null)
-                    actions.Add(Destination.ToString());
+                    actions.Add($"to {Destination}");
 
                 if (Schedule is not null)
                 {
