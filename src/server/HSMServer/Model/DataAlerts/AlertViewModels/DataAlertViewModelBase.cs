@@ -121,11 +121,7 @@ namespace HSMServer.Model.DataAlerts
                         RepeatMode = action.ScheduleRepeatMode.ToCore(),
                         InstantSend = action.ScheduleInstantSend
                     };
-                    destination = new PolicyDestinationUpdate(chats)
-                    {
-                        AllChats = allChats,
-                        UseDefaultChats = defaultChat
-                    };
+                    destination = new PolicyDestinationUpdate(chats, allChats, defaultChat);
                     comment = action.Comment;
                 }
                 else if (action.Action == ActionType.ShowIcon)

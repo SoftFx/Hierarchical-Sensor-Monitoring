@@ -10,6 +10,9 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class AlertExportViewModel
     {
+        private const string DefaultChat = "Default";
+
+
         public List<string> Products { get; set; }
 
         public List<string> Sensors { get; set; }
@@ -60,17 +63,24 @@ namespace HSMServer.Model.DataAlerts
             {
                 Chats = [];
 
-                foreach (var (id, _) in policy.Destination.Chats)
-                    if (availableChats.TryGetValue(id, out var name))
-                        Chats.Add(name);
+                if (policy.Destination.UseDefaultChats)
+                    Chats.Add(DefaultChat);
+                else
+                    foreach (var (id, _) in policy.Destination.Chats)
+                        if (availableChats.TryGetValue(id, out var name))
+                            Chats.Add(name);
             }
 
             Conditions = policy.Conditions.Select(c => new ConditionExportViewModel(c)).ToList();
         }
 
 
-        internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats) =>
-            new()
+        internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats)
+        {
+            var allChats = Chats is null;
+            var defaultChat = Chats?.Contains(DefaultChat) ?? false;
+
+            return new()
             {
                 Icon = Icon,
                 Status = Status,
@@ -84,10 +94,9 @@ namespace HSMServer.Model.DataAlerts
                     RepeatMode = ScheduledRepeatMode,
                     InstantSend = ScheduledInstantSend,
                 },
-                Destination = Chats is null
-                    ? new PolicyDestinationUpdate(allChats: true)
-                    : new PolicyDestinationUpdate(Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
+                Destination = new PolicyDestinationUpdate(!allChats && !defaultChat ? Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v) : [], allChats, defaultChat),
             };
+        }
     }
 
 
