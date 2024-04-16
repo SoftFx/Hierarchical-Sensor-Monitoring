@@ -19,7 +19,7 @@ namespace HSMServer.Model.Controls
         internal delegate (DefaultChatViewModel Value, bool IsFolder) ParentRequest();
 
 
-        public HashSet<Guid> AvailableChats { get; } = new();
+        public HashSet<Guid> AvailableChats { get; } = [];
 
 
         public Guid? SelectedChat { get; set; }

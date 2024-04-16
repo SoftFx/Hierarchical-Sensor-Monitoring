@@ -192,13 +192,14 @@ namespace HSMServer.Model.Folders
                 Description = Description,
                 Color = Color.ToArgb(),
                 TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
+
+                DefaultChatsSettings = DefaultChats.ToEntity(TelegramChats.ToDictionary(k => k, v => GetChatName(v))),
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
                     [nameof(TTL)] = TTL.ToEntity(),
                     [nameof(KeepHistory)] = KeepHistory.ToEntity(),
                     [nameof(SelfDestroy)] = SelfDestroy.ToEntity(),
-                },
-                DefaultChatsSettings = DefaultChats.ToEntity(TelegramChats.ToDictionary(k => k, v => GetChatName(v))),
+                }
             };
 
         internal FolderModel RecalculateState()

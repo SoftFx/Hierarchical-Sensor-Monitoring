@@ -43,13 +43,13 @@ namespace HSMServer.Extensions
                 chats = folder.TelegramChats;
                 return true;
             }
-            else if (model is NodeViewModel node && node.RootProduct.Parent is FolderModel parent)
+            else if (model is NodeViewModel node && node.RootProduct.Parent is FolderModel rootFolder)
             {
-                chats = parent.TelegramChats;
+                chats = rootFolder.TelegramChats;
                 return true;
             }
 
-            chats = new();
+            chats = [];
             return false;
         }
 
