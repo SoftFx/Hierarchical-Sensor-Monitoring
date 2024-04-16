@@ -12,12 +12,12 @@ namespace HSMServer.Helpers
 
         public static bool IsUsersPageAllowed(User user)
         {
-            return true;
+            return user.IsAdmin;
         }
 
         public static bool IsUserCRUDAllowed(User user)
         {
-            return true;
+            return user.IsAdmin;
         }
 
         public static bool IsAllProductsTreeAllowed(User user)
