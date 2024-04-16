@@ -465,10 +465,6 @@ window.initMultyichartCordinates = function (settings, values, id) {
     })
 }
 
-window.test = function (id, mode, distance) {
-    Layout.relayout(id, mode, distance);
-}
-
 window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false, yaxisRange = true) {
     return Plotly.newPlot(chartId, [], {
             hovermode: 'closest',

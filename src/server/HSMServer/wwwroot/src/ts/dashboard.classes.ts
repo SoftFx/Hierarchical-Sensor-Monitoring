@@ -18,7 +18,6 @@ export class Redraw {
     }
 }
 
-
 export class PanelSettings {
     id: string
     
