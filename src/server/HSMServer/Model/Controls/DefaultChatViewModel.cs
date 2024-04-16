@@ -50,8 +50,15 @@ namespace HSMServer.Model.Controls
             return IsFromParent ? AsFromParent(chatName) : chatName;
         }
 
-        public string GetParentDisplayValue(List<TelegramChat> chats) =>
-            ToAvailableChats(chats).TryGetValue(GetUsedValue(Parent), out var chat) ? AsFromParent(chat.Name) : string.Empty;
+        public string GetParentDisplayValue(List<TelegramChat> chats)
+        {
+            var usedValue = GetUsedValue(Parent);
+
+            if (usedValue == EmptyValue.Id)
+                return AsFromParent(EmptyValue.Name);
+
+            return ToAvailableChats(chats).TryGetValue(usedValue, out var chat) ? AsFromParent(chat.Name) : string.Empty;
+        }
 
         internal DefaultChatViewModel FromModel(PolicyDestinationSettings model)
         {
