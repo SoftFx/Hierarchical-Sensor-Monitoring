@@ -1,0 +1,17 @@
+﻿@model HSMServer.Model.TreeViewModel.SensorNodeViewModel
+
+@{
+    var journalParentDivId = $"journal_parent_{@Model.EncodedId}";
+}
+
+<div class='tab-pane fade mt-2' id=@journalParentDivId>
+    <table class="display w-100" id="journal_table_@Model.EncodedId">
+        <thead>
+        <tr>
+            <th>Date</th>
+            <th>Initiator</th>
+            <th>Text</th>
+        </tr>
+        </thead>
+    </table>
+</div>

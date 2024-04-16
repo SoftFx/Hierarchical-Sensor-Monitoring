@@ -258,17 +258,7 @@
                                 <div class='tab-pane fade' id=@valuesParentDivId>
                                     <div id='@valuesElementId'></div>
                                 </div>
-                                <div class='tab-pane fade mt-2' id=@journalParentDivId>
-                                    <table class="display w-100" id="journal_table_@sensorId">
-                                        <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Initiator</th>
-                                                <th>Text</th>
-                                            </tr>
-                                        </thead>
-                                    </table>
-                                </div>
+                               @await Html.PartialAsync("_SensorJournalTab", Model)
                             </div>
                         }
                         else
@@ -293,17 +283,7 @@
                                 <div class='tab-pane fade show active' id=@valuesParentDivId>
                                     <div id='@valuesElementId'></div>
                                 </div>
-                                <div class='tab-pane fade mt-2' id=@journalParentDivId>
-                                    <table class="display w-100" id="journal_table_@sensorId">
-                                        <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Initiator</th>
-                                                <th>Text</th>
-                                            </tr>
-                                        </thead>
-                                    </table>
-                                </div>
+                                 @await Html.PartialAsync("_SensorJournalTab", Model)
                             </div>
                         }
                     </div>
