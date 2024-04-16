@@ -18,9 +18,9 @@ namespace HSMServer.Model.Folders
 {
     public class FolderModel : BaseNodeViewModel, IServerModel<FolderEntity, FolderUpdate>, IChangesEntity
     {
-        public Dictionary<Guid, ProductNodeViewModel> Products { get; } = new();
+        public Dictionary<Guid, ProductNodeViewModel> Products { get; } = [];
 
-        public Dictionary<User, ProductRoleEnum> UserRoles { get; } = new();
+        public Dictionary<User, ProductRoleEnum> UserRoles { get; } = [];
 
         public DateTime CreationDate { get; }
 
@@ -123,7 +123,7 @@ namespace HSMServer.Model.Folders
 
         private DefaultChatViewModel UpdateSetting(DefaultChatViewModel currentValue, DefaultChatViewModel newValue, InitiatorInfo initiator)
         {
-            const string PropertyName = "Default telegram chat";
+            string GetJournalValue(Guid? chatId) => chatId.HasValue && chatId != DefaultChatViewModel.EmptyValue.Id ? GetChatName(chatId.Value) : DefaultChatViewModel.EmptyValue.Name;
 
             var oldChat = currentValue.SelectedChat;
             var newChat = newValue.SelectedChat;
@@ -133,10 +133,10 @@ namespace HSMServer.Model.Folders
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
                     Enviroment = "Folder settings update",
-                    OldValue = oldChat.HasValue && oldChat != currentValue.NotInitializedId ? GetChatName(oldChat.Value) : DefaultChatViewModel.NotInitialized,
-                    NewValue = newChat.HasValue && newChat != currentValue.NotInitializedId ? GetChatName(newChat.Value) : DefaultChatViewModel.NotInitialized,
+                    OldValue = GetJournalValue(oldChat),
+                    NewValue = GetJournalValue(newChat),
 
-                    PropertyName = PropertyName,
+                    PropertyName = "Default telegram chat",
                     Path = Name,
                 });
             }
@@ -162,8 +162,10 @@ namespace HSMServer.Model.Folders
 
         private HashSet<Guid> UpdateChats(HashSet<Guid> oldValue, HashSet<Guid> newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
-            var oldChats = oldValue.Select(id => GetChatName(id)).OrderBy(n => n).ToList();
-            var newChats = newValue.Select(id => GetChatName(id)).OrderBy(n => n).ToList();
+            List<string> GetFilteredValues(HashSet<Guid> hash) => [.. hash.Select(GetChatName).OrderBy(n => n)];
+
+            var oldChats = GetFilteredValues(oldValue);
+            var newChats = GetFilteredValues(newValue);
 
             if (newValue is not null && !newChats.SequenceEqual(oldChats))
             {
@@ -193,7 +195,7 @@ namespace HSMServer.Model.Folders
                 Color = Color.ToArgb(),
                 TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
 
-                DefaultChatsSettings = DefaultChats.ToEntity(TelegramChats.ToDictionary(k => k, v => GetChatName(v))),
+                DefaultChatsSettings = DefaultChats.ToEntity(TelegramChats.ToDictionary(k => k, GetChatName)),
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
                     [nameof(TTL)] = TTL.ToEntity(),

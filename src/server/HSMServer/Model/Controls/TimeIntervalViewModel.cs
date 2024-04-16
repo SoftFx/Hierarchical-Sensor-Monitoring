@@ -2,6 +2,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using HSMServer.Model.Controls;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
@@ -10,29 +11,17 @@ using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
 namespace HSMServer.Model
 {
-    public record TimeIntervalViewModel
+    public sealed record TimeIntervalViewModel : SensorSettingControlBase<TimeIntervalViewModel>
     {
         public const string CustomTemplate = "dd.HH:mm:ss";
 
         private static long _id = 0L;
 
         private readonly string _noneIntervalDisplayName = TimeInterval.None.GetDisplayName();
-        private readonly ParentRequest _parentRequest;
 
         private TimeInterval? _interval;
         private TimeSpan _customSpan;
         private string _customString;
-
-
-        private bool HasParentValue => ParentValue is not null;
-
-        private bool HasFolder => _parentRequest?.Invoke().IsFolder ?? false;
-
-
-        internal delegate (TimeIntervalViewModel Value, bool IsFolder) ParentRequest();
-
-
-        internal TimeIntervalViewModel ParentValue => _parentRequest?.Invoke().Value;
 
 
         public List<SelectListItem> IntervalItems { get; }
@@ -100,12 +89,9 @@ namespace HSMServer.Model
 
 
         // public constructor without parameters for post actions
-        public TimeIntervalViewModel() { }
+        public TimeIntervalViewModel() : base() { }
 
-        internal TimeIntervalViewModel(ParentRequest parentRequest)
-        {
-            _parentRequest = parentRequest;
-        }
+        internal TimeIntervalViewModel(ParentRequest parentRequest) : base(parentRequest) { }
 
         internal TimeIntervalViewModel(HashSet<TimeInterval> intervals, bool useCustomTemplate = true)
         {
@@ -117,7 +103,7 @@ namespace HSMServer.Model
         {
             IntervalItems = BuildSelectedList(intervals);
 
-            if (!HasParentValue)
+            if (!HasParent)
                 IntervalItems.RemoveAt(0);
         }
 
@@ -131,7 +117,7 @@ namespace HSMServer.Model
         {
             FromModel(new TimeIntervalModel(entity), intervals);
 
-            if (!HasParentValue)
+            if (!HasParent)
                 IntervalItems.RemoveAt(0);
         }
 
@@ -146,7 +132,7 @@ namespace HSMServer.Model
                 return new TimeIntervalModel(TimeInterval.ToDynamicCore());
 
             // for saving view with TimeInterval = FromFolder
-            var ticks = (current?.ParentValue ?? ParentValue)?.CustomSpan.Ticks ?? 0L;
+            var ticks = (current?.Parent ?? Parent)?.CustomSpan.Ticks ?? 0L;
             var hasFolder = current?.HasFolder ?? HasFolder;
 
             return new TimeIntervalModel(hasFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent, ticks);
@@ -179,7 +165,7 @@ namespace HSMServer.Model
 
         private List<SelectListItem> BuildSelectedList(HashSet<TimeInterval> intervals)
         {
-            string KeyBuilder(TimeInterval interval) => interval.IsParent() ? interval.ToFromParentDisplay(GetUsedValue(ParentValue)) : interval.GetDisplayName();
+            string KeyBuilder(TimeInterval interval) => interval.IsParent() ? interval.ToFromParentDisplay(GetUsedValue(Parent)) : interval.GetDisplayName();
 
             return intervals.ToSelectedItems(KeyBuilder);
         }
@@ -188,7 +174,7 @@ namespace HSMServer.Model
             model?.Interval switch
             {
                 TimeInterval.Custom => model.CustomSpan.ToReadableView(),
-                TimeInterval.FromParent => GetUsedValue(model.ParentValue),
+                TimeInterval.FromParent => GetUsedValue(model.Parent),
                 _ => model?.TimeInterval.GetDisplayName()
             };
     }
