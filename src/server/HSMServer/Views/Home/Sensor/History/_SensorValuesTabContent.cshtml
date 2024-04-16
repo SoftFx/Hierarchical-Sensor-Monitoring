@@ -1,0 +1,9 @@
+﻿@model HSMServer.Model.TreeViewModel.SensorNodeViewModel
+
+@{
+    var valuesElementId = $"values_{Model.EncodedId}";
+    var valuesParentDivId = $"values_parent_{Model.EncodedId}";}
+
+<div class='tab-pane fade' id=@valuesParentDivId>
+    <div id='@valuesElementId'></div>
+</div>

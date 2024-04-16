@@ -219,7 +219,7 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
 
         let noValuesElement = document.getElementById(`noTableValues_${encodedId}`);
         if (noValuesElement != null) {
-            $('#history_' + encodedId).hide();
+            // $('#history_' + encodedId).hide();
             $('#no_data_' + encodedId).show();
         } else {
             $('#history_' + encodedId).show();
@@ -261,7 +261,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
 
         let values = parsedData.values;
         if (values.length === 0) {
-            $('#history_' + encodedId).hide();
+            // $('#history_' + encodedId).hide();
             $('#no_data_' + encodedId).show();
         } else {
             $('#history_' + encodedId).show();
@@ -455,6 +455,7 @@ window.initializeJournal = function (type) {
         columns: type === NodeType.Node ? nodeColumns : sensorColumns,
         ...JournalTemplate(getJournalPage, type)
     });
+    let test = 123;
 }
 
 window.disableHistoryPeriod = function () {
