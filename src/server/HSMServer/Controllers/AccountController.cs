@@ -139,7 +139,7 @@ namespace HSMServer.Controllers
 
         #region Users
 
-        [AuthorizeIsAdmin]
+        //[AuthorizeIsAdmin]
         public IActionResult Users()
         {
             // TODO: use ViewComponent and remove using TempData for passing products
