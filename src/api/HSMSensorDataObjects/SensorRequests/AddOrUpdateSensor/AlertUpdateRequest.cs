@@ -3,6 +3,14 @@ using System.Collections.Generic;
 
 namespace HSMSensorDataObjects.SensorRequests
 {
+    public enum AlertDestinationMode : byte
+    {
+        DefaultChats = 0,
+        NotInitialized = 1,
+        AllChats = 200,
+    }
+
+
     public enum AlertRepeatMode : byte
     {
         FiveMinutes = 5,
@@ -89,14 +97,16 @@ namespace HSMSensorDataObjects.SensorRequests
         public SensorStatus Status { get; set; }
 
 
+        public AlertDestinationMode DestinationMode { get; set; }
+
         public string Template { get; set; }
 
         public string Icon { get; set; }
 
+        public bool IsDisabled { get; set; }
+
 
         public long? ConfirmationPeriod { get; set; }
-
-        public bool IsDisabled { get; set; }
 
 
         public DateTime? ScheduledNotificationTime { get; set; }

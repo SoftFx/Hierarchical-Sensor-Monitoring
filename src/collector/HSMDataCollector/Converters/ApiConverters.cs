@@ -64,6 +64,7 @@ namespace HSMDataCollector.Converters
                 ScheduledRepeatMode = alert.ScheduledRepeatMode,
                 ScheduledInstantSend = alert.ScheduledInstantSend,
 
+                DestinationMode = alert.DestinationMode,
                 Template = alert.Template,
                 Status = alert.Status,
                 Icon = alert.Icon,

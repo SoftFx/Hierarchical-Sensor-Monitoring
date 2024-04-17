@@ -29,11 +29,7 @@ namespace HSMDataCollector.Alerts
         public TimeSpan? ConfirmationPeriod { get; }
 
 
-        public bool? ScheduledInstantSend { get; private set; }
-
-        public DateTime? ScheduledNotificationTime { get; private set; }
-
-        public AlertRepeatMode? ScheduledRepeatMode { get; private set; }
+        public AlertDestinationMode DestinationMode { get; private set; } = AlertDestinationMode.DefaultChats;
 
         public SensorStatus Status { get; private set; } = SensorStatus.Ok;
 
@@ -45,6 +41,13 @@ namespace HSMDataCollector.Alerts
         public bool IsDisabled { get; private set; }
 
 
+        public AlertRepeatMode? ScheduledRepeatMode { get; private set; }
+
+        public DateTime? ScheduledNotificationTime { get; private set; }
+
+        public bool? ScheduledInstantSend { get; private set; }
+
+
         internal AlertAction(List<AlertConditionTemplate> conditions, TimeSpan? confirmationPeriod)
         {
             _conditions = conditions;
@@ -53,19 +56,21 @@ namespace HSMDataCollector.Alerts
         }
 
 
-        public AlertAction<T> AndSendNotification(string template)
+        public AlertAction<T> AndSendNotification(string template, AlertDestinationMode destination = default)
         {
+            DestinationMode = destination;
             Template = template;
 
             return this;
         }
 
-        public AlertAction<T> AndSendScheduledNotification(string template, DateTime time, AlertRepeatMode repeatMode, bool instantSend)
+        public AlertAction<T> AndSendScheduledNotification(string template, DateTime time, AlertRepeatMode repeatMode, bool instantSend, AlertDestinationMode destination = default)
         {
             Template = template;
             ScheduledNotificationTime = time;
             ScheduledRepeatMode = repeatMode;
             ScheduledInstantSend = instantSend;
+            DestinationMode = destination;
 
             return this;
         }
@@ -102,10 +107,12 @@ namespace HSMDataCollector.Alerts
         {
             Conditions = _conditions,
 
-            ConfirmationPeriod = ConfirmationPeriod,
+            DestinationMode = DestinationMode,
             Template = Template,
             Status = Status,
             Icon = Icon,
+
+            ConfirmationPeriod = ConfirmationPeriod,
 
             ScheduledRepeatMode = ScheduledRepeatMode,
             ScheduledNotificationTime = ScheduledNotificationTime,
