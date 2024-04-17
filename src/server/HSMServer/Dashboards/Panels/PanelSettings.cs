@@ -4,8 +4,6 @@ namespace HSMServer.Dashboards
 {
     public sealed class PanelSettings
     {
-        private const string DefaultHovermode = "x";
-
         internal const double DefaultHeight = 0.2;
         internal const double DefaultWidth = 0.3;
 
@@ -22,10 +20,8 @@ namespace HSMServer.Dashboards
 
         public bool ShowLegend { get; private set; }
 
-        public string Hovermode { get; private set; } = DefaultHovermode;
+        public Hovermode Hovermode { get; private set; } = Hovermode.X;
 
-        public int HoverDistance { get; private set; } = 1;
- 
 
         public PanelSettings()
         {
@@ -44,7 +40,6 @@ namespace HSMServer.Dashboards
             ShowLegend = update.ShowLegend ?? ShowLegend;
 
             Hovermode = update.Hovermode ?? Hovermode;
-            HoverDistance = update.HoverDistance ?? HoverDistance;
         }
 
         public PanelSettings FromEntity(PanelSettingsEntity entity)
@@ -58,7 +53,6 @@ namespace HSMServer.Dashboards
             ShowLegend = entity.ShowLegend;
 
             Hovermode = entity.Hovermode;
-            HoverDistance = entity.HoverDistance;
             
             return this;
         }
@@ -75,7 +69,6 @@ namespace HSMServer.Dashboards
                 ShowLegend = ShowLegend,
                 
                 Hovermode = Hovermode,
-                HoverDistance = HoverDistance
             };
     }
 }

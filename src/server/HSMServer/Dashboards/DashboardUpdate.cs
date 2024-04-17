@@ -1,8 +1,8 @@
 ﻿using HSMServer.ConcurrentStorage;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
+using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 
 namespace HSMServer.Dashboards
 {
@@ -36,9 +36,7 @@ namespace HSMServer.Dashboards
 
         public bool? AutoScale { get; set; }
 
-        public string Hovermode { get;  init; }
-        
-        public int? HoverDistance { get;  init; }
+        public Hovermode? Hovermode { get;  init; }
 
 
         public bool NeedSourceRebuild => IsAggregateValues.HasValue || MinY.HasValue || MaxY.HasValue || AutoScale.HasValue;

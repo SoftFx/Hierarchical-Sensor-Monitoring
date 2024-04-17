@@ -160,7 +160,9 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
     plot['marker']['color'] = data.color;
 
     let plotData = plot.getPlotData();
-    dashboardStorage.getPanel(panelId).lastUpdateTime = new Date(plotData[0].x.at(-1));
+    let panel = dashboardStorage.getPanel(panelId)
+    if (panel)
+        panel.lastUpdateTime = new Date(plotData[0].x.at(-1));
 
     Plotly.addTraces(id, plotData).then(
         (data) => {

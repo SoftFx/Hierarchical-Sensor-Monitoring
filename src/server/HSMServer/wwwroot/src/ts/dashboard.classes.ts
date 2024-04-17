@@ -1,5 +1,5 @@
 ﻿import {Plot} from "../js/plots";
-import {Hovermode} from "./types";
+import {HoverModeEnum} from "./types";
 import {IPanelSettings} from "./dashboard.interfaces";
 
 export class PlotUpdate {
@@ -21,7 +21,7 @@ export class Redraw {
 export class PanelSettings {
     id: string
     
-    hovermode: Hovermode
+    hovermode: HoverModeEnum
     hoverDistance: number
     
     showLegend: boolean
@@ -35,7 +35,7 @@ export class PanelSettings {
         this.id = id;
         
         this.hovermode = settings.hovermode;
-        this.hoverDistance = settings.hoverDistance;
+        this.hoverDistance = 20;
         
         this.showLegend = settings.showLegend;
         

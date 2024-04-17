@@ -1,7 +1,10 @@
 ﻿@using System.Text.Json
+@using HSMCommon.Extensions
+@using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.JsonConverters
+@using Microsoft.AspNetCore.Mvc.TagHelpers
 
 @model HSMServer.Model.Dashboards.PanelViewModel
 
@@ -46,18 +49,12 @@
                        <div class="dropdown-menu p-4 pt-2">
                            <div class="mb-3">
                                <label for="selecthovermode_@Model.Id" class="form-label">Hover Mode</label>
-                               <select id="selecthovermode_@Model.Id" class="form-control">
-                                   <option value="x">x</option>
-                                   <option value="y">y</option>
-                                   <option value="false">false</option>
-                                   <option value="closest">closest</option>
-                                   <option value="x unified">x unified</option>
-                                   <option value="y unified">y unified</option>
-                               </select>
-                           </div>
-                           <div class="mb-3">
-                             <label for="hoverdistance_@Model.Id" class="form-label">Hover Distance</label>
-                             <input type="number" class="form-control" id="hoverdistance_@Model.Id" placeholder="1">
+                                <select id="selecthovermode_@Model.Id"  class="form-control">
+                                    @foreach (var mode in Enum.GetValues<Hovermode>())
+                                    {
+                                        <option value='@((int)mode)'>@mode.GetDisplayName()</option>
+                                    }
+                                </select>
                            </div>
                            <button id="button_save_settings_@Model.Id" type="button" class="btn btn-primary">Save</button>
                          </div>

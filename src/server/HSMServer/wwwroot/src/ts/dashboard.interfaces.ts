@@ -1,4 +1,4 @@
-import {Hovermode} from "./types";
+import {HoverModeEnum} from "./types";
 
 export interface Dictionary<T> {
     [Key: string]: T;
@@ -31,7 +31,7 @@ export interface ISourceUpdate {
 }
 
 export interface IPanelSettings {
-    hovermode: Hovermode
+    hovermode: HoverModeEnum
     hoverDistance: number
 
     showLegend: boolean

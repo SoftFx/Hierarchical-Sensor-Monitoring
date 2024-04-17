@@ -3,6 +3,7 @@ import {IPanel, ISourceUpdate} from "./dashboard.interfaces";
 import {Plot, TimeSpanPlot} from "../js/plots";
 import {PanelSettings, PlotUpdate, Redraw} from "./dashboard.classes";
 import {dashboardStorage} from "../js/dashboard";
+import {HovermodeUtils} from "./services/hovermode.util";
 
 
 export namespace DataUpdate {
@@ -217,7 +218,7 @@ export namespace Layout {
             return;
         
         let plotDiv = $('#panelChart_' + id)[0] as PlotlyHTMLElement;
-        plotDiv.layout.hovermode = settings.hovermode ?? 'x';
+        plotDiv.layout.hovermode = HovermodeUtils.toHovermode(settings.hovermode);
         plotDiv.layout.hoverdistance = settings.hoverDistance;
         
         window.Plotly.relayout(plotDiv, plotDiv.layout)

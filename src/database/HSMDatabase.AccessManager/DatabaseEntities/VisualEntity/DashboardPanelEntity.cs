@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 {
@@ -33,9 +34,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
 
         public bool ShowLegend { get; init; }
         
-        public string Hovermode { get; init; }
-        
-        public int HoverDistance { get; init; }
+        public Hovermode Hovermode { get; init; }
     }
 
 
@@ -46,5 +45,22 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public double MinValue { get; set; }
 
         public bool FixedBorders { get; set; }
+    }
+
+
+    public enum Hovermode
+    {
+        [Display(Name = "x")]
+        X,
+        [Display(Name = "y")]
+        Y,
+        [Display(Name = "false")]
+        False,
+        [Display(Name = "closest")]
+        Closest,
+        [Display(Name = "x unified")]
+        XUnified,
+        [Display(Name = "y unified")]
+        YUnified,
     }
 }

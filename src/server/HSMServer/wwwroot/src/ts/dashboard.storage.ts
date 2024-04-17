@@ -3,7 +3,6 @@ import * as moment from "moment";
 import {Layout} from "./plotUpdate";
 import {PanelSettings} from "./dashboard.classes";
 import {HttpPanelService} from "./services/http-panel-service";
-import {Hovermode} from "./types";
 
 export const httpPanelService : HttpPanelService = new HttpPanelService();
 
@@ -56,16 +55,14 @@ export class Panel {
         
         this.settings = new PanelSettings(this.id, settings);
 
-        $('#selecthovermode_' + id).val(this.settings.hovermode as string);
-        $('#hoverdistance_' + id).val(this.settings.hoverDistance);
+        $('#selecthovermode_' + id).val(this.settings.hovermode);
         
         Layout.relayout(this.id, this.settings);
 
         this._savebutton = $('#button_save_settings_' + id);
         this._savebutton.on('click', async function (){
-            this.settings.hovermode = $('#selecthovermode_' + id).val() as Hovermode;
-            this.settings.hoverDistance = $('#hoverdistance_' + id).val() as number;
-            
+            this.settings.hovermode = Number($('#selecthovermode_' + id).val());
+
             await httpPanelService.updateSettings(this.settings);
             Layout.relayout(this.id, this.settings);
             $('#actionButton').trigger('click')
