@@ -78,7 +78,7 @@ namespace HSMServer.Model.DataAlerts
         internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats)
         {
             var allChats = Chats is null;
-            var defaultChat = Chats?.Contains(DefaultChat) ?? false;
+            var defaultChat = Chats?.Any(c => c.Equals(DefaultChat, StringComparison.InvariantCultureIgnoreCase)) ?? false;
 
             return new()
             {
