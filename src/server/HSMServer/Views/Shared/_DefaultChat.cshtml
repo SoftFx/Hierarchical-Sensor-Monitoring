@@ -17,11 +17,19 @@
 }
 
 
-<span class="meta-info-label">Default telegram chat</span>
+<style>
+    /* For null option in selectpicker */
+    .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder, .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder:hover, .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder:focus, .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder:active {
+        color: black;
+    }
+</style>
 
-<span id="labelDefaultChat" class="@(Model.IsModify ? "d-none" : string.Empty) meta-info-value">@displayName</span>
-<div id="defaultChatControl" class="@(Model.IsModify ? string.Empty : "d-none") meta-info-interval">
-    <select asp-for="SelectedChat" class="selectpicker">
+
+<span class="@(Model.IsModify ? "col-2" : "meta-info-label")">Default telegram chat</span>
+
+<span id="labelDefaultChat" class="@(Model.IsModify ? "d-none" : "meta-info-value")">@displayName</span>
+<div id="defaultChatControl" class="@(Model.IsModify ? "col-auto ms-1" : "d-none meta-info-interval")">
+    <select asp-for="SelectedChat" class="default-chat selectpicker">
         @if (Model.HasParent)
         {
             <option value="" selected="@Model.IsFromParent">@parentName</option>
