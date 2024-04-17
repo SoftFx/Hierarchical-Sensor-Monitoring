@@ -265,7 +265,7 @@ namespace HSMServer.ApiObjectsConverters
         public static PolicyUpdate Convert(this AlertUpdateRequest request, InitiatorInfo initiator) => new()
         {
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
-            Destination = new(),
+            Destination = new(request.DestinationMode is AlertDestinationMode.AllChats, request.DestinationMode is AlertDestinationMode.DefaultChats),
 
             Schedule = new PolicyScheduleUpdate()
             {
@@ -412,7 +412,7 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorRequests.Unit.Bytes_sec => Core.Model.Unit.Bytes_sec,
                 HSMSensorDataObjects.SensorRequests.Unit.KBytes_sec => Core.Model.Unit.KBytes_sec,
                 HSMSensorDataObjects.SensorRequests.Unit.MBytes_sec => Core.Model.Unit.MBytes_sec,
-                
+
                 HSMSensorDataObjects.SensorRequests.Unit.ValueInSecond => Core.Model.Unit.ValueInSecond,
 
                 _ => throw new NotImplementedException(),
