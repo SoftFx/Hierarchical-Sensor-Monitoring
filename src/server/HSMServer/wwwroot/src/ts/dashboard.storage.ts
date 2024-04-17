@@ -59,8 +59,8 @@ export class Panel {
         
         Layout.relayout(this.id, this.settings);
 
-        this._savebutton = $('#button_save_settings_' + id);
-        this._savebutton.on('click', async function (){
+        this._savebutton = $('#selecthovermode_' + id);
+        this._savebutton.on('change', async function (){
             this.settings.hovermode = Number($('#selecthovermode_' + id).val());
 
             await httpPanelService.updateSettings(this.settings);

@@ -46,18 +46,15 @@
 
                     <div class="dropdown-submenu">
                         <a class="dropdown-item">Hover settingss</a>
-                       <div class="dropdown-menu p-4 pt-2">
-                           <div class="mb-3">
-                               <label for="selecthovermode_@Model.Id" class="form-label">Hover Mode</label>
-                                <select id="selecthovermode_@Model.Id"  class="form-control">
-                                    @foreach (var mode in Enum.GetValues<Hovermode>())
-                                    {
-                                        <option value='@((int)mode)'>@mode.GetDisplayName()</option>
-                                    }
-                                </select>
-                           </div>
-                           <button id="button_save_settings_@Model.Id" type="button" class="btn btn-primary">Save</button>
-                         </div>
+                        <div class="dropdown-menu p-4 pt-2">
+                            <label for="selecthovermode_@Model.Id" class="form-label">Hover Mode</label>
+                            <select id="selecthovermode_@Model.Id" class="form-control">
+                                @foreach (var mode in Enum.GetValues<Hovermode>())
+                                {
+                                    <option value='@((int)mode)'>@mode.GetDisplayName()</option>
+                                }
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
