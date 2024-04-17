@@ -38,6 +38,7 @@ namespace HSMDataCollector.Converters
                 OriginalUnit = options.SensorUnit,
                 Description = options.Description,
 
+                DefaultChats = options.DefaultChats,
                 TTL = options.TtlAlert?.TtlValue?.Ticks ?? options.TTL?.Ticks,
                 KeepHistory = options.KeepHistory?.Ticks,
                 SelfDestroy = options.SelfDestroy?.Ticks,

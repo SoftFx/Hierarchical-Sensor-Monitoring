@@ -11,6 +11,11 @@ namespace HSMServer.Core.Model.NodeSettings
 
         public PolicyDestinationSettings() : base() { }
 
+        public PolicyDestinationSettings(bool isFromParent) : this()
+        {
+            IsFromParent = isFromParent;
+        }
+
         public PolicyDestinationSettings(PolicyDestinationSettingsEntity entity) : base(entity)
         {
             IsFromParent = entity.IsFromParent;

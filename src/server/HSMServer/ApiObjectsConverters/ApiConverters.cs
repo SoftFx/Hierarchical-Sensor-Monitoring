@@ -5,6 +5,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableOfChanges;
@@ -98,7 +99,7 @@ namespace HSMServer.ApiObjectsConverters
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = value.Value?.ToArray() ?? Array.Empty<byte>(),
+                Value = value.Value?.ToArray() ?? [],
                 Name = value.Name,
                 Extension = value.Extension,
                 OriginalSize = value.Value?.Count ?? 0L
@@ -251,9 +252,12 @@ namespace HSMServer.ApiObjectsConverters
                 Statistics = request.Statistics?.Convert(),
                 SelectedUnit = request.OriginalUnit?.Convert(),
                 Integration = request.EnableGrafana.HasValue ? request.EnableGrafana.Value ? Integration.Grafana : Integration.None : null,
+
+                DefaultChats = request.DefaultChats is not null ? new PolicyDestinationSettings(request.DefaultChats is DefaultChatsMode.FromParent) : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),
+
                 TTLPolicy = request.TtlAlert?.Convert(initiator),
                 Policies = request.Alerts?.Select(policy => policy.Convert(initiator)).ToList(),
                 DefaultAlertsOptions = (Core.Model.DefaultAlertsOptions)request.DefaultAlertsOptions,
