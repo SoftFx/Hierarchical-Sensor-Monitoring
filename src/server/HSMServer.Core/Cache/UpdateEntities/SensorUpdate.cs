@@ -95,7 +95,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public bool? AllChats { get; }
 
 
-        public PolicyDestinationUpdate(bool? allChats = null, bool? useDefaultChat = null)
+        public PolicyDestinationUpdate(bool? allChats = false, bool? useDefaultChat = true)
         {
             AllChats = allChats;
             UseDefaultChats = useDefaultChat;

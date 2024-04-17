@@ -99,7 +99,7 @@ namespace HSMServer.Model.DataAlerts
 
         private ActionProperties GetActions(Dictionary<Guid, string> availavleChats)
         {
-            PolicyDestinationUpdate destination = new();
+            PolicyDestinationUpdate destination = new(useDefaultChat: false);
             SensorStatus status = SensorStatus.Ok;
             PolicyScheduleUpdate schedule = null;
             string comment = null;

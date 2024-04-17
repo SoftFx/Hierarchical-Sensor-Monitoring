@@ -265,7 +265,7 @@ namespace HSMServer.ApiObjectsConverters
         public static PolicyUpdate Convert(this AlertUpdateRequest request, InitiatorInfo initiator) => new()
         {
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
-            Destination = new(useDefaultChat: true),
+            Destination = new(),
 
             Schedule = new PolicyScheduleUpdate()
             {
