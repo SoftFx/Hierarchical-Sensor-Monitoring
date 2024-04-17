@@ -749,7 +749,7 @@ namespace HSMServer.Core.Cache
         }
 
         private static bool CanRemoveChatsFromPolicy(PolicyDestination destination, HashSet<Guid> chats) =>
-            !destination.AllChats && destination.Chats.Any(pair => chats.Contains(pair.Key));
+            !destination.AllChats && !destination.UseDefaultChats && destination.Chats.Any(pair => chats.Contains(pair.Key));
 
         private static PolicyUpdate BuildPolicyUpdate(Policy policy, PolicyDestinationUpdate destination, InitiatorInfo initiator) =>
             new()

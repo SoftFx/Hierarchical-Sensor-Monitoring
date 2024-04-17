@@ -62,13 +62,15 @@
 
                 if (action.Chats.Contains(ActionViewModel.AllChatsId))
                     chats = "all chats";
+                else if (action.Chats.Contains(ActionViewModel.DefaultChatId))
+                    chats = "default chat";
                 else if (action.Chats.Count == 0)
                 {
                     chats = "(chats are not initialized)";
                     color = "gray";
                 }
                 else
-                    chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch]));
+                    chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch.Value)).Select(ch => telegramChats[ch.Value]));
 
                 if (action.ScheduleRepeatMode is not null)
                 {
