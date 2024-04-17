@@ -195,7 +195,7 @@ namespace HSMServer.Model.Folders
                 Color = Color.ToArgb(),
                 TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
 
-                DefaultChatsSettings = DefaultChats.ToEntity(TelegramChats.ToDictionary(k => k, GetChatName)),
+                DefaultChatsSettings = DefaultChats.ToEntity(TelegramChats.ToDictionary(k => k, v => GetChatName?.Invoke(v))),
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
                     [nameof(TTL)] = TTL.ToEntity(),

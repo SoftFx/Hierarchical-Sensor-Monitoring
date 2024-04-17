@@ -19,6 +19,8 @@ namespace HSMServer.Model.Controls
         public Guid? SelectedChat { get; set; }
 
 
+        public bool IsModify { get; }
+
         public bool IsFromParent => SelectedChat is null;
 
 
@@ -27,11 +29,12 @@ namespace HSMServer.Model.Controls
 
         internal DefaultChatViewModel(ParentRequest parentRequest) : base(parentRequest) { }
 
-        public DefaultChatViewModel(BaseNodeViewModel node) : this(node.DefaultChats._parentRequest)
+        public DefaultChatViewModel(BaseNodeViewModel node, bool isModify = true) : this(node.DefaultChats._parentRequest)
         {
             if (node.TryGetChats(out var availableChats))
                 AvailableChats = availableChats;
 
+            IsModify = isModify;
             SelectedChat = node.DefaultChats.SelectedChat;
         }
 
@@ -83,7 +86,7 @@ namespace HSMServer.Model.Controls
             };
         }
 
-        private Dictionary<Guid, TelegramChat> ToAvailableChats(List<TelegramChat> chats) => 
+        private Dictionary<Guid, TelegramChat> ToAvailableChats(List<TelegramChat> chats) =>
             chats.Where(u => AvailableChats.Contains(u.Id)).ToDictionary(k => k.Id, v => v);
 
         private static Guid GetUsedValue(DefaultChatViewModel model)

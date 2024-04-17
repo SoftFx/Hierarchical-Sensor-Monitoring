@@ -14,6 +14,10 @@
 {
     @await Html.PartialAsync("~/Views/Notifications/_NewTelegramChatHelpModal.cshtml", Model.FolderId)
 
+    <div class="d-flex flex-row text-nowrap align-items-center my-3">
+        <partial name="~/Views/Home/_DefaultChat.cshtml" for="DefaultChats" />
+    </div>
+
     <div class="my-2" align="right">
         <a href="javascript:showAddTelegramGroupHelpModal();" class="btn btn-link p-0">
             <i class="fa-solid fa-plus"></i> Add new chat

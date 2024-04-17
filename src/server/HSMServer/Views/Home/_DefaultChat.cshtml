@@ -17,37 +17,35 @@
 }
 
 
-<div class="d-flex flex-row text-nowrap align-items-center ms-3">
-    <span class="meta-info-label">Default telegram chat</span>
+<span class="meta-info-label">Default telegram chat</span>
 
-    <span id="labelDefaultChat" class="meta-info-value">@displayName</span>
-    <div id="defaultChatControl" class="d-none meta-info-interval">
-        <select asp-for="SelectedChat" class="selectpicker">
-            @if (Model.HasParent)
-            {
-                <option value="" selected="@Model.IsFromParent">@parentName</option>
-            }
+<span id="labelDefaultChat" class="@(Model.IsModify ? "d-none" : string.Empty) meta-info-value">@displayName</span>
+<div id="defaultChatControl" class="@(Model.IsModify ? string.Empty : "d-none") meta-info-interval">
+    <select asp-for="SelectedChat" class="selectpicker">
+        @if (Model.HasParent)
+        {
+            <option value="" selected="@Model.IsFromParent">@parentName</option>
+        }
 
-            <option value="@emptyValue.Id" selected="@Model.IsSelectedChat(emptyValue.Id)">@emptyValue.Name</option>
+        <option value="@emptyValue.Id" selected="@Model.IsSelectedChat(emptyValue.Id)">@emptyValue.Name</option>
 
-            <option data-divider="true"></option>
-            <option disabled>Groups</option>
-            @foreach (var chat in allChats.GetGroups())
-            {
-                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)">@chat.Name</option>
-            }
+        <option data-divider="true"></option>
+        <option disabled>Groups</option>
+        @foreach (var chat in allChats.GetGroups())
+        {
+            <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)">@chat.Name</option>
+        }
 
-            <option data-divider="true"></option>
-            <option disabled>Users</option>
-            @foreach (var chat in allChats.GetPrivates())
-            {
-                <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)">@chat.Name</option>
-            }
-        </select>
-    </div>
-
-    <i class='fas fa-question-circle mx-2' title='Telegram chat that will be default for new sensors.'></i>
+        <option data-divider="true"></option>
+        <option disabled>Users</option>
+        @foreach (var chat in allChats.GetPrivates())
+        {
+            <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)">@chat.Name</option>
+        }
+    </select>
 </div>
+
+<i class='fas fa-question-circle mx-2' title='Telegram chat that will be default for new sensors.'></i>
 
 
 <script>
