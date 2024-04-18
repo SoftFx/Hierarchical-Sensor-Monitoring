@@ -275,7 +275,7 @@ namespace HSMServer.Folders
                     Id = productId,
                     FolderId = action is ActionType.Delete ? Guid.Empty : folder.Id,
 
-                    DefaultChats = 
+                    //DefaultChats = 
                     KeepHistory = GetCoreUpdate(savedHistory, folder.KeepHistory, action),
                     SelfDestroy = GetCoreUpdate(selfDestroy, folder.SelfDestroy, action),
                     TTL = GetCoreUpdate(ttl, folder.TTL, action),
@@ -320,12 +320,12 @@ namespace HSMServer.Folders
             return model.IsFromFolder ? action is ActionType.Delete ? folderModel : folderModel.ToFromFolderModel() : null;
         }
 
-        private static PolicyDestinationSettings GetCorePolicy(PolicyDestinationSettings model, FolderModel folder, ActionType action)
-        {
-            var folderModel = folder.DefaultChats.ToModel(folder.GetAvailableChats());
+        //private static PolicyDestinationSettings GetCorePolicy(PolicyDestinationSettings model, FolderModel folder, ActionType action)
+        //{
+        //    var folderModel = folder.DefaultChats.ToModel(folder.GetAvailableChats());
 
-            return model.IsFromParent ? action is ActionType.Delete ? folderModel.IsFromParent = false
-        }
+        //    return model.IsFromParent ? action is ActionType.Delete ? folderModel.IsFromParent = false
+        //}
 
         private void ResetServerPolicyForFolderProducts()
         {

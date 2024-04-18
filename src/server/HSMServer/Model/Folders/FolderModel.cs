@@ -196,6 +196,7 @@ namespace HSMServer.Model.Folders
                 TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
 
                 DefaultChatsSettings = DefaultChats.ToEntity(GetAvailableChats()),
+
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
                     [nameof(TTL)] = TTL.ToEntity(),
@@ -204,7 +205,7 @@ namespace HSMServer.Model.Folders
                 }
             };
 
-        internal Dictionary<Guid, string> GetAvailableChats() => TelegramChats.ToDictionary(k => k, GetChatName);
+        internal Dictionary<Guid, string> GetAvailableChats() => TelegramChats.ToDictionary(k => k, v => GetChatName?.Invoke(v));
 
         internal FolderModel RecalculateState()
         {
