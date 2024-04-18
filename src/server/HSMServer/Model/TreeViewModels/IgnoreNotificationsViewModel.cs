@@ -2,6 +2,8 @@
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using System;
+using System.Collections.Generic;
+
 
 namespace HSMServer.Model
 {
@@ -13,11 +15,11 @@ namespace HSMServer.Model
         private const string FolderTreeElement = "folder";
 
 
-        public string Path { get; }
+        public string[] Paths { get; private set; }
 
         public string TreeElement { get; }
 
-        public string EncodedId { get; set; }
+        public string[] Ids { get; set;}
 
         public TimeIntervalViewModel IgnorePeriod { get; set; }
 
@@ -33,37 +35,77 @@ namespace HSMServer.Model
                                              DateTime.MaxValue : DateTimeNow.AddDays(Days).AddHours(Hours).AddMinutes(Minutes);
 
 
-        private IgnoreNotificationsViewModel(BaseNodeViewModel node)
+        //private IgnoreNotificationsViewModel(BaseNodeViewModel node)
+        //{
+        //    TreeElement = node switch
+        //    {
+        //        SensorNodeViewModel => SensorTreeElement,
+        //        ProductNodeViewModel => NodeTreeElement,
+        //        FolderModel => FolderTreeElement,
+        //        _ => null
+        //    };
+
+        //    IgnorePeriod = new(PredefinedIntervals.ForIgnore, useCustomTemplate: false);
+
+        //    DateTimeNow = DateTime.UtcNow.RoundToMin();
+        //}
+
+        //// public constructor without parameters for action Home/IgnoreNotifications
+        public IgnoreNotificationsViewModel() { }
+
+        //public IgnoreNotificationsViewModel(NodeViewModel node) : this((BaseNodeViewModel)node)
+        //{
+        //    Ids.Add(node.EncodedId);
+        //    Paths.Add(node.FullPath);
+
+        //    if (node.Id == node.RootProduct.Id)
+        //        TreeElement = ProductTreeElement;
+        //}
+
+        //public IgnoreNotificationsViewModel(FolderModel folder) : this((BaseNodeViewModel)folder)
+        //{
+        //    Ids.Add(folder.Id.ToString());
+        //    Paths.Add(folder.Name);
+        //}
+
+        public IgnoreNotificationsViewModel(List<BaseNodeViewModel> items)
         {
-            TreeElement = node switch
+            Ids   = new string[items.Count];
+            Paths = new string[items.Count];
+
+            for (var i = 0; i < items.Count; i++)
             {
-                SensorNodeViewModel => SensorTreeElement,
-                ProductNodeViewModel => NodeTreeElement,
-                FolderModel => FolderTreeElement,
-                _ => null
-            };
+                if (items[i] is NodeViewModel node)
+                {
+                    Ids[i]   = node.EncodedId;
+                    Paths[i] = node.FullPath;
+
+                    if (node.Id == node.RootProduct.Id)
+                        TreeElement = ProductTreeElement;
+                }
+                else if (items[i] is FolderModel folder)
+                {
+                    Ids[i]   = folder.Id.ToString();
+                    Paths[i] = folder.Name;
+                }
+            }
 
             IgnorePeriod = new(PredefinedIntervals.ForIgnore, useCustomTemplate: false);
 
             DateTimeNow = DateTime.UtcNow.RoundToMin();
-        }
 
-        // public constructor without parameters for action Home/IgnoreNotifications
-        public IgnoreNotificationsViewModel() { }
-
-        public IgnoreNotificationsViewModel(NodeViewModel node) : this((BaseNodeViewModel)node)
-        {
-            EncodedId = node.EncodedId;
-            Path = node.FullPath;
-
-            if (node.Id == node.RootProduct.Id)
-                TreeElement = ProductTreeElement;
-        }
-
-        public IgnoreNotificationsViewModel(FolderModel folder) : this((BaseNodeViewModel)folder)
-        {
-            EncodedId = folder.Id.ToString();
-            Path = folder.Name;
+            if (items.Count == 1)
+            {
+                TreeElement = items[0] switch
+                {
+                    SensorNodeViewModel => SensorTreeElement,
+                    ProductNodeViewModel => NodeTreeElement,
+                    FolderModel => FolderTreeElement,
+                    _ => null
+                };
+            }
+            else
+                TreeElement = "items";
         }
     }
 }
