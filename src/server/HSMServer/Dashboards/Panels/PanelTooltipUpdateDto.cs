@@ -7,7 +7,7 @@ public sealed record PanelTooltipUpdateDto
 {
     public Guid Id { get; set; }
     
-    public Hovermode Hovermode { get; set; }
+    public TooltipHovermode Hovermode { get; set; }
 
     internal PanelUpdate ToUpdate() =>
         new(Id)

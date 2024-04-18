@@ -36,7 +36,7 @@ namespace HSMServer.Dashboards
 
         public bool? AutoScale { get; set; }
 
-        public Hovermode? Hovermode { get;  init; }
+        public TooltipHovermode? Hovermode { get;  init; }
 
 
         public bool NeedSourceRebuild => IsAggregateValues.HasValue || MinY.HasValue || MaxY.HasValue || AutoScale.HasValue;
