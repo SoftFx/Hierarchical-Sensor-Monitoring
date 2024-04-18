@@ -34,39 +34,8 @@ namespace HSMServer.Model
         public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval is TimeInterval.Forever ?
                                              DateTime.MaxValue : DateTimeNow.AddDays(Days).AddHours(Hours).AddMinutes(Minutes);
 
-
-        //private IgnoreNotificationsViewModel(BaseNodeViewModel node)
-        //{
-        //    TreeElement = node switch
-        //    {
-        //        SensorNodeViewModel => SensorTreeElement,
-        //        ProductNodeViewModel => NodeTreeElement,
-        //        FolderModel => FolderTreeElement,
-        //        _ => null
-        //    };
-
-        //    IgnorePeriod = new(PredefinedIntervals.ForIgnore, useCustomTemplate: false);
-
-        //    DateTimeNow = DateTime.UtcNow.RoundToMin();
-        //}
-
         //// public constructor without parameters for action Home/IgnoreNotifications
         public IgnoreNotificationsViewModel() { }
-
-        //public IgnoreNotificationsViewModel(NodeViewModel node) : this((BaseNodeViewModel)node)
-        //{
-        //    Ids.Add(node.EncodedId);
-        //    Paths.Add(node.FullPath);
-
-        //    if (node.Id == node.RootProduct.Id)
-        //        TreeElement = ProductTreeElement;
-        //}
-
-        //public IgnoreNotificationsViewModel(FolderModel folder) : this((BaseNodeViewModel)folder)
-        //{
-        //    Ids.Add(folder.Id.ToString());
-        //    Paths.Add(folder.Name);
-        //}
 
         public IgnoreNotificationsViewModel(List<BaseNodeViewModel> items)
         {
