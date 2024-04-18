@@ -75,5 +75,9 @@ else
 <script>
     $(document).ready(function () {
         JournalTable = undefined;
+        
+        if ('@(Model.HasChildren)' === 'False'){
+            initializeJournal(NodeType.Node);
+        }
     });
 </script>
