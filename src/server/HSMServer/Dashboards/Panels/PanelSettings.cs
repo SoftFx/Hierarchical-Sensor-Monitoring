@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Dashboards
 {
-    public enum TooltipHovermode
+    public enum TooltipHovermode : byte
     {
         [Display(Name = "x")]
         X,
