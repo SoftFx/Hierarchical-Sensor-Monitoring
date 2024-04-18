@@ -1,7 +1,25 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Dashboards
 {
+    public enum TooltipHovermode : byte
+    {
+        [Display(Name = "x")]
+        X,
+        [Display(Name = "y")]
+        Y,
+        [Display(Name = "false")]
+        False,
+        [Display(Name = "closest")]
+        Closest,
+        [Display(Name = "x unified")]
+        XUnified,
+        [Display(Name = "y unified")]
+        YUnified,
+    }
+
+
     public sealed class PanelSettings
     {
         internal const double DefaultHeight = 0.2;
@@ -20,6 +38,8 @@ namespace HSMServer.Dashboards
 
         public bool ShowLegend { get; private set; }
 
+        public TooltipHovermode Hovermode { get; private set; } = TooltipHovermode.X;
+
 
         public PanelSettings()
         {
@@ -36,6 +56,8 @@ namespace HSMServer.Dashboards
             Y = update.Y ?? Y;
 
             ShowLegend = update.ShowLegend ?? ShowLegend;
+
+            Hovermode = update.Hovermode ?? Hovermode;
         }
 
         public PanelSettings FromEntity(PanelSettingsEntity entity)
@@ -48,6 +70,8 @@ namespace HSMServer.Dashboards
 
             ShowLegend = entity.ShowLegend;
 
+            Hovermode = (TooltipHovermode)entity.Hovermode;
+            
             return this;
         }
 
@@ -61,6 +85,8 @@ namespace HSMServer.Dashboards
                 Y = Y,
 
                 ShowLegend = ShowLegend,
+                
+                Hovermode = (byte)Hovermode,
             };
     }
 }

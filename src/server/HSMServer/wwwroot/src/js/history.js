@@ -258,6 +258,8 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         let parsedData = JSON.parse(data);
         if (parsedData.error === true)
             $('#points_limit').show();
+        else
+            $('#points_limit').hide()
 
         let values = parsedData.values;
         if (values.length === 0) {
