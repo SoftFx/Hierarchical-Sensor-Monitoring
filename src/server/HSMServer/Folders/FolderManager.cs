@@ -8,10 +8,8 @@ using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.TableOfChanges;
-using HSMServer.Extensions;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.Controls;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
@@ -215,7 +213,7 @@ namespace HSMServer.Folders
                 return folders;
 
             if (user.FoldersRoles.Count == 0)
-                return new();
+                return [];
 
             return folders.Where(f => user.IsFolderAvailable(f.Id)).ToList();
         }
@@ -275,7 +273,7 @@ namespace HSMServer.Folders
                     Id = productId,
                     FolderId = action is ActionType.Delete ? Guid.Empty : folder.Id,
 
-                    //DefaultChats = 
+                    DefaultChats = GetCorePolicy(defaultChats, folder, action),
                     KeepHistory = GetCoreUpdate(savedHistory, folder.KeepHistory, action),
                     SelfDestroy = GetCoreUpdate(selfDestroy, folder.SelfDestroy, action),
                     TTL = GetCoreUpdate(ttl, folder.TTL, action),
@@ -320,12 +318,8 @@ namespace HSMServer.Folders
             return model.IsFromFolder ? action is ActionType.Delete ? folderModel : folderModel.ToFromFolderModel() : null;
         }
 
-        //private static PolicyDestinationSettings GetCorePolicy(PolicyDestinationSettings model, FolderModel folder, ActionType action)
-        //{
-        //    var folderModel = folder.DefaultChats.ToModel(folder.GetAvailableChats());
-
-        //    return model.IsFromParent ? action is ActionType.Delete ? folderModel.IsFromParent = false
-        //}
+        private static PolicyDestinationSettings GetCorePolicy(PolicyDestinationSettings model, FolderModel folder, ActionType action)
+            => model.IsFromFolder ? new(folder.DefaultChats.ToEntity(folder.GetAvailableChats(), action is not ActionType.Delete)) : null;
 
         private void ResetServerPolicyForFolderProducts()
         {

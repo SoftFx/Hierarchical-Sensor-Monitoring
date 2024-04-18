@@ -41,13 +41,13 @@ namespace HSMServer.Model.ViewModel
         }
 
 
-        internal ProductUpdate ToUpdate(Dictionary<Guid, string> availableChats, InitiatorInfo initiator) =>
+        internal ProductUpdate ToUpdate(Dictionary<Guid, string> availableChats, bool parentIsFoler, InitiatorInfo initiator) =>
             new()
             {
                 Id = Id,
                 Name = IsNameChanged ? Name : null,
                 Description = Description is null ? string.Empty : Description,
-                DefaultChats = DefaultChats.ToModel(availableChats),
+                DefaultChats = DefaultChats.ToModel(availableChats, parentIsFoler),
                 Initiator = initiator,
             };
     }

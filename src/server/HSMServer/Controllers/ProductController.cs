@@ -156,7 +156,7 @@ namespace HSMServer.Controllers
         public IActionResult EditProduct(ProductGeneralInfoViewModel viewModel)
         {
             if (_treeViewModel.Nodes.TryGetValue(viewModel.Id, out var product) && ModelState.IsValid)
-                _treeValuesCache.UpdateProduct(viewModel.ToUpdate(product.GetAvailableChats(_telegramChatsManager), CurrentInitiator));
+                _treeValuesCache.UpdateProduct(viewModel.ToUpdate(product.GetAvailableChats(_telegramChatsManager), product.ParentIsFolder, CurrentInitiator));
             else
                 viewModel.DefaultChats = new(product);
 
@@ -166,7 +166,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void AddUserRight([FromBody] UserRightViewModel model)
         {
-            UserRightValidator validator = new UserRightValidator();
+            var validator = new UserRightValidator();
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
@@ -177,8 +177,8 @@ namespace HSMServer.Controllers
             var user = _userManager[model.UserId];
             var pair = (model.EntityId, (ProductRoleEnum)model.ProductRole);
 
-            if (user.ProductsRoles == null || !user.ProductsRoles.Any())
-                user.ProductsRoles = new List<(Guid, ProductRoleEnum)> { pair };
+            if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
+                user.ProductsRoles = [pair];
             else
                 user.ProductsRoles.Add(pair);
 

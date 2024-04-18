@@ -9,6 +9,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -1069,6 +1070,8 @@ namespace HSMServer.Core.Cache
                         TTL = new TimeIntervalModel(TimeInterval.None),
                         KeepHistory = new TimeIntervalModel(TimeInterval.Month),
                         SelfDestroy = new TimeIntervalModel(TimeInterval.Month),
+
+                        DefaultChats = new PolicyDestinationSettings(product.FolderId != null ? DefaultChatInheritanceMode.FromFolder : DefaultChatInheritanceMode.None),
                     };
 
                     product.Update(update);
@@ -1100,7 +1103,7 @@ namespace HSMServer.Core.Cache
 
                 DefaultChatsSettings = new PolicyDestinationSettingsEntity()
                 {
-                    IsFromParent = true,
+                    InheritanceMode = (byte)DefaultChatInheritanceMode.FromParent,
                 }
             };
 

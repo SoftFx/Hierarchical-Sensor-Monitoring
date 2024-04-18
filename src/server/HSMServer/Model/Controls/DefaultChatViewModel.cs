@@ -63,28 +63,31 @@ namespace HSMServer.Model.Controls
             return ToAvailableChats(chats).TryGetValue(usedValue, out var chat) ? AsFromParent(chat.Name) : string.Empty;
         }
 
+
         internal DefaultChatViewModel FromModel(PolicyDestinationSettings model)
         {
-            SelectedChat = model.IsFromParent ? null : model.Chats.FirstOrDefault().Key;
+            SelectedChat = model.InheritanceMode is DefaultChatInheritanceMode.None ? model.Chats.FirstOrDefault().Key : null;
 
             return this;
         }
 
-        internal PolicyDestinationSettings ToModel(Dictionary<Guid, string> availableChats) => new(ToEntity(availableChats));
+        internal PolicyDestinationSettings ToModel(Dictionary<Guid, string> availableChats, bool parentIsFolder = false) => new(ToEntity(availableChats, parentIsFolder));
 
-        internal PolicyDestinationSettingsEntity ToEntity(Dictionary<Guid, string> availableChats)
+        internal PolicyDestinationSettingsEntity ToEntity(Dictionary<Guid, string> availableChats, bool parentIsFolder = false)
         {
-            var chats = new Dictionary<Guid, string>(1);
+            var chats = new Dictionary<string, string>(1);
 
             if (SelectedChat.HasValue && availableChats.TryGetValue(SelectedChat.Value, out var chatName))
-                chats.Add(SelectedChat.Value, chatName);
+                chats.Add($"{SelectedChat.Value}", chatName);
 
             return new()
             {
-                Chats = chats.ToDictionary(k => k.Key.ToString(), v => v.Value),
-                IsFromParent = IsFromParent,
+                Chats = chats,
+                InheritanceMode = parentIsFolder ? (byte)DefaultChatInheritanceMode.FromFolder :
+                                  IsFromParent ? (byte)DefaultChatInheritanceMode.FromParent : (byte)DefaultChatInheritanceMode.None,
             };
         }
+
 
         private Dictionary<Guid, TelegramChat> ToAvailableChats(List<TelegramChat> chats) =>
             chats.Where(u => AvailableChats.Contains(u.Id)).ToDictionary(k => k.Id, v => v);

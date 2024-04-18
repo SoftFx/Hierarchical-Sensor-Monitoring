@@ -253,7 +253,7 @@ namespace HSMServer.ApiObjectsConverters
                 SelectedUnit = request.OriginalUnit?.Convert(),
                 Integration = request.EnableGrafana.HasValue ? request.EnableGrafana.Value ? Integration.Grafana : Integration.None : null,
 
-                DefaultChats = request.DefaultChats is not null ? new PolicyDestinationSettings(request.DefaultChats is DefaultChatsMode.FromParent) : null,
+                DefaultChats = request.DefaultChats is not null ? new PolicyDestinationSettings(request.DefaultChats.Value.Convert()) : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),
@@ -294,12 +294,19 @@ namespace HSMServer.ApiObjectsConverters
                 request.Target is not null ? new(request.Target.Type.Convert(), request.Target.Value) : null,
                 request.Combination.Convert());
 
-
         private static TimeIntervalModel ToTimeInterval(this long? ticks)
         {
             return !ticks.HasValue ? null : ticks.Value == TimeSpan.MaxValue.Ticks ? new TimeIntervalModel(TimeInterval.None) : new(ticks.Value);
         }
 
+
+        public static DefaultChatInheritanceMode Convert(this DefaultChatsMode apiMode) =>
+            apiMode switch
+            {
+                DefaultChatsMode.FromParent => DefaultChatInheritanceMode.FromParent,
+                DefaultChatsMode.NotInitialized => DefaultChatInheritanceMode.None,
+                _ => throw new NotImplementedException(),
+            };
 
         public static SensorType Convert(this HSMSensorDataObjects.SensorType type) =>
             type switch
