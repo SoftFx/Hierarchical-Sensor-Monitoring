@@ -27,7 +27,7 @@ namespace HSMServer.Model.Folders
         public Guid AuthorId { get; }
 
 
-        public HashSet<Guid> TelegramChats { get; private set; } = new();
+        public HashSet<Guid> TelegramChats { get; private set; } = [];
 
         public Color Color { get; private set; }
 
@@ -195,7 +195,8 @@ namespace HSMServer.Model.Folders
                 Color = Color.ToArgb(),
                 TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
 
-                DefaultChatsSettings = DefaultChats.ToEntity(TelegramChats.ToDictionary(k => k, v => GetChatName?.Invoke(v))),
+                DefaultChatsSettings = DefaultChats.ToEntity(GetAvailableChats()),
+
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
                     [nameof(TTL)] = TTL.ToEntity(),
@@ -203,6 +204,8 @@ namespace HSMServer.Model.Folders
                     [nameof(SelfDestroy)] = SelfDestroy.ToEntity(),
                 }
             };
+
+        internal Dictionary<Guid, string> GetAvailableChats() => TelegramChats.ToDictionary(k => k, v => GetChatName?.Invoke(v));
 
         internal FolderModel RecalculateState()
         {

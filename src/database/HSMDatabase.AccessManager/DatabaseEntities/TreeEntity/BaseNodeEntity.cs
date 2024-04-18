@@ -34,6 +34,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
     public sealed record PolicyDestinationSettingsEntity : PolicyDestinationEntity
     {
-        public bool IsFromParent { get; init; }
+        public byte InheritanceMode { get; init; }
     }
 }

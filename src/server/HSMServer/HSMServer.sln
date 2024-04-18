@@ -39,6 +39,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Modules", "Modules", "{98F0
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMSensorDataObjects", "..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj", "{F9C99186-A705-42D9-9977-FEF9325FE5AB}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDataCollector", "..\..\collector\HSMDataCollector\HSMDataCollector.csproj", "{254E8447-B59C-4745-B418-A0AA114883CE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -97,6 +99,10 @@ Global
 		{F9C99186-A705-42D9-9977-FEF9325FE5AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F9C99186-A705-42D9-9977-FEF9325FE5AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F9C99186-A705-42D9-9977-FEF9325FE5AB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{254E8447-B59C-4745-B418-A0AA114883CE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{254E8447-B59C-4745-B418-A0AA114883CE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{254E8447-B59C-4745-B418-A0AA114883CE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{254E8447-B59C-4745-B418-A0AA114883CE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
