@@ -36,6 +36,7 @@ namespace HSMSensorDataObjects.SensorRequests
     {
         FromParent = 0,
         NotInitialized = 1,
+        Empty = 2,
     }
 
 

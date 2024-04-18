@@ -305,6 +305,7 @@ namespace HSMServer.ApiObjectsConverters
             {
                 HSMSensorDataObjects.SensorRequests.DefaultChatsMode.FromParent => Core.Model.NodeSettings.DefaultChatsMode.FromParent,
                 HSMSensorDataObjects.SensorRequests.DefaultChatsMode.NotInitialized => Core.Model.NodeSettings.DefaultChatsMode.NotInitialized,
+                HSMSensorDataObjects.SensorRequests.DefaultChatsMode.Empty => Core.Model.NodeSettings.DefaultChatsMode.Empty,
                 _ => throw new NotImplementedException(),
             };
 
