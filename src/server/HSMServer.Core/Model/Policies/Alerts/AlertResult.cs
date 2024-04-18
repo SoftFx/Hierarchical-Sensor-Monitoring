@@ -14,10 +14,10 @@ namespace HSMServer.Core.Model.Policies
 
         public AlertDestination(Policy policy)
         {
-            var dest = policy.UsedDestination;
+            var target = policy.TargetChats;
 
-            Chats = new HashSet<Guid>(dest.Chats.Keys);
-            AllChats = dest.AllChats;
+            Chats = new HashSet<Guid>(target.Chats.Keys);
+            AllChats = target.AllChats;
         }
 
 

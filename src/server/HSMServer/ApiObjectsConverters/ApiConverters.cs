@@ -300,11 +300,11 @@ namespace HSMServer.ApiObjectsConverters
         }
 
 
-        public static DefaultChatInheritanceMode Convert(this DefaultChatsMode apiMode) =>
+        public static Core.Model.NodeSettings.DefaultChatsMode Convert(this HSMSensorDataObjects.SensorRequests.DefaultChatsMode apiMode) =>
             apiMode switch
             {
-                DefaultChatsMode.FromParent => DefaultChatInheritanceMode.FromParent,
-                DefaultChatsMode.NotInitialized => DefaultChatInheritanceMode.None,
+                HSMSensorDataObjects.SensorRequests.DefaultChatsMode.FromParent => Core.Model.NodeSettings.DefaultChatsMode.FromParent,
+                HSMSensorDataObjects.SensorRequests.DefaultChatsMode.NotInitialized => Core.Model.NodeSettings.DefaultChatsMode.NotInitialized,
                 _ => throw new NotImplementedException(),
             };
 

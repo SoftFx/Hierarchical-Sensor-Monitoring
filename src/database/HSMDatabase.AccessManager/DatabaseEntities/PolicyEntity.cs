@@ -17,7 +17,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     }
 
 
-    public record PolicyDestinationEntity
+    public sealed record PolicyDestinationEntity
     {
         public Dictionary<string, string> Chats { get; init; }
 

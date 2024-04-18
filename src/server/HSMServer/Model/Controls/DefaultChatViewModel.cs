@@ -66,7 +66,7 @@ namespace HSMServer.Model.Controls
 
         internal DefaultChatViewModel FromModel(PolicyDestinationSettings model)
         {
-            SelectedChat = model.InheritanceMode is DefaultChatInheritanceMode.None ? model.Chats.FirstOrDefault().Key : null;
+            SelectedChat = model.Mode is DefaultChatsMode.NotInitialized ? model.Chats.FirstOrDefault().Key : null;
 
             return this;
         }
@@ -83,8 +83,8 @@ namespace HSMServer.Model.Controls
             return new()
             {
                 Chats = chats,
-                InheritanceMode = parentIsFolder ? (byte)DefaultChatInheritanceMode.FromFolder :
-                                  IsFromParent ? (byte)DefaultChatInheritanceMode.FromParent : (byte)DefaultChatInheritanceMode.None,
+                Mode = parentIsFolder ? (byte)DefaultChatsMode.FromFolder :
+                                  IsFromParent ? (byte)DefaultChatsMode.FromParent : (byte)DefaultChatsMode.NotInitialized,
             };
         }
 

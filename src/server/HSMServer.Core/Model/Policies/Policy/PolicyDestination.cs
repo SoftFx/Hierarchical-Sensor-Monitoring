@@ -6,7 +6,15 @@ using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public class PolicyDestination
+    public interface IPolicyDestinationHandler
+    {
+        public Dictionary<Guid, string> Chats { get; }
+
+        public bool AllChats { get; }
+    }
+
+
+    public sealed class PolicyDestination : IPolicyDestinationHandler
     {
         public Dictionary<Guid, string> Chats { get; } = [];
 
@@ -22,8 +30,6 @@ namespace HSMServer.Core.Model.Policies
         {
             UseDefaultChats = entity.UseDefaultChats;
             AllChats = entity.AllChats;
-
-            Chats.Clear();
 
             if (entity.Chats is not null)
                 foreach (var (chatId, name) in entity.Chats)
@@ -50,12 +56,7 @@ namespace HSMServer.Core.Model.Policies
             AllChats = AllChats,
         };
 
-        public override string ToString()
-        {
-            if (AllChats)
-                return "all chats";
-            else
-                return UseDefaultChats ? "default chat" : string.Join(", ", Chats.Values);
-        }
+        public override string ToString() =>
+            AllChats ? "all chats" : UseDefaultChats ? "default chat" : string.Join(", ", Chats.Values);
     }
 }

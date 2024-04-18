@@ -1071,7 +1071,7 @@ namespace HSMServer.Core.Cache
                         KeepHistory = new TimeIntervalModel(TimeInterval.Month),
                         SelfDestroy = new TimeIntervalModel(TimeInterval.Month),
 
-                        DefaultChats = new PolicyDestinationSettings(product.FolderId != null ? DefaultChatInheritanceMode.FromFolder : DefaultChatInheritanceMode.None),
+                        DefaultChats = new PolicyDestinationSettings(product.FolderId != null ? DefaultChatsMode.FromFolder : DefaultChatsMode.NotInitialized),
                     };
 
                     product.Update(update);
@@ -1103,7 +1103,7 @@ namespace HSMServer.Core.Cache
 
                 DefaultChatsSettings = new PolicyDestinationSettingsEntity()
                 {
-                    InheritanceMode = (byte)DefaultChatInheritanceMode.FromParent,
+                    Mode = (byte)DefaultChatsMode.FromParent,
                 }
             };
 

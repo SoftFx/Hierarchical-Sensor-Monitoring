@@ -44,10 +44,6 @@ namespace HSMServer.Core.Model.Policies
         public PolicySchedule Schedule { get; set; } = new();
 
 
-        public PolicyDestination UsedDestination =>
-            Destination.UseDefaultChats && Sensor is not null ? Sensor.Settings.DefaultChats.Value : Destination;
-
-
         public string Template
         {
             get => _userTemplate;
@@ -63,6 +59,9 @@ namespace HSMServer.Core.Model.Policies
 
 
         internal virtual bool UseScheduleManagerLogic => Schedule.IsActive;
+
+        internal IPolicyDestinationHandler TargetChats => Destination.UseDefaultChats && Sensor is not null ? 
+            Sensor.Settings.DefaultChats.Value : Destination;
 
 
         public Policy()
