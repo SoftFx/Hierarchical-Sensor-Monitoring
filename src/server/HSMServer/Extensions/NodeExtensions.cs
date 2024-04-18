@@ -1,4 +1,6 @@
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Controls;
+using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
@@ -54,10 +56,19 @@ namespace HSMServer.Extensions
         }
 
 
-        internal static bool HasUnconfiguredAlerts(this SensorNodeViewModel sensor) =>
-            sensor.HasData && sensor.State is not Core.Model.SensorState.Muted &&
-            (sensor.DataAlerts.Values.Any(d => d.Any(a => a.IsUnconfigured())) ||
-            (!sensor.TTL.IsIntervalNone && sensor.TTLAlert.IsUnconfigured()));
+        internal static bool HasUnconfiguredAlerts(this SensorNodeViewModel sensor)
+        {
+            bool IsUnconfigured(DataAlertViewModelBase alert)
+            {
+                var notInitializedChat = DefaultChatViewModel.EmptyValue.Id;
+
+                return alert.IsUnconfigured() || (alert.IsDefaultDestination() && sensor.DefaultChats.GetCurrentChatId() == notInitializedChat);
+            }
+
+
+            return sensor.HasData && sensor.State is not Core.Model.SensorState.Muted &&
+                   (sensor.DataAlerts.Values.Any(d => d.Any(a => IsUnconfigured(a))) || (!sensor.TTL.IsIntervalNone && IsUnconfigured(sensor.TTLAlert)));
+        }
 
 
         internal static string ToCssIconClass(this SensorStatus status) =>
