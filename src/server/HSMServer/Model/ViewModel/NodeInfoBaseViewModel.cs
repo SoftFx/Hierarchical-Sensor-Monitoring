@@ -76,7 +76,7 @@ namespace HSMServer.Model.ViewModel
             SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
 
             HistoryStatistic = model.HistoryStatistic;
-            DefaultChats = new(model);
+            DefaultChats = new(model, isModify: false);
 
             AlertIcons = model.AlertIcons;
             HasTimeToLive = model.TTL.TimeInterval is not TimeInterval.None;
