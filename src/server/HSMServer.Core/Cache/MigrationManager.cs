@@ -3,6 +3,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,6 +12,8 @@ namespace HSMServer.Core.Cache
 {
     internal sealed class MigrationManager
     {
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
         private static readonly InitiatorInfo _softMigrator = InitiatorInfo.AsSoftSystemMigrator();
         private static readonly InitiatorInfo _migrator = InitiatorInfo.AsSystemMigrator();
 
@@ -44,7 +47,48 @@ namespace HSMServer.Core.Cache
         };
 
 
-        internal static IEnumerable<SensorUpdate> GetMigrationUpdates(List<BaseSensorModel> sensors)
+        internal delegate bool SensorMigrationApplyEvent(SensorUpdate update, out string error);
+
+        internal event SensorMigrationApplyEvent ApplySensorMigration;
+        internal event Action<ProductUpdate> ApplyProductMigration;
+
+
+        internal void RunSensorMigrations(List<BaseSensorModel> sensors)
+        {
+            foreach (var update in GetSensorsMigrationUpdates(sensors))
+                try
+                {
+                    ApplySensorMigration?.Invoke(update, out _);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Sensor migration is failed: {update.Id} {ex}");
+                }
+        }
+
+        internal void RunProductMigrations(List<ProductModel> products)
+        {
+            foreach (var update in GetProductsMigrationUpdates(products))
+                try
+                {
+                    ApplyProductMigration?.Invoke(update);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Product migration is failed: {update.Id} {ex}");
+                }
+        }
+
+        private static IEnumerable<ProductUpdate> GetProductsMigrationUpdates(List<ProductModel> products)
+        {
+            foreach (var product in products)
+            {
+                if (TryMigrateProductTTLPolicyDestinationToDefaultChat(product, out var update))
+                    yield return update;
+            }
+        }
+
+        private static IEnumerable<SensorUpdate> GetSensorsMigrationUpdates(List<BaseSensorModel> sensors)
         {
             foreach (var sensor in sensors)
             {
@@ -69,7 +113,7 @@ namespace HSMServer.Core.Cache
                 if (TryMigratePolicyDestinationToDefaultChat(sensor, out var update))
                     yield return update;
 
-                if (TryMigrateTTLPolicyDestinationToDefaultChat(sensor, out update))
+                if (TryMigrateSensorTTLPolicyDestinationToDefaultChat(sensor, out update))
                     yield return update;
 
                 if (TryMigrateSensorDefaultChatToParent(sensor, out update))
@@ -87,14 +131,23 @@ namespace HSMServer.Core.Cache
             return TryMigratePolicy(sensor, IsTarget, Migration, out update);
         }
 
-        private static bool TryMigrateTTLPolicyDestinationToDefaultChat(BaseSensorModel sensor, out SensorUpdate update)
+
+        private static bool TryMigrateSensorTTLPolicyDestinationToDefaultChat(BaseSensorModel sensor, out SensorUpdate update) =>
+            TryMigrateTTLPolicyDestinationToDefaultChat(sensor, out update);
+
+        private static bool TryMigrateProductTTLPolicyDestinationToDefaultChat(ProductModel product, out ProductUpdate update) =>
+            TryMigrateTTLPolicyDestinationToDefaultChat(product, out update);
+
+        private static bool TryMigrateTTLPolicyDestinationToDefaultChat<T>(BaseNodeModel node, out T update)
+            where T : BaseNodeUpdate, new()
         {
             static bool IsTarget(Policy policy) => policy.Destination.IsNotInitialized;
 
             static PolicyUpdate Migration(PolicyUpdate update) => ToDefaultChatDestination(update);
 
-            return TryMigrateTtlPolicy(sensor, IsTarget, Migration, out update);
+            return TryMigrateTtlPolicy(node, IsTarget, Migration, out update);
         }
+
 
         private static bool TryMigrateServiceAliveTtlToSchedule(BaseSensorModel sensor, out SensorUpdate update)
         {
@@ -129,7 +182,6 @@ namespace HSMServer.Core.Cache
 
                 return update;
             }
-
 
             var result = TryMigratePolicy(sensor, IsTarget, Migration, out update);
 
@@ -196,7 +248,6 @@ namespace HSMServer.Core.Cache
 
             static PolicyUpdate ExistingPoliciesMigration(PolicyUpdate update) => update;
 
-
             sensorUpdate = null;
 
             if (isTarget(sensor))
@@ -211,14 +262,15 @@ namespace HSMServer.Core.Cache
             return false;
         }
 
-        private static bool TryMigrateTtlPolicy(BaseSensorModel sensor, Predicate<Policy> isTarget, Func<PolicyUpdate, PolicyUpdate> migrator, out SensorUpdate sensorUpdate)
+        private static bool TryMigrateTtlPolicy<T>(BaseNodeModel node, Predicate<Policy> isTarget, Func<PolicyUpdate, PolicyUpdate> migrator, out T update)
+            where T : BaseNodeUpdate, new()
         {
-            var ttl = sensor.Policies.TimeToLive;
+            var ttl = node.Policies.TimeToLive;
             var needMigration = isTarget(ttl);
 
-            sensorUpdate = !needMigration ? null : new SensorUpdate()
+            update = !needMigration ? null : new T()
             {
-                Id = sensor.Id,
+                Id = node.Id,
                 TTLPolicy = migrator(ToUpdate(ttl)),
                 Initiator = _migrator,
             };

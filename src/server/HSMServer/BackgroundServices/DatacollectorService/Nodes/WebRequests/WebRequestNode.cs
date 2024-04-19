@@ -4,7 +4,7 @@ using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects.SensorRequests;
 using Microsoft.AspNetCore.Http;
 
-namespace HSMServer.WebRequestsNodes;
+namespace HSMServer.BackgroundServices;
 
 public record WebRequestNode
 {

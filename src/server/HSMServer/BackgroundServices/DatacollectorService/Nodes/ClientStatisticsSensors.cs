@@ -1,5 +1,4 @@
 using HSMDataCollector.Core;
-using HSMServer.WebRequestsNodes;
 using System.Collections.Concurrent;
 
 namespace HSMServer.BackgroundServices
