@@ -25,6 +25,8 @@ namespace HSMServer.Core.Model.NodeSettings
         public DefaultChatsMode Mode { get; } = DefaultChatsMode.FromParent;
 
 
+        public bool IsNotInitialized => Mode is DefaultChatsMode.NotInitialized;
+
         public bool IsFromParent => Mode is DefaultChatsMode.FromParent;
 
         public bool IsFromFolder => Mode is DefaultChatsMode.FromFolder;

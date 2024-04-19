@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using System;
@@ -10,7 +11,9 @@ namespace HSMServer.Core.Cache
 {
     internal sealed class MigrationManager
     {
+        private static readonly InitiatorInfo _softMigrator = InitiatorInfo.AsSoftSystemMigrator();
         private static readonly InitiatorInfo _migrator = InitiatorInfo.AsSystemMigrator();
+
 
         private static readonly HashSet<PolicyProperty> _numberToEmaSet =
         [
@@ -44,25 +47,54 @@ namespace HSMServer.Core.Cache
         internal static IEnumerable<SensorUpdate> GetMigrationUpdates(List<BaseSensorModel> sensors)
         {
             foreach (var sensor in sensors)
+            {
                 if (IsDefaultSensor(sensor))
                 {
                     if (IsNumberSensor(sensor.Type))
                     {
-                        if (TryBuildNumberToEmaMigration(sensor, out var update))
-                            yield return update;
+                        if (TryBuildNumberToEmaMigration(sensor, out var updateDefault))
+                            yield return updateDefault;
 
-                        if (TryBuildNumberToScheduleMigration(sensor, out update))
-                            yield return update;
+                        if (TryBuildNumberToScheduleMigration(sensor, out updateDefault))
+                            yield return updateDefault;
 
-                        if (TryBuildTimeInGcSensorMigration(sensor, out update))
-                            yield return update;
+                        if (TryBuildTimeInGcSensorMigration(sensor, out updateDefault))
+                            yield return updateDefault;
                     }
 
                     if (IsBoolSensor(sensor.Type) && TryMigrateServiceAliveTtlToSchedule(sensor, out var updateTtl))
                         yield return updateTtl;
                 }
+
+                if (TryMigratePolicyDestinationToDefaultChat(sensor, out var update))
+                    yield return update;
+
+                if (TryMigrateTTLPolicyDestinationToDefaultChat(sensor, out update))
+                    yield return update;
+
+                if (TryMigrateSensorDefaultChatToParent(sensor, out update))
+                    yield return update;
+            }
         }
 
+
+        private static bool TryMigratePolicyDestinationToDefaultChat(BaseSensorModel sensor, out SensorUpdate update)
+        {
+            static bool IsTarget(Policy policy) => policy.Destination.IsNotInitialized;
+
+            static PolicyUpdate Migration(PolicyUpdate update) => ToDefaultChatDestination(update);
+
+            return TryMigratePolicy(sensor, IsTarget, Migration, out update);
+        }
+
+        private static bool TryMigrateTTLPolicyDestinationToDefaultChat(BaseSensorModel sensor, out SensorUpdate update)
+        {
+            static bool IsTarget(Policy policy) => policy.Destination.IsNotInitialized;
+
+            static PolicyUpdate Migration(PolicyUpdate update) => ToDefaultChatDestination(update);
+
+            return TryMigrateTtlPolicy(sensor, IsTarget, Migration, out update);
+        }
 
         private static bool TryMigrateServiceAliveTtlToSchedule(BaseSensorModel sensor, out SensorUpdate update)
         {
@@ -206,6 +238,25 @@ namespace HSMServer.Core.Cache
             return false;
         }
 
+        private static bool TryMigrateSensorDefaultChatToParent(BaseSensorModel sensor, out SensorUpdate update)
+        {
+            if (sensor.Settings.DefaultChats.CurValue.IsNotInitialized)
+            {
+                update = new SensorUpdate
+                {
+                    Id = sensor.Id,
+                    DefaultChats = new PolicyDestinationSettings(DefaultChatsMode.FromParent),
+                    Initiator = _softMigrator,
+                };
+
+                return true;
+            }
+
+            update = null;
+
+            return false;
+        }
+
 
         private static bool IsDefaultSensor(BaseSensorModel sensor) => IsComputerSensor(sensor) || IsModuleSensor(sensor);
 
@@ -261,5 +312,8 @@ namespace HSMServer.Core.Cache
             InstantSend = instantSend,
             Time = new DateTime(1, 1, 1, 12, 0, 0, DateTimeKind.Utc),
         };
+
+        private static PolicyUpdate ToDefaultChatDestination(PolicyUpdate update) =>
+            update with { Destination = new PolicyDestinationUpdate(useDefaultChat: true) };
     }
 }
