@@ -346,6 +346,7 @@ namespace HSMServer.Controllers
         public IActionResult MuteSensors([FromBody] string[] ids)
         {
             var result = new List<BaseNodeViewModel>(ids.Length);
+
             foreach (string id in ids)
             {
                 var decodedId = SensorPathHelper.DecodeGuid(id);
@@ -364,8 +365,7 @@ namespace HSMServer.Controllers
                 }
             }
 
-            IgnoreNotificationsViewModel viewModel = new IgnoreNotificationsViewModel(result);
-            return PartialView("~/Views/Tree/_IgnoreNotificationsModal.cshtml", viewModel);
+            return PartialView("~/Views/Tree/_IgnoreNotificationsModal.cshtml", new IgnoreNotificationsViewModel(result));
         }
 
         [HttpPost]

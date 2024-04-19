@@ -12,9 +12,9 @@
     <form id="ignoreNotifications_form" asp-action="@nameof(HomeController.SetMutedStateToSensorFromModal)" method="post">
 
          <select multiple class="d-none" asp-for="@Model.Ids">
-            @for (var i = 0; i < Model.Ids.Length; i++)
+            @foreach (var id in Model.Ids)
             {
-                <option value="@Model.Ids[i]"></option>
+                <option value="@id"></option>
             }
         </select>
         <input class="d-none" asp-for="DateTimeNow" />

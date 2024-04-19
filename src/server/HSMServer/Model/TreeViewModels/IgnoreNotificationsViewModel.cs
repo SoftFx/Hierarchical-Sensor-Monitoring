@@ -15,11 +15,11 @@ namespace HSMServer.Model
         private const string FolderTreeElement = "folder";
 
 
-        public string[] Paths { get; private set; }
+        public string[] Paths { get; }
+
+        public string[] Ids { get; set; }
 
         public string TreeElement { get; }
-
-        public string[] Ids { get; set;}
 
         public TimeIntervalViewModel IgnorePeriod { get; set; }
 
