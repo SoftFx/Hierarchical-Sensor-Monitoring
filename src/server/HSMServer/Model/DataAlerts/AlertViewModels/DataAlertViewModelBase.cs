@@ -24,6 +24,8 @@ namespace HSMServer.Model.DataAlerts
         public Guid Id { get; set; }
 
 
+        public Guid DefaultChat { get; protected set; }
+
         public bool IsModify { get; protected set; }
 
         public virtual bool IsTtl { get; } = false;
@@ -153,7 +155,12 @@ namespace HSMServer.Model.DataAlerts
         protected virtual string DefaultIcon { get; }
 
 
-        protected DataAlertViewModel(Policy policy, NodeViewModel node)
+        private DataAlertViewModel(BaseNodeViewModel node)
+        {
+            DefaultChat = node.DefaultChats.GetCurrentChatId();
+        }
+
+        protected DataAlertViewModel(Policy policy, NodeViewModel node) : this((BaseNodeViewModel)node)
         {
             EntityId = node.Id;
             Id = policy.Id;
@@ -190,7 +197,7 @@ namespace HSMServer.Model.DataAlerts
                 Actions.Add(new ActionViewModel(IsActionMain, IsTtl, node) { Action = ActionType.SetStatus });
         }
 
-        public DataAlertViewModel(NodeViewModel node)
+        public DataAlertViewModel(NodeViewModel node) : this((BaseNodeViewModel)node)
         {
             EntityId = node.Id;
             IsModify = true;

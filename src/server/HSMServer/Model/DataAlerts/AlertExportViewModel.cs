@@ -10,7 +10,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class AlertExportViewModel
     {
-        private const string DefaultChat = "Default";
+        private const string DefaultChat = "#default";
 
 
         public List<string> Products { get; set; }

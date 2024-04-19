@@ -41,14 +41,14 @@ namespace HSMServer.Model.Controls
 
         public bool IsSelectedChat(Guid chatId) => SelectedChat == chatId;
 
+        public Guid GetCurrentChatId() => IsFromParent ? GetUsedValue(Parent) : SelectedChat.Value;
+
         public string GetCurrentDisplayValue(List<TelegramChat> chatList, out List<TelegramChat> allChats)
         {
             var chats = ToAvailableChats(chatList);
+            var chatName = chats.TryGetValue(GetCurrentChatId(), out var chat) ? chat.Name : EmptyValue.Name;
 
             allChats = [.. chats.Values];
-
-            var targetId = IsFromParent ? GetUsedValue(Parent) : SelectedChat.Value;
-            var chatName = chats.TryGetValue(targetId, out var chat) ? chat.Name : EmptyValue.Name;
 
             return IsFromParent ? AsFromParent(chatName) : chatName;
         }
