@@ -23,9 +23,9 @@
             <div class="spinner-border normal_spinner text-secondary" role="status"></div>
         </div>
         @await Html.PartialAsync("Sensor/History/_SensorHistoryContent", Model);
+        <div id="recentValues_@sensorId"></div>
     }
 
-    <div id="recentValues_@sensorId"></div>
 </div>
 
 
