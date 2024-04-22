@@ -11,6 +11,7 @@ using HSMServer.Dashboards;
 using HSMServer.Filters;
 using HSMServer.Folders;
 using HSMServer.Middleware;
+using HSMServer.Middleware.Telemetry;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
@@ -51,7 +52,8 @@ public static class ApplicationServiceExtensions
 
         services.AddSingleton<NotificationsCenter>()
                 .AddSingleton<DataCollectorWrapper>()
-                .AddSingleton<TreeViewModel>();
+                .AddSingleton<TreeViewModel>()
+                .AddSingleton<TelemetryCollector>();
 
         services.AddHostedService<TreeSnapshotService>()
                 .AddHostedService<ClearDatabaseService>()

@@ -1,4 +1,4 @@
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
@@ -8,9 +8,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 
-namespace HSMServer.Middleware
+namespace HSMServer.Middleware.Telemetry
 {
-    public sealed class TelemetryMiddleware(RequestDelegate _next, DataCollectorWrapper _collector, ITreeValuesCache _cache)
+    public class TelemetryCollector(DataCollectorWrapper _collector, ITreeValuesCache _cache)
     {
         private const string ClientNameHeader = nameof(Header.ClientName);
         private const string AccessKeyHeader = nameof(Header.Key);
@@ -18,10 +18,10 @@ namespace HSMServer.Middleware
         private const string XForvardHeader = "X-Forwarded-For"; // real ip without vpn redirection
         private const string EmptyClient = "No name";
 
-        private readonly ClientStatisticsSensors _statistics = _collector.WebRequestsSensors;
+        private protected readonly ClientStatisticsSensors _statistics = _collector.WebRequestsSensors;
 
 
-        public async Task InvokeAsync(HttpContext context)
+        public async Task<bool> TryRegisterPublicApiRequest(HttpContext context)
         {
             if (IsPublicApiRequest(context))
             {
@@ -37,18 +37,16 @@ namespace HSMServer.Middleware
                 {
                     await context.SetAccessError(error);
 
-                    return;
+                    return false;
                 }
             }
 
-            await _next(context);
-
-            if (context.TryGetPublicApiInfo(out var requestInfo))
-            {
-                _statistics.Total.AddResponseResult(context.Response);
-                _statistics[requestInfo.TelemetryPath].AddResponseResult(context.Response);
-            }
+            return true;
         }
+
+        [Obsolete("Should be removed ater migration from v3 to v4")]
+        public static bool TryAddKeyToHeader(HttpContext context, string accessKey) =>
+            context.TryWriteInfo(AccessKeyHeader, accessKey);
 
 
         private static bool IsPublicApiRequest(HttpContext context) => context.TryReadInfo(AccessKeyHeader, out _);
