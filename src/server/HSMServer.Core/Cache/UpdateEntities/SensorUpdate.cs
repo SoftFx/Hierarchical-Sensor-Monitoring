@@ -31,6 +31,10 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
 
         public DefaultAlertsOptions DefaultAlertsOptions { get; init; }
+
+
+        [SetsRequiredMembers]
+        public SensorUpdate() : base() { }
     }
 
 

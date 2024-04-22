@@ -1,10 +1,9 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
-using HSMServer.BackgroundServices;
 using Microsoft.AspNetCore.Http;
 
-namespace HSMServer.WebRequestsNodes;
+namespace HSMServer.BackgroundServices;
 
 public sealed record TotalWebRequestNode : WebRequestNode
 {
