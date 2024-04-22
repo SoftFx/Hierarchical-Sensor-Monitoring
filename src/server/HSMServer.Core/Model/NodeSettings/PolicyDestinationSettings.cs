@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model.NodeSettings
 {
     public enum DefaultChatsMode : byte
     {
-        NotInitialized = 0, // alerts to Unconfigurated
+        NotInitialized = 0, // unconfigured alerts
         Empty = 1, // alerts without notifications
         Custom = 5, // alerts with custom Chats
         FromParent = 10, // settings from Parent
@@ -56,7 +56,16 @@ namespace HSMServer.Core.Model.NodeSettings
         };
 
         public override string ToString() =>
-            IsFromFolder ? $"From folder ({ChatsToList()})" : IsFromParent ? "From parent" : ChatsToList();
+            Mode switch
+            {
+                DefaultChatsMode.NotInitialized => "Not initialized",
+                DefaultChatsMode.Empty => "Empty",
+                DefaultChatsMode.Custom => ChatsToList(),
+                DefaultChatsMode.FromParent => $"From parent",
+                DefaultChatsMode.FromFolder => $"From folder",
+                DefaultChatsMode.All => "All",
+                _ => string.Empty,
+            };
 
 
         private string ChatsToList() => string.Join(", ", Chats.Values);

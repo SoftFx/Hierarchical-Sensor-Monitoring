@@ -3,6 +3,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
+using HSMServer.Model.Controls;
 using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
@@ -23,6 +24,8 @@ namespace HSMServer.Model.DataAlerts
 
         public Guid Id { get; set; }
 
+
+        public DefaultChatMode DefaultChatMode { get; protected set; }
 
         public Guid DefaultChat { get; protected set; }
 
@@ -157,7 +160,7 @@ namespace HSMServer.Model.DataAlerts
 
         private DataAlertViewModel(BaseNodeViewModel node)
         {
-            DefaultChat = node.DefaultChats.GetCurrentChatId();
+            (DefaultChat, DefaultChatMode) = node.DefaultChats.GetCurrentChat();
         }
 
         protected DataAlertViewModel(Policy policy, NodeViewModel node) : this((BaseNodeViewModel)node)

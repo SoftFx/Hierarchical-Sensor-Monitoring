@@ -1,5 +1,4 @@
 using HSMServer.Model.Authentication;
-using HSMServer.Model.Controls;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
@@ -58,12 +57,8 @@ namespace HSMServer.Extensions
 
         internal static bool HasUnconfiguredAlerts(this SensorNodeViewModel sensor)
         {
-            bool IsUnconfigured(DataAlertViewModelBase alert)
-            {
-                var notInitializedChat = DefaultChatViewModel.EmptyValue.Id;
-
-                return alert.IsUnconfigured() || (alert.IsDefaultDestination() && sensor.DefaultChats.GetCurrentChatId() == notInitializedChat);
-            }
+            bool IsUnconfigured(DataAlertViewModelBase alert) =>
+                alert.IsUnconfigured() || (alert.IsDefaultDestination() && sensor.DefaultChats.IsNotInitialized);
 
 
             return sensor.HasData && sensor.State is not Core.Model.SensorState.Muted &&

@@ -1,8 +1,7 @@
-﻿@using HSMServer.Model.Controls
+﻿@using HSMCommon.Extensions
+@using HSMServer.Model.Controls
 @using HSMServer.Notifications
 @using HSMServer.Extensions
-@using System
-@using System.Collections.Generic
 
 @model DefaultChatViewModel
 
@@ -11,7 +10,6 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var emptyValue = DefaultChatViewModel.EmptyValue;
     var displayName = Model.GetCurrentDisplayValue(ChatsManager.GetValues(), out var allChats);
     var parentName = Model.GetParentDisplayValue(allChats);
 }
@@ -32,23 +30,24 @@
     <select asp-for="SelectedChat" class="default-chat selectpicker">
         @if (Model.HasParent)
         {
-            <option value="" selected="@Model.IsFromParent">@parentName</option>
+            <option value="@DefaultChatMode.FromParent" selected="@Model.IsSelectedMode(DefaultChatMode.FromParent)">@parentName</option>
         }
 
-        <option value="@emptyValue.Id" selected="@Model.IsSelectedChat(emptyValue.Id)">@emptyValue.Name</option>
+        <option value="@DefaultChatMode.NotInitialized" selected="@Model.IsSelectedMode(DefaultChatMode.NotInitialized)">@DefaultChatMode.NotInitialized.GetDisplayName()</option>
+        <option value="@DefaultChatMode.Empty" selected="@Model.IsSelectedMode(DefaultChatMode.Empty)">@DefaultChatMode.Empty.GetDisplayName()</option>
 
         <option data-divider="true"></option>
         <option disabled>Groups</option>
         @foreach (var chat in allChats.GetGroups())
         {
-            <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)">@chat.Name</option>
+            <option value="@chat.Id" selected="@Model.IsSelectedChat(chat)">@chat.Name</option>
         }
 
         <option data-divider="true"></option>
         <option disabled>Users</option>
         @foreach (var chat in allChats.GetPrivates())
         {
-            <option value="@chat.Id" selected="@Model.IsSelectedChat(chat.Id)">@chat.Name</option>
+            <option value="@chat.Id" selected="@Model.IsSelectedChat(chat)">@chat.Name</option>
         }
     </select>
 </div>
@@ -58,6 +57,25 @@
 
 <script>
      $(document).ready(function () {
-       $("select[name='DefaultChats.SelectedChat']").selectpicker();
+         $("select[name='DefaultChats.SelectedChat']").selectpicker();
      });
+
+     function fillDefaultChatMode(formData) {
+         let chatMode = '@DefaultChatMode.Custom';
+
+         let selectedOption = $(`select[name='DefaultChats.SelectedChat']`).find(":selected").text();
+         switch (selectedOption) {
+             case '@parentName':
+                 chatMode = '@DefaultChatMode.FromParent';
+                 break;
+             case '@DefaultChatMode.NotInitialized.GetDisplayName()':
+                 chatMode = '@DefaultChatMode.NotInitialized';
+                 break;
+             case '@DefaultChatMode.Empty.GetDisplayName()':
+                 chatMode = '@DefaultChatMode.Empty';
+                 break;
+         }
+         console.log(chatMode);
+         formData.append(`DefaultChats.ChatMode`, chatMode);
+     }
 </script>
