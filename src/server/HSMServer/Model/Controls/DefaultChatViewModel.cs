@@ -122,9 +122,9 @@ namespace HSMServer.Model.Controls
             return new()
             {
                 Chats = chats,
-                Mode = (byte)(ChatMode switch
+                Mode = (byte)(parentIsFolder ? DefaultChatsMode.FromFolder : ChatMode switch
                 {
-                    DefaultChatMode.FromParent => parentIsFolder ? DefaultChatsMode.FromFolder : DefaultChatsMode.FromParent,
+                    DefaultChatMode.FromParent => DefaultChatsMode.FromParent,
                     DefaultChatMode.Custom => DefaultChatsMode.Custom,
                     DefaultChatMode.Empty => DefaultChatsMode.Empty,
                     _ => DefaultChatsMode.NotInitialized
