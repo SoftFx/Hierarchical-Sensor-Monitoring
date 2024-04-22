@@ -6,15 +6,9 @@
 @{
     var sensorId = Model.EncodedId;
 
-    var graphElementId = $"graph_{sensorId}";
     var graphParentDivId = $"graph_parent_{sensorId}";
-    var journalElementId = $"journal_{sensorId}";
     var journalParentDivId = $"journal_parent_{sensorId}";
-    var valuesElementId = $"values_{sensorId}";
     var valuesParentDivId = $"values_parent_{sensorId}";
-
-    var isChartSupported = true;
-    var isDataExist = true;
 }
 
 <div id='historyDataPanel' class='pt-3 text-break hidden_element'>

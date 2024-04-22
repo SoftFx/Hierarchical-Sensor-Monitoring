@@ -93,15 +93,15 @@ window.InitializeHistory = function () {
             if (Object.keys(sensorInfo).length === 0)
                 return;
 
-            if (isFileSensor(sensorInfo.realPlot))
+            if (isFileSensor(sensorInfo.realType))
                 return;
 
             if (isTableHistorySelected(encodedId))
-                initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true)
+                initializeTable(encodedId, historyLatestAction, sensorInfo.realType, Data(date, date, sensorInfo.realType, encodedId), true)
             else if (isGraphAvailable(sensorInfo.realType)) 
                 initializeGraph(encodedId, rawHistoryLatestAction, sensorInfo, Data(date, date, sensorInfo.realType, encodedId), true)
             else
-                initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true);
+                initializeTable(encodedId, historyLatestAction, sensorInfo.realType, Data(date, date, sensorInfo.realType, encodedId), true);
         });
     }
 }

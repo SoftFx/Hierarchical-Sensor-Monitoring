@@ -1,28 +1,13 @@
 ﻿@using HSMServer.Controllers
 @using HSMServer.Core.Model
-@using HSMServer.Extensions
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.ViewModel
 
 @model SensorNodeViewModel
 
 @{
-    var file = Model.LastValue as FileValue;
-    bool isEnabledPreview = false;
-    if (file is not null)
-        isEnabledPreview = (file.Extension == "csv" && file.OriginalSize < 5 * 1024 * 1024) ||
-                           (file.Extension == "txt" && file.OriginalSize < 1024 * 1024);
-
     var sensorId = Model.EncodedId;
-
-    var graphElementId = $"graph_{sensorId}";
-    var graphParentDivId = $"graph_parent_{sensorId}";
-    var journalElementId = $"journal_{sensorId}";
-    var journalParentDivId = $"journal_parent_{sensorId}";
-    var valuesElementId = $"values_{sensorId}";
-    var valuesParentDivId = $"values_parent_{sensorId}";
 }
-
 
 <div>
     @await Html.PartialAsync("_MetaInfo", new SensorInfoViewModel(Model))
