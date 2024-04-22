@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace HSMServer.Core.Cache.UpdateEntities
 {
@@ -7,5 +8,9 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public string Name { get; init; }
 
         public Guid? FolderId { get; init; }
+
+
+        [SetsRequiredMembers]
+        public ProductUpdate() : base() { }
     }
 }

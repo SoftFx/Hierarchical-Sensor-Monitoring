@@ -74,6 +74,9 @@ namespace HSMServer.Core.Cache
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent += SendAlertMessage;
 
+            _migrator.ApplyProductMigration += UpdateProduct;
+            _migrator.ApplySensorMigration += TryUpdateSensor;
+
             Initialize();
         }
 
@@ -87,6 +90,9 @@ namespace HSMServer.Core.Cache
 
         public void Dispose()
         {
+            _migrator.ApplyProductMigration -= UpdateProduct;
+            _migrator.ApplySensorMigration -= TryUpdateSensor;
+
             _confirmationManager.NewMessageEvent -= _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent -= SendAlertMessage;
 
@@ -887,9 +893,10 @@ namespace HSMServer.Core.Cache
             var accessKeysEntities = _database.GetAccessKeys();
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
 
-            _logger.Info($"Migrate sensors settings and alerts");
-            RunMigration();
-            _logger.Info($"Migrate sensor settings and alerts finished");
+            _logger.Info($"Migrate product/sensors settings and alerts");
+            _migrator.RunProductMigrations([.. _tree.Values]);
+            _migrator.RunSensorMigrations([.. _sensors.Values]);
+            _logger.Info($"Migrate product/sensors settings and alerts finished");
 
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
             ApplyAccessKeys([.. accessKeysEntities]);
@@ -898,19 +905,6 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
             UpdateCacheState();
-        }
-
-        private void RunMigration()
-        {
-            try
-            {
-                foreach (var update in MigrationManager.GetMigrationUpdates([.. _sensors.Values]))
-                    TryUpdateSensor(update, out _);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Migration is failed: {ex}");
-            }
         }
 
         private List<ProductEntity> RequestProducts()

@@ -24,6 +24,9 @@ namespace HSMServer.Core.Model.Policies
         public bool AllChats { get; private set; }
 
 
+        public bool IsNotInitialized => !UseDefaultChats && !AllChats && Chats.Count == 0;
+
+
         internal PolicyDestination() { }
 
         internal PolicyDestination(PolicyDestinationEntity entity)
