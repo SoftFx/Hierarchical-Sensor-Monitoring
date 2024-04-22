@@ -163,20 +163,16 @@
                 cache: false,
                 async: true
             }).done(function (sensorsData) {
-                var array = JSON.parse(sensorsData);
+                let data = JSON.parse(sensorsData)
                 let displayChildrenInfo = false;
 
-                for (let i = 0; i < array.length; i++) {
-                    let dataObject = array[i];
+                updateNodeData(data);
 
-                    updateNodeData(dataObject);
+                if (data.value !== null && data.value !== undefined)
+                    displayChildrenInfo = true;
 
-                    if (dataObject.value !== null && dataObject.value !== undefined)
-                        displayChildrenInfo = true;
-
-                    if (dataObject.hasOwnProperty('value')) {
-                        updateSpecificSensorData(dataObject);
-                    }
+                if (data.hasOwnProperty('value')) {
+                    updateSpecificSensorData(data);
                 }
 
                 let accordionName = "";

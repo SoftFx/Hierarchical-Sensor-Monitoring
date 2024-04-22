@@ -398,21 +398,15 @@ namespace HSMServer.Controllers
                 return Json(string.Empty);
 
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
-            var updatedSensorsData = new List<object>();
 
             // TODO: implement update selected folder tree item
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-            {
-                foreach (var (_, childNode) in node.Nodes)
-                    updatedSensorsData.Add(new UpdatedNodeDataViewModel(childNode));
+                return Json(new UpdatedNodeDataViewModel(node));
 
-                foreach (var (_, sensor) in node.Sensors)
-                    updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
-            }
-            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor, CurrentUser));
+            if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                return Json(new UpdatedSensorDataViewModel(sensor, CurrentUser));
 
-            return Json(updatedSensorsData);
+            return _emptyResult;
         }
 
         [HttpGet]
