@@ -35,7 +35,7 @@
             }
 
 
-            public static TaskResult<T> ToError(string error) => new(error);
+            public static TaskResult<T> AsError(string error) => new(error);
         }
     }
 }
