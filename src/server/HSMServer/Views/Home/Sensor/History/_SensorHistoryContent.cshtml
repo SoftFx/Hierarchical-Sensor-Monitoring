@@ -68,32 +68,26 @@
 
         <div id='history_@sensorId'>
             <ul id="content_links" class='nav nav-tabs flex-fill'>
-                @if (Model.UpdateTime != DateTime.MinValue)
+                @if (Model.IsChartSupported)
                 {
-                    @if (Model.IsChartSupported)
-                    {
-                        <li class='nav-item' name="graph">
-                            <a id='link_graph_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
-                        </li>
-                    }
-                    <li class='nav-item' name="table">
-                        <div class="d-flex flex-row align-items-center">
-                            <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>
-                                Table
-                                <span id="newValuesCount" class="badge rounded-pill badge-light fw-semibold"></span>
-                            </a>
-                            <div id="tableHistoryRefreshButton" class="table-history-refresh ms-3 d-none">
-                                <a class='table-history-refresh-link fw-semibold' href="javascript:refreshTable();">Refresh</a>
-                            </div>
+                    <li class='nav-item' name="graph">
+                        <a id='link_graph_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
+                    </li>
+                }
+                <li class='nav-item' name="table">
+                    <div class="d-flex flex-row align-items-center">
+                        <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>
+                            Table
+                            <span id="newValuesCount" class="badge rounded-pill badge-light fw-semibold"></span>
+                        </a>
+                        <div id="tableHistoryRefreshButton" class="table-history-refresh ms-3 d-none">
+                            <a class='table-history-refresh-link fw-semibold' href="javascript:refreshTable();">Refresh</a>
                         </div>
-                    </li>
-                }
-                @if (!Model.IsJournalEmpty)
-                {
-                    <li class='nav-item' name="journal">
-                        <a id='link_journal_@sensorId' class='nav-link @(Model.IsJournalEmpty ? "hidden_element" : "")' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
-                    </li>
-                }
+                    </div>
+                </li>
+                <li class='nav-item' name="journal">
+                    <a id='link_journal_@sensorId' class='nav-link @(Model.IsJournalEmpty ? "hidden_element" : "")' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
+                </li>
             </ul>
         </div>
     </div>

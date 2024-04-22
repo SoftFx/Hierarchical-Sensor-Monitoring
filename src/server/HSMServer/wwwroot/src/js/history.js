@@ -96,11 +96,12 @@ window.InitializeHistory = function () {
             if (isFileSensor(sensorInfo.realPlot))
                 return;
 
-            if (isGraphAvailable(sensorInfo.realType)) {
-                initializeGraph(encodedId, rawHistoryLatestAction, sensorInfo, Data(date, date, sensorInfo.realType, encodedId), true);
-            } else if (isTableAvailable(sensorInfo.realType)) {
+            if (isTableHistorySelected(encodedId))
+                initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true)
+            else if (isGraphAvailable(sensorInfo.realType)) 
+                initializeGraph(encodedId, rawHistoryLatestAction, sensorInfo, Data(date, date, sensorInfo.realType, encodedId), true)
+            else
                 initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true);
-            }
         });
     }
 }
@@ -219,11 +220,11 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
 
         let noValuesElement = document.getElementById(`noTableValues_${encodedId}`);
         if (noValuesElement != null) {
-            // $('#history_' + encodedId).hide();
             $('#no_data_' + encodedId).show();
+            $('#noDataValues').removeClass('d-none');
         } else {
-            $('#history_' + encodedId).show();
             $('#no_data_' + encodedId).hide();
+            $('#noDataValues').addClass('d-none');
 
             if (needFillFromTo) {
                 let to = getToDate();
@@ -263,11 +264,12 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
 
         let values = parsedData.values;
         if (values.length === 0) {
-            // $('#history_' + encodedId).hide();
             $('#no_data_' + encodedId).show();
+            $('#noDataGraph').removeClass('d-none');
+            $(`#graph_${encodedId}`).empty();
         } else {
-            $('#history_' + encodedId).show();
             $('#no_data_' + encodedId).hide();
+            $('#noDataGraph').addClass('d-none');
 
             if (needFillFromTo) {
                 let from = new Date(values[0].receivingTime);
@@ -457,7 +459,6 @@ window.initializeJournal = function (type) {
         columns: type === NodeType.Node ? nodeColumns : sensorColumns,
         ...JournalTemplate(getJournalPage, type)
     });
-    let test = 123;
 }
 
 window.disableHistoryPeriod = function () {

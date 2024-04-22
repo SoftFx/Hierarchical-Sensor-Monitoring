@@ -220,12 +220,14 @@
             contenttype: 'application/json',
             cache: false,
             success: function (viewData) {
+                let grid = $(`#grid-accordion_${accordionId}`);
                 if (viewData !== '') {
                     let currInput = $(`#pageSize_${accordionId}`);
                     let [wasFocused, lastValue] = getFocusAndVal(currInput);
                     accordionId = accordion.length !== 0 ? accordionId : 'gridProducts';
 
-                    $(`#grid-accordion_${accordionId}`).empty().replaceWith(viewData);
+                    grid.parent().find('.children-no-data').addClass('d-none');
+                    grid.empty().replaceWith(viewData);
 
                     if (pageNumber === -1 || pageSize === -1)
                         setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
@@ -244,12 +246,14 @@
             contenttype: 'application/json',
             cache: false,
             success: function (viewData) {
+                let list = $(`#list-accordion_${accordionId}`);
                 if (viewData !== '') {
                     let currInput = $(`#pageSize_${accordionId}`);
                     let [wasFocused, lastValue] = getFocusAndVal(currInput);
                     accordionId = accordion.length !== 0 ? accordionId : 'listProducts';
 
-                    $(`#list-accordion_${accordionId}`).empty().replaceWith(viewData);
+                    list.parent().find('.children-no-data').addClass('d-none');
+                    list.empty().replaceWith(viewData);
 
                     if (pageNumber === -1 || pageSize === -1)
                         setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
