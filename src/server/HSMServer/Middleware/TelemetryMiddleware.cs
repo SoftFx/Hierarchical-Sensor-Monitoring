@@ -105,12 +105,10 @@ namespace HSMServer.Middleware
 
         private static bool TryMapIPToString(IPAddress address, out string ip)
         {
-            ip = address.AddressFamily switch
-            {
-                AddressFamily.InterNetwork => address.MapToIPv4().ToString(),
-                AddressFamily.InterNetworkV6 => address.MapToIPv6().ToString(),
-                _ => null
-            };
+            if (address.IsIPv4MappedToIPv6)
+                address = address.MapToIPv4();
+
+            ip = address.ToString();
 
             return ip is not null;
         }
