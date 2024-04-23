@@ -11,7 +11,7 @@ namespace HSMServer.Core.Model.Policies
         public const string DefaultIcon = "🕑";
         public const string DefaultTemplate = "[$product]$path";
 
-        private readonly SettingProperty<TimeIntervalModel> _ttl;
+        private readonly SettingPropertyBase<TimeIntervalModel> _ttl;
         private readonly OkPolicy _okPolicy;
 
         private DateTime? _lastTTLNotificationTime = DateTime.MinValue;
@@ -50,7 +50,7 @@ namespace HSMServer.Core.Model.Policies
         {
             var update = new PolicyUpdate()
             {
-                Destination = new PolicyDestinationUpdate(parent.Destination.Chats, parent.Destination.AllChats),
+                Destination = new PolicyDestinationUpdate(parent.Destination),
                 Id = Id,
                 Template = parent.Template,
                 Icon = parent.Icon,

@@ -17,6 +17,9 @@ namespace HSMServer.Core.Confirmation
 
         internal void RegisterNotification(PolicyResult policyResult)
         {
+            if (policyResult.IsEmpty)
+                return;
+
             try
             {
                 var newAlerts = new Dictionary<Guid, AlertResult>(policyResult.Alerts);

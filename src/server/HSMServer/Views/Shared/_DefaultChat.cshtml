@@ -1,0 +1,81 @@
+﻿@using HSMCommon.Extensions
+@using HSMServer.Model.Controls
+@using HSMServer.Notifications
+@using HSMServer.Extensions
+
+@model DefaultChatViewModel
+
+@inject ITelegramChatsManager ChatsManager
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var displayName = Model.GetCurrentDisplayValue(ChatsManager.GetValues(), out var allChats);
+    var parentName = Model.GetParentDisplayValue(allChats);
+}
+
+
+<style>
+    /* For null option in selectpicker */
+    .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder, .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder:hover, .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder:focus, .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder:active {
+        color: black;
+    }
+</style>
+
+
+<span class="@(Model.IsModify ? "col-2" : "meta-info-label")">Default telegram chat</span>
+
+<span id="labelDefaultChat" class="@(Model.IsModify ? "d-none" : "meta-info-value")">@displayName</span>
+<div id="defaultChatControl" class="@(Model.IsModify ? "col-auto ms-1" : "d-none meta-info-interval")">
+    <select asp-for="SelectedChat" class="default-chat selectpicker">
+        @if (Model.HasParent)
+        {
+            <option value="@DefaultChatMode.FromParent" selected="@Model.IsSelectedMode(DefaultChatMode.FromParent)">@parentName</option>
+        }
+
+        <option value="@DefaultChatMode.NotInitialized" selected="@Model.IsSelectedMode(DefaultChatMode.NotInitialized)">@DefaultChatMode.NotInitialized.GetDisplayName()</option>
+        <option value="@DefaultChatMode.Empty" selected="@Model.IsSelectedMode(DefaultChatMode.Empty)">@DefaultChatMode.Empty.GetDisplayName()</option>
+
+        <option data-divider="true"></option>
+        <option disabled>Groups</option>
+        @foreach (var chat in allChats.GetGroups())
+        {
+            <option value="@chat.Id" selected="@Model.IsSelectedChat(chat)">@chat.Name</option>
+        }
+
+        <option data-divider="true"></option>
+        <option disabled>Users</option>
+        @foreach (var chat in allChats.GetPrivates())
+        {
+            <option value="@chat.Id" selected="@Model.IsSelectedChat(chat)">@chat.Name</option>
+        }
+    </select>
+</div>
+
+<i class='fas fa-question-circle mx-2' title='Telegram chat that will be default for new sensors.'></i>
+
+
+<script>
+     $(document).ready(function () {
+         $("select[name='DefaultChats.SelectedChat']").selectpicker();
+     });
+
+     function fillDefaultChatMode(formData) {
+         let chatMode = '@DefaultChatMode.Custom';
+
+         let selectedOption = $(`select[name='DefaultChats.SelectedChat']`).find(":selected").text();
+         switch (selectedOption) {
+             case '@parentName':
+                 chatMode = '@DefaultChatMode.FromParent';
+                 break;
+             case '@DefaultChatMode.NotInitialized.GetDisplayName()':
+                 chatMode = '@DefaultChatMode.NotInitialized';
+                 break;
+             case '@DefaultChatMode.Empty.GetDisplayName()':
+                 chatMode = '@DefaultChatMode.Empty';
+                 break;
+         }
+         console.log(chatMode);
+         formData.append(`DefaultChats.ChatMode`, chatMode);
+     }
+</script>

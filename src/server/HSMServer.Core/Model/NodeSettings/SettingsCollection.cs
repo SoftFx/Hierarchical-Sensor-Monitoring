@@ -11,14 +11,17 @@ namespace HSMServer.Core.Model.NodeSettings
 {
     public sealed class SettingsCollection : IChangesEntity
     {
-        private readonly Dictionary<string, SettingProperty> _properties = new();
+        private readonly Dictionary<string, TimeIntervalSettingProperty> _intervalProperties = [];
 
 
-        public SettingProperty<TimeIntervalModel> KeepHistory { get; }
+        public DestinationSettingProperty DefaultChats { get; } = new();
 
-        public SettingProperty<TimeIntervalModel> SelfDestroy { get; }
 
-        public SettingProperty<TimeIntervalModel> TTL { get; }
+        public TimeIntervalSettingProperty KeepHistory { get; }
+
+        public TimeIntervalSettingProperty SelfDestroy { get; }
+
+        public TimeIntervalSettingProperty TTL { get; }
 
 
         public event Action<JournalRecordModel> ChangesHandler;
@@ -26,26 +29,28 @@ namespace HSMServer.Core.Model.NodeSettings
 
         internal SettingsCollection()
         {
-            KeepHistory = Register<TimeIntervalModel>(nameof(KeepHistory));
-            SelfDestroy = Register<TimeIntervalModel>(nameof(SelfDestroy));
-            TTL = Register<TimeIntervalModel>(nameof(TTL));
+            KeepHistory = Register(nameof(KeepHistory));
+            SelfDestroy = Register(nameof(SelfDestroy));
+            TTL = Register(nameof(TTL));
         }
 
 
         internal void Update(BaseNodeUpdate update, ChangeInfoTable table)
         {
-            void Update(SettingProperty<TimeIntervalModel> setting, TimeIntervalModel newVal, [CallerArgumentExpression(nameof(setting))] string propName = "", NoneValues none = NoneValues.Never)
+            void Update<T>(SettingPropertyBase<T> setting, T newVal, [CallerArgumentExpression(nameof(setting))] string propName = "", object emptyValue = null)
+                where T : class, new()
             {
                 var nodeInfo = table.Settings[propName];
-                var oldVal = setting.CurValue;
+                var defaultValue = emptyValue?.ToString();
+                var oldVal = setting.GetJournalValue(defaultValue);
 
                 if (nodeInfo.CanChange(update.Initiator) && setting.TrySetValue(newVal))
                 {
                     ChangesHandler?.Invoke(new JournalRecordModel(update.Id, update.Initiator)
                     {
                         Enviroment = "Settings update",
-                        OldValue = oldVal.IsNone ? $"{none}" : $"{oldVal}",
-                        NewValue = newVal.IsNone ? $"{none}" : $"{newVal}",
+                        OldValue = oldVal,
+                        NewValue = setting.GetJournalValue(defaultValue),
 
                         PropertyName = propName,
                         Path = table.Path,
@@ -55,39 +60,39 @@ namespace HSMServer.Core.Model.NodeSettings
                 }
             }
 
-            Update(TTL, update.TTL);
-            Update(SelfDestroy, update.SelfDestroy, "Remove sensor after inactivity");
+            Update(TTL, update.TTL, emptyValue: NoneValues.Never);
+            Update(SelfDestroy, update.SelfDestroy, "Remove sensor after inactivity", NoneValues.Never);
             Update(KeepHistory, update.KeepHistory, "Keep sensor history", NoneValues.Forever);
+            Update(DefaultChats, update.DefaultChats, "Default telegram chats");
         }
 
 
-        internal void SetSettings(Dictionary<string, TimeIntervalEntity> entity)
+        internal void SetSettings(Dictionary<string, TimeIntervalEntity> settingsEntity, PolicyDestinationSettingsEntity defaultChats)
         {
-            foreach (var (name, setting) in entity)
-                if (_properties.TryGetValue(name, out var property))
+            foreach (var (name, setting) in settingsEntity)
+                if (_intervalProperties.TryGetValue(name, out var property))
                     property.TrySetValue(new TimeIntervalModel(setting));
+
+            DefaultChats.TrySetValue(new PolicyDestinationSettings(defaultChats));
         }
 
         internal void SetParentSettings(SettingsCollection parentCollection)
         {
-            foreach (var (name, property) in _properties)
-                property.ParentProperty = parentCollection._properties[name];
+            foreach (var (name, property) in _intervalProperties)
+                property.SetParent(parentCollection._intervalProperties[name]);
+
+            DefaultChats.SetParent(parentCollection.DefaultChats);
         }
 
         internal Dictionary<string, TimeIntervalEntity> ToEntity() =>
-            _properties.Where(p => p.Value.IsSet).ToDictionary(k => k.Key, v => v.Value.ToEntity());
+            _intervalProperties.Where(p => p.Value.IsSet).ToDictionary(k => k.Key, v => v.Value.ToEntity());
 
 
-        private SettingProperty<T> Register<T>(string name) where T : TimeIntervalModel, new()
+        private TimeIntervalSettingProperty Register(string name)
         {
-            var property = new SettingProperty<T>()
-            {
-                Name = name
-            };
+            _intervalProperties[name] = new TimeIntervalSettingProperty();
 
-            _properties[name] = property;
-
-            return property;
+            return _intervalProperties[name];
         }
     }
 }
