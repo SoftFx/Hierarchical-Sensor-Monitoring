@@ -1,17 +1,22 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Extensions;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace HSMServer.Core.Model.NodeSettings
 {
     public enum DefaultChatsMode : byte
     {
+        [Display(Name = "Not initialized")]
         NotInitialized = 0, // unconfigured alerts
         Empty = 1, // alerts without notifications
         Custom = 5, // alerts with custom Chats
+        [Display(Name = "From parent")]
         FromParent = 10, // settings from Parent
+        [Display(Name = "From folder")]
         FromFolder = 20, // setting from Folder (only for Root products)
         All = 100, // for capability with PolicyDestination
     }
@@ -60,13 +65,9 @@ namespace HSMServer.Core.Model.NodeSettings
         public override string ToString() =>
             Mode switch
             {
-                DefaultChatsMode.NotInitialized => "Not initialized",
-                DefaultChatsMode.Empty => "Empty",
+                DefaultChatsMode.FromFolder => $"{DefaultChatsMode.FromFolder.GetDisplayName()} ({ChatsToList()})",
                 DefaultChatsMode.Custom => ChatsToList(),
-                DefaultChatsMode.FromParent => $"From parent",
-                DefaultChatsMode.FromFolder => $"From folder",
-                DefaultChatsMode.All => "All",
-                _ => string.Empty,
+                _ => Mode.GetDisplayName(),
             };
 
 
