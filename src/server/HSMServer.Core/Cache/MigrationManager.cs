@@ -86,6 +86,9 @@ namespace HSMServer.Core.Cache
                 if (TryMigrateProductTTLPolicyDestinationToDefaultChat(product, out var update))
                     yield return update;
 
+                if (TryMigrateProductDefaultChatToFolder(product, out update))
+                    yield return update;
+
                 if (TryMigrateProductDefaultChatToParent(product, out update))
                     yield return update;
             }
@@ -293,21 +296,28 @@ namespace HSMServer.Core.Cache
             return false;
         }
 
+        private static bool TryMigrateProductDefaultChatToFolder(ProductModel product, out ProductUpdate update)
+        {
+            static bool IsTarget(BaseNodeModel node) => node is ProductModel product && product.Parent == null && product.FolderId != null;
+
+            return TryMigrateNodeDefaultChartToParent(product, IsTarget, DefaultChatsMode.FromFolder, out update);
+        }
+
         private static bool TryMigrateProductDefaultChatToParent(ProductModel product, out ProductUpdate update)
         {
-            static bool IsTarget(BaseNodeModel node) => node is ProductModel product && (product.Parent != null || product.FolderId != null);
+            static bool IsTarget(BaseNodeModel node) => node is ProductModel product && product.Parent != null;
 
-            return TryMigrateNodeDefaultChartToParent(product, IsTarget, out update);
+            return TryMigrateNodeDefaultChartToParent(product, IsTarget, DefaultChatsMode.FromParent, out update);
         }
 
         private static bool TryMigrateSensorDefaultChatToParent(BaseSensorModel sensor, out SensorUpdate update)
         {
             static bool IsTarget(BaseNodeModel _) => true;
 
-            return TryMigrateNodeDefaultChartToParent(sensor, IsTarget, out update);
+            return TryMigrateNodeDefaultChartToParent(sensor, IsTarget, DefaultChatsMode.FromParent, out update);
         }
 
-        private static bool TryMigrateNodeDefaultChartToParent<T>(BaseNodeModel node, Predicate<BaseNodeModel> isTarget, out T update)
+        private static bool TryMigrateNodeDefaultChartToParent<T>(BaseNodeModel node, Predicate<BaseNodeModel> isTarget, DefaultChatsMode mode, out T update)
             where T : BaseNodeUpdate, new()
         {
             if (node.Settings.DefaultChats.CurValue.IsNotInitialized && isTarget(node))
@@ -315,7 +325,7 @@ namespace HSMServer.Core.Cache
                 update = new T
                 {
                     Id = node.Id,
-                    DefaultChats = new PolicyDestinationSettings(DefaultChatsMode.FromParent),
+                    DefaultChats = new PolicyDestinationSettings(mode),
                     Initiator = _softMigrator,
                 };
 

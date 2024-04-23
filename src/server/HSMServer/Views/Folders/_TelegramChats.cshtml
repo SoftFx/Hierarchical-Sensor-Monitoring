@@ -135,10 +135,13 @@
         event.preventDefault();
         event.stopImmediatePropagation();
 
+        var formData = new FormData(this);
+        fillDefaultChatMode(formData);
+
         $.ajax({
             url: $("#folderTelegramChats_form").attr("action"),
             type: 'POST',
-            data: new FormData(this),
+            data: formData,
             datatype: 'html',
             processData: false,
             contentType: false,

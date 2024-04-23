@@ -140,6 +140,7 @@
 
         var formData = new FormData(this);
         collectAlerts(formData);
+        fillDefaultChatMode(formData);
 
         $.ajax({
             url: $("#editMetaInfo_form").attr("action"),

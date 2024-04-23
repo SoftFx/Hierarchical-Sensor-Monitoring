@@ -802,7 +802,7 @@ namespace HSMServer.Controllers
                 Id = product.Id,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
                 TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
-                DefaultChats = newModel.DefaultChats.ToModel(availableChats, product.ParentIsFolder),
+                DefaultChats = newModel.DefaultChats.ToModel(availableChats, newModel.DefaultChats.IsFromParent && product.ParentIsFolder),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
                 Description = newModel.Description ?? string.Empty,

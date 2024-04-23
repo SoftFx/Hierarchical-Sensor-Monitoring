@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Extensions;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
@@ -123,10 +124,14 @@ namespace HSMServer.Model.Folders
 
         private DefaultChatViewModel UpdateSetting(DefaultChatViewModel currentValue, DefaultChatViewModel newValue, InitiatorInfo initiator)
         {
-            string GetJournalValue(Guid? chatId) => chatId.HasValue && chatId != DefaultChatViewModel.EmptyValue.Id ? GetChatName(chatId.Value) : DefaultChatViewModel.EmptyValue.Name;
+            string GetJournalValue((Guid chatId, DefaultChatMode mode) value) => value.mode switch
+            {
+                DefaultChatMode.Custom => GetChatName(value.chatId),
+                _ => value.mode.GetDisplayName(),
+            };
 
-            var oldChat = currentValue.SelectedChat;
-            var newChat = newValue.SelectedChat;
+            var oldChat = (currentValue.Chat, currentValue.ChatMode);
+            var newChat = (newValue.Chat, newValue.ChatMode);
 
             if (oldChat != newChat)
             {
