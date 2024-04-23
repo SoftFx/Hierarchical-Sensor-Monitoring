@@ -58,6 +58,8 @@ namespace HSMServer.Core.Model.Policies
 
         public (string, int) Key => (Icon, Count);
 
+        public int RetryCount { get; private set; }
+
 
         internal AlertResult(Policy policy, bool isReplace = false)
         {
@@ -82,6 +84,9 @@ namespace HSMServer.Core.Model.Policies
             IsScheduleAlert = policy.UseScheduleManagerLogic;
             IsReplaceAlert = isReplace && IsScheduleAlert;
             IsValidAlert = Destination.HasChats && Template is not null;
+
+            if (policy is TTLPolicy ttlPolicy)
+                RetryCount = ttlPolicy.RetryCount;
 
             AddPolicyResult(policy);
         }
@@ -141,6 +146,9 @@ namespace HSMServer.Core.Model.Policies
 
             if (totalCnt > 1)
                 sb.Append($" ({totalCnt} times)");
+
+            if (RetryCount > 0)
+                sb.Append($" #{RetryCount}");
 
             return sb.ToString().Trim();
         }
