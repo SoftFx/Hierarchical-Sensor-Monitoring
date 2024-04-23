@@ -92,19 +92,27 @@ namespace HSMServer.Middleware
 
         private static bool TryGetRemoteIP(HttpContext context, out string remoteIp)
         {
-            remoteIp = context.Request.HttpContext.Connection.RemoteIpAddress?.ToString();
+            if (TryMapIPToString(context.Request.HttpContext.Connection.RemoteIpAddress, out remoteIp))
+                return remoteIp is not null;
 
             if (remoteIp is null && context.TryReadInfo(XForvardHeader, out var forwardFor) && !string.IsNullOrEmpty(forwardFor))
-            {
                 foreach (var ipAddressRaw in forwardFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                    if (IPAddress.TryParse(ipAddressRaw, out var address) && address.AddressFamily is AddressFamily.InterNetwork or AddressFamily.InterNetworkV6)
-                    {
-                        remoteIp = address.ToString();
+                    if (IPAddress.TryParse(ipAddressRaw, out var address) && TryMapIPToString(address, out remoteIp))
                         break;
-                    }
-            }
 
             return remoteIp is not null;
+        }
+
+        private static bool TryMapIPToString(IPAddress address, out string ip)
+        {
+            ip = address.AddressFamily switch
+            {
+                AddressFamily.InterNetwork => address.MapToIPv4().ToString(),
+                AddressFamily.InterNetworkV6 => address.MapToIPv6().ToString(),
+                _ => null
+            };
+
+            return ip is not null;
         }
 
         private static string GetClientName(HttpContext context) => context.TryReadInfo(ClientNameHeader, out var name) && !string.IsNullOrWhiteSpace(name) ? name.ToString() : EmptyClient;
