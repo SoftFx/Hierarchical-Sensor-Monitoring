@@ -1,4 +1,5 @@
 using HSMServer.Model.Authentication;
+using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
@@ -18,7 +19,7 @@ namespace HSMServer.Extensions
         private const int IconSize = 3;
 
 
-        internal static Dictionary<Guid, string> GetAvailableChats(this NodeViewModel node, ITelegramChatsManager chatsManager)
+        internal static Dictionary<Guid, string> GetAvailableChats(this BaseNodeViewModel node, ITelegramChatsManager chatsManager)
         {
             node.TryGetChats(out var folderChats);
 
@@ -36,23 +37,33 @@ namespace HSMServer.Extensions
             return availableChats;
         }
 
-        internal static bool TryGetChats(this NodeViewModel node, out HashSet<Guid> chats)
+        internal static bool TryGetChats(this BaseNodeViewModel model, out HashSet<Guid> chats)
         {
-            if (node.RootProduct.Parent is FolderModel folder)
+            if (model is FolderModel folder)
             {
                 chats = folder.TelegramChats;
                 return true;
             }
+            else if (model is NodeViewModel node && node.RootProduct.Parent is FolderModel rootFolder)
+            {
+                chats = rootFolder.TelegramChats;
+                return true;
+            }
 
-            chats = new();
+            chats = [];
             return false;
         }
 
 
-        internal static bool HasUnconfiguredAlerts(this SensorNodeViewModel sensor) =>
-            sensor.HasData && sensor.State is not Core.Model.SensorState.Muted &&
-            (sensor.DataAlerts.Values.Any(d => d.Any(a => a.IsUnconfigured())) ||
-            (!sensor.TTL.IsIntervalNone && sensor.TTLAlert.IsUnconfigured()));
+        internal static bool HasUnconfiguredAlerts(this SensorNodeViewModel sensor)
+        {
+            bool IsUnconfigured(DataAlertViewModelBase alert) =>
+                alert.IsUnconfigured() || (alert.IsDefaultDestination() && sensor.DefaultChats.GetCurrentChat().mode is Model.Controls.DefaultChatMode.NotInitialized);
+
+
+            return sensor.HasData && sensor.State is not Core.Model.SensorState.Muted &&
+                   (sensor.DataAlerts.Values.Any(d => d.Any(a => IsUnconfigured(a))) || (!sensor.TTL.IsIntervalNone && IsUnconfigured(sensor.TTLAlert)));
+        }
 
 
         internal static string ToCssIconClass(this SensorStatus status) =>

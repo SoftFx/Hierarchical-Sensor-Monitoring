@@ -124,7 +124,9 @@ namespace HSMServer.BackgroundServices
 
                             if (sensor is not null)
                             {
-                                await writer.WriteLineAsync($"{sensor.RootProductName},{sensor.Path},{sensorInfo.TotalSizeBytes},{sensorInfo.ValuesSizeBytes},{sensorInfo.DataCount}");
+                                await writer.WriteLineAsync($"""
+                                                             "{sensor.RootProductName}","{sensor.Path}","{sensorInfo.TotalSizeBytes}","{sensorInfo.ValuesSizeBytes}","{sensorInfo.DataCount}"
+                                                             """);
 
                                 heaviestSensors.Enqueue(sensor.FullPath, sensorInfo.TotalSizeBytes);
                                 if (heaviestSensors.Count > _heaviestSensorsCount)

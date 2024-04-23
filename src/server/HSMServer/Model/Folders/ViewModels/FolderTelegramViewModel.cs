@@ -1,4 +1,5 @@
-﻿using HSMServer.Notifications;
+﻿using HSMServer.Model.Controls;
+using HSMServer.Notifications;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,6 +13,8 @@ namespace HSMServer.Model.Folders.ViewModels
         public List<TelegramChat> ChatsToAdd { get; } = new();
 
 
+        public DefaultChatViewModel DefaultChats { get; set; }
+
         public List<Guid> ConnectedChatIds { get; set; }
 
         public List<Guid> NewChats { get; set; }
@@ -24,6 +27,7 @@ namespace HSMServer.Model.Folders.ViewModels
         public FolderTelegramViewModel(FolderModel folder, List<TelegramChat> telegramChats)
         {
             FolderId = folder.Id;
+            DefaultChats = new DefaultChatViewModel(folder);
 
             foreach (var chat in telegramChats)
             {

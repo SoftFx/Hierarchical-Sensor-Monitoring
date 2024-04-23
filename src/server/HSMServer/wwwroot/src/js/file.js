@@ -38,6 +38,21 @@ window.openFileInBrowser = function (path, fileName, viewFileAction, time = unde
     });
 }
 
+const csvStringToArray = (data) => {
+    const re = /(,|\r?\n|\r|^)(?:"([^"]*(?:""[^"]*)*)"|([^,\r\n]*))/gi
+    const result = [[]]
+    let matches
+    while ((matches = re.exec(data))) {
+        if (matches[1].length && matches[1] !== ',') result.push([])
+        result[result.length - 1].push(
+            matches[2] !== undefined ? matches[2].replace(/""/g, '"') : matches[3]
+        )
+    }
+    
+    result.pop();
+    return result
+}
+
 window.previewFile = function(url, id, extension, time = null, fileNumber = null){
     let fileId = '';
     if (time === null)
@@ -54,16 +69,8 @@ window.previewFile = function(url, id, extension, time = null, fileNumber = null
         cache: false,
         contentType: "application/json",
         success: function (file) {
-            let dataSet = [];
             if (extension === 'csv') {
-                file.split('\n').forEach(el => {
-                    let splitted = el.split(',');
-                    let isEmpty = splitted.some(x => x !== '');
-
-                    if (isEmpty) {
-                        dataSet.push(splitted)
-                    }
-                });
+                let dataSet = csvStringToArray(file);
 
                 let columns = [];
 

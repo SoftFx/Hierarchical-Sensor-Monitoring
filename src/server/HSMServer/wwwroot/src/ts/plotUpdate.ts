@@ -1,12 +1,14 @@
 import {Data, PlotlyHTMLElement} from "plotly.js";
-import {Panel, SourceUpdate} from "./dashboard.interfaces";
+import {IPanel, ISourceUpdate} from "./dashboard.interfaces";
 import {Plot, TimeSpanPlot} from "../js/plots";
-import {PlotUpdate, Redraw} from "./dashboard.classes";
+import {PanelSettings, PlotUpdate, Redraw} from "./dashboard.classes";
+import {dashboardStorage} from "../js/dashboard";
+import {HovermodeUtils} from "./services/hovermode.util";
 
 
 export namespace DataUpdate {
     export class Update {
-        private panel: Panel;
+        private panel: IPanel;
 
 
         updateData: { update: PlotUpdate, id: number }[] = [];
@@ -15,12 +17,12 @@ export namespace DataUpdate {
         isTimeSpan: boolean = false;
 
 
-        public constructor(panel: Panel) {
+        public constructor(panel: IPanel) {
             this.panel = panel;
         }
 
-        
-        async updateSources(sourceUpdates: SourceUpdate[]) {
+
+        async updateSources(sourceUpdates: ISourceUpdate[]) {
             let promises: Promise<boolean>[] = [];
             let plotDiv = $(`#panelChart_${this.panel.id}`)[0] as PlotlyHTMLElement;
             for (let sourceUpdate of sourceUpdates)
@@ -35,8 +37,8 @@ export namespace DataUpdate {
                         .then(
                             (res) => {
                                 this.redraw(plotDiv).then((res) => {
-                                        this.relayout(plotDiv)
-                                    })
+                                    this.relayout(plotDiv)
+                                })
                             },
                             (error) => {
                                 this.relayout(plotDiv)
@@ -45,7 +47,7 @@ export namespace DataUpdate {
             })
         }
 
-        private async updateSource(sourceUpdate: SourceUpdate, plotDiv: PlotlyHTMLElement): Promise<boolean> {
+        private async updateSource(sourceUpdate: ISourceUpdate, plotDiv: PlotlyHTMLElement): Promise<boolean> {
             this.isTimeSpan = sourceUpdate.update.isTimeSpan !== undefined && sourceUpdate.update.isTimeSpan === true;
 
             let plots = plotDiv.data as Plot[];
@@ -103,6 +105,8 @@ export namespace DataUpdate {
                 this.updateData.push({update: this.singleUpdate, id: plotId});
             }
 
+            this.setNewUpdateTime()
+            
             this.singleUpdate = new PlotUpdate();
 
             return new Promise<boolean>((resolve) => {
@@ -110,6 +114,11 @@ export namespace DataUpdate {
             });
         }
 
+        private setNewUpdateTime(){
+            if (this.singleUpdate.customdata.length !== 0 && this.singleUpdate.y.length !== 0 && this.singleUpdate.x.length !== 0)
+                dashboardStorage.getPanel(this.panel.id).lastUpdateTime = new Date();
+        }
+        
         relayout(plotDiv: PlotlyHTMLElement) {
             if (this.isTimeSpan)
                 Layout.TimespanRelayout(plotDiv);
@@ -202,5 +211,16 @@ export namespace Layout {
             lastTime = new Date(plots[plotId].x.at(-1));
 
         return lastTime;
+    }
+    
+    export function relayout(id: string, settings: PanelSettings) {
+        if (settings === null)
+            return;
+        
+        let plotDiv = $('#panelChart_' + id)[0] as PlotlyHTMLElement;
+        plotDiv.layout.hovermode = HovermodeUtils.toHovermode(settings.hovermode);
+        plotDiv.layout.hoverdistance = settings.hoverDistance;
+        
+        window.Plotly.relayout(plotDiv, plotDiv.layout)
     }
 }

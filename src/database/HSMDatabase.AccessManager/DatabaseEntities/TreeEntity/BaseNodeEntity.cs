@@ -4,9 +4,12 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public abstract record BaseNodeEntity
     {
-        public Dictionary<string, TimeIntervalEntity> Settings { get; init; } = new();
+        public Dictionary<string, TimeIntervalEntity> Settings { get; init; } = [];
 
-        public List<string> Policies { get; init; } = new();
+        public List<string> Policies { get; init; } = [];
+
+
+        public PolicyDestinationSettingsEntity DefaultChatsSettings { get; init; } = new();
 
 
         public required string Id { get; init; }
@@ -26,5 +29,13 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public ChangeInfoTableEntity ChangeTable { get; init; }
 
         public PolicyEntity TTLPolicy { get; init; }
+    }
+
+
+    public sealed record PolicyDestinationSettingsEntity
+    {
+        public Dictionary<string, string> Chats { get; init; }
+
+        public byte Mode { get; init; }
     }
 }
