@@ -47,7 +47,7 @@ namespace HSMServer.Model.ViewModel
                 Id = Id,
                 Name = IsNameChanged ? Name : null,
                 Description = Description is null ? string.Empty : Description,
-                DefaultChats = DefaultChats.ToModel(availableChats, parentIsFoler),
+                DefaultChats = DefaultChats.ToModel(availableChats, DefaultChats.IsFromParent && parentIsFoler),
                 Initiator = initiator,
             };
     }
