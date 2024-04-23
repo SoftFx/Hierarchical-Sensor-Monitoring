@@ -10,6 +10,7 @@ public record WebRequestNode
 {
     private const double KbDivisor = 1 << 10;
 
+    private const string RequestPerSecondNode = "Clients requests count";
     private const string RecvSensorsNode = "Sensors updates";
     private const string SentBytesNode = "Traffic Out";
     private const string RecvBytesNode = "Traffic In";
@@ -18,6 +19,7 @@ public record WebRequestNode
     private readonly IInstantValueSensor<double> _receiveSensors;
     private readonly IInstantValueSensor<double> _receiveBytes;
     private readonly IInstantValueSensor<double> _sentBytes;
+    private readonly IInstantValueSensor<double> _rps;
 
 
     public WebRequestNode(IDataCollector collector, string id)
@@ -44,14 +46,22 @@ public record WebRequestNode
             EnableForGrafana = true,
             Description = "Number of KB that were sent from server to client via server public API."
         });
+
+        _rps = collector.CreateRateSensor(BuildSensorPath(id, RequestPerSecondNode), new RateSensorOptions
+        {
+            Alerts = [],
+            EnableForGrafana = true,
+            Description = "Total number of public API client requests."
+        });
     }
 
 
     private protected static string BuildSensorPath(string id, string sensorName) => $"{ClientNode}/{id}/{sensorName}";
 
 
-    public virtual void AddRequestData(HttpRequest request)
+    public void AddRequestData(HttpRequest request)
     {
+        _rps.AddValue(1);
         _receiveBytes.AddValue((request.ContentLength ?? 0) / KbDivisor);
     }
 
