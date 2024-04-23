@@ -110,9 +110,9 @@ namespace HSMServer.Model.Controls
             return this;
         }
 
-        internal PolicyDestinationSettings ToModel(Dictionary<Guid, string> availableChats, bool parentIsFolder = false) => new(ToEntity(availableChats, parentIsFolder));
+        internal PolicyDestinationSettings ToModel(Dictionary<Guid, string> availableChats, bool setFromFolder = false) => new(ToEntity(availableChats, setFromFolder));
 
-        internal PolicyDestinationSettingsEntity ToEntity(Dictionary<Guid, string> availableChats, bool parentIsFolder = false)
+        internal PolicyDestinationSettingsEntity ToEntity(Dictionary<Guid, string> availableChats, bool setFromFolder = false)
         {
             var chats = new Dictionary<string, string>(1);
 
@@ -122,7 +122,7 @@ namespace HSMServer.Model.Controls
             return new()
             {
                 Chats = chats,
-                Mode = (byte)(parentIsFolder ? DefaultChatsMode.FromFolder : ChatMode switch
+                Mode = (byte)(setFromFolder ? DefaultChatsMode.FromFolder : ChatMode switch
                 {
                     DefaultChatMode.FromParent => DefaultChatsMode.FromParent,
                     DefaultChatMode.Custom => DefaultChatsMode.Custom,
