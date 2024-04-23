@@ -18,7 +18,9 @@ namespace HSMServer.Core.Model.Policies
 
         private bool IsActive => !_ttl.IsEmpty && !IsDisabled;
 
-        internal int RetryCount { get; private set; }
+        private int _notifyCount;
+
+        internal int RetryCount => _notifyCount - 1;
 
 
         internal PolicyResult Ok
@@ -79,17 +81,15 @@ namespace HSMServer.Core.Model.Policies
             if (timeout)
             {
                 _lastTTLNotificationTime = DateTime.UtcNow;
-                RetryCount++;
+                _notifyCount++;
 
                 return PolicyResult;
             }
-            else
-            {
-                _lastTTLNotificationTime =  null;
-                RetryCount = 0;
 
-                return Ok;
-            }
+            _lastTTLNotificationTime =  null;
+            _notifyCount = 0;
+
+            return Ok;
         }
 
         internal void InitLastTtlTime(bool timeout)
