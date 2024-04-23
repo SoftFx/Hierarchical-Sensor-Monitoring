@@ -127,8 +127,7 @@ namespace HSMServer.Model.Folders
             string GetJournalValue((Guid chatId, DefaultChatMode mode) value) => value.mode switch
             {
                 DefaultChatMode.Custom => GetChatName(value.chatId),
-                DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
-                _ => DefaultChatMode.NotInitialized.GetDisplayName(),
+                _ => value.mode.GetDisplayName(),
             };
 
             var oldChat = (currentValue.Chat, currentValue.ChatMode);
