@@ -40,6 +40,8 @@ public sealed class PanelViewModel
     public Unit? MainUnit { get; set; }
 
 
+    public DateTime LastUpdate { get; set; } = DateTime.MinValue;
+
     public PanelRangeSettings YRange { get; set; }
 
     public PanelSettings Settings { get; set; }
@@ -60,7 +62,13 @@ public sealed class PanelViewModel
         Settings = panel.Settings;
         YRange = panel.YRange;
 
-        Sources = new CDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x => new DatasourceViewModel(x.Value, ShowProduct)));
+        Sources = new CDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x =>
+        {
+            if (x.Value.Sensor.LastUpdate > LastUpdate)
+                LastUpdate = x.Value.Sensor.LastUpdate;
+
+            return new DatasourceViewModel(x.Value, ShowProduct);
+        }));
         Templates = new CDict<TemplateViewModel>(panel.Subscriptions.ToDictionary(y => y.Value.Id, x => new TemplateViewModel(x.Value, availableFolders)));
     }
 
