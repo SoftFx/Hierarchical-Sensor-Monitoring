@@ -171,11 +171,8 @@ namespace HSMServer.Controllers
                     foreach (var sensorId in GetNodeSensors(decodedId))
                         _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator, newMutingPeriod);
                 }
-                else
-                {
-                    if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                        _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator, newMutingPeriod);
-                }
+                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator, newMutingPeriod);
             }
         }
 
@@ -191,11 +188,8 @@ namespace HSMServer.Controllers
                     foreach (var sensorId in GetNodeSensors(decodedId))
                         _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator);
                 }
-                else
-                {
-                    if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                        _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator);
-                }
+                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator);
             }
         }
 
@@ -298,8 +292,7 @@ namespace HSMServer.Controllers
                     };
 
                     if (!expectedUpdate)
-                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live",
-                            TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
                     else
                     {
                         toastViewModel.AddItem(product);
@@ -352,17 +345,11 @@ namespace HSMServer.Controllers
                 var decodedId = SensorPathHelper.DecodeGuid(id);
 
                 if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                {
                     result.Add(node);
-                }
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                {
                     result.Add(sensor);
-                }
                 else if (_folderManager.TryGetValue(decodedId, out var folder))
-                {
                     result.Add(folder);
-                }
             }
 
             return PartialView("~/Views/Tree/_IgnoreNotificationsModal.cshtml", new IgnoreNotificationsViewModel(result));

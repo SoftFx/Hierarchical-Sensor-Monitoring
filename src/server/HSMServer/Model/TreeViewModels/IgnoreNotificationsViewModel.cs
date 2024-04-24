@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Model
 {
-    public class IgnoreNotificationsViewModel
+    public sealed class IgnoreNotificationsViewModel
     {
         private const string NodeTreeElement = "node";
         private const string SensorTreeElement = "sensor";
@@ -17,11 +17,16 @@ namespace HSMServer.Model
 
         public string[] Paths { get; }
 
-        public string[] Ids { get; set; }
-
         public string TreeElement { get; }
 
+
+        public string[] Ids { get; set; }
+
+
         public TimeIntervalViewModel IgnorePeriod { get; set; }
+
+
+        public DateTime DateTimeNow { get; set; }
 
         public int Days { get; set; }
 
@@ -29,32 +34,33 @@ namespace HSMServer.Model
 
         public int Minutes { get; set; }
 
-        public DateTime DateTimeNow { get; set; }
+
 
         public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval is TimeInterval.Forever ?
                                              DateTime.MaxValue : DateTimeNow.AddDays(Days).AddHours(Hours).AddMinutes(Minutes);
+
 
         //// public constructor without parameters for action Home/IgnoreNotifications
         public IgnoreNotificationsViewModel() { }
 
         public IgnoreNotificationsViewModel(List<BaseNodeViewModel> items)
         {
-            Ids   = new string[items.Count];
+            Ids = new string[items.Count];
             Paths = new string[items.Count];
 
             for (var i = 0; i < items.Count; i++)
             {
                 if (items[i] is NodeViewModel node)
                 {
-                    Ids[i]   = node.EncodedId;
                     Paths[i] = node.FullPath;
+                    Ids[i] = node.EncodedId;
 
                     if (node.Id == node.RootProduct.Id)
                         TreeElement = ProductTreeElement;
                 }
                 else if (items[i] is FolderModel folder)
                 {
-                    Ids[i]   = folder.Id.ToString();
+                    Ids[i] = folder.Id.ToString();
                     Paths[i] = folder.Name;
                 }
             }

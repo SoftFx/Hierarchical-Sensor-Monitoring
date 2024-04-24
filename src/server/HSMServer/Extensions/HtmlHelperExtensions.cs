@@ -8,8 +8,8 @@ namespace HSMServer.Extensions
 {
     public static class HtmlHelperExtensions
     {
-        private const string ControllerKey = "controller";
         private const string NavLinkActiveClass = "active";
+        private const string ControllerKey = "controller";
 
 
         public static string ActiveClass(this IHtmlHelper htmlHelper, string controller = null) =>
@@ -18,7 +18,7 @@ namespace HSMServer.Extensions
                 ? NavLinkActiveClass
                 : string.Empty;
 
-        public static IHtmlContent MultiItemsHeader(this IHtmlHelper htmlHelper, IList<string> items, int maxCount = 2, string separator = ", ", bool useLineBreak = false)
+        public static IHtmlContent MultiItemsHeader(this IHtmlHelper _, IList<string> items, int maxCount = 2, string separator = ", ", bool useLineBreak = false)
         {
             var builder = new StringBuilder();
 
@@ -27,6 +27,7 @@ namespace HSMServer.Extensions
                 if (i > 0)
                 {
                     builder.Append(separator);
+
                     if (useLineBreak)
                         builder.Append("<br>");
                 }
