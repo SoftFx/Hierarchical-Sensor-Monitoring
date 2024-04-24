@@ -1,19 +1,18 @@
-﻿using HSMServer.Helpers;
+﻿using HSMServer.Authentication;
+using HSMServer.Extensions;
+using HSMServer.Helpers;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using HSMCommon.Constants;
-using HSMServer.Authentication;
-using HSMServer.Extensions;
-using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel
 {
     public record ProductViewModel
     {
-        public static TimeSpan ProductExpiredTime => ConfigurationConstants.DefaultExpirationTime;
-        
-        
+        public static readonly TimeSpan ProductExpiredTime = new(30, 0, 0, 0); // TODO : get DefaultExpirationTime from IServerConfig
+
+
         public Guid Id { get; }
 
         public string EncodedId { get; }
