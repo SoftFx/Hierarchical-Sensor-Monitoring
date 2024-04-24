@@ -10,7 +10,13 @@
 @if (Model != null)
 {
     <form id="ignoreNotifications_form" asp-action="@nameof(HomeController.SetMutedStateToSensorFromModal)" method="post">
-        <input class="d-none" asp-for="EncodedId" />
+
+         <select multiple class="d-none" asp-for="@Model.Ids">
+            @foreach (var id in Model.Ids)
+            {
+                <option value="@id"></option>
+            }
+        </select>
         <input class="d-none" asp-for="DateTimeNow" />
 
         <div class="modal fade" tabindex="-1" role="dialog" id="ignoreNotifications_modal">
@@ -19,7 +25,7 @@
                     <div class="modal-header">
                         <div class="text-break">
                             <h5 class="modal-title">Mute @Model.TreeElement</h5>
-                            <h6 class="modal-title">@Model.Path</h6>
+                                <h6 class="modal-title">@Html.MultiItemsHeader(Model.Paths)</h6>
                         </div>
                     </div>
 

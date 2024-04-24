@@ -161,34 +161,34 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void SetMutedStateToSensorFromModal(IgnoreNotificationsViewModel model)
         {
-            var decodedId = SensorPathHelper.DecodeGuid(model.EncodedId);
             var newMutingPeriod = model.EndOfIgnorePeriod;
 
-            if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
+            foreach (var id in model.Ids)
             {
-                foreach (var sensorId in GetNodeSensors(decodedId))
-                    _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator, newMutingPeriod);
-            }
-            else
-            {
-                if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                var decodedId = SensorPathHelper.DecodeGuid(id);
+                if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
+                {
+                    foreach (var sensorId in GetNodeSensors(decodedId))
+                        _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator, newMutingPeriod);
+                }
+                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                     _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator, newMutingPeriod);
             }
         }
 
         [HttpPost]
-        public void RemoveMutedStateToSensor([FromQuery] string selectedId)
+        public void RemoveMutedStateToSensor([FromBody] string[] ids)
         {
-            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+            foreach (var id in ids)
+            {
+                var decodedId = SensorPathHelper.DecodeGuid(id);
 
-            if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
-            {
-                foreach (var sensorId in GetNodeSensors(decodedId))
-                    _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator);
-            }
-            else
-            {
-                if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
+                {
+                    foreach (var sensorId in GetNodeSensors(decodedId))
+                        _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator);
+                }
+                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                     _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator);
             }
         }
@@ -292,8 +292,7 @@ namespace HSMServer.Controllers
                     };
 
                     if (!expectedUpdate)
-                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live",
-                            TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
                     else
                     {
                         toastViewModel.AddItem(product);
@@ -336,21 +335,24 @@ namespace HSMServer.Controllers
                 _treeValuesCache.ClearSensorHistory(GetRequest(sensor.Id));
         }
 
-        [HttpGet]
-        public IActionResult MuteSensors(string selectedId)
+        [HttpPost]
+        public IActionResult MuteSensors([FromBody] string[] ids)
         {
-            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+            var result = new List<BaseNodeViewModel>(ids.Length);
 
-            IgnoreNotificationsViewModel viewModel = null;
+            foreach (string id in ids)
+            {
+                var decodedId = SensorPathHelper.DecodeGuid(id);
 
-            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                viewModel = new IgnoreNotificationsViewModel(node);
-            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                viewModel = new IgnoreNotificationsViewModel(sensor);
-            else if (_folderManager.TryGetValue(decodedId, out var folder))
-                viewModel = new IgnoreNotificationsViewModel(folder);
+                if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                    result.Add(node);
+                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                    result.Add(sensor);
+                else if (_folderManager.TryGetValue(decodedId, out var folder))
+                    result.Add(folder);
+            }
 
-            return PartialView("~/Views/Tree/_IgnoreNotificationsModal.cshtml", viewModel);
+            return PartialView("~/Views/Tree/_IgnoreNotificationsModal.cshtml", new IgnoreNotificationsViewModel(result));
         }
 
         [HttpPost]

@@ -8,6 +8,6 @@
     "checkJs": false,
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": false,
-    "downlevelIteration": true  
+    "downlevelIteration": true
   }
 }
