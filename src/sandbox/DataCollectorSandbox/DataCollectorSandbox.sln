@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34701.34
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataCollectorSandboxFramework", "DataCollectorSandboxFramework\DataCollectorSandboxFramework.csproj", "{152E0758-6FB3-4E24-B8DA-616E49ACB9B9}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDataCollector", "..\..\collector\HSMDataCollector\HSMDataCollector.csproj", "{DFD95926-38B8-4B79-BCC8-31106E7134CB}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMSensorDataObjects", "..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj", "{EED26CE0-674E-44BB-BC22-3B17577A2228}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{152E0758-6FB3-4E24-B8DA-616E49ACB9B9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{152E0758-6FB3-4E24-B8DA-616E49ACB9B9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{152E0758-6FB3-4E24-B8DA-616E49ACB9B9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{152E0758-6FB3-4E24-B8DA-616E49ACB9B9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DFD95926-38B8-4B79-BCC8-31106E7134CB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DFD95926-38B8-4B79-BCC8-31106E7134CB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DFD95926-38B8-4B79-BCC8-31106E7134CB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DFD95926-38B8-4B79-BCC8-31106E7134CB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EED26CE0-674E-44BB-BC22-3B17577A2228}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EED26CE0-674E-44BB-BC22-3B17577A2228}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EED26CE0-674E-44BB-BC22-3B17577A2228}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EED26CE0-674E-44BB-BC22-3B17577A2228}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {89823D0E-0379-4682-A50E-D43FFB2B0EF1}
+	EndGlobalSection
+EndGlobal
