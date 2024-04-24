@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.TableOfChanges;
 using System;
 
@@ -8,6 +9,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
     {
         public required Guid Id { get; init; }
 
+
+        public PolicyDestinationSettings DefaultChats { get; init; }
 
         public TimeIntervalModel KeepHistory { get; init; }
 

@@ -1,5 +1,6 @@
 ﻿using HSMServer.ConcurrentStorage;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.Model.Controls;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -21,6 +22,8 @@ namespace HSMServer.Model.Folders
         public TimeIntervalViewModel KeepHistory { get; init; }
 
         public TimeIntervalViewModel SelfDestroy { get; init; }
+
+        public DefaultChatViewModel DefaultChats { get; init; }
 
 
         public string Description { get; init; }

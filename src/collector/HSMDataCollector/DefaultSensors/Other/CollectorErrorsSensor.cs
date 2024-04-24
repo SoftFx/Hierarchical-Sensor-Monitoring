@@ -1,5 +1,4 @@
 ﻿using HSMDataCollector.Options;
-using HSMSensorDataObjects;
 
 namespace HSMDataCollector.DefaultSensors.Other
 {

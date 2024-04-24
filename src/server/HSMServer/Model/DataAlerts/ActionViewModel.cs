@@ -47,7 +47,7 @@ namespace HSMServer.Model.DataAlerts
 
         public bool ScheduleInstantSend { get; set; }
 
-        public HashSet<Guid> Chats { get; set; } = new();
+        public HashSet<Guid?> Chats { get; set; } = new();
 
         public string Comment { get; set; }
 
@@ -60,6 +60,7 @@ namespace HSMServer.Model.DataAlerts
 
     public class ActionViewModel : AlertActionBase
     {
+        public static readonly Guid? DefaultChatId = null;
         public static readonly Guid AllChatsId = Guid.Empty;
         public static readonly string SetErrorStatus = $"set {SensorStatus.Error.ToSelectIcon()} {SensorStatus.Error.GetDisplayName()} status";
 

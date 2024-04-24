@@ -47,6 +47,8 @@ namespace HSMServer.Core.TableOfChanges
 
         public static InitiatorInfo AsSystemMigrator() => new(InitiatorType.ServerMigration, isForce: true);
 
+        public static InitiatorInfo AsSoftSystemMigrator() => new(InitiatorType.ServerMigration);
+
         public static InitiatorInfo AsUser(string username) => new(InitiatorType.User, username);
 
         public static InitiatorInfo AsCollector(string key, bool isForce) => new(InitiatorType.DataCollector, key, isForce);

@@ -241,11 +241,17 @@
         event.preventDefault();
         event.stopImmediatePropagation();
 
+        var formData = new FormData(this);
+        fillDefaultChatMode(formData);
+
         $.ajax({
             url: $(`#generalProductInfo_form`).attr("action"),
             type: 'POST',
-            data: $(`#generalProductInfo_form`).serialize(),
-            datatype: 'json',
+            data: formData,
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            cache: false,
             async: true,
             success: function (viewData) {
                 $(`#editProductGeneralInfo_div`).html(viewData);

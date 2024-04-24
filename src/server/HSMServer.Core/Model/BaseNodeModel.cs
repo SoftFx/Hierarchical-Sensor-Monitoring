@@ -37,9 +37,11 @@ namespace HSMServer.Core.Model
         public string Description { get; private set; }
 
 
-        public string FullPath => Parent is null ? $"{DisplayName}" : $"{Parent.FullPath}/{DisplayName}";
+        public bool IsRoot => Parent is null;
 
-        public string Path => Parent is null ? string.Empty : $"{Parent.Path}/{DisplayName}";
+        public string FullPath => IsRoot ? $"{DisplayName}" : $"{Parent.FullPath}/{DisplayName}";
+
+        public string Path => IsRoot ? string.Empty : $"{Parent.Path}/{DisplayName}";
 
         public string RootProductName => Parent?.RootProductName ?? DisplayName;
 
@@ -79,7 +81,7 @@ namespace HSMServer.Core.Model
             ChangeTable.FromEntity(entity.ChangeTable);
 
             if (entity.Settings is not null)
-                Settings.SetSettings(entity.Settings);
+                Settings.SetSettings(entity.Settings, entity.DefaultChatsSettings);
         }
 
 

@@ -4,6 +4,8 @@
 
 @model NodeInfoBaseViewModel
 
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
 
 <div id="meta_info_general_info">
     <label class="col-form-label fw-bold">General info:</label>
@@ -19,6 +21,10 @@
     }
     else if (Model is SensorInfoViewModel sensor)
     {
-        @await Html.PartialAsync("_SensorGeneralInfo", sensor)
+        @await Html.PartialAsync("Sensor/_SensorGeneralInfo", sensor)
     }
+
+    <div class="d-flex flex-row text-nowrap align-items-center ms-3">
+        <partial name="~/Views/Shared/_DefaultChat.cshtml" for="DefaultChats" />
+    </div>
 </div>

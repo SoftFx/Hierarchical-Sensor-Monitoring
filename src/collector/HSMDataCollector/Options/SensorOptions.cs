@@ -42,6 +42,8 @@ namespace HSMDataCollector.Options
         public Unit? SensorUnit { get; set; }
 
 
+        public DefaultChatsMode? DefaultChats { get; set; }
+
         public TimeSpan? KeepHistory { get; set; }
 
         public TimeSpan? SelfDestroy { get; set; }
