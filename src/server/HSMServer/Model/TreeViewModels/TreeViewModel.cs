@@ -1,6 +1,5 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Folders;
@@ -138,16 +137,6 @@ namespace HSMServer.Model.TreeViewModel
             bool CompareFunc(SensorNodeViewModel sensor) => sensor.Path.EndsWith($".module/Module Info/{name}") || sensor.Path.EndsWith($".module/{name}");
         }
 
-        internal void UpdateProductNotificationSettings(ProductNodeViewModel product)
-        {
-            var update = new ProductUpdate
-            {
-                Id = product.Id,
-            };
-
-            _cache.UpdateProduct(update);
-        }
-
 
         private ProductNodeViewModel AddNewProductViewModel(ProductModel product)
         {
@@ -190,7 +179,6 @@ namespace HSMServer.Model.TreeViewModel
             AccessKeys.TryAdd(key.Id, viewModel);
         }
 
-
         private void ChangeProductHandler(ProductModel model, ActionType action)
         {
             switch (action)
@@ -212,7 +200,7 @@ namespace HSMServer.Model.TreeViewModel
 
                 case ActionType.Delete:
                     if (Nodes.TryRemove(model.Id, out _))
-                        if (model.Parent != null && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                        if (!model.IsRoot && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
                             parentProduct.Nodes.TryRemove(model.Id, out var _);
 
                     break;
@@ -269,7 +257,7 @@ namespace HSMServer.Model.TreeViewModel
         {
             parent = default;
 
-            return product.Parent != null && Nodes.TryGetValue(product.Parent.Id, out parent);
+            return !product.IsRoot && Nodes.TryGetValue(product.Parent.Id, out parent);
         }
 
         private bool TryGetParentFolder(ProductModel product, out FolderModel parent) =>

@@ -1,4 +1,5 @@
 ﻿@using System.Text
+@using HSMServer.Model.Controls
 @using HSMServer.Model.DataAlerts
 @using HSMServer.Extensions
 @using HSMCommon.Extensions
@@ -62,13 +63,24 @@
 
                 if (action.Chats.Contains(ActionViewModel.AllChatsId))
                     chats = "all chats";
+                else if (action.Chats.Contains(ActionViewModel.DefaultChatId))
+                {
+                    var chatName = Model.DefaultChatMode switch
+                    {
+                        DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
+                        DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
+                        _ => telegramChats.TryGetValue(Model.DefaultChat, out var name) ? name : DefaultChatMode.NotInitialized.GetDisplayName(),
+                    };
+
+                    chats = $"default chat ({chatName})";
+                }
                 else if (action.Chats.Count == 0)
                 {
                     chats = "(chats are not initialized)";
                     color = "gray";
                 }
                 else
-                    chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch]));
+                    chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch.Value)).Select(ch => telegramChats[ch.Value]));
 
                 if (action.ScheduleRepeatMode is not null)
                 {

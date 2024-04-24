@@ -9,6 +9,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -73,6 +74,9 @@ namespace HSMServer.Core.Cache
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent += SendAlertMessage;
 
+            _migrator.ApplyProductMigration += UpdateProduct;
+            _migrator.ApplySensorMigration += TryUpdateSensor;
+
             Initialize();
         }
 
@@ -86,6 +90,9 @@ namespace HSMServer.Core.Cache
 
         public void Dispose()
         {
+            _migrator.ApplyProductMigration -= UpdateProduct;
+            _migrator.ApplySensorMigration -= TryUpdateSensor;
+
             _confirmationManager.NewMessageEvent -= _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent -= SendAlertMessage;
 
@@ -149,7 +156,7 @@ namespace HSMServer.Core.Cache
             {
                 RemoveProduct(productId);
 
-                if (product.Parent != null)
+                if (!product.IsRoot)
                     UpdateProduct(product.Parent);
             }
         }
@@ -158,7 +165,7 @@ namespace HSMServer.Core.Cache
 
         /// <returns>product (without parent) with name = name</returns>
         public ProductModel GetProductByName(string name) =>
-            _tree.FirstOrDefault(p => p.Value.Parent == null && p.Value.DisplayName == name).Value;
+            _tree.FirstOrDefault(p => p.Value.IsRoot && p.Value.DisplayName == name).Value;
 
         public bool TryGetProductByName(string name, out ProductModel product)
         {
@@ -170,7 +177,7 @@ namespace HSMServer.Core.Cache
         public string GetProductNameById(Guid id) => GetProduct(id)?.DisplayName;
 
         /// <returns>list of root products (without parent)</returns>
-        public List<ProductModel> GetProducts() => _tree.Values.Where(p => p.Parent == null).ToList();
+        public List<ProductModel> GetProducts() => _tree.Values.Where(p => p.IsRoot).ToList();
 
 
         public bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message)
@@ -223,7 +230,7 @@ namespace HSMServer.Core.Cache
 
         public bool TryGetProduct(Guid id, out ProductModel product, out string error)
         {
-            var ok = _tree.TryGetValue(id, out product) && product.Parent is null;
+            var ok = _tree.TryGetValue(id, out product) && product.IsRoot;
             error = !ok ? ErrorProductNotFound : null;
 
             return ok;
@@ -256,7 +263,7 @@ namespace HSMServer.Core.Cache
                 return false;
 
             // TODO: remove after refactoring sensors data storing
-            if (product.Parent is not null)
+            if (!product.IsRoot)
             {
                 message = "Temporarily unavailable feature. Please select a product without a parent";
                 return false;
@@ -709,7 +716,7 @@ namespace HSMServer.Core.Cache
                     foreach (var policy in sensor.Policies)
                     {
                         if (!TryGetPolicyUpdate(policy, chats, initiator, out var policyUpdate))
-                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination.Chats, policy.Destination.AllChats), initiator);
+                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), initiator);
 
                         policiesUpdate.Add(policyUpdate);
                     }
@@ -749,7 +756,7 @@ namespace HSMServer.Core.Cache
         }
 
         private static bool CanRemoveChatsFromPolicy(PolicyDestination destination, HashSet<Guid> chats) =>
-            !destination.AllChats && destination.Chats.Any(pair => chats.Contains(pair.Key));
+            !destination.AllChats && !destination.UseDefaultChats && destination.Chats.Any(pair => chats.Contains(pair.Key));
 
         private static PolicyUpdate BuildPolicyUpdate(Policy policy, PolicyDestinationUpdate destination, InitiatorInfo initiator) =>
             new()
@@ -886,9 +893,10 @@ namespace HSMServer.Core.Cache
             var accessKeysEntities = _database.GetAccessKeys();
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
 
-            _logger.Info($"Migrate sensors settings and alerts");
-            RunMigration();
-            _logger.Info($"Migrate sensor settings and alerts finished");
+            _logger.Info($"Migrate product/sensors settings and alerts");
+            _migrator.RunProductMigrations([.. _tree.Values]);
+            _migrator.RunSensorMigrations([.. _sensors.Values]);
+            _logger.Info($"Migrate product/sensors settings and alerts finished");
 
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
             ApplyAccessKeys([.. accessKeysEntities]);
@@ -897,19 +905,6 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
             UpdateCacheState();
-        }
-
-        private void RunMigration()
-        {
-            try
-            {
-                foreach (var update in MigrationManager.GetMigrationUpdates([.. _sensors.Values]))
-                    TryUpdateSensor(update, out _);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Migration is failed: {ex}");
-            }
         }
 
         private List<ProductEntity> RequestProducts()
@@ -1061,7 +1056,7 @@ namespace HSMServer.Core.Cache
         {
             if (_tree.TryAdd(product.Id, product))
             {
-                if (product.Parent == null)
+                if (product.IsRoot)
                 {
                     var update = new ProductUpdate
                     {
@@ -1069,6 +1064,8 @@ namespace HSMServer.Core.Cache
                         TTL = new TimeIntervalModel(TimeInterval.None),
                         KeepHistory = new TimeIntervalModel(TimeInterval.Month),
                         SelfDestroy = new TimeIntervalModel(TimeInterval.Month),
+
+                        DefaultChats = new PolicyDestinationSettings(product.FolderId != null ? DefaultChatsMode.FromFolder : DefaultChatsMode.NotInitialized),
                     };
 
                     product.Update(update);
@@ -1097,6 +1094,11 @@ namespace HSMServer.Core.Cache
                 DisplayName = request.SensorName,
                 Type = (byte)type,
                 CreationDate = DateTime.UtcNow.Ticks,
+
+                DefaultChatsSettings = new PolicyDestinationSettingsEntity()
+                {
+                    Mode = (byte)DefaultChatsMode.FromParent,
+                }
             };
 
             var sensor = SensorModelFactory.Build(entity);
@@ -1300,7 +1302,7 @@ namespace HSMServer.Core.Cache
             foreach (var (_, node) in product.SubProducts)
                 ClearEmptyNodes(node);
 
-            if (product.IsEmpty && product.Settings.SelfDestroy.Value.GetShiftedTime(product.CreationDate) < DateTime.UtcNow)
+            if (!product.IsRoot && product.IsEmpty && product.Settings.SelfDestroy.Value.GetShiftedTime(product.CreationDate) < DateTime.UtcNow)
                 RemoveProduct(product.Id, InitiatorInfo.AsSystemForce("Old empty node"));
         }
 

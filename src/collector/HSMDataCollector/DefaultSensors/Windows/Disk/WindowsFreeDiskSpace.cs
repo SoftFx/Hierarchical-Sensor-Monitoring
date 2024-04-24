@@ -1,5 +1,4 @@
-﻿using HSMDataCollector.DefaultSensors.SystemInfo;
-using HSMDataCollector.Options;
+﻿using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {

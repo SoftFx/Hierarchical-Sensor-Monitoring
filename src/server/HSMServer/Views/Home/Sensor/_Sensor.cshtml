@@ -1,0 +1,177 @@
+﻿@using HSMServer.Controllers
+@using HSMServer.Core.Model
+@using HSMServer.Model.TreeViewModel
+@using HSMServer.Model.ViewModel
+
+@model SensorNodeViewModel
+
+@{
+    var sensorId = Model.EncodedId;
+}
+
+<div>
+    @await Html.PartialAsync("_MetaInfo", new SensorInfoViewModel(Model))
+
+
+    @if (Model.Type == SensorType.File)
+    {
+        @await Html.PartialAsync("Sensor/History/_SensorFileContent", Model);
+    }
+    else
+    {
+        <div id="sensorHistorySpinner" class="center-relative-history-spinner">
+            <div class="spinner-border normal_spinner text-secondary" role="status"></div>
+        </div>
+        @await Html.PartialAsync("Sensor/History/_SensorHistoryContent", Model);
+        <div id="recentValues_@sensorId"></div>
+    }
+
+</div>
+
+
+<script>
+    var previousReceivedTime = undefined;
+    $('#barPicker').on('click', (e) => e.stopPropagation())
+
+    $('[id^="plot_"]').change(function () {
+        const name = this.id.substring("plot_".length, this.id.length);
+        if ($(this).is(':checked')){
+            addPlot(name);
+        }
+        else {
+            removePlot(name);
+        }
+    });
+
+    $(document).ready(function () {
+        hiddenColumns.clear();
+
+        if ('@(Model.Type is SensorType.DoubleBar or SensorType.IntegerBar)' === 'True')
+            hiddenColumns.tablecellsIds.push("#lastUpdateTime_header", "#closeTime_header", '[id^="lastUpdateTime_value"]', '[id^="closeTime_value"]',
+                                             "#firstValue_header", "#lastValue_header", '[id^="firstValue_value"]', '[id^="lastValue_value"]');
+
+        hiddenColumns.tablecellsIds.push("#receivingTime_header", '[id^="receivingTime_value"]')
+
+        if ('@Model.AggregateValues' === 'True')
+            hiddenColumns.tablecellsIds.push("#aggregatedValuesCount_header", '[id^="aggregatedValuesCount_value"]');
+    });
+
+    $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal(NodeType.Sensor));
+
+    $('input[id^="from_"]').off('change').on('change', function () {
+        $('#history_period').val('@HistoryPeriod.Custom');
+        $('#history_period').trigger('change');
+    });
+
+    $('input[id^="to_"]').off('change').on('change', function () {
+        $('#history_period').val('@HistoryPeriod.Custom');
+        $('#history_period').trigger('change');
+    });
+
+    $('#history_period').off('change').on('change', function () {
+        let period = this.value;
+
+        if (period === '@HistoryPeriod.Default')
+            localStorage.removeItem(`historyPeriod_@sensorId`);
+        else
+            localStorage.setItem(`historyPeriod_@sensorId`, period);
+
+        if (period === '@HistoryPeriod.Custom') {
+            localStorage.setItem(`historyFrom_@sensorId`, $(`#from_@sensorId`).val());
+            localStorage.setItem(`historyTo_@sensorId`, $(`#to_@sensorId`).val());
+        }
+        else {
+            localStorage.removeItem(`historyFrom_@sensorId`);
+            localStorage.removeItem(`historyTo_@sensorId`);
+        }
+
+        if (period === '@HistoryPeriod.Default') {
+            InitializeHistory();
+        }
+        else if (period != '@HistoryPeriod.Custom') {
+            let now = new Date();
+            let to = now.AddDays(1);
+            let from;
+
+            switch (period) {
+                case '@HistoryPeriod.Day':
+                    from = now.AddDays(-1);
+                    break;
+                case '@HistoryPeriod.ThreeDays':
+                    from = now.AddDays(-3);
+                    break;
+                case '@HistoryPeriod.Week':
+                    from = now.AddDays(-7);
+                    break;
+                case '@HistoryPeriod.TwoWeeks':
+                    from = now.AddDays(-14);
+                    break;
+                case '@HistoryPeriod.Month':
+                    from = now.AddDays(-30);
+                    break;
+            }
+
+            setFromAndTo('@sensorId', from, to);
+            searchHistory('@sensorId');
+        }
+    });
+
+    $(document).ready(function () {
+        if ('@(Model.Type is SensorType.File)' === 'True') {
+            setContentPreview('@Model.EncodedId');
+        }
+
+        let savedPlots = localStorage.getItem(`graph_@sensorId`);
+        if (savedPlots) {
+            let plots = savedPlots.split(',').filter((value, index, array) => array.indexOf(value) === index);
+            localStorage.setItem(`graph_@sensorId`, plots);
+            let jqueryPlots = $('[id^="plot_"]');
+            jqueryPlots.each(x => {
+                jqueryPlots[x].checked = plots.includes(jqueryPlots[x].id.substring("plot_".length));
+            })
+        }
+
+        JournalTable = undefined;
+
+        let content = $('#content_links li');
+        content.first().find('a').first().tab('show');
+    });
+
+    function setContentPreview(encodedId) {
+        $.ajax({
+            type: 'GET',
+            url: `${getFileInfo}?Selected=${encodedId}`,
+            cache: false,
+            contentType: "application/json",
+            success: function (response) {
+                if (previousReceivedTime === response.time)
+                    return;
+
+                if ((response.originalSize < 5 * 1024 * 1024 && response.extension === 'csv') || // 5MB
+                    (response.originalSize < 1024 * 1024 && response.extension === 'txt')) // 1MB
+                    previewFile(viewFileAction, encodedId, response.extension);
+                else
+                    $('#bigFilePreview').removeClass('d-none');
+
+                loadFiles();
+                previousReceivedTime = response.time;
+            }
+        })
+    }
+
+    function loadFiles() {
+        $.ajax({
+            type: 'GET',
+            url: `@Url.Action(nameof(HomeController.GetRecentFilesView), "Home")?fileId=@Model.EncodedId`,
+            cache: false,
+            contentType: "application/json",
+            success: function (response) {
+                $('#recentValues_@Model.EncodedId').html(response);
+            }
+        })
+    }
+
+    function refreshTable() {
+        $(`#link_table_@sensorId`).trigger('click');
+    }
+</script>

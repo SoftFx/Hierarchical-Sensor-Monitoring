@@ -72,13 +72,10 @@ builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.S
 
 builder.Services.AddApplicationServices(serverConfig);
 
-//builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection(nameof(MonitoringOptions))); should be removed???
-
 builder.Services.Configure<HostOptions>(hostOptions =>
 {
     hostOptions.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
 });
-
 
 try
 {

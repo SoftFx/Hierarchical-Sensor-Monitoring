@@ -1,8 +1,10 @@
 ﻿using HSMServer.Attributes;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.Model.Controls;
 using HSMServer.Model.TreeViewModel;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model.ViewModel
@@ -21,6 +23,8 @@ namespace HSMServer.Model.ViewModel
 
         public string Description { get; set; }
 
+        public DefaultChatViewModel DefaultChats { get; set; }
+
 
         public bool IsNameChanged => Name != OldName;
 
@@ -33,15 +37,17 @@ namespace HSMServer.Model.ViewModel
             Name = product.Name;
             OldName = product.Name;
             Description = product.Description;
+            DefaultChats = new(product);
         }
 
 
-        internal ProductUpdate ToUpdate(InitiatorInfo initiator) =>
+        internal ProductUpdate ToUpdate(Dictionary<Guid, string> availableChats, bool parentIsFoler, InitiatorInfo initiator) =>
             new()
             {
                 Id = Id,
                 Name = IsNameChanged ? Name : null,
                 Description = Description is null ? string.Empty : Description,
+                DefaultChats = DefaultChats.ToModel(availableChats, DefaultChats.IsFromParent && parentIsFoler),
                 Initiator = initiator,
             };
     }

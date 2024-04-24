@@ -1,6 +1,5 @@
 using HSMServer.Authentication;
 using HSMServer.Dashboards;
-using HSMServer.Datasources;
 using HSMServer.Folders;
 using HSMServer.Model.Dashboards;
 using Microsoft.AspNetCore.Mvc;
@@ -199,6 +198,19 @@ namespace HSMServer.Controllers
             }
 
             return _emptyResult;
+        }
+
+        [HttpPut("Dashboards/{dashboardId:guid}/Panels")]
+        public IActionResult UpdatePanelSettings([FromBody] PanelTooltipUpdateDto panelTooltipUpdate, Guid dashboardId)
+        {
+            if (panelTooltipUpdate is not null && TryGetPanel(dashboardId, panelTooltipUpdate.Id, out var panel))
+            {
+                panel.NotifyUpdate(panelTooltipUpdate.ToUpdate());
+
+                return Ok("Successfully updated");
+            }
+
+            return BadRequest("Couldn't update panel");
         }
         
         #endregion

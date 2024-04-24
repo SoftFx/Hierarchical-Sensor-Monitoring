@@ -1,4 +1,4 @@
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
@@ -8,9 +8,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 
-namespace HSMServer.Middleware
+namespace HSMServer.Middleware.Telemetry
 {
-    public sealed class TelemetryMiddleware(RequestDelegate _next, DataCollectorWrapper _collector, ITreeValuesCache _cache)
+    public class TelemetryCollector(DataCollectorWrapper _collector, ITreeValuesCache _cache)
     {
         private const string ClientNameHeader = nameof(Header.ClientName);
         private const string AccessKeyHeader = nameof(Header.Key);
@@ -18,10 +18,10 @@ namespace HSMServer.Middleware
         private const string XForvardHeader = "X-Forwarded-For"; // real ip without vpn redirection
         private const string EmptyClient = "No name";
 
-        private readonly ClientStatisticsSensors _statistics = _collector.WebRequestsSensors;
+        private protected readonly ClientStatisticsSensors _statistics = _collector.WebRequestsSensors;
 
 
-        public async Task InvokeAsync(HttpContext context)
+        public async Task<bool> TryRegisterPublicApiRequest(HttpContext context)
         {
             if (IsPublicApiRequest(context))
             {
@@ -37,18 +37,16 @@ namespace HSMServer.Middleware
                 {
                     await context.SetAccessError(error);
 
-                    return;
+                    return false;
                 }
             }
 
-            await _next(context);
-
-            if (context.TryGetPublicApiInfo(out var requestInfo))
-            {
-                _statistics.Total.AddResponseResult(context.Response);
-                _statistics[requestInfo.TelemetryPath].AddResponseResult(context.Response);
-            }
+            return true;
         }
+
+        [Obsolete("Should be removed ater migration from v3 to v4")]
+        public static bool TryAddKeyToHeader(HttpContext context, string accessKey) =>
+            context.TryWriteInfo(AccessKeyHeader, accessKey);
 
 
         private static bool IsPublicApiRequest(HttpContext context) => context.TryReadInfo(AccessKeyHeader, out _);
@@ -92,19 +90,25 @@ namespace HSMServer.Middleware
 
         private static bool TryGetRemoteIP(HttpContext context, out string remoteIp)
         {
-            remoteIp = context.Request.HttpContext.Connection.RemoteIpAddress?.ToString();
+            if (TryMapIPToString(context.Request.HttpContext.Connection.RemoteIpAddress, out remoteIp))
+                return remoteIp is not null;
 
             if (remoteIp is null && context.TryReadInfo(XForvardHeader, out var forwardFor) && !string.IsNullOrEmpty(forwardFor))
-            {
                 foreach (var ipAddressRaw in forwardFor.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                    if (IPAddress.TryParse(ipAddressRaw, out var address) && address.AddressFamily is AddressFamily.InterNetwork or AddressFamily.InterNetworkV6)
-                    {
-                        remoteIp = address.ToString();
+                    if (IPAddress.TryParse(ipAddressRaw, out var address) && TryMapIPToString(address, out remoteIp))
                         break;
-                    }
-            }
 
             return remoteIp is not null;
+        }
+
+        private static bool TryMapIPToString(IPAddress address, out string ip)
+        {
+            if (address.IsIPv4MappedToIPv6)
+                address = address.MapToIPv4();
+
+            ip = address.ToString();
+
+            return ip is not null;
         }
 
         private static string GetClientName(HttpContext context) => context.TryReadInfo(ClientNameHeader, out var name) && !string.IsNullOrWhiteSpace(name) ? name.ToString() : EmptyClient;

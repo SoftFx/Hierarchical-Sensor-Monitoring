@@ -1,8 +1,12 @@
 import {convertToGraphData} from "./plotting";
 import {Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot} from "./plots";
 import {Dashboard} from "../ts/dashboardT";
+import {DashboardStorage, Panel} from "../ts/dashboard.storage";
+import {Layout} from "../ts/plotUpdate";
 
 const updateDashboardInterval = 120000; // 2min
+export const dashboardStorage = new DashboardStorage();
+
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();
@@ -155,7 +159,12 @@ window.insertSourcePlot = function (data, id, panelId, dashboardId, range = unde
     plot.showlegend = true;
     plot['marker']['color'] = data.color;
 
-    Plotly.addTraces(id, plot.getPlotData()).then(
+    let plotData = plot.getPlotData();
+    let panel = dashboardStorage.getPanel(panelId)
+    if (panel)
+        panel.lastUpdateTime = new Date(plotData[0].x.at(-1));
+
+    Plotly.addTraces(id, plotData).then(
         (data) => {
             if (plot instanceof TimeSpanPlot) {
                 let y = [];
@@ -322,6 +331,10 @@ window.initDashboard = function () {
 
     Dashboard.initRequests(dict);
 }
+
+window.addPanelToStorage = function (id, settings) {
+    dashboardStorage.addPanel(new Panel(id, settings))
+};
 
 window.disableDragAndResize = function () {
     interact('.resize-draggable').options.resize.enabled = false;

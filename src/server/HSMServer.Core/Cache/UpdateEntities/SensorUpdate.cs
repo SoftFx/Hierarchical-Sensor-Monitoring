@@ -31,6 +31,10 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
 
         public DefaultAlertsOptions DefaultAlertsOptions { get; init; }
+
+
+        [SetsRequiredMembers]
+        public SensorUpdate() : base() { }
     }
 
 
@@ -88,19 +92,27 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
     public sealed record PolicyDestinationUpdate
     {
-        public Dictionary<Guid, string> Chats { get; } = new();
+        public Dictionary<Guid, string> Chats { get; } = [];
 
-        public bool AllChats { get; }
+        public bool? UseDefaultChats { get; }
+
+        public bool? AllChats { get; }
 
 
-        public PolicyDestinationUpdate(bool allChats = false)
+        public PolicyDestinationUpdate(bool? allChats = false, bool? useDefaultChat = true)
         {
             AllChats = allChats;
+            UseDefaultChats = useDefaultChat;
         }
 
-        public PolicyDestinationUpdate(Dictionary<Guid, string> chats, bool allChats = false) : this(allChats)
+        public PolicyDestinationUpdate(Dictionary<Guid, string> chats, bool? allChats = null, bool? useDefaultChat = null) : this(allChats, useDefaultChat)
         {
             Chats = chats;
+        }
+
+        public PolicyDestinationUpdate(PolicyDestination destination) : this(destination.AllChats, destination.UseDefaultChats)
+        {
+            Chats = new Dictionary<Guid, string>(destination.Chats);
         }
     }
 
