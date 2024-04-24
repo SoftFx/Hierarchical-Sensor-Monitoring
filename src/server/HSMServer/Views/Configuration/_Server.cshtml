@@ -1,4 +1,5 @@
 ﻿@using HSMServer.Model.Configuration
+@using HSMServer.ServerConfiguration
 
 @model ServerSettingsViewModel
 
@@ -17,7 +18,7 @@
 </div>
 <div class="row">
     <div class="offset-2 col-auto">
-        <label class="note">Port on which the site is accessible.</label>
+        <label class="note">Port on which the site is accessible. Default value is @KestrelConfig.DefaultSitePort.</label>
     </div>
 </div>
 
@@ -31,7 +32,7 @@
 </div>
 <div class="row">
     <div class="offset-2 col-auto">
-        <label class="note">Port on which the API is available.</label>
+        <label class="note">Port on which the API is available. Default value is @KestrelConfig.DefaultSensorPort.</label>
     </div>
 </div>
 
@@ -80,7 +81,7 @@
 </div>
 <div class="row">
     <div class="offset-2 col-auto">
-        <label class="note">Frequency of environment database backup. This database contains meta information of server entities.</label>
+        <label class="note">Frequency of environment database backup. This database contains meta information of server entities. Default value is @BackupDatabaseConfig.DefaultPeriodHours hour.</label>
     </div>
 </div>
 
@@ -97,7 +98,7 @@
 </div>
 <div class="row">
     <div class="offset-2 col-auto">
-        <label class="note">Maximum storage time for database backup.</label>
+        <label class="note">Maximum storage time for database backup. Default value is @BackupDatabaseConfig.DefaultStoragePeriodDays days.</label>
     </div>
 </div>
 

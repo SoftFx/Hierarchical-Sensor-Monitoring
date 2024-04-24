@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Model.Configuration
 @using HSMServer.BackgroundServices
+@using HSMServer.ServerConfiguration
 
 @model MonitoringSettingsViewModel
 
@@ -16,7 +17,7 @@
 </div>
 <div class="row">
     <div class="offset-3 col-auto">
-        <label class="note">Will self-monitoring statistics be collected (product "@DataCollectorWrapper.SelfMonitoringProductName").</label>
+        <label class="note">Will self-monitoring statistics be collected (product "@DataCollectorWrapper.SelfMonitoringProductName"). Default value is @MonitoringOptions.DefaultIsMonitoringEnabled.</label>
     </div>
 </div>
 
@@ -33,7 +34,7 @@
 </div>
 <div class="row">
     <div class="offset-3 col-auto">
-        <label class="note">Frequency of collecting statistics on memory occupied by sensors in the database (sensors "@DatabaseSensorsStatistics.FullStatisticsSensorName" and "@DatabaseSensorsStatistics.TopHeaviestSensorName").</label>
+        <label class="note">Frequency of collecting statistics on memory occupied by sensors in the database (sensors "@DatabaseSensorsStatistics.FullStatisticsSensorName" and "@DatabaseSensorsStatistics.TopHeaviestSensorName"). Default value is @MonitoringOptions.DefaultDatabaseStatisticsPeriodDays day.</label>
     </div>
 </div>
 
@@ -47,7 +48,7 @@
 </div>
 <div class="row">
     <div class="offset-3 col-auto">
-        <label class="note">Number of sensors that are collected by the sensor "@DatabaseSensorsStatistics.TopHeaviestSensorName".</label>
+        <label class="note">Number of sensors that are collected by the sensor "@DatabaseSensorsStatistics.TopHeaviestSensorName". Default value is @MonitoringOptions.DefaultTopHeaviestSensorsCount sensors.</label>
     </div>
 </div>
 
