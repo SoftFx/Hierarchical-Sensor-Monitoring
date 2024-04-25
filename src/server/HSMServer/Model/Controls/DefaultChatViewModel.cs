@@ -36,6 +36,8 @@ namespace HSMServer.Model.Controls
 
         public bool IsModify { get; }
 
+        public bool IsCustom => ChatMode is DefaultChatMode.Custom;
+
         public bool IsFromParent => ChatMode is DefaultChatMode.FromParent;
 
         public bool IsNotInitialized => ChatMode is DefaultChatMode.NotInitialized;
@@ -59,7 +61,7 @@ namespace HSMServer.Model.Controls
         }
 
 
-        public bool IsSelectedChat(TelegramChat chat) => Chat == chat.Id;
+        public bool IsSelectedChat(TelegramChat chat) => ChatMode is DefaultChatMode.Custom && Chat == chat.Id;
 
         public bool IsSelectedMode(DefaultChatMode mode) => ChatMode == mode;
 
@@ -110,9 +112,9 @@ namespace HSMServer.Model.Controls
             return this;
         }
 
-        internal PolicyDestinationSettings ToModel(Dictionary<Guid, string> availableChats, bool setFromFolder = false) => new(ToEntity(availableChats, setFromFolder));
+        internal PolicyDestinationSettings ToModel(Dictionary<Guid, string> availableChats) => new(ToEntity(availableChats));
 
-        internal PolicyDestinationSettingsEntity ToEntity(Dictionary<Guid, string> availableChats, bool setFromFolder = false)
+        internal PolicyDestinationSettingsEntity ToEntity(Dictionary<Guid, string> availableChats)
         {
             var chats = new Dictionary<string, string>(1);
 
@@ -122,7 +124,7 @@ namespace HSMServer.Model.Controls
             return new()
             {
                 Chats = chats,
-                Mode = (byte)(setFromFolder ? DefaultChatsMode.FromFolder : ChatMode switch
+                Mode = (byte)(ChatMode switch
                 {
                     DefaultChatMode.FromParent => DefaultChatsMode.FromParent,
                     DefaultChatMode.Custom => DefaultChatsMode.Custom,
@@ -131,6 +133,13 @@ namespace HSMServer.Model.Controls
                 }),
             };
         }
+
+        internal static PolicyDestinationSettingsEntity FromFolderEntity(Dictionary<string, string> chats) =>
+            new()
+            {
+                Mode = (byte)DefaultChatsMode.FromFolder,
+                Chats = chats,
+            };
 
 
         private Dictionary<Guid, TelegramChat> ToAvailableChats(List<TelegramChat> chats) =>
