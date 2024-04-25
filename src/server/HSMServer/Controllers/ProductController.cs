@@ -156,7 +156,7 @@ namespace HSMServer.Controllers
         public IActionResult EditProduct(ProductGeneralInfoViewModel viewModel)
         {
             if (_treeViewModel.Nodes.TryGetValue(viewModel.Id, out var product) && ModelState.IsValid)
-                _treeValuesCache.UpdateProduct(viewModel.ToUpdate(product, product.GetAvailableChats(_telegramChatsManager), _folderManager, CurrentInitiator));
+                _treeValuesCache.UpdateProduct(viewModel.ToUpdate(product, _telegramChatsManager, _folderManager, CurrentInitiator));
             else
                 viewModel.DefaultChats = new(product);
 

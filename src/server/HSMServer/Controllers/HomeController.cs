@@ -798,9 +798,7 @@ namespace HSMServer.Controllers
                 Id = product.Id,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
                 TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
-                DefaultChats = newModel.DefaultChats.IsFromParent && product.ParentIsFolder
-                    ? new(Model.Controls.DefaultChatViewModel.FromFolderEntity(_folderManager.GetFolderDefaultChat(product.FolderId.Value)))
-                    : newModel.DefaultChats.ToModel(availableChats),
+                DefaultChats = newModel.DefaultChats.ToUpdate(product, _telegramChatsManager, _folderManager),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
                 Description = newModel.Description ?? string.Empty,

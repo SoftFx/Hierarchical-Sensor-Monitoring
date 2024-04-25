@@ -4,8 +4,8 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Folders;
 using HSMServer.Model.Controls;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notifications;
 using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model.ViewModel
@@ -42,15 +42,13 @@ namespace HSMServer.Model.ViewModel
         }
 
 
-        internal ProductUpdate ToUpdate(ProductNodeViewModel product, Dictionary<Guid, string> availableChats, IFolderManager folderManager, InitiatorInfo initiator) =>
+        internal ProductUpdate ToUpdate(ProductNodeViewModel product, ITelegramChatsManager chatsManager, IFolderManager folderManager, InitiatorInfo initiator) =>
             new()
             {
                 Id = Id,
                 Name = IsNameChanged ? Name : null,
                 Description = Description is null ? string.Empty : Description,
-                DefaultChats = DefaultChats.IsFromParent && product.ParentIsFolder
-                    ? new(DefaultChatViewModel.FromFolderEntity(folderManager.GetFolderDefaultChat(product.FolderId.Value)))
-                    : DefaultChats.ToModel(availableChats),
+                DefaultChats = DefaultChats.ToUpdate(product, chatsManager, folderManager),
                 Initiator = initiator,
             };
     }

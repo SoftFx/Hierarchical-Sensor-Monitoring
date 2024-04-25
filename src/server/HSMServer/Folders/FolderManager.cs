@@ -332,9 +332,12 @@ namespace HSMServer.Folders
         {
             if (model.IsFromFolder)
             {
-                return action is not ActionType.Delete
-                    ? new(global::HSMServer.Model.Controls.DefaultChatViewModel.FromFolderEntity(GetFolderDefaultChat(folder.Id)))
-                    : new(folder.DefaultChats.ToEntity(folder.GetAvailableChats()));
+                var chat = folder.DefaultChats;
+                var entity = action is ActionType.Delete
+                    ? chat.ToEntity(folder.GetAvailableChats())
+                    : chat.FromFolderEntity(GetFolderDefaultChat(folder.Id));
+
+                return new(entity);
             }
 
             return null;

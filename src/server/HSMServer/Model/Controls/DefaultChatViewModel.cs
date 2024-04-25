@@ -2,6 +2,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Extensions;
+using HSMServer.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using System;
@@ -134,12 +135,17 @@ namespace HSMServer.Model.Controls
             };
         }
 
-        internal static PolicyDestinationSettingsEntity FromFolderEntity(Dictionary<string, string> chats) =>
+        internal PolicyDestinationSettingsEntity FromFolderEntity(Dictionary<string, string> chats) =>
             new()
             {
                 Mode = (byte)DefaultChatsMode.FromFolder,
                 Chats = chats,
             };
+
+        internal PolicyDestinationSettings ToUpdate(ProductNodeViewModel product, ITelegramChatsManager chatsManager, IFolderManager folderManager) =>
+            IsFromParent && product.ParentIsFolder
+                ? new(FromFolderEntity(folderManager.GetFolderDefaultChat(product.FolderId.Value)))
+                : ToModel(product.GetAvailableChats(chatsManager));
 
 
         private Dictionary<Guid, TelegramChat> ToAvailableChats(List<TelegramChat> chats) =>
