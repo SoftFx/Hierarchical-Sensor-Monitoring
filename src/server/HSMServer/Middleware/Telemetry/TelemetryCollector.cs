@@ -5,7 +5,6 @@ using HSMServer.Extensions;
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Net;
-using System.Net.Sockets;
 using System.Threading.Tasks;
 
 namespace HSMServer.Middleware.Telemetry

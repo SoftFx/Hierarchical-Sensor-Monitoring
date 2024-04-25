@@ -16,7 +16,9 @@ export class DashboardStorage {
         this._intervalId = this.checkForUpdate(this.panels);
     }
 
-    public addPanel(panel: Panel) {
+    public addPanel(panel: Panel, lastUpdate: Date) {
+        panel.lastUpdateTime = new Date(lastUpdate);
+
         this.panels[panel.id] = panel;
         this.panels[panel.id].updateNotify();
 
