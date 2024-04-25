@@ -62,6 +62,7 @@
 
      function fillDefaultChatMode(formData) {
          let chatMode = '@DefaultChatMode.Custom';
+         let selectedChat = $(`select[name='SelectedChat']`).find(":selected").val();
 
          let selectedOption = $(`select[name='SelectedChat']`).find(":selected").text();
          switch (selectedOption) {
@@ -77,6 +78,6 @@
          }
 
          formData.append(`DefaultChats.ChatMode`, chatMode);
-         formData.append(`DefaultChats.SelectedChat`, selectedOption);
+         formData.append(`DefaultChats.SelectedChat`, selectedChat);
      }
 </script>
