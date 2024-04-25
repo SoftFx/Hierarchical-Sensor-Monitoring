@@ -256,6 +256,16 @@ namespace HSMServer.Folders
             }
         }
 
+        public Dictionary<string, string> GetFolderDefaultChat(Guid folderId)
+        {
+            var chats = new Dictionary<string, string>(1);
+
+            if (TryGetValue(folderId, out var folder) && folder.DefaultChats.IsCustom)
+                chats.Add(folder.DefaultChats.Chat.ToString(), GetChatName?.Invoke(folder.DefaultChats.Chat));
+
+            return chats;
+        }
+
         private bool TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator, ActionType action = ActionType.Update)
         {
             var product = _cache.GetProduct(productId);
@@ -318,8 +328,20 @@ namespace HSMServer.Folders
             return model.IsFromFolder ? action is ActionType.Delete ? folderModel : folderModel.ToFromFolderModel() : null;
         }
 
-        private static PolicyDestinationSettings GetCorePolicy(PolicyDestinationSettings model, FolderModel folder, ActionType action)
-            => model.IsFromFolder ? new(folder.DefaultChats.ToEntity(folder.GetAvailableChats(), action is not ActionType.Delete)) : null;
+        private PolicyDestinationSettings GetCorePolicy(PolicyDestinationSettings model, FolderModel folder, ActionType action)
+        {
+            if (model.IsFromFolder)
+            {
+                var chat = folder.DefaultChats;
+                var entity = action is ActionType.Delete
+                    ? chat.ToEntity(folder.GetAvailableChats())
+                    : chat.FromFolderEntity(GetFolderDefaultChat(folder.Id));
+
+                return new(entity);
+            }
+
+            return null;
+        }
 
         private void ResetServerPolicyForFolderProducts()
         {

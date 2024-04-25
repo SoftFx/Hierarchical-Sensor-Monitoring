@@ -33,5 +33,7 @@ namespace HSMServer.Folders
         void RemoveChatHandler(TelegramChat chat, InitiatorInfo initiator);
 
         List<FolderModel> GetUserFolders(User user);
+
+        Dictionary<string, string> GetFolderDefaultChat(Guid folderId);
     }
 }
