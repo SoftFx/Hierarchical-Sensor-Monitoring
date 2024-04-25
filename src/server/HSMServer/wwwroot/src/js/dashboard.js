@@ -332,8 +332,8 @@ window.initDashboard = function () {
     Dashboard.initRequests(dict);
 }
 
-window.addPanelToStorage = function (id, settings) {
-    dashboardStorage.addPanel(new Panel(id, settings))
+window.addPanelToStorage = function (id, settings, lastUpdate) {
+    dashboardStorage.addPanel(new Panel(id, settings), lastUpdate)
 };
 
 window.disableDragAndResize = function () {

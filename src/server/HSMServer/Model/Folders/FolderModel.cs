@@ -224,7 +224,7 @@ namespace HSMServer.Model.Folders
 
         private static DefaultChatViewModel LoadDefaultChats(PolicyDestinationSettingsEntity entity = null)
         {
-            var model = entity is null ? new PolicyDestinationSettings() : new PolicyDestinationSettings(entity);
+            var model = new PolicyDestinationSettings(entity ?? new PolicyDestinationSettingsEntity());
 
             return new DefaultChatViewModel().FromModel(model);
         }

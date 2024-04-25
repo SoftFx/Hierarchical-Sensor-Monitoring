@@ -76,7 +76,7 @@
                 containerHeight = Math.max(containerHeight, data);
                 return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend, false, ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)]).then(
                         (plot) => {
-                                window.addPanelToStorage('@Model.Id', settings);
+                                window.addPanelToStorage('@Model.Id', settings, '@Model.LastUpdate');
 
                                 values.forEach(function (x) {
                                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])

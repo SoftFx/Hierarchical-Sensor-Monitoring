@@ -46,56 +46,56 @@
             <summary>
             Receives value of bool sensor
             </summary>
-            <param name="sensorValue"></param>
+            <param name="boolValue"></param>
             <returns></returns>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.IntSensorValue)">
             <summary>
             Receives value of int sensor
             </summary>
-            <param name="sensorValue"></param>
+            <param name="intValue"></param>
             <returns></returns>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleSensorValue)">
             <summary>
             Receives value of double sensor
             </summary>
-            <param name="sensorValue"></param>
+            <param name="doubleValue"></param>
             <returns></returns>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.StringSensorValue)">
             <summary>
             Receives value of string sensor
             </summary>
-            <param name="sensorValue"></param>
+            <param name="stringValue"></param>
             <returns></returns>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.TimeSpanSensorValue)">
             <summary>
             Receives value of timespan sensor
             </summary>
-            <param name="sensorValue"></param>
+            <param name="timeValue"></param>
             <returns></returns>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMServer.ApiObjectsConverters.VersionSensor)">
             <summary>
             Receives value of version sensor
             </summary>
-            <param name="sensorValue"></param>
+            <param name="versionValue"></param>
             <returns></returns>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.RateSensorValue)">
             <summary>
             Receives value of rate sensor
             </summary>
-            <param name="sensorValue"></param>
+            <param name="rateValue"></param>
             <returns></returns>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleBarSensorValue)">
             <summary>
             Receives value of double bar sensor
             </summary>
-            <param name="sensorValue"></param>
+            <param name="doubleBarValue"></param>
             <returns></returns>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.IntBarSensorValue)">
@@ -109,7 +109,7 @@
             <summary>
             Receives the value of file sensor, where the file contents are presented as byte array.
             </summary>
-            <param name="sensorValue"></param>
+            <param name="fileValue"></param>
             <returns></returns>
         </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMSensorDataObjects.SensorValueRequests.SensorValueBase})">

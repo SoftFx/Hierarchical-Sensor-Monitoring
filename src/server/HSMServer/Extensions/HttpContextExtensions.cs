@@ -1,5 +1,6 @@
 ﻿using HSMServer.Middleware;
 using Microsoft.AspNetCore.Http;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HSMServer.Extensions
@@ -15,6 +16,9 @@ namespace HSMServer.Extensions
 
             return value is not null;
         }
+
+        public static bool TryWriteInfo<T>(this HttpContext context, string key, T value) =>
+            context.Request.Headers.TryAdd(key, value.ToString());
 
         public static void SetPublicApiInfo(this HttpContext context, PublicApiRequestInfo info)
         {
