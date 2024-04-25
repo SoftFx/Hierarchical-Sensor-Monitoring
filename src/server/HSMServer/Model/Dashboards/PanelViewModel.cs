@@ -62,14 +62,16 @@ public sealed class PanelViewModel
         Settings = panel.Settings;
         YRange = panel.YRange;
 
-        Sources = new CDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x =>
-        {
-            if (x.Value.Sensor.LastUpdate > LastUpdate)
-                LastUpdate = x.Value.Sensor.LastUpdate;
-
-            return new DatasourceViewModel(x.Value, ShowProduct);
-        }));
+        Sources = new CDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x => BuildSourceViewModel(x.Value)));
         Templates = new CDict<TemplateViewModel>(panel.Subscriptions.ToDictionary(y => y.Value.Id, x => new TemplateViewModel(x.Value, availableFolders)));
+
+        DatasourceViewModel BuildSourceViewModel(PanelDatasource source)
+        {
+            if (source.Sensor.LastUpdate > LastUpdate)
+                LastUpdate = source.Sensor.LastUpdate;
+
+            return new DatasourceViewModel(source, ShowProduct);
+        }
     }
 
 
