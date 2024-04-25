@@ -3,13 +3,16 @@
 @using HSMServer.Controllers
 @using HSMServer.Extensions
 @using HSMServer.Model.Authentication
+@using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.ViewModel
 @using HSMServer.Model.Folders.ViewModels
 @using Microsoft.AspNetCore.Mvc.TagHelpers
+@using HSMServer.TagHelpers
 
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@addTagHelper *, HSMServer
 
 @{
     var user = User as User;
@@ -67,6 +70,11 @@
 
         <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
     </div>
+
+    @if (Model is SensorInfoViewModel sensorModel)
+    {
+        <h6 id="errorInfo_@Model.EncodedId" class="d-flex my-1 tree-icon-error"  condition-class-d-none="@(sensorModel.Status != SensorStatus.Error)">@sensorModel.Status: @(sensorModel.StatusComment)</h6>
+    }
 
     <form id="editMetaInfo_form" method="post" asp-action="@updateAction">
         <input id="metaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>

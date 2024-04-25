@@ -89,6 +89,10 @@
         if (dataObject.newValuesCount != null && $(`#link_table_${id}`).hasClass("active")) {
             $("#tableHistoryRefreshButton").removeClass("d-none");
         }
+        if (dataObject.status === 'Error')
+            $('#errorInfo_'+id).removeClass('d-none').text(dataObject.status + ': ' + dataObject.validationError);
+        else
+            $('#errorInfo_'+id).addClass('d-none');
     }
 
     function updateGeneralInfo(selectedNodeId) {
