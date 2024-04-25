@@ -1,7 +1,7 @@
-﻿using HSMDataCollector.Options;
-using System.Threading.Tasks;
+﻿using HSMDataCollector.DefaultSensors.Windows.Process;
+using HSMDataCollector.Options;
 using System;
-using HSMDataCollector.DefaultSensors.Windows.Process;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -18,7 +18,9 @@ namespace HSMDataCollector.DefaultSensors.Windows
     {
         private ProcessEventListener _listener;
 
+
         internal WindowsProcessTimeInGC(BarSensorOptions options) : base(options) { }
+
 
         internal override Task<bool> Init()
         {
@@ -36,13 +38,13 @@ namespace HSMDataCollector.DefaultSensors.Windows
             return base.Init();
         }
 
-
         internal override Task Stop()
         {
             _listener?.Dispose();
 
             return base.Stop();
         }
+
 
         protected override double GetBarData() => _listener.TimeInGC;
     }

@@ -3,23 +3,17 @@ using System.Diagnostics.Tracing;
 
 namespace HSMDataCollector.DefaultSensors.Windows.Process
 {
-    internal class ProcessEventListener : EventListener
+    internal sealed class ProcessEventListener : EventListener
     {
         public double TimeInGC { get; private set; }
+
 
         protected override void OnEventSourceCreated(EventSource source)
         {
             if (source.Name.Equals("System.Runtime"))
             {
-                EnableEvents(source, EventLevel.Critical, (EventKeywords)(-1), null);
+                EnableEvents(source, EventLevel.Critical, EventKeywords.All, null);
             }
-        }
-
-        private void UpdateTimeInGc(IDictionary<string, object> eventPayload)
-        {
-            if (eventPayload["Name"].ToString() != "time-in-gc")
-                return;
-            TimeInGC = (double)eventPayload["Mean"];
         }
 
         protected override void OnEventWritten(EventWrittenEventArgs eventData)
@@ -34,6 +28,15 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
                     }
                 }
             }
+        }
+
+
+        private void UpdateTimeInGc(IDictionary<string, object> eventPayload)
+        {
+            if (eventPayload["Name"].ToString() != "time-in-gc")
+                return;
+
+            TimeInGC = (double)eventPayload["Mean"];
         }
     }
 }
