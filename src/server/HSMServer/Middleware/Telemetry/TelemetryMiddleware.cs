@@ -1,3 +1,4 @@
+using System.IO;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
@@ -10,11 +11,24 @@ namespace HSMServer.Middleware.Telemetry
     {
         public async Task InvokeAsync(HttpContext context)
         {
-            var result = await TryRegisterPublicApiRequest(context);
+            using (var buffer = new MemoryStream())
+            {
+                var result = await TryRegisterPublicApiRequest(context);
 
-            if (result)
-                await _next(context);
+                var response = context.Response;
 
+                var bodyStream = response.Body;
+                response.Body = buffer;
+
+                if (result)
+                    await _next(context);
+
+                response.Headers.Append("Content-Length", new[] { buffer.Length.ToString()});
+                buffer.Position = 0;
+
+                await buffer.CopyToAsync(bodyStream);
+            }
+            
             if (context.TryGetPublicApiInfo(out var requestInfo))
             {
                 _statistics.Total.AddResponseResult(context.Response);
