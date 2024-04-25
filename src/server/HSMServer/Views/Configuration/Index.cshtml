@@ -31,22 +31,47 @@
         </ul>
         <div class="tab-content w-100">
             <div class="tab-pane fade show active" id="server" role="tabpanel" aria-labelledby="server-tab">
-                <form id="serverSettings_form" method="post" asp-action="">
+                <form id="serverSettings_form" method="post" asp-action="@nameof(ConfigurationController.SaveServerSettings)">
                     @await Html.PartialAsync("_Server", Model.Server)
                 </form>
             </div>
 
             <div class="tab-pane fade" id="monitoring" role="tabpanel" aria-labelledby="monitoring-tab">
-                <form id="selfMonitoringSettings_form" method="post" asp-action="">
+                <form id="selfMonitoringSettings_form" method="post" asp-action="@nameof(ConfigurationController.SaveMonitoringSettings)">
                     @await Html.PartialAsync("_SelfMonitoring", Model.Monitoring)
                 </form>
             </div>
 
             <div class="tab-pane fade" id="telegram" role="tabpanel" aria-labelledby="telegram-tab">
-                <form id="telegramSettings_form" asp-action="">
+                <form id="telegramSettings_form" asp-action="@nameof(ConfigurationController.SaveTelegramSettings)">
                     @await Html.PartialAsync("_Telegram", Model.Telegram)
                 </form>
             </div>
         </div>
     </div>
 </div>
+
+
+<script>
+    function savingFormSubscribe(formId, successMessage) {
+        $(document).off("submit", `#${formId}`).on("submit", `#${formId}`, function (event) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            $.ajax({
+                type: 'POST',
+                url: $(`#${formId}`).attr("action"),
+                data: new FormData(this),
+                datatype: 'html',
+                processData: false,
+                contentType: false,
+                cache: false,
+                async: true,
+                success: function (viewData) {
+                    $(`#${formId}`).html(viewData);
+                    showToast(successmessage);
+                }
+            });
+        });
+    }
+</script>

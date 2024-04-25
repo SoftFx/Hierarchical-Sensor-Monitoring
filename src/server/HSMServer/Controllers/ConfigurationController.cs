@@ -19,32 +19,57 @@ namespace HSMServer.Controllers
 
         public IActionResult Index() => View(new ConfigurationViewModel(_config));
 
-        //[HttpPost]
-        //public void SaveConfig([FromBody] ConfigurationViewModel viewModel) => ChangeConfigValue(viewModel.PropertyName, viewModel.Value);
+        [HttpPost]
+        public IActionResult SaveServerSettings(ServerSettingsViewModel settings)
+        {
+            if (ModelState.IsValid)
+            {
+                _config.Kestrel.SensorPort = settings.SensorsPort;
+                _config.Kestrel.SitePort = settings.SitePort;
 
-        //[HttpPost]
-        //public void SetToDefault([FromQuery] string name) => ChangeConfigValue(name, _configViewModel[name].DefaultValue);
+                _config.ServerCertificate.Name = settings.CertificateName;
+                _config.ServerCertificate.Key = settings.CertificateKey;
+
+                _config.BackupDatabase.PeriodHours = settings.BackupPeriodHours;
+                _config.BackupDatabase.StoragePeriodDays = settings.BackupStoragePeriodDays;
+
+                _config.ResaveSettings();
+            }
+
+            return PartialView("_Server", settings);
+        }
+
+        [HttpPost]
+        public IActionResult SaveMonitoringSettings(MonitoringSettingsViewModel settings)
+        {
+            if (ModelState.IsValid)
+            {
+                _config.MonitoringOptions.IsMonitoringEnabled = settings.IsMonitoringEnabled;
+                _config.MonitoringOptions.TopHeaviestSensorsCount = settings.TopHeaviestSensorsCount;
+                _config.MonitoringOptions.DatabaseStatisticsPeriodDays = settings.DatabaseStatisticsPeriodDays;
+
+                _config.ResaveSettings();
+            }
+
+            return PartialView("_SelfMonitoring", settings);
+        }
+
+        [HttpPost]
+        public IActionResult SaveTelegramSettings(TelegramSettingsViewModel settings)
+        {
+            if (ModelState.IsValid)
+            {
+                _config.Telegram.IsRunning = settings.IsEnabled;
+                _config.Telegram.BotToken = settings.BotToken;
+                _config.Telegram.BotName = settings.BotName;
+
+                _config.ResaveSettings();
+            }
+
+            return PartialView("_Telegram", settings);
+        }
 
         [HttpGet]
         public Task<string> RestartTelegramBot() => _telegramBot.StartBot();
-
-
-        private void ChangeConfigValue(string propertyName, string newValue)
-        {
-            switch (propertyName)
-            {
-                case nameof(_config.Telegram.BotName):
-                    _config.Telegram.BotName = newValue;
-                    break;
-                case nameof(_config.Telegram.BotToken):
-                    _config.Telegram.BotToken = newValue;
-                    break;
-                case nameof(_config.Telegram.IsRunning) when bool.TryParse(newValue, out var boolValue):
-                    _config.Telegram.IsRunning = boolValue;
-                    break;
-            }
-
-            _config.ResaveSettings();
-        }
     }
 }
