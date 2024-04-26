@@ -5,13 +5,6 @@ namespace HSMServer.Model.Configuration
 {
     public class ServerSettingsViewModel
     {
-        [Display(Name = "Storage time")]
-        public int BackupStoragePeriodDays { get; set; }
-
-        [Display(Name = "Periodicity")]
-        public int BackupPeriodHours { get; set; }
-
-
         [Display(Name = "Name")]
         public string CertificateName { get; set; }
 
@@ -30,9 +23,6 @@ namespace HSMServer.Model.Configuration
 
         public ServerSettingsViewModel(IServerConfig config)
         {
-            BackupStoragePeriodDays = config.BackupDatabase.StoragePeriodDays;
-            BackupPeriodHours = config.BackupDatabase.PeriodHours;
-
             CertificateName = config.ServerCertificate.Name;
             CertificateKey = config.ServerCertificate.Key;
 

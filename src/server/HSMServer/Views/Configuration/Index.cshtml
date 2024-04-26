@@ -23,6 +23,9 @@
                 <button class="nav-link active" id="server-tab" data-bs-toggle="tab" data-bs-target="#server" type="button" role="tab" aria-controls="server" aria-selected="true">Server</button>
             </li>
             <li class="nav-item" role="presentation">
+                <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup" type="button" role="tab" aria-controls="backup" aria-selected="false">Backup</button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link" id="monitoring-tab" data-bs-toggle="tab" data-bs-target="#monitoring" type="button" role="tab" aria-controls="monitoring" aria-selected="false">Self monitoring</button>
             </li>
             <li class="nav-item" role="presentation">
@@ -33,6 +36,12 @@
             <div class="tab-pane fade show active" id="server" role="tabpanel" aria-labelledby="server-tab">
                 <form id="serverSettings_form" method="post" asp-action="@nameof(ConfigurationController.SaveServerSettings)">
                     @await Html.PartialAsync("_Server", Model.Server)
+                </form>
+            </div>
+
+            <div class="tab-pane fade" id="backup" role="tabpanel" aria-labelledby="backup-tab">
+                <form id="backupSettings_form" method="post" asp-action="@nameof(ConfigurationController.SaveBackupSettings)">
+                    @await Html.PartialAsync("_Backup", Model.Backup)
                 </form>
             </div>
 

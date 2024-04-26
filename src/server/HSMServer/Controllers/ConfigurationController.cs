@@ -30,13 +30,24 @@ namespace HSMServer.Controllers
                 _config.ServerCertificate.Name = settings.CertificateName;
                 _config.ServerCertificate.Key = settings.CertificateKey;
 
+                _config.ResaveSettings();
+            }
+
+            return PartialView("_Server", settings);
+        }
+
+        [HttpPost]
+        public IActionResult SaveBackupSettings(BackupSettingsViewModel settings)
+        {
+            if (ModelState.IsValid)
+            {
                 _config.BackupDatabase.PeriodHours = settings.BackupPeriodHours;
                 _config.BackupDatabase.StoragePeriodDays = settings.BackupStoragePeriodDays;
 
                 _config.ResaveSettings();
             }
 
-            return PartialView("_Server", settings);
+            return PartialView("_SelfMonitoring", settings);
         }
 
         [HttpPost]
