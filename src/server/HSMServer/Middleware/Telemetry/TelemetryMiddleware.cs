@@ -11,7 +11,7 @@ namespace HSMServer.Middleware.Telemetry
     {
         public async Task InvokeAsync(HttpContext context)
         {
-            using (var buffer = new MemoryStream())
+            using(var buffer = new MemoryStream())
             {
                 var result = await TryRegisterPublicApiRequest(context);
 
@@ -23,12 +23,12 @@ namespace HSMServer.Middleware.Telemetry
                 if (result)
                     await _next(context);
 
-                response.Headers.Append("Content-Length", new[] { buffer.Length.ToString()});
+                response.ContentLength = buffer.Length;
                 buffer.Position = 0;
 
                 await buffer.CopyToAsync(bodyStream);
             }
-            
+
             if (context.TryGetPublicApiInfo(out var requestInfo))
             {
                 _statistics.Total.AddResponseResult(context.Response);
