@@ -1,10 +1,11 @@
 ﻿using HSMServer.Attributes;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.Folders;
 using HSMServer.Model.Controls;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notifications;
 using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model.ViewModel
@@ -41,13 +42,13 @@ namespace HSMServer.Model.ViewModel
         }
 
 
-        internal ProductUpdate ToUpdate(Dictionary<Guid, string> availableChats, bool parentIsFoler, InitiatorInfo initiator) =>
+        internal ProductUpdate ToUpdate(ProductNodeViewModel product, ITelegramChatsManager chatsManager, IFolderManager folderManager, InitiatorInfo initiator) =>
             new()
             {
                 Id = Id,
                 Name = IsNameChanged ? Name : null,
                 Description = Description is null ? string.Empty : Description,
-                DefaultChats = DefaultChats.ToModel(availableChats, DefaultChats.IsFromParent && parentIsFoler),
+                DefaultChats = DefaultChats.ToUpdate(product, chatsManager, folderManager),
                 Initiator = initiator,
             };
     }

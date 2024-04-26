@@ -27,7 +27,7 @@
 
 <span id="labelDefaultChat" class="@(Model.IsModify ? "d-none" : "meta-info-value")">@displayName</span>
 <div id="defaultChatControl" class="@(Model.IsModify ? "col-auto ms-1" : "d-none meta-info-interval")">
-    <select asp-for="SelectedChat" class="default-chat selectpicker">
+    <select name="SelectedChat" class="default-chat selectpicker">
         @if (Model.HasParent)
         {
             <option value="@DefaultChatMode.FromParent" selected="@Model.IsSelectedMode(DefaultChatMode.FromParent)">@parentName</option>
@@ -57,13 +57,14 @@
 
 <script>
      $(document).ready(function () {
-         $("select[name='DefaultChats.SelectedChat']").selectpicker();
+         $("select[name='SelectedChat']").selectpicker();
      });
 
      function fillDefaultChatMode(formData) {
          let chatMode = '@DefaultChatMode.Custom';
+         let selectedChat = $(`select[name='SelectedChat']`).find(":selected").val();
 
-         let selectedOption = $(`select[name='DefaultChats.SelectedChat']`).find(":selected").text();
+         let selectedOption = $(`select[name='SelectedChat']`).find(":selected").text();
          switch (selectedOption) {
              case '@parentName':
                  chatMode = '@DefaultChatMode.FromParent';
@@ -75,7 +76,8 @@
                  chatMode = '@DefaultChatMode.Empty';
                  break;
          }
-         console.log(chatMode);
+
          formData.append(`DefaultChats.ChatMode`, chatMode);
+         formData.append(`DefaultChats.SelectedChat`, selectedChat);
      }
 </script>

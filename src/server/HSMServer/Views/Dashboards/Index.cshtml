@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Controllers
 @using HSMServer.Model.Dashboards
+@using HSMServer.Model.Authentication
 
 @model List<DashboardViewModel>
 
@@ -8,6 +9,7 @@
 @{
     const string separator = ",";
     var dashboards = string.Join(separator, Model.Select(d => d.Id));
+    var userIsAdmin = Context.User is User user && user.IsAdmin;
 
     ViewData["Title"] = "Dashboards";
 }
@@ -18,11 +20,14 @@
         <div class="d-flex justify-content-between my-2 mb-4">
             <h5 class="m-0 align-self-center">Dashboards</h5>
 
-            <div class='d-flex col-md-auto'>
-                <a class="icon-link" method="GET" asp-action="@nameof(DashboardsController.CreateDashboard)">
-                    <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add dashboard
-                </a>
-            </div>
+            @if (userIsAdmin)
+            {
+                <div class='d-flex col-md-auto'>
+                    <a class="icon-link" method="GET" asp-action="@nameof(DashboardsController.CreateDashboard)">
+                        <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add dashboard
+                    </a>
+                </div>
+            }
         </div>
 
         @foreach (var dashboard in Model)
@@ -58,9 +63,12 @@
                     <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
                         <a id="edit_@dashboard.Id" class="dropdown-item text-decoration-none fw-normal button-link"
                            asp-action="@nameof(DashboardsController.EditDashboard)" asp-route-dashboardId="@dashboard.Id">
-                           View/Edit
+                            View/Edit
                         </a>
-                        <a class="dropdown-item text-decoration-none fw-normal button-link" id="remove_@dashboard.Id" name="@dashboard.Name">Remove</a>
+                        @if (userIsAdmin)
+                        {
+                            <a class="dropdown-item text-decoration-none fw-normal button-link" id="remove_@dashboard.Id" name="@dashboard.Name">Remove</a>
+                        }
                     </div>
                 </div>
             </div>

@@ -5,6 +5,7 @@
 @using HSMServer.Dashboards
 @using HSMServer.JsonConverters
 @using Microsoft.AspNetCore.Mvc.TagHelpers
+@using HSMServer.Model.Authentication
 
 @model HSMServer.Model.Dashboards.PanelViewModel
 
@@ -36,27 +37,37 @@
             </div>
             <div class="align-self-start">
                 <span class="time-ago-div" id="lastUpdate_@Model.Id" style="font-size: smaller"></span>
-                <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false">
-                    <i class="fa-solid fa-ellipsis-vertical button-link"></i>
-                </button>
-                <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-                    <a id="toggle_@Model.Id" class="toggle-legend dropdown-item text-decoration-none fw-normal button-link">@legendsTitle</a>
-                    <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
-                    <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
 
-                    <div class="dropdown-submenu">
-                        <a class="dropdown-item">Hover settingss</a>
-                        <div class="dropdown-menu p-4 pt-2">
-                            <label for="selecthovermode_@Model.Id" class="form-label">Hover Mode</label>
-                            <select id="selecthovermode_@Model.Id" class="form-control">
-                                @foreach (var mode in Enum.GetValues<TooltipHovermode>())
-                                {
-                                    <option value='@((int)mode)'>@mode.GetDisplayName()</option>
-                                }
-                            </select>
+                @if (Context.User is User user && user.IsAdmin)
+                {
+                    <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false">
+                        <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                        <a id="toggle_@Model.Id" class="toggle-legend dropdown-item text-decoration-none fw-normal button-link">@legendsTitle</a>
+                        <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
+                        <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+
+                        <div class="dropdown-submenu">
+                            <a class="dropdown-item">Hover settings</a>
+                            <div class="dropdown-menu p-4 pt-2">
+                                <label for="selecthovermode_@Model.Id" class="form-label">Hover Mode</label>
+                                <select id="selecthovermode_@Model.Id" class="form-control">
+                                    @foreach (var mode in Enum.GetValues<TooltipHovermode>())
+                                    {
+                                        <option value='@((int)mode)'>@mode.GetDisplayName()</option>
+                                    }
+                                </select>
+                            </div>
                         </div>
                     </div>
-                </div>
+                }
+                else
+                {
+                    <span class="p-1">
+                        <i class="fa-solid fa-ellipsis-vertical disabled" style="color: darkgrey"></i>
+                    </span>
+                }
             </div>
         </div>
     </div>
@@ -76,7 +87,7 @@
                 containerHeight = Math.max(containerHeight, data);
                 return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend, false, ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)]).then(
                         (plot) => {
-                                window.addPanelToStorage('@Model.Id', settings);
+                                window.addPanelToStorage('@Model.Id', settings, '@Model.LastUpdate');
 
                                 values.forEach(function (x) {
                                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
