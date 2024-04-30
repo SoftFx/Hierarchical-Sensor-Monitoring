@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-#if !NETSTANDARD2_0
+#if !NET6_0_OR_GREATER
     internal sealed class WindowsProcessTimeInGC : WindowsTimeInGCBase
     {
         protected override string InstanceName => ProcessInfo.CurrentProcessName;
@@ -14,7 +14,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         internal WindowsProcessTimeInGC(BarSensorOptions options) : base(options) { }
     }
 #else
-    internal sealed class WindowsProcessTimeInGC : CollectableBarMonitoringSensorBase<DoubleMonitoringBar, double>
+    internal sealed class WindowsProcessTimeInGC : DoubleBarPublicSensor
     {
         private ProcessEventListener _listener;
 
@@ -27,6 +27,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
             try
             {
                 _listener = new ProcessEventListener();
+                _listener.OnTimeInGC += OnTimeInGC;
             }
             catch (Exception ex)
             {
@@ -40,13 +41,14 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         internal override Task Stop()
         {
-            _listener?.Dispose();
+            _listener.OnTimeInGC -= OnTimeInGC;
+            _listener.Dispose();
 
             return base.Stop();
         }
 
+        private void OnTimeInGC(double value) => AddValue(value);
 
-        protected override double GetBarData() => _listener.TimeInGC;
     }
 #endif
 }

@@ -1,12 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics.Tracing;
 
 namespace HSMDataCollector.DefaultSensors.Windows.Process
 {
     internal sealed class ProcessEventListener : EventListener
     {
-        public double TimeInGC { get; private set; }
-
+        public event Action<double> OnTimeInGC;
 
         protected override void OnEventSourceCreated(EventSource source)
         {
@@ -36,7 +36,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
             if (eventPayload["Name"].ToString() != "time-in-gc")
                 return;
 
-            TimeInGC = (double)eventPayload["Mean"];
+            OnTimeInGC?.Invoke((double)eventPayload["Mean"]);
         }
     }
 }
