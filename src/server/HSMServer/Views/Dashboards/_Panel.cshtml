@@ -70,13 +70,14 @@
         const settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
         const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
+        const lastUpdate = "@(Model.LastUpdate == DateTime.MinValue ? 0 : Model.LastUpdate)" === "0" ? 0 : "@Model.LastUpdate.ToString("yyyy-MM-ddTHH:mm:ss")";
 
         initMultyichartCordinates(settings, values, '@Model.Id').then(
             (data) => {
                 containerHeight = Math.max(containerHeight, data);
                 return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend, false, ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)]).then(
                         (plot) => {
-                                window.addPanelToStorage('@Model.Id', settings, '@Model.LastUpdate');
+                                window.addPanelToStorage('@Model.Id', settings,lastUpdate);
 
                                 values.forEach(function (x) {
                                     insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
