@@ -164,18 +164,28 @@
             contentType: 'application/json',
             data: JSON.stringify(object)
         }).done(function (response){
-            if (response.reload && response.reload === true)
-                 window.location.reload();   
-            else 
-            {
-                dashboard.find('h5#name').text("Dashboard: " + object.Name);
-                replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
-                disableEdit();
+            if (window.location.search.includes("isModify")){
+                window.location.search = "";  
+                
+                disableDashboardEdit(dashboard, object);
             }
+            else {
+                if (response.reload && response.reload === true)
+                     window.location.reload();   
+                else 
+                    disableDashboardEdit(dashboard, object);
+            }
+
             changesCounter = 0;
         }).fail(function (response){
             showToast(response.responseText)
         })
+        
+        function disableDashboardEdit(dashboard, object){
+            dashboard.find('h5#name').text("Dashboard: " + object.Name);
+            replaceHtmlToMarkdownJquery(dashboard.find('div#markdown_description').text(object.Description))
+            disableEdit();
+        }
     })
 
     function addPanel() {
