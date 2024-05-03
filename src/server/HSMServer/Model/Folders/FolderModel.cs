@@ -1,10 +1,13 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Extensions;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Controls;
 using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
@@ -16,16 +19,16 @@ namespace HSMServer.Model.Folders
 {
     public class FolderModel : BaseNodeViewModel, IServerModel<FolderEntity, FolderUpdate>, IChangesEntity
     {
-        public Dictionary<Guid, ProductNodeViewModel> Products { get; } = new();
+        public Dictionary<Guid, ProductNodeViewModel> Products { get; } = [];
 
-        public Dictionary<User, ProductRoleEnum> UserRoles { get; } = new();
+        public Dictionary<User, ProductRoleEnum> UserRoles { get; } = [];
 
         public DateTime CreationDate { get; }
 
         public Guid AuthorId { get; }
 
 
-        public HashSet<Guid> TelegramChats { get; private set; } = new();
+        public HashSet<Guid> TelegramChats { get; private set; } = [];
 
         public Color Color { get; private set; }
 
@@ -46,6 +49,8 @@ namespace HSMServer.Model.Folders
             AuthorId = Guid.Parse(entity.AuthorId);
             CreationDate = new DateTime(entity.CreationDate);
 
+            DefaultChats = LoadDefaultChats(entity.DefaultChatsSettings);
+
             KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)));
             SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
             TTL = LoadTTL(entity.Settings.GetValueOrDefault(nameof(TTL)));
@@ -65,6 +70,8 @@ namespace HSMServer.Model.Folders
             AuthorId = addModel.AuthorId;
             Products = addModel.Products;
             Description = addModel.Description;
+
+            DefaultChats = LoadDefaultChats();
 
             KeepHistory = LoadKeepHistory();
             SelfDestroy = LoadSelfDestroy();
@@ -89,6 +96,9 @@ namespace HSMServer.Model.Folders
 
             if (update.TelegramChats is not null)
                 TelegramChats = UpdateChats(TelegramChats, update.TelegramChats, update.Initiator);
+
+            if (update.DefaultChats != null)
+                DefaultChats = UpdateSetting(DefaultChats, update.DefaultChats, update.Initiator);
         }
 
         private TimeIntervalViewModel UpdateSetting(TimeIntervalViewModel currentValue, TimeIntervalViewModel newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(currentValue))] string propName = "", NoneValues none = NoneValues.Never)
@@ -105,6 +115,33 @@ namespace HSMServer.Model.Folders
                     NewValue = newModel.IsNone ? $"{none}" : $"{newModel}",
 
                     PropertyName = propName,
+                    Path = Name,
+                });
+            }
+
+            return newValue;
+        }
+
+        private DefaultChatViewModel UpdateSetting(DefaultChatViewModel currentValue, DefaultChatViewModel newValue, InitiatorInfo initiator)
+        {
+            string GetJournalValue((Guid chatId, DefaultChatMode mode) value) => value.mode switch
+            {
+                DefaultChatMode.Custom => GetChatName(value.chatId),
+                _ => value.mode.GetDisplayName(),
+            };
+
+            var oldChat = (currentValue.Chat, currentValue.ChatMode);
+            var newChat = (newValue.Chat, newValue.ChatMode);
+
+            if (oldChat != newChat)
+            {
+                ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
+                {
+                    Enviroment = "Folder settings update",
+                    OldValue = GetJournalValue(oldChat),
+                    NewValue = GetJournalValue(newChat),
+
+                    PropertyName = "Default telegram chat",
                     Path = Name,
                 });
             }
@@ -130,8 +167,10 @@ namespace HSMServer.Model.Folders
 
         private HashSet<Guid> UpdateChats(HashSet<Guid> oldValue, HashSet<Guid> newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
-            var oldChats = oldValue.Select(id => GetChatName(id)).OrderBy(n => n).ToList();
-            var newChats = newValue.Select(id => GetChatName(id)).OrderBy(n => n).ToList();
+            List<string> GetFilteredValues(HashSet<Guid> hash) => [.. hash.Select(GetChatName).OrderBy(n => n)];
+
+            var oldChats = GetFilteredValues(oldValue);
+            var newChats = GetFilteredValues(newValue);
 
             if (newValue is not null && !newChats.SequenceEqual(oldChats))
             {
@@ -160,6 +199,9 @@ namespace HSMServer.Model.Folders
                 Description = Description,
                 Color = Color.ToArgb(),
                 TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
+
+                DefaultChatsSettings = DefaultChats.ToEntity(GetAvailableChats()),
+
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
                     [nameof(TTL)] = TTL.ToEntity(),
@@ -168,6 +210,8 @@ namespace HSMServer.Model.Folders
                 }
             };
 
+        internal Dictionary<Guid, string> GetAvailableChats() => TelegramChats.ToDictionary(k => k, v => GetChatName?.Invoke(v));
+
         internal FolderModel RecalculateState()
         {
             UpdateTime = Products.Values.MaxOrDefault(x => x.UpdateTime);
@@ -175,6 +219,14 @@ namespace HSMServer.Model.Folders
             RecalculateAlerts(Products.Values);
 
             return this;
+        }
+
+
+        private static DefaultChatViewModel LoadDefaultChats(PolicyDestinationSettingsEntity entity = null)
+        {
+            var model = new PolicyDestinationSettings(entity ?? new PolicyDestinationSettingsEntity());
+
+            return new DefaultChatViewModel().FromModel(model);
         }
 
 
@@ -191,6 +243,7 @@ namespace HSMServer.Model.Folders
 
             return new TimeIntervalViewModel(entity, predefinedIntervals);
         }
+
 
         public void Dispose() { }
     }

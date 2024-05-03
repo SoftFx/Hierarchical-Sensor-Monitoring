@@ -21,16 +21,10 @@ namespace HSMDataCollector.Alerts
     {
         public List<AlertConditionTemplate> Conditions { get; set; }
 
+
+        public AlertDestinationMode DestinationMode { get; set; }
+
         public SensorStatus Status { get; set; }
-
-
-        public TimeSpan? ConfirmationPeriod { get; set; }
-
-        public bool? ScheduledInstantSend { get; set; }
-
-        public DateTime? ScheduledNotificationTime { get; set; }
-
-        public AlertRepeatMode? ScheduledRepeatMode { get; set; }
 
         public string Template { get; set; }
 
@@ -38,6 +32,16 @@ namespace HSMDataCollector.Alerts
 
 
         public bool IsDisabled { get; set; }
+
+
+        public TimeSpan? ConfirmationPeriod { get; set; }
+
+
+        public AlertRepeatMode? ScheduledRepeatMode { get; set; }
+
+        public DateTime? ScheduledNotificationTime { get; set; }
+
+        public bool? ScheduledInstantSend { get; set; }
 
 
         protected internal AlertBaseTemplate() { }

@@ -7,73 +7,53 @@
     var journalDivId = $"journal_{nodeId}";
 }
 
-@if (!Model.HasChildren)
-{
-    <div id="noDataPanel" class="d-flex justify-content-center align-items-center noData-label">
-        <label>No data</label>
-    </div>
-    <div id="noDataJournalPanel" class="d-none">
-        <ul id="dataPanel" class='nav nav-tabs' role="tablist">
-            <li class="nav-item active">
-                <a id="journalLink_@nodeId" class='nav-link active' data-bs-toggle='tab' href='#@journalDivId' role="tab"><i class="fa-solid fa-list"></i> Journal</a>
-            </li>
-        </ul>
-        <div class='tab-content'>
-            <div class='tab-pane fade show active mt-2' id=@journalDivId role="tabpanel">
-                <table class="display w-100 test" id="journal_table_@nodeId">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Path</th>
-                            <th>Initiator</th>
-                            <th>Text</th>
-                        </tr>
-                    </thead>
-                </table>
-            </div>
-        </div>
-    </div>
-}
-else
-{
-    <ul id="dataPanel" class='nav nav-tabs' role="tablist">
-        <li class='nav-item'>
-            <a id="gridLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getGridPage(`gridSensors`);getGridPage(`gridNodes`)" href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
-        </li>
-        <li class='nav-item'>
-            <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getListPage(`listSensors`);getListPage(`listNodes`)" href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
-        </li>
-        <li class="nav-item">
-            <a id="journalLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="initializeJournal(NodeType.Node);" href='#@journalDivId' role="tab"><i class="fa-solid fa-list"></i> Journal</a>
-        </li>
-    </ul>
-    <div class='tab-content'>
-        <div class='tab-pane fade' id=@gridDivId role="tabpanel">
-            <div class="accordion" id="grid-accordion_gridNodes"></div>
-            <div class="accordion" id="grid-accordion_gridSensors"></div>
-        </div>
-        <div class='tab-pane fade' id=@listDivId role="tabpanel">
-            <div class="accordion" id="list-accordion_listNodes"></div>
-            <div class="accordion" id="list-accordion_listSensors"></div>
-        </div>
-        <div class='tab-pane fade mt-2' id=@journalDivId role="tabpanel">
-            <table class="display w-100 test" id="journal_table_@nodeId">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Path</th> 
-                        <th>Initiator</th>
-                        <th>Text</th>
-                    </tr>
-                </thead>
-            </table>
-        </div>
-    </div>
-}
 
+<ul id="dataPanel" class='nav nav-tabs' role="tablist">
+    <li class='nav-item'>
+        <a id="gridLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getGridPage(`gridSensors`);getGridPage(`gridNodes`)" href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
+    </li>
+    <li class='nav-item'>
+        <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getListPage(`listSensors`);getListPage(`listNodes`)" href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
+    </li>
+    <li class="nav-item">
+        <a id="journalLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="initializeJournal(NodeType.Node);" href='#@journalDivId' role="tab"><i class="fa-solid fa-list"></i> Journal</a>
+    </li>
+</ul>
+<div class='tab-content'>
+    <div class='tab-pane fade' id=@gridDivId role="tabpanel">
+        <div class="accordion" id="grid-accordion_gridNodes"></div>
+        <div class="accordion" id="grid-accordion_gridSensors"></div>
+        <div class="children-no-data d-flex justify-content-center align-items-center noData-label">
+            <label>No data</label>
+        </div>
+    </div>
+    <div class='tab-pane fade' id=@listDivId role="tabpanel">
+        <div class="accordion" id="list-accordion_listNodes"></div>
+        <div class="accordion" id="list-accordion_listSensors"></div>
+        <div class="children-no-data d-flex justify-content-center align-items-center noData-label">
+            <label>No data</label>
+        </div>
+    </div>
+    <div class='tab-pane fade mt-2' id=@journalDivId role="tabpanel">
+        <table class="display w-100 test" id="journal_table_@nodeId">
+            <thead>
+            <tr>
+                <th>Date</th>
+                <th>Path</th>
+                <th>Initiator</th>
+                <th>Text</th>
+            </tr>
+            </thead>
+        </table>
+    </div>
+</div>
 
 <script>
     $(document).ready(function () {
         JournalTable = undefined;
+        
+        if ('@(Model.HasChildren)' === 'False'){
+            initializeJournal(NodeType.Node);
+        }
     });
 </script>

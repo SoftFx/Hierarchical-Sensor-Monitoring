@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model.Policies;
+using System;
 using System.Collections.Concurrent;
 
 namespace HSMServer.Notifications.Telegram.AddressBook
@@ -23,6 +24,9 @@ namespace HSMServer.Notifications.Telegram.AddressBook
         private bool GroupByPath => _mainDiff == PathConst;
 
 
+        internal DateTime FirstNotifyTime { get; private set; }
+
+
         internal GroupedNotification(AlertResult alert)
         {
             _baseState = alert.LastState with { };
@@ -30,11 +34,15 @@ namespace HSMServer.Notifications.Telegram.AddressBook
 
             if (_baseState.Template.Contains(PathConst))
                 _groupedPath = new GroupedPath(_baseState.Path);
+
+            FirstNotifyTime = alert.BuildDate;
         }
 
 
-        internal bool TryApply(AlertState alert)
+        internal bool TryApply(AlertResult result)
         {
+            var alert = result.LastState;
+
             if (_baseState is null || _baseState.Template.Text != alert.Template.Text)
                 return false;
 
@@ -62,6 +70,9 @@ namespace HSMServer.Notifications.Telegram.AddressBook
                     if (_groupedItems.Count < MaxGroupedItemsCount)
                         _groupedItems.Enqueue(alert[diffName]);
                 }
+
+                if (FirstNotifyTime > result.BuildDate)
+                    FirstNotifyTime = result.BuildDate;
             }
 
             return apply;

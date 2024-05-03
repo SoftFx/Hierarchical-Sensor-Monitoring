@@ -61,7 +61,7 @@ namespace HSMServer.Core.Model
         KBytes_sec = 2102,
         [Display(Name = "MB/sec")]
         MBytes_sec = 2103,
-        
+
         [Display(Name = "# per sec")]
         ValueInSecond = 3000,
     }
@@ -174,6 +174,8 @@ namespace HSMServer.Core.Model
 
         protected override void UpdateTTL(PolicyUpdate update) => Policies.UpdateTTL(update);
 
+        internal abstract void Revalidate();
+
         internal abstract bool TryAddValue(BaseValue value);
 
         internal abstract void AddDbValue(byte[] bytes);
@@ -234,6 +236,7 @@ namespace HSMServer.Core.Model
             Policies = Policies.Select(u => u.Id.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
+            DefaultChatsSettings = Settings.DefaultChats.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
             ChangeTable = ChangeTable.ToEntity(),
         };

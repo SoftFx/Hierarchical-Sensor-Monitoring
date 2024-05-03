@@ -11,12 +11,16 @@ namespace HSMServer.Core.Model.Policies
         public const string DefaultIcon = "🕑";
         public const string DefaultTemplate = "[$product]$path";
 
-        private readonly SettingProperty<TimeIntervalModel> _ttl;
+        private readonly SettingPropertyBase<TimeIntervalModel> _ttl;
         private readonly OkPolicy _okPolicy;
 
         private DateTime? _lastTTLNotificationTime = DateTime.MinValue;
 
         private bool IsActive => !_ttl.IsEmpty && !IsDisabled;
+
+        private int _notifyCount;
+
+        internal int RetryCount => _notifyCount - 1;
 
 
         internal PolicyResult Ok
@@ -50,7 +54,7 @@ namespace HSMServer.Core.Model.Policies
         {
             var update = new PolicyUpdate()
             {
-                Destination = new PolicyDestinationUpdate(parent.Destination.Chats, parent.Destination.AllChats),
+                Destination = new PolicyDestinationUpdate(parent.Destination),
                 Id = Id,
                 Template = parent.Template,
                 Icon = parent.Icon,
@@ -67,7 +71,6 @@ namespace HSMServer.Core.Model.Policies
             _okPolicy.TryUpdate(update with { Template = _okPolicy.OkTemplate, Icon = null }, out _, sensor);
         }
 
-
         internal bool HasTimeout(DateTime? time) => IsActive && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 
         internal bool ResendNotification(DateTime? time) => HasTimeout(time) && Schedule.IsActive
@@ -75,16 +78,24 @@ namespace HSMServer.Core.Model.Policies
 
         internal PolicyResult GetNotification(bool timeout)
         {
-            _lastTTLNotificationTime = timeout ? DateTime.UtcNow : null;
+            if (timeout)
+            {
+                _lastTTLNotificationTime = DateTime.UtcNow;
+                _notifyCount++;
 
-            return timeout ? PolicyResult : Ok;
+                return PolicyResult;
+            }
+
+            _lastTTLNotificationTime =  null;
+            _notifyCount = 0;
+
+            return Ok;
         }
 
         internal void InitLastTtlTime(bool timeout)
         {
             _lastTTLNotificationTime = timeout ? DateTime.UtcNow : null;
         }
-
 
         public override string ToString()
         {

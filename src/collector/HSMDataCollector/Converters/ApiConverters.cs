@@ -38,6 +38,7 @@ namespace HSMDataCollector.Converters
                 OriginalUnit = options.SensorUnit,
                 Description = options.Description,
 
+                DefaultChats = options.DefaultChats,
                 TTL = options.TtlAlert?.TtlValue?.Ticks ?? options.TTL?.Ticks,
                 KeepHistory = options.KeepHistory?.Ticks,
                 SelfDestroy = options.SelfDestroy?.Ticks,
@@ -64,6 +65,7 @@ namespace HSMDataCollector.Converters
                 ScheduledRepeatMode = alert.ScheduledRepeatMode,
                 ScheduledInstantSend = alert.ScheduledInstantSend,
 
+                DestinationMode = alert.DestinationMode,
                 Template = alert.Template,
                 Status = alert.Status,
                 Icon = alert.Icon,

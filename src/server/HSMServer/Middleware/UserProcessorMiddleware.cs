@@ -5,17 +5,8 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Middleware
 {
-    public class UserProcessorMiddleware
+    public class UserProcessorMiddleware(RequestDelegate _next, IUserManager _userManager)
     {
-        private readonly RequestDelegate _next;
-        private readonly IUserManager _userManager;
-
-        public UserProcessorMiddleware(RequestDelegate next, IUserManager userManager)
-        {
-            _next = next;
-            _userManager = userManager;
-        }
-
         public Task InvokeAsync(HttpContext context)
         {
             var port = context.Connection.LocalPort;

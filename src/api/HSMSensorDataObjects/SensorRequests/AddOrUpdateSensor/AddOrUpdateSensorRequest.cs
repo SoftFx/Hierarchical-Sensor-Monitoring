@@ -32,6 +32,14 @@ namespace HSMSensorDataObjects.SensorRequests
     }
 
 
+    public enum DefaultChatsMode : byte
+    {
+        FromParent = 0,
+        NotInitialized = 1,
+        Empty = 2,
+    }
+
+
     [Flags]
     public enum StatisticsOptions : int
     {
@@ -64,6 +72,8 @@ namespace HSMSensorDataObjects.SensorRequests
 
         public string Description { get; set; }
 
+
+        public DefaultChatsMode? DefaultChats { get; set; }
 
         public long? KeepHistory { get; set; }
 

@@ -112,7 +112,7 @@ namespace HSMServer.Folders
                 AddFolderToChats?.Invoke(folder.Id, addedTelegramChats);
                 await (RemoveFolderFromChats?.Invoke(folder.Id, removedTelegramChats, update.Initiator) ?? Task.CompletedTask);
 
-                if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
+                if (update.DefaultChats != null || update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                     foreach (var productId in folder.Products.Keys)
                         TryUpdateProductInFolder(productId, folder, update.Initiator);
             }
@@ -213,7 +213,7 @@ namespace HSMServer.Folders
                 return folders;
 
             if (user.FoldersRoles.Count == 0)
-                return new();
+                return [];
 
             return folders.Where(f => user.IsFolderAvailable(f.Id)).ToList();
         }
@@ -256,23 +256,38 @@ namespace HSMServer.Folders
             }
         }
 
+        public Dictionary<string, string> GetFolderDefaultChat(Guid folderId)
+        {
+            var chats = new Dictionary<string, string>(1);
+
+            if (TryGetValue(folderId, out var folder) && folder.DefaultChats.IsCustom)
+                chats.Add(folder.DefaultChats.Chat.ToString(), GetChatName?.Invoke(folder.DefaultChats.Chat));
+
+            return chats;
+        }
+
         private bool TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator, ActionType action = ActionType.Update)
         {
             var product = _cache.GetProduct(productId);
 
             if (product is not null)
             {
-                var ttl = product.Settings.TTL.Value;
+                var defaultChats = product.Settings.DefaultChats.Value;
+
                 var savedHistory = product.Settings.KeepHistory.Value;
                 var selfDestroy = product.Settings.SelfDestroy.Value;
+                var ttl = product.Settings.TTL.Value;
 
                 var update = new ProductUpdate()
                 {
                     Id = productId,
                     FolderId = action is ActionType.Delete ? Guid.Empty : folder.Id,
-                    TTL = GetCorePolicy(ttl, folder.TTL, action),
-                    KeepHistory = GetCorePolicy(savedHistory, folder.KeepHistory, action),
-                    SelfDestroy = GetCorePolicy(selfDestroy, folder.SelfDestroy, action),
+
+                    DefaultChats = GetCorePolicy(defaultChats, folder, action),
+                    KeepHistory = GetCoreUpdate(savedHistory, folder.KeepHistory, action),
+                    SelfDestroy = GetCoreUpdate(selfDestroy, folder.SelfDestroy, action),
+                    TTL = GetCoreUpdate(ttl, folder.TTL, action),
+
                     Initiator = initiator,
                 };
 
@@ -306,37 +321,50 @@ namespace HSMServer.Folders
         }
 
 
-        private static TimeIntervalModel GetCorePolicy(TimeIntervalModel model, TimeIntervalViewModel folder, ActionType action)
+        private static TimeIntervalModel GetCoreUpdate(TimeIntervalModel model, TimeIntervalViewModel folder, ActionType action)
         {
             var folderModel = folder.ToModel();
 
             return model.IsFromFolder ? action is ActionType.Delete ? folderModel : folderModel.ToFromFolderModel() : null;
         }
 
+        private PolicyDestinationSettings GetCorePolicy(PolicyDestinationSettings model, FolderModel folder, ActionType action)
+        {
+            if (model.IsFromFolder)
+            {
+                var chat = folder.DefaultChats;
+                var entity = action is ActionType.Delete
+                    ? chat.ToEntity(folder.GetAvailableChats())
+                    : chat.FromFolderEntity(GetFolderDefaultChat(folder.Id));
+
+                return new(entity);
+            }
+
+            return null;
+        }
+
         private void ResetServerPolicyForFolderProducts()
         {
-            static TimeIntervalModel IsFromFolder<T>(SettingProperty<T> property, TimeIntervalViewModel interval)
+            static TimeIntervalModel IsFromFolder<T>(SettingPropertyBase<T> property, TimeIntervalViewModel interval)
                 where T : TimeIntervalModel, new()
             {
                 return property.Value.IsFromParent ? interval.ToModel() : null;
             }
 
             foreach (var product in _cache.GetProducts())
-            {
-                if (!product.FolderId.HasValue || !TryGetValueById(product.FolderId, out var folder))
-                    continue;
-
-                var update = new ProductUpdate
+                if (product.FolderId.HasValue && TryGetValueById(product.FolderId, out var folder))
                 {
-                    Id = product.Id,
-                    TTL = IsFromFolder(product.Settings.TTL, folder.TTL),
-                    KeepHistory = IsFromFolder(product.Settings.KeepHistory, folder.KeepHistory),
-                    SelfDestroy = IsFromFolder(product.Settings.SelfDestroy, folder.SelfDestroy),
-                };
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        TTL = IsFromFolder(product.Settings.TTL, folder.TTL),
+                        KeepHistory = IsFromFolder(product.Settings.KeepHistory, folder.KeepHistory),
+                        SelfDestroy = IsFromFolder(product.Settings.SelfDestroy, folder.SelfDestroy),
+                    };
 
-                if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
-                    _cache.UpdateProduct(update);
-            }
+                    if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
+                        _cache.UpdateProduct(update);
+                }
         }
 
         private List<FolderModel> GetFolders() => Values.Select(x => x.RecalculateState()).ToList();

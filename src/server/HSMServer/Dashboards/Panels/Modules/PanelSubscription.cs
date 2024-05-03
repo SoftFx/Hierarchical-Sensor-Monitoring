@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Datasources;
 using HSMServer.PathTemplates;
@@ -77,8 +78,19 @@ namespace HSMServer.Dashboards
         }
 
 
-        public bool IsMatch(BaseSensorModel sensor) => DatasourceFactory.IsSupportedPlotProperty(sensor, Property) &&
+        public bool IsPropertySuitable(BaseSensorModel sensor) => DatasourceFactory.IsSupportedPlotProperty(sensor, Property);
+
+        public bool IsEmaPropertySuitable(BaseSensorModel sensor) =>
+             Property switch
+             {
+                 PlottedProperty.EmaValue or PlottedProperty.EmaMin or PlottedProperty.EmaMean or PlottedProperty.EmaMax or PlottedProperty.EmaCount => sensor.Statistics.HasEma(),
+                 _ => true
+             };
+
+        public bool IsMatchTemplate(BaseSensorModel sensor) =>
             _pathTemplate.IsMatch(sensor.FullPath) && AreFoldersContain(sensor.Root.FolderId);
+
+        public bool IsMatch(BaseSensorModel sensor) => IsPropertySuitable(sensor) && IsEmaPropertySuitable(sensor) && IsMatchTemplate(sensor);
 
         public string BuildSensorLabel() => _pathTemplate.BuildStringByTempalte(Label) ?? Label;
 

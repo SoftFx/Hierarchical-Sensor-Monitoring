@@ -1,0 +1,57 @@
+﻿@using HSMServer.Core
+@using HSMServer.Model.TreeViewModel
+@model HSMServer.Model.TreeViewModel.SensorNodeViewModel
+
+@{
+    var graphElementId = $"graph_{Model.EncodedId}";
+    var graphParentDivId = $"graph_parent_{Model.EncodedId}";
+}
+
+<div class='tab-pane fade' id=@graphParentDivId>
+     <div class="mt-1" id='points_limit' style="display: none">
+            <span class="m-2" style="color: red">Current history period contains more than @SensorNodeViewModel.ValuesLimit points. Only last @SensorNodeViewModel.ValuesLimit point will be displayed.</span>
+        </div>
+    
+    <div id="noDataGraph" hidden class="d-flex d-none justify-content-center align-items-center noData-label">
+        <label>No data</label>
+    </div>
+    <div class="graph-with-plot-button" id='@graphElementId'></div>
+    @if (Model.Type.IsBar())
+    {
+        <button class="btn button-plot-selection px-0" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+            <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+        </button>
+        <ul id="barPicker" class="dropdown-menu" style="max-width: 8rem; min-width: 2rem" aria-labelledby="dropdownMenuButton">
+            <li class="dropdown-item text-start px-2 mx-0">
+                <input type="checkbox" value="" checked id="plot_bar">
+                <label for="plot_bar">
+                    Bar
+                </label>
+            </li>
+            <li class="dropdown-item text-start px-2 mx-0">
+                <input type="checkbox" value="" id="plot_max">
+                <label for="plot_max">
+                    Max
+                </label>
+            </li>
+            <li class="dropdown-item text-start px-2  mx-0">
+                <input type="checkbox" value="" id="plot_min">
+                <label for="plot_min">
+                    Min
+                </label>
+            </li>
+            <li class="dropdown-item text-start px-2 mx-0">
+                <input type="checkbox" value="" id="plot_mean">
+                <label for="plot_mean">
+                    Mean
+                </label>
+            </li>
+            <li class="dropdown-item text-start px-2 mx-0">
+                <input type="checkbox" value="" id="plot_count">
+                <label for="plot_count">
+                    Count
+                </label>
+            </li>
+        </ul>
+    }
+</div>

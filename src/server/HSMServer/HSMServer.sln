@@ -37,8 +37,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMPingModule", "..\..\modu
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Modules", "Modules", "{98F0E59D-1A22-4F8B-969E-08FDA6CB9DB2}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMSensorDataObjects", "..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj", "{F9C99186-A705-42D9-9977-FEF9325FE5AB}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -93,10 +91,6 @@ Global
 		{477D951F-1F60-4203-ADE5-3F2437C375AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{477D951F-1F60-4203-ADE5-3F2437C375AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{477D951F-1F60-4203-ADE5-3F2437C375AA}.Release|Any CPU.Build.0 = Release|Any CPU
-		{F9C99186-A705-42D9-9977-FEF9325FE5AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{F9C99186-A705-42D9-9977-FEF9325FE5AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F9C99186-A705-42D9-9977-FEF9325FE5AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F9C99186-A705-42D9-9977-FEF9325FE5AB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

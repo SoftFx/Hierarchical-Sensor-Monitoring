@@ -5,12 +5,13 @@
     <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>3.34.0</Version>
+    <Version>3.35.0</Version>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Copyright>Copyright © 2024</Copyright>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <TypescriptCompileBlocked>true</TypescriptCompileBlocked>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <DefineConstants>DEBUG;TRACE</DefineConstants>
@@ -36,8 +37,8 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation.AspNetCore" Version="11.2.2" />
-    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.3.0" />
-    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.1.3" />
+    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.3.1" />
+    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.1.4" />
     <PackageReference Include="NLog.Web.AspNetCore" Version="5.2.2" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
     <PackageReference Include="System.Linq.Async" Version="6.0.1" />

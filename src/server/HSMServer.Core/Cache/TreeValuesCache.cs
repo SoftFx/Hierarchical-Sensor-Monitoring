@@ -9,6 +9,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -28,6 +29,7 @@ namespace HSMServer.Core.Cache
     {
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
+        private const string ErrorProductNotFound = "Product doesn't exist.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
         private const string ErrorMasterKey = "Master key is invalid for this request because product is not specified.";
 
@@ -72,6 +74,9 @@ namespace HSMServer.Core.Cache
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent += SendAlertMessage;
 
+            _migrator.ApplyProductMigration += UpdateProduct;
+            _migrator.ApplySensorMigration += TryUpdateSensor;
+
             Initialize();
         }
 
@@ -85,6 +90,9 @@ namespace HSMServer.Core.Cache
 
         public void Dispose()
         {
+            _migrator.ApplyProductMigration -= UpdateProduct;
+            _migrator.ApplySensorMigration -= TryUpdateSensor;
+
             _confirmationManager.NewMessageEvent -= _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent -= SendAlertMessage;
 
@@ -148,7 +156,7 @@ namespace HSMServer.Core.Cache
             {
                 RemoveProduct(productId);
 
-                if (product.Parent != null)
+                if (!product.IsRoot)
                     UpdateProduct(product.Parent);
             }
         }
@@ -157,7 +165,7 @@ namespace HSMServer.Core.Cache
 
         /// <returns>product (without parent) with name = name</returns>
         public ProductModel GetProductByName(string name) =>
-            _tree.FirstOrDefault(p => p.Value.Parent == null && p.Value.DisplayName == name).Value;
+            _tree.FirstOrDefault(p => p.Value.IsRoot && p.Value.DisplayName == name).Value;
 
         public bool TryGetProductByName(string name, out ProductModel product)
         {
@@ -169,7 +177,7 @@ namespace HSMServer.Core.Cache
         public string GetProductNameById(Guid id) => GetProduct(id)?.DisplayName;
 
         /// <returns>list of root products (without parent)</returns>
-        public List<ProductModel> GetProducts() => _tree.Values.Where(p => p.Parent == null).ToList();
+        public List<ProductModel> GetProducts() => _tree.Values.Where(p => p.IsRoot).ToList();
 
 
         public bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message)
@@ -178,6 +186,7 @@ namespace HSMServer.Core.Cache
                 return false;
 
             var accessKey = GetAccessKeyModel(request);
+
             if (!accessKey.IsValid(KeyPermissions.CanSendSensorData, out message))
                 return false;
 
@@ -190,6 +199,41 @@ namespace HSMServer.Core.Cache
             }
 
             return sensorChecking;
+        }
+
+        public void SetLastKeyUsage(Guid key, string ip)
+        {
+            if (!TryGetKey(key, out var keyModel, out _))
+                return;
+
+            var usageTime = DateTime.UtcNow;
+
+            keyModel.UpdateUsageInfo(ip, usageTime);
+            _snapshot.Keys[key].Update(ip, usageTime);
+
+            ChangeAccessKeyEvent?.Invoke(keyModel, ActionType.Update);
+        }
+
+        public bool TryGetKey(Guid id, out AccessKeyModel key, out string message)
+        {
+            key = _keys.TryGetValue(id, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
+
+            if (!key.IsValidState(out message))
+                return false;
+
+            if (!key.IsMaster)
+                return true;
+
+            message = ErrorMasterKey;
+            return false;
+        }
+
+        public bool TryGetProduct(Guid id, out ProductModel product, out string error)
+        {
+            var ok = _tree.TryGetValue(id, out product) && product.IsRoot;
+            error = !ok ? ErrorProductNotFound : null;
+
+            return ok;
         }
 
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
@@ -219,7 +263,7 @@ namespace HSMServer.Core.Cache
                 return false;
 
             // TODO: remove after refactoring sensors data storing
-            if (product.Parent is not null)
+            if (!product.IsRoot)
             {
                 message = "Temporarily unavailable feature. Please select a product without a parent";
                 return false;
@@ -254,6 +298,7 @@ namespace HSMServer.Core.Cache
                 }
 
                 _database.RemoveAccessKey(id);
+                _snapshot.Keys.Remove(id);
 
                 ChangeAccessKeyEvent?.Invoke(key, ActionType.Delete);
             }
@@ -292,7 +337,7 @@ namespace HSMServer.Core.Cache
             {
                 if (!TryGetProductByKey(request, out var product, out _))
                 {
-                    error = $"Product with this key {request.KeyGuid} doesn't exists";
+                    error = $"Product with this key {request.Key} doesn't exists";
                     return false;
                 }
 
@@ -385,6 +430,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             if (sensor.EndOfMuting != endOfMuting)
+            {
                 TryUpdateSensor(new SensorUpdate
                 {
                     Id = sensorId,
@@ -392,6 +438,9 @@ namespace HSMServer.Core.Cache
                     EndOfMutingPeriod = endOfMuting,
                     Initiator = initiator
                 }, out _);
+
+                sensor.Revalidate();
+            }
         }
 
         public void ClearNodeHistory(ClearHistoryRequest request)
@@ -667,7 +716,7 @@ namespace HSMServer.Core.Cache
                     foreach (var policy in sensor.Policies)
                     {
                         if (!TryGetPolicyUpdate(policy, chats, initiator, out var policyUpdate))
-                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination.Chats, policy.Destination.AllChats), initiator);
+                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), initiator);
 
                         policiesUpdate.Add(policyUpdate);
                     }
@@ -707,7 +756,7 @@ namespace HSMServer.Core.Cache
         }
 
         private static bool CanRemoveChatsFromPolicy(PolicyDestination destination, HashSet<Guid> chats) =>
-            !destination.AllChats && destination.Chats.Any(pair => chats.Contains(pair.Key));
+            !destination.AllChats && !destination.UseDefaultChats && destination.Chats.Any(pair => chats.Contains(pair.Key));
 
         private static PolicyUpdate BuildPolicyUpdate(Policy policy, PolicyDestinationUpdate destination, InitiatorInfo initiator) =>
             new()
@@ -788,13 +837,16 @@ namespace HSMServer.Core.Cache
 
         internal void AddNewSensorValue(StoreInfo storeInfo)
         {
-            if (!TryGetProductByKey(storeInfo, out var product, out _))
+            var product = storeInfo?.Product;
+
+            if (product == null && !TryGetProductByKey(storeInfo, out product, out _))
                 return;
 
             var parentProduct = AddNonExistingProductsAndGetParentProduct(product, storeInfo);
 
+            var sensorName = storeInfo.SensorName;
             var value = storeInfo.BaseValue;
-            var sensorName = storeInfo.PathParts[^1];
+
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
 
             if (sensor == null)
@@ -841,9 +893,10 @@ namespace HSMServer.Core.Cache
             var accessKeysEntities = _database.GetAccessKeys();
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
 
-            _logger.Info($"Migrate sensors settings and alerts");
-            RunMigration();
-            _logger.Info($"Migrate sensor settings and alerts finished");
+            _logger.Info($"Migrate product/sensors settings and alerts");
+            _migrator.RunProductMigrations([.. _tree.Values]);
+            _migrator.RunSensorMigrations([.. _sensors.Values]);
+            _logger.Info($"Migrate product/sensors settings and alerts finished");
 
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
             ApplyAccessKeys([.. accessKeysEntities]);
@@ -852,19 +905,6 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
             UpdateCacheState();
-        }
-
-        private void RunMigration()
-        {
-            try
-            {
-                foreach (var update in MigrationManager.GetMigrationUpdates([.. _sensors.Values]))
-                    TryUpdateSensor(update, out _);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Migration is failed: {ex}");
-            }
         }
 
         private List<ProductEntity> RequestProducts()
@@ -988,7 +1028,7 @@ namespace HSMServer.Core.Cache
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseRequestModel request)
         {
             var pathParts = request.PathParts;
-            var authorId = GetAccessKey(request.KeyGuid).AuthorId;
+            var authorId = GetAccessKey(request.Key).AuthorId;
 
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -1016,7 +1056,7 @@ namespace HSMServer.Core.Cache
         {
             if (_tree.TryAdd(product.Id, product))
             {
-                if (product.Parent == null)
+                if (product.IsRoot)
                 {
                     var update = new ProductUpdate
                     {
@@ -1024,6 +1064,8 @@ namespace HSMServer.Core.Cache
                         TTL = new TimeIntervalModel(TimeInterval.None),
                         KeepHistory = new TimeIntervalModel(TimeInterval.Month),
                         SelfDestroy = new TimeIntervalModel(TimeInterval.Month),
+
+                        DefaultChats = new PolicyDestinationSettings(product.FolderId != null ? DefaultChatsMode.FromFolder : DefaultChatsMode.NotInitialized),
                     };
 
                     product.Update(update);
@@ -1049,9 +1091,14 @@ namespace HSMServer.Core.Cache
             SensorEntity entity = new()
             {
                 Id = Guid.NewGuid().ToString(),
-                DisplayName = request.PathParts[^1],
+                DisplayName = request.SensorName,
                 Type = (byte)type,
                 CreationDate = DateTime.UtcNow.Ticks,
+
+                DefaultChatsSettings = new PolicyDestinationSettingsEntity()
+                {
+                    Mode = (byte)DefaultChatsMode.FromParent,
+                }
             };
 
             var sensor = SensorModelFactory.Build(entity);
@@ -1084,6 +1131,9 @@ namespace HSMServer.Core.Cache
 
             if (isSuccess && _tree.TryGetValue(key.ProductId, out var product))
             {
+                if (_snapshot.Keys.TryGetValue(key.Id, out var snapKey))
+                    key.UpdateUsageInfo(snapKey.IP, snapKey.LastUseTime);
+
                 isSuccess &= product.AccessKeys.TryAdd(key.Id, key);
                 ChangeProductEvent?.Invoke(product, ActionType.Update);
             }
@@ -1170,7 +1220,7 @@ namespace HSMServer.Core.Cache
         }
 
         private AccessKeyModel GetAccessKeyModel(BaseRequestModel request) =>
-            _keys.TryGetValue(request.KeyGuid, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
+            _keys.TryGetValue(request.Key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
 
         private void FillSensorsData()
         {
@@ -1247,13 +1297,22 @@ namespace HSMServer.Core.Cache
                     UpdateMutedSensorState(sensor.Id, InitiatorInfo.System);
         }
 
-        void CheckSensorTimeout(BaseSensorModel sensor)
+        public void ClearEmptyNodes(ProductModel product)
+        {
+            foreach (var (_, node) in product.SubProducts)
+                ClearEmptyNodes(node);
+
+            if (!product.IsRoot && product.IsEmpty && product.Settings.SelfDestroy.Value.GetShiftedTime(product.CreationDate) < DateTime.UtcNow)
+                RemoveProduct(product.Id, InitiatorInfo.AsSystemForce("Old empty node"));
+        }
+
+        private void CheckSensorTimeout(BaseSensorModel sensor)
         {
             sensor.CheckTimeout();
 
             var ttl = sensor.Policies.TimeToLive;
 
-            if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.Time))
+            if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
                 SendNotification(ttl.GetNotification(true));
         }
 
@@ -1276,8 +1335,6 @@ namespace HSMServer.Core.Cache
 
                 SendNotification(ttl.GetNotification(timeout));
             }
-            //else
-            //    sensor.Policies.TimeToLive.InitLastTtlTime(timeout); // setup last time for schedule logic
 
             SensorUpdateView(sensor);
         }

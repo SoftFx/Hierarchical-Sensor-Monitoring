@@ -8,7 +8,7 @@
     {
         FolderModel folder => await Html.PartialAsync("_Folder", folder),
         ProductNodeViewModel productVM => await Html.PartialAsync("_Node", productVM),
-        SensorNodeViewModel sensorVM => await Html.PartialAsync("_Sensor", sensorVM),
+        SensorNodeViewModel sensorVM => await Html.PartialAsync("Sensor/_Sensor", sensorVM),
         _ => Html.Raw("No Data")
     })
 </div>

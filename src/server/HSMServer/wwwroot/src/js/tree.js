@@ -209,11 +209,33 @@ function buildContextMenu(node) {
     if (curType === NodeType.Disabled)
         return contextMenu;
 
+    let isManager = node.data.jstree.isManager === "True";
+    let isMutedState = node.data.jstree.isMutedState;
 
     let selectedNodes = $('#jstree').jstree(true).get_selected();
     let selectedNodesCount = selectedNodes.length;
 
     if (selectedNodesCount > 1) {
+
+        if (isManager) {
+            if (isMutedState !== undefined && isMutedState !== '') {
+                if (!(isMutedState === "True")) {
+                    contextMenu["MuteNode"] = {
+                        "label": `Mute items for...`,
+                        separator_after: true,
+                        "action": _ => muteRequest([].concat(selectedNodes))
+                    }
+                }
+                else {
+                        contextMenu["UnmuteNode"] = {
+                            "label": `Unmute items`,
+                            separator_after: true,
+                            "action": _ => unmuteRequest([].concat(selectedNodes))
+                        }
+                }
+            }
+        }
+
         contextMenu["RemoveNode"] = {
             "label": `Remove items`,
             "action": _ => {
@@ -302,9 +324,6 @@ function buildContextMenu(node) {
         return contextMenu;
     }
 
-
-    let isManager = node.data.jstree.isManager === "True";
-
     let isFolder = curType === NodeType.Folder;
     let isSensor = curType === NodeType.Sensor;
     let isProduct = curType === NodeType.Product;
@@ -330,8 +349,6 @@ function buildContextMenu(node) {
         };
     }
 
-    let isMutedState = node.data.jstree.isMutedState;
-
     if (isManager) {
         if (isMutedState !== undefined && isMutedState !== '') {
             if (!(isMutedState === "True")) {
@@ -339,7 +356,7 @@ function buildContextMenu(node) {
                     "label": `Mute ${getKeyByValue(curType)} for...`,
                     "separator_after": true,
                     "separator_before": true,
-                    "action": _ => muteRequest(node)
+                    "action": _ => muteRequest([].concat(node.id))
                 }
             }
             else {
@@ -347,7 +364,7 @@ function buildContextMenu(node) {
                     "label": `Unmute ${getKeyByValue(curType)}`,
                     "separator_after": true,
                     "separator_before": true,
-                    "action": _ => unmuteRequest(node)
+                    "action": _ => unmuteRequest([].concat(node.id))
                 }
             }
         }
@@ -499,20 +516,31 @@ function isFolder(node) {
     return node.icon.includes("fa-folder");
 }
 
-function unmuteRequest(node){
-    return $.ajax(`${unmuteAction}?selectedId=${node.id}`, AjaxPost).done(() => {
+function unmuteRequest(selectedNodes){
+    return $.ajax({
+        url: `${unmuteAction}`,
+        type: 'POST',
+        cache: false,
+        async: true,
+        data: JSON.stringify(selectedNodes),
+        contentType: "application/json"
+    }).done(() => {
         updateTreeTimer();
-
         if (window.hasOwnProperty('updateSelectedNodeData')) {
             updateSelectedNodeData();
         }
     });
 }
 
-function muteRequest(node) {
-    return $.ajax(`${muteAction}?selectedId=${node.id}`, {
+function muteRequest(selectedNodes) {
+    return $.ajax({
+        url: `${muteAction}`,
+        type: 'POST',
         cache: false,
+        async: true,
+        data: JSON.stringify(selectedNodes),
         success: (v) => $("#ignoreNotificatios_partial").html(v),
+        contentType: "application/json",
     }).done(() => $('#ignoreNotifications_modal').modal('show'))
 }
 

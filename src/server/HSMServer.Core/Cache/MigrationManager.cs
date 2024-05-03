@@ -1,7 +1,9 @@
 ﻿using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +12,11 @@ namespace HSMServer.Core.Cache
 {
     internal sealed class MigrationManager
     {
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
+        private static readonly InitiatorInfo _softMigrator = InitiatorInfo.AsSoftSystemMigrator();
         private static readonly InitiatorInfo _migrator = InitiatorInfo.AsSystemMigrator();
+
 
         private static readonly HashSet<PolicyProperty> _numberToEmaSet =
         [
@@ -30,25 +36,122 @@ namespace HSMServer.Core.Cache
             PolicyProperty.EmaCount,
         ];
 
+        private static readonly PolicyUpdate _timeInGcPolicy = new()
+        {
+            Conditions = [new PolicyConditionUpdate(PolicyOperation.GreaterThan, PolicyProperty.EmaMean, new TargetValue(TargetType.Const, "20"))],
+            Destination = new PolicyDestinationUpdate(),
+            Icon = "⚠",
+            Initiator = _migrator,
+            Schedule = GetDefaultScheduleUpdate(),
+            Template = "[$product]$path $property $operation $target $unit",
+        };
 
-        internal static IEnumerable<SensorUpdate> GetMigrationUpdates(List<BaseSensorModel> sensors)
+
+        internal delegate bool SensorMigrationApplyEvent(SensorUpdate update, out string error);
+
+        internal event SensorMigrationApplyEvent ApplySensorMigration;
+        internal event Action<ProductUpdate> ApplyProductMigration;
+
+
+        internal void RunSensorMigrations(List<BaseSensorModel> sensors)
+        {
+            foreach (var update in GetSensorsMigrationUpdates(sensors))
+                try
+                {
+                    ApplySensorMigration?.Invoke(update, out _);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Sensor migration is failed: {update.Id} {ex}");
+                }
+        }
+
+        internal void RunProductMigrations(List<ProductModel> products)
+        {
+            foreach (var update in GetProductsMigrationUpdates(products))
+                try
+                {
+                    ApplyProductMigration?.Invoke(update);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Product migration is failed: {update.Id} {ex}");
+                }
+        }
+
+        private static IEnumerable<ProductUpdate> GetProductsMigrationUpdates(List<ProductModel> products)
+        {
+            foreach (var product in products)
+            {
+                if (TryMigrateProductTTLPolicyDestinationToDefaultChat(product, out var update))
+                    yield return update;
+
+                if (TryMigrateProductDefaultChatToFolder(product, out update))
+                    yield return update;
+
+                if (TryMigrateProductDefaultChatToParent(product, out update))
+                    yield return update;
+            }
+        }
+
+        private static IEnumerable<SensorUpdate> GetSensorsMigrationUpdates(List<BaseSensorModel> sensors)
         {
             foreach (var sensor in sensors)
+            {
                 if (IsDefaultSensor(sensor))
                 {
                     if (IsNumberSensor(sensor.Type))
                     {
-                        if (TryBuildNumberToEmaMigration(sensor, out var update))
-                            yield return update;
+                        if (TryBuildNumberToEmaMigration(sensor, out var updateDefault))
+                            yield return updateDefault;
 
-                        if (TryBuildNumberToScheduleMigration(sensor, out update))
-                            yield return update;
+                        if (TryBuildNumberToScheduleMigration(sensor, out updateDefault))
+                            yield return updateDefault;
 
+                        if (TryBuildTimeInGcSensorMigration(sensor, out updateDefault))
+                            yield return updateDefault;
                     }
 
                     if (IsBoolSensor(sensor.Type) && TryMigrateServiceAliveTtlToSchedule(sensor, out var updateTtl))
                         yield return updateTtl;
                 }
+
+                if (TryMigratePolicyDestinationToDefaultChat(sensor, out var update))
+                    yield return update;
+
+                if (TryMigrateSensorTTLPolicyDestinationToDefaultChat(sensor, out update))
+                    yield return update;
+
+                if (TryMigrateSensorDefaultChatToParent(sensor, out update))
+                    yield return update;
+            }
+        }
+
+
+        private static bool TryMigratePolicyDestinationToDefaultChat(BaseSensorModel sensor, out SensorUpdate update)
+        {
+            static bool IsTarget(Policy policy) => policy.Destination.IsNotInitialized;
+
+            static PolicyUpdate Migration(PolicyUpdate update) => ToDefaultChatDestination(update);
+
+            return TryMigratePolicy(sensor, IsTarget, Migration, out update);
+        }
+
+
+        private static bool TryMigrateSensorTTLPolicyDestinationToDefaultChat(BaseSensorModel sensor, out SensorUpdate update) =>
+            TryMigrateTTLPolicyDestinationToDefaultChat(sensor, out update);
+
+        private static bool TryMigrateProductTTLPolicyDestinationToDefaultChat(ProductModel product, out ProductUpdate update) =>
+            TryMigrateTTLPolicyDestinationToDefaultChat(product, out update);
+
+        private static bool TryMigrateTTLPolicyDestinationToDefaultChat<T>(BaseNodeModel node, out T update)
+            where T : BaseNodeUpdate, new()
+        {
+            static bool IsTarget(Policy policy) => policy.Destination.IsNotInitialized;
+
+            static PolicyUpdate Migration(PolicyUpdate update) => ToDefaultChatDestination(update);
+
+            return TryMigrateTtlPolicy(node, IsTarget, Migration, out update);
         }
 
 
@@ -57,7 +160,7 @@ namespace HSMServer.Core.Cache
             bool IsTarget(Policy policy) => sensor.DisplayName == "Service alive" && !policy.Schedule.IsActive;
 
             static PolicyUpdate Migration(PolicyUpdate update) =>
-                update with { Schedule = GetDefaultScheduleUpdate() };
+                update with { Schedule = GetDefaultScheduleUpdate(false) };
 
             return TryMigrateTtlPolicy(sensor, IsTarget, Migration, out update);
         }
@@ -86,7 +189,6 @@ namespace HSMServer.Core.Cache
                 return update;
             }
 
-
             var result = TryMigratePolicy(sensor, IsTarget, Migration, out update);
 
             if (result)
@@ -105,10 +207,21 @@ namespace HSMServer.Core.Cache
             return TryMigratePolicy(sensor, IsTarget, Migration, out update);
         }
 
+        private static bool TryBuildTimeInGcSensorMigration(BaseSensorModel sensor, out SensorUpdate update)
+        {
+            static bool IsTarget(BaseSensorModel sensor) => sensor.DisplayName == "Time in GC" && !sensor.Statistics.HasEma();
+
+
+            var result = TryAddPolicy(sensor, IsTarget, _timeInGcPolicy, out update);
+
+            if (result)
+                update = update with { Statistics = StatisticsOptions.EMA };
+
+            return result;
+        }
+
         private static bool TryMigratePolicy(BaseSensorModel sensor, Predicate<Policy> isTarget, Func<PolicyUpdate, PolicyUpdate> migrator, out SensorUpdate sensorUpdate)
         {
-            sensorUpdate = null;
-
             var alerts = new List<PolicyUpdate>();
             var hasMigrations = false;
 
@@ -125,9 +238,6 @@ namespace HSMServer.Core.Cache
                 alerts.Add(update);
             }
 
-            if (!hasMigrations)
-                return false;
-
             sensorUpdate = new SensorUpdate()
             {
                 Id = sensor.Id,
@@ -135,17 +245,38 @@ namespace HSMServer.Core.Cache
                 Initiator = _migrator,
             };
 
-            return true;
+            return hasMigrations;
         }
 
-        private static bool TryMigrateTtlPolicy(BaseSensorModel sensor, Predicate<Policy> isTarget, Func<PolicyUpdate, PolicyUpdate> migrator, out SensorUpdate sensorUpdate)
+        private static bool TryAddPolicy(BaseSensorModel sensor, Predicate<BaseSensorModel> isTarget, PolicyUpdate policyToAdd, out SensorUpdate sensorUpdate)
         {
-            var ttl = sensor.Policies.TimeToLive;
+            static bool IsTargetPolicy(Policy policy) => false;
+
+            static PolicyUpdate ExistingPoliciesMigration(PolicyUpdate update) => update;
+
+            sensorUpdate = null;
+
+            if (isTarget(sensor))
+            {
+                TryMigratePolicy(sensor, IsTargetPolicy, ExistingPoliciesMigration, out sensorUpdate);
+
+                sensorUpdate.Policies.Add(policyToAdd);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryMigrateTtlPolicy<T>(BaseNodeModel node, Predicate<Policy> isTarget, Func<PolicyUpdate, PolicyUpdate> migrator, out T update)
+            where T : BaseNodeUpdate, new()
+        {
+            var ttl = node.Policies.TimeToLive;
             var needMigration = isTarget(ttl);
 
-            sensorUpdate = !needMigration ? null : new SensorUpdate()
+            update = !needMigration ? null : new T()
             {
-                Id = sensor.Id,
+                Id = node.Id,
                 TTLPolicy = migrator(ToUpdate(ttl)),
                 Initiator = _migrator,
             };
@@ -161,6 +292,47 @@ namespace HSMServer.Core.Cache
 
                 return targetProperties.Contains(condition.Property);
             }
+
+            return false;
+        }
+
+        private static bool TryMigrateProductDefaultChatToFolder(ProductModel product, out ProductUpdate update)
+        {
+            static bool IsTarget(BaseNodeModel node) => node is ProductModel product && product.Parent == null && product.FolderId != null;
+
+            return TryMigrateNodeDefaultChartToParent(product, IsTarget, DefaultChatsMode.FromFolder, out update);
+        }
+
+        private static bool TryMigrateProductDefaultChatToParent(ProductModel product, out ProductUpdate update)
+        {
+            static bool IsTarget(BaseNodeModel node) => node is ProductModel product && product.Parent != null;
+
+            return TryMigrateNodeDefaultChartToParent(product, IsTarget, DefaultChatsMode.FromParent, out update);
+        }
+
+        private static bool TryMigrateSensorDefaultChatToParent(BaseSensorModel sensor, out SensorUpdate update)
+        {
+            static bool IsTarget(BaseNodeModel _) => true;
+
+            return TryMigrateNodeDefaultChartToParent(sensor, IsTarget, DefaultChatsMode.FromParent, out update);
+        }
+
+        private static bool TryMigrateNodeDefaultChartToParent<T>(BaseNodeModel node, Predicate<BaseNodeModel> isTarget, DefaultChatsMode mode, out T update)
+            where T : BaseNodeUpdate, new()
+        {
+            if (node.Settings.DefaultChats.CurValue.IsNotInitialized && isTarget(node))
+            {
+                update = new T
+                {
+                    Id = node.Id,
+                    DefaultChats = new PolicyDestinationSettings(mode),
+                    Initiator = _softMigrator,
+                };
+
+                return true;
+            }
+
+            update = null;
 
             return false;
         }
@@ -203,8 +375,7 @@ namespace HSMServer.Core.Cache
                 Time = schedule.Time,
             };
 
-        private static PolicyDestinationUpdate ToUpdate(PolicyDestination destination) =>
-            new(destination.Chats, destination.AllChats);
+        private static PolicyDestinationUpdate ToUpdate(PolicyDestination destination) => new(destination);
 
         private static PolicyConditionUpdate ToUpdate(PolicyCondition condition) =>
             new()
@@ -215,11 +386,14 @@ namespace HSMServer.Core.Cache
             };
 
 
-        private static PolicyScheduleUpdate GetDefaultScheduleUpdate() => new()
+        private static PolicyScheduleUpdate GetDefaultScheduleUpdate(bool instantSend = true) => new()
         {
             RepeatMode = AlertRepeatMode.Hourly,
-            InstantSend = false,
+            InstantSend = instantSend,
             Time = new DateTime(1, 1, 1, 12, 0, 0, DateTimeKind.Utc),
         };
+
+        private static PolicyUpdate ToDefaultChatDestination(PolicyUpdate update) =>
+            update with { Destination = new PolicyDestinationUpdate(useDefaultChat: true) };
     }
 }

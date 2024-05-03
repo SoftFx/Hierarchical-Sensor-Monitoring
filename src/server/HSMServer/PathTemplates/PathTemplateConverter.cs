@@ -6,7 +6,7 @@ namespace HSMServer.PathTemplates
 {
     public sealed partial class PathTemplateConverter
     {
-        private const string AllValidSymbols = @"[\p{L}\p{Nd}\p{Zs}\._\$]*";
+        private const string AllValidSymbols = @"[\p{L}\p{Nd}\p{Zs}\._\#,%\$\-]*";
         private const string NamedVariables = @"\{(.*?)\}";
         private const string UnnamedVariable = @"\*";
 

@@ -1,4 +1,5 @@
 ﻿using HSMServer.Extensions;
+using HSMServer.Model.Controls;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.ViewModel;
 using System;
@@ -27,6 +28,8 @@ namespace HSMServer.Model.TreeViewModel
         public TimeIntervalViewModel TTL { get; protected set; }
 
         public TimeToLiveAlertViewModel TTLAlert { get; protected set; }
+
+        public DefaultChatViewModel DefaultChats { get; protected set; }
 
 
         public Guid Id { get; protected set; }

@@ -7,9 +7,18 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed record AlertDestination
     {
+        public HashSet<Guid> Chats { get; init; }
+
         public bool AllChats { get; init; }
 
-        public HashSet<Guid> Chats { get; init; }
+
+        public AlertDestination(Policy policy)
+        {
+            var target = policy.TargetChats;
+
+            Chats = new HashSet<Guid>(target.Chats.Keys);
+            AllChats = target.AllChats;
+        }
 
 
         internal bool HasChats => AllChats || Chats.Count > 0;
@@ -58,14 +67,12 @@ namespace HSMServer.Core.Model.Policies
 
         public (string, int) Key => (Icon, Count);
 
+        public int RetryCount { get; private set; }
+
 
         internal AlertResult(Policy policy, bool isReplace = false)
         {
-            Destination = new()
-            {
-                AllChats = policy.Destination.AllChats,
-                Chats = new HashSet<Guid>(policy.Destination.Chats.Keys)
-            };
+            Destination = new(policy);
 
             ConfirmationPeriod = policy.ConfirmationPeriod;
             SendTime = policy.Schedule.GetSendTime();
@@ -82,6 +89,9 @@ namespace HSMServer.Core.Model.Policies
             IsScheduleAlert = policy.UseScheduleManagerLogic;
             IsReplaceAlert = isReplace && IsScheduleAlert;
             IsValidAlert = Destination.HasChats && Template is not null;
+
+            if (policy is TTLPolicy ttlPolicy)
+                RetryCount = ttlPolicy.RetryCount;
 
             AddPolicyResult(policy);
         }
@@ -131,7 +141,6 @@ namespace HSMServer.Core.Model.Policies
             return false;
         }
 
-
         public string BuildFullComment(string comment, int extraCnt = 0)
         {
             var sb = new StringBuilder(1 << 5);
@@ -141,6 +150,9 @@ namespace HSMServer.Core.Model.Policies
 
             if (totalCnt > 1)
                 sb.Append($" ({totalCnt} times)");
+
+            if (RetryCount > 0)
+                sb.Append($" #{RetryCount}");
 
             return sb.ToString().Trim();
         }

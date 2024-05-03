@@ -11,6 +11,7 @@ using HSMServer.Dashboards;
 using HSMServer.Filters;
 using HSMServer.Folders;
 using HSMServer.Middleware;
+using HSMServer.Middleware.Telemetry;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
@@ -31,7 +32,7 @@ namespace HSMServer.ServiceExtensions;
 
 public static class ApplicationServiceExtensions
 {
-    private static readonly HashSet<Type> _asyncStorageTypes = new();
+    private static readonly HashSet<Type> _asyncStorageTypes = [];
 
 
     public static IServiceCollection AddApplicationServices(this IServiceCollection services, IServerConfig config)
@@ -51,7 +52,8 @@ public static class ApplicationServiceExtensions
 
         services.AddSingleton<NotificationsCenter>()
                 .AddSingleton<DataCollectorWrapper>()
-                .AddSingleton<TreeViewModel>();
+                .AddSingleton<TreeViewModel>()
+                .AddSingleton<TelemetryCollector>();
 
         services.AddHostedService<TreeSnapshotService>()
                 .AddHostedService<ClearDatabaseService>()
@@ -88,10 +90,10 @@ public static class ApplicationServiceExtensions
             o.TagActionsBy(api =>
             {
                 if (api.GroupName != null)
-                    return new[] { api.GroupName };
+                    return [api.GroupName];
 
                 if (api.ActionDescriptor is ControllerActionDescriptor controllerActionDescriptor)
-                    return new[] { controllerActionDescriptor.ControllerName };
+                    return [controllerActionDescriptor.ControllerName];
 
                 throw new InvalidOperationException("Unable to determine tag for endpoint.");
             });
@@ -138,7 +140,7 @@ public static class ApplicationServiceExtensions
         applicationBuilder.UseAuthentication();
         applicationBuilder.UseAuthorization();
 
-        applicationBuilder.UseMiddleware<RequestStatisticsMiddleware>();
+        applicationBuilder.UseMiddleware<TelemetryMiddleware>();
         applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
         applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
 
@@ -158,7 +160,6 @@ public static class ApplicationServiceExtensions
             if (services.GetService(type) is IAsyncStorage storage)
                 await storage.Initialize();
     }
-
 
     private static Action<ListenOptions> KestrelListenOptions(ServerCertificateConfig config) =>
         options =>

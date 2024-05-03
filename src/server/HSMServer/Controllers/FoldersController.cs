@@ -125,6 +125,7 @@ namespace HSMServer.Controllers
             var update = new FolderUpdate()
             {
                 Id = viewModel.FolderId,
+                DefaultChats = viewModel.DefaultChats,
                 TelegramChats = new HashSet<Guid>(connectedChats),
                 Initiator = CurrentInitiator
             };

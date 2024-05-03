@@ -58,3 +58,4 @@ import './css/accessKey.css';
 import './css/home.css';
 import './css/product.css';
 import './css/dragging.css'
+import './css/dashboards.css'

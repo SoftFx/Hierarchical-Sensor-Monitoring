@@ -15,7 +15,6 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -123,9 +122,7 @@ namespace HSMServer.Controllers
             if (localValue is not null && (values.Count == 0 || values[0].Time != localValue.Time))
                 values.Add(localValue);
 
-            return new JsonResult(HistoryProcessorFactory.BuildProcessor(model.Type)
-                                                         .ProcessingAndCompression(sensor, values, model.BarsCount)
-                                                         .Select(v => (object)v));
+            return HistoryProcessorFactory.BuildProcessor(model.Type).GetResultFromValues(sensor, values, model.BarsCount);
         }
 
 

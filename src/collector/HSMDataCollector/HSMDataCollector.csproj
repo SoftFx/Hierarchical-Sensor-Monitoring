@@ -1,13 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <PackageId>HSMDataCollector.HSMDataCollector</PackageId>
-    <TargetFrameworks>netstandard2.0;net472</TargetFrameworks>
+    <TargetFrameworks>net8.0;net472</TargetFrameworks>
     <OutputType>Library</OutputType>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
-    <AssemblyVersion>3.3.0</AssemblyVersion>
-    <AssemblyFileVersion>3.3.0</AssemblyFileVersion>
-    <ProductVersion>3.3.0</ProductVersion>
-    <Version>3.3.0</Version>
+    <AssemblyVersion>3.3.1</AssemblyVersion>
+    <AssemblyFileVersion>3.3.1</AssemblyFileVersion>
+    <ProductVersion>3.3.1</ProductVersion>
+    <Version>3.3.1</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
@@ -26,7 +26,7 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.1.3" />
+    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.1.4" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

@@ -22,7 +22,7 @@ const string NLogConfigFileName = "nlog.config";
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.SetBasePath(ServerConfig.ConfigPath)
-                     .AddJsonFile(ServerConfig.ConfigName, true);
+                     .AddJsonFile(ServerConfig.ConfigName, true, reloadOnChange: true);
 
 var serverConfig = new ServerConfig(builder.Configuration);
 
@@ -76,7 +76,6 @@ builder.Services.Configure<HostOptions>(hostOptions =>
 {
     hostOptions.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
 });
-
 
 try
 {

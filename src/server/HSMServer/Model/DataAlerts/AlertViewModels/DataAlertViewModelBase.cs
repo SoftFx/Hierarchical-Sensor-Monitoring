@@ -3,6 +3,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
+using HSMServer.Model.Controls;
 using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
@@ -23,6 +24,10 @@ namespace HSMServer.Model.DataAlerts
 
         public Guid Id { get; set; }
 
+
+        public DefaultChatMode DefaultChatMode { get; protected set; }
+
+        public Guid DefaultChat { get; protected set; }
 
         public bool IsModify { get; protected set; }
 
@@ -99,7 +104,7 @@ namespace HSMServer.Model.DataAlerts
 
         private ActionProperties GetActions(Dictionary<Guid, string> availavleChats)
         {
-            PolicyDestinationUpdate destination = new();
+            PolicyDestinationUpdate destination = new(useDefaultChat: false);
             SensorStatus status = SensorStatus.Ok;
             PolicyScheduleUpdate schedule = null;
             string comment = null;
@@ -110,9 +115,10 @@ namespace HSMServer.Model.DataAlerts
                 if (action.Action == ActionType.SendNotification)
                 {
                     bool allChats = action.Chats?.Contains(ActionViewModel.AllChatsId) ?? false;
-                    Dictionary<Guid, string> chats = allChats
+                    bool defaultChat = action.Chats?.Contains(ActionViewModel.DefaultChatId) ?? false;
+                    Dictionary<Guid, string> chats = allChats || defaultChat
                         ? new(0)
-                        : action.Chats?.ToDictionary(k => k, v => availavleChats[v]) ?? new(0);
+                        : action.Chats?.ToDictionary(k => k.Value, v => availavleChats[v.Value]) ?? new(0);
 
                     schedule = new PolicyScheduleUpdate()
                     {
@@ -120,7 +126,7 @@ namespace HSMServer.Model.DataAlerts
                         RepeatMode = action.ScheduleRepeatMode.ToCore(),
                         InstantSend = action.ScheduleInstantSend
                     };
-                    destination = new PolicyDestinationUpdate(chats, allChats);
+                    destination = new PolicyDestinationUpdate(chats, allChats, defaultChat);
                     comment = action.Comment;
                 }
                 else if (action.Action == ActionType.ShowIcon)
@@ -152,7 +158,12 @@ namespace HSMServer.Model.DataAlerts
         protected virtual string DefaultIcon { get; }
 
 
-        protected DataAlertViewModel(Policy policy, NodeViewModel node)
+        private DataAlertViewModel(BaseNodeViewModel node)
+        {
+            (DefaultChat, DefaultChatMode) = node.DefaultChats.GetCurrentChat();
+        }
+
+        protected DataAlertViewModel(Policy policy, NodeViewModel node) : this((BaseNodeViewModel)node)
         {
             EntityId = node.Id;
             Id = policy.Id;
@@ -160,7 +171,8 @@ namespace HSMServer.Model.DataAlerts
             IsDisabled = policy.IsDisabled;
 
             if (!string.IsNullOrEmpty(policy.Template))
-                Actions.Add(new ActionViewModel(IsActionMain, IsTtl, node)
+            {
+                var action = new ActionViewModel(IsActionMain, IsTtl, node)
                 {
                     Action = ActionType.SendNotification,
                     Comment = policy.Template,
@@ -168,10 +180,18 @@ namespace HSMServer.Model.DataAlerts
                     ScheduleStartTime = policy.Schedule.Time.ToClientScheduleTime(),
                     ScheduleRepeatMode = policy.Schedule.RepeatMode.ToClient(),
                     ScheduleInstantSend = policy.Schedule.InstantSend,
-                    Chats = policy.Destination.AllChats
-                        ? new HashSet<Guid>() { ActionViewModel.AllChatsId }
-                        : new HashSet<Guid>(policy.Destination.Chats.Keys),
-                });
+                };
+
+                if (policy.Destination.AllChats)
+                    action.Chats.Add(ActionViewModel.AllChatsId);
+                else if (policy.Destination.UseDefaultChats)
+                    action.Chats.Add(ActionViewModel.DefaultChatId);
+                else
+                    foreach (var chat in policy.Destination.Chats)
+                        action.Chats.Add(chat.Key);
+
+                Actions.Add(action);
+            }
 
             if (!string.IsNullOrEmpty(policy.Icon))
                 Actions.Add(new ActionViewModel(IsActionMain, IsTtl, node) { Action = ActionType.ShowIcon, Icon = policy.Icon });
@@ -180,7 +200,7 @@ namespace HSMServer.Model.DataAlerts
                 Actions.Add(new ActionViewModel(IsActionMain, IsTtl, node) { Action = ActionType.SetStatus });
         }
 
-        public DataAlertViewModel(NodeViewModel node)
+        public DataAlertViewModel(NodeViewModel node) : this((BaseNodeViewModel)node)
         {
             EntityId = node.Id;
             IsModify = true;

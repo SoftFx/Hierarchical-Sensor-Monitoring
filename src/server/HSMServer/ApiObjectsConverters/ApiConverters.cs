@@ -5,6 +5,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableOfChanges;
@@ -98,7 +99,7 @@ namespace HSMServer.ApiObjectsConverters
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = value.Value?.ToArray() ?? Array.Empty<byte>(),
+                Value = value.Value?.ToArray() ?? [],
                 Name = value.Name,
                 Extension = value.Extension,
                 OriginalSize = value.Value?.Count ?? 0L
@@ -228,9 +229,8 @@ namespace HSMServer.ApiObjectsConverters
             return apiValues;
         }
 
-
-        public static HistoryRequestModel Convert(this HistoryRequest request, string key) =>
-            new(string.IsNullOrEmpty(key) ? request.Key : key, request.Path)
+        public static HistoryRequestModel Convert(this HistoryRequest request, Guid key) =>
+            new(key, request.Path)
             {
                 From = request.From,
                 To = request.To,
@@ -252,9 +252,12 @@ namespace HSMServer.ApiObjectsConverters
                 Statistics = request.Statistics?.Convert(),
                 SelectedUnit = request.OriginalUnit?.Convert(),
                 Integration = request.EnableGrafana.HasValue ? request.EnableGrafana.Value ? Integration.Grafana : Integration.None : null,
+
+                DefaultChats = request.DefaultChats is not null ? new PolicyDestinationSettings(request.DefaultChats.Value.Convert()) : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),
+
                 TTLPolicy = request.TtlAlert?.Convert(initiator),
                 Policies = request.Alerts?.Select(policy => policy.Convert(initiator)).ToList(),
                 DefaultAlertsOptions = (Core.Model.DefaultAlertsOptions)request.DefaultAlertsOptions,
@@ -266,7 +269,7 @@ namespace HSMServer.ApiObjectsConverters
         public static PolicyUpdate Convert(this AlertUpdateRequest request, InitiatorInfo initiator) => new()
         {
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
-            Destination = new(),
+            Destination = new(request.DestinationMode is AlertDestinationMode.AllChats, request.DestinationMode is AlertDestinationMode.DefaultChats),
 
             Schedule = new PolicyScheduleUpdate()
             {
@@ -291,12 +294,20 @@ namespace HSMServer.ApiObjectsConverters
                 request.Target is not null ? new(request.Target.Type.Convert(), request.Target.Value) : null,
                 request.Combination.Convert());
 
-
         private static TimeIntervalModel ToTimeInterval(this long? ticks)
         {
             return !ticks.HasValue ? null : ticks.Value == TimeSpan.MaxValue.Ticks ? new TimeIntervalModel(TimeInterval.None) : new(ticks.Value);
         }
 
+
+        public static Core.Model.NodeSettings.DefaultChatsMode Convert(this HSMSensorDataObjects.SensorRequests.DefaultChatsMode apiMode) =>
+            apiMode switch
+            {
+                HSMSensorDataObjects.SensorRequests.DefaultChatsMode.FromParent => Core.Model.NodeSettings.DefaultChatsMode.FromParent,
+                HSMSensorDataObjects.SensorRequests.DefaultChatsMode.NotInitialized => Core.Model.NodeSettings.DefaultChatsMode.NotInitialized,
+                HSMSensorDataObjects.SensorRequests.DefaultChatsMode.Empty => Core.Model.NodeSettings.DefaultChatsMode.Empty,
+                _ => throw new NotImplementedException(),
+            };
 
         public static SensorType Convert(this HSMSensorDataObjects.SensorType type) =>
             type switch
@@ -413,7 +424,7 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorRequests.Unit.Bytes_sec => Core.Model.Unit.Bytes_sec,
                 HSMSensorDataObjects.SensorRequests.Unit.KBytes_sec => Core.Model.Unit.KBytes_sec,
                 HSMSensorDataObjects.SensorRequests.Unit.MBytes_sec => Core.Model.Unit.MBytes_sec,
-                
+
                 HSMSensorDataObjects.SensorRequests.Unit.ValueInSecond => Core.Model.Unit.ValueInSecond,
 
                 _ => throw new NotImplementedException(),
