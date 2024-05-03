@@ -8,15 +8,11 @@ namespace HSMServer.Datasources
 {
     public sealed class VersionSensorLineDatasource : BaseLineDatasource<VersionValue, Version, Version>
     {
-        protected override BaseDataAggregator BuildDataAggregator(Func<BaseValue, Version> converter)
-        {
-            throw new NotImplementedException();
-        }
+        protected override BaseDataAggregator BuildDataAggregator(Func<BaseValue, Version> converter) =>
+            new VersionDataAggregator(converter);
 
-        protected override Version ConvertToChartType(Version value)
-        {
-            throw new NotImplementedException();
-        }
+
+        protected override Version ConvertToChartType(Version value) => value;
 
         protected override Func<VersionValue, Version> GetPropertyFactory(PlottedProperty property) =>
             GetValuePropertyFactory<VersionValue, Version>(property);
