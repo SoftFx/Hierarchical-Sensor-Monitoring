@@ -41,6 +41,7 @@ namespace HSMServer.Controllers
         {
             if (ModelState.IsValid)
             {
+                _config.BackupDatabase.IsEnabled = settings.IsEnabled;
                 _config.BackupDatabase.PeriodHours = settings.BackupPeriodHours;
                 _config.BackupDatabase.StoragePeriodDays = settings.BackupStoragePeriodDays;
 

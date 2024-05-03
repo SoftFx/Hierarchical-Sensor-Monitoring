@@ -11,6 +11,9 @@ namespace HSMServer.Model.Configuration
         [Display(Name = "Periodicity")]
         public int BackupPeriodHours { get; set; }
 
+        [Display(Name = "Enable backup")]
+        public bool IsEnabled { get; set; }
+
 
         public BackupSettingsViewModel() { }
 
@@ -18,6 +21,7 @@ namespace HSMServer.Model.Configuration
         {
             BackupStoragePeriodDays = config.BackupDatabase.StoragePeriodDays;
             BackupPeriodHours = config.BackupDatabase.PeriodHours;
+            IsEnabled = config.BackupDatabase.IsEnabled;
         }
     }
 }

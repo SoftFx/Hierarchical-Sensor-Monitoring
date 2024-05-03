@@ -6,6 +6,20 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
+<div class="row mt-3">
+    <div class="col-2">
+        <label class="col-form-label" asp-for="IsEnabled"></label>
+    </div>
+    <div class="col-auto form-check form-switch ms-3 mt-2">
+        <input class="form-check-input" type="checkbox" asp-for="IsEnabled">
+    </div>
+</div>
+<div class="row">
+    <div class="offset-2 col-10">
+        <label class="note">Will information be backed up. Default value is @BackupDatabaseConfig.DefaultIsBackupEnabled. The setting will be applied in real time.</label>
+    </div>
+</div>
+
 <div class="row mt-2">
     <div class="col-2">
         <label class="col-form-label" asp-for="BackupPeriodHours"></label>
