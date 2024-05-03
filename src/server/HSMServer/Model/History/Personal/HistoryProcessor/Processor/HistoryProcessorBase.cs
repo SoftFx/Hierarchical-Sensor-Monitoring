@@ -57,7 +57,7 @@ namespace HSMServer.Model.History
         {
             _showMessage = history.Count > SensorNodeViewModel.ValuesLimit;
 
-            return history.Take(SensorNodeViewModel.ValuesLimit).ToList();
+            return history.TakeLast(SensorNodeViewModel.ValuesLimit).ToList();
         }
 
         private static TimeSpan CountInterval(List<BaseValue> values, int compressedValuesCount)
