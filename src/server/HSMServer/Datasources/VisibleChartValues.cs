@@ -1,6 +1,8 @@
 ﻿using HSMServer.Dashboards;
 using HSMServer.Datasources.Aggregators;
+using HSMServer.Extensions;
 using System;
+using System.Linq;
 using System.Numerics;
 using System.Text;
 
@@ -30,14 +32,16 @@ namespace HSMServer.Datasources
             Value = state.Value;
             Time = state.Time;
 
-            //add aggr info
+            var sb = new StringBuilder(1 << 4);
+
+            foreach (var (time, version) in state.AggrState.Reverse())
+                sb.Append($"{time.ToDefaultFormat()} - {version.RemoveTailZeroes()}");
+
+            Tooltip = sb.ToString();
         }
 
 
-        internal override object Filter(PanelRangeSettings settings)
-        {
-            throw new NotImplementedException();
-        }
+        internal override object Filter(PanelRangeSettings _) => this;
     }
 
 

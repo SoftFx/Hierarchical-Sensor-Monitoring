@@ -6,7 +6,7 @@ namespace HSMServer.Datasources.Aggregators
 {
     public readonly struct VersionPointState : ILinePointState<Version>
     {
-        private HashSet<(DateTime, Version)> AggrState { get; init; } = [];
+        internal HashSet<(DateTime, Version)> AggrState { get; init; } = [];
 
 
         public DateTime Time { get; init; }
