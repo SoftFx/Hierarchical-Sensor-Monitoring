@@ -47,7 +47,7 @@ namespace HSMServer.Controllers
                 _config.ResaveSettings();
             }
 
-            return PartialView("_SelfMonitoring", settings);
+            return PartialView("_Backup", settings);
         }
 
         [HttpPost]
