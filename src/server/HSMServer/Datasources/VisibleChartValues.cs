@@ -8,11 +8,6 @@ namespace HSMServer.Datasources
 {
     public abstract class BaseChartValue
     {
-        private static long _idCounter = 0L;
-
-
-        public long Id { get; } = _idCounter++;
-
         public DateTime Time { get; protected set; }
 
         public string Tooltip { get; protected set; }
@@ -28,9 +23,28 @@ namespace HSMServer.Datasources
     }
 
 
-    public sealed class LineChartValue<T> : BaseChartValue<T> where T : INumber<T>
+    public sealed class VersionChartValue : BaseChartValue<Version>, ILinePoint<VersionPointState>
     {
-        internal void SetNewState(ref readonly LinePointState<T> state)
+        public void SetNewState(ref readonly VersionPointState state)
+        {
+            Value = state.Value;
+            Time = state.Time;
+
+            //add aggr info
+        }
+
+
+        internal override object Filter(PanelRangeSettings settings)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+
+    public sealed class LineChartValue<T> : BaseChartValue<T>, ILinePoint<LineNumberPointState<T>>
+        where T : INumber<T>
+    {
+        public void SetNewState(ref readonly LineNumberPointState<T> state)
         {
             Value = state.Value;
             Time = state.Time;
@@ -39,6 +53,7 @@ namespace HSMServer.Datasources
 
             Tooltip = count > 1 ? $"Aggregated ({count}) values" : string.Empty;
         }
+
 
         internal override object Filter(PanelRangeSettings settings)
         {

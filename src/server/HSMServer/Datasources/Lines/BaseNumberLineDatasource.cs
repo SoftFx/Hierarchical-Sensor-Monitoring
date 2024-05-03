@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Datasources.Aggregators;
 using HSMServer.Datasources.Lines;
-using System;
 using System.Numerics;
 
 namespace HSMServer.Datasources
@@ -10,7 +9,6 @@ namespace HSMServer.Datasources
         where TValue : BaseValue
         where TChart : INumber<TChart>
     {
-        protected override BaseDataAggregator BuildDataAggregator(Func<BaseValue, TChart> converter) =>
-            new LineDataAggregator<TChart>(converter);
+        protected override BaseDataAggregator DataAggregator { get; } = new LineNumberDataAggregator<TChart>();
     }
 }

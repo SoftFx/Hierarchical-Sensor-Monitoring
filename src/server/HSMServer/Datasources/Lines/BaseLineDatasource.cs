@@ -11,9 +11,6 @@ namespace HSMServer.Datasources.Lines
         protected Func<TValue, TProp> _getPropertyFactory;
 
 
-        protected override BaseDataAggregator DataAggregator { get; }
-
-
         protected override ChartType AggregatedType => ChartType.Line;
 
         protected override ChartType NormalType => ChartType.Line;
@@ -23,7 +20,8 @@ namespace HSMServer.Datasources.Lines
         {
             TChart ToChartValue(BaseValue value) => ConvertToChartType(_getPropertyFactory((TValue)value));
 
-            DataAggregator = BuildDataAggregator(ToChartValue);
+            if (DataAggregator is IDataAggregator<TChart> valueAggregator)
+                valueAggregator.AttachConverter(ToChartValue);
         }
 
 
@@ -36,8 +34,6 @@ namespace HSMServer.Datasources.Lines
             return this;
         }
 
-
-        protected abstract BaseDataAggregator BuildDataAggregator(Func<BaseValue, TChart> converter);
 
         protected abstract Func<TValue, TProp> GetPropertyFactory(PlottedProperty property);
 
