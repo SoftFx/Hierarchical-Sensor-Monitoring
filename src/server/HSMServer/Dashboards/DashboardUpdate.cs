@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 
 namespace HSMServer.Dashboards
 {
@@ -36,7 +35,7 @@ namespace HSMServer.Dashboards
 
         public bool? AutoScale { get; set; }
 
-        public TooltipHovermode? Hovermode { get;  init; }
+        public TooltipHovermode? Hovermode { get; init; }
 
 
         public bool NeedSourceRebuild => IsAggregateValues.HasValue || MinY.HasValue || MaxY.HasValue || AutoScale.HasValue;
@@ -47,6 +46,20 @@ namespace HSMServer.Dashboards
         {
             Id = panelId;
         }
+    }
+
+
+    public sealed record PanelTooltipUpdateDto
+    {
+        public Guid Id { get; set; }
+
+        public TooltipHovermode Hovermode { get; set; }
+
+        internal PanelUpdate ToUpdate() =>
+            new(Id)
+            {
+                Hovermode = Hovermode
+            };
     }
 
 

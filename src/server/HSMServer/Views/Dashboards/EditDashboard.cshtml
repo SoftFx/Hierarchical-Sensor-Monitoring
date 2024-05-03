@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Controllers
 @using HSMServer.Constants
 @using HSMServer.Model.Dashboards
+@using HSMServer.Model.Authentication
 
 @model DashboardViewModel
 
@@ -9,6 +10,7 @@
 @{
     var isModify = Model.IsModify;
     var isEmptyDashboard = Model.Panels.Count == 0;
+    var userIsAdmin = Context.User is User user && user.IsAdmin;
 
     ViewData["Title"] = "Dashboard";
 }
@@ -20,11 +22,14 @@
             <div class="d-flex justify-content-between mb-1">
                 <h5 id="name">Dashboard: @Model.Name</h5>
 
-                <a class="icon-link text-nowrap" href="javascript:editDahsboardSettings();" title='edit dashboard settings'>
-                    <i class='fas fa-edit'>
-                        <use xlink:href="#box-seam">
-                    </i> Edit
-                </a>
+                @if (userIsAdmin)
+                {
+                    <a class="icon-link text-nowrap" href="javascript:editDahsboardSettings();" title='edit dashboard settings'>
+                        <i class='fas fa-edit'>
+                            <use xlink:href="#box-seam">
+                        </i> Edit
+                    </a>
+                }
             </div>
 
             <div id="markdown_description">@Model.Description</div>
@@ -61,13 +66,16 @@
             </div>
 
 
-            <select asp-for="FromPeriod" asp-items="DashboardViewModel.Periods" form="saveDashBoardForm" id="from_select" class="form-select" style="width: auto"></select>
+            <select asp-for="FromPeriod" asp-items="DashboardViewModel.Periods" form="saveDashBoardForm" id="from_select" class="form-select" style="width: auto" disabled="@(!userIsAdmin)"></select>
 
-            <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? string.Empty : "d-none")" href="javascript:addPanel();">
-                <i class="fa-solid fa-plus">
-                    <use xlink:href="#box-seam">
-                </i> Add panel
-            </a>
+            @if (userIsAdmin)
+            {
+                <a id="addPanel" class="icon-link text-nowrap ms-2 @(isModify ? string.Empty : "d-none")" href="javascript:addPanel();">
+                    <i class="fa-solid fa-plus">
+                        <use xlink:href="#box-seam">
+                    </i> Add panel
+                </a>
+            }
         </div>
     </div>
 
