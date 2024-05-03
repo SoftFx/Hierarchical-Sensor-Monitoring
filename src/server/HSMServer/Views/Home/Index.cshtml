@@ -90,9 +90,9 @@
             $("#tableHistoryRefreshButton").removeClass("d-none");
         }
         if (dataObject.status === 'Error')
-            $('#errorInfo_'+id).removeClass('d-none').text(dataObject.status + ': ' + dataObject.validationError);
+            $(`#errorInfo_${id}`).removeClass('d-none').addClass('d-flex').text(`${dataObject.status}: ${dataObject.validationError}`);
         else
-            $('#errorInfo_'+id).addClass('d-none');
+            $(`#errorInfo_${id}`).removeClass('d-flex').addClass('d-none');
     }
 
     function updateGeneralInfo(selectedNodeId) {
