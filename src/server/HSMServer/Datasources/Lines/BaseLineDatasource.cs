@@ -2,13 +2,11 @@
 using HSMServer.Dashboards;
 using HSMServer.Datasources.Aggregators;
 using System;
-using System.Numerics;
 
-namespace HSMServer.Datasources
+namespace HSMServer.Datasources.Lines
 {
     public abstract class BaseLineDatasource<TValue, TProp, TChart> : SensorDatasourceBase
         where TValue : BaseValue
-        where TChart : INumber<TChart>
     {
         protected Func<TValue, TProp> _getPropertyFactory;
 
@@ -25,7 +23,7 @@ namespace HSMServer.Datasources
         {
             TChart ToChartValue(BaseValue value) => ConvertToChartType(_getPropertyFactory((TValue)value));
 
-            DataAggregator = new LineDataAggregator<TChart>(ToChartValue);
+            DataAggregator = BuildDataAggregator(ToChartValue);
         }
 
 
@@ -42,6 +40,8 @@ namespace HSMServer.Datasources
         protected abstract Func<TValue, TProp> GetPropertyFactory(PlottedProperty property);
 
         protected abstract TChart ConvertToChartType(TProp value);
+
+        protected abstract BaseDataAggregator BuildDataAggregator(Func<BaseValue, TChart> converter);
 
 
         protected Exception BuildException(PlottedProperty property) => new($"Unsupport cast property for {typeof(TValue).Name} {property} from {typeof(TProp).Name} to {typeof(TChart).Name}");

@@ -44,6 +44,8 @@ namespace HSMServer.Datasources
                 SensorType.DoubleBar when property.IsBarIntLine() => new DoubleBarIntLineSource(),
                 SensorType.DoubleBar when property.IsBarDoubleLine() => new DoubleBarNullDoubleSource(),
 
+                SensorType.Version when property.IsInstantView() => new VersionSensorLineDatasource(),
+
                 SensorType.Boolean => new PointDatasource(),
 
                 _ => throw new Exception($"History visualization for {sensor.Type} sensor is not supported")

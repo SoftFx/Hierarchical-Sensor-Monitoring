@@ -5,7 +5,7 @@ using System.Numerics;
 
 namespace HSMServer.Datasources
 {
-    public abstract class InstantBaseLineDatasource<TValue, TProp, TChart> : BaseLineDatasource<TValue, TProp, TChart>
+    public abstract class InstantBaseLineDatasource<TValue, TProp, TChart> : BaseNumberLineDatasource<TValue, TProp, TChart>
             where TValue : BaseValue<TProp>
             where TChart : INumber<TChart>
     {
@@ -38,7 +38,7 @@ namespace HSMServer.Datasources
     }
 
 
-    public abstract class InstantBaseNullDoubleLineDatasource<TValue> : BaseLineDatasource<TValue, double?, double>
+    public abstract class InstantBaseNullDoubleLineDatasource<TValue> : BaseNumberLineDatasource<TValue, double?, double>
        where TValue : BaseInstantValue
     {
         protected override Func<TValue, double?> GetPropertyFactory(PlottedProperty property) => property switch
