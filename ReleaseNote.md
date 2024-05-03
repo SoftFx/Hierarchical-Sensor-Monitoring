@@ -102,11 +102,13 @@ Each node includes the next sensors:
 * How to install server [guide](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Installation) has been uploaded.
 
 # Datacollector v.3.3.1
+* **netstandart2.0 target framework has been changed to net8**
 * **DefaultChatsMode** has been added in sensor settings. Default value is **FromParent**.
 * **AlertDestinationMode** has been added in Alerts API. Default value is **DefaultChats**.
+* New **EMA (Mean)** alert has been added for **Time in GC** sensor.
+* New custom logic for **ProcessTimeInGC** sensor with **net8** framework has been added.
 
 # HSMDataObjects v.3.1.4
 
 * New **AlertDestinationMode** for alerts has been added: **DefaultChats**, **NotInitialized**, **AllChats**.
 * New **DefaultChatsMode** for sensors has been added: **FromParent**, **NotInitialized**, **Empty**
-* New **EMA (Mean)** alert has been added for **Time in GC** sensor.
