@@ -37,13 +37,21 @@ namespace HSMServer.Datasources.Lines
         }
 
 
+        protected abstract BaseDataAggregator BuildDataAggregator(Func<BaseValue, TChart> converter);
+
         protected abstract Func<TValue, TProp> GetPropertyFactory(PlottedProperty property);
 
         protected abstract TChart ConvertToChartType(TProp value);
 
-        protected abstract BaseDataAggregator BuildDataAggregator(Func<BaseValue, TChart> converter);
 
+        protected static Exception BuildException(PlottedProperty property) => new($"Unsupport cast property for {typeof(TValue).Name} {property} from {typeof(TProp).Name} to {typeof(TChart).Name}");
 
-        protected Exception BuildException(PlottedProperty property) => new($"Unsupport cast property for {typeof(TValue).Name} {property} from {typeof(TProp).Name} to {typeof(TChart).Name}");
+        protected static Func<T, P> GetValuePropertyFactory<T, P>(PlottedProperty property) where T : BaseValue<P> =>
+            property switch
+            {
+                PlottedProperty.Value => v => v.Value,
+
+                _ => throw BuildException(property),
+            };
     }
 }

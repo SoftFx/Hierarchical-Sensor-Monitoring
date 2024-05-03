@@ -9,12 +9,8 @@ namespace HSMServer.Datasources
             where TValue : BaseValue<TProp>
             where TChart : INumber<TChart>
     {
-        protected override Func<TValue, TProp> GetPropertyFactory(PlottedProperty property) => property switch
-        {
-            PlottedProperty.Value => v => v.Value,
-
-            _ => throw BuildException(property),
-        };
+        protected override Func<TValue, TProp> GetPropertyFactory(PlottedProperty property) =>
+            GetValuePropertyFactory<TValue, TProp>(property);
     }
 
     public sealed class IntLineDatasource : InstantBaseLineDatasource<IntegerValue, int, int>

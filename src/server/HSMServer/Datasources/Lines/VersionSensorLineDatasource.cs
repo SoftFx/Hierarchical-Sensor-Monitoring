@@ -18,9 +18,7 @@ namespace HSMServer.Datasources
             throw new NotImplementedException();
         }
 
-        protected override Func<VersionValue, Version> GetPropertyFactory(PlottedProperty property)
-        {
-            throw new NotImplementedException();
-        }
+        protected override Func<VersionValue, Version> GetPropertyFactory(PlottedProperty property) =>
+            GetValuePropertyFactory<VersionValue, Version>(property);
     }
 }
