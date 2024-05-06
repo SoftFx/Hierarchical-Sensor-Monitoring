@@ -9,6 +9,10 @@ namespace HSMServer.TagHelpers
     {
         private const string TagHelperName = "is-visible";
 
+        private const string HideElementClass = "d-none";
+        private const string ShowElementClass = "d-flex";
+
+
         [HtmlAttributeName("")]
         public bool IsVisible { get; set; }
 
@@ -17,13 +21,13 @@ namespace HSMServer.TagHelpers
         {
             if (IsVisible)
             {
-                output.RemoveClass("d-none", HtmlEncoder.Default);
-                output.AddClass("d-flex", HtmlEncoder.Default);
+                output.RemoveClass(HideElementClass, HtmlEncoder.Default);
+                output.AddClass(ShowElementClass, HtmlEncoder.Default);
             }
             else
             {
-                output.RemoveClass("d-flex", HtmlEncoder.Default);
-                output.AddClass("d-none", HtmlEncoder.Default);
+                output.RemoveClass(ShowElementClass, HtmlEncoder.Default);
+                output.AddClass(HideElementClass, HtmlEncoder.Default);
             }
         }
     }
