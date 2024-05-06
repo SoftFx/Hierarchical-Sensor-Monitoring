@@ -28,10 +28,17 @@ namespace HSMServer.Core.TreeStateSnapshot
 
             if (_db.TryGetLastNode(out var node))
             {
-                _sensors = new StateCollection<LastSensorState, SensorStateEntity>(node.Sensors);
-                _keys = new StateCollection<LastKeyState, LastKeyStateEntity>(node.Keys);
-                
-                IsFinal = node.IsFinal;
+                try
+                {
+                    _sensors = new StateCollection<LastSensorState, SensorStateEntity>(node.Sensors);
+                    _keys = new StateCollection<LastKeyState, LastKeyStateEntity>(node.Keys);
+
+                    IsFinal = node.IsFinal;
+                }
+                catch 
+                {
+                    HasData = false;
+                }
             }
             else
                 HasData = false;
