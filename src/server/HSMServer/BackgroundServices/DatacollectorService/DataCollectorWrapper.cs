@@ -30,6 +30,7 @@ namespace HSMServer.BackgroundServices
 
         public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor)
         {
+            optionsMonitor.OnChange((o, a) => { });
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
             var loggerOptions = new LoggerOptions()
             {
