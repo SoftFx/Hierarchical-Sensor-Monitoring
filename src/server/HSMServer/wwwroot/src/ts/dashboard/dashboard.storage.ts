@@ -1,8 +1,8 @@
 ﻿import {Dictionary, IPanelSettings} from "./dashboard.interfaces";
 import * as moment from "moment";
-import {Layout} from "./plotUpdate";
 import {PanelSettings} from "./dashboard.classes";
-import {HttpPanelService} from "./services/http-panel-service";
+import {Layout} from "../plotUpdate";
+import {HttpPanelService} from "../services/http-panel-service";
 
 export const httpPanelService : HttpPanelService = new HttpPanelService();
 

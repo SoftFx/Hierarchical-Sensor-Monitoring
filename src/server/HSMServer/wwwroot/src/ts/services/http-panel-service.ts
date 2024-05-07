@@ -1,4 +1,4 @@
-﻿import {PanelSettings} from "../dashboard.classes";
+﻿import {PanelSettings} from "../dashboard/dashboard.classes";
 
 export class HttpPanelService {
     async updateSettings(settings: PanelSettings) {

@@ -1,4 +1,4 @@
-import {HoverModeEnum} from "./types";
+import {HoverModeEnum} from "../types";
 
 export interface Dictionary<T> {
     [Key: string]: T;

@@ -1,8 +1,8 @@
 import {convertToGraphData} from "./plotting";
 import {Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot} from "./plots";
 import {Dashboard} from "../ts/dashboardT";
-import {DashboardStorage, Panel} from "../ts/dashboard.storage";
 import {Layout} from "../ts/plotUpdate";
+import {DashboardStorage, Panel} from "../ts/dashboard/dashboard.storage";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();

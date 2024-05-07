@@ -1,19 +1,17 @@
 ﻿import {Plot} from "./plot";
-import {Data, Layout, ScatterData, TypedArray} from "plotly.js";
 import {VersionEntity, VersionValue} from "../entities/version-entity";
 
-export class VersionPlot extends Plot<Date, string>{
+export class VersionPlot extends Plot<string>{
     override type = 'scatter';
     override mode = 'lines+markers';
     override hovertemplate = "%{customdata}<extra></extra>";
     
     constructor(values: VersionValue[]) {
         super();
-
-        let test:string[] = [];
-        values.forEach(x => {
-            test.push(this.getY(x.value));
-        })
+        // let test:string[] = [];
+        // values.forEach(x => {
+        //     test.push(this.getY(x.value));
+        // })
 
         for (let i of values) {
             this.x.push(i.time);

@@ -1,7 +1,7 @@
 ﻿import {Layout, ScatterData} from "plotly.js";
 import {Colors} from "../../js/plots";
 
-export class Plot<T, U> {
+export class Plot<T> {
     data: ScatterData;
     layout: Layout;
     
@@ -25,8 +25,8 @@ export class Plot<T, U> {
         }
     };
     
-    x: T[] = [];
-    y: U[] = [];
+    x: Date[] = [];
+    y: T[] = [];
     customdata: string[] = [];
     
     constructor() {

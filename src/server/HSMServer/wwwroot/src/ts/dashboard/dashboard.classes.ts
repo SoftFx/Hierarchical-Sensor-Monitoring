@@ -1,6 +1,6 @@
-﻿import {Plot} from "../js/plots";
-import {HoverModeEnum} from "./types";
-import {IPanelSettings} from "./dashboard.interfaces";
+﻿import {IPanelSettings} from "./dashboard.interfaces";
+import {HoverModeEnum} from "../types";
+import {Plot} from "../../js/plots";
 
 export class PlotUpdate {
     x: any[] = [];

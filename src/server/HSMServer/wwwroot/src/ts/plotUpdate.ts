@@ -1,9 +1,9 @@
 import {Data, PlotlyHTMLElement} from "plotly.js";
-import {IPanel, ISourceUpdate} from "./dashboard.interfaces";
 import {Plot, TimeSpanPlot} from "../js/plots";
-import {PanelSettings, PlotUpdate, Redraw} from "./dashboard.classes";
 import {dashboardStorage} from "../js/dashboard";
 import {HovermodeUtils} from "./services/hovermode.util";
+import {IPanel, ISourceUpdate} from "./dashboard/dashboard.interfaces";
+import {PanelSettings, PlotUpdate, Redraw} from "./dashboard/dashboard.classes";
 
 
 export namespace DataUpdate {
