@@ -6,7 +6,10 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
+using HSMServer.JsonConverters;
+using NLog.Targets;
 
 namespace HSMServer.Controllers
 {
@@ -232,9 +235,14 @@ namespace HSMServer.Controllers
             {
                 var response = await datasource.Source.Initialize();
 
-                return Json(new DatasourceViewModel(response, datasource, showProduct));
+                var options = new JsonSerializerOptions()
+                {
+                    Converters = { new VersionSourceConverter() },
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                };
+                
+                return Json(new DatasourceViewModel(response, datasource, showProduct), options);
             }
-
             return Json(new
             {
                 error

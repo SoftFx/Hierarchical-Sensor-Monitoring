@@ -9,6 +9,7 @@
     ServiceStatusIcon,
     TimeSpanPlot
 } from "./plots";
+import {VersionPlot} from "../ts/plots/version-plot";
 
 export const serviceAlivePlotName  = "ServiceAlive";
 export const serviceStatusPlotName  = "ServiceStatus";
@@ -212,6 +213,8 @@ export function convertToGraphData(graphData, sensorInfo, graphName, color = Col
                           : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 7:
             return new TimeSpanPlot(escapedData, sensorInfo.units, color, range);
+        case 8:
+            return new VersionPlot(escapedData)
         case 9:
             return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range);
         case 10:
