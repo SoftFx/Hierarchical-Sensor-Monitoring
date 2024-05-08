@@ -7,6 +7,10 @@ import {DashboardStorage, Panel} from "../ts/dashboard/dashboard.storage";
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
 
+window.test = function () {
+    
+}
+
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();
@@ -129,6 +133,8 @@ function checkForYRange(plot) {
 }
 
 window.insertSourcePlot = function (data, id, panelId, dashboardId, range = undefined) {
+    dashboardStorage.test(data);
+    
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)

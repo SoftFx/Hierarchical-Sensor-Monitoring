@@ -1,17 +1,16 @@
 ﻿import {Plot} from "./plot";
-import {VersionEntity, VersionValue} from "../entities/version-entity";
+import {IVersionEntity, IVersionValue} from "../entities/version-entity";
 
 export class VersionPlot extends Plot<string>{
     override type = 'scatter';
     override mode = 'lines+markers';
-    override hovertemplate = "%{customdata}<extra></extra>";
+    hovertemplate = "%{customdata}<extra></extra>";
     
-    constructor(values: VersionValue[]) {
-        super();
-        // let test:string[] = [];
-        // values.forEach(x => {
-        //     test.push(this.getY(x.value));
-        // })
+    constructor(values: IVersionValue[], color:string, shape:string) {
+        super({
+            color: color,
+            shape: shape
+        });
 
         for (let i of values) {
             this.x.push(i.time);
@@ -30,7 +29,7 @@ export class VersionPlot extends Plot<string>{
     //                         0
     // }
 
-    getY(value: VersionEntity) : string {
+    getY(value: IVersionEntity) : string {
         return `${value.major}.${value.minor}${value.build}${value.revision}${value.majorRevision}${value.minorRevision}`;
     }
 }

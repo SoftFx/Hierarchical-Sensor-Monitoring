@@ -214,7 +214,7 @@ export function convertToGraphData(graphData, sensorInfo, graphName, color = Col
         case 7:
             return new TimeSpanPlot(escapedData, sensorInfo.units, color, range);
         case 8:
-            return new VersionPlot(escapedData)
+            return new VersionPlot(escapedData, color, shape)
         case 9:
             return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range);
         case 10:

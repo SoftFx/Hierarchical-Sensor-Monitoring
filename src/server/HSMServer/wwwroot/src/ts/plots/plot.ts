@@ -1,23 +1,25 @@
-﻿import {Layout, ScatterData} from "plotly.js";
+﻿import {Layout, ScatterData, ScatterLine} from "plotly.js";
 import {Colors} from "../../js/plots";
+import {ISourceSettings} from "../dashboard/dashboard.interfaces";
 
 export class Plot<T> {
     data: ScatterData;
     layout: Layout;
     
-    protected type : string;
-    protected mode: string;
+    type : string;
+    mode: string;
+    hovertemplate = "%{x}, %{customdata}<extra></extra>";
+    line = {
+        color: Colors.defaultTrace,
+        shape: ""
+    }
 
     showlegend = false;
-    protected hovertemplate = "%{x}, %{customdata}<extra></extra>";
-    customColor = Colors.default;
     autoscaleY = true;
     
     marker = {
-        // @ts-ignore
-        color: [],
-        // @ts-ignore
-        size: [],
+        color: Array<string>,
+        size: Array<number>,
         opacity: 1,
         line: {
             color: Colors.line,
@@ -29,7 +31,9 @@ export class Plot<T> {
     y: T[] = [];
     customdata: string[] = [];
     
-    constructor() {
+    constructor(settings: Partial<ISourceSettings>) {
+        this.line.color = settings.color;
+        this.line.shape = settings.shape;
     }
 
     getPlotData() {

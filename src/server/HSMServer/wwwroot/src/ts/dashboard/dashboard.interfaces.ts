@@ -1,4 +1,5 @@
 import {HoverModeEnum} from "../types";
+import {Datum} from "plotly.js";
 
 export interface Dictionary<T> {
     [Key: string]: T;
@@ -40,4 +41,30 @@ export interface IPanelSettings {
     height: number
     x: number
     y:number
+}
+
+export interface ISourceSettings{
+    id: string,
+    panelId: string,
+    dashboardId: string,
+    chartType: number,
+    color: string,
+    label: string,
+    shape: string,
+    
+    values: IValue[]
+    range: [Datum, Datum] | boolean,
+    sensorInfo: ISensorInfo
+}
+
+interface ISensorInfo{
+    realType: number,
+    plotType: number,
+    units: string
+}
+
+interface IValue{
+    time: Date,
+    tooltip: string,
+    value: any
 }

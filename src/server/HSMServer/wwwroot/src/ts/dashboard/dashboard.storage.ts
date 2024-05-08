@@ -1,4 +1,4 @@
-﻿import {Dictionary, IPanelSettings} from "./dashboard.interfaces";
+﻿import {Dictionary, IPanelSettings, ISourceSettings} from "./dashboard.interfaces";
 import * as moment from "moment";
 import {PanelSettings} from "./dashboard.classes";
 import {Layout} from "../plotUpdate";
@@ -36,6 +36,11 @@ export class DashboardStorage {
                 panel.updateNotify();
             });
         }, 5000);
+    }
+    
+    test(data: ISourceSettings){
+        console.log(data.values);
+        console.log(data.chartType);
     }
 }
 
