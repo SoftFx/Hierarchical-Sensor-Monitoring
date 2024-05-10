@@ -23,6 +23,12 @@ export namespace DataUpdate {
 
 
         async updateSources(sourceUpdates: ISourceUpdate[]) {
+            let panel = dashboardStorage.getPanel(this.panel.id);
+            if (panel.settings.isSingleMode){
+                
+                return;
+            }
+            
             let promises: Promise<boolean>[] = [];
             let plotDiv = $(`#panelChart_${this.panel.id}`)[0] as PlotlyHTMLElement;
             for (let sourceUpdate of sourceUpdates)

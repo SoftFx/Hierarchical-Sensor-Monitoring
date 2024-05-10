@@ -40,6 +40,8 @@ namespace HSMServer.Dashboards
 
         public TooltipHovermode Hovermode { get; private set; } = TooltipHovermode.X;
 
+        public bool IsSingleMode { get; private set; } = false;
+
 
         public PanelSettings()
         {
@@ -58,6 +60,7 @@ namespace HSMServer.Dashboards
             ShowLegend = update.ShowLegend ?? ShowLegend;
 
             Hovermode = update.Hovermode ?? Hovermode;
+            IsSingleMode = update.IsSingleMode ?? IsSingleMode;
         }
 
         public PanelSettings FromEntity(PanelSettingsEntity entity)
@@ -71,6 +74,7 @@ namespace HSMServer.Dashboards
             ShowLegend = entity.ShowLegend;
 
             Hovermode = (TooltipHovermode)entity.Hovermode;
+            IsSingleMode = entity.IsSingleMode;
             
             return this;
         }
@@ -87,6 +91,7 @@ namespace HSMServer.Dashboards
                 ShowLegend = ShowLegend,
                 
                 Hovermode = (byte)Hovermode,
+                IsSingleMode = IsSingleMode
             };
     }
 }

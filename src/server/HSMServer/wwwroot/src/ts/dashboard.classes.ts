@@ -25,7 +25,8 @@ export class PanelSettings {
     hoverDistance: number
     
     showLegend: boolean
-    
+    isSingleMode: boolean
+
     width: number
     height: number
     x: number
@@ -38,6 +39,7 @@ export class PanelSettings {
         this.hoverDistance = 20;
         
         this.showLegend = settings.showLegend;
+        this.isSingleMode = settings.isSingleMode;
         
         this.width = settings.width;
         this.height = settings.height;

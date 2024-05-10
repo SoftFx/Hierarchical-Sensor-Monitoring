@@ -23,6 +23,8 @@ namespace HSMServer.Dashboards
         public double? Y { get; init; }
 
 
+        public bool? IsSingleMode { get; init; }
+        
         public bool? ShowLegend { get; init; }
 
         public bool? ShowProduct { get; init; }
@@ -49,16 +51,19 @@ namespace HSMServer.Dashboards
     }
 
 
-    public sealed record PanelTooltipUpdateDto
+    public sealed record PanelUpdateDto
     {
         public Guid Id { get; set; }
 
-        public TooltipHovermode Hovermode { get; set; }
+        public TooltipHovermode? Hovermode { get; set; }
+        
+        public bool? IsSingleMode { get; set; }
 
         internal PanelUpdate ToUpdate() =>
             new(Id)
             {
-                Hovermode = Hovermode
+                Hovermode = Hovermode,
+                IsSingleMode = IsSingleMode
             };
     }
 

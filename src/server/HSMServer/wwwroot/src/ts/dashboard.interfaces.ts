@@ -35,6 +35,7 @@ export interface IPanelSettings {
     hoverDistance: number
 
     showLegend: boolean
+    isSingleMode: boolean
 
     width: number
     height: number

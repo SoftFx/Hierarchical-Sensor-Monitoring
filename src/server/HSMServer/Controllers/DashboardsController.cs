@@ -201,11 +201,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpPut("Dashboards/{dashboardId:guid}/Panels")]
-        public IActionResult UpdatePanelSettings([FromBody] PanelTooltipUpdateDto panelTooltipUpdate, Guid dashboardId)
+        public IActionResult UpdatePanelSettings([FromBody] PanelUpdateDto panelUpdate, Guid dashboardId)
         {
-            if (panelTooltipUpdate is not null && TryGetPanel(dashboardId, panelTooltipUpdate.Id, out var panel))
+            if (panelUpdate is not null && TryGetPanel(dashboardId, panelUpdate.Id, out var panel))
             {
-                panel.NotifyUpdate(panelTooltipUpdate.ToUpdate());
+                panel.NotifyUpdate(panelUpdate.ToUpdate());
 
                 return Ok("Successfully updated");
             }
