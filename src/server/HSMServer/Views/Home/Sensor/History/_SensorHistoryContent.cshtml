@@ -18,7 +18,7 @@
             <select id="history_period" class="me-2">
                 @foreach (var period in Enum.GetValues<HistoryPeriod>())
                 {
-                    <option value="@period" @(period is HistoryPeriod.Default ? "selected" : string.Empty)>@period.GetDisplayName()</option>
+                    <!option value="@period" @(period is HistoryPeriod.Default ? "selected" : string.Empty)>@period.GetDisplayName()</!option>
                 }
             </select>
 
