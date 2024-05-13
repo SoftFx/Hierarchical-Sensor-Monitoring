@@ -94,23 +94,20 @@ namespace HSMServer.Core.Cache.UpdateEntities
     {
         public Dictionary<Guid, string> Chats { get; } = [];
 
-        public bool? UseDefaultChats { get; }
-
-        public bool? AllChats { get; }
+        public PolicyDestinationMode? Mode { get; }
 
 
-        public PolicyDestinationUpdate(bool? allChats = false, bool? useDefaultChat = true)
+        public PolicyDestinationUpdate(PolicyDestinationMode? mode = null)
         {
-            AllChats = allChats;
-            UseDefaultChats = useDefaultChat;
+            Mode = mode;
         }
 
-        public PolicyDestinationUpdate(Dictionary<Guid, string> chats, bool? allChats = null, bool? useDefaultChat = null) : this(allChats, useDefaultChat)
+        public PolicyDestinationUpdate(Dictionary<Guid, string> chats, PolicyDestinationMode? mode = null) : this(mode)
         {
             Chats = chats;
         }
 
-        public PolicyDestinationUpdate(PolicyDestination destination) : this(destination.AllChats, destination.UseDefaultChats)
+        public PolicyDestinationUpdate(PolicyDestination destination) : this(destination.Mode)
         {
             Chats = new Dictionary<Guid, string>(destination.Chats);
         }

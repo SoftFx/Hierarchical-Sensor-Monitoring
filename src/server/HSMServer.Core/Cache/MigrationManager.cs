@@ -132,7 +132,7 @@ namespace HSMServer.Core.Cache
         {
             static bool IsTarget(Policy policy) => policy.Destination.IsNotInitialized;
 
-            static PolicyUpdate Migration(PolicyUpdate update) => ToDefaultChatDestination(update);
+            static PolicyUpdate Migration(PolicyUpdate update) => ToFromParentDestination(update);
 
             return TryMigratePolicy(sensor, IsTarget, Migration, out update);
         }
@@ -149,7 +149,7 @@ namespace HSMServer.Core.Cache
         {
             static bool IsTarget(Policy policy) => policy.Destination.IsNotInitialized;
 
-            static PolicyUpdate Migration(PolicyUpdate update) => ToDefaultChatDestination(update);
+            static PolicyUpdate Migration(PolicyUpdate update) => ToFromParentDestination(update);
 
             return TryMigrateTtlPolicy(node, IsTarget, Migration, out update);
         }
@@ -393,7 +393,7 @@ namespace HSMServer.Core.Cache
             Time = new DateTime(1, 1, 1, 12, 0, 0, DateTimeKind.Utc),
         };
 
-        private static PolicyUpdate ToDefaultChatDestination(PolicyUpdate update) =>
-            update with { Destination = new PolicyDestinationUpdate(useDefaultChat: true) };
+        private static PolicyUpdate ToFromParentDestination(PolicyUpdate update) =>
+            update with { Destination = new PolicyDestinationUpdate(PolicyDestinationMode.FromParent) };
     }
 }

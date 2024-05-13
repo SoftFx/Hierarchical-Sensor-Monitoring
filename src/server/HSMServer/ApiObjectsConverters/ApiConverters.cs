@@ -269,7 +269,7 @@ namespace HSMServer.ApiObjectsConverters
         public static PolicyUpdate Convert(this AlertUpdateRequest request, InitiatorInfo initiator) => new()
         {
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
-            Destination = new(request.DestinationMode is AlertDestinationMode.AllChats, request.DestinationMode is AlertDestinationMode.DefaultChats),
+            Destination = new(request.DestinationMode.Convert()),
 
             Schedule = new PolicyScheduleUpdate()
             {
@@ -450,6 +450,15 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Hourly => Core.Model.Policies.AlertRepeatMode.Hourly,
                 HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Daily => Core.Model.Policies.AlertRepeatMode.Daily,
                 HSMSensorDataObjects.SensorRequests.AlertRepeatMode.Weekly => Core.Model.Policies.AlertRepeatMode.Weekly,
+                _ => throw new NotImplementedException(),
+            };
+
+        private static PolicyDestinationMode Convert(this AlertDestinationMode destination) =>
+            destination switch
+            {
+                AlertDestinationMode.NotInitialized => PolicyDestinationMode.NotInitialized,
+                AlertDestinationMode.DefaultChats => PolicyDestinationMode.FromParent,
+                AlertDestinationMode.AllChats => PolicyDestinationMode.AllChats,
                 _ => throw new NotImplementedException(),
             };
     }

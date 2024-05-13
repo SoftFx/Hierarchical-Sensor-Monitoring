@@ -36,7 +36,7 @@ namespace HSMServer.Core.Model.NodeSettings
 
         public bool IsFromFolder => Mode is DefaultChatsMode.FromFolder;
 
-        public bool AllChats => Mode is DefaultChatsMode.All;
+        public bool IsAllChats => Mode is DefaultChatsMode.All;
 
 
         public PolicyDestinationSettings() : base() { }

@@ -104,7 +104,7 @@ namespace HSMServer.Model.DataAlerts
 
         private ActionProperties GetActions(Dictionary<Guid, string> availavleChats)
         {
-            PolicyDestinationUpdate destination = new(useDefaultChat: false);
+            PolicyDestinationUpdate destination = new();
             SensorStatus status = SensorStatus.Ok;
             PolicyScheduleUpdate schedule = null;
             string comment = null;
@@ -120,13 +120,16 @@ namespace HSMServer.Model.DataAlerts
                         ? new(0)
                         : action.Chats?.ToDictionary(k => k.Value, v => availavleChats[v.Value]) ?? new(0);
 
+                    PolicyDestinationMode? mode = allChats ? PolicyDestinationMode.AllChats : defaultChat ? PolicyDestinationMode.FromParent : null;
+
                     schedule = new PolicyScheduleUpdate()
                     {
                         Time = action.ScheduleStartTime.ToCoreScheduleTime(),
                         RepeatMode = action.ScheduleRepeatMode.ToCore(),
                         InstantSend = action.ScheduleInstantSend
                     };
-                    destination = new PolicyDestinationUpdate(chats, allChats, defaultChat);
+
+                    destination = new PolicyDestinationUpdate(chats, mode);
                     comment = action.Comment;
                 }
                 else if (action.Action == ActionType.ShowIcon)
@@ -182,9 +185,9 @@ namespace HSMServer.Model.DataAlerts
                     ScheduleInstantSend = policy.Schedule.InstantSend,
                 };
 
-                if (policy.Destination.AllChats)
+                if (policy.Destination.IsAllChats)
                     action.Chats.Add(ActionViewModel.AllChatsId);
-                else if (policy.Destination.UseDefaultChats)
+                else if (policy.Destination.IsFromParentChats)
                     action.Chats.Add(ActionViewModel.DefaultChatId);
                 else
                     foreach (var chat in policy.Destination.Chats)

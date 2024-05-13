@@ -59,11 +59,11 @@ namespace HSMServer.Model.DataAlerts
             ScheduledRepeatMode = policy.Schedule.RepeatMode; // TODO: null if None or Immediatly?
             ScheduledInstantSend = policy.Schedule.InstantSend;
 
-            if (!policy.Destination.AllChats)
+            if (!policy.Destination.IsAllChats)
             {
                 Chats = [];
 
-                if (policy.Destination.UseDefaultChats)
+                if (policy.Destination.IsFromParentChats)
                     Chats.Add(DefaultChat);
                 else
                     foreach (var (id, _) in policy.Destination.Chats)
@@ -80,6 +80,10 @@ namespace HSMServer.Model.DataAlerts
             var allChats = Chats is null;
             var defaultChat = Chats?.Any(c => c.Equals(DefaultChat, StringComparison.InvariantCultureIgnoreCase)) ?? false;
 
+            PolicyDestinationMode? mode = allChats ? PolicyDestinationMode.AllChats : defaultChat ? PolicyDestinationMode.FromParent : null;
+
+            var chats = !allChats && !defaultChat ? Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v) : [];
+
             return new()
             {
                 Icon = Icon,
@@ -94,7 +98,7 @@ namespace HSMServer.Model.DataAlerts
                     RepeatMode = ScheduledRepeatMode,
                     InstantSend = ScheduledInstantSend,
                 },
-                Destination = new PolicyDestinationUpdate(!allChats && !defaultChat ? Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v) : [], allChats, defaultChat),
+                Destination = new PolicyDestinationUpdate(chats, mode),
             };
         }
     }
