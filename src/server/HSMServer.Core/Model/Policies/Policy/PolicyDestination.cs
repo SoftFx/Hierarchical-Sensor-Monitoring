@@ -38,6 +38,8 @@ namespace HSMServer.Core.Model.Policies
 
         public bool IsAllChats => Mode is PolicyDestinationMode.AllChats;
 
+        public bool IsCustom => Mode is PolicyDestinationMode.Custom;
+
         public bool IsEmpty => Mode is PolicyDestinationMode.Empty;
 
 
@@ -71,7 +73,8 @@ namespace HSMServer.Core.Model.Policies
                 foreach (var (chatId, name) in update.Chats)
                     Chats.Add(chatId, name);
 
-                Mode = PolicyDestinationMode.Custom;
+                if (Chats.Count > 0)
+                    Mode = PolicyDestinationMode.Custom;
             }
         }
 
