@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using System;
@@ -94,6 +95,8 @@ namespace HSMServer.Core.Model
     {
         private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
 
+        public override SensorSettingsCollection Settings { get; } = new();
+
         public override SensorPolicyCollection Policies { get; }
 
 
@@ -159,6 +162,9 @@ namespace HSMServer.Core.Model
 
         public BaseSensorModel(SensorEntity entity) : base(entity)
         {
+            if (entity.Settings is not null)
+                Settings.SetSettings(entity.Settings);
+
             State = (SensorState)entity.State;
             OriginalUnit = (Unit?)entity.OriginalUnit;
             Integration = (Integration)entity.Integration;
@@ -236,7 +242,6 @@ namespace HSMServer.Core.Model
             Policies = Policies.Select(u => u.Id.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
-            DefaultChatsSettings = Settings.DefaultChats.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
             ChangeTable = ChangeTable.ToEntity(),
         };

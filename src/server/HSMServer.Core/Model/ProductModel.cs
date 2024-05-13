@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Concurrent;
@@ -25,6 +26,8 @@ namespace HSMServer.Core.Model
 
         public override ProductPolicyCollection Policies { get; } = new();
 
+        public override NodeSettingsCollection Settings { get; } = new();
+
 
         public ProductState State { get; }
 
@@ -43,6 +46,9 @@ namespace HSMServer.Core.Model
 
         public ProductModel(ProductEntity entity) : base(entity)
         {
+            if (entity.Settings is not null)
+                Settings.SetSettings(entity.Settings, entity.DefaultChatsSettings);
+
             State = (ProductState)entity.State;
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
 

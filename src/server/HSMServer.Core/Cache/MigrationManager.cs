@@ -121,9 +121,6 @@ namespace HSMServer.Core.Cache
 
                 if (TryMigrateSensorTTLPolicyDestinationToDefaultChat(sensor, out update))
                     yield return update;
-
-                if (TryMigrateSensorDefaultChatToParent(sensor, out update))
-                    yield return update;
             }
         }
 
@@ -310,21 +307,14 @@ namespace HSMServer.Core.Cache
             return TryMigrateNodeDefaultChartToParent(product, IsTarget, DefaultChatsMode.FromParent, out update);
         }
 
-        private static bool TryMigrateSensorDefaultChatToParent(BaseSensorModel sensor, out SensorUpdate update)
-        {
-            static bool IsTarget(BaseNodeModel _) => true;
-
-            return TryMigrateNodeDefaultChartToParent(sensor, IsTarget, DefaultChatsMode.FromParent, out update);
-        }
-
-        private static bool TryMigrateNodeDefaultChartToParent<T>(BaseNodeModel node, Predicate<BaseNodeModel> isTarget, DefaultChatsMode mode, out T update)
+        private static bool TryMigrateNodeDefaultChartToParent<T>(ProductModel product, Predicate<ProductModel> isTarget, DefaultChatsMode mode, out T update)
             where T : BaseNodeUpdate, new()
         {
-            if (node.Settings.DefaultChats.CurValue.IsNotInitialized && isTarget(node))
+            if (product.Settings.DefaultChats.CurValue.IsNotInitialized && isTarget(product))
             {
                 update = new T
                 {
-                    Id = node.Id,
+                    Id = product.Id,
                     DefaultChats = new PolicyDestinationSettings(mode),
                     Initiator = _softMigrator,
                 };
