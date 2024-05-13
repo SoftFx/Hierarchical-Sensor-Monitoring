@@ -1,8 +1,9 @@
 ﻿@using HSMCommon.Constants
 @using HSMServer.Constants
 @using HSMServer.Controllers
-@using HSMServer.Model.ViewModel
-@model Dictionary<string, ConfigurationViewModel>
+@using HSMServer.Model.Configuration
+
+@model ConfigurationViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -10,116 +11,50 @@
     ViewData["Title"] = "Configuration";
 }
 
-<script>
-    var setToDefaultAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SetToDefault), ViewConstants.ConfigurationController))";
-    var saveAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SaveConfig), ViewConstants.ConfigurationController))";
-    var restartBotAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.RestartTelegramBot), ViewConstants.ConfigurationController))";
-</script>
-
-<style>
-    .default-text-field {
-        font-weight: normal;
-        color: grey;
-        font-size: inherit;
-        margin-left: 1vh;
-    }
-
-    .config-name {
-        margin-right: 1vh;
-    }
-</style>
 
 <div class="container">
-    <div class="row justify-content-center">
+    <div class="row w-100 justify-content-center">
+        <div class="d-flex justify-content-start my-3 p-0">
+            <h5>Configuration parameters</h5>
+        </div>
 
-        <div class="m-10">
-            <div class="row justify-content-start">
-                <div class="col-auto">
-                    <h5 class="my-3 ms-5">Configuration parameters</h5>
-                </div>
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="server-tab" data-bs-toggle="tab" data-bs-target="#server" type="button" role="tab" aria-controls="server" aria-selected="true">Server</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup" type="button" role="tab" aria-controls="backup" aria-selected="false">Backup</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="monitoring-tab" data-bs-toggle="tab" data-bs-target="#monitoring" type="button" role="tab" aria-controls="monitoring" aria-selected="false">Self monitoring</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="telegram-tab" data-bs-toggle="tab" data-bs-target="#telegram" type="button" role="tab" aria-controls="telegram" aria-selected="false">Telegram</button>
+            </li>
+        </ul>
+        <div class="tab-content w-100">
+            <div class="tab-pane fade show active" id="server" role="tabpanel" aria-labelledby="server-tab">
+                <form id="serverSettings_form" method="post" asp-action="@nameof(ConfigurationController.SaveServerSettings)">
+                    @await Html.PartialAsync("_Server", Model.Server)
+                </form>
             </div>
-        </div>
 
-        <div class="col-xxl">
-            <table class="table table-striped">
-                <thead>
-                <tr>
-                    <th scope="col">#</th>
-                    <th scope="col">Parameter name</th>
-                    <th scope="col">Parameter value</th>
-                    <th scope="col">Is Default</th>
-                    <th scope="col">Action</th>
-                </tr>
-                </thead>
-                <tbody>
-                @{
-                    var i = 0;
-                }
-                @foreach (var (propertyName, item) in Model)
-                {
-                    <form method="post">
-                        <tr>
-                            <th scope="row">@i</th>
-                            <td>
-                                <label class="config-name">@item.Name</label>
-                                <a tabindex="0" data-bs-toggle="popover" data-bs-trigger="focus"  title="Description" data-bs-content="@item.Description" data-bs-html="true">
-                                    <i class="fas fa-question-circle"></i>
-                                </a>
-                            </td>
+            <div class="tab-pane fade" id="backup" role="tabpanel" aria-labelledby="backup-tab">
+                <form id="backupSettings_form" method="post" asp-action="@nameof(ConfigurationController.SaveBackupSettings)">
+                    @await Html.PartialAsync("_Backup", Model.Backup)
+                </form>
+            </div>
 
-                            <td>
-                                <div style="display: flex">
-                                    <input type="text" class="form-control mw-25" value="@item.Value" id="value_@propertyName">
-                                </div>
-                            </td>
-                            <td>
-                                <label class="default-text-field">@item.IsDefault</label>
-                            </td>
+            <div class="tab-pane fade" id="monitoring" role="tabpanel" aria-labelledby="monitoring-tab">
+                <form id="selfMonitoringSettings_form" method="post" asp-action="@nameof(ConfigurationController.SaveMonitoringSettings)">
+                    @await Html.PartialAsync("_SelfMonitoring", Model.Monitoring)
+                </form>
+            </div>
 
-                            <td>
-                                @if (!item.IsDefault)
-                                {
-                                    <button id="reset_@propertyName" type="button" class="btn btn-secondary ms-1"data-bs-toggle="tooltip" title="reset value to default">
-                                        <i class="fas fa-undo-alt"></i>
-                                    </button>
-                                }
-
-                                <button disabled id="ok_@propertyName" type="button" class="btn btn-secondary ms-1"data-bs-toggle="tooltip" title="ok">
-                                    <i class="fas fa-check"></i>
-                                </button>
-
-                                <button disabled id="cancel_@propertyName" type="button"class="btn btn-secondary ms-1" data-bs-toggle="tooltip" title="revert changes">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    </form>
-                    i++;
-                }
-                </tbody>
-            </table>
-        </div>
-
-        <div class="m-10">
-            <div class="row justify-content-start">
-                <div class="col-auto">
-                    <h5 class="my-3 ms-5">Telegram</h5>
-                </div>
-
-                <div>
-                    You can configure a Telegram bot. Please install it via Telegram and put configuration
-                    parameters (@ConfigurationConstants.BotName, @ConfigurationConstants.BotToken, @ConfigurationConstants.AreBotMessagesEnabled) in the table below.
-                    <b>Warning!</b> It will stop current bot.
-                    Installation link <a href='https://core.telegram.org/bots/features#botfather' target='_blank'>Bot Installation</a>.
-                </div>
-
-                <div class="row ms-5 mt-1 mb-1">
-                    <button id="restartButton" type="button" class="col-auto btn btn-secondary" style="background-color: #e35478">
-                        <i class="fab fa-telegram"></i> Restart Telegram Bot
-                    </button>
-
-                    <div class="mt-1" id="message" style="color: red; display: none;"></div>
-                </div>
+            <div class="tab-pane fade" id="telegram" role="tabpanel" aria-labelledby="telegram-tab">
+                <form id="telegramSettings_form" asp-action="@nameof(ConfigurationController.SaveTelegramSettings)">
+                    @await Html.PartialAsync("_Telegram", Model.Telegram)
+                </form>
             </div>
         </div>
     </div>
@@ -127,83 +62,25 @@
 
 
 <script>
-    //Description popovers
-    $(document).ready(function() {
-        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-        var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
-            return new bootstrap.Popover(popoverTriggerEl);
-        });
-    });
+    function savingFormSubscribe(formId, successMessage) {
+        $(document).off("submit", `#${formId}`).on("submit", `#${formId}`, function (event) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
 
-    function createData(name, value) {
-        return {
-            "PropertyName": name,
-            "Value": value
-        }
+            $.ajax({
+                type: 'POST',
+                url: $(`#${formId}`).attr("action"),
+                data: new FormData(this),
+                datatype: 'html',
+                processData: false,
+                contentType: false,
+                cache: false,
+                async: true,
+                success: function (viewData) {
+                    $(`#${formId}`).html(viewData);
+                    showToast(successMessage);
+                }
+            });
+        });
     }
-
-    $('[id^=cancel_]').on("click", function() {
-        document.location.reload();
-    });
-
-    $('[id^=value_]').on("input", function() {
-        name = this.id.substring("value_".length);
-
-        $('#ok_' + name).prop('disabled', false);
-        $('#cancel_' + name).prop('disabled', false);
-    });
-
-    $('[id^=ok_]').on("click", function() {
-        name = this.id.substring("ok_".length);
-
-        let value = $('#value_' + name).val();
-        let data = createData(name, value);
-
-        $.ajax({
-            type: 'POST',
-            url: saveAction,
-            data: JSON.stringify(data),
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function(result) {
-            document.location.reload();
-        });
-    });
-
-    $('[id^=reset_]').on("click", function() {
-        name = this.id.substring("reset_".length);
-
-        $.ajax({
-            type: 'POST',
-            url: setToDefaultAction + "?Name=" + name,
-            cache: false,
-            async: true,
-            success: function() {
-                document.location.reload();
-            }
-        });
-    });
-
-    $('[id^=restartButton]').on('click', function() {
-        $.ajax({
-            type: 'GET',
-            url: restartBotAction,
-            dataType: 'html',
-            contentType: 'text',
-            cache: false,
-            async: true,
-            success: function(data) {
-                let message = $("#message");
-                message.css("display", "block");
-
-                if (data == "") {
-                    message.empty().css("color", "green").append("Success.");
-                }
-                else {
-                    message.empty().css("color", "red").append(data);
-                }
-            }
-        });
-    });
 </script>

@@ -14,8 +14,12 @@ namespace HSMServer.BackgroundServices
     {
         private readonly IDatabaseSettings _dbSettings = new DatabaseSettings();
         private readonly IDatabaseCore _database;
+        private readonly IServerConfig _config;
 
         private readonly TimeSpan _storagePeriod;
+
+
+        private bool IsBackupEnabled => _config.BackupDatabase.IsEnabled;
 
 
         public override TimeSpan Delay { get; }
@@ -23,6 +27,7 @@ namespace HSMServer.BackgroundServices
 
         public BackupDatabaseService(IDatabaseCore database, IServerConfig config)
         {
+            _config = config;
             _database = database;
 
             _storagePeriod = TimeSpan.FromDays(config.BackupDatabase.StoragePeriodDays);
@@ -32,6 +37,10 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ServiceAction()
         {
+            if (!IsBackupEnabled)
+                return Task.CompletedTask;
+
+
             void EnvironmentBackup(string path) => _database.BackupEnvironment(path);
 
             void DashboardsBackup(string path) => _database.Dashboards.Backup(path);

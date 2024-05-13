@@ -15,8 +15,8 @@ namespace HSMServer.BackgroundServices
 {
     public sealed class DataCollectorWrapper : IDisposable
     {
-        private const string SelfMonitoringProductName = "HSM Server Monitoring";
         private const string SelfCollectorName = "Self monitoring";
+        public const string SelfMonitoringProductName = "HSM Server Monitoring";
 
         private readonly IDataCollector _collector;
 
