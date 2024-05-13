@@ -60,7 +60,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal virtual bool UseScheduleManagerLogic => Schedule.IsActive;
 
-        internal IPolicyDestinationHandler TargetChats => Destination.IsFromParentChats && Sensor is not null ? 
+        internal IPolicyDestinationHandler TargetChats => Destination.IsFromParentChats && Sensor?.Parent is not null ? 
             Sensor.Parent.Settings.DefaultChats.Value : Destination;
 
 
