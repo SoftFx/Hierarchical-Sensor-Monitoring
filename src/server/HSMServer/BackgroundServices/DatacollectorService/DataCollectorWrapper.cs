@@ -28,9 +28,8 @@ namespace HSMServer.BackgroundServices
         internal DatabaseSensorsSize DbSizeSensors { get; }
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config)
         {
-            optionsMonitor.OnChange((o, a) => { });
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
             var loggerOptions = new LoggerOptions()
             {
