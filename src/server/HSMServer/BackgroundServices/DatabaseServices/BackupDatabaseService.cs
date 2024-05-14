@@ -16,22 +16,19 @@ namespace HSMServer.BackgroundServices
         private readonly IDatabaseCore _database;
         private readonly IServerConfig _config;
 
-        private readonly TimeSpan _storagePeriod;
-
 
         private bool IsBackupEnabled => _config.BackupDatabase.IsEnabled;
 
+        private TimeSpan StoragePeriod => TimeSpan.FromDays(_config.BackupDatabase.StoragePeriodDays);
 
-        public override TimeSpan Delay { get; }
+
+        public override TimeSpan Delay => TimeSpan.FromMinutes(_config.BackupDatabase.PeriodHours);//TODO fromHours
 
 
         public BackupDatabaseService(IDatabaseCore database, IServerConfig config)
         {
             _config = config;
             _database = database;
-
-            _storagePeriod = TimeSpan.FromDays(config.BackupDatabase.StoragePeriodDays);
-            Delay = TimeSpan.FromHours(config.BackupDatabase.PeriodHours);
         }
 
 
@@ -91,7 +88,7 @@ namespace HSMServer.BackgroundServices
                     {
                         var creationTime = backup.CreationTime;
 
-                        if (creationTime < (now - _storagePeriod) || creationTime.Date == now.Date)
+                        if (creationTime < (now - StoragePeriod) || creationTime.Date == now.Date)
                             Directory.Delete(backup.Name, true);
                     }
                     catch (Exception ex)
