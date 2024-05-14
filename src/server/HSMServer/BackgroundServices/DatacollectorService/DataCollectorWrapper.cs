@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
+using HSMDataCollector.Options;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Extensions;
@@ -28,7 +29,7 @@ namespace HSMServer.BackgroundServices
         internal DatabaseSensorsSize DbSizeSensors { get; }
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor)
         {
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
             var loggerOptions = new LoggerOptions()
@@ -49,7 +50,7 @@ namespace HSMServer.BackgroundServices
             else
                 _collector.Unix.AddAllDefaultSensors(productVersion);
 
-            DbStatisticsSensors = new DatabaseSensorsStatistics(_collector, db, cache, config);
+            DbStatisticsSensors = new DatabaseSensorsStatistics(_collector, db, cache, config, optionsMonitor);
             DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
         }

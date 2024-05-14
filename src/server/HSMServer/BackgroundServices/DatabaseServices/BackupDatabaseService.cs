@@ -22,7 +22,7 @@ namespace HSMServer.BackgroundServices
         private TimeSpan StoragePeriod => TimeSpan.FromDays(_config.BackupDatabase.StoragePeriodDays);
 
 
-        public override TimeSpan Delay => TimeSpan.FromMinutes(_config.BackupDatabase.PeriodHours);//TODO fromHours
+        public override TimeSpan Delay => TimeSpan.FromHours(_config.BackupDatabase.PeriodHours);
 
 
         public BackupDatabaseService(IDatabaseCore database, IServerConfig config)
