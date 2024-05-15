@@ -106,7 +106,7 @@ namespace HSMServer.BackgroundServices
             return _collector.CreateDoubleSensor($"{NodeName}/{TopHeaviestSensorName}", options);
         }
 
-        private void UpdateNextStart() => _nextStart = DateTime.UtcNow.Ceil(Periodicity) + Periodicity - TimeSpan.FromDays(1);
+        private void UpdateNextStart() => _nextStart = DateTime.UtcNow.Floor(TimeSpan.FromDays(1)) + Periodicity;
 
         private async Task BuildStatistics()
         {
