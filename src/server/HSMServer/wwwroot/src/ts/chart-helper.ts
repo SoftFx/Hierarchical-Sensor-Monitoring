@@ -1,8 +1,8 @@
 ﻿import Plotly from "plotly.js";
-import {IPanelSettings} from "./dashboard.interfaces";
+import {PanelSettings} from "./dashboard.classes";
 
 export namespace ChartHelper {
-    export async function initMultyichartCordinates(settings: IPanelSettings, id: string) : Promise<number> {
+    export async function initMultyichartCordinates(settings: PanelSettings, id: string) : Promise<number> {
         return new Promise(function (resolve, reject) {
             let dashboardPanels = $('#dashboardPanels');
             let width = dashboardPanels.width();
@@ -27,7 +27,7 @@ export namespace ChartHelper {
         })
     }
     
-    export async function initMultiChart(chartId: string, height = 300, showlegend = true, autorange = false, yaxisRange: boolean | [number, number] = false){
+    export async function initMultiChart(chartId: string, settings: PanelSettings, height = 300, autorange = false){
         return Plotly.newPlot(chartId, [], {
                 hovermode: 'closest',
                 hoverdistance: 1,
@@ -42,7 +42,7 @@ export namespace ChartHelper {
                     t: 30,
                     b: 40,
                 },
-                showlegend: showlegend,
+                showlegend: settings.showLegend,
                 legend: {
                     y: 0,
                     x: 0,
