@@ -73,14 +73,20 @@
         </div>
     </div>
 
-    <div id="panelChart_@Model.Id"></div>
-    <div id="panelLastValue_@Model.Id">
-        @foreach (var (_, source) in Model.Sources)
-        {
-            await Html.RenderPartialAsync("_SourceLastValue", source);
-        }
-        <div>@Model.Name - @Model.Settings.IsSingleMode</div>
-    </div>
+    
+    @if (Model.Settings.IsSingleMode)
+    {
+        <div id="panelLastValue_@Model.Id">
+            @foreach (var (_, source) in Model.Sources)
+            {
+                await Html.RenderPartialAsync("_SourceLastValue", source);
+            }
+        </div>
+    }
+    else
+    {
+        <div id="panelChart_@Model.Id"></div>
+    }
 </div>
 
 

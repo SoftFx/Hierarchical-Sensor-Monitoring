@@ -50,27 +50,29 @@ export class DashboardStorage {
 
         this.addPanel(panel, lastUpdate)
 
-        values.forEach(function (x) {
-            insertSourcePlot(x, `panelChart_${id}`, id, dId, panel.settings.range)
-        })
+        if (!panel.settings.isSingleMode){
+            values.forEach(function (x) {
+                insertSourcePlot(x, `panelChart_${id}`, id, dId, panel.settings.range)
+            })
 
-        $(`#panelChart_${id}`).on('plotly_relayout', function (e, updateData){
-            let emptypanel = $(`#emptypanel_${id}`);
-            let container = $(`#${id}`);
-            emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
-        }).on('plotly_doubleclick', async function(){
-            await customReset($(`#panelChart_${id}`)[0], getRangeDate(), panel.settings.range)
-        })
+            $(`#panelChart_${id}`).on('plotly_relayout', function (e, updateData){
+                let emptypanel = $(`#emptypanel_${id}`);
+                let container = $(`#${id}`);
+                emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
+            }).on('plotly_doubleclick', async function(){
+                await customReset($(`#panelChart_${id}`)[0], getRangeDate(), panel.settings.range)
+            })
 
-        await Plotly.relayout(plot.id, {
-            'xaxis.autorange': false,
-            'height': Number((settings.height * 1400).toFixed(5)) - 46
-        })
-
+            await Plotly.relayout(plot.id, {
+                'xaxis.autorange': false,
+                'height': Number((settings.height * 1400).toFixed(5)) - 46
+            })
+        }
+        
         if (values.length === 0) {
             $(`#emptypanel_${id}`).show();
         }
-
+        
         replaceHtmlToMarkdown('panel_description')
     }
     

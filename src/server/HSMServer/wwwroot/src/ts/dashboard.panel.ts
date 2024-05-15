@@ -48,21 +48,20 @@ export class Panel {
         this._lastUpdateDiv = $('#lastUpdate_' + this.id);
 
         this.addEventListeners();
-        
-        if (!this.settings.isSingleMode) {
-            $('#selecthovermode_' + this.id).val(this.settings.hovermode);
 
+        $('#selecthovermode_' + this.id).val(this.settings.hovermode);
+
+        Layout.relayout(this.id, this.settings);
+
+        this._savebutton = $('#selecthovermode_' + this.id);
+        this._savebutton.on('change', async function () {
+            this.settings.hovermode = Number($('#selecthovermode_' + this.id).val());
+
+            await httpPanelService.updateSettings(this.settings);
             Layout.relayout(this.id, this.settings);
-
-            this._savebutton = $('#selecthovermode_' + this.id);
-            this._savebutton.on('change', async function () {
-                this.settings.hovermode = Number($('#selecthovermode_' + this.id).val());
-
-                await httpPanelService.updateSettings(this.settings);
-                Layout.relayout(this.id, this.settings);
-                $('#actionButton').trigger('click')
-            }.bind(this))
-        }
+            $('#actionButton').trigger('click')
+        }.bind(this))
+        
 
         this.updateNotify();
     }

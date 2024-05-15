@@ -18,6 +18,8 @@ namespace HSMServer.Datasources
         public string Tooltip { get; protected set; }
 
 
+        internal abstract string GetValue();
+        
         internal abstract object Filter(PanelRangeSettings settings);
     }
 
@@ -25,6 +27,8 @@ namespace HSMServer.Datasources
     public abstract class BaseChartValue<T> : BaseChartValue
     {
         public T Value { get; protected set; }
+
+        internal override string GetValue() => Value.ToString();
     }
 
 

@@ -220,6 +220,9 @@ export namespace Layout {
     }
     
     export function relayout(id: string, settings: PanelSettings) {
+        if (settings.isSingleMode)
+            return;
+        
         if (settings === null)
             return;
         

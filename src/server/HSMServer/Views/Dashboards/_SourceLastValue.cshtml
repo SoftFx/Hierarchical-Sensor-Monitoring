@@ -1,5 +1,15 @@
+@using HSMServer.Datasources
 @model HSMServer.Model.Dashboards.DatasourceViewModel
 
 
-<div>@Model.DisplayLabel</div>
+@{
+    var lastValue = Model.Values[^1] as BaseChartValue;
+}
+
+<div style="display: flex; font-size: clamp(2rem, 8vw, 3rem)">
+    <input disabled type="color" value="@Model.Color" class="form-control form-control-color p-1" style="background-color: white; width: 3rem; align-self: center; flex-grow: 0"/>
+    <span style="flex-grow: 2; max-width: 40%">@Model.DisplayLabel</span>
+    <span>@lastValue.Time</span>
+    <span style="flex-grow: 1; text-align: end">@lastValue?.GetValue()</span>
+</div>
 

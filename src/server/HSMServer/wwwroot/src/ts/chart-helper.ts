@@ -28,6 +28,9 @@ export namespace ChartHelper {
     }
     
     export async function initMultiChart(chartId: string, settings: PanelSettings, height = 300, autorange = false){
+        if (settings.isSingleMode)
+            return;
+        
         return Plotly.newPlot(chartId, [], {
                 hovermode: 'closest',
                 hoverdistance: 1,
