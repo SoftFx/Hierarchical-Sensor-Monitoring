@@ -53,17 +53,18 @@ namespace HSMServer.Dashboards
 
     public sealed record PanelUpdateDto
     {
-        public Guid Id { get; set; }
-
         public TooltipHovermode? Hovermode { get; set; }
         
         public bool? IsSingleMode { get; set; }
+        
+        public bool? ShowLegend { get; set; } 
 
-        internal PanelUpdate ToUpdate() =>
-            new(Id)
+        internal PanelUpdate ToUpdate(Guid id) =>
+            new(id)
             {
                 Hovermode = Hovermode,
-                IsSingleMode = IsSingleMode
+                IsSingleMode = IsSingleMode,
+                ShowLegend = ShowLegend
             };
     }
 

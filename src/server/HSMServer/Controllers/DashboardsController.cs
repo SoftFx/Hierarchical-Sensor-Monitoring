@@ -167,22 +167,6 @@ namespace HSMServer.Controllers
             return TryGetBoard(dashboardId, out var dashboard) && dashboard.AutofitPanels(width) ? Ok("Successfully relayout") : BadRequest("Couldn't relayout");
         }
 
-        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public IActionResult UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
-        {
-            if (TryGetPanel(dashboardId, panelId, out var panel))
-            {
-                panel.NotifyUpdate(new PanelUpdate(panel.Id)
-                {
-                    ShowLegend = showlegend,
-                });
-
-                return Ok("Successfully updated");
-            }
-
-            return BadRequest("Couldn't update panel");
-        }
-
         [HttpGet("Dashboards/{dashboardId:guid}/PanelUpdate/{panelId:guid}")]
         public ActionResult<object> GetPanelUpdates(Guid dashboardId, Guid panelId)
         {
@@ -200,12 +184,12 @@ namespace HSMServer.Controllers
             return _emptyResult;
         }
 
-        [HttpPut("Dashboards/{dashboardId:guid}/Panels")]
-        public IActionResult UpdatePanelSettings([FromBody] PanelUpdateDto panelUpdate, Guid dashboardId)
+        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
+        public IActionResult UpdatePanelSettings([FromBody] PanelUpdateDto panelUpdate, Guid dashboardId, Guid panelId)
         {
-            if (panelUpdate is not null && TryGetPanel(dashboardId, panelUpdate.Id, out var panel))
+            if (panelUpdate is not null && TryGetPanel(dashboardId, panelId, out var panel))
             {
-                panel.NotifyUpdate(panelUpdate.ToUpdate());
+                panel.NotifyUpdate(panelUpdate.ToUpdate(panelId));
 
                 return Ok("Successfully updated");
             }

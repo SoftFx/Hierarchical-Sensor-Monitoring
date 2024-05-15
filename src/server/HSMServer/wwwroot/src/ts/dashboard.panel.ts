@@ -5,13 +5,11 @@ import {Layout} from "./plotUpdate";
 import {httpPanelService} from "./dashboard.storage";
 import {SiteHelper} from "./services/site-helper";
 import showToast = SiteHelper.showToast;
+import Plotly from "plotly.js";
 
 export class Panel {
     private _lastUpdateTime: Date = new Date(0);
     private _lastUpdateDiv: JQuery<HTMLElement>;
-
-    private _savebutton: JQuery<HTMLElement>;
-
 
     id: string
     settings: PanelSettings
@@ -48,20 +46,8 @@ export class Panel {
         this._lastUpdateDiv = $('#lastUpdate_' + this.id);
 
         this.addEventListeners();
-
-        $('#selecthovermode_' + this.id).val(this.settings.hovermode);
-
-        Layout.relayout(this.id, this.settings);
-
-        this._savebutton = $('#selecthovermode_' + this.id);
-        this._savebutton.on('change', async function () {
-            this.settings.hovermode = Number($('#selecthovermode_' + this.id).val());
-
-            await httpPanelService.updateSettings(this.settings);
-            Layout.relayout(this.id, this.settings);
-            $('#actionButton').trigger('click')
-        }.bind(this))
         
+        Layout.relayout(this.id, this.settings);
 
         this.updateNotify();
     }
@@ -81,23 +67,81 @@ export class Panel {
     }
 
     addEventListeners() {
-        document.getElementById(this.id).querySelector('.dropdown-menu .switch-mode').addEventListener(
+        let panelMenu = document.getElementById(this.id).querySelector('.dropdown-menu');
+
+        let hovermode = panelMenu.querySelector('select.hovermode') as HTMLSelectElement;
+        hovermode.value = this.settings.hovermode.toString();
+        hovermode.addEventListener(
+            "change",
+            async (event) => {
+                let target = event.target as HTMLSelectElement;
+                this.settings.hovermode = Number(target.value);
+
+                await httpPanelService.updateSettings(this);
+                Layout.relayout(this.id, this.settings);
+                $('#actionButton').trigger('click')
+            } 
+        );
+        
+        panelMenu.querySelector('.switch-mode').addEventListener(
             "click",
-            () => {
-                fetch(window.location.pathname + '/Panels', {
-                    method: "put",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        id: this.id,
-                        isSingleMode: !this.settings.isSingleMode
-                    })
-                }).then(
-                    (data) => showToast("Panel mode updated!"),
-                    (error) => showToast("Update failed")
-                )
+            async (event) => {
+                this.settings.isSingleMode = !this.settings.isSingleMode;
+                
+                let result = await httpPanelService.updateSettings(this);
+                showToast(await result.text())
             }
         );
+
+        panelMenu.querySelector('.toggle-legend').addEventListener(
+            "click",
+            async (event: PointerEvent) => {
+                let target = event.target as HTMLAnchorElement;
+                this.settings.showLegend = !this.settings.showLegend;
+
+                let result = await httpPanelService.updateSettings(this);
+                showToast(await result.text());
+
+                if (!this.settings.isSingleMode && result.ok) {
+                    if (this.settings.showLegend) {
+                        Plotly.relayout(`panelChart_${this.id}`, {
+                            // @ts-ignore
+                            'legend.yref': "container",
+                            'showlegend': this.settings.showLegend,
+                        }).then(
+                            (success) => {
+                                target.textContent = "Hide legends";
+                            },
+                            (error) => {
+                                showToast(error)
+                            }
+                        );
+                    }
+                    else {
+                        Plotly.relayout(`panelChart_${this.id}`, {
+                            // @ts-ignore
+                            'legend.yref': "paper",
+                            'showlegend': true,
+                        }).then(
+                            (success) => {
+                                Plotly.relayout(`panelChart_${this.id}`, {
+                                        'showlegend' : this.settings.showLegend
+                                    })
+                                target.textContent = "Show legends";
+                            },
+                            (error) => {
+                                showToast(error)
+                            }
+                        );
+                    }
+                }
+            }
+        );
+
+        panelMenu.querySelector('.removePanel').addEventListener(
+            "click",
+            (event) => {
+            }
+        )
     }
 }

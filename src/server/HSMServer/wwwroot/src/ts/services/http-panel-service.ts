@@ -1,13 +1,14 @@
-﻿import {PanelSettings} from "../dashboard.classes";
+﻿import {Panel} from "../dashboard.panel";
+
 
 export class HttpPanelService {
-    async updateSettings(settings: PanelSettings) {
-        return await fetch(window.location.pathname + "/Panels", {
+    async updateSettings(panel: Panel) {
+        return fetch(window.location.pathname + `/${panel.id}`, {
             method: 'PUT',
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify(settings)
+            body: JSON.stringify(panel.settings)
         });
     }
 }
