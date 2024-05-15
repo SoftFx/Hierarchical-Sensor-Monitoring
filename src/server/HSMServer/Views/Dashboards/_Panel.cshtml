@@ -40,7 +40,7 @@
 
                 @if (Context.User is User user && user.IsAdmin)
                 {
-                    <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false">
+                    <button class="btn p-1 action-button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false">
                         <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                     </button>
                     <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
@@ -73,7 +73,6 @@
         </div>
     </div>
 
-    
     @if (Model.Settings.IsSingleMode)
     {
         <div id="panelLastValue_@Model.Id">

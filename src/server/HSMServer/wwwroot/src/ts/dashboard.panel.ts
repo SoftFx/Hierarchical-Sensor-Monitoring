@@ -67,7 +67,9 @@ export class Panel {
     }
 
     addEventListeners() {
-        let panelMenu = document.getElementById(this.id).querySelector('.dropdown-menu');
+        let panel = document.getElementById(this.id);
+        let actionButton = panel.querySelector('.action-button') as HTMLButtonElement
+        let panelMenu = panel.querySelector('.dropdown-menu');
 
         let hovermode = panelMenu.querySelector('select.hovermode') as HTMLSelectElement;
         hovermode.value = this.settings.hovermode.toString();
@@ -79,7 +81,7 @@ export class Panel {
 
                 await httpPanelService.updateSettings(this);
                 Layout.relayout(this.id, this.settings);
-                $('#actionButton').trigger('click')
+                actionButton.click();
             } 
         );
         
@@ -90,6 +92,7 @@ export class Panel {
                 
                 let result = await httpPanelService.updateSettings(this);
                 showToast(await result.text())
+                actionButton.click();
             }
         );
 
@@ -101,6 +104,7 @@ export class Panel {
 
                 let result = await httpPanelService.updateSettings(this);
                 showToast(await result.text());
+                actionButton.click();
 
                 if (!this.settings.isSingleMode && result.ok) {
                     if (this.settings.showLegend) {
@@ -137,11 +141,5 @@ export class Panel {
                 }
             }
         );
-
-        panelMenu.querySelector('.removePanel').addEventListener(
-            "click",
-            (event) => {
-            }
-        )
     }
 }
