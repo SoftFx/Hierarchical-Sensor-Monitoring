@@ -85,44 +85,5 @@
         const lastUpdate = "@(Model.LastUpdate == DateTime.MinValue ? 0 : Model.LastUpdate)" === "0" ? 0 : "@Model.LastUpdate.ToString("yyyy-MM-ddTHH:mm:ss")";
 
         initPanel('@Model.Id', settings, ySettings, values, lastUpdate, '@Model.DashboardId');
-        
-        // initMultyichartCordinates(settings, '@Model.Id').then(
-        //     (data) => {
-        //         containerHeight = Math.max(containerHeight, data);
-        //         return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend, false, ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)]).then(
-        //                 (plot) => {
-        //                         window.addPanelToStorage('@Model.Id', settings, lastUpdate);
-        //
-        //                         values.forEach(function (x) {
-        //                             insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
-        //                         })
-        //
-        //                         $('#panelChart_@Model.Id').on('plotly_relayout', function (e, updateData){
-        //                             let emptypanel = $('#emptypanel_@Model.Id');
-        //                             let container = $('#@Model.Id');
-        //                             emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
-        //                         })
-        //                        
-        //                         $('#panelChart_@Model.Id').on('plotly_doubleclick', function(){
-        //                             customReset($('#panelChart_@Model.Id')[0], getRangeDate(), ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
-        //                         })
-        //
-        //                         Plotly.relayout(plot.id, { 
-        //                             'xaxis.autorange': false,
-        //                             'height': Number((settings.height * 1400).toFixed(5)) - 46
-        //                         })
-        //
-        //                         if (values.length === 0) {
-        //                             $('#emptypanel_@Model.Id').show();
-        //                         }
-        //
-        //                         replaceHtmlToMarkdown('panel_description')
-        //                     },
-        //                 (error) => showToast(error)
-        //         );
-        //     },
-        //     (error) => showToast(error)
-        // )
     })
-
 </script>
