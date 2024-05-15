@@ -40,40 +40,38 @@ export class DashboardStorage {
     }
     
     public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: Date, dId: string){
-        // let panel = new Panel(id, settings);
-        //
-        // let result = await ChartHelper.initMultyichartCordinates(settings,id)
-        //
-        // this.containerHeight = Math.max(this.containerHeight, result);
-        //
-        // let plot = await ChartHelper.initMultiChart(`panelChart_${id}`, Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend, false, ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
-        //
-        // this.addPanel(panel, lastUpdate)
-        //
-        // values.forEach(function (x) {
-        //     insertSourcePlot(x, `panelChart_${id}`, id, dId, ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
-        // })
-        //
-        // $(`#panelChart_${this.id}`).on('plotly_relayout', function (e, updateData){
-        //     let emptypanel = $(`#emptypanel_${id}`);
-        //     let container = $(`#${id}`);
-        //     emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
-        // })
-        //
-        // $(`#panelChart_${id}`).on('plotly_doubleclick', async function(){
-        //     await customReset($(`#panelChart_${id}`)[0], getRangeDate(), ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
-        // })
-        //
-        // await Plotly.relayout(plot.id, {
-        //     'xaxis.autorange': false,
-        //     'height': Number((settings.height * 1400).toFixed(5)) - 46
-        // })
-        //
-        // if (values.length === 0) {
-        //     $(`#emptypanel_${id}`).show();
-        // }
-        //
-        // replaceHtmlToMarkdown('panel_description')
+        let panel = new Panel(id, settings);
+
+        let result = await ChartHelper.initMultyichartCordinates(settings,id)
+
+        this.containerHeight = Math.max(this.containerHeight, result);
+
+        let plot = await ChartHelper.initMultiChart(`panelChart_${id}`, Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend, false, ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
+
+        this.addPanel(panel, lastUpdate)
+
+        values.forEach(function (x) {
+            insertSourcePlot(x, `panelChart_${id}`, id, dId, ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
+        })
+
+        $(`#panelChart_${id}`).on('plotly_relayout', function (e, updateData){
+            let emptypanel = $(`#emptypanel_${id}`);
+            let container = $(`#${id}`);
+            emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
+        }).on('plotly_doubleclick', async function(){
+            await customReset($(`#panelChart_${id}`)[0], getRangeDate(), ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
+        })
+
+        await Plotly.relayout(plot.id, {
+            'xaxis.autorange': false,
+            'height': Number((settings.height * 1400).toFixed(5)) - 46
+        })
+
+        if (values.length === 0) {
+            $(`#emptypanel_${id}`).show();
+        }
+
+        replaceHtmlToMarkdown('panel_description')
     }
     
     checkForUpdate(panels: Dictionary<Panel>) {
@@ -114,6 +112,8 @@ export class Panel {
     }
 
     updateNotify() {
+        this._lastUpdateDiv = $('#lastUpdate_' + this.id);
+
         if (this._lastUpdateTime.getTime() === 0)
             this._lastUpdateDiv.html("Never updated");
         else

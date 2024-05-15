@@ -443,7 +443,7 @@ window.syncIndexes = function () {
 }
 
 window.initPanel = async function (id, settings, ySettings, values, lastUpdate) {
-    await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate);
+   await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate);
 }
 
 window.initMultyichartCordinates = function (settings, id) {
