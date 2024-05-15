@@ -113,6 +113,19 @@ namespace HSMServer.Controllers
             return await EditDashboard(dashboardId);
         }
 
+        [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/Switch")]
+        public async Task<IActionResult> GetPanel(Guid dashboardId, Guid panelId)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+            {
+                var vm = new PanelViewModel(panel, dashboardId, GetAvailableFolders());
+                
+                return PartialView("_Panel", await vm.InitPanelData());
+            }
+
+            return BadRequest();
+        }
+        
         [ApiExplorerSettings(IgnoreApi = true)]
         [Route("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public async Task<IActionResult> AddDashboardPanel(Guid dashboardId, Guid panelId)

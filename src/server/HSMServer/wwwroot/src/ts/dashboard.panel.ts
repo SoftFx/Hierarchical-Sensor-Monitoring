@@ -92,7 +92,17 @@ export class Panel {
                 
                 let result = await httpPanelService.updateSettings(this);
                 showToast(await result.text())
+                
+                const panelPage = await httpPanelService.getPanel(this);
                 actionButton.click();
+                
+                // TODO: replace panel in storage!!!
+                panel.replaceWith(createElementFromHTML(panelPage));
+
+                function createElementFromHTML(htmlString: string) {
+                    const range = document.createRange();
+                    return range.createContextualFragment(htmlString);
+                }
             }
         );
 
