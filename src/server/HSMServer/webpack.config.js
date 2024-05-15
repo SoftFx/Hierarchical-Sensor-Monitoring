@@ -5,6 +5,7 @@ const CopyPlugin = require("copy-webpack-plugin");
 const MomentLocalesPlugin = require('moment-locales-webpack-plugin');
 
 module.exports = {
+    target: 'web',
     entry: "./wwwroot/src/index.js",
     output: {
         path: path.resolve(__dirname, "wwwroot/dist"),

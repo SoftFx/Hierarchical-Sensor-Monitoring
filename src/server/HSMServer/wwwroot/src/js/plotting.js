@@ -13,7 +13,7 @@
 export const serviceAlivePlotName  = "ServiceAlive";
 export const serviceStatusPlotName  = "ServiceStatus";
 
-window.customReset = async function (plot = undefined, xaxisRange = undefined, yaxisRange = undefined) {
+export async function customReset(plot = undefined, xaxisRange = undefined, yaxisRange = undefined) {
     await Plotly.relayout(plot, await getLayout(plot, xaxisRange, yaxisRange));
 
     function getLayout(plot = undefined, xaxisRange = undefined, yaxisRange = undefined) {

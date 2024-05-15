@@ -40,5 +40,11 @@ export interface IPanelSettings {
     width: number
     height: number
     x: number
-    y:number
+    y: number
+}
+
+export interface IYRangeSettings {
+    autoScale: boolean
+    maxValue: number,
+    minValue: number
 }

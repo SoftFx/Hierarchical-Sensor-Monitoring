@@ -128,7 +128,7 @@ function checkForYRange(plot) {
         $('#y-range-settings').hide()
 }
 
-window.insertSourcePlot = function (data, id, panelId, dashboardId, range = undefined) {
+export function insertSourcePlot (data, id, panelId, dashboardId, range = undefined) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)
@@ -442,7 +442,11 @@ window.syncIndexes = function () {
     }
 }
 
-window.initMultyichartCordinates = function (settings, values, id) {
+window.initPanel = async function (id, settings, ySettings, values, lastUpdate) {
+    await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate);
+}
+
+window.initMultyichartCordinates = function (settings, id) {
     return new Promise(function (resolve, reject) {
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();
