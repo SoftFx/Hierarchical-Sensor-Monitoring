@@ -81,6 +81,8 @@ namespace HSMServer.Dashboards
         public string Shape { get; init; }
 
         public bool AggregateValues { get; init; }
+        
+        public bool IsSingleMode { get; init; }
     }
 
 

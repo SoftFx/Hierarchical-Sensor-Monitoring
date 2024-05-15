@@ -32,7 +32,7 @@ namespace HSMServer.Dashboards
         }
 
 
-        public PanelDatasource BuildSource(PanelRangeSettings yRange, bool aggregateValues)
+        public PanelDatasource BuildSource(PanelRangeSettings yRange, bool aggregateValues, bool isSingleMode)
         {
             Source?.Dispose(); // unsubscribe prev version
 
@@ -42,7 +42,9 @@ namespace HSMServer.Dashboards
                 Property = Property,
 
                 AggregateValues = aggregateValues,
-                YRange = yRange
+                YRange = yRange,
+                
+                IsSingleMode = isSingleMode
             };
 
             Source = DatasourceFactory.Build(Sensor, settings);
@@ -67,6 +69,6 @@ namespace HSMServer.Dashboards
             Source?.Dispose();
         }
 
-        protected override void ChangeDependentProperties(PanelSourceUpdate update) => BuildSource(update.YRange, update.AggregateValues);
+        protected override void ChangeDependentProperties(PanelSourceUpdate update) => BuildSource(update.YRange, update.AggregateValues, update.IsSingleMode);
     }
 }

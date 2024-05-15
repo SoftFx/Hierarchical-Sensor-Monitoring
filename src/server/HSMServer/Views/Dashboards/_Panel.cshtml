@@ -47,7 +47,7 @@
                         <a id="toggle_@Model.Id" class="toggle-legend dropdown-item text-decoration-none fw-normal button-link">@legendsTitle</a>
                         <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
                         <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
-                        <a id="switch_@Model.Id" class="switch-mode dropdown-item text-decoration-none fw-normal button-link">Switch mode</a>
+                        <a class="switch-mode dropdown-item text-decoration-none fw-normal button-link">Switch mode</a>
 
                         <div class="dropdown-submenu">
                             <a class="dropdown-item">Hover settings</a>
@@ -74,7 +74,13 @@
     </div>
 
     <div id="panelChart_@Model.Id"></div>
-    <div id="panelLastValue_@Model.Id"></div>
+    <div id="panelLastValue_@Model.Id">
+        @foreach (var (_, source) in Model.Sources)
+        {
+            await Html.RenderPartialAsync("_SourceLastValue", source);
+        }
+        <div>@Model.Name - @Model.Settings.IsSingleMode</div>
+    </div>
 </div>
 
 

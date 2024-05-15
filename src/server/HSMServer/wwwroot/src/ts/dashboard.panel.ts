@@ -3,6 +3,8 @@ import {IPanelSettings, IYRangeSettings} from "./dashboard.interfaces";
 import moment from "moment/moment";
 import {Layout} from "./plotUpdate";
 import {httpPanelService} from "./dashboard.storage";
+import {SiteHelper} from "./services/site-helper";
+import showToast = SiteHelper.showToast;
 
 export class Panel {
     private _lastUpdateTime: Date = new Date(0);
@@ -45,6 +47,8 @@ export class Panel {
     basePanelInit() {
         this._lastUpdateDiv = $('#lastUpdate_' + this.id);
 
+        this.addEventListeners();
+        
         if (!this.settings.isSingleMode) {
             $('#selecthovermode_' + this.id).val(this.settings.hovermode);
 
@@ -62,18 +66,39 @@ export class Panel {
 
         this.updateNotify();
     }
-    
-    getUpdateSourcesFunc(){
-        return this.settings.isSingleMode ? 
+
+    getUpdateSourcesFunc() {
+        return this.settings.isSingleMode ?
             this.updatePlot :
             this.updateSingleMode
     }
-    
-    updatePlot(){
-        
+
+    updatePlot() {
+
     }
-    
-    updateSingleMode(){
-        
+
+    updateSingleMode() {
+
+    }
+
+    addEventListeners() {
+        document.getElementById(this.id).querySelector('.dropdown-menu .switch-mode').addEventListener(
+            "click",
+            () => {
+                fetch(window.location.pathname + '/Panels', {
+                    method: "put",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        id: this.id,
+                        isSingleMode: !this.settings.isSingleMode
+                    })
+                }).then(
+                    (data) => showToast("Panel mode updated!"),
+                    (error) => showToast("Update failed")
+                )
+            }
+        );
     }
 }

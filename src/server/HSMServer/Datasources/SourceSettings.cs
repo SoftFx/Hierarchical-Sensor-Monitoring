@@ -18,6 +18,8 @@ namespace HSMServer.Datasources
 
 
         public bool AggregateValues { get; init; }
+        
+        public bool IsSingleMode { get; init; }
 
         public int CustomVisibleCount { get; init; } = DefaultMaxVisibleCnt;
 

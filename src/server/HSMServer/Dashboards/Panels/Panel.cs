@@ -85,7 +85,7 @@ namespace HSMServer.Dashboards
                     ApplyPanelSettings(sub);
 
                 foreach (var (_, source) in Sources)
-                    source.BuildSource(YRange, AggregateValues);
+                    source.BuildSource(YRange, AggregateValues, Settings.IsSingleMode);
             }
         }
 
@@ -228,7 +228,7 @@ namespace HSMServer.Dashboards
 
                 _sensorToSourceMap[source.Sensor.Id].Add(source.Id);
 
-                source.BuildSource(YRange, AggregateValues);
+                source.BuildSource(YRange, AggregateValues, Settings.IsSingleMode);
                 SubscribeModuleToUpdates(source);
             }
 
