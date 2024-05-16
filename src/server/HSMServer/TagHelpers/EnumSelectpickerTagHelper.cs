@@ -14,7 +14,6 @@ using HSMServer.Core.Attributes;
 
 namespace HSMServer.TagHelpers
 {
-
     [HtmlTargetElement("enum-selectpicker")]
     public class EnumSelectpickerTagHelper : TagHelper
     {
@@ -35,7 +34,6 @@ namespace HSMServer.TagHelpers
 
         public override void Process(TagHelperContext context, TagHelperOutput output)
         {
-
             var options = ParseEnum();
 
             output.TagName = "select";
@@ -47,6 +45,10 @@ namespace HSMServer.TagHelpers
             StringBuilder sb = new();
 
             string currentGroup = null;
+
+            if (AspFor.Model is null)
+                sb.Append("<option value=\"\" disabled selected hidden></option>");
+
             foreach (var option in options)
             {
                 if (currentGroup == null || currentGroup != option.GroupName)
@@ -60,16 +62,15 @@ namespace HSMServer.TagHelpers
                     currentGroup = option.GroupName;
                 }
 
-                sb.Append($"<option value={option.Id} {(option.Id == AspFor.Model.ToString() ? "selected" : "")}>{option.Name}</option>");
+                sb.Append($"<option value={option.Id} {(option.Id == AspFor.Model?.ToString() ? "selected" : "")}>{option.Name}</option>");
             }
 
             output.PreContent.SetHtmlContent(sb.ToString());
         }
 
-
         private List<Option> ParseEnum()
         {
-            var type = AspFor.Model.GetType();
+            var type = AspFor.ModelExplorer.ModelType.GenericTypeArguments[0];
 
             if (_cache.TryGetValue(type, out List<Option> result))
                 return result;
@@ -81,7 +82,7 @@ namespace HSMServer.TagHelpers
             return result;
         }
 
-        private IEnumerable<Option> GetEnumValues(Type type)
+        private static IEnumerable<Option> GetEnumValues(Type type)
         {
             foreach (Enum value in Enum.GetValues(type))
             {

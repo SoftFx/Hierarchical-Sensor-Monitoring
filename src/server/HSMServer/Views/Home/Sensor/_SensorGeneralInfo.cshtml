@@ -79,13 +79,16 @@
              <span>@Model.SelectedUnit.GetDisplayName()</span>
         </div>
     </div>
-        <div class="d-flex flex-row text-nowrap align-items-center ms-3 d-none" id="sensorUnitEdit">
-        <span class="meta-info-label">Unit:</span>
-        <div class="meta-info-interval">
-            <enum-selectpicker asp-for=@Model.SelectedUnit />
-        </div>
-    </div>
 }
+
+<div class="d-flex justify-content-start d-none" id="sensorUnitEdit">
+        <div class="d-flex ms-3 text-nowrap align-items-center">
+            <span style="min-width: 9rem">Unit:</span>
+        </div>
+        <div class="d-flex w-100">
+        <enum-selectpicker class="unit-select" asp-for=@Model.SelectedUnit/>
+        </div>
+</div>
 
 @if (Model.SensorType is not (SensorType.IntegerBar or SensorType.DoubleBar or SensorType.File))
 {
