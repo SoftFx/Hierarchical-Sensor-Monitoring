@@ -1,4 +1,5 @@
 ﻿using HSMServer.Attributes;
+using HSMServer.BackgroundServices;
 using HSMServer.Model.Configuration;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
@@ -11,10 +12,11 @@ namespace HSMServer.Controllers
     [Authorize]
     [AuthorizeIsAdmin]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications) : Controller
+    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService) : Controller
     {
         private readonly IServerConfig _config = config;
         private readonly TelegramBot _telegramBot = notifications.TelegramBot;
+        private readonly BackupDatabaseService _backupDatabaseService = backupService;
 
 
         public IActionResult Index() => View(new ConfigurationViewModel(_config));
@@ -83,5 +85,9 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         public Task<string> RestartTelegramBot() => _telegramBot.StartBot();
+
+
+        [HttpGet]
+        public Task<string> CreateBackup() => _backupDatabaseService.CreateBackup();
     }
 }

@@ -1,12 +1,16 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.Settings;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Extensions;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace HSMServer.BackgroundServices
 {
@@ -34,11 +38,25 @@ namespace HSMServer.BackgroundServices
             Delay = TimeSpan.FromHours(config.BackupDatabase.PeriodHours);
         }
 
+        public async Task<string> CreateBackup()
+        {
+            try
+            {
+                await ServiceAction();
+                return string.Empty;
+            }
+            catch (Exception ex) 
+            {
+                var msg = $"An error ({ex.Message}) has been occurred while create backup.";
+                _logger.Error(ex, msg);
+                return msg;
+            }
+        }
 
-        protected override Task ServiceAction()
+        protected override async Task ServiceAction()
         {
             if (!IsBackupEnabled)
-                return Task.CompletedTask;
+                return;
 
 
             void EnvironmentBackup(string path) => _database.BackupEnvironment(path);
@@ -52,8 +70,6 @@ namespace HSMServer.BackgroundServices
             Backup(_dbSettings.ServerLayoutDatabaseName, DashboardsBackup);
             DeleteOldBackups(_dbSettings.ServerLayoutDatabaseName);
 
-
-            return Task.CompletedTask;
         }
 
         private void Backup(string dbName, Action<string> backupAction)

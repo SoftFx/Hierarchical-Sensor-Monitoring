@@ -1,4 +1,6 @@
-﻿@using HSMServer.Model.Configuration
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Model.Configuration
 @using HSMServer.ServerConfiguration
 
 @model BackupSettingsViewModel
@@ -54,13 +56,37 @@
     </div>
 </div>
 
-<div class="d-flex justify-content-end mt-2">
+<div class="d-flex justify-content-between mt-2">
+    <button id="createBackupButton" type="button" class="btn btn-primary mt-1">Create Backup</button>
     <button type="submit" class="btn btn-primary independentSizeButton mt-1">Save</button>
 </div>
 
+<div id="createBackupErrorMessage" style="color: red; display: none;"></div>
 
 <script>
     $(document).ready(function () {
         savingFormSubscribe("backupSettings_form", "Backup settings have been succesfully saved!");
+    });
+
+    $('[id^=createBackupButton]').on('click', function() {
+        $.ajax({
+            type: 'GET',
+            url: '@Html.Raw(Url.Action(nameof(ConfigurationController.CreateBackup), ViewConstants.ConfigurationController))',
+            dataType: 'html',
+            contentType: 'text',
+            cache: false,
+            async: true,
+            success: function(data) {
+                let message = $("#createBackupErrorMessage");
+                message.css("display", "block");
+
+                if (data == "") {
+                    message.empty().css("color", "green").append("Success.");
+                }
+                else {
+                    message.empty().css("color", "red").append(data);
+                }
+            }
+        });
     });
 </script>
