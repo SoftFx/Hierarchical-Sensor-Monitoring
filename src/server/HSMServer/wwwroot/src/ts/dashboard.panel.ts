@@ -13,13 +13,10 @@ export class Panel {
 
     id: string
     settings: PanelSettings
-    updateSource: Function;
 
     constructor(id: string, settings: IPanelSettings, ySettings: IYRangeSettings) {
         this.id = id;
         this.settings = new PanelSettings(this.id, settings, ySettings);
-
-        this.updateSource = this.getUpdateSourcesFunc();
     }
 
     get lastUpdateTime(): Date {
@@ -50,20 +47,6 @@ export class Panel {
         Layout.relayout(this.id, this.settings);
 
         this.updateNotify();
-    }
-
-    getUpdateSourcesFunc() {
-        return this.settings.isSingleMode ?
-            this.updatePlot :
-            this.updateSingleMode
-    }
-
-    updatePlot() {
-
-    }
-
-    updateSingleMode() {
-
     }
 
     addEventListeners() {

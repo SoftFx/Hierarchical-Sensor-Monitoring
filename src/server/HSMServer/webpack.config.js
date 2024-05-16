@@ -37,7 +37,8 @@ module.exports = {
         fallback: {
             stream: require.resolve("stream-browserify"),
             os: require.resolve("os-browserify"),
-            process: require.resolve("process/browser")
+            process: require.resolve("process/browser"),
+            assert: require.resolve("assert/")
         }
     },
     plugins: [
