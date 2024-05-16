@@ -135,7 +135,7 @@ namespace HSMServer.Model.Controls
             };
         }
 
-        internal PolicyDestinationSettingsEntity FromFolderEntity(Dictionary<string, string> chats) =>
+        internal static PolicyDestinationSettingsEntity FromFolderEntity(Dictionary<string, string> chats) =>
             new()
             {
                 Mode = (byte)DefaultChatsMode.FromFolder,

@@ -335,7 +335,7 @@ namespace HSMServer.Folders
                 var chat = folder.DefaultChats;
                 var entity = action is ActionType.Delete
                     ? chat.ToEntity(folder.GetAvailableChats())
-                    : chat.FromFolderEntity(GetFolderDefaultChat(folder.Id));
+                    : Model.Controls.DefaultChatViewModel.FromFolderEntity(GetFolderDefaultChat(folder.Id));
 
                 return new(entity);
             }

@@ -56,6 +56,20 @@ namespace HSMServer.Core.Model.NodeSettings
         }
 
 
+        public PolicyDestinationSettings ApplyNewChats(Dictionary<Guid, string> newChats)
+        {
+            var settings = new PolicyDestinationSettings(DefaultChatsMode.Custom);
+
+            foreach (var chat in Chats)
+                settings.Chats.TryAdd(chat.Key, chat.Value);
+
+            foreach (var chat in newChats)
+                settings.Chats.TryAdd(chat.Key, chat.Value);
+
+            return settings;
+        }
+
+
         public PolicyDestinationSettingsEntity ToEntity() => new()
         {
             Chats = Chats?.ToDictionary(k => k.Key.ToString(), v => v.Value),

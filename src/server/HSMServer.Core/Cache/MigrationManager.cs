@@ -15,7 +15,7 @@ namespace HSMServer.Core.Cache
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         private static readonly InitiatorInfo _softMigrator = InitiatorInfo.AsSoftSystemMigrator();
-        private static readonly InitiatorInfo _migrator = InitiatorInfo.AsSystemMigrator();
+        private static readonly InitiatorInfo _forceMigrator = InitiatorInfo.AsSystemMigrator();
 
 
         private static readonly HashSet<PolicyProperty> _numberToEmaSet =
@@ -41,7 +41,7 @@ namespace HSMServer.Core.Cache
             Conditions = [new PolicyConditionUpdate(PolicyOperation.GreaterThan, PolicyProperty.EmaMean, new TargetValue(TargetType.Const, "20"))],
             Destination = new PolicyDestinationUpdate(),
             Icon = "⚠",
-            Initiator = _migrator,
+            Initiator = _forceMigrator,
             Schedule = GetDefaultScheduleUpdate(),
             Template = "[$product]$path $property $operation $target $unit",
         };
@@ -83,13 +83,16 @@ namespace HSMServer.Core.Cache
         {
             foreach (var product in products)
             {
-                if (TryMigrateProductTTLPolicyDestinationToDefaultChat(product, out var update))
-                    yield return update;
-
-                if (TryMigrateProductDefaultChatToFolder(product, out update))
+                if (TryMigrateProductDefaultChatToFolder(product, out var update))
                     yield return update;
 
                 if (TryMigrateProductDefaultChatToParent(product, out update))
+                    yield return update;
+
+                if (TryMigrateTTLCustomDestinationToParent(product, out update))
+                    yield return update;
+
+                if (TryMigrateTTLNotParentDestinationToParent(product, out update)) //TODO: should be changed to soft initiator
                     yield return update;
             }
         }
@@ -135,20 +138,39 @@ namespace HSMServer.Core.Cache
         }
 
 
-        private static bool TryMigrateSensorTTLPolicyDestinationToDefaultChat(BaseSensorModel sensor, out SensorUpdate update) =>
-            TryMigrateTTLPolicyDestinationToDefaultChat(sensor, out update);
-
-        private static bool TryMigrateProductTTLPolicyDestinationToDefaultChat(ProductModel product, out ProductUpdate update) =>
-            TryMigrateTTLPolicyDestinationToDefaultChat(product, out update);
-
-        private static bool TryMigrateTTLPolicyDestinationToDefaultChat<T>(BaseNodeModel node, out T update)
-            where T : BaseNodeUpdate, new()
+        private static bool TryMigrateSensorTTLPolicyDestinationToDefaultChat(BaseSensorModel sensor, out SensorUpdate update)
         {
             static bool IsTarget(Policy policy) => policy.Destination.IsNotInitialized;
 
-            static PolicyUpdate Migration(PolicyUpdate update) => ToFromParentDestination(update);
+            return TryMigrateTtlPolicy(sensor, IsTarget, ToFromParentDestination, out update);
+        }
 
-            return TryMigrateTtlPolicy(node, IsTarget, Migration, out update);
+        private static bool TryMigrateTTLCustomDestinationToParent(ProductModel product, out ProductUpdate update)
+        {
+            Dictionary<Guid, string> oldChats = [];
+
+            static bool IsTarget(Policy policy) => policy.Destination.IsCustom;
+
+            PolicyUpdate Migration(PolicyUpdate update)
+            {
+                oldChats = new(update.Destination.Chats);
+
+                return ToFromParentDestination(update);
+            }
+
+            var ok = TryMigrateTtlPolicy(product, IsTarget, Migration, out update);
+
+            if (ok)
+                update = update with { DefaultChats = update.DefaultChats.ApplyNewChats(oldChats) };
+
+            return ok;
+        }
+
+        private static bool TryMigrateTTLNotParentDestinationToParent(ProductModel product, out ProductUpdate update)
+        {
+            static bool IsTarget(Policy policy) => !policy.Destination.IsFromParentChats;
+
+            return TryMigrateTtlPolicy(product, IsTarget, ToFromParentDestination, out update);
         }
 
 
@@ -239,7 +261,7 @@ namespace HSMServer.Core.Cache
             {
                 Id = sensor.Id,
                 Policies = alerts,
-                Initiator = _migrator,
+                Initiator = _forceMigrator,
             };
 
             return hasMigrations;
@@ -275,7 +297,7 @@ namespace HSMServer.Core.Cache
             {
                 Id = node.Id,
                 TTLPolicy = migrator(ToUpdate(ttl)),
-                Initiator = _migrator,
+                Initiator = _forceMigrator,
             };
 
             return needMigration;
@@ -354,7 +376,7 @@ namespace HSMServer.Core.Cache
                 IsDisabled = policy.IsDisabled,
                 Icon = policy.Icon,
 
-                Initiator = _migrator,
+                Initiator = _forceMigrator,
             };
 
         private static PolicyScheduleUpdate ToUpdate(PolicySchedule schedule) =>
