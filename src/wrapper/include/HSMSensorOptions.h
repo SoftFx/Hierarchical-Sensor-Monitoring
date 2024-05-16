@@ -343,6 +343,13 @@ namespace hsm_wrapper
 		HSMBarAlertTemplate() : HSMAlertBaseTemplate(CreateHSMBarAlertBaseTemplateImpl()) {};
 	};
 
+	enum HSMDefaultAlertsOptions 
+	{
+		None = 0,
+		DisableTtl = 1,
+		DisableStatusChange = 2
+	};
+
 	class HSMWRAPPER_API HSMBaseSensorOptions
 	{
 	public:
@@ -353,6 +360,7 @@ namespace hsm_wrapper
 		std::optional<bool> enable_for_grafana;
 		std::optional<bool> is_singleton_sensor;
 		std::optional<bool> aggregate_data;
+		unsigned int default_alert_options = HSMDefaultAlertsOptions::None;
 	};
 
 	class HSMWRAPPER_API HSMInstantSensorOptions : public HSMBaseSensorOptions
