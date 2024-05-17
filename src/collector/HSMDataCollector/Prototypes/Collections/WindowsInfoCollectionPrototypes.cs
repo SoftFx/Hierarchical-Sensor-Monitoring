@@ -26,8 +26,7 @@ namespace HSMDataCollector.Prototypes
         {
             var options = base.Get(customOptions);
 
-            options.Description = $"{options.Description} Information is read from [**Windows Registry**](https://en.wikipedia.org/wiki/Windows_Registry)." +
-            $" The system check is carried out every {options.PostDataPeriod.ToReadableView()}";
+            options.Description = $"{options.Description} The system check is carried out every {options.PostDataPeriod.ToReadableView()}";
 
             return options;
         }
@@ -41,19 +40,11 @@ namespace HSMDataCollector.Prototypes
 
         public WindowsLastRestartPrototype() : base()
         {
-            Type = SensorType.TimeSpanSensor;
-        }
-
-        public override WindowsInfoSensorOptions Get(WindowsInfoSensorOptions customOptions)
-        {
-            var options = base.Get(customOptions);
-
-            options.Description = $"This sensor sends information about the time of the last OS restart. " +
+            Description = $"This sensor sends information about the time of the last OS restart. " +
                 $"The information is read using [**Performance counter**](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.performancecounter?view=netframework-4.7.2) by path " +
-                $"*{WindowsLastRestart.CategoryName}/{WindowsLastRestart.CounterName}* " +
-                $"The system check is carried out every {options.PostDataPeriod.ToReadableView()}";
-
-            return options;
+                $"*{WindowsLastRestart.CategoryName}/{WindowsLastRestart.CounterName}* ";
+;
+            Type = SensorType.TimeSpanSensor;
         }
     }
 
@@ -65,7 +56,8 @@ namespace HSMDataCollector.Prototypes
 
         public WindowsLastUpdatePrototype() : base()
         {
-            Description = "This sensor sends information about the time of the last OS update.";
+            Description = "This sensor sends information about the time of the last OS update. The sensor reads Windows Logs from **Setup** category. " +
+                "The information is read using [**Event log**](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.eventlog?view=dotnet-plat-ext-7.0).";
 
             Type = SensorType.TimeSpanSensor;
 
@@ -86,7 +78,8 @@ namespace HSMDataCollector.Prototypes
 
         public WindowsVersionPrototype() : base()
         {
-            Description = "Current version of the OS in the format: *ProductName DisplayVersion (Major.Minor.Build)*.";
+            Description = "Current version of the OS in the format: *ProductName DisplayVersion (Major.Minor.Build)*. " +
+                "Information is read from [**Windows Registry**](https://en.wikipedia.org/wiki/Windows_Registry).";
 
             Type = SensorType.VersionSensor;
             AggregateData = true;

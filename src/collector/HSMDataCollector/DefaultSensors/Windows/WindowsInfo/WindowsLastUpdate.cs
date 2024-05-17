@@ -1,32 +1,39 @@
 ﻿using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using System;
+using System.Diagnostics.Eventing.Reader;
+using System.Runtime.Versioning;
+
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "<Pending>")]
     internal sealed class WindowsLastUpdate : MonitoringSensorBase<TimeSpan>
     {
-        private const string ShellCommand = "Get-WinEvent -LogName Setup | where {$_.message -match \"success\"} | select -First 1 -Property @{Name='Date';Expression={$_.TimeCreated.ToString()}} | select -ExpandProperty Date";
-        
-        
-        private readonly DateTime _lastUpdateDate;
+        private readonly EventLogQuery _query = new EventLogQuery("SetUp", PathType.LogName) { ReverseDirection = true };
 
         protected override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
 
 
-        public WindowsLastUpdate(WindowsInfoSensorOptions options) : base(options)
+        public WindowsLastUpdate(SensorOptions options) : base(options) { }
+
+
+        public DateTime GetLastSuccessfulUpdateTime()
         {
-            using (var process = ProcessInfo.GetPowershellProcess(ShellCommand))
+            using (EventLogReader reader = new EventLogReader(_query))
             {
-                process.Start();
-
-                DateTime.TryParse(process.StandardOutput.ReadToEnd(), out _lastUpdateDate);
-
-                process.WaitForExit();
+                EventRecord eventRecord;
+                while ((eventRecord = reader.ReadEvent()) != null)
+                {
+                    if (eventRecord.Id == 2)
+                        return eventRecord.TimeCreated.Value;
+                }
             }
+
+            return RegistryInfo.GetInstallationDate();
         }
 
 
-        protected override TimeSpan GetValue() => DateTime.UtcNow - _lastUpdateDate.ToUniversalTime();
+        protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastSuccessfulUpdateTime().ToUniversalTime();
     }
 }
