@@ -620,7 +620,6 @@ namespace HSMServer.Controllers
                 SelectedUnit = newModel.SelectedUnit,
                 AggregateValues = newModel.AggregateValues,
                 Statistics = newModel.GetOptions(),
-                DefaultChats = newModel.DefaultChats.ToModel(availableChats),
                 Initiator = CurrentInitiator
             };
 

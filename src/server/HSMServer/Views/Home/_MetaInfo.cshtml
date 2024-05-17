@@ -149,7 +149,9 @@
 
         var formData = new FormData(this);
         collectAlerts(formData);
-        fillDefaultChatMode?.(formData);
+        if (window.fillDefaultChatMode) {
+            fillDefaultChatMode(formData);
+        }
 
         $.ajax({
             url: $("#editMetaInfo_form").attr("action"),
