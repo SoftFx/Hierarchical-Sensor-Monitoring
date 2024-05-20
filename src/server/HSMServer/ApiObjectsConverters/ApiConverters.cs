@@ -445,9 +445,10 @@ namespace HSMServer.ApiObjectsConverters
         private static PolicyDestinationMode Convert(this AlertDestinationMode destination) =>
             destination switch
             {
+                AlertDestinationMode.DefaultChats or AlertDestinationMode.FromParent => PolicyDestinationMode.FromParent,
                 AlertDestinationMode.NotInitialized => PolicyDestinationMode.NotInitialized,
-                AlertDestinationMode.DefaultChats => PolicyDestinationMode.FromParent,
                 AlertDestinationMode.AllChats => PolicyDestinationMode.AllChats,
+                AlertDestinationMode.Empty => PolicyDestinationMode.Empty,
                 _ => throw new NotImplementedException(),
             };
     }

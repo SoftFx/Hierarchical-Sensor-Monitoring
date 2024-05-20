@@ -42,6 +42,7 @@ namespace HSMDataCollector.Options
         public Unit? SensorUnit { get; set; }
 
 
+        [Obsolete("This setting doesn't exist for sensor now")]
         public DefaultChatsMode? DefaultChats { get; set; }
 
         public TimeSpan? KeepHistory { get; set; }
