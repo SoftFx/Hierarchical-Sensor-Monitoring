@@ -2,7 +2,6 @@
 using HSMDataCollector.Options;
 using System;
 using System.Diagnostics.Eventing.Reader;
-using System.Runtime.Versioning;
 
 
 namespace HSMDataCollector.DefaultSensors.Windows
@@ -10,6 +9,8 @@ namespace HSMDataCollector.DefaultSensors.Windows
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "<Pending>")]
     internal sealed class WindowsLastUpdate : MonitoringSensorBase<TimeSpan>
     {
+        private const int InstallationSuccessCode = 2;
+
         private readonly EventLogQuery _query = new EventLogQuery("SetUp", PathType.LogName) { ReverseDirection = true };
 
         protected override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
@@ -25,7 +26,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
                 EventRecord eventRecord;
                 while ((eventRecord = reader.ReadEvent()) != null)
                 {
-                    if (eventRecord.Id == 2)
+                    if (eventRecord.Id == InstallationSuccessCode)
                         return eventRecord.TimeCreated.Value;
                 }
             }
