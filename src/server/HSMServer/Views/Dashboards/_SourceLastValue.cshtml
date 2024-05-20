@@ -1,15 +1,14 @@
-@using HSMServer.Datasources
-@model HSMServer.Model.Dashboards.DatasourceViewModel
+@model HSMServer.Model.Dashboards.PanelViewModel
 
-
-@{
-    var lastValue = Model.Values[^1] as BaseChartValue;
-}
-
-<div id="source_@Model.Id" style="display: flex; font-size: clamp(2rem, 8vw, 3rem)">
-    <input disabled type="color" value="@Model.Color" class="form-control form-control-color p-1" style="background-color: white; width: 3rem; align-self: center; flex-grow: 0"/>
-    <span class="mx-2" style="flex-grow: 2; max-width: 40%">@Model.DisplayLabel</span>
-    <span class="last-time mx-2">@lastValue.Time</span>
-    <span class="last-value mx-1" style="flex-grow: 1; text-align: end">@lastValue?.GetValue()</span>
-</div>
-
+<table class="table d-flex" style="font-size: clamp(1rem, 3vw, 1rem)">
+    <tr>
+        <th>Color</th>
+        <th>Label</th>
+        <th>Time</th>
+        <th>Value</th>
+    </tr>
+    @foreach (var i in @Model.Sources.Values)
+    {
+        @await Html.PartialAsync("_LastValue", i)
+    }
+</table>

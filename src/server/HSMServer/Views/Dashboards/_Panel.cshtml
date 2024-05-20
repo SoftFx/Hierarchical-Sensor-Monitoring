@@ -15,7 +15,7 @@
     var jsonOptions = new JsonSerializerOptions()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new PlotlyDoubleConverter() }
+        Converters = {new PlotlyDoubleConverter()}
     };
     var legendsTitle = @Model.Settings.ShowLegend ? "Hide legends" : "Show legends";
 }
@@ -25,12 +25,15 @@
         <span id="emptypanel_@Model.Id" style="font-size: larger; position: fixed; z-index: 300; color: rgb(128,128,128); display: none">Empty panel</span>
         <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1 name-draggable">
             <div class="d-inline-block overflow-hidden">
-                <span class="fw-bold d-flex" title="@Model.Name" id="panel_name" style="white-space: nowrap">@Model.Name</span>
-               
-                @if (@Model.AggregateValues)
-                {
-                    <span style="color:grey">(values are aggregated)</span>
-                }
+                <div class="d-flex">
+                    <span class="fw-bold d-flex" title="@Model.Name" id="panel_name" style="white-space: nowrap">@Model.Name</span>
+
+                    @if (@Model.AggregateValues)
+                    {
+                        <div class="d-flex ms-1" style="color:grey">(values are aggregated)</div>
+                    }
+                </div>
+
                 @if (string.IsNullOrEmpty(Model.Description))
                 {
                     <div style="height: 1.5rem"></div>
@@ -81,10 +84,7 @@
     @if (Model.Settings.IsSingleMode)
     {
         <div id="panelLastValue_@Model.Id">
-            @foreach (var (_, source) in Model.Sources)
-            {
-                await Html.RenderPartialAsync("_SourceLastValue", source);
-            }
+            @await Html.PartialAsync("_SourceLastValue", Model)
         </div>
     }
     else

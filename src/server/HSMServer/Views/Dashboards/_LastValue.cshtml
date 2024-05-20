@@ -1,0 +1,22 @@
+@using HSMServer.Datasources
+@model HSMServer.Model.Dashboards.DatasourceViewModel
+
+
+@{
+    var lastValue = Model.Values[^1] as BaseChartValue;
+}
+
+<tr id="source_@Model.Id">
+    <td>
+        <input disabled type="color" value="@Model.Color" class="form-control form-control-color p-1" style="background-color: white; width: 3rem; align-self: center; flex-grow: 0"/>
+    </td>
+    <td>
+        <span class="mx-2" style="flex-grow: 2; max-width: 40%">@Model.DisplayLabel</span>
+    </td>
+    <td>
+        <span class="last-time mx-2">@lastValue.Time</span>
+    </td>
+    <td>
+        <span class="last-value mx-1" style="flex-grow: 1; text-align: end">@lastValue?.GetValue()</span>
+    </td>
+</tr>
