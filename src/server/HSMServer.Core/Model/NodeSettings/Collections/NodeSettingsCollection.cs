@@ -14,7 +14,8 @@ namespace HSMServer.Core.Model.NodeSettings
         {
             base.Update(update, table);
 
-            GetUpdateFunction<PolicyDestinationSettings>(update, table)(DefaultChats, update.DefaultChats, "Default telegram chats", null);
+            if (update is ProductUpdate productUpdate)
+                GetUpdateFunction<PolicyDestinationSettings>(update, table)(DefaultChats, productUpdate.DefaultChats, "Default telegram chats", null);
         }
 
 

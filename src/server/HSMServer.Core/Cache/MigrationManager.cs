@@ -297,7 +297,7 @@ namespace HSMServer.Core.Cache
             {
                 Id = node.Id,
                 TTLPolicy = migrator(ToUpdate(ttl)),
-                Initiator = _forceMigrator,
+                Initiator = _forceMigrator, // TODO: after migrtion change initiator to _softMigrator
             };
 
             return needMigration;
@@ -319,22 +319,21 @@ namespace HSMServer.Core.Cache
         {
             static bool IsTarget(BaseNodeModel node) => node is ProductModel product && product.Parent == null && product.FolderId != null;
 
-            return TryMigrateNodeDefaultChartToParent(product, IsTarget, DefaultChatsMode.FromFolder, out update);
+            return TryMigrateNodeDefaultChatToParent(product, IsTarget, DefaultChatsMode.FromFolder, out update);
         }
 
         private static bool TryMigrateProductDefaultChatToParent(ProductModel product, out ProductUpdate update)
         {
             static bool IsTarget(BaseNodeModel node) => node is ProductModel product && product.Parent != null;
 
-            return TryMigrateNodeDefaultChartToParent(product, IsTarget, DefaultChatsMode.FromParent, out update);
+            return TryMigrateNodeDefaultChatToParent(product, IsTarget, DefaultChatsMode.FromParent, out update);
         }
 
-        private static bool TryMigrateNodeDefaultChartToParent<T>(ProductModel product, Predicate<ProductModel> isTarget, DefaultChatsMode mode, out T update)
-            where T : BaseNodeUpdate, new()
+        private static bool TryMigrateNodeDefaultChatToParent(ProductModel product, Predicate<ProductModel> isTarget, DefaultChatsMode mode, out ProductUpdate update)
         {
             if (product.Settings.DefaultChats.CurValue.IsNotInitialized && isTarget(product))
             {
-                update = new T
+                update = new ProductUpdate
                 {
                     Id = product.Id,
                     DefaultChats = new PolicyDestinationSettings(mode),

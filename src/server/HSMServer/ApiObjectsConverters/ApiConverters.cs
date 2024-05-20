@@ -5,7 +5,6 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
-using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableOfChanges;
@@ -253,7 +252,6 @@ namespace HSMServer.ApiObjectsConverters
                 SelectedUnit = request.OriginalUnit?.Convert(),
                 Integration = request.EnableGrafana.HasValue ? request.EnableGrafana.Value ? Integration.Grafana : Integration.None : null,
 
-                DefaultChats = request.DefaultChats is not null ? new PolicyDestinationSettings(request.DefaultChats.Value.Convert()) : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),
@@ -299,15 +297,6 @@ namespace HSMServer.ApiObjectsConverters
             return !ticks.HasValue ? null : ticks.Value == TimeSpan.MaxValue.Ticks ? new TimeIntervalModel(TimeInterval.None) : new(ticks.Value);
         }
 
-
-        public static Core.Model.NodeSettings.DefaultChatsMode Convert(this HSMSensorDataObjects.SensorRequests.DefaultChatsMode apiMode) =>
-            apiMode switch
-            {
-                HSMSensorDataObjects.SensorRequests.DefaultChatsMode.FromParent => Core.Model.NodeSettings.DefaultChatsMode.FromParent,
-                HSMSensorDataObjects.SensorRequests.DefaultChatsMode.NotInitialized => Core.Model.NodeSettings.DefaultChatsMode.NotInitialized,
-                HSMSensorDataObjects.SensorRequests.DefaultChatsMode.Empty => Core.Model.NodeSettings.DefaultChatsMode.Empty,
-                _ => throw new NotImplementedException(),
-            };
 
         public static SensorType Convert(this HSMSensorDataObjects.SensorType type) =>
             type switch

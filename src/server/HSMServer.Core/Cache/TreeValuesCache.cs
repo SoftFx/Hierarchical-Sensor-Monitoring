@@ -1094,11 +1094,6 @@ namespace HSMServer.Core.Cache
                 DisplayName = request.SensorName,
                 Type = (byte)type,
                 CreationDate = DateTime.UtcNow.Ticks,
-
-                DefaultChatsSettings = new PolicyDestinationSettingsEntity()
-                {
-                    Mode = (byte)DefaultChatsMode.FromParent,
-                }
             };
 
             var sensor = SensorModelFactory.Build(entity);
