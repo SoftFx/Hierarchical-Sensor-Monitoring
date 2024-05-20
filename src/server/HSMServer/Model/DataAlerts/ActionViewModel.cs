@@ -37,7 +37,7 @@ namespace HSMServer.Model.DataAlerts
 
     public enum ChatsMode
     {
-        [Display(Name = "from parent")]
+        [Display(Name = "parent telegram chat")]
         FromParent,
         [Display(Name = "not initialized destination")]
         NotInitialized,

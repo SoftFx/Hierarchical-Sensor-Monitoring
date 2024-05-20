@@ -10,7 +10,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class AlertExportViewModel
     {
-        private const string NotInitializedChat = "#notinit";
+        private const string NotInitializedChat = "#notinitialized";
         private const string FromParentChat = "#fromparent";
         private const string EmptyChat = "#empty";
         private const string AllChats = "#all";
