@@ -161,7 +161,7 @@ namespace HSMServer.Core.Cache
             var ok = TryMigrateTtlPolicy(product, IsTarget, Migration, out update);
 
             if (ok)
-                update = update with { DefaultChats = update.DefaultChats.ApplyNewChats(oldChats) };
+                update = update with { DefaultChats = product.Settings.DefaultChats.CurValue.ApplyNewChats(oldChats) };
 
             return ok;
         }
