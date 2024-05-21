@@ -19,11 +19,12 @@ namespace HSMServer.Core.Model.NodeSettings
         }
 
 
-        internal void SetParentSettings(NodeSettingsCollection parentCollection)
+        internal override void SetParentSettings(BaseSettingsCollection parentCollection)
         {
             base.SetParentSettings(parentCollection);
 
-            DefaultChats.SetParent(parentCollection.DefaultChats);
+            if (parentCollection is NodeSettingsCollection settings)
+                DefaultChats.SetParent(settings.DefaultChats);
         }
 
         internal void SetSettings(Dictionary<string, TimeIntervalEntity> settingsEntity, PolicyDestinationSettingsEntity defaultChats)

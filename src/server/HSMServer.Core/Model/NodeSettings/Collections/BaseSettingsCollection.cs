@@ -46,7 +46,7 @@ namespace HSMServer.Core.Model.NodeSettings
                     property.TrySetValue(new TimeIntervalModel(setting));
         }
 
-        internal void SetParentSettings(BaseSettingsCollection parentCollection)
+        internal virtual void SetParentSettings(BaseSettingsCollection parentCollection)
         {
             foreach (var (name, property) in _intervalProperties)
                 property.SetParent(parentCollection._intervalProperties[name]);
