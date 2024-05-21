@@ -3,10 +3,11 @@ import {TimeSpanPlot, ErrorColorPlot} from "./plots";
 import {Dashboard} from "../ts/dashboardT";
 import {DashboardStorage} from "../ts/dashboard.storage";
 import {Panel} from "../ts/dashboard.panel";
+import {PanelCordinatesHelper} from "../ts/services/panel-cordinates-helper";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
-
+export const panelHelper = new PanelCordinatesHelper();
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();

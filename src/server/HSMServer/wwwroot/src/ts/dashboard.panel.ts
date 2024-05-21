@@ -6,6 +6,7 @@ import {httpPanelService} from "./dashboard.storage";
 import {SiteHelper} from "./services/site-helper";
 import showToast = SiteHelper.showToast;
 import Plotly from "plotly.js";
+import {panelHelper} from "../js/dashboard";
 
 export class Panel {
     private _lastUpdateTime: Date = new Date(0);
@@ -81,6 +82,7 @@ export class Panel {
                 
                 // TODO: replace panel in storage!!!
                 panel.replaceWith(createElementFromHTML(panelPage));
+                await panelHelper.recordinate(this.id);
 
                 function createElementFromHTML(htmlString: string) {
                     const range = document.createRange();
