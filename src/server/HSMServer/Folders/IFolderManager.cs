@@ -34,6 +34,6 @@ namespace HSMServer.Folders
 
         List<FolderModel> GetUserFolders(User user);
 
-        Dictionary<string, string> GetFolderDefaultChat(Guid folderId);
+        Dictionary<string, string> GetFolderDefaultChats(Guid folderId);
     }
 }

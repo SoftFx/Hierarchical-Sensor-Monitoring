@@ -160,6 +160,6 @@ namespace HSMServer.Extensions
             alert.Actions.Any(a => a.Action is ActionType.SendNotification &&
                                    (a.ChatsMode is ChatsMode.NotInitialized ||
                                    (a.ChatsMode is ChatsMode.Custom && a.Chats.Count == 0) ||
-                                   (a.ChatsMode is ChatsMode.FromParent && sensor.Parent.DefaultChats.GetCurrentChat().mode is Model.Controls.DefaultChatMode.NotInitialized)));
+                                   (a.ChatsMode is ChatsMode.FromParent && sensor.Parent.DefaultChats.GetCurrentChats().mode is Model.Controls.DefaultChatMode.NotInitialized)));
     }
 }

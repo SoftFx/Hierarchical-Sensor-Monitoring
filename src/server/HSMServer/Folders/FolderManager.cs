@@ -256,12 +256,13 @@ namespace HSMServer.Folders
             }
         }
 
-        public Dictionary<string, string> GetFolderDefaultChat(Guid folderId)
+        public Dictionary<string, string> GetFolderDefaultChats(Guid folderId)
         {
-            var chats = new Dictionary<string, string>(1);
+            var chats = new Dictionary<string, string>(1 << 2);
 
             if (TryGetValue(folderId, out var folder) && folder.DefaultChats.IsCustom)
-                chats.Add(folder.DefaultChats.Chat.ToString(), GetChatName?.Invoke(folder.DefaultChats.Chat));
+                foreach (var chat in folder.DefaultChats.SelectedChats)
+                    chats.Add(chat.ToString(), GetChatName?.Invoke(chat));
 
             return chats;
         }
@@ -335,7 +336,7 @@ namespace HSMServer.Folders
                 var chat = folder.DefaultChats;
                 var entity = action is ActionType.Delete
                     ? chat.ToEntity(folder.GetAvailableChats())
-                    : Model.Controls.DefaultChatViewModel.FromFolderEntity(GetFolderDefaultChat(folder.Id));
+                    : Model.Controls.DefaultChatViewModel.FromFolderEntity(GetFolderDefaultChats(folder.Id));
 
                 return new(entity);
             }

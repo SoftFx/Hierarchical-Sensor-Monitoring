@@ -15,7 +15,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var telegramChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v.Name);
+    var telegramChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v);
 }
 
 
@@ -65,12 +65,12 @@
                 {
                     case ChatsMode.FromParent:
                     {
-                        var (chat, mode) = Model.ParentDefaultChat.GetCurrentChat();
+                        var (chatIds, mode) = Model.ParentDefaultChat.GetCurrentChats();
                         var chatName = mode switch
                         {
                             DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
                             DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
-                            _ => telegramChats.TryGetValue(chat, out var name) ? name : DefaultChatMode.NotInitialized.GetDisplayName(),
+                            _ => chatIds.ToNames(telegramChats),
                         };
 
                         chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatName})";
@@ -85,7 +85,7 @@
                             color = "gray";
                         }
                         else
-                            chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch]));
+                            chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
                     
                         break;
                     }

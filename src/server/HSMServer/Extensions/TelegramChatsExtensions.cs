@@ -1,11 +1,23 @@
 ﻿using HSMServer.Notifications;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Extensions
 {
-    internal static class TelegramChatsExtensions
+    public static class TelegramChatsExtensions
     {
+        public static string ToNames(this HashSet<Guid> chatIds, Dictionary<Guid, TelegramChat> availableChats)
+        {
+            var chats = new List<string>(1 << 2);
+
+            foreach (var id in chatIds)
+                if (availableChats.TryGetValue(id, out var chat))
+                    chats.Add(chat.Name);
+
+            return string.Join(", ", chats);
+        }
+
         internal static List<TelegramChat> GetGroups(this List<TelegramChat> chats) =>
             chats.GetChats(ConnectedChatType.TelegramGroup);
 

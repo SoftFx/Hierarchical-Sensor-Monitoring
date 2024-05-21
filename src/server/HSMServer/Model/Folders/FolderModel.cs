@@ -124,14 +124,14 @@ namespace HSMServer.Model.Folders
 
         private DefaultChatViewModel UpdateSetting(DefaultChatViewModel currentValue, DefaultChatViewModel newValue, InitiatorInfo initiator)
         {
-            string GetJournalValue((Guid chatId, DefaultChatMode mode) value) => value.mode switch
+            string GetJournalValue((HashSet<Guid> ids, DefaultChatMode mode) value) => value.mode switch
             {
-                DefaultChatMode.Custom => GetChatName(value.chatId),
+                DefaultChatMode.Custom => string.Join(", ", value.ids.Select(i => GetChatName(i))),
                 _ => value.mode.GetDisplayName(),
             };
 
-            var oldChat = (currentValue.Chat, currentValue.ChatMode);
-            var newChat = (newValue.Chat, newValue.ChatMode);
+            var oldChat = (currentValue.SelectedChats, currentValue.ChatMode);
+            var newChat = (newValue.SelectedChats, newValue.ChatMode);
 
             if (oldChat != newChat)
             {

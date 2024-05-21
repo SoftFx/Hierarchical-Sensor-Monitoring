@@ -15,19 +15,11 @@
 }
 
 
-<style>
-    /* For null option in selectpicker */
-    .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder, .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder:hover, .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder:focus, .bootstrap-select.default-chat > .dropdown-toggle.bs-placeholder:active {
-        color: black;
-    }
-</style>
-
-
-<span class="@(Model.IsModify ? "col-2" : "meta-info-label")">Telegram chat</span>
+<span class="@(Model.IsModify ? "col-2" : "meta-info-label")">Telegram chat(s)</span>
 
 <span id="labelDefaultChat" class="@(Model.IsModify ? "d-none" : "meta-info-value")">@displayName</span>
 <div id="defaultChatControl" class="@(Model.IsModify ? "col-auto ms-1" : "d-none meta-info-interval")">
-    <select name="SelectedChat" class="default-chat selectpicker">
+    <select name="SelectedChats" class="default-chat selectpicker" multiple data-live-search="true" data-placeholder="Default telegram chat(s)" required>
         @if (Model.HasParent)
         {
             <option value="@DefaultChatMode.FromParent" selected="@Model.IsSelectedMode(DefaultChatMode.FromParent)">@parentName</option>
@@ -56,28 +48,32 @@
 
 
 <script>
-     $(document).ready(function () {
-         $("select[name='SelectedChat']").selectpicker();
-     });
+    $(document).ready(function () {
+        $("select[name='SelectedChats']").selectpicker();
+    });
 
-     function fillDefaultChatMode(formData) {
-         let chatMode = '@DefaultChatMode.Custom';
-         let selectedChat = $(`select[name='SelectedChat']`).find(":selected").val();
+    function fillDefaultChatMode(formData) {
+        let chatsMode = '@DefaultChatMode.Custom';
+        let chats = [];
 
-         let selectedOption = $(`select[name='SelectedChat']`).find(":selected").text();
-         switch (selectedOption) {
-             case '@parentName':
-                 chatMode = '@DefaultChatMode.FromParent';
-                 break;
-             case '@DefaultChatMode.NotInitialized.GetDisplayName()':
-                 chatMode = '@DefaultChatMode.NotInitialized';
-                 break;
-             case '@DefaultChatMode.Empty.GetDisplayName()':
-                 chatMode = '@DefaultChatMode.Empty';
-                 break;
-         }
+        $(document).find("select[name='SelectedChats']:first option").each(function () {
+            if ($(this).is(':selected')) {
+                if ($(this).val() === '@DefaultChatMode.FromParent' ||
+                    $(this).val() === '@DefaultChatMode.NotInitialized' ||
+                    $(this).val() === '@DefaultChatMode.Empty') {
+                    chatsMode = $(this).val();
+                    chats = [];
+                    return;
+                }
+        
+                chats.push($(this).val());
+            }
+        });
 
-         formData.append(`DefaultChats.ChatMode`, chatMode);
-         formData.append(`DefaultChats.SelectedChat`, selectedChat);
-     }
+        formData.append(`DefaultChats.ChatMode`, chatsMode);
+
+        for (let k = 0; k < chats.length; ++k) {
+            formData.append(`DefaultChats.SelectedChats[${k}]`, chats[k]);
+        }
+    }
 </script>
