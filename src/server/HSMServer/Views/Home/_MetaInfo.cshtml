@@ -257,7 +257,7 @@
 
         block.find("select[name='Chats']:first option").each(function () {
             if ($(this).is(':selected')) {
-                if ($(this).val() === '@ChatsMode.FromParent' || $(this).val() === '@ChatsMode.NotInitialized' || 
+                if ($(this).val() === '@ChatsMode.FromParent' || $(this).val() === '@ChatsMode.NotInitialized' ||
                     $(this).val() === '@ChatsMode.Empty' || $(this).val() === '@ChatsMode.All') {
                     chatsMode = $(this).val();
                     chats = [];
@@ -266,7 +266,11 @@
 
                 chats.push($(this).val());
             }
-        })
+        });
+
+        block.find("div[name='Chats']").each(function () {
+            chatsMode = '@ChatsMode.FromParent';
+        });
 
         formData.append(`DataAlerts[${type}][${i}].Actions[${j}].ChatsMode`, chatsMode);
 

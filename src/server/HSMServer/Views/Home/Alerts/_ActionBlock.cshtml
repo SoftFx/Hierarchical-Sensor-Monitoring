@@ -40,7 +40,7 @@
         <div class="alert-text-block operation-select">to</div>
         @if (Model.Node is not SensorNodeViewModel)
         {
-            <div class="alert-block target-input">@Model.ChatsMode.GetDisplayName()</div>
+            <div name="Chats" class="alert-block target-input">@Model.ChatsMode.GetDisplayName()</div>
         }
         else
         {
