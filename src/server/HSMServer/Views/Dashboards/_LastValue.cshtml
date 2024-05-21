@@ -7,16 +7,17 @@
 }
 
 <tr id="source_@Model.Id">
-    <td>
+    <th scope="row">
         <input disabled type="color" value="@Model.Color" class="form-control form-control-color p-1" style="background-color: white; width: 3rem; align-self: center; flex-grow: 0"/>
-    </td>
+    </th>
     <td>
         <span class="mx-2" style="flex-grow: 2; max-width: 40%">@Model.DisplayLabel</span>
     </td>
-    <td>
-        <span class="last-time mx-2">@lastValue.Time</span>
-    </td>
+
     <td>
         <span class="last-value mx-1" style="flex-grow: 1; text-align: end">@lastValue?.GetValue()</span>
+    </td>
+    <td>
+        <span class="last-time mx-2">@lastValue.Time</span>
     </td>
 </tr>
