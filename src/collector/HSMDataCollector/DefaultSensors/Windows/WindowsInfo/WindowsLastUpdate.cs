@@ -9,7 +9,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "<Pending>")]
     internal sealed class WindowsLastUpdate : MonitoringSensorBase<TimeSpan>
     {
-        private const int InstallationSuccessCode = 2;
+        private const int INSTALLATION_SUCCESS_CODE = 2;
 
         private readonly EventLogQuery _query = new EventLogQuery("SetUp", PathType.LogName) { ReverseDirection = true };
 
@@ -19,14 +19,14 @@ namespace HSMDataCollector.DefaultSensors.Windows
         public WindowsLastUpdate(SensorOptions options) : base(options) { }
 
 
-        public DateTime GetLastSuccessfulUpdateTime()
+        private DateTime GetLastSuccessfulUpdateTime()
         {
             using (EventLogReader reader = new EventLogReader(_query))
             {
                 EventRecord eventRecord;
                 while ((eventRecord = reader.ReadEvent()) != null)
                 {
-                    if (eventRecord.Id == InstallationSuccessCode)
+                    if (eventRecord.Id == INSTALLATION_SUCCESS_CODE)
                         return eventRecord.TimeCreated.Value;
                 }
             }

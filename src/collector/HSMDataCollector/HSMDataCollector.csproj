@@ -4,10 +4,10 @@
     <TargetFrameworks>net8.0;net472</TargetFrameworks>
     <OutputType>Library</OutputType>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
-    <AssemblyVersion>3.3.2</AssemblyVersion>
-    <AssemblyFileVersion>3.3.2</AssemblyFileVersion>
-    <ProductVersion>3.3.2</ProductVersion>
-    <Version>3.3.2</Version>
+    <AssemblyVersion>3.3.3</AssemblyVersion>
+    <AssemblyFileVersion>3.3.3</AssemblyFileVersion>
+    <ProductVersion>3.3.3</ProductVersion>
+    <Version>3.3.3</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
@@ -33,6 +33,7 @@
     <PackageReference Include="NLog" Version="4.7.9" />
     <PackageReference Include="Polly.Core" Version="8.2.1" />
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="6.0.1" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
     <PackageReference Include="System.Net.Http" Version="4.3.4" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="7.0.1" />
   </ItemGroup>
