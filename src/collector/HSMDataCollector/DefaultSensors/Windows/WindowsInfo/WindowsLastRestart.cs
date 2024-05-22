@@ -12,8 +12,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
         public static string WMI_CLASS_NAME = "Win32_OperatingSystem";
         public static string PROPERTY_NAME  = "LastBootUpTime";
 
-        private readonly ManagementObjectSearcher _searcher = new ManagementObjectSearcher($"SELECT {PROPERTY_NAME} FROM {WMI_CLASS_NAME}");
-
         protected override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
 
 
@@ -25,11 +23,14 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         private DateTime GetLastBootTime()
         {
-            var wmiObject = _searcher.Get().OfType<ManagementObject>().FirstOrDefault();
-
-            if (wmiObject != null)
+            using (var searcher = new ManagementObjectSearcher($"SELECT {PROPERTY_NAME} FROM {WMI_CLASS_NAME}"))
             {
-                return ManagementDateTimeConverter.ToDateTime(wmiObject.Properties[PROPERTY_NAME].Value.ToString()).ToUniversalTime();
+                var wmiObject = searcher.Get().OfType<ManagementObject>().FirstOrDefault();
+
+                if (wmiObject != null)
+                {
+                    return ManagementDateTimeConverter.ToDateTime(wmiObject.Properties[PROPERTY_NAME].Value.ToString()).ToUniversalTime();
+                }
             }
 
             return DateTime.MinValue;
