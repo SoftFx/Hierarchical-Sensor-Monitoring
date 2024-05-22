@@ -201,3 +201,7 @@ input.input-validation-error {
 .noHover{
     pointer-events: none;
 }
+
+.bootstrap-select.unit-select {
+    width: 9rem !important;
+}
