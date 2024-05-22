@@ -1,5 +1,5 @@
 ﻿import Plotly from "plotly.js";
-import {PanelSettings} from "./dashboard.classes";
+import {PanelSettings} from "./dashboard/dashboard.classes";
 
 export namespace ChartHelper {
     export async function initMultyichartCordinates(settings: PanelSettings, id: string) : Promise<number> {

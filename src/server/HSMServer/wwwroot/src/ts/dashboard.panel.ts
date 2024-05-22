@@ -1,12 +1,12 @@
-import {PanelSettings} from "./dashboard.classes";
-import {IPanelSettings, IYRangeSettings} from "./dashboard.interfaces";
 import moment from "moment/moment";
 import {Layout} from "./plotUpdate";
-import {httpPanelService} from "./dashboard.storage";
 import {SiteHelper} from "./services/site-helper";
 import showToast = SiteHelper.showToast;
 import Plotly from "plotly.js";
 import {panelHelper} from "../js/dashboard";
+import {PanelSettings} from "./dashboard/dashboard.classes";
+import {IPanelSettings, IYRangeSettings} from "./dashboard/dashboard.interfaces";
+import {httpPanelService} from "./dashboard/dashboard.storage";
 
 export class Panel {
     private _lastUpdateTime: Date = new Date(0);

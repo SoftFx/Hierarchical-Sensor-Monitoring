@@ -1,5 +1,5 @@
-import {IPanel, ISourceUpdate} from "./dashboard.interfaces";
 import {DataUpdate} from "./plotUpdate";
+import {IPanel, ISourceUpdate} from "./dashboard/dashboard.interfaces";
 
 export namespace Dashboard {
     const updateDashboardInterval = 120000; // 2min

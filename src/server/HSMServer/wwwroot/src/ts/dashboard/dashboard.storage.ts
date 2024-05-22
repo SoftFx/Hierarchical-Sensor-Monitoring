@@ -1,13 +1,14 @@
 import {Dictionary, IPanelSettings, IYRangeSettings} from "./dashboard.interfaces";
-import {HttpPanelService} from "./services/http-panel-service";
-import {ChartHelper} from "./chart-helper";
-import Plotly from "plotly.js";
-import {insertSourcePlot} from "../js/dashboard";
-import {customReset} from "../js/plotting";
-import {SiteHelper} from "./services/site-helper";
-import {Panel} from "./dashboard.panel";
+import {ChartHelper} from "../chart-helper";
+import {SiteHelper} from "../services/site-helper";
+
 import getRangeDate = ChartHelper.getRangeDate;
 import replaceHtmlToMarkdown = SiteHelper.replaceHtmlToMarkdown;
+import {Panel} from "../dashboard.panel";
+import {HttpPanelService} from "../services/http-panel-service";
+import {insertSourcePlot} from "../../js/dashboard";
+import {customReset} from "../../js/plotting";
+import Plotly from "plotly.js";
 
 export const httpPanelService : HttpPanelService = new HttpPanelService();
 
