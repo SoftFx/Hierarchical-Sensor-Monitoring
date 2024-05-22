@@ -3,26 +3,21 @@ using System.Numerics;
 
 namespace HSMServer.Datasources.Aggregators
 {
-    public readonly struct LinePointState<T> where T : INumber<T>
+    public readonly struct LineNumberPointState<T> : ILinePointState<T>
+        where T : INumber<T>
     {
         public DateTime Time { get; init; }
 
         public T Value { get; init; }
 
 
-        public long Count { get; init; }
+        public long Count { get; init; } = 1;
 
 
-        public LinePointState(T value, DateTime time)
-        {
-            Value = value;
-            Time = time;
-
-            Count = 1;
-        }
+        public LineNumberPointState() { }
 
 
-        public static LinePointState<T> GetMaxState(LinePointState<T> first, LinePointState<T> second)
+        public static LineNumberPointState<T> GetMaxState(LineNumberPointState<T> first, LineNumberPointState<T> second)
         {
             var firstMax = first.Value > second.Value;
 
@@ -34,7 +29,7 @@ namespace HSMServer.Datasources.Aggregators
             };
         }
 
-        public static LinePointState<T> GetMinState(LinePointState<T> first, LinePointState<T> second)
+        public static LineNumberPointState<T> GetMinState(LineNumberPointState<T> first, LineNumberPointState<T> second)
         {
             var firstMin = first.Value < second.Value;
 
@@ -46,7 +41,7 @@ namespace HSMServer.Datasources.Aggregators
             };
         }
 
-        public static LinePointState<T> GetAvrState(LinePointState<T> first, LinePointState<T> second)
+        public static LineNumberPointState<T> GetAvrState(LineNumberPointState<T> first, LineNumberPointState<T> second)
         {
             static double GetNumber(T value) => double.CreateChecked(value);
 

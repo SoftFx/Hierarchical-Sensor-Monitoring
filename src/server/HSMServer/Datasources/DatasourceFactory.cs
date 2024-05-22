@@ -11,7 +11,7 @@ namespace HSMServer.Datasources
             {
                 SensorType.IntegerBar or SensorType.DoubleBar => property.IsBarView() || property.IsBarLine() || property.IsBarIntLine() || property.IsBarDoubleLine(),
                 SensorType.Integer or SensorType.Double or SensorType.Rate => property.IsInstantView() || property.IsInstantDoubleLine(),
-                SensorType.TimeSpan => property.IsInstantView(),
+                SensorType.TimeSpan or SensorType.Version => property.IsInstantView(),
 
                 _ => false,
             };
@@ -44,9 +44,11 @@ namespace HSMServer.Datasources
                 SensorType.DoubleBar when property.IsBarIntLine() => new DoubleBarIntLineSource(),
                 SensorType.DoubleBar when property.IsBarDoubleLine() => new DoubleBarNullDoubleSource(),
 
+                SensorType.Version when property.IsInstantView() => new VersionSensorLineDatasource(),
+
                 SensorType.Boolean => new PointDatasource(),
 
-                _ => throw new Exception($"History visualization for {sensor.Type} sensor is not supported")
+                _ => throw new Exception($"History visualization for {sensor.Type} sensor by {property} is not supported")
             };
 
             return source.AttachSensor(sensor, settings);

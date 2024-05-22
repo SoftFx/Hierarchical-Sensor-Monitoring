@@ -2,18 +2,13 @@
 using HSMServer.Dashboards;
 using HSMServer.Datasources.Aggregators;
 using System;
-using System.Numerics;
 
-namespace HSMServer.Datasources
+namespace HSMServer.Datasources.Lines
 {
     public abstract class BaseLineDatasource<TValue, TProp, TChart> : SensorDatasourceBase
         where TValue : BaseValue
-        where TChart : INumber<TChart>
     {
         protected Func<TValue, TProp> _getPropertyFactory;
-
-
-        protected override BaseDataAggregator DataAggregator { get; }
 
 
         protected override ChartType AggregatedType => ChartType.Line;
@@ -25,7 +20,8 @@ namespace HSMServer.Datasources
         {
             TChart ToChartValue(BaseValue value) => ConvertToChartType(_getPropertyFactory((TValue)value));
 
-            DataAggregator = new LineDataAggregator<TChart>(ToChartValue);
+            if (DataAggregator is IDataAggregator<TChart> valueAggregator)
+                valueAggregator.AttachConverter(ToChartValue);
         }
 
 
@@ -44,6 +40,14 @@ namespace HSMServer.Datasources
         protected abstract TChart ConvertToChartType(TProp value);
 
 
-        protected Exception BuildException(PlottedProperty property) => new($"Unsupport cast property for {typeof(TValue).Name} {property} from {typeof(TProp).Name} to {typeof(TChart).Name}");
+        protected static Exception BuildException(PlottedProperty property) => new($"Unsupport cast property for {typeof(TValue).Name} {property} from {typeof(TProp).Name} to {typeof(TChart).Name}");
+
+        protected static Func<T, P> GetValuePropertyFactory<T, P>(PlottedProperty property) where T : BaseValue<P> =>
+            property switch
+            {
+                PlottedProperty.Value => v => v.Value,
+
+                _ => throw BuildException(property),
+            };
     }
 }
