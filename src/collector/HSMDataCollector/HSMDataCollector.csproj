@@ -4,10 +4,10 @@
     <TargetFrameworks>net8.0;net472</TargetFrameworks>
     <OutputType>Library</OutputType>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
-    <AssemblyVersion>3.3.3</AssemblyVersion>
-    <AssemblyFileVersion>3.3.3</AssemblyFileVersion>
-    <ProductVersion>3.3.3</ProductVersion>
-    <Version>3.3.3</Version>
+    <AssemblyVersion>3.3.4</AssemblyVersion>
+    <AssemblyFileVersion>3.3.4</AssemblyFileVersion>
+    <ProductVersion>3.3.4</ProductVersion>
+    <Version>3.3.4</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
