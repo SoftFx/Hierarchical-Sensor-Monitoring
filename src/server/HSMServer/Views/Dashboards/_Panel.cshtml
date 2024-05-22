@@ -19,6 +19,8 @@
     };
     var legendsTitle = @Model.Settings.ShowLegend ? "Hide legends" : "Show legends";
     var settingsButtonsDisplayClass = @Model.Settings.IsSingleMode ? "d-none" : "";
+    
+    var lastUpdate = (long)(@Model.LastUpdate - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
 }
 
 <div id="@Model.Id" class="panel resize-draggable">
@@ -105,6 +107,6 @@
         console.log('@Model.LastUpdate.ToUniversalTime()')
         console.log(lastUpdate)
 
-        initPanel('@Model.Id', settings, ySettings, values, lastUpdate, '@Model.DashboardId');
+        initPanel('@Model.Id', settings, ySettings, values, Number('@lastUpdate'), '@Model.DashboardId');
     })
 </script>

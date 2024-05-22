@@ -23,7 +23,7 @@ export class DashboardStorage {
         this._lastUpdateIntervalId = this.checkForUpdate(this.panels);
     }
 
-    public addPanel(panel: Panel, lastUpdate: Date) {
+    public addPanel(panel: Panel, lastUpdate: number) {
         panel.lastUpdateTime = new Date(lastUpdate);
 
         this.panels[panel.id] = panel;
@@ -39,7 +39,7 @@ export class DashboardStorage {
         return this.panels[id];
     }
     
-    public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: Date, dId: string){
+    public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: number, dId: string){
         let panel = new Panel(id, settings, ySettings);
 
         let result = await ChartHelper.initMultyichartCordinates(panel.settings, id)
