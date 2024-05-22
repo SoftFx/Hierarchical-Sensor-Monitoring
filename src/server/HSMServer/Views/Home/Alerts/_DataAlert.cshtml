@@ -15,7 +15,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var telegramChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v.Name);
+    var telegramChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v);
 }
 
 
@@ -61,26 +61,38 @@
                 StringBuilder schedule = new(1 << 2);
                 string color = "#0366d6";
 
-                if (action.Chats.Contains(ActionViewModel.AllChatsId))
-                    chats = "all chats";
-                else if (action.Chats.Contains(ActionViewModel.DefaultChatId))
+                switch (action.ChatsMode)
                 {
-                    var chatName = Model.DefaultChatMode switch
+                    case ChatsMode.FromParent:
                     {
-                        DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
-                        DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
-                        _ => telegramChats.TryGetValue(Model.DefaultChat, out var name) ? name : DefaultChatMode.NotInitialized.GetDisplayName(),
-                    };
+                        var (chatIds, mode) = Model.ParentDefaultChat.GetCurrentChats();
+                        var chatName = mode switch
+                        {
+                            DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
+                            DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
+                            _ => chatIds.ToNames(telegramChats),
+                        };
 
-                    chats = $"default chat ({chatName})";
+                        chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatName})";
+                        
+                        break;
+                    }
+                    case ChatsMode.Custom:
+                    {
+                        if (action.Chats.Count == 0)
+                        {
+                            chats = "(chats are not initialized)";
+                            color = "gray";
+                        }
+                        else
+                            chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
+                    
+                        break;
+                    }
+                    default:
+                        chats = action.ChatsMode.GetDisplayName();
+                        break;
                 }
-                else if (action.Chats.Count == 0)
-                {
-                    chats = "(chats are not initialized)";
-                    color = "gray";
-                }
-                else
-                    chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch.Value)).Select(ch => telegramChats[ch.Value]));
 
                 if (action.ScheduleRepeatMode is not null)
                 {

@@ -7,6 +7,7 @@
 @using HSMServer.Model.ViewModel
 @using HSMServer.Model.Folders.ViewModels
 @using Microsoft.AspNetCore.Mvc.TagHelpers
+@using HSMServer.Model.DataAlerts
 @using HSMServer.TagHelpers
 
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
@@ -148,7 +149,9 @@
 
         var formData = new FormData(this);
         collectAlerts(formData);
-        fillDefaultChatMode(formData);
+        if (window.fillDefaultChatMode) {
+            fillDefaultChatMode(formData);
+        }
 
         $.ajax({
             url: $("#editMetaInfo_form").attr("action"),
@@ -249,13 +252,27 @@
     }
 
     function setFormDataAlertsSendNotificationChats(formData, type, i, j, block) {
+        let chatsMode = '@ChatsMode.Custom';
         let chats = [];
 
         block.find("select[name='Chats']:first option").each(function () {
             if ($(this).is(':selected')) {
+                if ($(this).val() === '@ChatsMode.FromParent' || $(this).val() === '@ChatsMode.NotInitialized' ||
+                    $(this).val() === '@ChatsMode.Empty' || $(this).val() === '@ChatsMode.All') {
+                    chatsMode = $(this).val();
+                    chats = [];
+                    return;
+                }
+
                 chats.push($(this).val());
             }
-        })
+        });
+
+        block.find("div[name='Chats']").each(function () {
+            chatsMode = '@ChatsMode.FromParent';
+        });
+
+        formData.append(`DataAlerts[${type}][${i}].Actions[${j}].ChatsMode`, chatsMode);
 
         for (let k = 0; k < chats.length; ++k){
             formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Chats[${k}]`, chats[k]);

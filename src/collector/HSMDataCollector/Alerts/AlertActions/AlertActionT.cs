@@ -29,7 +29,7 @@ namespace HSMDataCollector.Alerts
         public TimeSpan? ConfirmationPeriod { get; }
 
 
-        public AlertDestinationMode DestinationMode { get; private set; } = AlertDestinationMode.DefaultChats;
+        public AlertDestinationMode DestinationMode { get; private set; } = AlertDestinationMode.FromParent;
 
         public SensorStatus Status { get; private set; } = SensorStatus.Ok;
 
@@ -56,7 +56,7 @@ namespace HSMDataCollector.Alerts
         }
 
 
-        public AlertAction<T> AndSendNotification(string template, AlertDestinationMode destination = default)
+        public AlertAction<T> AndSendNotification(string template, AlertDestinationMode destination = AlertDestinationMode.FromParent)
         {
             DestinationMode = destination;
             Template = template;
@@ -64,7 +64,7 @@ namespace HSMDataCollector.Alerts
             return this;
         }
 
-        public AlertAction<T> AndSendScheduledNotification(string template, DateTime time, AlertRepeatMode repeatMode, bool instantSend, AlertDestinationMode destination = default)
+        public AlertAction<T> AndSendScheduledNotification(string template, DateTime time, AlertRepeatMode repeatMode, bool instantSend, AlertDestinationMode destination = AlertDestinationMode.FromParent)
         {
             Template = template;
             ScheduledNotificationTime = time;

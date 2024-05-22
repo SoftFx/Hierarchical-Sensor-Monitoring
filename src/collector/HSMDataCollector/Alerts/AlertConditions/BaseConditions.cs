@@ -10,9 +10,9 @@ namespace HSMDataCollector.Alerts
         private protected TimeSpan? _confirmationPeriod;
 
 
-        public AlertAction<T> ThenSendNotification(string template, AlertDestinationMode destination = default) => BuildAlertAction().AndSendNotification(template, destination);
+        public AlertAction<T> ThenSendNotification(string template, AlertDestinationMode destination = AlertDestinationMode.FromParent) => BuildAlertAction().AndSendNotification(template, destination);
 
-        public AlertAction<T> ThenSendScheduledNotification(string template, DateTime time, AlertRepeatMode repeatMode, bool instantSend, AlertDestinationMode destination = default) =>
+        public AlertAction<T> ThenSendScheduledNotification(string template, DateTime time, AlertRepeatMode repeatMode, bool instantSend, AlertDestinationMode destination = AlertDestinationMode.FromParent) =>
             BuildAlertAction().AndSendScheduledNotification(template, time, repeatMode, instantSend, destination);
 
         public AlertAction<T> ThenSetIcon(string icon) => BuildAlertAction().AndSetIcon(icon);

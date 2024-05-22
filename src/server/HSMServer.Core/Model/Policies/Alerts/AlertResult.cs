@@ -17,7 +17,7 @@ namespace HSMServer.Core.Model.Policies
             var target = policy.TargetChats;
 
             Chats = new HashSet<Guid>(target.Chats.Keys);
-            AllChats = target.AllChats;
+            AllChats = target.IsAllChats;
         }
 
 

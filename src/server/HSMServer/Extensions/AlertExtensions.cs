@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Model.DataAlerts;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Linq;
 
@@ -55,6 +56,27 @@ namespace HSMServer.Extensions
                 AlertProperty.OriginalSize => PolicyProperty.OriginalSize,
                 AlertProperty.NewSensorData => PolicyProperty.NewSensorData,
                 _ => throw new NotImplementedException()
+            };
+
+
+        public static ChatsMode ToClient(this PolicyDestinationMode mode) =>
+            mode switch
+            {
+                PolicyDestinationMode.FromParent => ChatsMode.FromParent,
+                PolicyDestinationMode.Custom => ChatsMode.Custom,
+                PolicyDestinationMode.AllChats => ChatsMode.All,
+                PolicyDestinationMode.Empty => ChatsMode.Empty,
+                _ => ChatsMode.NotInitialized,
+            };
+
+        public static PolicyDestinationMode ToCore(this ChatsMode mode) =>
+            mode switch
+            {
+                ChatsMode.FromParent => PolicyDestinationMode.FromParent,
+                ChatsMode.Custom => PolicyDestinationMode.Custom,
+                ChatsMode.All => PolicyDestinationMode.AllChats,
+                ChatsMode.Empty => PolicyDestinationMode.Empty,
+                _ => PolicyDestinationMode.NotInitialized,
             };
 
 
@@ -134,7 +156,10 @@ namespace HSMServer.Extensions
                 _ => true,
             };
 
-        public static bool IsDefaultDestination(this DataAlertViewModelBase alert) =>
-            alert.Actions.Any(a => a.Action == ActionType.SendNotification && a.Chats.Contains(ActionViewModel.DefaultChatId));
+        public static bool IsNotInitializedDestination(this DataAlertViewModelBase alert, SensorNodeViewModel sensor) =>
+            alert.Actions.Any(a => a.Action is ActionType.SendNotification &&
+                                   (a.ChatsMode is ChatsMode.NotInitialized ||
+                                   (a.ChatsMode is ChatsMode.Custom && a.Chats.Count == 0) ||
+                                   (a.ChatsMode is ChatsMode.FromParent && sensor.Parent.DefaultChats.GetCurrentChats().mode is Model.Controls.DefaultChatMode.NotInitialized)));
     }
 }
