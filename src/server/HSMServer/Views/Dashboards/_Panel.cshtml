@@ -103,9 +103,6 @@
         const settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
         const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
-        const lastUpdate = "@(Model.LastUpdate == DateTime.MinValue ? 0 : Model.LastUpdate)" === "0" ? 0 : "@Model.LastUpdate.ToString("yyyy-MM-ddTHH:mm:ss")";
-        console.log('@Model.LastUpdate.ToUniversalTime()')
-        console.log(lastUpdate)
 
         initPanel('@Model.Id', settings, ySettings, values, Number('@lastUpdate'), '@Model.DashboardId');
     })
