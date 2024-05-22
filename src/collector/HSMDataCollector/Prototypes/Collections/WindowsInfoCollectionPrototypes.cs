@@ -40,9 +40,9 @@ namespace HSMDataCollector.Prototypes
 
         public WindowsLastRestartPrototype() : base()
         {
-            Description = $"This sensor sends information about the time of the last OS restart. " +
-                $"The information is read using the [**Windows Management Instrumentation**](https://learn.microsoft.com/en-us/windows/win32/wmisdk/wmi-start-page)" +
-                $"by class *{WindowsLastRestart.WMI_CLASS_NAME}* and property *{WindowsLastRestart.PROPERTY_NAME}* ";
+            Description = $"This sensor sends information about the time of the last OS restart." +
+                $" The information is read using the [**Windows Management Instrumentation**](https://learn.microsoft.com/en-us/windows/win32/wmisdk/wmi-start-page)" +
+                $" by class *{WindowsLastRestart.WMI_CLASS_NAME}* and property *{WindowsLastRestart.PROPERTY_NAME}*.";
 
             Type = SensorType.TimeSpanSensor;
         }
