@@ -158,9 +158,9 @@ namespace HSMServer.Core.Cache
                 return ToFromParentDestination(update);
             }
 
-            var ok = TryMigrateTtlPolicy(product, IsTarget, Migration, out update);
+            var ok = TryMigrateProductTtlPolicy(product, IsTarget, Migration, out update);
 
-            if (ok)
+            if (ok && oldChats.Count > 0)
                 update = update with { DefaultChats = product.Settings.DefaultChats.CurValue.ApplyNewChats(oldChats) };
 
             return ok;
@@ -170,7 +170,7 @@ namespace HSMServer.Core.Cache
         {
             static bool IsTarget(Policy policy) => !policy.Destination.IsFromParentChats;
 
-            return TryMigrateTtlPolicy(product, IsTarget, ToFromParentDestination, out update);
+            return TryMigrateProductTtlPolicy(product, IsTarget, ToFromParentDestination, out update);
         }
 
 
@@ -297,10 +297,27 @@ namespace HSMServer.Core.Cache
             {
                 Id = node.Id,
                 TTLPolicy = migrator(ToUpdate(ttl)),
-                Initiator = _forceMigrator, // TODO: after migrtion change initiator to _softMigrator
+                Initiator = _softMigrator,
             };
 
             return needMigration;
+        }
+
+        private static bool TryMigrateProductTtlPolicy(ProductModel node, Predicate<Policy> isTargetPredict, Func<PolicyUpdate, PolicyUpdate> migrator, out ProductUpdate update)
+        {
+            var ttl = node.Policies.TimeToLive;
+            var isTarget = isTargetPredict(ttl);
+            var needForceMigration = node.ChangeTable.TtlPolicy.NeedMigrate;
+            var needMigartion = isTarget || needForceMigration;
+
+            update = !needMigartion ? null : new ProductUpdate()
+            {
+                Id = node.Id,
+                TTLPolicy = isTarget ? migrator(ToUpdate(ttl)) : ToUpdate(ttl),
+                Initiator = needForceMigration ? _forceMigrator : _softMigrator,
+            };
+
+            return needMigartion;
         }
 
         private static bool IsTargetPolicy(Policy policy, HashSet<PolicyProperty> targetProperties)
