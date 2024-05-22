@@ -15,7 +15,7 @@
     var jsonOptions = new JsonSerializerOptions()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = {new PlotlyDoubleConverter()}
+        Converters = { new PlotlyDoubleConverter(), new VersionSourceConverter() }
     };
     var legendsTitle = @Model.Settings.ShowLegend ? "Hide legends" : "Show legends";
     var settingsButtonsDisplayClass = @Model.Settings.IsSingleMode ? "d-none" : "";

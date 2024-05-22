@@ -1,4 +1,4 @@
-﻿import {Plot} from "../js/plots";
+import {Plot} from "../js/plots";
 import {HoverModeEnum} from "./types";
 import {IPanelSettings, IYRangeSettings} from "./dashboard.interfaces";
 

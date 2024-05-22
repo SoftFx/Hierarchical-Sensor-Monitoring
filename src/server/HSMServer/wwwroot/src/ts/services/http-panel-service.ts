@@ -1,4 +1,4 @@
-﻿import {Panel} from "../dashboard.panel";
+import {Panel} from "../dashboard.panel";
 
 
 export class HttpPanelService {

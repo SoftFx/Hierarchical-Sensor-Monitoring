@@ -229,7 +229,7 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
             if (needFillFromTo) {
                 let to = getToDate();
                 let from = new Date($(`#oldest_date_${encodedId}`).val());
-
+                
                 from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
                 $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
@@ -331,6 +331,9 @@ function getToDate() {
 
 function datetimeLocal(datetime) {
     const dt = new Date(datetime);
+
+    if (isNaN(dt.getTime()))
+       return (new Date()).toISOString().slice(0, 16);
 
     return dt.toISOString().slice(0, 16);
 }

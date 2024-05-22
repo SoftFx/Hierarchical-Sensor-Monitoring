@@ -8,4 +8,9 @@ namespace HSMServer.Model.History
     {
         
     }
+    
+    internal class VersionHistoryProcessor : HistoryProcessorBase
+    {
+        
+    }
 }

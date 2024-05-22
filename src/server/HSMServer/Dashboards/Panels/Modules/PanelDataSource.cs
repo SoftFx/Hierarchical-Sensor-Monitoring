@@ -3,6 +3,7 @@ using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Datasources;
 using System;
+using System.Text.Json;
 
 namespace HSMServer.Dashboards
 {
@@ -13,6 +14,8 @@ namespace HSMServer.Dashboards
         public Guid SensorId { get; }
 
 
+        public JsonSerializerOptions SerializerOptions { get; } = new();
+        
         public SensorDatasourceBase Source { get; private set; }
 
 

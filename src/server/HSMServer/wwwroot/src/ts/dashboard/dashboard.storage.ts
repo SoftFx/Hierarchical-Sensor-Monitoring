@@ -1,4 +1,4 @@
-﻿import {Dictionary, IPanelSettings, IYRangeSettings} from "./dashboard.interfaces";
+import {Dictionary, IPanelSettings, IYRangeSettings} from "./dashboard.interfaces";
 import {HttpPanelService} from "./services/http-panel-service";
 import {ChartHelper} from "./chart-helper";
 import Plotly from "plotly.js";
