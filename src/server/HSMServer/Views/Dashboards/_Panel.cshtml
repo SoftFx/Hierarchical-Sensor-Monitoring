@@ -18,6 +18,7 @@
         Converters = {new PlotlyDoubleConverter()}
     };
     var legendsTitle = @Model.Settings.ShowLegend ? "Hide legends" : "Show legends";
+    var settingsButtonsDisplayClass = @Model.Settings.IsSingleMode ? "d-none" : "";
 }
 
 <div id="@Model.Id" class="panel resize-draggable">
@@ -52,12 +53,12 @@
                         <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                     </button>
                     <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-                        <a class="toggle-legend dropdown-item text-decoration-none fw-normal button-link">@legendsTitle</a>
+                        <a class="@settingsButtonsDisplayClass toggle-legend dropdown-item text-decoration-none fw-normal button-link">@legendsTitle</a>
                         <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
                         <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
                         <a class="switch-mode dropdown-item text-decoration-none fw-normal button-link">Switch mode</a>
 
-                        <div class="dropdown-submenu">
+                        <div class="@settingsButtonsDisplayClass dropdown-submenu">
                             <a class="dropdown-item">Hover settings</a>
                             <div class="dropdown-menu p-4 pt-2">
                                 <label class="form-label">Hover Mode</label>
@@ -101,6 +102,8 @@
         const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
         const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         const lastUpdate = "@(Model.LastUpdate == DateTime.MinValue ? 0 : Model.LastUpdate)" === "0" ? 0 : "@Model.LastUpdate.ToString("yyyy-MM-ddTHH:mm:ss")";
+        console.log('@Model.LastUpdate.ToUniversalTime()')
+        console.log(lastUpdate)
 
         initPanel('@Model.Id', settings, ySettings, values, lastUpdate, '@Model.DashboardId');
     })

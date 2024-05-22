@@ -80,10 +80,8 @@ export class Panel {
                 const panelPage = await httpPanelService.getPanel(this);
                 actionButton.click();
                 
-                // TODO: replace panel in storage!!!
                 panel.replaceWith(createElementFromHTML(panelPage));
-                await panelHelper.recordinate(this.id);
-
+                
                 function createElementFromHTML(htmlString: string) {
                     const range = document.createRange();
                     return range.createContextualFragment(htmlString);
