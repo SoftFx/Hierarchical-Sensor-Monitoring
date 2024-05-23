@@ -6,13 +6,13 @@
 
   <property name="wrapper.dir" value="${SourceDir}\src\wrapper" />
 
-	<property name="tempdir"  value="${teamcity.build.tempDir}\${build.number}" />
+	<property name="target.dir"  value="${ArtifactsDir}\${build.number}" />
 
 
   <target name="BuildCppWrapperRelease">
     <echo message="build starded at: ${datetime::now()}" />
     <exec program="${MSBuildPath2022}">
-      <arg line="${source.dir}\wrapper\HSMCppWrapper.vcxproj" />
+      <arg line="${wrapper.dir}\HSMCppWrapper.vcxproj" />
       <arg line="/property:Configuration=Release" />
       <arg line="/property:Platform=x64" />
       <arg value="/target:Rebuild" />
@@ -25,7 +25,7 @@
   <target name="BuildCppWrapperDebug">
     <echo message="build starded at: ${datetime::now()}" />
     <exec program="${MSBuildPath2022}">
-      <arg line="${source.dir}\wrapper\HSMCppWrapper.vcxproj" />
+      <arg line="${wrapper.dir}\HSMCppWrapper.vcxproj" />
       <arg line="/property:Configuration=Debug" />
       <arg line="/property:Platform=x64" />
       <arg value="/target:Rebuild" />
@@ -36,8 +36,15 @@
   </target>
 
   <target name="zipCppWrapper">
+    <delete>
+      <fileset>
+        <include name="${target.dir}\*.*" />
+      </fileset>
+    </delete>
 
-    <zip zipfile="${Artifacts.dir}\HSMCppWrapper.${build.number}.zip">
+    <mkdir dir="${target.dir}" />
+
+    <zip zipfile="${target.dir}\HSMCppWrapper.${build.number}.zip">
       <fileset basedir="${wrapper.dir}\x64\Release\" prefix="dll\HSMCppWrapper\x64\Release">
         <include name="HSMCppWrapper.dll" />
         <include name="HSMDataCollector.dll" />
@@ -62,7 +69,7 @@
         <include name="HSMCppWrapper.lib" />
       </fileset>
 
-      <fileset basedir="${wrapper.dir}\x64\Release\" prefix="assembly\HSM">
+      <fileset basedir="${wrapper.dir}\x64\Release\" prefix="Assembly\HSM">
         <include name="*.dll" />
 				<exclude name="HSM*.dll" />
       </fileset>
