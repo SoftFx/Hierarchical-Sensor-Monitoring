@@ -10,7 +10,17 @@ namespace HSMServer.Core.Model.Policies
     {
         public Dictionary<Guid, string> Chats { get; }
 
-        public bool AllChats { get; }
+        public bool IsAllChats { get; }
+    }
+
+
+    public enum PolicyDestinationMode : byte
+    {
+        FromParent = 0,
+        Empty,
+        NotInitialized,
+        Custom = 100,
+        AllChats = 200
     }
 
 
@@ -19,47 +29,71 @@ namespace HSMServer.Core.Model.Policies
         public Dictionary<Guid, string> Chats { get; } = [];
 
 
-        public bool UseDefaultChats { get; private set; }
-
-        public bool AllChats { get; private set; }
+        public PolicyDestinationMode Mode { get; private set; }
 
 
-        public bool IsNotInitialized => !UseDefaultChats && !AllChats && Chats.Count == 0;
+        public bool IsNotInitialized => Mode is PolicyDestinationMode.NotInitialized;
+
+        public bool IsFromParentChats => Mode is PolicyDestinationMode.FromParent;
+
+        public bool IsAllChats => Mode is PolicyDestinationMode.AllChats;
+
+        public bool IsCustom => Mode is PolicyDestinationMode.Custom;
+
+        public bool IsEmpty => Mode is PolicyDestinationMode.Empty;
 
 
         internal PolicyDestination() { }
 
         internal PolicyDestination(PolicyDestinationEntity entity)
         {
-            UseDefaultChats = entity.UseDefaultChats;
-            AllChats = entity.AllChats;
-
             if (entity.Chats is not null)
                 foreach (var (chatId, name) in entity.Chats)
                     Chats.Add(new Guid(chatId), name);
+
+            Mode = entity switch
+            {
+                { UseDefaultChats: true } => PolicyDestinationMode.FromParent,
+                { AllChats: true } => PolicyDestinationMode.AllChats,
+                { IsEmpty: true } => PolicyDestinationMode.Empty,
+                { Chats.Count: > 0 } => PolicyDestinationMode.Custom,
+                _ => PolicyDestinationMode.NotInitialized,
+            };
         }
 
 
         internal void Update(PolicyDestinationUpdate update)
         {
-            UseDefaultChats = update.UseDefaultChats ?? UseDefaultChats;
-            AllChats = update.AllChats ?? AllChats;
+            Mode = update.Mode ?? Mode;
 
             Chats.Clear();
 
             if (update.Chats is not null)
+            {
                 foreach (var (chatId, name) in update.Chats)
                     Chats.Add(chatId, name);
+
+                if (Chats.Count > 0)
+                    Mode = PolicyDestinationMode.Custom;
+            }
         }
 
         internal PolicyDestinationEntity ToEntity() => new()
         {
             Chats = Chats?.ToDictionary(k => k.Key.ToString(), v => v.Value),
-            UseDefaultChats = UseDefaultChats,
-            AllChats = AllChats,
+            IsNotInitialized = IsNotInitialized,
+            UseDefaultChats = IsFromParentChats,
+            AllChats = IsAllChats,
+            IsEmpty = IsEmpty,
         };
 
-        public override string ToString() =>
-            AllChats ? "all chats" : UseDefaultChats ? "default chat" : string.Join(", ", Chats.Values);
+        public override string ToString() => Mode switch
+        {
+            PolicyDestinationMode.FromParent => "from parent chats",
+            PolicyDestinationMode.Empty => "empty destination",
+            PolicyDestinationMode.Custom => string.Join(", ", Chats.Values),
+            PolicyDestinationMode.AllChats => "all chats",
+            _ => "not initialized destination",
+        };
     }
 }

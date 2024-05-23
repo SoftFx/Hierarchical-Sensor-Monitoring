@@ -22,6 +22,11 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public Dictionary<string, string> Chats { get; init; }
 
 
+        public bool IsNotInitialized { get; init; } //TODO should be collected to enum, need migration
+
+        public bool IsEmpty { get; init; }
+
+
         public bool UseDefaultChats { get; init; }
 
         public bool AllChats { get; init; }
