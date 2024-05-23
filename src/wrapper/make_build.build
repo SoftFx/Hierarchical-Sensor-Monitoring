@@ -4,7 +4,7 @@
   <property name="MSBuildPath2022" value="C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" />
   <property name="DotNetCLI_Path" value="C:\Program Files\dotnet\dotnet.exe" />
 
-  <property name="wrapper.dir" value="${system.SourceDir}\src\wrapper" />
+  <property name="wrapper.dir" value="${SourceDir}\src\wrapper" />
 
 	<property name="tempdir"  value="${teamcity.build.tempDir}\${build.number}" />
 
