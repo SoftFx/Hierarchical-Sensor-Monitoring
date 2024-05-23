@@ -37,9 +37,7 @@
 
   <target name="zipCppWrapper">
 
-    <mkdir dir="${tempdir}" />
- 
-    <zip zipfile="${tempdir}\HSMCppWrapper.${build.number}.zip">
+    <zip zipfile="${Artifacts.dir}\HSMCppWrapper.${build.number}.zip">
       <fileset basedir="${wrapper.dir}\x64\Release\" prefix="dll\HSMCppWrapper\x64\Release">
         <include name="HSMCppWrapper.dll" />
         <include name="HSMDataCollector.dll" />
