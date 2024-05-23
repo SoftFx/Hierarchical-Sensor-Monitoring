@@ -41,7 +41,7 @@
                 <button class="nav-link @disabledTab" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab" aria-controls="users" aria-selected="false">Users</button>
             </li>
         </ul>
-        <div class="tab-content w-100" id="myTabContent">
+        <div class="tab-content w-100">
             <div class="tab-pane fade show active" id="general" role="tabpanel" aria-labelledby="general-tab">
                 <form method="post" asp-action="@(isAdd ? nameof(FoldersController.AddFolder) : nameof(FoldersController.EditFolder))">
                     @await Html.PartialAsync("_General", Model)

@@ -1,10 +1,9 @@
 ﻿using HSMServer.Attributes;
-using HSMServer.Model.ViewModel;
+using HSMServer.Model.Configuration;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
@@ -12,54 +11,77 @@ namespace HSMServer.Controllers
     [Authorize]
     [AuthorizeIsAdmin]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class ConfigurationController : Controller
+    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications) : Controller
     {
-        private static Dictionary<string, ConfigurationViewModel> _configViewModel = new();
-
-        private readonly IServerConfig _config;
-        private readonly TelegramBot _telegramBot;
+        private readonly IServerConfig _config = config;
+        private readonly TelegramBot _telegramBot = notifications.TelegramBot;
 
 
-        public ConfigurationController(IServerConfig config, NotificationsCenter notifications)
+        public IActionResult Index() => View(new ConfigurationViewModel(_config));
+
+        [HttpPost]
+        public IActionResult SaveServerSettings(ServerSettingsViewModel settings)
         {
-            _config = config;
-            _configViewModel = ConfigurationViewModel.TelegramSettings(new TelegramConfigurationViewModel(_config.Telegram));
+            if (ModelState.IsValid)
+            {
+                _config.Kestrel.SensorPort = settings.SensorsPort;
+                _config.Kestrel.SitePort = settings.SitePort;
 
-            _telegramBot = notifications.TelegramBot;
-        }
+                _config.ServerCertificate.Name = settings.CertificateName;
+                _config.ServerCertificate.Key = settings.CertificateKey;
 
+                _config.ResaveSettings();
+            }
 
-        public IActionResult Index()
-        {
-            return View(_configViewModel);
+            return PartialView("_Server", settings);
         }
 
         [HttpPost]
-        public void SaveConfig([FromBody] ConfigurationViewModel viewModel) => ChangeConfigValue(viewModel.PropertyName, viewModel.Value);
+        public IActionResult SaveBackupSettings(BackupSettingsViewModel settings)
+        {
+            if (ModelState.IsValid)
+            {
+                _config.BackupDatabase.IsEnabled = settings.IsEnabled;
+                _config.BackupDatabase.PeriodHours = settings.BackupPeriodHours;
+                _config.BackupDatabase.StoragePeriodDays = settings.BackupStoragePeriodDays;
+
+                _config.ResaveSettings();
+            }
+
+            return PartialView("_Backup", settings);
+        }
 
         [HttpPost]
-        public void SetToDefault([FromQuery] string name) => ChangeConfigValue(name, _configViewModel[name].DefaultValue);
+        public IActionResult SaveMonitoringSettings(MonitoringSettingsViewModel settings)
+        {
+            if (ModelState.IsValid)
+            {
+                _config.MonitoringOptions.IsMonitoringEnabled = settings.IsMonitoringEnabled;
+                _config.MonitoringOptions.TopHeaviestSensorsCount = settings.TopHeaviestSensorsCount;
+                _config.MonitoringOptions.DatabaseStatisticsPeriodDays = settings.DatabaseStatisticsPeriodDays;
+
+                _config.ResaveSettings();
+            }
+
+            return PartialView("_SelfMonitoring", settings);
+        }
+
+        [HttpPost]
+        public IActionResult SaveTelegramSettings(TelegramSettingsViewModel settings)
+        {
+            if (ModelState.IsValid)
+            {
+                _config.Telegram.IsRunning = settings.IsEnabled;
+                _config.Telegram.BotToken = settings.BotToken;
+                _config.Telegram.BotName = settings.BotName;
+
+                _config.ResaveSettings();
+            }
+
+            return PartialView("_Telegram", settings);
+        }
 
         [HttpGet]
         public Task<string> RestartTelegramBot() => _telegramBot.StartBot();
-
-
-        private void ChangeConfigValue(string propertyName, string newValue)
-        {
-            switch (propertyName)
-            {
-                case nameof(_config.Telegram.BotName):
-                    _config.Telegram.BotName = newValue;
-                    break;
-                case nameof(_config.Telegram.BotToken):
-                    _config.Telegram.BotToken = newValue;
-                    break;
-                case nameof(_config.Telegram.IsRunning) when bool.TryParse(newValue, out var boolValue):
-                    _config.Telegram.IsRunning = boolValue;
-                    break;
-            }
-
-            _config.ResaveSettings();
-        }
     }
 }

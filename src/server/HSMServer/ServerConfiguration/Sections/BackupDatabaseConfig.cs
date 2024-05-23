@@ -2,8 +2,15 @@
 {
     public class BackupDatabaseConfig
     {
-        public int PeriodHours { get; set; } = 1;
+        public const int DefaultPeriodHours = 1;
+        public const int DefaultStoragePeriodDays = 10;
+        public const bool DefaultIsBackupEnabled = true;
 
-        public int StoragePeriodDays { get; set; } = 10;
+
+        public bool IsEnabled { get; set; } = DefaultIsBackupEnabled;
+
+        public int PeriodHours { get; set; } = DefaultPeriodHours;
+
+        public int StoragePeriodDays { get; set; } = DefaultStoragePeriodDays;
     }
 }

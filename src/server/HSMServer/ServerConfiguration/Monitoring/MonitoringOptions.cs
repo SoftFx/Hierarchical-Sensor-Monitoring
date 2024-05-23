@@ -2,12 +2,15 @@ namespace HSMServer.ServerConfiguration
 {
     public sealed class MonitoringOptions
     {
-        public int DatabaseStatisticsPeriodDays { get; set; } = 1;
+        public const int DefaultDatabaseStatisticsPeriodDays = 1;
+        public const int DefaultTopHeaviestSensorsCount = 10;
+        public const bool DefaultIsMonitoringEnabled = true;
 
-        public int TopHeaviestSensorsCount { get; set; } = 10;
 
-        public bool UseDatabaseMonitoring { get; set; }
+        public int DatabaseStatisticsPeriodDays { get; set; } = DefaultDatabaseStatisticsPeriodDays;
 
-        public bool UseRequestMonitoring { get; set; }
+        public int TopHeaviestSensorsCount { get; set; } = DefaultTopHeaviestSensorsCount;
+
+        public bool IsMonitoringEnabled { get; set; } = DefaultIsMonitoringEnabled;
     }
 }
