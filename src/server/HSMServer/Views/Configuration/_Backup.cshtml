@@ -25,7 +25,7 @@
         <label class="col-form-label" asp-for="BackupPeriodHours"></label>
     </div>
     <div class="col-2">
-        <input class="form-control" asp-for="BackupPeriodHours">
+        <input class="form-control" type="number" min="1" asp-for="BackupPeriodHours">
     </div>
     <div class="col">
         <label class="col-form-label">hour(s)</label>
@@ -33,7 +33,7 @@
 </div>
 <div class="row">
     <div class="offset-2 col-10">
-        <label class="note">Frequency of environment database backup. This database contains meta information of server entities. Default value is @BackupDatabaseConfig.DefaultPeriodHours hour. The setting will be applied after the server is restarted.</label>
+        <label class="note">Frequency of environment database backup. This database contains meta information of server entities. Default value is @BackupDatabaseConfig.DefaultPeriodHours hour. The setting will be applied in real time.</label>
     </div>
 </div>
 
@@ -42,7 +42,7 @@
         <label class="col-form-label" asp-for="BackupStoragePeriodDays"></label>
     </div>
     <div class="col-2">
-        <input class="form-control" asp-for="BackupStoragePeriodDays">
+        <input class="form-control" type="number" min="1" asp-for="BackupStoragePeriodDays">
     </div>
     <div class="col">
         <label class="col-form-label">day(s)</label>
@@ -50,7 +50,7 @@
 </div>
 <div class="row">
     <div class="offset-2 col-10">
-        <label class="note">Maximum storage time for database backup. Default value is @BackupDatabaseConfig.DefaultStoragePeriodDays days. The setting will be applied after the server is restarted.</label>
+        <label class="note">Maximum storage time for database backup. Default value is @BackupDatabaseConfig.DefaultStoragePeriodDays days. The setting will be applied in real time.</label>
     </div>
 </div>
 
