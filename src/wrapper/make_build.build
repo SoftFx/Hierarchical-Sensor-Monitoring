@@ -12,7 +12,7 @@
   <target name="BuildCppWrapperRelease">
     <echo message="build starded at: ${datetime::now()}" />
     <exec program="${MSBuildPath2022}">
-      <arg line="${source.dir}\wrapper\HSMCppWrapper.sln" />
+      <arg line="${source.dir}\wrapper\HSMCppWrapper.vcxproj" />
       <arg line="/property:Configuration=Release" />
       <arg line="/property:Platform=x64" />
       <arg value="/target:Rebuild" />
@@ -25,7 +25,7 @@
   <target name="BuildCppWrapperDebug">
     <echo message="build starded at: ${datetime::now()}" />
     <exec program="${MSBuildPath2022}">
-      <arg line="${source.dir}\wrapper\HSMCppWrapper.sln" />
+      <arg line="${source.dir}\wrapper\HSMCppWrapper.vcxproj" />
       <arg line="/property:Configuration=Debug" />
       <arg line="/property:Platform=x64" />
       <arg value="/target:Rebuild" />
