@@ -87,7 +87,7 @@
 
     @if (Model.Settings.IsSingleMode)
     {
-        <div id="panelLastValue_@Model.Id">
+        <div id="panelLastValue_@Model.Id" style="height: inherit; overflow: auto">
             @await Html.PartialAsync("_SourceLastValue", Model)
         </div>
     }
