@@ -3,7 +3,8 @@
 
 
 @{
-    var lastValue = Model.Values[^1] as BaseChartValue;
+    var value = Model.Values.LastOrDefault();
+    var lastValue = value as BaseChartValue;
 }
 
 <tr id="source_@Model.Id">
@@ -19,6 +20,6 @@
         <span class="last-value" style="flex-grow: 1; text-align: end">@lastValue?.GetValue()</span>
     </td>
     <td>
-        <span class="last-time">@lastValue.Time</span>
+        <span class="last-time">@lastValue?.Time</span>
     </td>
 </tr>

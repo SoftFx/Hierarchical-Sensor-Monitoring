@@ -28,8 +28,8 @@ export namespace DataUpdate {
                 if (panel.settings.isSingleMode){
                     for(let sourceUpdate of sourceUpdates){
                         let values = document.getElementById(`source_${sourceUpdate.id}`).querySelectorAll('.last-time, .last-value');
-                        values[0].textContent = sourceUpdate.update.newVisibleValues.at(-1).time;
-                        values[1].textContent = sourceUpdate.update.newVisibleValues.at(-1).value as string;
+                        values[1].textContent = sourceUpdate.update.newVisibleValues.at(-1).time;
+                        values[0].textContent = sourceUpdate.update.newVisibleValues.at(-1).value as string;
                     }
 
                     return;

@@ -262,7 +262,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         else
             $('#points_limit').hide()
 
-        let values = parsedData.values;
+        let values = parsedData.value.values;
         if (values.length === 0) {
             $('#no_data_' + encodedId).show();
             $('#noDataGraph').removeClass('d-none');
@@ -309,7 +309,7 @@ function isFileSensor(type) {
 }
 
 function isGraphAvailable(type) {
-    return !(type === 3 || type === 6 || type === 8);
+    return !(type === 3 || type === 6);
 }
 
 function isTableAvailable(type) {
