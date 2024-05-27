@@ -15,6 +15,12 @@ namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
+        private readonly JsonSerializerOptions _serializerOptions = new ()
+        {
+            Converters = { new VersionSourceConverter() },
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+        
         private readonly IDashboardManager _dashboards;
         private readonly IFolderManager _folders;
 
@@ -231,14 +237,8 @@ namespace HSMServer.Controllers
             if (TryGetPanel(dashboardId, panelId, out var panel) && panel.TryAddSource(sensorId, out var datasource, out error))
             {
                 var response = await datasource.Source.Initialize();
-
-                var options = new JsonSerializerOptions()
-                {
-                    Converters = { new VersionSourceConverter() },
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                };
                 
-                return Json(new DatasourceViewModel(response, datasource, showProduct), options);
+                return Json(new DatasourceViewModel(response, datasource, showProduct), _serializerOptions);
             }
             return Json(new
             {
