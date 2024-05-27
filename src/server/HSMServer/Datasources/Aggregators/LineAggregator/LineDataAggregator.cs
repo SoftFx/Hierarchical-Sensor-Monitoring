@@ -1,45 +1,46 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Dashboards;
 using System;
-using System.Numerics;
 
 namespace HSMServer.Datasources.Aggregators
 {
-    public sealed class LineDataAggregator<T> : BaseDataAggregator<LinePointState<T>>
-        where T : INumber<T>
+    public interface IDataAggregator<TValue>
     {
-        private readonly Func<BaseValue, T> _toChartValue;
+        IDataAggregator<TValue> AttachConverter(Func<BaseValue, TValue> toChartValue);
+    }
 
 
-        internal LineDataAggregator(Func<BaseValue, T> toChartValue)
+    public abstract class LineDataAggregator<TValue, TPoint, TState> : BaseDataAggregator<TState>, IDataAggregator<TValue>
+        where TPoint : BaseChartValue<TValue>, ILinePoint<TState>, new()
+        where TState : struct, ILinePointState<TValue>
+    {
+        private protected Func<BaseValue, TValue> _toChartValue;
+
+
+        public IDataAggregator<TValue> AttachConverter(Func<BaseValue, TValue> toChartValue)
         {
             _toChartValue = toChartValue;
+
+            return this;
         }
 
 
-        protected override BaseChartValue BuildNewPoint() => new LineChartValue<T>();
+        protected override BaseChartValue BuildNewPoint() => new TPoint();
 
-        protected override LinePointState<T> BuildState(BaseValue rawValue) =>
-            new(_toChartValue(rawValue), rawValue.Time);
-
-        protected override void ApplyState(BaseChartValue rawPoint, LinePointState<T> state)
+        protected override TState BuildState(BaseValue rawValue) => new()
         {
-            if (rawPoint is LineChartValue<T> point)
+            Value = _toChartValue(rawValue),
+            Time = rawValue.Time,
+        };
+
+        protected override void ApplyState(BaseChartValue rawPoint, TState state)
+        {
+            if (rawPoint is TPoint point)
                 point.SetNewState(ref state);
         }
 
 
-        protected override Func<LinePointState<T>, LinePointState<T>, LinePointState<T>> GetAggrStateFactory(PlottedProperty property) =>
-            property switch
-            {
-                PlottedProperty.Max or PlottedProperty.Count => LinePointState<T>.GetMaxState,
-
-                PlottedProperty.Min => LinePointState<T>.GetMinState,
-
-                PlottedProperty.Value or PlottedProperty.Mean or PlottedProperty.EmaValue or PlottedProperty.EmaMin or
-                PlottedProperty.EmaMean or PlottedProperty.EmaMax or PlottedProperty.EmaCount => LinePointState<T>.GetAvrState,
-
-                _ => throw new NotImplementedException($"Line aggregation for {property} is not supported")
-            };
+        protected NotImplementedException BuildNotSupportedException(PlottedProperty property) =>
+            new($"Line aggregation by {property} is not supported for {GetType().FullName} aggregator");
     }
 }

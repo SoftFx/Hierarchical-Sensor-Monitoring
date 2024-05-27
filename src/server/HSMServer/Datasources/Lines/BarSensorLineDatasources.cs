@@ -5,7 +5,7 @@ using System.Numerics;
 
 namespace HSMServer.Datasources
 {
-    public abstract class BarBaseLineDatasource<TValue, TProp, TChart> : BaseLineDatasource<TValue, TProp, TChart>
+    public abstract class BarBaseLineDatasource<TValue, TProp, TChart> : BaseNumberLineDatasource<TValue, TProp, TChart>
         where TValue : BarBaseValue<TProp>
         where TProp : struct, INumber<TProp>
         where TChart : INumber<TChart>
@@ -30,7 +30,7 @@ namespace HSMServer.Datasources
     public sealed class DoubleBarLineDatasource : BarBaseLineDatasource<DoubleBarValue, double, double> { }
 
 
-    public abstract class BarBaseNullDoubleLineDatasource<TValue> : BaseLineDatasource<TValue, double?, double>
+    public abstract class BarBaseNullDoubleLineDatasource<TValue> : BaseNumberLineDatasource<TValue, double?, double>
         where TValue : BarBaseValue
     {
         protected override Func<TValue, double?> GetPropertyFactory(PlottedProperty property) => property switch
@@ -51,7 +51,7 @@ namespace HSMServer.Datasources
     public sealed class DoubleBarNullDoubleSource : BarBaseNullDoubleLineDatasource<DoubleBarValue> { }
 
 
-    public abstract class BarBaseIntLineDatasource<TValue> : BaseLineDatasource<TValue, int, int>
+    public abstract class BarBaseIntLineDatasource<TValue> : BaseNumberLineDatasource<TValue, int, int>
         where TValue : BarBaseValue
     {
         protected override Func<TValue, int> GetPropertyFactory(PlottedProperty property) => property switch

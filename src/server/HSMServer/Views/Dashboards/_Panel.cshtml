@@ -15,9 +15,12 @@
     var jsonOptions = new JsonSerializerOptions()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new PlotlyDoubleConverter() }
+        Converters = { new PlotlyDoubleConverter(), new VersionSourceConverter() }
     };
     var legendsTitle = @Model.Settings.ShowLegend ? "Hide legends" : "Show legends";
+    var settingsButtonsDisplayClass = @Model.Settings.IsSingleMode ? "d-none" : "";
+    
+    var lastUpdate = (long)(@Model.LastUpdate - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
 }
 
 <div id="@Model.Id" class="panel resize-draggable">
@@ -25,7 +28,15 @@
         <span id="emptypanel_@Model.Id" style="font-size: larger; position: fixed; z-index: 300; color: rgb(128,128,128); display: none">Empty panel</span>
         <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1 name-draggable">
             <div class="d-inline-block overflow-hidden">
-                <span class="fw-bold d-flex" title="@Model.Name" id="panel_name" style="white-space: nowrap">@Model.Name</span>
+                <div class="d-flex">
+                    <span class="fw-bold d-flex" title="@Model.Name" id="panel_name" style="white-space: nowrap">@Model.Name</span>
+
+                    @if (@Model.AggregateValues)
+                    {
+                        <div class="d-flex ms-1" style="color:grey">(values are aggregated)</div>
+                    }
+                </div>
+
                 @if (string.IsNullOrEmpty(Model.Description))
                 {
                     <div style="height: 1.5rem"></div>
@@ -40,22 +51,23 @@
 
                 @if (Context.User is User user && user.IsAdmin)
                 {
-                    <button id="actionButton" class="btn p-1" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false">
+                    <button class="btn p-1 action-button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false">
                         <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                     </button>
                     <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-                        <a id="toggle_@Model.Id" class="toggle-legend dropdown-item text-decoration-none fw-normal button-link">@legendsTitle</a>
+                        <a class="@settingsButtonsDisplayClass toggle-legend dropdown-item text-decoration-none fw-normal button-link">@legendsTitle</a>
                         <a class="dropdown-item text-decoration-none fw-normal button-link" asp-controller="@ViewConstants.DashboardsController" asp-action="@nameof(DashboardsController.AddDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">Edit</a>
                         <a id="remove_@Model.Id" class="removePanel dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+                        <a class="switch-mode dropdown-item text-decoration-none fw-normal button-link">Switch mode</a>
 
-                        <div class="dropdown-submenu">
+                        <div class="@settingsButtonsDisplayClass dropdown-submenu">
                             <a class="dropdown-item">Hover settings</a>
                             <div class="dropdown-menu p-4 pt-2">
-                                <label for="selecthovermode_@Model.Id" class="form-label">Hover Mode</label>
-                                <select id="selecthovermode_@Model.Id" class="form-control">
+                                <label class="form-label">Hover Mode</label>
+                                <select class="hovermode form-control">
                                     @foreach (var mode in Enum.GetValues<TooltipHovermode>())
                                     {
-                                        <option value='@((int)mode)'>@mode.GetDisplayName()</option>
+                                        <option value='@((int) mode)'>@mode.GetDisplayName()</option>
                                     }
                                 </select>
                             </div>
@@ -72,7 +84,17 @@
         </div>
     </div>
 
-    <div id="panelChart_@Model.Id"></div>
+
+    @if (Model.Settings.IsSingleMode)
+    {
+        <div id="panelLastValue_@Model.Id" style="height: 80%; overflow: auto">
+            @await Html.PartialAsync("_SourceLastValue", Model)
+        </div>
+    }
+    else
+    {
+        <div id="panelChart_@Model.Id"></div>
+    }
 </div>
 
 
@@ -81,45 +103,7 @@
         const settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
         const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
-        const lastUpdate = "@(Model.LastUpdate == DateTime.MinValue ? 0 : Model.LastUpdate)" === "0" ? 0 : "@Model.LastUpdate.ToString("yyyy-MM-ddTHH:mm:ss")";
 
-        initMultyichartCordinates(settings, values, '@Model.Id').then(
-            (data) => {
-                containerHeight = Math.max(containerHeight, data);
-                return initMultichart('panelChart_@Model.Id', Number((settings.height * 1400).toFixed(5)) - 46, settings.showLegend, false, ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)]).then(
-                        (plot) => {
-                                window.addPanelToStorage('@Model.Id', settings, lastUpdate);
-
-                                values.forEach(function (x) {
-                                    insertSourcePlot(x, 'panelChart_@Model.Id', '@Model.Id', '@Model.DashboardId', ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
-                                })
-
-                                $('#panelChart_@Model.Id').on('plotly_relayout', function (e, updateData){
-                                    let emptypanel = $('#emptypanel_@Model.Id');
-                                    let container = $('#@Model.Id');
-                                    emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
-                                })
-                                
-                                $('#panelChart_@Model.Id').on('plotly_doubleclick', function(){
-                                    customReset($('#panelChart_@Model.Id')[0], getRangeDate(), ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)])
-                                })
-
-                                Plotly.relayout(plot.id, { 
-                                    'xaxis.autorange': false,
-                                    'height': Number((settings.height * 1400).toFixed(5)) - 46
-                                })
-
-                                if (values.length === 0) {
-                                    $('#emptypanel_@Model.Id').show();
-                                }
-
-                                replaceHtmlToMarkdown('panel_description')
-                            },
-                        (error) => showToast(error)
-                );
-            },
-            (error) => showToast(error)
-        )
+        initPanel('@Model.Id', settings, ySettings, values, Number('@lastUpdate'), '@Model.DashboardId');
     })
-
 </script>
