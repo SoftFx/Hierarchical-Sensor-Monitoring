@@ -1,0 +1,20 @@
+@model HSMServer.Model.Dashboards.PanelViewModel
+
+<table class="table p-0 m-0" style="table-layout:fixed;font-size: clamp(1rem, 3vw, 1rem)">
+    <thead>
+    <tr>
+        <th scope="col">Color</th>
+        <th scope="col">Label</th>
+        <th scope="col">Value</th>
+        <th scope="col">Time</th>
+    </tr>
+    </thead>
+
+    <tbody>
+     @foreach (var i in @Model.Sources.Values)
+        {
+            @await Html.PartialAsync("_LastValue", i)
+        }
+    </tbody>
+   
+</table>

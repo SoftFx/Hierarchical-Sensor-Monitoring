@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
+using HSMDataCollector.Options;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Extensions;
@@ -15,8 +16,8 @@ namespace HSMServer.BackgroundServices
 {
     public sealed class DataCollectorWrapper : IDisposable
     {
-        private const string SelfMonitoringProductName = "HSM Server Monitoring";
         private const string SelfCollectorName = "Self monitoring";
+        public const string SelfMonitoringProductName = "HSM Server Monitoring";
 
         private readonly IDataCollector _collector;
 
@@ -49,7 +50,7 @@ namespace HSMServer.BackgroundServices
             else
                 _collector.Unix.AddAllDefaultSensors(productVersion);
 
-            DbStatisticsSensors = new DatabaseSensorsStatistics(_collector, db, cache, config);
+            DbStatisticsSensors = new DatabaseSensorsStatistics(_collector, db, cache, config, optionsMonitor);
             DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
         }

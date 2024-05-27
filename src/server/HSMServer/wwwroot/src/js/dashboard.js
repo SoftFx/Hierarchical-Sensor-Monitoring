@@ -1,12 +1,13 @@
 import {convertToGraphData} from "./plotting";
-import {Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot} from "./plots";
+import {TimeSpanPlot, ErrorColorPlot} from "./plots";
 import {Dashboard} from "../ts/dashboardT";
-import {DashboardStorage, Panel} from "../ts/dashboard.storage";
-import {Layout} from "../ts/plotUpdate";
+import {Panel} from "../ts/dashboard.panel";
+import {PanelCordinatesHelper} from "../ts/services/panel-cordinates-helper";
+import {DashboardStorage} from "../ts/dashboard/dashboard.storage";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
-
+export const panelHelper = new PanelCordinatesHelper();
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();
@@ -128,7 +129,7 @@ function checkForYRange(plot) {
         $('#y-range-settings').hide()
 }
 
-window.insertSourcePlot = function (data, id, panelId, dashboardId, range = undefined) {
+export function insertSourcePlot (data, id, panelId, dashboardId, range = undefined) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)
@@ -442,7 +443,11 @@ window.syncIndexes = function () {
     }
 }
 
-window.initMultyichartCordinates = function (settings, values, id) {
+window.initPanel = async function (id, settings, ySettings, values, lastUpdate) {
+   await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate);
+}
+
+window.initMultyichartCordinates = function (settings, id) {
     return new Promise(function (resolve, reject) {
         let dashboardPanels = $('#dashboardPanels');
         let width = dashboardPanels.width();

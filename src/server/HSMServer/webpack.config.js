@@ -5,6 +5,7 @@ const CopyPlugin = require("copy-webpack-plugin");
 const MomentLocalesPlugin = require('moment-locales-webpack-plugin');
 
 module.exports = {
+    target: 'web',
     entry: "./wwwroot/src/index.js",
     output: {
         path: path.resolve(__dirname, "wwwroot/dist"),
@@ -25,16 +26,25 @@ module.exports = {
                 use: ['style-loader', 'css-loader']
             },
             {
-                test: /\.tsx?$/,
+                test: /\.ts?$/,
                 use: 'ts-loader',
                 exclude: /node_modules/,
             },
         ]
     },
     resolve: {
-        extensions: ['.ts', '.js']
+        extensions: ['.ts', '.js'],
+        fallback: {
+            stream: require.resolve("stream-browserify"),
+            os: require.resolve("os-browserify"),
+            process: require.resolve("process/browser"),
+            assert: require.resolve("assert/")
+        }
     },
     plugins: [
+        new webpack.ProvidePlugin({
+            process: 'process',
+        }),
         new webpack.ProvidePlugin({
             $: 'jquery',
             jQuery: 'jquery',

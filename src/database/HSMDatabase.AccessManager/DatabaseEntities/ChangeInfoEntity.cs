@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
@@ -18,6 +19,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     public sealed record ChangeInfoEntity
     {
         public InitiatorInfoEntity Initiator { get; init; }
+
+        public int PropertyVersion { get; init; }
 
         public long Time { get; init; }
     }

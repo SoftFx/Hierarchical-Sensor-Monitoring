@@ -20,11 +20,12 @@ using System.Text.Json.Serialization;
 const string NLogConfigFileName = "nlog.config";
 
 var builder = WebApplication.CreateBuilder(args);
+var config = builder.Configuration;
 
-builder.Configuration.SetBasePath(ServerConfig.ConfigPath)
-                     .AddJsonFile(ServerConfig.ConfigName, true, reloadOnChange: true);
+config.SetBasePath(ServerConfig.ConfigPath)
+      .AddJsonFile(ServerConfig.ConfigName, true, reloadOnChange: true);
 
-var serverConfig = new ServerConfig(builder.Configuration);
+var serverConfig = new ServerConfig(config);
 
 LayoutRenderer.Register("buildConfiguration", logEvent => builder.Environment.IsDevelopment() ? "Debug" : "Release");
 LayoutRenderer.Register("infrastructureLogger", logEvent => CommonConstants.InfrastructureLoggerName);
@@ -70,7 +71,8 @@ builder.Services.AddFluentValidationAutoValidation()
 
 builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.SitePort);
 
-builder.Services.AddApplicationServices(serverConfig);
+builder.Services.AddApplicationServices(serverConfig)
+                .Configure<MonitoringOptions>(config.GetSection(nameof(serverConfig.MonitoringOptions)));
 
 builder.Services.Configure<HostOptions>(hostOptions =>
 {

@@ -1,6 +1,7 @@
-﻿import {Plot} from "../js/plots";
-import {HoverModeEnum} from "./types";
-import {IPanelSettings} from "./dashboard.interfaces";
+
+import {IPanelSettings, IYRangeSettings} from "./dashboard.interfaces";
+import {Plot} from "../../js/plots";
+import {HoverModeEnum} from "../types";
 
 export class PlotUpdate {
     x: any[] = [];
@@ -25,23 +26,31 @@ export class PanelSettings {
     hoverDistance: number
     
     showLegend: boolean
-    
+    isSingleMode: boolean
+
     width: number
     height: number
     x: number
     y:number
 
-    constructor(id: string, settings: IPanelSettings) {
+    autoscale: boolean
+    range: boolean | [number, number]
+
+    constructor(id: string, settings: IPanelSettings, ySettings: IYRangeSettings) {
         this.id = id;
         
         this.hovermode = settings.hovermode;
         this.hoverDistance = 20;
         
         this.showLegend = settings.showLegend;
+        this.isSingleMode = settings.isSingleMode;
         
         this.width = settings.width;
         this.height = settings.height;
         this.x = settings.x;
         this.y = settings.y;
+        
+        this.autoscale = ySettings.autoScale;
+        this.range = this.autoscale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)]
     }
 }

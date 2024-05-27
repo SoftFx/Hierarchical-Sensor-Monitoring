@@ -1,5 +1,5 @@
-﻿using HSMCommon.Constants;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
+using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Http;
 using NLog;
 using System.IO;
@@ -8,18 +8,13 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Middleware
 {
-    internal sealed class LoggingExceptionMiddleware
+    internal sealed class LoggingExceptionMiddleware(RequestDelegate next, IServerConfig config)
     {
         private const int MaxSizeForDeserializeContent = int.MaxValue;
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly RequestDelegate _next;
-
-
-        public LoggingExceptionMiddleware(RequestDelegate next)
-        {
-            _next = next;
-        }
+        private readonly int _sensorPort = config.Kestrel.SensorPort;
+        private readonly RequestDelegate _next = next;
 
 
         public async Task InvokeAsync(HttpContext context)
@@ -32,7 +27,7 @@ namespace HSMServer.Middleware
             }
             catch
             {
-                if (context.Connection.LocalPort == ConfigurationConstants.SensorsPort)
+                if (context.Connection.LocalPort == _sensorPort)
                 {
                     var request = context.Request;
                     request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
