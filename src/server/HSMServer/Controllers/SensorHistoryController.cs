@@ -43,6 +43,13 @@ namespace HSMServer.Controllers
     [Authorize]
     public class SensorHistoryController : BaseController
     {
+        private readonly JsonSerializerOptions _serializationsOptions = new()
+        {
+            Converters = { new VersionSourceConverter() },
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+
+        
         internal const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
         private const int LatestHistoryCount = -300;
 
@@ -123,14 +130,8 @@ namespace HSMServer.Controllers
 
             if (localValue is not null && (values.Count == 0 || values[0].Time != localValue.Time))
                 values.Add(localValue);
-
-            var options = new JsonSerializerOptions()
-            {
-                Converters = { new VersionSourceConverter() },
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            };
             
-            return Json(HistoryProcessorFactory.BuildProcessor(model.Type).GetResultFromValues(sensor, values, model.BarsCount), options);
+            return Json(HistoryProcessorFactory.BuildProcessor(model.Type).GetResultFromValues(sensor, values, model.BarsCount), _serializationsOptions);
         }
 
 
