@@ -396,12 +396,20 @@ function addResizable(interactable) {
 
                 let item = $(target)
 
-                var update = {
-                    'width': item.width(),
-                    'height': item.height() - item.children('div').first().height()
-                };
+                let panel = dashboardStorage.getPanel(event.target.id);
+                if (panel.settings.isSingleMode){
+                    let panelData = document.getElementById(`panelLastValue_${panel.id}`);
+                    panelData.style.width = item.width() + 'px';
+                    panelData.style.height = item.height() - item.children('div').first().height() + 'px';
+                }
+                else {
+                    var update = {
+                        'width': item.width(),
+                        'height': item.height() - item.children('div').first().height()
+                    };
 
-                Plotly.relayout(`panelChart_${event.target.id}`, update);
+                    Plotly.relayout(`panelChart_${event.target.id}`, update);
+                }
             }
         },
         modifiers: [
