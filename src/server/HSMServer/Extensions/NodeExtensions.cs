@@ -58,7 +58,9 @@ namespace HSMServer.Extensions
         internal static bool HasUnconfiguredAlerts(this SensorNodeViewModel sensor)
         {
             bool IsUnconfigured(DataAlertViewModelBase alert) =>
-                alert.IsUnconfigured() || (alert.IsDefaultDestination() && sensor.DefaultChats.GetCurrentChat().mode is Model.Controls.DefaultChatMode.NotInitialized);
+                !alert.IsDisabled &&
+                (alert.Actions.Any(a => a.Action == ActionType.SendNotification && a.Chats.Count == 0) ||
+                (alert.IsDefaultDestination() && sensor.DefaultChats.GetCurrentChat().mode is Model.Controls.DefaultChatMode.NotInitialized));
 
 
             return sensor.HasData && sensor.State is not Core.Model.SensorState.Muted &&

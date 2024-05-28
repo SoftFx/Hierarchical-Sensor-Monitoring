@@ -134,9 +134,6 @@ namespace HSMServer.Extensions
                 _ => true,
             };
 
-        public static bool IsUnconfigured(this DataAlertViewModelBase alert) =>
-            !alert.IsDisabled && alert.Actions.Any(a => a.Action == ActionType.SendNotification && a.Chats.Count == 0);
-
         public static bool IsDefaultDestination(this DataAlertViewModelBase alert) =>
             alert.Actions.Any(a => a.Action == ActionType.SendNotification && a.Chats.Contains(ActionViewModel.DefaultChatId));
     }

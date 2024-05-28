@@ -23,12 +23,12 @@ namespace HSMServer.BackgroundServices
         private readonly IDatabaseCore _database;
         private readonly IServerConfig _config;
 
-        private readonly TimeSpan _storagePeriod;
-
         private bool IsBackupEnabled => _config.BackupDatabase.IsEnabled;
 
+        private TimeSpan StoragePeriod => TimeSpan.FromDays(_config.BackupDatabase.StoragePeriodDays);
 
-        public override TimeSpan Delay { get; }
+
+        public override TimeSpan Delay => TimeSpan.FromHours(_config.BackupDatabase.PeriodHours);
         public SftpWrapper SftpWrapper { get; private set; }
 
 
@@ -36,9 +36,6 @@ namespace HSMServer.BackgroundServices
         {
             _config = config;
             _database = database;
-
-            _storagePeriod = TimeSpan.FromDays(config.BackupDatabase.StoragePeriodDays);
-            Delay = TimeSpan.FromHours(config.BackupDatabase.PeriodHours);
 
             if (config.BackupDatabase.SftpConnectionConfig.IsEnabled)
                 SftpWrapper = new SftpWrapper(config.BackupDatabase.SftpConnectionConfig);
@@ -136,7 +133,7 @@ namespace HSMServer.BackgroundServices
                     {
                         var creationTime = backup.CreationTime;
 
-                        if (creationTime < (now - _storagePeriod) || creationTime.Date == now.Date)
+                        if (creationTime < (now - StoragePeriod) || creationTime.Date == now.Date)
                             Directory.Delete(backup.Name, true);
                     }
                     catch (Exception ex)
