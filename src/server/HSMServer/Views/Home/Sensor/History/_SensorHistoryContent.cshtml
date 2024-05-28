@@ -9,18 +9,15 @@
     var graphParentDivId = $"graph_parent_{sensorId}";
     var journalParentDivId = $"journal_parent_{sensorId}";
     var valuesParentDivId = $"values_parent_{sensorId}";
+
+    var history_period = HistoryPeriod.Default;
 }
 
 <div id='historyDataPanel' class='pt-3 text-break hidden_element'>
     <div class="d-flex justify-content-between">
         <div id="datePickerFromTo">
             <label class="me-1">Period:</label>
-            <select id="history_period" class="me-2">
-                @foreach (var period in Enum.GetValues<HistoryPeriod>())
-                {
-                    <option value="@period" @(period is HistoryPeriod.Default ? "selected" : string.Empty)>@period.GetDisplayName()</option>
-                }
-            </select>
+            <select asp-for="@history_period" class="me-2" asp-items="@Enum.GetValues<HistoryPeriod>().Select(x => new SelectListItem{ Value = x.ToString(), Text = x.GetDisplayName()})"></select>
 
             <label class="me-1" id="from_@(sensorId)_label" for="from_@sensorId">From:</label>
             <input class="me-2" type="datetime-local" id="from_@sensorId" name="from">

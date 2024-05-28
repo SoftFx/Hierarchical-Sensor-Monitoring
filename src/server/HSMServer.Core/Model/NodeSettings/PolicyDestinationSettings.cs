@@ -36,7 +36,7 @@ namespace HSMServer.Core.Model.NodeSettings
 
         public bool IsFromFolder => Mode is DefaultChatsMode.FromFolder;
 
-        public bool AllChats => Mode is DefaultChatsMode.All;
+        public bool IsAllChats => Mode is DefaultChatsMode.All;
 
 
         public PolicyDestinationSettings() : base() { }
@@ -53,6 +53,20 @@ namespace HSMServer.Core.Model.NodeSettings
             if (entity.Chats is not null)
                 foreach (var (chatId, name) in entity.Chats)
                     Chats.Add(new Guid(chatId), name);
+        }
+
+
+        public PolicyDestinationSettings ApplyNewChats(Dictionary<Guid, string> newChats)
+        {
+            var settings = new PolicyDestinationSettings(DefaultChatsMode.Custom);
+
+            foreach (var chat in Chats)
+                settings.Chats.TryAdd(chat.Key, chat.Value);
+
+            foreach (var chat in newChats)
+                settings.Chats.TryAdd(chat.Key, chat.Value);
+
+            return settings;
         }
 
 

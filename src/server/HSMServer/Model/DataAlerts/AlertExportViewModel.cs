@@ -10,7 +10,18 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class AlertExportViewModel
     {
-        private const string DefaultChat = "#default";
+        private const string NotInitializedChat = "#notinitialized";
+        private const string FromParentChat = "#fromparent";
+        private const string EmptyChat = "#empty";
+        private const string AllChats = "#all";
+
+        private readonly Dictionary<PolicyDestinationMode, string> _chatsModeToKeyWords = new()
+        {
+            { PolicyDestinationMode.NotInitialized, NotInitializedChat },
+            { PolicyDestinationMode.FromParent, FromParentChat },
+            { PolicyDestinationMode.AllChats, AllChats },
+            { PolicyDestinationMode.Empty, EmptyChat },
+        };
 
 
         public List<string> Products { get; set; }
@@ -33,7 +44,7 @@ namespace HSMServer.Model.DataAlerts
 
         public bool ScheduledInstantSend { get; set; }
 
-        public List<string> Chats { get; set; }
+        public List<string> Chats { get; set; } = [];
 
         public bool IsDisabled { get; set; }
 
@@ -59,17 +70,12 @@ namespace HSMServer.Model.DataAlerts
             ScheduledRepeatMode = policy.Schedule.RepeatMode; // TODO: null if None or Immediatly?
             ScheduledInstantSend = policy.Schedule.InstantSend;
 
-            if (!policy.Destination.AllChats)
-            {
-                Chats = [];
-
-                if (policy.Destination.UseDefaultChats)
-                    Chats.Add(DefaultChat);
-                else
-                    foreach (var (id, _) in policy.Destination.Chats)
-                        if (availableChats.TryGetValue(id, out var name))
-                            Chats.Add(name);
-            }
+            if (_chatsModeToKeyWords.TryGetValue(policy.Destination.Mode, out var keyWord))
+                Chats.Add(keyWord);
+            else
+                foreach (var (id, _) in policy.Destination.Chats)
+                    if (availableChats.TryGetValue(id, out var name))
+                        Chats.Add(name);
 
             Conditions = policy.Conditions.Select(c => new ConditionExportViewModel(c)).ToList();
         }
@@ -77,8 +83,31 @@ namespace HSMServer.Model.DataAlerts
 
         internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats)
         {
-            var allChats = Chats is null;
-            var defaultChat = Chats?.Any(c => c.Equals(DefaultChat, StringComparison.InvariantCultureIgnoreCase)) ?? false;
+            PolicyDestinationMode? mode = PolicyDestinationMode.Custom;
+            Dictionary<Guid, string> chats = [];
+
+            if (Chats is not null)
+            {
+                var keyWordsToChatsMode = _chatsModeToKeyWords.ToDictionary(u => u.Value, u => u.Key);
+                foreach (var chat in Chats)
+                {
+                    if (keyWordsToChatsMode.TryGetValue(chat, out var chatMode))
+                    {
+                        mode = chatMode;
+                        chats = [];
+
+                        break;
+                    }
+
+                    if (availableChats.TryGetValue(chat, out var chatId))
+                        chats.Add(chatId, chat);
+                }
+            }
+            else
+            {
+                mode = null;
+                chats = null;
+            }
 
             return new()
             {
@@ -94,7 +123,7 @@ namespace HSMServer.Model.DataAlerts
                     RepeatMode = ScheduledRepeatMode,
                     InstantSend = ScheduledInstantSend,
                 },
-                Destination = new PolicyDestinationUpdate(!allChats && !defaultChat ? Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v) : [], allChats, defaultChat),
+                Destination = new PolicyDestinationUpdate(chats, mode),
             };
         }
     }

@@ -12,7 +12,6 @@
 <div>
     @await Html.PartialAsync("_MetaInfo", new SensorInfoViewModel(Model))
 
-
     @if (Model.Type == SensorType.File)
     {
         @await Html.PartialAsync("Sensor/History/_SensorFileContent", Model);

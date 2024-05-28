@@ -24,7 +24,10 @@
         @await Html.PartialAsync("Sensor/_SensorGeneralInfo", sensor)
     }
 
-    <div class="d-flex flex-row text-nowrap align-items-center ms-3">
-        <partial name="~/Views/Shared/_DefaultChat.cshtml" for="DefaultChats" />
-    </div>
+    @if (Model is not SensorInfoViewModel)
+    {
+        <div class="d-flex flex-row text-nowrap align-items-center ms-3">
+            <partial name="~/Views/Shared/_DefaultChat.cshtml" for="DefaultChats" />
+        </div>
+    }
 </div>

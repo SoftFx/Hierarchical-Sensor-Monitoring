@@ -1,9 +1,9 @@
 import {Data, PlotlyHTMLElement} from "plotly.js";
-import {IPanel, ISourceUpdate} from "./dashboard.interfaces";
 import {Plot, TimeSpanPlot} from "../js/plots";
-import {PanelSettings, PlotUpdate, Redraw} from "./dashboard.classes";
 import {dashboardStorage} from "../js/dashboard";
 import {HovermodeUtils} from "./services/hovermode.util";
+import {IPanel, ISourceUpdate} from "./dashboard/dashboard.interfaces";
+import {PanelSettings, PlotUpdate, Redraw} from "./dashboard/dashboard.classes";
 
 
 export namespace DataUpdate {
@@ -22,29 +22,45 @@ export namespace DataUpdate {
         }
 
 
-        async updateSources(sourceUpdates: ISourceUpdate[]) {
-            let promises: Promise<boolean>[] = [];
-            let plotDiv = $(`#panelChart_${this.panel.id}`)[0] as PlotlyHTMLElement;
-            for (let sourceUpdate of sourceUpdates)
-                promises.push(this.updateSource(sourceUpdate, plotDiv));
+        public async updateSources(sourceUpdates: ISourceUpdate[]) {
+            try {
+                let panel = dashboardStorage.getPanel(this.panel.id);
+                if (panel.settings.isSingleMode){
+                    for(let sourceUpdate of sourceUpdates){
+                        let values = document.getElementById(`source_${sourceUpdate.id}`).querySelectorAll('.last-time, .last-value');
+                        values[1].textContent = sourceUpdate.update.newVisibleValues.at(-1).time;
+                        values[0].textContent = sourceUpdate.update.newVisibleValues.at(-1).value as string;
+                    }
 
-            await Promise.allSettled(promises).then((results) => {
-                if (results.every((result) => {
-                    return result.status === "fulfilled";
-                })) {
-                    let [update, ids] = this.getUpdates();
-                    this.extendTraces(plotDiv, update, ids)
-                        .then(
-                            (res) => {
-                                this.redraw(plotDiv).then((res) => {
+                    return;
+                }
+
+                let promises: Promise<boolean>[] = [];
+                let plotDiv = $(`#panelChart_${this.panel.id}`)[0] as PlotlyHTMLElement;
+                for (let sourceUpdate of sourceUpdates)
+                    promises.push(this.updateSource(sourceUpdate, plotDiv));
+
+                await Promise.allSettled(promises).then((results) => {
+                    if (results.every((result) => {
+                        return result.status === "fulfilled";
+                    })) {
+                        let [update, ids] = this.getUpdates();
+                        this.extendTraces(plotDiv, update, ids)
+                            .then(
+                                (res) => {
+                                    this.redraw(plotDiv).then((res) => {
+                                        this.relayout(plotDiv)
+                                    })
+                                },
+                                (error) => {
                                     this.relayout(plotDiv)
                                 })
-                            },
-                            (error) => {
-                                this.relayout(plotDiv)
-                            })
-                }
-            })
+                    }
+                })
+            }
+            catch (ex){
+                
+            }
         }
 
         private async updateSource(sourceUpdate: ISourceUpdate, plotDiv: PlotlyHTMLElement): Promise<boolean> {
@@ -214,6 +230,9 @@ export namespace Layout {
     }
     
     export function relayout(id: string, settings: PanelSettings) {
+        if (settings.isSingleMode)
+            return;
+        
         if (settings === null)
             return;
         

@@ -35,6 +35,19 @@ namespace HSMServer.Model.DataAlerts
         Weekly,
     }
 
+    public enum ChatsMode
+    {
+        [Display(Name = "parent telegram chat(s)")]
+        FromParent,
+        [Display(Name = "not initialized destination")]
+        NotInitialized,
+        [Display(Name = "empty destination")]
+        Empty,
+        [Display(Name = "all chats")]
+        All,
+        Custom
+    }
+
 
     public class AlertActionBase
     {
@@ -47,7 +60,9 @@ namespace HSMServer.Model.DataAlerts
 
         public bool ScheduleInstantSend { get; set; }
 
-        public HashSet<Guid?> Chats { get; set; } = new();
+        public ChatsMode ChatsMode { get; set; }
+
+        public HashSet<Guid> Chats { get; set; } = new();
 
         public string Comment { get; set; }
 
@@ -60,8 +75,6 @@ namespace HSMServer.Model.DataAlerts
 
     public class ActionViewModel : AlertActionBase
     {
-        public static readonly Guid? DefaultChatId = null;
-        public static readonly Guid AllChatsId = Guid.Empty;
         public static readonly string SetErrorStatus = $"set {SensorStatus.Error.ToSelectIcon()} {SensorStatus.Error.GetDisplayName()} status";
 
         private readonly Dictionary<ActionType, string> _actions = new()

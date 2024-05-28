@@ -152,15 +152,18 @@
         let panels = {};
         for (let i of dashboardPanels.children('div')){
             let item = $(i);
-            let showlegend = item.find('.js-plotly-plot')[0].layout.showlegend;
+            let plot = item.find('.js-plotly-plot');
 
             panels[i.id] = {
                 width: Number((item.width() / width).toFixed(5)),
                 height: Number((item.height() / height).toFixed(5)),
                 x: Number((parseFloat(i.dataset.x || 0) / width).toFixed(5)),
                 y: Number((parseFloat(i.dataset.y || 0) / height).toFixed(5)),
-                showLegend: showlegend
             };
+            
+            if (plot.length > 0){
+                panels[i.id]['showlegend'] = plot[0].layout.showlegend;
+            }
         }
 
         let object = {};
@@ -256,49 +259,5 @@
                 })
             }
         );
-    }).on('click', 'a.toggle-legend', function (){
-        let id = this.id.substring("toggle_".length, this.id.length);
-        let showlegend = !$(`#panelChart_${id}`)[0].layout.showlegend;
-        let toggle = $(this);
-        $.ajax({
-            type: 'put',
-            url: window.location.pathname + `/${id}?showlegend=${showlegend}`
-        }).done(function (response){
-            let plotId = `panelChart_${id}`;
-
-            if (showlegend)
-            {
-                Plotly.relayout(plotId, {
-                    'legend.yref': "container",
-                    'showlegend': showlegend,
-                }).then(
-                    (success) => {
-                        toggle.text("Hide legends");
-                        showToast(response)
-                    },
-                    (error) => {
-                        showToast(error)
-                    }
-                );
-            }
-            else 
-            {
-                Plotly.relayout(plotId, {
-                    'legend.yref': "paper",
-                    'showlegend': true,
-                }).then(
-                    (success) => {
-                        Plotly.relayout(plotId, {'showlegend' : showlegend})
-                        toggle.text("Show legends");
-                        showToast(response)
-                    },
-                    (error) => {
-                        showToast(error)
-                    }
-                );
-            }
-        }).fail(function (response){
-            showToast(response.responseText)
-        })
     })
 </script>

@@ -1,88 +1,15 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.Core.Model
 {
-    public enum SensorState : byte
-    {
-        Available,
-        Muted,
-        Blocked = byte.MaxValue,
-    }
-
-
-    [Flags]
-    public enum Integration : int
-    {
-        None = 0,
-        Grafana = 1,
-    }
-
-
-    public enum Unit : int
-    {
-        bits = 0,
-        bytes = 1,
-        KB = 2,
-        MB = 3,
-        GB = 4,
-
-        [Display(Name = "%")]
-        Percents = 100,
-
-        [Display(Name = "ticks")]
-        Ticks = 1000,
-        [Display(Name = "ms")]
-        Milliseconds = 1010,
-        [Display(Name = "sec")]
-        Seconds = 1011,
-        [Display(Name = "min")]
-        Minutes = 1012,
-
-        [Display(Name = "count")]
-        Count = 1100,
-        [Display(Name = "requests")]
-        Requests = 1101,
-        [Display(Name = "responses")]
-        Responses = 1102,
-
-        [Display(Name = "bits/sec")]
-        Bits_sec = 2100,
-        [Display(Name = "Bytes/sec")]
-        Bytes_sec = 2101,
-        [Display(Name = "KB/sec")]
-        KBytes_sec = 2102,
-        [Display(Name = "MB/sec")]
-        MBytes_sec = 2103,
-
-        [Display(Name = "# per sec")]
-        ValueInSecond = 3000,
-    }
-
-
-    [Flags]
-    public enum StatisticsOptions : int
-    {
-        None = 0,
-        EMA = 1,
-    }
-
-
-    [Flags]
-    public enum DefaultAlertsOptions : long
-    {
-        None = 0,
-        DisableTtl = 1,
-        DisableStatusChange = 2,
-    }
-
 
     public interface IBarSensor
     {
@@ -93,6 +20,8 @@ namespace HSMServer.Core.Model
     public abstract class BaseSensorModel : BaseNodeModel
     {
         private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
+
+        public override SensorSettingsCollection Settings { get; } = new();
 
         public override SensorPolicyCollection Policies { get; }
 
@@ -159,6 +88,9 @@ namespace HSMServer.Core.Model
 
         public BaseSensorModel(SensorEntity entity) : base(entity)
         {
+            if (entity.Settings is not null)
+                Settings.SetSettings(entity.Settings);
+
             State = (SensorState)entity.State;
             OriginalUnit = (Unit?)entity.OriginalUnit;
             Integration = (Integration)entity.Integration;
@@ -236,7 +168,6 @@ namespace HSMServer.Core.Model
             Policies = Policies.Select(u => u.Id.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
-            DefaultChatsSettings = Settings.DefaultChats.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
             ChangeTable = ChangeTable.ToEntity(),
         };

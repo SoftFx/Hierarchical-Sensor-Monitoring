@@ -756,7 +756,7 @@ namespace HSMServer.Core.Cache
         }
 
         private static bool CanRemoveChatsFromPolicy(PolicyDestination destination, HashSet<Guid> chats) =>
-            !destination.AllChats && !destination.UseDefaultChats && destination.Chats.Any(pair => chats.Contains(pair.Key));
+            destination.IsCustom && destination.Chats.Any(pair => chats.Contains(pair.Key));
 
         private static PolicyUpdate BuildPolicyUpdate(Policy policy, PolicyDestinationUpdate destination, InitiatorInfo initiator) =>
             new()
@@ -1094,11 +1094,6 @@ namespace HSMServer.Core.Cache
                 DisplayName = request.SensorName,
                 Type = (byte)type,
                 CreationDate = DateTime.UtcNow.Ticks,
-
-                DefaultChatsSettings = new PolicyDestinationSettingsEntity()
-                {
-                    Mode = (byte)DefaultChatsMode.FromParent,
-                }
             };
 
             var sensor = SensorModelFactory.Build(entity);

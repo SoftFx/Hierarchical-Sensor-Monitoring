@@ -81,6 +81,10 @@ window.markdownToHTML = function (text) {
     return window.DOMPurify.sanitize(window.marked.marked(text));
 }
 
+export function getMarkdown(text) {
+    return window.DOMPurify.sanitize(window.marked.marked(text));
+}
+
 window.replaceHtmlToMarkdown = function (elementId) {
     let element = $(`#${elementId}`);
     let innerHtml = element.html();

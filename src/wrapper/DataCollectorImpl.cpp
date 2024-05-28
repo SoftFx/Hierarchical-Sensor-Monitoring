@@ -212,6 +212,7 @@ namespace {
 		if (options.enable_for_grafana)		hsm_options->EnableForGrafana = options.enable_for_grafana.value();
 		if (options.is_singleton_sensor)	hsm_options->IsSingletonSensor = options.is_singleton_sensor.value();
 		if (options.aggregate_data)			hsm_options->AggregateData = options.aggregate_data.value();
+		hsm_options->DefaultAlertsOptions = (DefaultAlertsOptions)options.default_alert_options;
 	}
 
 	HSMDataCollector::Options::InstantSensorOptions^ ConvertInstantOptions(const hsm_wrapper::HSMInstantSensorOptions& options)

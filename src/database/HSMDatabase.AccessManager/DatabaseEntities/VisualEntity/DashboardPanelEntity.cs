@@ -34,6 +34,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public bool ShowLegend { get; init; }
 
         public byte Hovermode { get; init; }
+        
+        public bool IsSingleMode { get; init; }
     }
 
 

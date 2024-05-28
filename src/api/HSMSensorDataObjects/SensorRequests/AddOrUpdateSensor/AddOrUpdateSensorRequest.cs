@@ -32,6 +32,7 @@ namespace HSMSensorDataObjects.SensorRequests
     }
 
 
+    [Obsolete("This setting doesn't exist for sensor now")]
     public enum DefaultChatsMode : byte
     {
         FromParent = 0,
@@ -73,6 +74,7 @@ namespace HSMSensorDataObjects.SensorRequests
         public string Description { get; set; }
 
 
+        [Obsolete("This setting doesn't exist for sensor now")]
         public DefaultChatsMode? DefaultChats { get; set; }
 
         public long? KeepHistory { get; set; }
