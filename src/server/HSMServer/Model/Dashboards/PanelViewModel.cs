@@ -77,7 +77,7 @@ public sealed class PanelViewModel
 
     public async Task<PanelViewModel> InitPanelData(DateTime? from = null)
     {
-        await Task.WhenAll(Sources.Values.Select(t => t.LoadDataFrom(from)));
+        await Task.WhenAll(Sources.Values.Select(t => t.LoadDataFrom(Settings.IsSingleMode ? null : from)));
 
         return this;
     }
