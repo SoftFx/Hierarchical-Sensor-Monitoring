@@ -5,6 +5,8 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
+using CompressionLevel = LevelDB.CompressionLevel;
 using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
@@ -337,10 +339,11 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void Backup(string backupPath)
+        public string Backup(string backupPath)
         {
             try
             {
+                var fileInfo = new FileInfo($"{backupPath}.zip");
                 using var backupDb = new DB(backupPath, _databaseOptions);
                 using var snapshot = _database.CreateSnapshot();
 
@@ -353,10 +356,16 @@ namespace HSMDatabase.LevelDB
                     backupDb.Put(snapshotIterator.Key(), snapshotIterator.Value());
                     snapshotIterator.Next();
                 }
+
+                ZipFile.CreateFromDirectory(fileInfo.DirectoryName, fileInfo.FullName);
+                fileInfo.Directory.Delete();
+
+                return fileInfo.FullName;
             }
             catch (Exception ex)
             {
                 _logger.Error($"Backup database error: {ex}");
+                return string.Empty;
             }
         }
 

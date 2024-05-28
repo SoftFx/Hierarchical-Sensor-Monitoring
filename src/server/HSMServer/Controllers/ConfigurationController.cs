@@ -6,6 +6,8 @@ using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
+using HSMServer.Sftp;
+using System;
 
 namespace HSMServer.Controllers
 {
@@ -46,6 +48,12 @@ namespace HSMServer.Controllers
                 _config.BackupDatabase.IsEnabled = settings.IsEnabled;
                 _config.BackupDatabase.PeriodHours = settings.BackupPeriodHours;
                 _config.BackupDatabase.StoragePeriodDays = settings.BackupStoragePeriodDays;
+
+                _config.BackupDatabase.SftpConnectionConfig.Address  = settings.Address;
+                _config.BackupDatabase.SftpConnectionConfig.Port     = settings.Port;
+                _config.BackupDatabase.SftpConnectionConfig.Username = settings.Username;
+                _config.BackupDatabase.SftpConnectionConfig.Password = settings.Password;
+                _config.BackupDatabase.SftpConnectionConfig.PrivateKey = settings.PrivateKey;
 
                 _config.ResaveSettings();
             }
@@ -88,6 +96,27 @@ namespace HSMServer.Controllers
 
 
         [HttpGet]
-        public Task<string> CreateBackup() => _backupDatabaseService.CreateBackup();
+        public Task<string> CreateBackup() => _backupDatabaseService.CreateBackupAsync();
+
+        [HttpPost]
+        public string CheckSftpConnection(BackupSettingsViewModel settings)
+        {
+            if (ModelState.IsValid)
+            {
+                var connection = new SftpConnectionConfig()
+                {
+                    Address    = settings.Address,
+                    Port       = settings.Port,
+                    Username   = settings.Username,
+                    Password   = settings.Password,
+                    PrivateKey = settings.PrivateKey,
+                    RootPath   = settings.RootPath,
+                };
+
+                return _backupDatabaseService.CheckSftpConnection(connection);
+            }
+
+            return "ViewModel is invalid!";
+        }
     }
 }

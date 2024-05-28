@@ -6,7 +6,7 @@ namespace HSMDatabase.AccessManager
 {
     public interface IEnvironmentDatabase : IDisposable
     {
-        void Backup(string backupPath);
+        string Backup(string backupPath);
 
 
         #region Folders

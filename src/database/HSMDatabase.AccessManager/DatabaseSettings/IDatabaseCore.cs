@@ -24,7 +24,7 @@ namespace HSMServer.Core.DataLayer
         long TotalDbSize { get; }
 
 
-        void BackupEnvironment(string backupPath);
+        string BackupEnvironment(string backupPath);
 
 
         #region Folders

@@ -29,7 +29,7 @@ namespace HSMServer.BackgroundServices
             await base.ExecuteAsync(token);
         }
 
-        protected override Task ServiceAction()
+        protected override Task ServiceActionAsync()
         {
             _collector.SendDbInfo();
 

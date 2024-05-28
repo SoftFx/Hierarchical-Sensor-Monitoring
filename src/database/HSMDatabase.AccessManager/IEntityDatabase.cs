@@ -9,6 +9,6 @@
 
         void Delete(byte[] key);
 
-        void Backup(string backupPath);
+        string Backup(string backupPath);
     }
 }

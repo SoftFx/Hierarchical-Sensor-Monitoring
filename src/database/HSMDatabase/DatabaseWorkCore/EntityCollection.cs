@@ -121,7 +121,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return list;
         }
 
-        public void Backup(string backupPath) => _database.Backup(backupPath);
+        public string Backup(string backupPath) => _database.Backup(backupPath);
 
 
         private void RegisterId(Guid id)

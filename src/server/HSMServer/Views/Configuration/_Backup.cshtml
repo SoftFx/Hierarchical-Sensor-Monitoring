@@ -5,8 +5,6 @@
 
 @model BackupSettingsViewModel
 
-@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
-
 
 <div class="row mt-3">
     <div class="col-2">
@@ -40,7 +38,7 @@
 </div>
 
 <div class="row mt-2">
-    <div class="col-2 d-flex align-items-center">
+    <div class="col-2">
         <label class="col-form-label" asp-for="BackupStoragePeriodDays"></label>
     </div>
     <div class="col-2">
@@ -56,8 +54,88 @@
     </div>
 </div>
 
+<hr/>
+
+<div class="row">
+    <div class="col-1 text-end">
+        <label class="col-form-label" asp-for="Address"></label>
+    </div>
+    <div class="col-5">
+        <input class="form-control" asp-for="Address">
+    </div>
+    <div class="col-1 text-end">
+        <label class="col-form-label text-end" asp-for="Port"></label>
+    </div>
+    <div class="col-2">
+        <input class="form-control" asp-for="Port">
+    </div>
+    <div class="col text-end">
+        <button id="checkConnectionButton" type="button" class="btn btn-primary">Check connection</button>
+    </div>
+</div>
+<div class="row">
+    <div class="offset-1 col-5">
+        <label class="note">Sftp server address.</label>
+    </div>
+    <div class="offset-1 col-2">
+        <label class="note">Sftp server port (empty for default).</label>
+    </div>
+    <div id="checkConnectionErrorMessage" class="col text-end" style="color: red; display: none;"></div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-1 text-end">
+        <label class="col-form-label" asp-for="Username"></label>
+    </div>
+    <div class="col-5">
+        <input class="form-control" asp-for="Username">
+    </div>
+    <div class="col-1 text-end">
+        <label class="col-form-label" asp-for="Password" typeof="password"></label>
+    </div>
+    <div class="col-5">
+        <input class="form-control" asp-for="Password">
+    </div>
+</div>
+<div class="row">
+    <div class="offset-1 col-5">
+        <label class="note">User name.</label>
+    </div>
+    <div class="offset-1 col-5">
+        <label class="note">Password (Empty if no needed).</label>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-1 text-end">
+        <label class="col-form-label" asp-for="RootPath"></label>
+    </div>
+    <div class="col-11">
+        <input class="form-control" asp-for="RootPath"></input>
+    </div>
+</div>
+<div class="row">
+    <div class="offset-1 col">
+        <label class="note">Root path.</label>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-1 text-end">
+        <label class="col-form-label" asp-for="PrivateKey"></label>
+    </div>
+    <div class="col-11">
+        <textarea class="form-control" asp-for="PrivateKey" rows="5"></textarea>
+    </div>
+</div>
+<div class="row">
+    <div class="offset-1 col">
+        <label class="note">Private key.</label>
+    </div>
+</div>
+
 <div class="d-flex justify-content-between mt-2">
-    <button id="createBackupButton" type="button" class="btn btn-primary mt-1">Create Backup</button>
+    <button id="createBackupButton" type="button" class="btn btn-primary mt-1">Backup & Upload</button>
     <button type="submit" class="btn btn-primary independentSizeButton mt-1">Save</button>
 </div>
 
@@ -89,4 +167,28 @@
             }
         });
     });
+
+         $('[id^=checkConnectionButton]').on('click', function() {
+            var form = document.getElementById('backupSettings_form');
+            var formData = new FormData(form);
+            $.ajax({
+                type: 'POST',
+                url: '@Html.Raw(Url.Action(nameof(ConfigurationController.CheckSftpConnection), ViewConstants.ConfigurationController))',
+                data: formData,
+                processData: false,
+                contentType: false,
+                async: false,
+                success: function(data) {
+                    let message = $("#checkConnectionErrorMessage");
+                    message.css("display", "block");
+
+                    if (data == "") {
+                        message.empty().css("color", "green").append("Success.");
+                    }
+                    else {
+                        message.empty().css("color", "red").append(data);
+                    }
+                }
+            });
+        });
 </script>

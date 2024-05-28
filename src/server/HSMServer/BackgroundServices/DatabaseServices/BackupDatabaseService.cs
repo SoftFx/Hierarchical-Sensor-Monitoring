@@ -4,6 +4,8 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Extensions;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
+using HSMServer.Sftp;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -11,6 +13,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using static System.Collections.Specialized.BitVector32;
 
 namespace HSMServer.BackgroundServices
 {
@@ -22,11 +25,11 @@ namespace HSMServer.BackgroundServices
 
         private readonly TimeSpan _storagePeriod;
 
-
         private bool IsBackupEnabled => _config.BackupDatabase.IsEnabled;
 
 
         public override TimeSpan Delay { get; }
+        public SftpWrapper SftpWrapper { get; private set; }
 
 
         public BackupDatabaseService(IDatabaseCore database, IServerConfig config)
@@ -36,13 +39,32 @@ namespace HSMServer.BackgroundServices
 
             _storagePeriod = TimeSpan.FromDays(config.BackupDatabase.StoragePeriodDays);
             Delay = TimeSpan.FromHours(config.BackupDatabase.PeriodHours);
+
+            if (config.BackupDatabase.SftpConnectionConfig.IsEnabled)
+                SftpWrapper = new SftpWrapper(config.BackupDatabase.SftpConnectionConfig);
         }
 
-        public async Task<string> CreateBackup()
+        public string CheckSftpConnection(SftpConnectionConfig connection)
         {
             try
             {
-                await ServiceAction();
+                var sftp = new SftpWrapper(connection);
+                sftp.CheckConnection();
+                return string.Empty;
+            }
+            catch (Exception ex)
+            {
+                var msg = $"An error ({ex.Message}) has been occurred while check connection.";
+                _logger.Error(ex, msg);
+                return ex.Message;
+            }
+        }
+
+        public async Task<string> CreateBackupAsync()
+        {
+            try
+            {
+                await ServiceActionAsync();
                 return string.Empty;
             }
             catch (Exception ex) 
@@ -53,37 +75,44 @@ namespace HSMServer.BackgroundServices
             }
         }
 
-        protected override async Task ServiceAction()
+        protected override async Task ServiceActionAsync()
         {
             if (!IsBackupEnabled)
                 return;
 
+            string EnvironmentBackup(string path) => _database.BackupEnvironment(path);
 
-            void EnvironmentBackup(string path) => _database.BackupEnvironment(path);
-
-            void DashboardsBackup(string path) => _database.Dashboards.Backup(path);
+            string DashboardsBackup(string path) => _database.Dashboards.Backup(path);
 
 
-            Backup(_dbSettings.EnvironmentDatabaseName, EnvironmentBackup);
-            DeleteOldBackups(_dbSettings.EnvironmentDatabaseName);
+            var backupFileName = Backup(_dbSettings.EnvironmentDatabaseName, EnvironmentBackup);
+            if (!string.IsNullOrEmpty(backupFileName))
+            {
+                await UploadBackupAsync(backupFileName);
+                DeleteOldBackups(_dbSettings.EnvironmentDatabaseName);
+            }
 
-            Backup(_dbSettings.ServerLayoutDatabaseName, DashboardsBackup);
-            DeleteOldBackups(_dbSettings.ServerLayoutDatabaseName);
-
+            backupFileName = Backup(_dbSettings.ServerLayoutDatabaseName, DashboardsBackup);
+            if (!string.IsNullOrEmpty(backupFileName))
+            {
+                await UploadBackupAsync(backupFileName);
+                DeleteOldBackups(_dbSettings.ServerLayoutDatabaseName);
+            }
         }
 
-        private void Backup(string dbName, Action<string> backupAction)
+        private string Backup(string dbName, Func<string, string> backupAction)
         {
             try
             {
-                var backupPath = Path.Combine(_dbSettings.DatabaseBackupsFolder, $"{dbName}_{DateTime.UtcNow.ToWindowsFormat()}");
-                var backupDb = Directory.CreateDirectory(backupPath);
+                var directoryInfo = new DirectoryInfo(Path.Combine(_dbSettings.DatabaseBackupsFolder, $"{dbName}_{DateTime.UtcNow.ToWindowsFormat()}"));
 
-                backupAction(backupDb.FullName);
+                return backupAction(directoryInfo.FullName);
+
             }
             catch (Exception ex)
             {
                 _logger.Error($"{dbName} database backup error: {ex}");
+                return null;
             }
         }
 
@@ -122,6 +151,10 @@ namespace HSMServer.BackgroundServices
             }
         }
 
+        private async Task UploadBackupAsync(string backupFileName)
+        {
+             SftpWrapper.UploadFile(backupFileName, SftpWrapper.RootPath, CancellationToken.None);
+        }
 
         private record BackupDirectory(string Name, DateTime CreationTime);
     }

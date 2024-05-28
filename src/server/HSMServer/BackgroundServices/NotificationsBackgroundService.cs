@@ -27,7 +27,7 @@ namespace HSMServer.BackgroundServices
         public override Task StopAsync(CancellationToken token) => _center.DisposeAsync().AsTask().ContinueWith(_ => base.StopAsync(token)).Unwrap();
 
 
-        protected override async Task ServiceAction()
+        protected override async Task ServiceActionAsync()
         {
             _center.SendAllMessages();
 

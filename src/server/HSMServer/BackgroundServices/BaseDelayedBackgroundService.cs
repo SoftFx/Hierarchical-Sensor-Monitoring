@@ -24,7 +24,7 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        protected abstract Task ServiceAction();
+        protected abstract Task ServiceActionAsync();
 
         protected override async Task ExecuteAsync(CancellationToken token)
         {
@@ -34,7 +34,7 @@ namespace HSMServer.BackgroundServices
 
             while (!token.IsCancellationRequested)
             {
-                await ServiceAction();
+                await ServiceActionAsync();
                 await Task.Delay(Delay, token);
             }
         }

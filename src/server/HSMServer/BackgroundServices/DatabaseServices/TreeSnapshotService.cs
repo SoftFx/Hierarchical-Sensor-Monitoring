@@ -33,7 +33,7 @@ namespace HSMServer.BackgroundServices
             return base.StartAsync(token);
         }
 
-        protected override Task ServiceAction() => SaveState(false);
+        protected override Task ServiceActionAsync() => SaveState(false);
 
 
         private async Task SaveState(bool isFinal)

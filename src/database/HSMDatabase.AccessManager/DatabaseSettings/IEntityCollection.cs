@@ -21,6 +21,6 @@ namespace HSMDatabase.AccessManager.DatabaseSettings
 
         public List<T> ReadCollection();
 
-        public void Backup(string backupPath);
+        public string Backup(string backupPath);
     }
 }

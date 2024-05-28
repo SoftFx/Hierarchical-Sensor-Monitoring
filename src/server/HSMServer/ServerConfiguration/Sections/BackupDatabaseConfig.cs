@@ -1,4 +1,6 @@
-﻿namespace HSMServer.ServerConfiguration
+﻿using HSMServer.Sftp;
+
+namespace HSMServer.ServerConfiguration
 {
     public class BackupDatabaseConfig
     {
@@ -12,5 +14,7 @@
         public int PeriodHours { get; set; } = DefaultPeriodHours;
 
         public int StoragePeriodDays { get; set; } = DefaultStoragePeriodDays;
+
+        public SftpConnectionConfig SftpConnectionConfig { get; set; } = new SftpConnectionConfig();
     }
 }
