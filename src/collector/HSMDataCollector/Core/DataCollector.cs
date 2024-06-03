@@ -67,6 +67,8 @@ namespace HSMDataCollector.Core
         /// <param name="options">Common options for datacollector</param>
         public DataCollector(CollectorOptions options)
         {
+            AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(UnhandledExceptionHandler);
+
             _options = options;
 
             _queueManager = new QueueManager(options, _logger);
@@ -232,6 +234,12 @@ namespace HSMDataCollector.Core
         private void ToRunningCollector() => _ = _sensorsStorage.Start();
 
         private void ToStoppedCollector() => _queueManager.Stop();
+
+        private void UnhandledExceptionHandler(object sender, UnhandledExceptionEventArgs e)
+        {
+            Exception ex = (Exception)e.ExceptionObject;
+            _logger.Error($"Unhandled exception caught: {ex.Message}");
+        }
 
         #region Obsolets
 
