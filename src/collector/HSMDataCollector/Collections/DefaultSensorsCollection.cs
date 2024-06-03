@@ -80,7 +80,7 @@ namespace HSMDataCollector.DefaultSensors
 
             _queueOverflowSensor = new QueueOverflowSensor(_prototype.QueueOverflow.Get(options));
 
-            _storage.QueueManager.OverflowInfoEvent += _queueOverflowSensor.AddValue;
+            //_storage.QueueManager.OverflowInfoEvent += _queueOverflowSensor.AddValue;
 
             return Register(_queueOverflowSensor);
         }

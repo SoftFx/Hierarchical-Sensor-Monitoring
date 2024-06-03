@@ -1,5 +1,4 @@
-﻿using HSMDataCollector.Extensions;
-using HSMDataCollector.Logging;
+﻿using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue;
 using Polly;
 using Polly.Retry;
@@ -7,7 +6,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,11 +14,8 @@ namespace HSMDataCollector.Client.HttpsClient
     internal abstract class BaseHandlers<T> : IDisposable
     {
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
-        private readonly StringBuilder _retryLogBuilder = new StringBuilder(1 << 10);
 
         private readonly ResiliencePipeline<HttpResponseMessage> _pipeline;
-
-        private ClientRequestModel _currentRequest;
 
         protected readonly ICollectorLogger _logger;
         protected readonly ISyncQueue<T> _queue;
@@ -28,14 +23,12 @@ namespace HSMDataCollector.Client.HttpsClient
 
         internal event Func<string, HttpContent, CancellationToken, Task<HttpResponseMessage>> SendRequestEvent;
 
-
         protected abstract DelayBackoffType DelayStrategy { get; }
 
         protected abstract int MaxRequestAttempts { get; }
 
-
-        private bool CanSendRequest => _currentRequest == null;
-
+        protected readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
+        protected int _timeout = 1000;
 
         protected BaseHandlers(ISyncQueue<T> queue, Endpoints endpoints, ICollectorLogger logger)
         {
@@ -46,15 +39,12 @@ namespace HSMDataCollector.Client.HttpsClient
             var retryOptions = new RetryStrategyOptions<HttpResponseMessage>()
             {
                 MaxRetryAttempts = MaxRequestAttempts,
-                BackoffType = DelayStrategy,
+                BackoffType      = DelayStrategy,
 
                 MaxDelay = TimeSpan.FromMinutes(2),
-                Delay = TimeSpan.FromSeconds(1),
+                Delay    = TimeSpan.FromSeconds(1),
 
-                OnRetry = LogException,
-                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
-                                  .Handle<HttpRequestException>()
-                                  .HandleResult(result => result?.StatusCode.IsRetryCode() ?? true),
+                OnRetry  = LogException,
             };
 
             _pipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
@@ -76,94 +66,102 @@ namespace HSMDataCollector.Client.HttpsClient
         internal abstract string GetUri(object rawData);
 
 
-
         private ValueTask LogException(OnRetryArguments<HttpResponseMessage> args)
         {
-            if (!CanSendRequest)
-            {
-                var curAttempt = args.AttemptNumber + 1;
-                var exception = args.Outcome.Exception;
-                var result = args.Outcome.Result;
+            if (args.Outcome.Result != null)
+                _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Code = {args.Outcome.Result.StatusCode}");
 
-                _retryLogBuilder.Clear()
-                                .Append($"Id = {_currentRequest.Id} ")
-                                .Append($"Attempt number = {curAttempt}| ");
-
-                if (result != null)
-                    _retryLogBuilder.Append($"Failed to send data. Code = {result.StatusCode} ");
-
-                if (exception != null)
-                    _retryLogBuilder.Append($"Exception = {exception.Message} Inner = {exception.InnerException.Message}| ");
-
-                if (curAttempt == 1)
-                    _retryLogBuilder.Append($"Uri = {_currentRequest.Uri} ")
-                                    .Append($"Data = {_currentRequest.JsonMessage}");
-
-                _logger.Error(_retryLogBuilder.ToString());
-            }
+            else if (args.Outcome.Exception != null)
+                    _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Exception = {args.Outcome.Exception.Message} Inner = {args.Outcome.Exception.InnerException.Message}");
 
             return default;
         }
 
-
         private async Task RecieveDataQueue(List<T> values)
         {
-            if (CanSendRequest)
+            if (await _semaphore.WaitAsync(_timeout))
             {
-                var requests = values.Select(ConvertToRequestData).ToList();
-
-                await HandleRequestResult(await BuildAndSendNewRequest(requests), values);
-
-                return;
+                try
+                {
+                    await HandleRequestResult(await BuildAndSendNewRequest(values), values);
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
             }
-
-            foreach (var value in values)
-                _queue.AddFail(value);
+            else
+            {
+                foreach (var value in values)
+                    _queue.AddFail(value);
+            }
         }
 
         private async Task RecieveDataQueue(T value)
         {
-            if (CanSendRequest)
-                await HandleRequestResult(await BuildAndSendNewRequest(ConvertToRequestData(value)), value);
+            if (await _semaphore.WaitAsync(_timeout))
+            {
+                try
+                {
+                    await HandleRequestResult(await BuildAndSendNewRequest(value), value);
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            }
             else
+            {
                 _queue.AddFail(value);
+            }
         }
 
-        private async Task<HttpResponseMessage> BuildAndSendNewRequest(object rawData)
+        private Task<HttpResponseMessage> BuildAndSendNewRequest(IEnumerable<T> values)
+        {
+            var rawData = values.Select(ConvertToRequestData);
+            var request = new ClientRequestModel(rawData, GetUri(rawData));
+            return SendRequest(request);
+        }
+
+        private Task<HttpResponseMessage> BuildAndSendNewRequest(T value)
+        {
+            var rawData = ConvertToRequestData(value);
+            var request = new ClientRequestModel(rawData, GetUri(rawData));
+            return SendRequest(request);
+        }
+
+        private async Task<HttpResponseMessage> SendRequest(ClientRequestModel request)
         {
             try
             {
-                _currentRequest = new ClientRequestModel(rawData, GetUri(rawData));
+                var response = await _pipeline.ExecuteAsync(ExecutePipeline, request, _tokenSource.Token);
 
-                var response = await _pipeline.ExecuteAsync(ExecutePipeline, _tokenSource.Token);
-
-                _queue.ThrowPackageRequestInfo(new PackageSendingInfo(_currentRequest.JsonMessage.Length, response));
+                _queue.ThrowPackageRequestInfo(new PackageSendingInfo(request.JsonMessage.Length, response));
 
                 return response;
             }
             catch (Exception ex)
             {
-                _queue.ThrowPackageRequestInfo(new PackageSendingInfo(_currentRequest?.JsonMessage?.Length ?? 0, null, exception: ex.Message));
-                _logger.Error(ex);
+                _queue.ThrowPackageRequestInfo(new PackageSendingInfo(request?.JsonMessage?.Length ?? 0, null, exception: ex.Message));
+                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException.Message} | Id = {request.Id} Data = {request.JsonMessage}");
 
-                return null;
-            }
-            finally
-            {
-                _currentRequest = null;
+                return default;
             }
         }
 
-        private async ValueTask<HttpResponseMessage> ExecutePipeline(CancellationToken token) =>
-            await SendRequestEvent(_currentRequest.Uri, _currentRequest.GetContent(), token);
+        private async ValueTask<HttpResponseMessage> ExecutePipeline(ClientRequestModel request, CancellationToken token) =>
+            await SendRequestEvent(request.Uri, request.GetContent(), token);
 
 
         public void Dispose()
         {
-            _tokenSource.Cancel();
-
             _queue.NewValuesEvent -= RecieveDataQueue;
-            _queue.NewValueEvent -= RecieveDataQueue;
+            _queue.NewValueEvent  -= RecieveDataQueue;
+
+            _tokenSource?.Cancel();
+            _tokenSource.Dispose();
+
+            _semaphore.Dispose();
         }
     }
 }
