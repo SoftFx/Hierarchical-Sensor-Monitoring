@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager;
+﻿using HSMCommon.TaskResult;
+using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using NLog;
 using System;
@@ -36,7 +37,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         }
 
 
-        public string Backup(string backupPath) => _database.Backup(backupPath);
+        public TaskResult<string> Backup(string backupPath) => _database.Backup(backupPath);
 
 
         #region Folders

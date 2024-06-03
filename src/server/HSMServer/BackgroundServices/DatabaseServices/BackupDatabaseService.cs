@@ -1,19 +1,16 @@
-﻿using HSMDatabase.AccessManager;
+﻿using HSMCommon.TaskResult;
+using HSMDatabase.AccessManager;
 using HSMDatabase.Settings;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Extensions;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using HSMServer.Sftp;
-using Newtonsoft.Json.Linq;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
-using static System.Collections.Specialized.BitVector32;
+using static System.Net.WebRequestMethods;
+
 
 namespace HSMServer.BackgroundServices
 {
@@ -23,30 +20,35 @@ namespace HSMServer.BackgroundServices
         private readonly IDatabaseCore _database;
         private readonly IServerConfig _config;
 
+        private readonly BackupSensors _backupSensors;
+
         private bool IsBackupEnabled => _config.BackupDatabase.IsEnabled;
 
         private TimeSpan StoragePeriod => TimeSpan.FromDays(_config.BackupDatabase.StoragePeriodDays);
 
+        private volatile bool _isBackupRunning;
 
         public override TimeSpan Delay => TimeSpan.FromHours(_config.BackupDatabase.PeriodHours);
-        public SftpWrapper SftpWrapper { get; private set; }
 
 
-        public BackupDatabaseService(IDatabaseCore database, IServerConfig config)
+        public BackupDatabaseService(IDatabaseCore database, IServerConfig config, DataCollectorWrapper datacollectorWrapper)
         {
             _config = config;
             _database = database;
-
-            if (config.BackupDatabase.SftpConnectionConfig.IsEnabled)
-                SftpWrapper = new SftpWrapper(config.BackupDatabase.SftpConnectionConfig);
+            _backupSensors = datacollectorWrapper.BackupSensors;
         }
 
-        public string CheckSftpConnection(SftpConnectionConfig connection)
+        public async Task<string> CheckSftpWritePermisionAsync(SftpConnectionConfig connection)
         {
             try
             {
-                var sftp = new SftpWrapper(connection);
-                sftp.CheckConnection();
+                if (string.IsNullOrEmpty(connection.PrivateKey))
+                    connection.PrivateKey = _config.BackupDatabase.SftpConnectionConfig.PrivateKey;
+
+                using (var sftp = new SftpWrapper(connection, _logger))
+                {
+                    await sftp.CheckWritePermissionsAsync(connection.RootPath);
+                }
                 return string.Empty;
             }
             catch (Exception ex)
@@ -61,6 +63,9 @@ namespace HSMServer.BackgroundServices
         {
             try
             {
+                if (_isBackupRunning)
+                    return "Backup already running";
+
                 await ServiceActionAsync();
                 return string.Empty;
             }
@@ -77,27 +82,45 @@ namespace HSMServer.BackgroundServices
             if (!IsBackupEnabled)
                 return;
 
-            string EnvironmentBackup(string path) => _database.BackupEnvironment(path);
-
-            string DashboardsBackup(string path) => _database.Dashboards.Backup(path);
-
-
-            var backupFileName = Backup(_dbSettings.EnvironmentDatabaseName, EnvironmentBackup);
-            if (!string.IsNullOrEmpty(backupFileName))
+            if (!_isBackupRunning)
             {
-                await UploadBackupAsync(backupFileName);
-                DeleteOldBackups(_dbSettings.EnvironmentDatabaseName);
-            }
+                _isBackupRunning = true;
 
-            backupFileName = Backup(_dbSettings.ServerLayoutDatabaseName, DashboardsBackup);
-            if (!string.IsNullOrEmpty(backupFileName))
-            {
-                await UploadBackupAsync(backupFileName);
-                DeleteOldBackups(_dbSettings.ServerLayoutDatabaseName);
+                try
+                {
+                    var enviromentBackupResult = Backup(_dbSettings.EnvironmentDatabaseName, _database.BackupEnvironment);
+                    if (enviromentBackupResult.IsOk)
+                    {
+                        _backupSensors.AddBackupCreateInfo(true, enviromentBackupResult.Value);
+                        DeleteOldBackups(_dbSettings.EnvironmentDatabaseName);
+                    }
+                    else
+                    {
+                        _backupSensors.AddBackupCreateInfo(false, enviromentBackupResult.Error);
+                    }
+
+                    var dashboardBackupResult = Backup(_dbSettings.ServerLayoutDatabaseName, _database.Dashboards.Backup);
+                    if (dashboardBackupResult.IsOk)
+                    {
+                        _backupSensors.AddBackupCreateInfo(true, dashboardBackupResult.Value);
+                        DeleteOldBackups(_dbSettings.ServerLayoutDatabaseName);
+                    }
+                    else
+                    {
+                        _backupSensors.AddBackupCreateInfo(false, dashboardBackupResult.Error);
+                    }
+
+                    if (_config.BackupDatabase.SftpConnectionConfig.IsEnabled)
+                        await SynchronizeSftpFolderAsync();
+                }
+                finally
+                {
+                    _isBackupRunning = false;
+                }
             }
         }
 
-        private string Backup(string dbName, Func<string, string> backupAction)
+        private TaskResult<string> Backup(string dbName, Func<string, TaskResult<string>> backupAction)
         {
             try
             {
@@ -119,22 +142,21 @@ namespace HSMServer.BackgroundServices
             {
                 var now = DateTime.UtcNow;
 
-                var backupsDirectories =
-                   Directory.GetDirectories(_dbSettings.DatabaseBackupsFolder, $"{dbName}*", SearchOption.TopDirectoryOnly)
-                            .Select(d => new BackupDirectory(d, Directory.GetCreationTimeUtc(d)))
+                var backupsFiles =
+                   new DirectoryInfo(_dbSettings.DatabaseBackupsFolder).GetFiles($"{dbName}*", SearchOption.TopDirectoryOnly)
                             .OrderBy(d => d.CreationTime)
                             .ToList();
 
-                for (int i = 0; i < backupsDirectories.Count - 1; ++i) // all backups except the last one
+                for (int i = 0; i < backupsFiles.Count - 1; ++i) // all backups except the last one
                 {
-                    var backup = backupsDirectories[i];
+                    var backup = backupsFiles[i];
 
                     try
                     {
                         var creationTime = backup.CreationTime;
 
                         if (creationTime < (now - StoragePeriod) || creationTime.Date == now.Date)
-                            Directory.Delete(backup.Name, true);
+                            backup.Delete();
                     }
                     catch (Exception ex)
                     {
@@ -148,9 +170,50 @@ namespace HSMServer.BackgroundServices
             }
         }
 
-        private async Task UploadBackupAsync(string backupFileName)
+        private async Task SynchronizeSftpFolderAsync()
         {
-             SftpWrapper.UploadFile(backupFileName, SftpWrapper.RootPath, CancellationToken.None);
+
+            try
+            {
+                using (var sftp = new SftpWrapper(_config.BackupDatabase.SftpConnectionConfig, _logger))
+                {
+                    var root = _config.BackupDatabase.SftpConnectionConfig.RootPath;
+
+                    sftp.CreateAllDirectories(root);
+
+                    var sftpFiles = sftp.ListDirectory(root).Where(x => x.IsDirectory == false).ToList();
+                    foreach (var localFile in new DirectoryInfo(_dbSettings.DatabaseBackupsFolder).GetFiles())
+                    {
+                        var sftpFile = sftpFiles.FirstOrDefault(x => x.Name == localFile.Name);
+
+                        if (sftpFile == null)
+                        {
+                            try
+                            {
+                                await sftp.UploadFileAsync(localFile.FullName, root);
+                                _backupSensors.AddBackupUploadInfo(true, $"{localFile.FullName} uploaded to {sftp.Host}\\{root} successfuly");
+                            }
+                            catch (Exception ex)
+                            {
+                                _backupSensors.AddBackupUploadInfo(false, $"An error {ex.Message} has been occured while uploading {localFile.FullName} to {sftp.Host}/{root}");
+                                throw;
+                            }
+                        }
+                        else
+                            sftpFiles.Remove(sftpFile);
+                    }
+
+                    foreach (var sftpFile in sftpFiles)
+                    {
+                        await sftp.DeleteFileAsync(sftpFile.FullName);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _backupSensors.AddBackupUploadInfo(false, $"An error {ex.Message} has been occured while connecting to sftp server: {_config.BackupDatabase.SftpConnectionConfig.Address}/{_config.BackupDatabase.SftpConnectionConfig.RootPath}");
+                throw;
+            }
         }
 
         private record BackupDirectory(string Name, DateTime CreationTime);

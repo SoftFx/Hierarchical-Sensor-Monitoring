@@ -1,4 +1,5 @@
 ﻿using HSMServer.ServerConfiguration;
+using Microsoft.AspNetCore.Http;
 using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model.Configuration
@@ -29,10 +30,12 @@ namespace HSMServer.Model.Configuration
         public string Password { get; set; }
 
         [Display(Name = "Private key")]
-        public string PrivateKey { get; set;}
+        public IFormFile PrivateKey { get; set;}
 
         [Display(Name = "Root path")]
         public string RootPath { get; set; }
+
+        public string PrivateKeyFileName { get; set; }
 
         public BackupSettingsViewModel() { }
 
@@ -42,13 +45,13 @@ namespace HSMServer.Model.Configuration
             BackupPeriodHours       = config.BackupDatabase.PeriodHours;
             IsEnabled               = config.BackupDatabase.IsEnabled;
 
-            IsSftpEnabled = config.BackupDatabase.SftpConnectionConfig.IsEnabled;
-            Address       = config.BackupDatabase.SftpConnectionConfig.Address;
-            Port          = config.BackupDatabase.SftpConnectionConfig.Port;
-            Username      = config.BackupDatabase.SftpConnectionConfig.Username;
-            Password      = config.BackupDatabase.SftpConnectionConfig.Password;
-            PrivateKey    = config.BackupDatabase.SftpConnectionConfig.PrivateKey;
-            RootPath      = config.BackupDatabase.SftpConnectionConfig.RootPath;
+            IsSftpEnabled      = config.BackupDatabase.SftpConnectionConfig.IsEnabled;
+            Address            = config.BackupDatabase.SftpConnectionConfig.Address;
+            Port               = config.BackupDatabase.SftpConnectionConfig.Port;
+            Username           = config.BackupDatabase.SftpConnectionConfig.Username;
+            Password           = config.BackupDatabase.SftpConnectionConfig.Password;
+            RootPath           = config.BackupDatabase.SftpConnectionConfig.RootPath;
+            PrivateKeyFileName = config.BackupDatabase.SftpConnectionConfig.PrivateKeyFileName;
         }
     }
 }

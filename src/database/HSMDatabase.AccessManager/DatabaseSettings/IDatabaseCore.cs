@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager;
+﻿using HSMCommon.TaskResult;
+using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.DatabaseSettings;
 using System;
@@ -24,7 +25,7 @@ namespace HSMServer.Core.DataLayer
         long TotalDbSize { get; }
 
 
-        string BackupEnvironment(string backupPath);
+        TaskResult<string> BackupEnvironment(string backupPath);
 
 
         #region Folders

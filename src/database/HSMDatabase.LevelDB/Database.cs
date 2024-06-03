@@ -1,3 +1,4 @@
+using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB.Extensions;
 using LevelDB;
@@ -339,33 +340,45 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public string Backup(string backupPath)
+        public TaskResult<string> Backup(string backupPath)
         {
             try
             {
                 var fileInfo = new FileInfo($"{backupPath}.zip");
-                using var backupDb = new DB(backupPath, _databaseOptions);
-                using var snapshot = _database.CreateSnapshot();
 
-                using var readOptions = new ReadOptions() { Snapshot = snapshot };
-                using var snapshotIterator = _database.CreateIterator(readOptions);
-
-                snapshotIterator.SeekToFirst();
-                while (snapshotIterator.IsValid)
+                using (var backupDb = new DB(backupPath, _databaseOptions))
                 {
-                    backupDb.Put(snapshotIterator.Key(), snapshotIterator.Value());
-                    snapshotIterator.Next();
+                    using (var snapshot = _database.CreateSnapshot())
+                    {
+                        using (var readOptions = new ReadOptions() { Snapshot = snapshot })
+                        {
+                            using (var snapshotIterator = _database.CreateIterator(readOptions))
+                            {
+
+                                snapshotIterator.SeekToFirst();
+                                while (snapshotIterator.IsValid)
+                                {
+                                    backupDb.Put(snapshotIterator.Key(), snapshotIterator.Value());
+                                    snapshotIterator.Next();
+                                }
+                            }
+                        }
+                    }
                 }
 
-                ZipFile.CreateFromDirectory(fileInfo.DirectoryName, fileInfo.FullName);
-                fileInfo.Directory.Delete();
+                if (File.Exists(fileInfo.FullName))
+                    File.Delete(fileInfo.FullName);
 
-                return fileInfo.FullName;
+                ZipFile.CreateFromDirectory(backupPath, fileInfo.FullName);
+                Directory.Delete(backupPath, true);
+
+                return new TaskResult<string>(fileInfo.FullName);
             }
             catch (Exception ex)
             {
-                _logger.Error($"Backup database error: {ex}");
-                return string.Empty;
+                var msg = $"Backup database {backupPath} error: {ex}";
+                _logger.Error(msg);
+                return TaskResult<string>.AsError(msg);
             }
         }
 

@@ -6,6 +6,7 @@
 @model BackupSettingsViewModel
 
 
+<h6 class="mt-3">Backup settings</h6>
 <div class="row mt-3">
     <div class="col-2">
         <label class="col-form-label" asp-for="IsEnabled"></label>
@@ -54,88 +55,98 @@
     </div>
 </div>
 
-<hr/>
-
+<h6 class="mt-3">Sftp settings</h6>
+<div class="row mt-3">
+    <div class="col-2">
+        <label class="col-form-label" asp-for="IsSftpEnabled"></label>
+    </div>
+    <div class="col-auto form-check form-switch ms-3 mt-2">
+        <input class="form-check-input" type="checkbox" asp-for="IsSftpEnabled">
+    </div>
+    <div class="col text-end">
+        <button id="checkConnectionButton" type="button" class="btn btn-primary" title="Check connection and write permission"><i class="fa fa-plug" aria-hidden="true"></i> Check Connection</button>
+    </div>
+</div>
 <div class="row">
-    <div class="col-1 text-end">
+    <div class="offset-2 col-2">
+        <label class="note">Will backup uploded to sftp.</label>
+    </div>
+    <div class="col text-end" id="checkConnectionErrorMessage"  style="color: red; display: none;"></div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-2">
         <label class="col-form-label" asp-for="Address"></label>
     </div>
-    <div class="col-5">
+    <div class="col-3">
         <input class="form-control" asp-for="Address">
     </div>
-    <div class="col-1 text-end">
-        <label class="col-form-label text-end" asp-for="Port"></label>
+    <div class="offset-2 col-2">
+        <label class="col-form-label" asp-for="Port"></label>
     </div>
     <div class="col-2">
         <input class="form-control" asp-for="Port">
     </div>
-    <div class="col text-end">
-        <button id="checkConnectionButton" type="button" class="btn btn-primary">Check connection</button>
-    </div>
 </div>
 <div class="row">
-    <div class="offset-1 col-5">
+    <div class="offset-2 col-3">
         <label class="note">Sftp server address.</label>
     </div>
-    <div class="offset-1 col-2">
+    <div class="offset-4 col">
         <label class="note">Sftp server port (empty for default).</label>
     </div>
-    <div id="checkConnectionErrorMessage" class="col text-end" style="color: red; display: none;"></div>
 </div>
 
 <div class="row mt-2">
-    <div class="col-1 text-end">
+    <div class="col-2">
         <label class="col-form-label" asp-for="Username"></label>
     </div>
-    <div class="col-5">
+    <div class="col-3">
         <input class="form-control" asp-for="Username">
     </div>
-    <div class="col-1 text-end">
+    <div class="offset-2 col-2">
         <label class="col-form-label" asp-for="Password" typeof="password"></label>
     </div>
-    <div class="col-5">
+    <div class="col-3">
         <input class="form-control" asp-for="Password">
     </div>
 </div>
 <div class="row">
-    <div class="offset-1 col-5">
+    <div class="offset-2 col-3">
         <label class="note">User name.</label>
     </div>
-    <div class="offset-1 col-5">
+    <div class="offset-4 col-3">
         <label class="note">Password (Empty if no needed).</label>
     </div>
 </div>
 
 <div class="row mt-2">
-    <div class="col-1 text-end">
+    <div class="col-2">
         <label class="col-form-label" asp-for="RootPath"></label>
     </div>
-    <div class="col-11">
+    <div class="col-3">
         <input class="form-control" asp-for="RootPath"></input>
     </div>
-</div>
-<div class="row">
-    <div class="offset-1 col">
-        <label class="note">Root path.</label>
-    </div>
-</div>
-
-<div class="row mt-2">
-    <div class="col-1 text-end">
+    <div class="offset-2 col-2">
         <label class="col-form-label" asp-for="PrivateKey"></label>
     </div>
-    <div class="col-11">
-        <textarea class="form-control" asp-for="PrivateKey" rows="5"></textarea>
+    <div class="col-3">
+        <input class="form-control" asp-for="PrivateKey" type="file" /></input>
     </div>
 </div>
 <div class="row">
-    <div class="offset-1 col">
-        <label class="note">Private key.</label>
+    <div class="offset-2 col-3">
+        <label class="note">Root path.</label>
+    </div>
+    <div class="offset-4 col-3">
+        <label class="note">Private key file. @(Model.PrivateKeyFileName != null ? $"[ {Model.PrivateKeyFileName} ]" : "")</label>
     </div>
 </div>
 
 <div class="d-flex justify-content-between mt-2">
-    <button id="createBackupButton" type="button" class="btn btn-primary mt-1">Backup & Upload</button>
+    <div class="col-2 d-grid">
+        <button id="createBackupButton" type="button" class="btn btn-primary mt-1" @(Model.IsEnabled ? "" : "disabled")><i class="fa fa-file" aria-hidden="true"></i> @(Model.IsSftpEnabled ? "Backup & Upload" : "Backup")</button>
+    </div>
     <button type="submit" class="btn btn-primary independentSizeButton mt-1">Save</button>
 </div>
 

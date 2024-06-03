@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using HSMServer.Sftp;
 using System;
+using System.IO;
 
 namespace HSMServer.Controllers
 {
@@ -49,11 +50,25 @@ namespace HSMServer.Controllers
                 _config.BackupDatabase.PeriodHours = settings.BackupPeriodHours;
                 _config.BackupDatabase.StoragePeriodDays = settings.BackupStoragePeriodDays;
 
-                _config.BackupDatabase.SftpConnectionConfig.Address  = settings.Address;
-                _config.BackupDatabase.SftpConnectionConfig.Port     = settings.Port;
-                _config.BackupDatabase.SftpConnectionConfig.Username = settings.Username;
-                _config.BackupDatabase.SftpConnectionConfig.Password = settings.Password;
-                _config.BackupDatabase.SftpConnectionConfig.PrivateKey = settings.PrivateKey;
+                _config.BackupDatabase.SftpConnectionConfig.IsEnabled  = settings.IsSftpEnabled;
+                _config.BackupDatabase.SftpConnectionConfig.Address    = settings.Address;
+                _config.BackupDatabase.SftpConnectionConfig.Port       = settings.Port;
+                _config.BackupDatabase.SftpConnectionConfig.Username   = settings.Username;
+                _config.BackupDatabase.SftpConnectionConfig.Password   = settings.Password;
+                _config.BackupDatabase.SftpConnectionConfig.RootPath   = settings.RootPath;
+                if (settings.PrivateKey != null)
+                {
+                    using (var stream = new StreamReader(settings.PrivateKey.OpenReadStream()))
+                    {
+                        _config.BackupDatabase.SftpConnectionConfig.PrivateKey = stream.ReadToEnd();
+                    }
+
+                    _config.BackupDatabase.SftpConnectionConfig.PrivateKeyFileName = settings.PrivateKey.FileName;
+                }
+                else
+                {
+                    settings.PrivateKeyFileName = _config.BackupDatabase.SftpConnectionConfig.PrivateKeyFileName;
+                }
 
                 _config.ResaveSettings();
             }
@@ -99,7 +114,7 @@ namespace HSMServer.Controllers
         public Task<string> CreateBackup() => _backupDatabaseService.CreateBackupAsync();
 
         [HttpPost]
-        public string CheckSftpConnection(BackupSettingsViewModel settings)
+        public Task<string> CheckSftpConnection(BackupSettingsViewModel settings)
         {
             if (ModelState.IsValid)
             {
@@ -109,14 +124,21 @@ namespace HSMServer.Controllers
                     Port       = settings.Port,
                     Username   = settings.Username,
                     Password   = settings.Password,
-                    PrivateKey = settings.PrivateKey,
-                    RootPath   = settings.RootPath,
+                    RootPath   = settings.RootPath
                 };
 
-                return _backupDatabaseService.CheckSftpConnection(connection);
+                if (settings.PrivateKey != null)
+                {
+                    using (var stream = new StreamReader(settings.PrivateKey.OpenReadStream()))
+                    {
+                        connection.PrivateKey = stream.ReadToEnd();
+                    }
+                }
+
+                return _backupDatabaseService.CheckSftpWritePermisionAsync(connection);
             }
 
-            return "ViewModel is invalid!";
+            return Task.FromResult("ViewModel is invalid!");
         }
     }
 }

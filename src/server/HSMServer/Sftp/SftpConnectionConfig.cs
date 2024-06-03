@@ -12,6 +12,8 @@
 
         public string Password { get; set; }
 
+        public string PrivateKeyFileName { get; set; }
+
         public string PrivateKey { get; set; }
 
         public string RootPath { get; set; }
