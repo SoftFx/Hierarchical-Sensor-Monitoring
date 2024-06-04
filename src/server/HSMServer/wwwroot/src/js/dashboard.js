@@ -4,10 +4,17 @@ import {Dashboard} from "../ts/dashboardT";
 import {Panel} from "../ts/dashboard.panel";
 import {PanelCordinatesHelper} from "../ts/services/panel-cordinates-helper";
 import {DashboardStorage} from "../ts/dashboard/dashboard.storage";
+import {MutationObserverService} from "../ts/services/mutation-observer-service";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
 export const panelHelper = new PanelCordinatesHelper();
+
+export const formObserver = new MutationObserverService();
+
+window.addObserve = function(q){
+    formObserver.addFormToObserve(q);
+}
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();
