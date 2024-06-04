@@ -68,10 +68,14 @@ export class DashboardStorage {
                 'xaxis.autorange': false,
                 'height': Number((settings.height * 1400).toFixed(5)) - 46
             })
+            
+            if (values.length === 0) {
+                $(`#emptypanel_${id}`).show();
+            }
         }
-        
-        if (values.length === 0) {
-            $(`#emptypanel_${id}`).show();
+        else {
+            let panelData = $(`#panelLastValue_${panel.id}`);
+            panelData.height(Number((settings.height * 1400).toFixed(5)) - 46)
         }
         
         replaceHtmlToMarkdown('panel_description')
