@@ -11,6 +11,7 @@ import {customReset} from "../../js/plotting";
 import Plotly from "plotly.js";
 
 export const httpPanelService : HttpPanelService = new HttpPanelService();
+export const updateDashboardInterval = 120000;
 
 export class DashboardStorage {
     containerHeight = 0;
@@ -87,6 +88,11 @@ export class DashboardStorage {
                 panel.updateNotify();
             });
         }, 5000);
+    }
+    
+    initUpdateRequests() {
+        for (let i in this.panels)
+            this.panels[i].initUpdateRequests()
     }
 }
 
