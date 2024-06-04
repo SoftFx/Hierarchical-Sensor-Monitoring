@@ -18,12 +18,14 @@ export class MutationObserverService {
 
     getFormValues(): { [key: string]: string } {
         const values: { [key: string]: string } = {};
-        const elements = this.form.querySelectorAll('select, input, textarea');
+        const elements = this.form.querySelectorAll('select, input, textarea, .filter-option-inner-inner');
 
         elements.forEach((element: HTMLElement) => {
             if (element.id) {
                 if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement)
                     values[element.id] = element.value;
+                else 
+                    values[element.id] = element.textContent;
             }
         })
 
