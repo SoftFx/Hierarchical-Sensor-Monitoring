@@ -1,6 +1,7 @@
 ﻿using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.Settings;
+using HSMSensorDataObjects;
 using HSMServer.Core.DataLayer;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
@@ -8,6 +9,8 @@ using HSMServer.Sftp;
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using static System.Net.WebRequestMethods;
 
@@ -26,7 +29,9 @@ namespace HSMServer.BackgroundServices
 
         private TimeSpan StoragePeriod => TimeSpan.FromDays(_config.BackupDatabase.StoragePeriodDays);
 
-        private volatile bool _isBackupRunning;
+        private StringBuilder _sb = new StringBuilder(1024);
+
+        private SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
 
         public override TimeSpan Delay => TimeSpan.FromHours(_config.BackupDatabase.PeriodHours);
 
@@ -63,9 +68,6 @@ namespace HSMServer.BackgroundServices
         {
             try
             {
-                if (_isBackupRunning)
-                    return "Backup already running";
-
                 await ServiceActionAsync();
                 return string.Empty;
             }
@@ -82,41 +84,49 @@ namespace HSMServer.BackgroundServices
             if (!IsBackupEnabled)
                 return;
 
-            if (!_isBackupRunning)
+            if (await _semaphore.WaitAsync(0))
             {
-                _isBackupRunning = true;
-
                 try
                 {
+                    bool hasError = false;
+                    _sb.Clear();
                     var enviromentBackupResult = Backup(_dbSettings.EnvironmentDatabaseName, _database.BackupEnvironment);
                     if (enviromentBackupResult.IsOk)
                     {
-                        _backupSensors.AddBackupCreateInfo(true, enviromentBackupResult.Value);
+                        _sb.AppendLine(enviromentBackupResult.Value);
                         DeleteOldBackups(_dbSettings.EnvironmentDatabaseName);
                     }
                     else
                     {
-                        _backupSensors.AddBackupCreateInfo(false, enviromentBackupResult.Error);
+                        hasError = true;
+                        _sb.AppendLine(enviromentBackupResult.Error);
                     }
 
                     var dashboardBackupResult = Backup(_dbSettings.ServerLayoutDatabaseName, _database.Dashboards.Backup);
                     if (dashboardBackupResult.IsOk)
                     {
-                        _backupSensors.AddBackupCreateInfo(true, dashboardBackupResult.Value);
+                        _sb.AppendLine(enviromentBackupResult.Value);
                         DeleteOldBackups(_dbSettings.ServerLayoutDatabaseName);
                     }
                     else
                     {
-                        _backupSensors.AddBackupCreateInfo(false, dashboardBackupResult.Error);
+                        hasError = true;
+                        _sb.AppendLine(dashboardBackupResult.Error);
                     }
+
+                    _backupSensors.AddLocalValue(_database.BackupsSize, hasError, _sb.ToString());
 
                     if (_config.BackupDatabase.SftpConnectionConfig.IsEnabled)
                         await SynchronizeSftpFolderAsync();
                 }
                 finally
                 {
-                    _isBackupRunning = false;
+                    _semaphore.Release();
                 }
+            }
+            else
+            {
+                throw new Exception("Backup already running");
             }
         }
 
@@ -172,7 +182,6 @@ namespace HSMServer.BackgroundServices
 
         private async Task SynchronizeSftpFolderAsync()
         {
-
             try
             {
                 using (var sftp = new SftpWrapper(_config.BackupDatabase.SftpConnectionConfig, _logger))
@@ -180,6 +189,9 @@ namespace HSMServer.BackgroundServices
                     var root = _config.BackupDatabase.SftpConnectionConfig.RootPath;
 
                     sftp.CreateAllDirectories(root);
+
+                    bool hasError = false;
+                    _sb.Clear();
 
                     var sftpFiles = sftp.ListDirectory(root).Where(x => x.IsDirectory == false).ToList();
                     foreach (var localFile in new DirectoryInfo(_dbSettings.DatabaseBackupsFolder).GetFiles())
@@ -191,12 +203,12 @@ namespace HSMServer.BackgroundServices
                             try
                             {
                                 await sftp.UploadFileAsync(localFile.FullName, root);
-                                _backupSensors.AddBackupUploadInfo(true, $"{localFile.FullName} uploaded to {sftp.Host}\\{root} successfuly");
+                                _sb.AppendLine($"{localFile.FullName} uploaded to {sftp.Host}\\{root} successfuly.");
                             }
                             catch (Exception ex)
                             {
-                                _backupSensors.AddBackupUploadInfo(false, $"An error {ex.Message} has been occured while uploading {localFile.FullName} to {sftp.Host}/{root}");
-                                throw;
+                                hasError = true;
+                                _sb.AppendLine($"An error {ex.Message} has been occurred while uploading {localFile.FullName} to {sftp.Host}/{root}.");
                             }
                         }
                         else
@@ -207,12 +219,17 @@ namespace HSMServer.BackgroundServices
                     {
                         await sftp.DeleteFileAsync(sftpFile.FullName);
                     }
+
+                    long result = 0;
+                    foreach (var sftpFile in sftp.ListDirectory(root).Where(x => x.IsDirectory == false))
+                        result += sftpFile.Length;
+
+                    _backupSensors.AddRemoteValue(result, hasError, _sb.ToString());
                 }
             }
             catch (Exception ex)
             {
-                _backupSensors.AddBackupUploadInfo(false, $"An error {ex.Message} has been occured while connecting to sftp server: {_config.BackupDatabase.SftpConnectionConfig.Address}/{_config.BackupDatabase.SftpConnectionConfig.RootPath}");
-                throw;
+                _backupSensors.AddRemoteValue(0, true, $"An error ({ex.Message}) has been occurred while remote backup processing");
             }
         }
 

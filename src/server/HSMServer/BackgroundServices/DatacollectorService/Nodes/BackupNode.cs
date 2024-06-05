@@ -2,47 +2,52 @@
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using System;
 
 
 namespace HSMServer.BackgroundServices;
 
 public record BackupSensors
 {
-    private const string CreateBackupNode = "Backup created";
-    private const string UploadBackupNode = "Backup uploaded";
+    private const string LocalBackupNode = "Local backup size";
+    private const string RemoteBackupNode = "Remote backup size";
     private const string NodeName = "Backup";
 
-    private readonly IInstantValueSensor<bool> _createBackupSensor;
-    private readonly IInstantValueSensor<bool> _uploadBackupSensor;
+    private IInstantValueSensor<double> _localBackupSensor { get; }
+    private IInstantValueSensor<double> _remoteBackupSensor { get; }
 
 
     public BackupSensors(IDataCollector collector)
     {
-        _createBackupSensor = collector.CreateBoolSensor($"{NodeName}/{CreateBackupNode}", new InstantSensorOptions
+        _localBackupSensor = collector.CreateDoubleSensor($"{NodeName}/{LocalBackupNode}", new InstantSensorOptions
         {
             Alerts = [],
+            TTL = TimeSpan.MaxValue,
             EnableForGrafana = true,
-            Description = "Database backup file created"
+            SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.MB,
+            Description = $"The sensor sends information about {LocalBackupNode}. Contains backups of Environment and ServerLayout databases."
         });
 
-        _uploadBackupSensor = collector.CreateBoolSensor($"{NodeName}/{UploadBackupNode}", new InstantSensorOptions
+        _remoteBackupSensor = collector.CreateDoubleSensor($"{NodeName}/{RemoteBackupNode}", new InstantSensorOptions
         {
             Alerts = [],
+            TTL = TimeSpan.MaxValue,
             EnableForGrafana = true,
-            Description = "Database backup file uploaded"
+            SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.MB,
+            Description = $"The sensor sends information about {RemoteBackupNode}. Contains backups of Environment and ServerLayout databases."
         });
-
     }
 
-    public void AddBackupCreateInfo(bool value, string message)
+    public void AddLocalValue(long value, bool hasErrors, string message)
     {
-        _createBackupSensor.AddValue(value, SetStatus(value) , message);
+        _localBackupSensor.AddValue(DatabaseSensorsBase.GetRoundedDouble(value), GetStatus(hasErrors), message);
     }
 
-    public void AddBackupUploadInfo(bool value, string message)
+    public void AddRemoteValue(long value, bool hasErrors, string message)
     {
-        _uploadBackupSensor.AddValue(value, SetStatus(value), message);
+        _remoteBackupSensor.AddValue(DatabaseSensorsBase.GetRoundedDouble(value), GetStatus(hasErrors), message);
     }
 
-    private static SensorStatus SetStatus(bool value) => value ? SensorStatus.Ok : SensorStatus.Error;
+
+    private SensorStatus GetStatus(bool hasErrors) => hasErrors ? SensorStatus.Error : SensorStatus.Ok;
 }
