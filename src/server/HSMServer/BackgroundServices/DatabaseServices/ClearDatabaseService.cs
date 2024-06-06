@@ -26,7 +26,7 @@ namespace HSMServer.BackgroundServices
         //    return base.ExecuteAsync(token);
         //}
 
-        protected override Task ServiceAction()
+        protected override Task ServiceActionAsync()
         {
             RunAction(RunClearHistory);
             RunAction(RunSensorsSelfDestroy);

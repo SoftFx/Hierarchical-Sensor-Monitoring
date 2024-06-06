@@ -20,7 +20,7 @@ namespace HSMServer.BackgroundServices
         internal abstract void SendInfo();
 
 
-        protected static double GetRoundedDouble(long sizeInBytes)
+        public static double GetRoundedDouble(long sizeInBytes)
         {
             return Math.Round(sizeInBytes / MbDivisor, DigitsCnt, MidpointRounding.AwayFromZero);
         }

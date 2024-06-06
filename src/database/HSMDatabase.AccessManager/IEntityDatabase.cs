@@ -1,4 +1,6 @@
-﻿namespace HSMDatabase.AccessManager
+﻿using HSMCommon.TaskResult;
+
+namespace HSMDatabase.AccessManager
 {
     public interface IEntityDatabase
     {
@@ -9,6 +11,6 @@
 
         void Delete(byte[] key);
 
-        void Backup(string backupPath);
+        TaskResult<string> Backup(string backupPath);
     }
 }

@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Constants;
+using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.DatabaseSettings;
@@ -75,7 +76,7 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
 
-        public void BackupEnvironment(string backupPath) => _environmentDatabase.Backup(backupPath);
+        public TaskResult<string> BackupEnvironment(string backupPath) => _environmentDatabase.Backup(backupPath);
 
 
         #region Fill Sensors (start app)

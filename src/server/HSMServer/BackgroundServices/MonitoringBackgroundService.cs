@@ -18,7 +18,7 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        protected override Task ServiceAction()
+        protected override Task ServiceActionAsync()
         {
             _cache.UpdateCacheState();
 

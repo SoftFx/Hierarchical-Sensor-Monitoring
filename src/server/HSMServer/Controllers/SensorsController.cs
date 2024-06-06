@@ -1,5 +1,5 @@
 ﻿using HSMCommon.Extensions;
-using HSMCommon.TaskResult.HSMCommon.TaskResult;
+using HSMCommon.TaskResult;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorRequests;
