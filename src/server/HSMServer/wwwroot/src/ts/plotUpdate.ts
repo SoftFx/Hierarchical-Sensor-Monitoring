@@ -2,13 +2,14 @@ import {Data, PlotlyHTMLElement} from "plotly.js";
 import {Plot, TimeSpanPlot} from "../js/plots";
 import {dashboardStorage} from "../js/dashboard";
 import {HovermodeUtils} from "./services/hovermode.util";
-import {IPanel, ISourceUpdate} from "./dashboard/dashboard.interfaces";
+import {ISourceUpdate} from "./dashboard/dashboard.interfaces";
 import {PanelSettings, PlotUpdate, Redraw} from "./dashboard/dashboard.classes";
+import {Panel} from "./dashboard.panel";
 
 
 export namespace DataUpdate {
     export class Update {
-        private panel: IPanel;
+        private panel: Panel;
 
 
         updateData: { update: PlotUpdate, id: number }[] = [];
@@ -16,8 +17,7 @@ export namespace DataUpdate {
         singleUpdate: PlotUpdate = new PlotUpdate();
         isTimeSpan: boolean = false;
 
-
-        public constructor(panel: IPanel) {
+        public constructor(panel: Panel) {
             this.panel = panel;
         }
 
@@ -28,11 +28,10 @@ export namespace DataUpdate {
                 if (panel.settings.isSingleMode){
                     for(let sourceUpdate of sourceUpdates){
                         let values = document.getElementById(`source_${sourceUpdate.id}`).querySelectorAll('.last-time, .last-value');
-                        values[1].textContent = sourceUpdate.update.newVisibleValues.at(-1).time;
+                        let time = new Date(sourceUpdate.update.newVisibleValues.at(-1).time);
+                        values[1].textContent =   new Date(time.getTime() + time.getTimezoneOffset() * 60000).toLocaleString()
                         values[0].textContent = sourceUpdate.update.newVisibleValues.at(-1).value as string;
                     }
-
-                    return;
                 }
 
                 let promises: Promise<boolean>[] = [];
@@ -98,7 +97,7 @@ export namespace DataUpdate {
                     prevData.ids.push(j.id)
                     let custom = j.value;
 
-                    if (this.panel.range !== undefined && this.panel.range !== true)
+                    if (this.panel.settings.range !== undefined && this.panel.settings.range !== true)
                         custom = j.tooltip;
                     else if (j.tooltip !== null)
                         custom += `<br>${j.tooltip}`;
@@ -139,7 +138,7 @@ export namespace DataUpdate {
             if (this.isTimeSpan)
                 Layout.TimespanRelayout(plotDiv);
             else
-                Layout.DefaultRelayout(plotDiv, this.panel.range);
+                Layout.DefaultRelayout(plotDiv, this.panel.settings.range);
 
             this.singleUpdate = new PlotUpdate();
             this.redrawData = new Redraw();

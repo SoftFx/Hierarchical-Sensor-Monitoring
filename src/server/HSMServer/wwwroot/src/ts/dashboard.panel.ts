@@ -1,16 +1,16 @@
 import moment from "moment/moment";
-import {Layout} from "./plotUpdate";
+import {DataUpdate, Layout} from "./plotUpdate";
 import {SiteHelper} from "./services/site-helper";
 import showToast = SiteHelper.showToast;
 import Plotly from "plotly.js";
-import {panelHelper} from "../js/dashboard";
 import {PanelSettings} from "./dashboard/dashboard.classes";
-import {IPanelSettings, IYRangeSettings} from "./dashboard/dashboard.interfaces";
-import {httpPanelService} from "./dashboard/dashboard.storage";
+import {IPanelSettings, ISourceUpdate, IYRangeSettings} from "./dashboard/dashboard.interfaces";
+import {httpPanelService, updateDashboardInterval} from "./dashboard/dashboard.storage";
 
 export class Panel {
     private _lastUpdateTime: Date = new Date(0);
     private _lastUpdateDiv: JQuery<HTMLElement>;
+    private _requestTimeout: number;
 
     id: string
     settings: PanelSettings
@@ -38,6 +38,18 @@ export class Panel {
             this._lastUpdateDiv.html("Never updated");
         else
             this._lastUpdateDiv.html(moment(this._lastUpdateTime).fromNow());
+    }
+    
+    initUpdateRequests(){
+        let update = new DataUpdate.Update(this);
+        this._requestTimeout = window.setInterval(function () {
+            fetch(window.location.pathname + '/PanelUpdate' + `/${this.id}`, {
+                method: 'GET'
+            }).then(res => res.json())
+                .then((res: ISourceUpdate[]) => {
+                    update.updateSources(res)
+                })
+        }.bind(this), updateDashboardInterval)
     }
 
     basePanelInit() {
