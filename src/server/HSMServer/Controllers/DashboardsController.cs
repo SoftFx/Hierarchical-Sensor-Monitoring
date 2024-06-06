@@ -199,7 +199,7 @@ namespace HSMServer.Controllers
                     id = x.Key,
                     update = x.Value.Source.GetSourceUpdates()
                 });
-                
+
                 return updates.ToList();
             }
 

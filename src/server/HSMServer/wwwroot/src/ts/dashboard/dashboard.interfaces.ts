@@ -5,19 +5,6 @@ export interface Dictionary<T> {
     [Key: string]: T;
 }
 
-export interface IPanel {
-    id: string,
-    sources: ISource[],
-    requestTimeout: number,
-    range: boolean | [number, number],
-    isTimeSpan: boolean
-}
-
-export interface ISource {
-    id: string,
-    range: boolean | [number, number]
-}
-
 export interface ISourceUpdate {
     id: string,
     update: {

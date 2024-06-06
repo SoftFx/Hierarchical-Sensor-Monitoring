@@ -1,6 +1,5 @@
 import {convertToGraphData} from "./plotting";
 import {TimeSpanPlot, ErrorColorPlot} from "./plots";
-import {Dashboard} from "../ts/dashboardT";
 import {Panel} from "../ts/dashboard.panel";
 import {PanelCordinatesHelper} from "../ts/services/panel-cordinates-helper";
 import {DashboardStorage} from "../ts/dashboard/dashboard.storage";
@@ -316,28 +315,7 @@ window.initDashboard = function () {
     addDraggable(interactPanelDrag)
     addResizable(interactPanelResize)
 
-    let dict = {};
-    for (let i in currentPanel) {
-        if (dict[currentPanel[i].panelId] === undefined) {
-            dict[currentPanel[i].panelId] = {
-                sources: [
-                    {
-                        id: i,
-                    }
-                ],
-                range: currentPanel[i].range,
-                isTimeSpan: currentPanel[i].isTimeSpan,
-                requestTimeout: undefined,
-                id: currentPanel[i].panelId
-            }
-        } else {
-            dict[currentPanel[i].panelId].sources.push({
-                id: i
-            })
-        }
-    }
-
-    Dashboard.initRequests(dict);
+    dashboardStorage.initUpdateRequests()
 }
 
 window.addPanelToStorage = function (id, settings, lastUpdate) {
