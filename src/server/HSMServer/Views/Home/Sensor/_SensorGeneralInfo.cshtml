@@ -71,7 +71,7 @@
 
 @if (Model.SelectedUnit is not null)
 {
-    <div class="d-flex justify-content-start" id="sensorUnitView">
+    <div class="d-flex justify-content-start">
         <div class="d-flex ms-3 text-nowrap">
             <span style="min-width: 9rem">Unit:</span>
         </div>
@@ -80,15 +80,6 @@
         </div>
     </div>
 }
-
-<div class="d-flex justify-content-start d-none" id="sensorUnitEdit">
-    <div class="d-flex ms-3 text-nowrap align-items-center">
-        <span style="min-width: 9rem">Unit:</span>
-    </div>
-    <div class="d-flex w-100">
-        <enum-selectpicker class="unit-select" asp-for=@Model.SelectedUnit/>
-    </div>
-</div>
 
 @if (Model.SensorType is not (SensorType.IntegerBar or SensorType.DoubleBar or SensorType.File))
 {
