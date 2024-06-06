@@ -1,5 +1,6 @@
 export class MutationObserverService {
     initialValues: { [key: string]: string } = {};
+    newValue: { [key: string]: string } = {};
     form: HTMLFormElement | null = null;
     constructor() {
     }
@@ -7,7 +8,7 @@ export class MutationObserverService {
     public addFormToObserve(id: string) {
         this.form = document.getElementById(id) as HTMLFormElement;
         this.initialValues = this.getFormValues();
-
+        this.newValue = structuredClone(this.initialValues);
         // Подписка на событие изменения формы
         this.form.addEventListener('change', (event) => {
             if (event.target) {
@@ -23,7 +24,9 @@ export class MutationObserverService {
         elements.forEach((element: HTMLElement) => {
             if (element.id) {
                 if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement)
+                {
                     values[element.id] = element.value;
+                }
             }
         })
 
@@ -38,5 +41,12 @@ export class MutationObserverService {
             console.log(`Изменение: ${element.tagName} (id: ${element.id || 'no id'}, name: ${element.getAttribute('name') || 'no name'})`);
             console.log(`${initialValue} -> ${currentValue}`);
         }
+        
+        this.newValue[element.id || element.getAttribute('name')] = currentValue;
+    }
+    
+    public check(){
+        console.log(this.newValue)
+        console.log(this.initialValues)
     }
 }
