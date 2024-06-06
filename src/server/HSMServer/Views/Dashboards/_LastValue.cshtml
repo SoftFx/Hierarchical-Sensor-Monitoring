@@ -8,18 +8,15 @@
 }
 
 <tr id="source_@Model.Id">
-    <th scope="row">
-        <input disabled type="color" value="@Model.Color" class="form-control form-control-color" style="background-color: white; width: 3rem; align-self: center; flex-grow: 0; height: 1.5rem;
-                                                                                                                                                                                   border: 0;"/>
-    </th>
     <td>
         <span style="flex-grow: 2; max-width: 40%">@Model.DisplayLabel</span>
     </td>
-
     <td>
         <span class="last-value" style="flex-grow: 1; text-align: end">@lastValue?.GetValue()</span>
     </td>
-    <td>
-        <span class="last-time">@lastValue?.Time</span>
+    <td class="d-flex  justify-content-end">
+        <div style="width: 9rem">
+            <span class="last-time">@lastValue?.Time</span>
+        </div>
     </td>
 </tr>
