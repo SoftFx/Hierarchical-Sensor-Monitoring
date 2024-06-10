@@ -149,10 +149,15 @@ namespace HSMServer.Core.Model.Policies
             PolicyResult = new(_sensor.Id);
             NotificationResult = new(_sensor.Id);
 
+            if (_sensor.Id == Guid.Parse("58c0f484-6709-48ab-aba1-ae6e19612ad4"))
+            {
+                var a = 1;
+            }
+            
             if (!value.Status.IsOfftime() && _sensor.State != SensorState.Muted)
             {
                 foreach (var policy in _storage.Values)
-                    if (!policy.IsDisabled && !policy.Validate(value))
+                    if (!policy.IsDisabled && policy.Validate(value))
                     {
                         PolicyResult.AddAlert(policy);
 

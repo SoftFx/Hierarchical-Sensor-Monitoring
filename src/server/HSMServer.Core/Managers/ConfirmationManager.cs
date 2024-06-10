@@ -24,6 +24,12 @@ namespace HSMServer.Core.Confirmation
             {
                 var newAlerts = new Dictionary<Guid, AlertResult>(policyResult.Alerts);
                 var sensorId = policyResult.SensorId;
+                
+                if (sensorId == Guid.Parse("58c0f484-6709-48ab-aba1-ae6e19612ad4"))
+                {
+                    var a = 1;
+                }
+                
                 var branch = _tree[sensorId];
 
                 foreach (var (storedAlertId, _) in branch)
@@ -63,6 +69,11 @@ namespace HSMServer.Core.Confirmation
                 {
                     var thrownAlerts = new List<AlertResult>(1 << 4);
 
+                    if (sensorId == Guid.Parse("58c0f484-6709-48ab-aba1-ae6e19612ad4"))
+                    {
+                        var a = 1;
+                    }
+                    
                     foreach (var (alertId, allResults) in sensorAlerts)
                     {
                         while (allResults.TryPeek(out var result, out var stateTime))
