@@ -17,6 +17,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using HSMServer.JsonConverters;
 
@@ -46,7 +47,8 @@ namespace HSMServer.Controllers
         private readonly JsonSerializerOptions _serializationsOptions = new()
         {
             Converters = { new VersionSourceConverter() },
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
         };
 
         
