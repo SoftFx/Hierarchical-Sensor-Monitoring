@@ -17,18 +17,16 @@ namespace HSMServer.Core.Confirmation
 
         internal void RegisterNotification(PolicyResult policyResult)
         {
-            if (policyResult.IsEmpty)
-                return;
-
             try
             {
                 var newAlerts = new Dictionary<Guid, AlertResult>(policyResult.Alerts);
                 var sensorId = policyResult.SensorId;
                 var branch = _tree[sensorId];
 
-                foreach (var (storedAlertId, _) in branch)
-                    if (!newAlerts.ContainsKey(storedAlertId) && !_lastStatusUpdates.ContainsKey(storedAlertId))
-                        branch.TryRemove(storedAlertId, out _);
+                FlushNotValidAlerts(branch, newAlerts);
+
+                if (policyResult.IsEmpty)
+                    return;
 
                 foreach (var alertId in newAlerts.Keys.ToList())
                 {
@@ -54,7 +52,13 @@ namespace HSMServer.Core.Confirmation
             }
         }
 
-
+        private void FlushNotValidAlerts(CDict<CPriorityQueue<AlertResult,DateTime>> branch, Dictionary<Guid, AlertResult> newAlerts)
+        {
+            foreach (var (storedAlertId, _) in branch)
+                if (!newAlerts.ContainsKey(storedAlertId) && !_lastStatusUpdates.ContainsKey(storedAlertId))
+                    branch.TryRemove(storedAlertId, out _);
+        }
+        
         internal override void FlushMessages()
         {
             try
@@ -76,7 +80,9 @@ namespace HSMServer.Core.Confirmation
                                 }
                                 else
                                 {
-                                    if (allResults.TryPeekValue(out var first) && _lastStatusUpdates.TryGetValue(alertId, out var last) && first.LastState.PrevStatus != last.LastState.Status)
+                                    if (allResults.TryPeekValue(out var first) &&
+                                        _lastStatusUpdates.TryGetValue(alertId, out var last) &&
+                                        first.LastState.PrevStatus != last.LastState.Status)
                                         thrownAlerts.AddRange(allResults.UnwrapToList());
 
                                     _lastStatusUpdates.TryRemove(alertId, out _);

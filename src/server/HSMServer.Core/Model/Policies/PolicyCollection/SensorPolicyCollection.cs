@@ -83,8 +83,7 @@ namespace HSMServer.Core.Model.Policies
         internal bool TryValidate(BaseValue value, out T valueT, bool isLastValue = true) =>
             TryCheckValueType(value, out valueT) && CalculateStorageResult(valueT, isLastValue, false);
 
-        internal bool TryRevalidate(BaseValue value) => TryCheckValueType(value, out var valueT) &&
-            CalculateStorageResult(valueT, true, true);
+        internal bool TryRevalidate(BaseValue value) => TryCheckValueType(value, out var valueT) && CalculateStorageResult(valueT, true, true);
 
         internal bool SensorTimeout(BaseValue value)
         {
@@ -152,7 +151,7 @@ namespace HSMServer.Core.Model.Policies
             if (!value.Status.IsOfftime() && _sensor.State != SensorState.Muted)
             {
                 foreach (var policy in _storage.Values)
-                    if (!policy.IsDisabled && !policy.Validate(value))
+                    if (!policy.IsDisabled && policy.Validate(value))
                     {
                         PolicyResult.AddAlert(policy);
 
