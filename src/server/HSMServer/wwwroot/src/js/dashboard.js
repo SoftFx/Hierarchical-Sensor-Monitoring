@@ -15,6 +15,10 @@ window.addObserve = function(q){
     formObserver.addFormToObserve(q);
 }
 
+window.check = function (){
+    formObserver.check();
+}
+
 window.getRangeDate = function () {
     let period = $('#from_select').val();
 

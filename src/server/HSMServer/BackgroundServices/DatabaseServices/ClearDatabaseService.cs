@@ -28,9 +28,9 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ServiceActionAsync()
         {
-            RunAction(RunClearHistory);
-            RunAction(RunSensorsSelfDestroy);
-            RunAction(RunProductsSelfDestroy);
+            // RunAction(RunClearHistory);
+            // RunAction(RunSensorsSelfDestroy);
+            // RunAction(RunProductsSelfDestroy);
 
             return Task.CompletedTask;
         }
