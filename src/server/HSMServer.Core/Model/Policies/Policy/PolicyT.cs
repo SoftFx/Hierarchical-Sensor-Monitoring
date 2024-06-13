@@ -11,7 +11,7 @@
             else
                 ResetState();
 
-            return !fail;
+            return fail;
         }
 
 
