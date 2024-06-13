@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.TaskResult;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.Collections.Generic;
 
@@ -6,7 +7,7 @@ namespace HSMDatabase.AccessManager
 {
     public interface IEnvironmentDatabase : IDisposable
     {
-        void Backup(string backupPath);
+        TaskResult<string> Backup(string backupPath);
 
 
         #region Folders

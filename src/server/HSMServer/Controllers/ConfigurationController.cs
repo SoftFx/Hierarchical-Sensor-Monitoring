@@ -1,20 +1,25 @@
 ﻿using HSMServer.Attributes;
+using HSMServer.BackgroundServices;
 using HSMServer.Model.Configuration;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
+using HSMServer.Sftp;
+using System;
+using System.IO;
 
 namespace HSMServer.Controllers
 {
     [Authorize]
     [AuthorizeIsAdmin]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications) : Controller
+    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService) : Controller
     {
         private readonly IServerConfig _config = config;
         private readonly TelegramBot _telegramBot = notifications.TelegramBot;
+        private readonly BackupDatabaseService _backupDatabaseService = backupService;
 
 
         public IActionResult Index() => View(new ConfigurationViewModel(_config));
@@ -44,6 +49,26 @@ namespace HSMServer.Controllers
                 _config.BackupDatabase.IsEnabled = settings.IsEnabled;
                 _config.BackupDatabase.PeriodHours = settings.BackupPeriodHours;
                 _config.BackupDatabase.StoragePeriodDays = settings.BackupStoragePeriodDays;
+
+                _config.BackupDatabase.SftpConnectionConfig.IsEnabled  = settings.IsSftpEnabled;
+                _config.BackupDatabase.SftpConnectionConfig.Address    = settings.Address;
+                _config.BackupDatabase.SftpConnectionConfig.Port       = settings.Port;
+                _config.BackupDatabase.SftpConnectionConfig.Username   = settings.Username;
+                _config.BackupDatabase.SftpConnectionConfig.Password   = settings.Password;
+                _config.BackupDatabase.SftpConnectionConfig.RootPath   = settings.RootPath;
+                if (settings.PrivateKey != null)
+                {
+                    using (var stream = new StreamReader(settings.PrivateKey.OpenReadStream()))
+                    {
+                        _config.BackupDatabase.SftpConnectionConfig.PrivateKey = stream.ReadToEnd();
+                    }
+
+                    _config.BackupDatabase.SftpConnectionConfig.PrivateKeyFileName = settings.PrivateKey.FileName;
+                }
+                else
+                {
+                    settings.PrivateKeyFileName = _config.BackupDatabase.SftpConnectionConfig.PrivateKeyFileName;
+                }
 
                 _config.ResaveSettings();
             }
@@ -83,5 +108,37 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         public Task<string> RestartTelegramBot() => _telegramBot.StartBot();
+
+
+        [HttpGet]
+        public Task<string> CreateBackup() => _backupDatabaseService.CreateBackupAsync();
+
+        [HttpPost]
+        public Task<string> CheckSftpConnection(BackupSettingsViewModel settings)
+        {
+            if (ModelState.IsValid)
+            {
+                var connection = new SftpConnectionConfig()
+                {
+                    Address    = settings.Address,
+                    Port       = settings.Port,
+                    Username   = settings.Username,
+                    Password   = settings.Password,
+                    RootPath   = settings.RootPath
+                };
+
+                if (settings.PrivateKey != null)
+                {
+                    using (var stream = new StreamReader(settings.PrivateKey.OpenReadStream()))
+                    {
+                        connection.PrivateKey = stream.ReadToEnd();
+                    }
+                }
+
+                return _backupDatabaseService.CheckSftpWritePermisionAsync(connection);
+            }
+
+            return Task.FromResult("ViewModel is invalid!");
+        }
     }
 }

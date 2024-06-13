@@ -28,6 +28,8 @@ namespace HSMServer.BackgroundServices
 
         internal DatabaseSensorsSize DbSizeSensors { get; }
 
+        internal BackupSensors BackupSensors { get; }
+
 
         public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor)
         {
@@ -53,6 +55,7 @@ namespace HSMServer.BackgroundServices
             DbStatisticsSensors = new DatabaseSensorsStatistics(_collector, db, cache, config, optionsMonitor);
             DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
+            BackupSensors = new BackupSensors(_collector);
         }
 
 

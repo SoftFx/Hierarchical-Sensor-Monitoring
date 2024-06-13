@@ -254,128 +254,128 @@ namespace {
 	}
 }
 
-HSMSensor<bool> DataCollectorImpl::CreateBoolSensor(const std::string& path, const std::string& description)
+BoolSensor DataCollectorImpl::CreateBoolSensor(const std::string& path, const std::string& description)
 {
 	auto bool_sensor = data_collector->CreateBoolSensor(gcnew String(path.c_str()), gcnew String(description.c_str()));
-	return HSMSensor<bool>{std::make_shared<HSMSensorImpl<bool>>(bool_sensor)};
+	return BoolSensor{std::make_shared<HSMSensorImpl<bool>>(bool_sensor)};
 }
 
-HSMSensor<bool> DataCollectorImpl::CreateBoolSensor(const std::string& path, const HSMInstantSensorOptions& options)
+BoolSensor DataCollectorImpl::CreateBoolSensor(const std::string& path, const HSMInstantSensorOptions& options)
 {
 	auto bool_sensor = data_collector->CreateBoolSensor(gcnew String(path.c_str()), ConvertInstantOptions(options));
-	return HSMSensor<bool>{std::make_shared<HSMSensorImpl<bool>>(bool_sensor)};
+	return BoolSensor{std::make_shared<HSMSensorImpl<bool>>(bool_sensor)};
 }
 
-HSMSensor<int> DataCollectorImpl::CreateIntSensor(const std::string& path, const std::string& description)
+IntSensor DataCollectorImpl::CreateIntSensor(const std::string& path, const std::string& description)
 {
 	auto int_sensor = data_collector->CreateIntSensor(gcnew String(path.c_str()), gcnew String(description.c_str()));
-	return HSMSensor<int>{std::make_shared<HSMSensorImpl<int>>(int_sensor)};
+	return IntSensor{std::make_shared<HSMSensorImpl<int>>(int_sensor)};
 }
 
-HSMSensor<int> DataCollectorImpl::CreateIntSensor(const std::string& path, const hsm_wrapper::HSMInstantSensorOptions& options)
+IntSensor DataCollectorImpl::CreateIntSensor(const std::string& path, const hsm_wrapper::HSMInstantSensorOptions& options)
 {
 	auto int_sensor = data_collector->CreateIntSensor(gcnew String(path.c_str()), ConvertInstantOptions(options));
-	return HSMSensor<int>{std::make_shared<HSMSensorImpl<int>>(int_sensor)};
+	return IntSensor{std::make_shared<HSMSensorImpl<int>>(int_sensor)};
 }
 
-HSMSensor<double> DataCollectorImpl::CreateDoubleSensor(const std::string& path, const std::string& description)
+DoubleSensor DataCollectorImpl::CreateDoubleSensor(const std::string& path, const std::string& description)
 {
 	auto double_sensor = data_collector->CreateDoubleSensor(gcnew String(path.c_str()), gcnew String(description.c_str()));
-	return HSMSensor<double>{std::make_shared<HSMSensorImpl<double>>(double_sensor)};
+	return DoubleSensor{std::make_shared<HSMSensorImpl<double>>(double_sensor)};
 }
 
-HSMSensor<double> DataCollectorImpl::CreateDoubleSensor(const std::string& path, const hsm_wrapper::HSMInstantSensorOptions& options)
+DoubleSensor DataCollectorImpl::CreateDoubleSensor(const std::string& path, const hsm_wrapper::HSMInstantSensorOptions& options)
 {
 	auto double_sensor = data_collector->CreateDoubleSensor(gcnew String(path.c_str()), ConvertInstantOptions(options));
-	return HSMSensor<double>{std::make_shared<HSMSensorImpl<double>>(double_sensor)};
+	return DoubleSensor{std::make_shared<HSMSensorImpl<double>>(double_sensor)};
 }
 
-HSMSensor<string> DataCollectorImpl::CreateStringSensor(const std::string& path, const std::string& description)
+StringSensor DataCollectorImpl::CreateStringSensor(const std::string& path, const std::string& description)
 {
 	auto string_sensor = data_collector->CreateStringSensor(gcnew String(path.c_str()), gcnew String(description.c_str()));
-	return HSMSensor<string>{std::make_shared<HSMSensorImpl<string>>(string_sensor)};
+	return StringSensor{std::make_shared<HSMSensorImpl<string>>(string_sensor)};
 }
 
-HSMSensor<string> DataCollectorImpl::CreateStringSensor(const std::string& path, const hsm_wrapper::HSMInstantSensorOptions& options)
+StringSensor DataCollectorImpl::CreateStringSensor(const std::string& path, const hsm_wrapper::HSMInstantSensorOptions& options)
 {
 	auto string_sensor = data_collector->CreateStringSensor(gcnew String(path.c_str()), ConvertInstantOptions(options));
-	return HSMSensor<string>{std::make_shared<HSMSensorImpl<string>>(string_sensor)};
+	return StringSensor{std::make_shared<HSMSensorImpl<string>>(string_sensor)};
 }
 
-HSMLastValueSensor<bool> DataCollectorImpl::CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description)
+BoolLastValueSensor DataCollectorImpl::CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description)
 {
 	auto int_default_sensor = data_collector->CreateLastValueBoolSensor(gcnew String(path.c_str()), default_value, gcnew String(description.c_str()));
-	return HSMLastValueSensor<bool>{std::make_shared<HSMLastValueSensorImpl<bool>>(int_default_sensor)};
+	return BoolLastValueSensor{std::make_shared<HSMLastValueSensorImpl<bool>>(int_default_sensor)};
 }
 
-HSMLastValueSensor<int> DataCollectorImpl::CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description)
+IntLastValueSensor DataCollectorImpl::CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description)
 {
 	auto int_default_sensor = data_collector->CreateLastValueIntSensor(gcnew String(path.c_str()), default_value, gcnew String(description.c_str()));
-	return HSMLastValueSensor<int>{std::make_shared<HSMLastValueSensorImpl<int>>(int_default_sensor)};
+	return IntLastValueSensor{std::make_shared<HSMLastValueSensorImpl<int>>(int_default_sensor)};
 }
 
-HSMLastValueSensor<double> DataCollectorImpl::CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description)
+DoubleLastValueSensor DataCollectorImpl::CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description)
 {
 	auto double_default_sensor = data_collector->CreateLastValueDoubleSensor(gcnew String(path.c_str()), default_value, gcnew String(description.c_str()));
-	return HSMLastValueSensor<double>{std::make_shared<HSMLastValueSensorImpl<double>>(double_default_sensor)};
+	return DoubleLastValueSensor{std::make_shared<HSMLastValueSensorImpl<double>>(double_default_sensor)};
 }
 
-HSMLastValueSensor<std::string> DataCollectorImpl::CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description)
+StringLastValueSensor DataCollectorImpl::CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description)
 {
 	auto int_default_sensor = data_collector->CreateLastValueStringSensor(gcnew String(path.c_str()), gcnew String(default_value.c_str()), gcnew String(description.c_str()));
-	return HSMLastValueSensor<string>{std::make_shared<HSMLastValueSensorImpl<std::string>>(int_default_sensor)};
+	return StringLastValueSensor{std::make_shared<HSMLastValueSensorImpl<std::string>>(int_default_sensor)};
 }
 
-HSMBarSensor<int> DataCollectorImpl::CreateIntBarSensor(const std::string& path, int timeout, int small_period, const std::string& description)
+IntBarSensor DataCollectorImpl::CreateIntBarSensor(const std::string& path, int timeout, int small_period, const std::string& description)
 {
 	auto int_bar_sensor = data_collector->CreateIntBarSensor(gcnew String(path.c_str()), timeout, small_period, gcnew String(description.c_str()));
-	return HSMBarSensor<int>{std::make_shared<HSMBarSensorImpl<int>>(int_bar_sensor)};
+	return IntBarSensor{std::make_shared<HSMBarSensorImpl<int>>(int_bar_sensor)};
 }
 
-HSMBarSensor<int> DataCollectorImpl::CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options)
+IntBarSensor DataCollectorImpl::CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options)
 {
 	auto int_bar_sensor = data_collector->CreateIntBarSensor(gcnew String(path.c_str()), ConvertBarOptions(options));
-	return HSMBarSensor<int>{std::make_shared<HSMBarSensorImpl<int>>(int_bar_sensor)};
+	return IntBarSensor{std::make_shared<HSMBarSensorImpl<int>>(int_bar_sensor)};
 }
 
-HSMBarSensor<double> DataCollectorImpl::CreateDoubleBarSensor(const std::string& path, int timeout, int small_period, int precision, const std::string& description)
+DoubleBarSensor DataCollectorImpl::CreateDoubleBarSensor(const std::string& path, int timeout, int small_period, int precision, const std::string& description)
 {
 	auto double_bar_sensor = data_collector->CreateDoubleBarSensor(gcnew String(path.c_str()), timeout, small_period, precision, gcnew String(description.c_str()));
-	return HSMBarSensor<double>{std::make_shared<HSMBarSensorImpl<double>>(double_bar_sensor)};
+	return DoubleBarSensor{std::make_shared<HSMBarSensorImpl<double>>(double_bar_sensor)};
 }
 
-HSMBarSensor<double> DataCollectorImpl::CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options)
+DoubleBarSensor DataCollectorImpl::CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options)
 {
 	auto double_bar_sensor = data_collector->CreateDoubleBarSensor(gcnew String(path.c_str()), ConvertBarOptions(options));
-	return HSMBarSensor<double>{std::make_shared<HSMBarSensorImpl<double>>(double_bar_sensor)};
+	return DoubleBarSensor{std::make_shared<HSMBarSensorImpl<double>>(double_bar_sensor)};
 }
 
-HSMRateSensor<int> DataCollectorImpl::CreateIntRateSensor(const std::string& path, int period /*= 60000*/, const std::string& description /*= ""*/)
+IntRateSensor DataCollectorImpl::CreateIntRateSensor(const std::string& path, int period /*= 60000*/, const std::string& description /*= ""*/)
 {
 	RateSensorOptions^ options = gcnew RateSensorOptions();
 	options->PostDataPeriod = ToTimespan(chrono::milliseconds(period));
 	auto int_rate_sensor = data_collector->CreateRateSensor(gcnew String(path.c_str()), options);
-	return HSMRateSensor<int>{std::make_shared<HSMRateSensorImpl<int>>(int_rate_sensor)};
+	return IntRateSensor{std::make_shared<HSMRateSensorImpl<int>>(int_rate_sensor)};
 }
 
-hsm_wrapper::HSMRateSensor<int> DataCollectorImpl::CreateIntRateSensor(const std::string& path, const HSMRateSensorOptions& options)
+hsm_wrapper::IntRateSensor DataCollectorImpl::CreateIntRateSensor(const std::string& path, const HSMRateSensorOptions& options)
 {
 	auto int_rate_sensor = data_collector->CreateRateSensor(gcnew String(path.c_str()), ConvertRateOptions(options));
-	return HSMRateSensor<int>{std::make_shared<HSMRateSensorImpl<int>>(int_rate_sensor)};
+	return IntRateSensor{std::make_shared<HSMRateSensorImpl<int>>(int_rate_sensor)};
 }
 
-HSMRateSensor<double> DataCollectorImpl::CreateDoubleRateSensor(const std::string& path, int period /*= 60000*/, const std::string& description /*= ""*/)
+DoubleRateSensor DataCollectorImpl::CreateDoubleRateSensor(const std::string& path, int period /*= 60000*/, const std::string& description /*= ""*/)
 {
 	RateSensorOptions^ options = gcnew RateSensorOptions();
 	options->PostDataPeriod = ToTimespan(chrono::milliseconds(period));
 	auto double_rate_sensor = data_collector->CreateRateSensor(gcnew String(path.c_str()), options);
-	return HSMRateSensor<double>{std::make_shared<HSMRateSensorImpl<double>>(double_rate_sensor)};
+	return DoubleRateSensor{std::make_shared<HSMRateSensorImpl<double>>(double_rate_sensor)};
 }
 
-hsm_wrapper::HSMRateSensor<double> DataCollectorImpl::CreateDoubleRateSensor(const std::string& path, const HSMRateSensorOptions& options)
+hsm_wrapper::DoubleRateSensor DataCollectorImpl::CreateDoubleRateSensor(const std::string& path, const HSMRateSensorOptions& options)
 {
 	auto double_rate_sensor = data_collector->CreateRateSensor(gcnew String(path.c_str()), ConvertRateOptions(options));
-	return HSMRateSensor<double>{std::make_shared<HSMRateSensorImpl<double>>(double_rate_sensor)};
+	return DoubleRateSensor{std::make_shared<HSMRateSensorImpl<double>>(double_rate_sensor)};
 }
 
 

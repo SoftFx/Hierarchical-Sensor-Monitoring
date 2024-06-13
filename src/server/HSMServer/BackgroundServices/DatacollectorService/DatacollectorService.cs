@@ -39,7 +39,7 @@ namespace HSMServer.BackgroundServices
             await base.ExecuteAsync(token);
         }
 
-        protected override Task ServiceAction()
+        protected override Task ServiceActionAsync()
         {
             if (_isMonitoringEnabled)
                 _collector.SendDbInfo();

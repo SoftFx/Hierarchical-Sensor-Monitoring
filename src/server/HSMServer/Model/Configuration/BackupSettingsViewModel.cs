@@ -1,4 +1,5 @@
 ﻿using HSMServer.ServerConfiguration;
+using Microsoft.AspNetCore.Http;
 using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model.Configuration
@@ -14,14 +15,43 @@ namespace HSMServer.Model.Configuration
         [Display(Name = "Enable backup")]
         public bool IsEnabled { get; set; }
 
+        [Display(Name = "Enable sftp")]
+        public bool IsSftpEnabled { get; set; }
+
+        [Display(Name = "Host name")]
+        public string Address { get; set; }
+
+        [Display(Name = "Port number")]
+        public int? Port { get; set; }
+
+        [Display(Name = "User name")]
+        public string Username { get; set; }
+        
+        public string Password { get; set; }
+
+        [Display(Name = "Private key")]
+        public IFormFile PrivateKey { get; set;}
+
+        [Display(Name = "Root path")]
+        public string RootPath { get; set; }
+
+        public string PrivateKeyFileName { get; set; }
 
         public BackupSettingsViewModel() { }
 
         public BackupSettingsViewModel(IServerConfig config)
         {
             BackupStoragePeriodDays = config.BackupDatabase.StoragePeriodDays;
-            BackupPeriodHours = config.BackupDatabase.PeriodHours;
-            IsEnabled = config.BackupDatabase.IsEnabled;
+            BackupPeriodHours       = config.BackupDatabase.PeriodHours;
+            IsEnabled               = config.BackupDatabase.IsEnabled;
+
+            IsSftpEnabled      = config.BackupDatabase.SftpConnectionConfig.IsEnabled;
+            Address            = config.BackupDatabase.SftpConnectionConfig.Address;
+            Port               = config.BackupDatabase.SftpConnectionConfig.Port;
+            Username           = config.BackupDatabase.SftpConnectionConfig.Username;
+            Password           = config.BackupDatabase.SftpConnectionConfig.Password;
+            RootPath           = config.BackupDatabase.SftpConnectionConfig.RootPath;
+            PrivateKeyFileName = config.BackupDatabase.SftpConnectionConfig.PrivateKeyFileName;
         }
     }
 }

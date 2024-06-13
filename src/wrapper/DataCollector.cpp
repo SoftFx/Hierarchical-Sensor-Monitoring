@@ -222,7 +222,7 @@ void hsm_wrapper::DataCollectorImplWrapper::InitializeProductVersion(const std::
 	}
 }
 
-HSMSensor<bool> DataCollectorImplWrapper::CreateBoolSensor(const std::string& path, const std::string& description)
+BoolSensor DataCollectorImplWrapper::CreateBoolSensor(const std::string& path, const std::string& description)
 {
 	try
 	{
@@ -234,7 +234,7 @@ HSMSensor<bool> DataCollectorImplWrapper::CreateBoolSensor(const std::string& pa
 	}
 }
 
-hsm_wrapper::HSMSensor<bool> DataCollectorImplWrapper::CreateBoolSensor(const std::string& path, const HSMInstantSensorOptions& options)
+BoolSensor DataCollectorImplWrapper::CreateBoolSensor(const std::string& path, const HSMInstantSensorOptions& options)
 {
 	try
 	{
@@ -246,7 +246,7 @@ hsm_wrapper::HSMSensor<bool> DataCollectorImplWrapper::CreateBoolSensor(const st
 	}
 }
 
-HSMSensor<double> DataCollectorImplWrapper::CreateDoubleSensor(const std::string& path, const std::string& description)
+DoubleSensor DataCollectorImplWrapper::CreateDoubleSensor(const std::string& path, const std::string& description)
 {
 	try
 	{
@@ -258,7 +258,7 @@ HSMSensor<double> DataCollectorImplWrapper::CreateDoubleSensor(const std::string
 	}
 }
 
-hsm_wrapper::HSMSensor<double> DataCollectorImplWrapper::CreateDoubleSensor(const std::string& path, const HSMInstantSensorOptions& options)
+DoubleSensor DataCollectorImplWrapper::CreateDoubleSensor(const std::string& path, const HSMInstantSensorOptions& options)
 {
 	try
 	{
@@ -271,7 +271,7 @@ hsm_wrapper::HSMSensor<double> DataCollectorImplWrapper::CreateDoubleSensor(cons
 }
 
 
-HSMSensor<int> DataCollectorImplWrapper::CreateIntSensor(const std::string& path, const std::string& description)
+IntSensor DataCollectorImplWrapper::CreateIntSensor(const std::string& path, const std::string& description)
 {
 	try
 	{
@@ -283,7 +283,7 @@ HSMSensor<int> DataCollectorImplWrapper::CreateIntSensor(const std::string& path
 	}
 }
 
-hsm_wrapper::HSMSensor<int> DataCollectorImplWrapper::CreateIntSensor(const std::string& path, const HSMInstantSensorOptions& options)
+IntSensor DataCollectorImplWrapper::CreateIntSensor(const std::string& path, const HSMInstantSensorOptions& options)
 {
 	try
 	{
@@ -296,7 +296,7 @@ hsm_wrapper::HSMSensor<int> DataCollectorImplWrapper::CreateIntSensor(const std:
 }
 
 
-HSMSensor<std::string> DataCollectorImplWrapper::CreateStringSensor(const std::string& path, const std::string& description)
+StringSensor DataCollectorImplWrapper::CreateStringSensor(const std::string& path, const std::string& description)
 {
 	try
 	{
@@ -308,7 +308,7 @@ HSMSensor<std::string> DataCollectorImplWrapper::CreateStringSensor(const std::s
 	}
 }
 
-hsm_wrapper::HSMSensor<std::string> DataCollectorImplWrapper::CreateStringSensor(const std::string& path, const HSMInstantSensorOptions& options)
+StringSensor DataCollectorImplWrapper::CreateStringSensor(const std::string& path, const HSMInstantSensorOptions& options)
 {
 	try
 	{
@@ -320,7 +320,7 @@ hsm_wrapper::HSMSensor<std::string> DataCollectorImplWrapper::CreateStringSensor
 	}
 }
 
-HSMLastValueSensor<bool> DataCollectorImplWrapper::CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description)
+BoolLastValueSensor DataCollectorImplWrapper::CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description)
 {
 	try
 	{
@@ -332,7 +332,7 @@ HSMLastValueSensor<bool> DataCollectorImplWrapper::CreateLastValueBoolSensor(con
 	}
 }
 
-HSMLastValueSensor<double> DataCollectorImplWrapper::CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description)
+DoubleLastValueSensor DataCollectorImplWrapper::CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description)
 {
 	try
 	{
@@ -356,7 +356,7 @@ StringLastValueSensor DataCollectorImplWrapper::CreateLastValueStringSensor(cons
 	}
 }
 
-HSMLastValueSensor<int> DataCollectorImplWrapper::CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description)
+IntLastValueSensor DataCollectorImplWrapper::CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description)
 {
 	try
 	{
@@ -368,7 +368,7 @@ HSMLastValueSensor<int> DataCollectorImplWrapper::CreateLastValueIntSensor(const
 	}
 }
 
-HSMBarSensor<int> DataCollectorImplWrapper::CreateIntBarSensor(const std::string& path, int timeout, int small_period, const std::string& description)
+IntBarSensor DataCollectorImplWrapper::CreateIntBarSensor(const std::string& path, int timeout, int small_period, const std::string& description)
 {
 	try
 	{
@@ -381,7 +381,7 @@ HSMBarSensor<int> DataCollectorImplWrapper::CreateIntBarSensor(const std::string
 }
 
 
-hsm_wrapper::HSMBarSensor<int> DataCollectorImplWrapper::CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options)
+IntBarSensor DataCollectorImplWrapper::CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options)
 {
 	try
 	{
@@ -394,7 +394,7 @@ hsm_wrapper::HSMBarSensor<int> DataCollectorImplWrapper::CreateIntBarSensor(cons
 }
 
 
-HSMBarSensor<double> DataCollectorImplWrapper::CreateDoubleBarSensor(const std::string& path, int timeout, int small_period, int precision, const std::string& description)
+DoubleBarSensor DataCollectorImplWrapper::CreateDoubleBarSensor(const std::string& path, int timeout, int small_period, int precision, const std::string& description)
 {
 	try
 	{
@@ -406,7 +406,7 @@ HSMBarSensor<double> DataCollectorImplWrapper::CreateDoubleBarSensor(const std::
 	}
 }
 
-HSMBarSensor<double> DataCollectorImplWrapper::CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options)
+DoubleBarSensor DataCollectorImplWrapper::CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options)
 {
 	try
 	{
@@ -418,7 +418,7 @@ HSMBarSensor<double> DataCollectorImplWrapper::CreateDoubleBarSensor(const std::
 	}
 }
 
-HSMRateSensor<int> DataCollectorImplWrapper::CreateIntRateSensor(const std::string& path, int period, const std::string& description) const
+IntRateSensor DataCollectorImplWrapper::CreateIntRateSensor(const std::string& path, int period, const std::string& description) const
 {
 	try
 	{
@@ -430,7 +430,20 @@ HSMRateSensor<int> DataCollectorImplWrapper::CreateIntRateSensor(const std::stri
 	}
 }
 
-HSMRateSensor<double> DataCollectorImplWrapper::CreateDoubleRateSensor(const std::string& path, int period, const std::string& description) const
+
+IntRateSensor DataCollectorImplWrapper::CreateIntRateSensor(const std::string& path, const HSMRateSensorOptions& options) const
+{
+	try
+	{
+		return impl->CreateIntRateSensor(path, options);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+DoubleRateSensor DataCollectorImplWrapper::CreateDoubleRateSensor(const std::string& path, int period, const std::string& description) const
 {
 	try
 	{
@@ -442,6 +455,17 @@ HSMRateSensor<double> DataCollectorImplWrapper::CreateDoubleRateSensor(const std
 	}
 }
 
+DoubleRateSensor DataCollectorImplWrapper::CreateDoubleRateSensor(const std::string& path, const HSMRateSensorOptions& options) const
+{
+	try
+	{
+		return impl->CreateDoubleRateSensor(path, options);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
 
 template<class T>
 std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<T>> DataCollectorImplWrapper::CreateNoParamsFuncSensor(const std::string& path, const std::string& description, 
@@ -628,7 +652,7 @@ IntBarSensor DataCollectorProxy::CreateIntBarSensor(const std::string& path, int
 	return impl_wrapper->CreateIntBarSensor(path, timeout, small_period, description);
 }
 
-hsm_wrapper::IntBarSensor DataCollectorProxy::CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options)
+IntBarSensor DataCollectorProxy::CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options)
 {
 	return impl_wrapper->CreateIntBarSensor(path, options);
 }
@@ -644,16 +668,27 @@ DoubleBarSensor DataCollectorProxy::CreateDoubleBarSensor(const std::string& pat
 	return impl_wrapper->CreateDoubleBarSensor(path, options);
 }
 
+
 IntRateSensor DataCollectorProxy::CreateIntRateSensor(const std::string& path, int period /*= 15000*/, const std::string& description /*= {}*/)
 {
 	return impl_wrapper->CreateIntRateSensor(path, period, description);
 }
+
+IntRateSensor DataCollectorProxy::CreateIntRateSensor(const std::string& path, const HSMRateSensorOptions& options)
+{
+	return impl_wrapper->CreateIntRateSensor(path, options);
+}
+
 
 DoubleRateSensor DataCollectorProxy::CreateDoubleRateSensor(const std::string& path, int period /*= 15000*/, const std::string& description /*= {}*/)
 {
 	return impl_wrapper->CreateDoubleRateSensor(path, period, description);
 }
 
+DoubleRateSensor DataCollectorProxy::CreateDoubleRateSensor(const std::string& path, const HSMRateSensorOptions& options)
+{
+	return impl_wrapper->CreateDoubleRateSensor(path, options);
+}
 
 
 #define InstantiateOneParamTemplates(X)\

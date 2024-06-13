@@ -10,7 +10,6 @@ namespace HSMServer.BackgroundServices
 {
     public sealed class DatabaseSensorsSize : DatabaseSensorsBase
     {
-        private const string BackupsDbName = "Config backups";
         private const string JournalsDbName = "Journals";
         private const string HistoryDbName = "History";
         private const string ConfigDbName = "Config";
@@ -25,7 +24,6 @@ namespace HSMServer.BackgroundServices
                                 "* Snapshots - the database contains current state of tree (last update time of sensors, timeouts and etc.)") },
             { HistoryDbName, new("The database contains sensors history divided into weekly folders.") },
             { JournalsDbName, new("The database contains journal records for each sensor.") },
-            { BackupsDbName, new("The database contains backups of Environment and ServerLayout databases.") },
             { TotalDbName, new("All database size is the sum of the sizes of Environment, SensorValues, Snapshots, ServerLayout and Journals databases.") },
         };
 
@@ -36,7 +34,6 @@ namespace HSMServer.BackgroundServices
             CreateDataSizeSensor(HistoryDbName, () => _database.SensorHistoryDbSize);
             CreateDataSizeSensor(JournalsDbName, () => _database.JournalDbSize);
             CreateDataSizeSensor(ConfigDbName, () => _database.ConfigDbSize);
-            CreateDataSizeSensor(BackupsDbName, () => _database.BackupsSize);
             CreateDataSizeSensor(TotalDbName, () => _database.TotalDbSize);
         }
 

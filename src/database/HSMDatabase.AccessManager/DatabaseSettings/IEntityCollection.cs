@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.TaskResult;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 using System;
 using System.Collections.Generic;
@@ -21,6 +22,6 @@ namespace HSMDatabase.AccessManager.DatabaseSettings
 
         public List<T> ReadCollection();
 
-        public void Backup(string backupPath);
+        public TaskResult<string> Backup(string backupPath);
     }
 }

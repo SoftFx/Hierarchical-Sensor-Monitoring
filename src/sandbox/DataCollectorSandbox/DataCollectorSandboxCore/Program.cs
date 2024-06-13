@@ -10,10 +10,29 @@ var collectorOptions = new CollectorOptions()
 
 var _collector = new DataCollector(collectorOptions).AddNLog(new HSMDataCollector.Logging.LoggerOptions() { WriteDebug = true });
 
-_collector.Windows.AddAllDefaultSensors();
+//_collector.Windows.AddAllDefaultSensors();
+
+var _baseInt = _collector.CreateIntSensor("instant/int");
+
 
 await _collector.Start();
 
+CancellationTokenSource tsc = new CancellationTokenSource();
+
+Task.Run(() =>
+{
+    int i = 0;
+    while (true)
+    {
+        if (tsc.Token.IsCancellationRequested)
+            break;
+
+        _baseInt.AddValue(i++, $"Comment {i}");
+    }
+});
 Console.ReadLine();
+tsc.Cancel();
+tsc.Dispose();
+
 
 _collector.Dispose();

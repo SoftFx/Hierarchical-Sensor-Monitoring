@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.3.0" />
+    <ProjectReference Include="..\..\..\collector\HSMDataCollector\HSMDataCollector.csproj" />
   </ItemGroup>
 
 </Project>
