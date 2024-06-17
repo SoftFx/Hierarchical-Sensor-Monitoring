@@ -1,24 +1,21 @@
 export class MutationObserverService {
-    alertNames = ["Chats", "Schedule"]
-    
     initialValues: { [key: string]: string } = {};
     newValue: { [key: string]: string } = {};
     form: HTMLFormElement | null = null;
     
-    oldVals: { [key: string]: string } = {};
-    newVals: { [key: string]: string } = {};
-    
+    alertChange: boolean = false;
+
     constructor() {
     }
-    
+
     public addFormToObserve(id: string) {
+        this.alertChange = false;
         this.form = document.getElementById(id) as HTMLFormElement;
         this.initialValues = this.getFormValues();
         this.newValue = structuredClone(this.initialValues);
-        // Подписка на событие изменения формы
         this.form.addEventListener('change', (event) => {
             if (event.target) {
-                this.checkChanges(event.target as Element);
+                this.checkChanges(event.target as HTMLElement);
             }
         });
     }
@@ -29,93 +26,59 @@ export class MutationObserverService {
 
         elements.forEach((element: HTMLElement) => {
             let closest = element.closest('.dataAlertRow');
-            
-            if (closest !== null){
-                let currentValue = '';
-                if (element instanceof HTMLSelectElement){
-                    let arr = Array.from(element.selectedOptions);
-                    for (let i of arr){
-                        currentValue += "," + i.value
+
+            if (element.id || (element.getAttribute('name') && closest === null)) {
+                if (element instanceof HTMLSelectElement) {
+                    let currentValue = '';
+                    if (element instanceof HTMLSelectElement) {
+                        let arr = Array.from(element.selectedOptions);
+                        for (let i of arr) {
+                            currentValue += "," + i.value
+                        }
                     }
+                    values[element.id || element.name] = currentValue;
+                } else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+                    values[element.id || element.name] = element.value;
                 }
-                else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)
-                    currentValue = element.value;
-                
-                values[closest.id + element.getAttribute('name')]  = currentValue;
-            }
-            else if (element instanceof HTMLSelectElement){
-                let currentValue = '';
-                if (element instanceof HTMLSelectElement){
-                    let arr = Array.from(element.selectedOptions);
-                    for (let i of arr){
-                        currentValue += "," + i.value
-                    }
-                }
-                values[element.id || element.getAttribute('name')] = currentValue;
-            }
-            else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-                values[element.id || element.getAttribute('name')] = element.value;
             }
         })
 
         return values;
     }
 
-    checkChanges(element: Element): void {
+    checkChanges(element: HTMLElement): void {
         let currentValue = '';
-        let initialValue = '';
-        let id = '';
-
         let closest = element.closest('.dataAlertRow');
-        if (closest !== null){
-            id = closest.id + element.getAttribute('name');
-            if (element instanceof HTMLSelectElement){
-                let arr = Array.from(element.selectedOptions);
-                for (let i of arr){
-                    currentValue += "," + i.value
-                }
-            }
-            else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)
-                currentValue = element.value;
-        }
-        else {
-            id = element.id || element.getAttribute('name');
-            if (element instanceof HTMLSelectElement){
-                let arr = Array.from(element.selectedOptions);
-                for (let i of arr){
-                    currentValue += "," + i.value
-                }
-            }
-            else
-                currentValue = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element.value : "";
+
+        if (closest !== null) {
+            this.alertChange = true;
+            return;
         }
 
-        initialValue = this.initialValues[id];
-        console.log(element);
+        let id = element.id || element.getAttribute('name');
 
-        if (currentValue !== initialValue) {
-            console.log(`Изменение: ${element.tagName} (id: ${element.id || 'no id'}, name: ${element.getAttribute('name') || 'no name'})`);
-            console.log(`${initialValue} -> ${currentValue}`);
+        if (element instanceof HTMLSelectElement) {
+            let arr = Array.from(element.selectedOptions);
+            for (let i of arr) {
+                currentValue += "," + i.value
+            }
+        } else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+            currentValue = element.value;
         }
         
         this.newValue[id] = currentValue;
     }
-    public check(){
-        console.log(this.newValue)
-        console.log(this.initialValues)
+
+    public check(): boolean {
+        if (this.alertChange)
+            return false;
         
-        console.log(this.newValue === this.initialValues);
-        
-        for(let i of Object.entries(this.newValue)){
-            if (this.newValue[i[0]] !== this.initialValues[i[0]])
-            {
-                console.log(this.newValue[i[0]])
-                console.log(this.initialValues[i[0]])
-                console.log("no")
-                return;
+        for (let i of Object.entries(this.newValue)) {
+            if (this.newValue[i[0]] !== this.initialValues[i[0]]) {
+                return false;
             }
         }
-        
-        console.log("yes")
+
+        return true;
     }
 }

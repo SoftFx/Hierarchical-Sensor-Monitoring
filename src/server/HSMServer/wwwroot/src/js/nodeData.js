@@ -1,4 +1,7 @@
-﻿var needToActivateListTab = false;
+﻿import {MutationObserverService} from "../ts/services/mutation-observer-service";
+
+var needToActivateListTab = false;
+export const formObserver = new MutationObserverService();
 
 window.currentSelectedNodeId = "";
 
@@ -78,23 +81,36 @@ function saveMetaData(selectedId) {
         if (isValid && isAlertsValid) {
             let path = $("#nodeHeader").text();
 
-            showConfirmationModal(
-                `Saving changes`,
-                `Do you want to save '${path}' changes?`,
-                () => {
-                    $.ajax({
-                        url: form.action,
-                        type: 'POST',
-                        data: formData,
-                        processData: false,
-                        contentType: false,
-                        async: true
-                    }).done(() => initSelectedNode(selectedId));
-                },
-                () => initSelectedNode(selectedId),
-                "Yes",
-                "No"
-            );
+            if (!formObserver.check())
+            {
+                showConfirmationModal(
+                    `Saving changes`,
+                    `Do you want to save '${path}' changes?`,
+                    () => {
+                        $.ajax({
+                            url: form.action,
+                            type: 'POST',
+                            data: formData,
+                            processData: false,
+                            contentType: false,
+                            async: true
+                        }).done(() => initSelectedNode(selectedId));
+                    },
+                    () => initSelectedNode(selectedId),
+                    "Yes",
+                    "No"
+                );
+            }
+            else {
+                $.ajax({
+                    url: form.action,
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    async: true
+                }).done(() => initSelectedNode(selectedId))
+            }
         }
         else {
             initSelectedNode(selectedId);
