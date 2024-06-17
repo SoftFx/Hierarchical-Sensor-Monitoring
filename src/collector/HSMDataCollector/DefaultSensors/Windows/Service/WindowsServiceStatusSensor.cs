@@ -23,20 +23,20 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         }
 
 
-        internal override Task<bool> Start()
+        internal override Task<bool> StartAsync()
         {
             if (_statusWatcher == null)
                 _statusWatcher = new Timer(CheckServiceStatus, null, _scanPeriod, _scanPeriod);
 
-            return base.Start();
+            return base.StartAsync();
         }
 
-        internal override Task Stop()
+        internal override Task StopAsync()
         {
             _statusWatcher?.Dispose();
             _controller?.Dispose();
 
-            return base.Stop();
+            return base.StopAsync();
         }
 
 

@@ -32,11 +32,11 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override async Task<bool> Init()
+        internal override async Task<bool> InitAsync()
         {
             if (!IsInitialized)
             {
-                var baseInit = await base.Init();
+                var baseInit = await base.InitAsync();
 
                 if (baseInit)
                     _sendTimer = new Timer(OnTimerTick, null, TimerDueTime, PostTimePeriod);
@@ -45,7 +45,7 @@ namespace HSMDataCollector.DefaultSensors
             return IsInitialized;
         }
 
-        internal override Task Stop()
+        internal override Task StopAsync()
         {
             if (!IsInitialized)
                 return Task.FromResult(false);

@@ -22,7 +22,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         internal WindowsProcessTimeInGC(BarSensorOptions options) : base(options) { }
 
 
-        internal override Task<bool> Init()
+        internal override Task<bool> InitAsync()
         {
             try
             {
@@ -36,15 +36,15 @@ namespace HSMDataCollector.DefaultSensors.Windows
                 return Task.FromResult(false);
             }
 
-            return base.Init();
+            return base.InitAsync();
         }
 
-        internal override Task Stop()
+        internal override Task StopAsync()
         {
             _listener.OnTimeInGC -= OnTimeInGC;
             _listener.Dispose();
 
-            return base.Stop();
+            return base.StopAsync();
         }
 
         private void OnTimeInGC(double value) => AddValue(value);

@@ -1,8 +1,10 @@
-using HSMDataCollector.Options;
-using HSMDataCollector.Requests;
-using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Threading.Tasks;
+using HSMDataCollector.Core;
+using HSMDataCollector.Options;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
+
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -17,40 +19,44 @@ namespace HSMDataCollector.DefaultSensors
 
         internal bool IsProiritySensor => _metainfo.IsPrioritySensor;
 
-
-        internal event Func<PriorityRequest, Task<bool>> SensorCommandRequest;
-        internal event Action<SensorValueBase> ReceiveSensorValue;
-
         public event Action<string, Exception> ExceptionThrowing;
 
+        internal readonly IDataProcessor _dataProducer;
 
         protected SensorBase(SensorOptions options)
         {
             options.Path = options.CalculateSystemPath();
-
             _metainfo = options;
+            _dataProducer = options.DataProcessor;
         }
-
 
         public void SendValue(SensorValueBase value)
         {
             value.Path = SensorPath;
-            ReceiveSensorValue?.Invoke(value);
+            if (IsProiritySensor)
+                _dataProducer.AddData(value);
+            else
+                _dataProducer.AddData(value);
+        }
+
+        internal virtual Task<bool> InitAsync()
+        {
+            _dataProducer.AddCommand(_metainfo.ApiRequest);
+            return Task.FromResult(true);
+        }
+
+        internal virtual Task<bool> StartAsync() => Task.FromResult(true);
+
+        internal virtual Task StopAsync() => Task.CompletedTask;
+
+        protected void ThrowException(Exception ex)
+        {
+            _dataProducer.AddException(SensorPath, ex);
+            ExceptionThrowing?.Invoke(SensorPath, ex);
         }
 
 
-        internal virtual Task<bool> Init() => SendCommand(new PriorityRequest(_metainfo.ApiRequest));
+        public void Dispose() => StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
 
-        internal virtual Task<bool> Start() => Task.FromResult(true);
-
-        internal virtual Task Stop() => Task.CompletedTask;
-
-        protected void ThrowException(Exception ex) => ExceptionThrowing?.Invoke(SensorPath, ex);
-
-
-        public void Dispose() => Stop();
-
-
-        private Task<bool> SendCommand(PriorityRequest request) => SensorCommandRequest?.Invoke(request) ?? Task.FromResult(true);
     }
 }

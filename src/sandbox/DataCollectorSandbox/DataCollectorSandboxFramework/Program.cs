@@ -19,7 +19,7 @@ namespace DatacollectorSandbox
         private static readonly Random _random = new Random(1123213);
         private static IDataCollector _collector;
 
-        private static int _timeout = 1;
+        private static int _timeout = 100;
 
         private static IInstantValueSensor<double> _baseDouble, _priorityDouble;
         private static IInstantValueSensor<bool> _baseBool, _priorityBool;
@@ -64,6 +64,7 @@ namespace DatacollectorSandbox
 
             var tokenSource = new CancellationTokenSource();
 
+
             //var task1 = Task.Run(() =>
             //{
             //    while (!tokenSource.IsCancellationRequested)
@@ -98,6 +99,8 @@ namespace DatacollectorSandbox
             _collector.Windows.AddAllDefaultSensors(GetVersion());
 
             await _collector.Start();
+
+
 
             var instantPriority = new InstantSensorOptions()
             {

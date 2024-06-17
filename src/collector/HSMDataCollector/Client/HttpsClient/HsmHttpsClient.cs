@@ -2,7 +2,10 @@ using HSMDataCollector.Client.HttpsClient;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -10,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace HSMDataCollector.Client
 {
-    internal sealed class HsmHttpsClient : IDisposable
+    internal sealed class HsmHttpsClient : IDataSender, IDisposable
     {
         private const string HeaderClientName = "ClientName";
         private const string HeaderAccessKey = "Key";
@@ -20,12 +23,12 @@ namespace HSMDataCollector.Client
         private readonly CommandHandler _commandsHandler;
         private readonly DataHandlers _dataHandler;
 
-        private readonly ILoggerManager _logger;
+        private readonly ICollectorLogger _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
 
 
-        internal HsmHttpsClient(CollectorOptions options, IQueueManager queue, ILoggerManager logger)
+        internal HsmHttpsClient(CollectorOptions options, ICollectorLogger logger)
         {
             _endpoints = new Endpoints(options);
             _logger = logger;
@@ -41,11 +44,8 @@ namespace HSMDataCollector.Client
             _client.DefaultRequestHeaders.Add(HeaderClientName, options.ClientName);
             _client.DefaultRequestHeaders.Add(HeaderAccessKey, options.AccessKey);
 
-            _commandsHandler = new CommandHandler(queue.Commands, _endpoints, _logger);
-            _commandsHandler.SendRequestEvent += _client.PostAsync;
-
-            _dataHandler = new DataHandlers(queue.Data, _endpoints, _logger);
-            _dataHandler.SendRequestEvent += _client.PostAsync;
+            _commandsHandler = new CommandHandler(_endpoints, _logger);
+            _dataHandler     = new DataHandlers( _endpoints, _logger);
         }
 
 
@@ -61,6 +61,30 @@ namespace HSMDataCollector.Client
             _client.Dispose();
         }
 
+        public Task<string> SendCommandAsync(CommandRequestBase command, CancellationToken token)
+        {
+            _commandsHandler.SendAsync(command, token);
+        }
+
+        public Task<Dictionary<string, string>> SendCommandAsync(IEnumerable<CommandRequestBase> command, CancellationToken token)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task SendDataAsync(SensorValueBase data, CancellationToken token)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task SendFileAsync(FileSensorValue file, CancellationToken token)
+        {
+            throw new NotImplementedException();
+        }
 
         internal async Task<ConnectionResult> TestConnection()
         {

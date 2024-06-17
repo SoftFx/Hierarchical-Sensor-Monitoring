@@ -1,24 +1,22 @@
-﻿using HSMDataCollector.Logging;
-using HSMDataCollector.SyncQueue;
-using Polly;
-using Polly.Retry;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Polly;
+using Polly.Retry;
+using HSMDataCollector.Logging;
+using HSMDataCollector.SyncQueue;
+
 
 namespace HSMDataCollector.Client.HttpsClient
 {
     internal abstract class BaseHandlers<T> : IDisposable
     {
-        private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
-
         private readonly ResiliencePipeline<HttpResponseMessage> _pipeline;
 
         protected readonly ICollectorLogger _logger;
-        protected readonly ISyncQueue<T> _queue;
         protected readonly Endpoints _endpoints;
 
         internal event Func<string, HttpContent, CancellationToken, Task<HttpResponseMessage>> SendRequestEvent;
@@ -30,11 +28,10 @@ namespace HSMDataCollector.Client.HttpsClient
         protected readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
         protected int _timeout = 1000;
 
-        protected BaseHandlers(ISyncQueue<T> queue, Endpoints endpoints, ICollectorLogger logger)
+        protected BaseHandlers(Endpoints endpoints, ICollectorLogger logger)
         {
             _endpoints = endpoints;
             _logger = logger;
-            _queue = queue;
 
             var retryOptions = new RetryStrategyOptions<HttpResponseMessage>()
             {
@@ -50,15 +47,12 @@ namespace HSMDataCollector.Client.HttpsClient
             _pipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
                             .AddRetry(retryOptions)
                             .Build();
-
-            _queue.NewValuesEvent += RecieveDataQueue;
-            _queue.NewValueEvent += RecieveDataQueue;
         }
 
 
-        internal virtual Task HandleRequestResult(HttpResponseMessage response, List<T> values) => Task.CompletedTask;
+        internal virtual Task HandleRequestResultAsync(HttpResponseMessage response, List<T> values) => Task.CompletedTask;
 
-        internal virtual Task HandleRequestResult(HttpResponseMessage response, T value) => Task.CompletedTask;
+        internal virtual Task HandleRequestResultAsync(HttpResponseMessage response, T value) => Task.CompletedTask;
 
 
         internal abstract object ConvertToRequestData(T value);
@@ -77,64 +71,53 @@ namespace HSMDataCollector.Client.HttpsClient
             return default;
         }
 
-        private async Task RecieveDataQueue(List<T> values)
+        public async Task SendAsync(List<T> values, CancellationToken token)
         {
-            if (await _semaphore.WaitAsync(_timeout))
+            await _semaphore.WaitAsync(token).ConfigureAwait(false);
+
+            try
             {
-                try
-                {
-                    await HandleRequestResult(await BuildAndSendNewRequest(values), values);
-                }
-                finally
-                {
-                    _semaphore.Release();
-                }
+
+                await HandleRequestResultAsync(await BuildAndSendNewRequestAsync(values, token), values);
             }
-            else
+            finally
             {
-                foreach (var value in values)
-                    _queue.AddFail(value);
+                _semaphore.Release();
             }
         }
 
-        private async Task RecieveDataQueue(T value)
+        public async Task SendAsync(T value, CancellationToken token)
         {
-            if (await _semaphore.WaitAsync(_timeout))
+            await _semaphore.WaitAsync(token).ConfigureAwait(false);
+            try
             {
-                try
-                {
-                    await HandleRequestResult(await BuildAndSendNewRequest(value), value);
-                }
-                finally
-                {
-                    _semaphore.Release();
-                }
+                await HandleRequestResultAsync(await BuildAndSendNewRequestAsync(value, token), value);
             }
-            else
+            finally
             {
-                _queue.AddFail(value);
+                _semaphore.Release();
             }
         }
 
-        private Task<HttpResponseMessage> BuildAndSendNewRequest(IEnumerable<T> values)
+        private ValueTask<HttpResponseMessage> BuildAndSendNewRequestAsync(IEnumerable<T> values, CancellationToken token)
         {
             var rawData = values.Select(ConvertToRequestData);
             var request = new ClientRequestModel(rawData, GetUri(rawData));
-            return SendRequest(request);
+            return SendRequest(request, token);
         }
 
-        private Task<HttpResponseMessage> BuildAndSendNewRequest(T value)
+        private ValueTask<HttpResponseMessage> BuildAndSendNewRequestAsync(T value, CancellationToken token)
         {
             var rawData = ConvertToRequestData(value);
             var request = new ClientRequestModel(rawData, GetUri(rawData));
-            return SendRequest(request);
+            return SendRequest(request, token);
         }
 
-        private async Task<HttpResponseMessage> SendRequest(ClientRequestModel request)
+        private async ValueTask<HttpResponseMessage> SendRequest(ClientRequestModel request, CancellationToken token)
         {
             try
             {
-                var response = await _pipeline.ExecuteAsync(ExecutePipeline, request, _tokenSource.Token);
+                var response = await _pipeline.ExecuteAsync(ExecutePipeline, request, token);
 
                 _queue.ThrowPackageRequestInfo(new PackageSendingInfo(request.JsonMessage.Length, response));
 
@@ -143,7 +126,7 @@ namespace HSMDataCollector.Client.HttpsClient
             catch (Exception ex)
             {
                 _queue.ThrowPackageRequestInfo(new PackageSendingInfo(request?.JsonMessage?.Length ?? 0, null, exception: ex.Message));
-                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException.Message} | Id = {request.Id} Data = {request.JsonMessage}");
+                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Id = {request.Id} Data = {request.JsonMessage}");
 
                 return default;
             }
@@ -155,12 +138,6 @@ namespace HSMDataCollector.Client.HttpsClient
 
         public void Dispose()
         {
-            _queue.NewValuesEvent -= RecieveDataQueue;
-            _queue.NewValueEvent  -= RecieveDataQueue;
-
-            _tokenSource?.Cancel();
-            _tokenSource.Dispose();
-
             _semaphore.Dispose();
         }
     }

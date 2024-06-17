@@ -18,10 +18,10 @@ namespace HSMDataCollector.Sensors
         }
 
 
-        internal override Task Stop()
+        internal override Task StopAsync()
         {
             SendValue(_lastValue, _lastStatus, _lastComment);
-            return base.Stop();
+            return base.StopAsync();
         }
 
 

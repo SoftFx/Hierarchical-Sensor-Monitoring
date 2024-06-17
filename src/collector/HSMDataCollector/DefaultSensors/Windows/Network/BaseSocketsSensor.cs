@@ -20,7 +20,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         protected internal BaseSocketsSensor(SensorOptions options) : base(options) { }
         
         
-        internal override Task<bool> Init()
+        internal override Task<bool> InitAsync()
         {
             try
             {
@@ -34,16 +34,16 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
                 return Task.FromResult(false);
             }
 
-            return base.Init();
+            return base.InitAsync();
         }
         
         
-        internal override Task Stop()
+        internal override Task StopAsync()
         {
             _counterTCPv4?.Dispose();
             _counterTCPv6?.Dispose();
 
-            return base.Stop();
+            return base.StopAsync();
         }
         
         protected override int GetValue() => (int)(_counterTCPv4.NextValue() + _counterTCPv6.NextValue());

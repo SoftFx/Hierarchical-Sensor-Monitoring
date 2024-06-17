@@ -17,9 +17,9 @@ namespace HSMDataCollector.DefaultSensors.Other
         }
 
 
-        internal override async Task<bool> Start()
+        internal override async Task<bool> StartAsync()
         {
-            var ok = await base.Start();
+            var ok = await base.StartAsync();
 
             if (ok)
                 SendValue(_version, comment: $"Start: {_startTime.ToString(DefaultTimeFormat)}");
@@ -28,11 +28,11 @@ namespace HSMDataCollector.DefaultSensors.Other
         }
 
 
-        internal override Task Stop()
+        internal override Task StopAsync()
         {
             SendValue(_version, comment: $"Stop: {DateTime.UtcNow.ToString(DefaultTimeFormat)}");
 
-            return base.Stop();
+            return base.StopAsync();
         }
     }
 }

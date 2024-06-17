@@ -23,7 +23,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         internal WindowsSensorBase(BarSensorOptions options) : base(options) { }
 
 
-        internal override Task<bool> Init()
+        internal override Task<bool> InitAsync()
         {
             try
             {
@@ -51,15 +51,15 @@ namespace HSMDataCollector.DefaultSensors.Windows
                 return Task.FromResult(false);
             }
 
-            return base.Init();
+            return base.InitAsync();
         }
 
 
-        internal override Task Stop()
+        internal override Task StopAsync()
         {
             _performanceCounter?.Dispose();
 
-            return base.Stop();
+            return base.StopAsync();
         }
 
         protected override double GetBarData() => _performanceCounter.NextValue();

@@ -39,7 +39,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override Task<bool> Start()
+        internal override Task<bool> StartAsync()
         {
             _tokenSource = new CancellationTokenSource();
 
@@ -51,13 +51,13 @@ namespace HSMDataCollector.DefaultSensors
 
             _ = UpdateDiskSpeed();
 
-            return base.Start();
+            return base.StartAsync();
         }
 
-        internal override Task Stop()
+        internal override Task StopAsync()
         {
             _tokenSource?.Cancel();
-            return base.Stop();
+            return base.StopAsync();
         }
 
 

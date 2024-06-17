@@ -35,7 +35,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         }
 
 
-        internal override Task<bool> Start()
+        internal override Task<bool> StartAsync()
         {
             try
             {
@@ -49,7 +49,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
                 ThrowException(exception);
             }
 
-            return base.Start();
+            return base.StartAsync();
         }
 
         private StringSensorValue BuildRecordValue(string eventId, DateTime time, string source, string message) =>

@@ -1,29 +1,26 @@
-﻿using HSMDataCollector.Logging;
-using HSMDataCollector.Requests;
-using HSMDataCollector.SyncQueue;
-using HSMSensorDataObjects.SensorRequests;
-using Newtonsoft.Json;
-using Polly;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Polly;
+using HSMDataCollector.Logging;
+using HSMDataCollector.Requests;
+using HSMSensorDataObjects.SensorRequests;
+
 
 namespace HSMDataCollector.Client.HttpsClient
 {
     internal sealed class CommandHandler : BaseHandlers<PriorityRequest>
     {
-        private readonly ICommandQueue _commandQueue;
-
 
         protected override DelayBackoffType DelayStrategy => DelayBackoffType.Linear;
 
         protected override int MaxRequestAttempts => int.MaxValue;
 
 
-        public CommandHandler(ICommandQueue queue, Endpoints endpoints, ICollectorLogger logger) : base(queue, endpoints, logger)
+        public CommandHandler(Endpoints endpoints, ICollectorLogger logger) : base(endpoints, logger)
         {
-            _commandQueue = queue;
         }
 
 
@@ -42,7 +39,7 @@ namespace HSMDataCollector.Client.HttpsClient
             }
         }
 
-        internal override async Task HandleRequestResult(HttpResponseMessage response, List<PriorityRequest> values)
+        internal override async Task HandleRequestResultAsync(HttpResponseMessage response, List<PriorityRequest> values)
         {
             if (response != null)
             {
@@ -67,7 +64,7 @@ namespace HSMDataCollector.Client.HttpsClient
             }
         }
 
-        internal override async Task HandleRequestResult(HttpResponseMessage response, PriorityRequest value)
+        internal override async Task HandleRequestResultAsync(HttpResponseMessage response, PriorityRequest value)
         {
             if (response == null)
                 _commandQueue.SetCancel(value.Key);

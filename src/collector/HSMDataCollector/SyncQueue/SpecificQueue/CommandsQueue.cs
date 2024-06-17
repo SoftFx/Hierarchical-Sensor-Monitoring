@@ -10,12 +10,12 @@ namespace HSMDataCollector.SyncQueue
     internal class CommandsQueue : SyncQueue<PriorityRequest>, ICommandQueue
     {
         private readonly ConcurrentDictionary<(Guid, string), TaskCompletionSource<bool>> _requestStorage = new ConcurrentDictionary<(Guid, string), TaskCompletionSource<bool>>();
-        private readonly ILoggerManager _logger;
+        private readonly ICollectorLogger _logger;
 
         protected override string QueueName => "Commands";
 
 
-        public CommandsQueue(CollectorOptions options, ILoggerManager logger) : base(options, TimeSpan.FromSeconds(5))
+        public CommandsQueue(CollectorOptions options, ICollectorLogger logger) : base(options, TimeSpan.FromSeconds(5))
         {
             _logger = logger;
         }

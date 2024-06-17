@@ -16,10 +16,10 @@ namespace HSMDataCollector.Sensors
     internal sealed class FileSensorInstant : SensorInstant<List<byte>>, IFileSensor
     {
         private readonly FileSensorOptions _options;
-        private readonly ILoggerManager _logger;
+        private readonly ICollectorLogger _logger;
 
 
-        public FileSensorInstant(FileSensorOptions options, ILoggerManager logger) : base(options)
+        public FileSensorInstant(FileSensorOptions options, ICollectorLogger logger) : base(options)
         {
             _options = options;
             _logger = logger;
@@ -64,6 +64,7 @@ namespace HSMDataCollector.Sensors
             catch (Exception ex)
             {
                 _logger.Error($"{SensorPath} - {ex.Message}");
+                _dataProducer.AddException(SensorPath, ex);
                 return false;
             }
 

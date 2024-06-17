@@ -28,6 +28,7 @@ namespace HSMDataCollector.Core
 
         public TimeSpan PackageCollectPeriod { get; set; } = TimeSpan.FromSeconds(15);
 
+        public IDataSender DataSender { get; set; }
 
         internal string ServerUrl => ServerAddress.TrimEnd('/');
     }

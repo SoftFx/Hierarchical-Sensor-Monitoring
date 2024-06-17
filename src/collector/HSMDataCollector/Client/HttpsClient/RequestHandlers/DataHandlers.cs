@@ -14,7 +14,7 @@ namespace HSMDataCollector.Client.HttpsClient
         protected override int MaxRequestAttempts => 10;
 
 
-        public DataHandlers(ISyncQueue<SensorValueBase> queue, Endpoints endpoints, ICollectorLogger logger) : base(queue, endpoints, logger) { }
+        public DataHandlers(Endpoints endpoints, ICollectorLogger logger) : base(endpoints, logger) { }
 
 
         internal override object ConvertToRequestData(SensorValueBase value) => value;
