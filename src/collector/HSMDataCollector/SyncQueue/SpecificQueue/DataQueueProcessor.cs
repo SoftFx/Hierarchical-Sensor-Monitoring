@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
-    internal class DataQueueProcessor : QueueProcessorBase<SensorValueBase>
+    internal sealed class DataQueueProcessor : QueueProcessorBase<SensorValueBase>
     {
         public DataQueueProcessor(CollectorOptions options) : base(options) { }
 
@@ -16,7 +16,10 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 await Task.Delay(_options.PackageCollectPeriod, token).ConfigureAwait(false);
 
-                await _sender.SendDataAsync(_queue.Take(_options.MaxValuesInPackage), _cancellationTokenSource.Token).ConfigureAwait(false);
+                while (_queue.Count > 0)
+                {
+                    await _sender.SendDataAsync(_queue.Take(_options.MaxValuesInPackage), _cancellationTokenSource.Token).ConfigureAwait(false);
+                }
             }
         }
 

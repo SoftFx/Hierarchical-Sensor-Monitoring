@@ -1,10 +1,11 @@
-﻿using HSMDataCollector.Extensions;
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -32,7 +33,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override async Task<bool> InitAsync()
+        internal override async ValueTask<bool> InitAsync()
         {
             if (!IsInitialized)
             {
@@ -45,15 +46,12 @@ namespace HSMDataCollector.DefaultSensors
             return IsInitialized;
         }
 
-        internal override Task StopAsync()
+        internal override ValueTask StopAsync()
         {
-            if (!IsInitialized)
-                return Task.FromResult(false);
-
             _sendTimer?.Dispose();
             _sendTimer = null;
 
-            return Task.CompletedTask;
+            return default;
         }
 
 

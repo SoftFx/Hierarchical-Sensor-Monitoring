@@ -1,16 +1,16 @@
-﻿using HSMDataCollector.DefaultSensors;
+﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.Sensors;
 using HSMDataCollector.SensorsFactory;
-using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+
 
 namespace HSMDataCollector.Core
 {
@@ -18,15 +18,17 @@ namespace HSMDataCollector.Core
     {
         private readonly DataCollector _collector;
 
-        internal IDataProcessor DataProcessor { get; }
+
+
+        internal IQueueManager QueueManager { get; }
 
         internal ICollectorLogger Logger { get; }
 
 
-        internal SensorsStorage(DataCollector collector, IDataProcessor dataProcessor, ICollectorLogger logger)
+        internal SensorsStorage(DataCollector collector, IQueueManager queueManager, ICollectorLogger logger)
         {
             _collector = collector;
-            DataProcessor = dataProcessor;
+            QueueManager = queueManager;
 
             Logger = logger;
         }
@@ -40,11 +42,11 @@ namespace HSMDataCollector.Core
             }
         }
 
-        internal Task Init() => Task.WhenAll(Values.Select(s => s.InitAsync()));
+        internal Task InitAsync() => Task.WhenAll(Values.Select(async s => await s.InitAsync()));
 
-        internal Task Start() => Task.WhenAll(Values.Select(s => s.StartAsync()));
+        internal Task StartAsync() => Task.WhenAll(Values.Select(async s => await s.StartAsync()));
 
-        internal Task Stop() => Task.WhenAll(Values.Select(s => s.StopAsync()));
+        internal Task StopAsync() => Task.WhenAll(Values.Select(async s => await s.StopAsync()));
 
 
         internal MonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options)
@@ -158,11 +160,10 @@ namespace HSMDataCollector.Core
             options.Module = _collector.Module;
             options.Path = path;
             options.Type = type;
-            options.DataProcessor = DataProcessor;
+            options.DataProcessor = QueueManager;
 
             return options;
         }
 
-        private void WriteSensorException(string sensorPath, Exception ex) => Logger.Error($"Sensor: {sensorPath}, {ex}");
     }
 }

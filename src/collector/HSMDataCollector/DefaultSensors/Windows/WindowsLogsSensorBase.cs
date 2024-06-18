@@ -1,12 +1,13 @@
-using HSMDataCollector.Options;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMDataCollector.Options;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
+
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -35,7 +36,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         }
 
 
-        internal override Task<bool> StartAsync()
+        internal override ValueTask<bool> StartAsync()
         {
             try
             {

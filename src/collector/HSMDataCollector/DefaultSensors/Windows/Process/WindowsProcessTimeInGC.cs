@@ -22,7 +22,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         internal WindowsProcessTimeInGC(BarSensorOptions options) : base(options) { }
 
 
-        internal override Task<bool> InitAsync()
+        internal override ValueTask<bool> InitAsync()
         {
             try
             {
@@ -33,13 +33,13 @@ namespace HSMDataCollector.DefaultSensors.Windows
             {
                 ThrowException(new Exception($"Error initializing performance counter: {WindowsTimeInGCBase.Category}/{WindowsTimeInGCBase.Counter} instance {ProcessInfo.CurrentProcessName}: {ex}"));
 
-                return Task.FromResult(false);
+                return new ValueTask<bool>(false);
             }
 
             return base.InitAsync();
         }
 
-        internal override Task StopAsync()
+        internal override ValueTask StopAsync()
         {
             _listener.OnTimeInGC -= OnTimeInGC;
             _listener.Dispose();

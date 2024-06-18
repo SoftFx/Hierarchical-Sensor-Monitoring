@@ -28,7 +28,7 @@ namespace HSMDataCollector.Options
 
         internal string Path { get; set; }
 
-        internal IDataProcessor DataProcessor { get; set; }
+        internal IQueueManager DataProcessor { get; set; }
 
 
         public bool IsComputerSensor { get; set; } // singltone options sets dy default and sensor adds to .computer node

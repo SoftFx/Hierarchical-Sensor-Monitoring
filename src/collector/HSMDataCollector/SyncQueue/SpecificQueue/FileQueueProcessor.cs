@@ -16,8 +16,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 await _event.WaitAsync(_options.PackageCollectPeriod, token);
 
-                if(_queue.TryDequeue(out FileSensorValue result))
-                    await _sender.SendFileAsync(result, token).ConfigureAwait(false);
+                while (_queue.Count > 0)
+                {
+                    if (_queue.TryDequeue(out FileSensorValue result))
+                        await _sender.SendFileAsync(result, token).ConfigureAwait(false);
+                }
             }
         }
     }

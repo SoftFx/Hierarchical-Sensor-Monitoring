@@ -1,9 +1,10 @@
-﻿using HSMDataCollector.Options;
-using System;
+﻿using System;
 using System.Linq;
 using System.ServiceProcess;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.DefaultSensors.Windows.Service
 {
@@ -23,7 +24,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         }
 
 
-        internal override Task<bool> StartAsync()
+        internal override ValueTask<bool> StartAsync()
         {
             if (_statusWatcher == null)
                 _statusWatcher = new Timer(CheckServiceStatus, null, _scanPeriod, _scanPeriod);
@@ -31,7 +32,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             return base.StartAsync();
         }
 
-        internal override Task StopAsync()
+        internal override ValueTask StopAsync()
         {
             _statusWatcher?.Dispose();
             _controller?.Dispose();

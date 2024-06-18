@@ -15,9 +15,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         {
             while (!token.IsCancellationRequested)
             {
-                await _event.WaitAsync(_options.PackageCollectPeriod, token);
+                await _event.WaitAsync(token);
 
-                await _sender.SendDataAsync(_queue.Take(_options.MaxValuesInPackage), token).ConfigureAwait(false);
+                while (_queue.Count > 0)
+                {
+                    await _sender.SendPriorityDataAsync(_queue.Take(_options.MaxValuesInPackage), token).ConfigureAwait(false);
+                }
             }
         }
 

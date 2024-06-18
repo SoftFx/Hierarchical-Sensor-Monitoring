@@ -1,7 +1,8 @@
-﻿using HSMDataCollector.Options;
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
@@ -20,7 +21,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         protected internal BaseSocketsSensor(SensorOptions options) : base(options) { }
         
         
-        internal override Task<bool> InitAsync()
+        internal override ValueTask<bool> InitAsync()
         {
             try
             {
@@ -31,14 +32,14 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             {
                 ThrowException(new Exception($"Error initializing performance counter: {CategoryTcp4}/{CounterName}, {CategoryTcp6}/{CounterName}: {ex}"));
 
-                return Task.FromResult(false);
+                return new ValueTask<bool>(false);
             }
 
             return base.InitAsync();
         }
         
         
-        internal override Task StopAsync()
+        internal override ValueTask StopAsync()
         {
             _counterTCPv4?.Dispose();
             _counterTCPv6?.Dispose();

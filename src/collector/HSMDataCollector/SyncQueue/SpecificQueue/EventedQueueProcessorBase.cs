@@ -8,7 +8,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal abstract class EventedQueueProcessorBase<T> : QueueProcessorBase<T>
     {
-        protected readonly SemaphoreSlim _event = new(0);
+        protected readonly SemaphoreSlim _event = new SemaphoreSlim(0);
 
         public EventedQueueProcessorBase(CollectorOptions options) : base (options) { }
 

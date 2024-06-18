@@ -5,26 +5,24 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Polly;
 using HSMDataCollector.Logging;
-using HSMDataCollector.Requests;
 using HSMSensorDataObjects.SensorRequests;
+using HSMSensorDataObjects;
 
 
 namespace HSMDataCollector.Client.HttpsClient
 {
-    internal sealed class CommandHandler : BaseHandlers<PriorityRequest>
+    internal sealed class CommandHandler : BaseHandlers<CommandRequestBase>
     {
-
         protected override DelayBackoffType DelayStrategy => DelayBackoffType.Linear;
 
         protected override int MaxRequestAttempts => int.MaxValue;
 
+        internal override object ConvertToRequestData(CommandRequestBase value) => value;
 
-        public CommandHandler(Endpoints endpoints, ICollectorLogger logger) : base(endpoints, logger)
+        public CommandHandler(HsmHttpsClient client, Endpoints endpoints, ICollectorLogger logger) : base(client, endpoints, logger)
         {
         }
 
-
-        internal override object ConvertToRequestData(PriorityRequest value) => value.Request;
 
         internal override string GetUri(object rawData)
         {
@@ -39,7 +37,7 @@ namespace HSMDataCollector.Client.HttpsClient
             }
         }
 
-        internal override async Task HandleRequestResultAsync(HttpResponseMessage response, List<PriorityRequest> values)
+        internal override async ValueTask HandleRequestResultAsync(HttpResponseMessage response, IEnumerable<CommandRequestBase> values)
         {
             if (response != null)
             {
@@ -48,26 +46,26 @@ namespace HSMDataCollector.Client.HttpsClient
 
                 foreach (var val in values)
                 {
-                    var path = val.Request.Path;
+                    var path = val.Path;
                     var hasError = errors.TryGetValue(path, out var error);
 
                     if (hasError)
-                        _logger.Error($"Error command for {path} - {error}");
-
-                    _commandQueue.SetResult(val.Key, !hasError);
+                        _logger.Error($"Command request for {path} has been faulted. {error}.");
+                    else
+                        _logger.Info($"Command request for {path} has been accepted.");
                 }
             }
             else
             {
                 foreach (var val in values)
-                    _commandQueue.SetCancel(val.Key);
+                    _logger.Error($"Command for {val.Path} has been canceled.");
             }
         }
 
-        internal override async Task HandleRequestResultAsync(HttpResponseMessage response, PriorityRequest value)
+        internal override async ValueTask HandleRequestResultAsync(HttpResponseMessage response, CommandRequestBase value)
         {
             if (response == null)
-                _commandQueue.SetCancel(value.Key);
+                _logger.Error($"Command for {value.Path} has been canceled.");
             else
             {
                 var isSuccess = response.IsSuccessStatusCode;
@@ -77,10 +75,12 @@ namespace HSMDataCollector.Client.HttpsClient
                     var json = await response.Content.ReadAsStringAsync();
                     var error = JsonConvert.DeserializeObject<string>(json);
 
-                    _logger.Error($"Error command for {value.Request.Path} - {error}");
+                    _logger.Error($"Command request for {value.Path} has been faulted. {error}.");
                 }
-
-                _commandQueue.SetResult(value.Key, isSuccess);
+                else
+                {
+                    _logger.Info($"Command request for {value.Path} has been accepted.");
+                }
             }
         }
     }

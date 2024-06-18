@@ -34,7 +34,7 @@ namespace HSMDataCollector.Core
         private readonly SensorsStorage _sensorsStorage;
         private readonly CollectorOptions _options;
         private readonly HsmHttpsClient _hsmClient;
-        private readonly DataProcessor _dataProcessor;
+        private readonly QueueManager _queueManager;
 
 
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
@@ -72,14 +72,17 @@ namespace HSMDataCollector.Core
         {
             _options = options;
 
-            _dataProcessor = new DataProcessor(options, _logger);
-            _sensorsStorage = new SensorsStorage(this, _dataProcessor, _logger);
+            _hsmClient = new HsmHttpsClient(options, _logger);
+
+            if (options.DataSender == null)
+                options.DataSender = _hsmClient;
+
+            _queueManager = new QueueManager(options, _logger);
+            _sensorsStorage = new SensorsStorage(this, _queueManager, _logger);
             _prototypes = new PrototypesCollection(options);
 
             Windows = new WindowsSensorsCollection(_sensorsStorage, _prototypes);
             Unix = new UnixSensorsCollection(_sensorsStorage, _prototypes);
-
-            _hsmClient = new HsmHttpsClient(options, _logger);
 
             ToRunning += ToRunningCollector;
             ToStopped += ToStoppedCollector;
@@ -150,7 +153,7 @@ namespace HSMDataCollector.Core
 
                 await customStartingTask;
 
-                _ = _sensorsStorage.Init().ContinueWith(_ => ChangeStatus(CollectorStatus.Running));
+                _ = _sensorsStorage.InitAsync().ContinueWith(_ => ChangeStatus(CollectorStatus.Running));
             }
             catch (Exception ex)
             {
@@ -172,7 +175,7 @@ namespace HSMDataCollector.Core
 
                 ChangeStatus(CollectorStatus.Stopping);
 
-                await Task.WhenAll(_sensorsStorage.Stop(), customStartingTask);
+                await Task.WhenAll(_sensorsStorage.StopAsync(), customStartingTask);
 
                 ChangeStatus(CollectorStatus.Stopped);
             }
@@ -232,7 +235,7 @@ namespace HSMDataCollector.Core
             }
         }
 
-        private void ToRunningCollector() => _ = _sensorsStorage.Start();
+        private void ToRunningCollector() => _ = _sensorsStorage.StartAsync();
 
         private void ToStoppedCollector() => _queueManager.Stop();
 

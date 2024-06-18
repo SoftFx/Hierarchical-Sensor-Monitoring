@@ -1,8 +1,9 @@
+using System.Threading;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using System.Threading;
+
 
 namespace HSMDataCollector.Sensors
 {

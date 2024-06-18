@@ -1,8 +1,9 @@
-﻿using HSMDataCollector.Core;
+﻿using System;
+using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors.Diagnostic;
 using HSMDataCollector.DefaultSensors.Other;
 using HSMDataCollector.Options;
-using System;
+
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -20,7 +21,7 @@ namespace HSMDataCollector.DefaultSensors
         private PackageDataCountSensor _packageDataCountSensor;
         private PackageContentSizeSensor _packageSizeSensor;
 
-        private QueueOverflowSensor _queueOverflowSensor;
+        internal QueueOverflowSensor QueueOverflowSensor { get; private set; }
 
 
         internal CollectorErrorsSensor CollectorErrors { get; private set; }
@@ -50,8 +51,6 @@ namespace HSMDataCollector.DefaultSensors
 
             CollectorErrors = new CollectorErrorsSensor(_prototype.CollectorErrors.Get(null));
 
-            _storage.Logger.ThrowNewError += CollectorErrors.SendCollectorError;
-
             return Register(CollectorErrors);
         }
 
@@ -75,14 +74,12 @@ namespace HSMDataCollector.DefaultSensors
 
         protected DefaultSensorsCollection AddQueueOverflowCommon(BarSensorOptions options)
         {
-            if (_queueOverflowSensor != null)
+            if (QueueOverflowSensor != null)
                 return this;
 
-            _queueOverflowSensor = new QueueOverflowSensor(_prototype.QueueOverflow.Get(options));
+            QueueOverflowSensor = new QueueOverflowSensor(_prototype.QueueOverflow.Get(options));
 
-            //_storage.QueueManager.OverflowInfoEvent += _queueOverflowSensor.AddValue;
-
-            return Register(_queueOverflowSensor);
+            return Register(QueueOverflowSensor);
         }
 
 
@@ -93,7 +90,7 @@ namespace HSMDataCollector.DefaultSensors
 
             _packageDataCountSensor = new PackageDataCountSensor(_prototype.PackageValuesCount.Get(options));
 
-            _storage.QueueManager.PackageInfoEvent += _packageDataCountSensor.AddValue;
+           // _storage.QueueManager.PackageInfoEvent += _packageDataCountSensor.AddValue;
 
             return Register(_packageDataCountSensor);
         }
@@ -106,7 +103,7 @@ namespace HSMDataCollector.DefaultSensors
 
             _packageSizeSensor = new PackageContentSizeSensor(_prototype.PackageContentSize.Get(options));
 
-            _storage.QueueManager.PackageRequestInfoEvent += _packageSizeSensor.AddValue;
+           // _storage.QueueManager.PackageRequestInfoEvent += _packageSizeSensor.AddValue;
 
             return Register(_packageSizeSensor);
         }
@@ -119,7 +116,7 @@ namespace HSMDataCollector.DefaultSensors
 
             _packageProcessTimeSensor = new PackageDataAvrProcessTimeSensor(_prototype.PackageProcessTime.Get(options));
 
-            _storage.QueueManager.PackageInfoEvent += _packageProcessTimeSensor.AddValue;
+            //_storage.QueueManager.PackageInfoEvent += _packageProcessTimeSensor.AddValue;
 
             return Register(_packageProcessTimeSensor);
         }
@@ -140,17 +137,17 @@ namespace HSMDataCollector.DefaultSensors
 
         public void Dispose()
         {
-            if (_packageProcessTimeSensor != null)
-                _storage.QueueManager.PackageInfoEvent -= _packageProcessTimeSensor.AddValue;
+            //if (_packageProcessTimeSensor != null)
+            //    _storage.QueueManager.PackageInfoEvent -= _packageProcessTimeSensor.AddValue;
 
-            if (_packageDataCountSensor != null)
-                _storage.QueueManager.PackageInfoEvent -= _packageDataCountSensor.AddValue;
+            //if (_packageDataCountSensor != null)
+            //    _storage.QueueManager.PackageInfoEvent -= _packageDataCountSensor.AddValue;
 
-            if (_queueOverflowSensor != null)
-                _storage.QueueManager.OverflowInfoEvent -= _queueOverflowSensor.AddValue;
+            //if (_queueOverflowSensor != null)
+            //    _storage.QueueManager.OverflowInfoEvent -= _queueOverflowSensor.AddValue;
 
-            if (CollectorErrors != null)
-                _storage.Logger.ThrowNewError -= CollectorErrors.SendCollectorError;
+            //if (CollectorErrors != null)
+            //    _storage.Logger.ThrowNewError -= CollectorErrors.SendCollectorError;
         }
     }
 }

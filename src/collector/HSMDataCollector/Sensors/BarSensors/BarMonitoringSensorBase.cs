@@ -1,8 +1,9 @@
-﻿using HSMDataCollector.Extensions;
-using HSMDataCollector.Options;
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -32,7 +33,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override async Task<bool> InitAsync()
+        internal override async ValueTask<bool> InitAsync()
         {
             var isInitialized = await base.InitAsync();
 
@@ -42,7 +43,7 @@ namespace HSMDataCollector.DefaultSensors
             return isInitialized;
         }
 
-        internal override async Task StopAsync()
+        internal override async ValueTask StopAsync()
         {
             _collectTimer?.Dispose();
 
@@ -67,7 +68,7 @@ namespace HSMDataCollector.DefaultSensors
         protected sealed override BarType GetDefaultValue() =>
             new BarType()
             {
-                OpenTime = _internalBar?.OpenTime ?? DateTime.UtcNow,
+                OpenTime  = _internalBar?.OpenTime ?? DateTime.UtcNow,
                 CloseTime = _internalBar?.CloseTime ?? DateTime.UtcNow,
                 Count = 1,
             };

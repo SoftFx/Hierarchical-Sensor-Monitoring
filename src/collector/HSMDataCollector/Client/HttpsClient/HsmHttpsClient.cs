@@ -1,15 +1,16 @@
-using HSMDataCollector.Client.HttpsClient;
-using HSMDataCollector.Core;
-using HSMDataCollector.Logging;
-using HSMDataCollector.SyncQueue;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Client.HttpsClient;
+using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
+using HSMDataCollector.SyncQueue;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
+
 
 namespace HSMDataCollector.Client
 {
@@ -22,11 +23,14 @@ namespace HSMDataCollector.Client
 
         private readonly CommandHandler _commandsHandler;
         private readonly DataHandlers _dataHandler;
+        private readonly DataHandlers _priorityDataHandler;
+        private readonly DataHandlers _fileHandler;
 
         private readonly ICollectorLogger _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
 
+        public event Action<PackageSendingInfo> OnSendPackage;
 
         internal HsmHttpsClient(CollectorOptions options, ICollectorLogger logger)
         {
@@ -44,8 +48,10 @@ namespace HSMDataCollector.Client
             _client.DefaultRequestHeaders.Add(HeaderClientName, options.ClientName);
             _client.DefaultRequestHeaders.Add(HeaderAccessKey, options.AccessKey);
 
-            _commandsHandler = new CommandHandler(_endpoints, _logger);
-            _dataHandler     = new DataHandlers( _endpoints, _logger);
+            _commandsHandler = new CommandHandler(this, _endpoints, _logger);
+            _dataHandler     = new DataHandlers(this, _endpoints, _logger);
+            _priorityDataHandler = new DataHandlers(this, _endpoints, _logger);
+            _fileHandler = new DataHandlers(this, _endpoints, _logger);
         }
 
 
@@ -53,38 +59,33 @@ namespace HSMDataCollector.Client
         {
             _tokenSource.Cancel();
 
-            _commandsHandler.SendRequestEvent -= _client.PostAsync;
-            _dataHandler.SendRequestEvent -= _client.PostAsync;
-
             _commandsHandler.Dispose();
             _dataHandler.Dispose();
             _client.Dispose();
         }
 
-        public Task<string> SendCommandAsync(CommandRequestBase command, CancellationToken token)
+        public ValueTask SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
         {
-            _commandsHandler.SendAsync(command, token);
+            return _commandsHandler.SendAsync(commands, token);
         }
 
-        public Task<Dictionary<string, string>> SendCommandAsync(IEnumerable<CommandRequestBase> command, CancellationToken token)
+        public ValueTask SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
         {
-            throw new NotImplementedException();
+            return _dataHandler.SendAsync(items, token);
         }
 
-        public Task SendDataAsync(SensorValueBase data, CancellationToken token)
+        public ValueTask SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
         {
-            throw new NotImplementedException();
+            return _priorityDataHandler.SendAsync(items, token);
         }
 
-        public Task SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+        public ValueTask SendFileAsync(FileSensorValue file, CancellationToken token)
         {
-            throw new NotImplementedException();
+            return _fileHandler.SendAsync(file, token);
         }
 
-        public Task SendFileAsync(FileSensorValue file, CancellationToken token)
-        {
-            throw new NotImplementedException();
-        }
+        internal ValueTask<HttpResponseMessage> SendRequestAsync(string uri, StringContent stringContent, CancellationToken token) => new ValueTask<HttpResponseMessage>(_client.PutAsync(uri, stringContent, token));
+
 
         internal async Task<ConnectionResult> TestConnection()
         {
@@ -104,5 +105,8 @@ namespace HSMDataCollector.Client
                 return new ConnectionResult(null, ex.Message);
             }
         }
+
+        internal void ReportPackageInfo(PackageSendingInfo packageSendingInfo) => OnSendPackage?.Invoke(packageSendingInfo);
+
     }
 }

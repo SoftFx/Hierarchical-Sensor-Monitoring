@@ -1,7 +1,8 @@
-﻿using HSMDataCollector.Extensions;
+﻿using System;
+using HSMDataCollector.Extensions;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
-using System;
+
 
 namespace HSMDataCollector.DefaultSensors
 {

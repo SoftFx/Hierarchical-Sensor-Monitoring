@@ -1,8 +1,10 @@
 using System;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 
 
@@ -21,37 +23,47 @@ namespace HSMDataCollector.DefaultSensors
 
         public event Action<string, Exception> ExceptionThrowing;
 
-        internal readonly IDataProcessor _dataProducer;
+        internal readonly IQueueManager _dataProcessor;
 
         protected SensorBase(SensorOptions options)
         {
             options.Path = options.CalculateSystemPath();
             _metainfo = options;
-            _dataProducer = options.DataProcessor;
+            _dataProcessor = options.DataProcessor;
         }
 
         public void SendValue(SensorValueBase value)
         {
             value.Path = SensorPath;
+
+            value.TrimLongComment();
+
+            if (value is FileSensorValue file)
+            {
+                _dataProcessor.AddFile(file);
+                return;
+            }
+
             if (IsProiritySensor)
-                _dataProducer.AddData(value);
+                _dataProcessor.AddPriorityData(value);
             else
-                _dataProducer.AddData(value);
+                _dataProcessor.AddData(value);
         }
 
-        internal virtual Task<bool> InitAsync()
+        internal virtual ValueTask<bool> InitAsync()
         {
-            _dataProducer.AddCommand(_metainfo.ApiRequest);
-            return Task.FromResult(true);
+            _dataProcessor.AddCommand(_metainfo.ApiRequest);
+
+            return new ValueTask<bool>(true);
         }
 
-        internal virtual Task<bool> StartAsync() => Task.FromResult(true);
+        internal virtual ValueTask<bool> StartAsync() => new ValueTask<bool>(true);
 
-        internal virtual Task StopAsync() => Task.CompletedTask;
+        internal virtual ValueTask StopAsync() => default;
 
         protected void ThrowException(Exception ex)
         {
-            _dataProducer.AddException(SensorPath, ex);
+            _dataProcessor.AddException(SensorPath, ex);
             ExceptionThrowing?.Invoke(SensorPath, ex);
         }
 

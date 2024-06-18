@@ -1,7 +1,8 @@
-﻿using HSMDataCollector.Options;
+﻿using System.Threading.Tasks;
+using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using System.Threading.Tasks;
+
 
 namespace HSMDataCollector.Sensors
 {
@@ -18,7 +19,7 @@ namespace HSMDataCollector.Sensors
         }
 
 
-        internal override Task StopAsync()
+        internal override ValueTask StopAsync()
         {
             SendValue(_lastValue, _lastStatus, _lastComment);
             return base.StopAsync();

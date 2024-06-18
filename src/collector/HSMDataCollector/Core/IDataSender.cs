@@ -1,21 +1,24 @@
-﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.SyncQueue;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
+
 
 namespace HSMDataCollector.Core
 {
     public interface IDataSender
     {
-        Task SendDataAsync(SensorValueBase data, CancellationToken token);
+        ValueTask SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token);
 
-        Task SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token);
+        ValueTask SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token);
 
-        Task<string> SendCommandAsync(CommandRequestBase command, CancellationToken token);
+        ValueTask SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token);
 
-        Task<Dictionary<string, string>> SendCommandAsync(IEnumerable<CommandRequestBase> command, CancellationToken token);
+        ValueTask SendFileAsync(FileSensorValue file, CancellationToken token);
 
-        Task SendFileAsync(FileSensorValue file, CancellationToken token);
+        event Action<PackageSendingInfo> OnSendPackage;
     }
 }

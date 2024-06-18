@@ -1,13 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 
 
 namespace HSMDataCollector.Core
 {
-    internal interface IDataProcessor
+    internal interface IQueueManager
     {
+        void Init();
+
+        void Stop();
+
         void AddData(SensorValueBase item);
 
         void AddData(IEnumerable<SensorValueBase> items);
@@ -23,5 +28,6 @@ namespace HSMDataCollector.Core
         void AddFile(FileSensorValue file);
 
         void AddException(string SensorPath, Exception ex);
+
     }
 }

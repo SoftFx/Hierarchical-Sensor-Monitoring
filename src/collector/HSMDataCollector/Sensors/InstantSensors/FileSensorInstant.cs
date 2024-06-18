@@ -64,7 +64,7 @@ namespace HSMDataCollector.Sensors
             catch (Exception ex)
             {
                 _logger.Error($"{SensorPath} - {ex.Message}");
-                _dataProducer.AddException(SensorPath, ex);
+                _dataProcessor.AddException(SensorPath, ex);
                 return false;
             }
 

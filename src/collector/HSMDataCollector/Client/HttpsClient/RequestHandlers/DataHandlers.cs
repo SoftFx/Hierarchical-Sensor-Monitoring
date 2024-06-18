@@ -1,9 +1,8 @@
-﻿using HSMDataCollector.Logging;
-using HSMDataCollector.SyncQueue;
+﻿using System;
+using System.Collections.Generic;
+using HSMDataCollector.Logging;
 using HSMSensorDataObjects.SensorValueRequests;
 using Polly;
-using System;
-using System.Collections.Generic;
 
 namespace HSMDataCollector.Client.HttpsClient
 {
@@ -14,7 +13,7 @@ namespace HSMDataCollector.Client.HttpsClient
         protected override int MaxRequestAttempts => 10;
 
 
-        public DataHandlers(Endpoints endpoints, ICollectorLogger logger) : base(endpoints, logger) { }
+        public DataHandlers(HsmHttpsClient client, Endpoints endpoints, ICollectorLogger logger) : base(client, endpoints, logger) { }
 
 
         internal override object ConvertToRequestData(SensorValueBase value) => value;
