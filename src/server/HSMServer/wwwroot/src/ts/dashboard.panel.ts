@@ -40,8 +40,8 @@ export class Panel {
         else
             this._lastUpdateDiv.html(moment(this._lastUpdateTime).fromNow());
     }
-    
-    initUpdateRequests(){
+
+    initUpdateRequests() {
         let update = new DataUpdate.Update(this);
         this._requestTimeout = window.setInterval(function () {
             fetch(window.location.pathname + '/PanelUpdate' + `/${this.id}`, {
@@ -57,13 +57,13 @@ export class Panel {
         this._lastUpdateDiv = $('#lastUpdate_' + this.id);
 
         this.addEventListeners();
-        
+
         Layout.relayout(this.id, this.settings);
 
         this.updateNotify();
     }
 
-    addOrderableTable(){
+    addOrderableTable() {
         $(`#${this.id} .orderable-table`).DataTable({
             search: false,
             paging: false,
@@ -72,11 +72,11 @@ export class Panel {
             searching: false
         })
     }
-    
+
     addEventListeners() {
         if (this.settings.isSingleMode)
             this.addOrderableTable();
-        
+
         let panel = document.getElementById(this.id);
         let actionButton = panel.querySelector('.action-button') as HTMLButtonElement
         let panelMenu = panel.querySelector('.dropdown-menu');
@@ -92,20 +92,20 @@ export class Panel {
                 await httpPanelService.updateSettings(this);
                 Layout.relayout(this.id, this.settings);
                 actionButton.click();
-            } 
+            }
         );
-        
+
         panelMenu.querySelector('.switch-mode').addEventListener(
             "click",
             async (event) => {
                 this.settings.isSingleMode = !this.settings.isSingleMode;
-                
+
                 let result = await httpPanelService.updateSettings(this);
                 showToast(await result.text())
-                
+
                 const panelPage = await httpPanelService.getPanel(this);
                 actionButton.click();
-                
+
                 panel.replaceWith(createElementFromHTML(panelPage));
                 
                 function createElementFromHTML(htmlString: string) {
@@ -139,8 +139,7 @@ export class Panel {
                                 showToast(error)
                             }
                         );
-                    }
-                    else {
+                    } else {
                         Plotly.relayout(`panelChart_${this.id}`, {
                             // @ts-ignore
                             'legend.yref': "paper",
@@ -148,8 +147,8 @@ export class Panel {
                         }).then(
                             (success) => {
                                 Plotly.relayout(`panelChart_${this.id}`, {
-                                        'showlegend' : this.settings.showLegend
-                                    })
+                                    'showlegend': this.settings.showLegend
+                                })
                                 target.textContent = "Show legends";
                             },
                             (error) => {
@@ -160,5 +159,23 @@ export class Panel {
                 }
             }
         );
+    }
+
+    async manualCordinatesUpdate() {
+        let currPanelDiv = $('#dashboardPanels').find(`#${this.id}`).first();
+        let width = $('#dashboardPanels').width();
+        let height = 1400;
+        return fetch(window.location.pathname + `/${this.id}`, {
+            method: 'PUT',
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                width: Number((currPanelDiv.width() / width).toFixed(5)),
+                height: Number((currPanelDiv.height() / height).toFixed(5)),
+                x: Number((parseFloat(currPanelDiv.data('x') || 0) / width).toFixed(5)),
+                y: Number((parseFloat(currPanelDiv.data('y') || 0) / height).toFixed(5)),
+            }),
+        })
     }
 }

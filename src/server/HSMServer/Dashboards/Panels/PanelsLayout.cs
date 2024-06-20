@@ -22,8 +22,8 @@ namespace HSMServer.Dashboards
                 var defaultRowsCount = panels.Count / panelsInRow;
                 var lastRowSize = panels.Count % panelsInRow;
 
-                Relayout(panels.Take(defaultRowsCount * panelsInRow).ToList(), panelsInRow);
-                Relayout(panels.TakeLast(lastRowSize).ToList(), lastRowSize, defaultRowsCount); // + 1
+                Relayout(panels.Take(defaultRowsCount * panelsInRow).ToList(), panelsInRow, out var y);
+                Relayout(panels.TakeLast(lastRowSize).ToList(), lastRowSize, out y, defaultRowsCount); // + 1
                 
                 var rowsBefore = defaultRowsCount;
 
@@ -33,12 +33,12 @@ namespace HSMServer.Dashboards
                 var defaultRowsCount2 = singleModePanels.Count / (panelsInRow * 2);
                 var lastRowSize2 = singleModePanels.Count % (panelsInRow * 2);
                 
-                Relayout(singleModePanels.Take(defaultRowsCount2 * panelsInRow * 2).ToList(), panelsInRow * 2, rowsBefore); // +1 from pred
+                Relayout(singleModePanels.Take(defaultRowsCount2 * panelsInRow * 2).ToList(), panelsInRow * 2, out y, rowsBefore); // +1 from pred
                 
                 if (defaultRowsCount2 * panelsInRow * 2 != 0)
                     rowsBefore++;
                 
-                Relayout(singleModePanels.TakeLast(lastRowSize2).ToList(), lastRowSize2, rowsBefore + defaultRowsCount2);
+                Relayout(singleModePanels.TakeLast(lastRowSize2).ToList(), lastRowSize2, out y, rowsBefore + defaultRowsCount2);
 
                 return true;
             }
@@ -53,24 +53,54 @@ namespace HSMServer.Dashboards
             
         }
 
-        private static void Relayout(List<KeyValuePair<Guid, Panel>> pairs, int panelsInRow, int rowsExist = 0)
+        private static void Relayout(List<KeyValuePair<Guid, Panel>> pairs, int panelsInRow, out double y, int rowsExist = 0)
         {
             var panelWidth = TotalWidthRow / panelsInRow;
-
+            y = 0D;
+            var isSingleMode = false;
             for (int i = 0; i < pairs.Count; ++i)
             {
                 var (panelId, panel) = pairs[i];
-
+                
+                isSingleMode = panel.Settings.IsSingleMode;
+                
                 var rowNumber = i / panelsInRow + rowsExist;
                 var columnNumber = i % panelsInRow;
 
+                y = DefaultYCoef * rowNumber;
+                
                 panel.Update(new PanelUpdate(panelId)
                 {
                     Height = PanelSettings.DefaultHeight,
                     Width = panelWidth - PanelPadding,
 
                     X = panelWidth * columnNumber + PanelPadding,
-                    Y = DefaultYCoef * rowNumber,
+                    Y = y,
+                });
+            }
+        }
+
+        private static void RelayoutSingleMode(List<KeyValuePair<Guid, Panel>> pairs, int panelsInRow, out double y, int rowsExist = 0)
+        {
+            var panelWidth = TotalWidthRow / panelsInRow;
+            y = 0D;
+            var maxHeight = 0D;
+            for (int i = 0; i < pairs.Count; ++i)
+            {
+                var (panelId, panel) = pairs[i];
+             
+                var rowNumber = i / panelsInRow + rowsExist;
+                var columnNumber = i % panelsInRow;
+
+                y = maxHeight == 0D? DefaultYCoef * rowNumber : DefaultYCoef * rowNumber ;
+                
+                panel.Update(new PanelUpdate(panelId)
+                {
+                    Height = PanelSettings.DefaultHeight,
+                    Width = panelWidth - PanelPadding,
+
+                    X = panelWidth * columnNumber + PanelPadding,
+                    Y = y,
                 });
             }
         }

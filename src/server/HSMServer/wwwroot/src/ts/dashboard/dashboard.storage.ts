@@ -70,11 +70,16 @@ export class DashboardStorage {
                 'height': Number((settings.height * 1400).toFixed(5)) - 46
             })
             
+            await panel.manualCordinatesUpdate();
+            
             if (values.length === 0) {
                 $(`#emptypanel_${id}`).show();
             }
         }
-        
+        else
+            await panel.manualCordinatesUpdate();
+
+
         replaceHtmlToMarkdown('panel_description')
     }
     
