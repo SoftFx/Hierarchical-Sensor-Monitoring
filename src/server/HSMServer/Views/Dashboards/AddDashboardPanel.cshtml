@@ -115,6 +115,7 @@
 
         multichartRange = ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)];
 
+        // refactor to ChartHelper methods
         initMultichart('multichart', 300, true, true).then(
             (dom) => {
                 values.forEach(function (x) {

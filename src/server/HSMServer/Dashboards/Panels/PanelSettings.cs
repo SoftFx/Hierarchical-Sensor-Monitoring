@@ -31,9 +31,7 @@ namespace HSMServer.Dashboards
         public double Height { get; private set; } = DefaultHeight;
 
         public double SWidth { get; private set; } = DefaultWidth;
-        
-        public double SHeight { get; private set; } = double.PositiveInfinity;
-        
+
         
 
         public double X { get; private set; }
@@ -72,7 +70,6 @@ namespace HSMServer.Dashboards
             else
             {
                 SWidth = update.Width ?? SWidth;
-                SHeight = update.Height ?? SHeight;
             }
         }
 
@@ -81,7 +78,6 @@ namespace HSMServer.Dashboards
             Height = entity.Height;
             Width = entity.Width;
             
-            SHeight = entity.SHeight;
             SWidth = entity.SWidth;
 
             X = entity.X;
@@ -101,7 +97,6 @@ namespace HSMServer.Dashboards
                 Height = Height,
                 Width = Width,
                 
-                SHeight = SHeight,
                 SWidth = SWidth,
 
                 X = X,

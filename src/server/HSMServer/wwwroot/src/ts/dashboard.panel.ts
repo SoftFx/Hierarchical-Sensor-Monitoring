@@ -74,7 +74,8 @@ export class Panel {
     }
     
     addEventListeners() {
-        this.addOrderableTable();
+        if (this.settings.isSingleMode)
+            this.addOrderableTable();
         
         let panel = document.getElementById(this.id);
         let actionButton = panel.querySelector('.action-button') as HTMLButtonElement

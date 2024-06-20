@@ -74,10 +74,6 @@ export class DashboardStorage {
                 $(`#emptypanel_${id}`).show();
             }
         }
-        else {
-            let panelData = $(`#panelLastValue_${panel.id}`);
-            //panelData.height(Number((settings.height * 1400).toFixed(5)) - 46)
-        }
         
         replaceHtmlToMarkdown('panel_description')
     }

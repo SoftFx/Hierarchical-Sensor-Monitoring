@@ -376,9 +376,14 @@ function addResizable(interactable) {
 
                 let panel = dashboardStorage.getPanel(event.target.id);
                 if (panel.settings.isSingleMode){
-                    let panelData = document.getElementById(`panelLastValue_${panel.id}`);
-                    panelData.style.width = item.width() + 'px';
-                    panelData.style.height = item.height() - item.children('div').first().height() + 'px';
+                    let children = item.children();
+                    let title = children[0].getBoundingClientRect();
+                    let data = item.find('table')[0].getBoundingClientRect();
+                    let childrenHeight = title.height + data.height;
+                    let childrenWidth = data.width;
+                    target.style.height = childrenHeight + 'px';
+                    if (childrenWidth > event.rect.width)
+                        target.style.width = childrenWidth + 'px';
                 }
                 else {
                     var update = {
@@ -431,31 +436,6 @@ window.syncIndexes = function () {
 
 window.initPanel = async function (id, settings, ySettings, values, lastUpdate) {
    await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate);
-}
-
-window.initMultyichartCordinates = function (settings, id) {
-    return new Promise(function (resolve, reject) {
-        let dashboardPanels = $('#dashboardPanels');
-        let width = dashboardPanels.width();
-        let height = 1400;
-
-        let currWidth = Number((settings.width * width).toFixed(5))
-        let currHeight = Number((settings.height * height).toFixed(5))
-        let transitionX = settings.x * width;
-        let transitionY = settings.y * height;
-        let panel = $(`#${id}`);
-
-        if (panel.length === 0)
-            reject();
-
-        panel.width(currWidth)
-            .height(currHeight)
-            .css('transform', 'translate(' + transitionX + 'px, ' + transitionY + 'px)')
-            .attr('data-x', transitionX)
-            .attr('data-y', transitionY);
-
-        resolve(transitionY + currHeight * 2);
-    })
 }
 
 window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false, yaxisRange = true) {
