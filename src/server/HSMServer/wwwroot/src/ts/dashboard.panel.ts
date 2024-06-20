@@ -6,6 +6,7 @@ import Plotly from "plotly.js";
 import {PanelSettings} from "./dashboard/dashboard.classes";
 import {IPanelSettings, ISourceUpdate, IYRangeSettings} from "./dashboard/dashboard.interfaces";
 import {httpPanelService, updateDashboardInterval} from "./dashboard/dashboard.storage";
+import DataTable from "datatables.net-dt";
 
 export class Panel {
     private _lastUpdateTime: Date = new Date(0);
@@ -62,7 +63,19 @@ export class Panel {
         this.updateNotify();
     }
 
+    addOrderableTable(){
+        $(`#${this.id} .orderable-table`).DataTable({
+            search: false,
+            paging: false,
+            lengthChange: false,
+            info: false,
+            searching: false
+        })
+    }
+    
     addEventListeners() {
+        this.addOrderableTable();
+        
         let panel = document.getElementById(this.id);
         let actionButton = panel.querySelector('.action-button') as HTMLButtonElement
         let panelMenu = panel.querySelector('.dropdown-menu');
