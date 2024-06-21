@@ -12,7 +12,7 @@ namespace HSMServer.Dashboards
         private const double DefaultYCoef = 0.22D; // coef for start point of Y coord for every row
         private const double PanelPadding = 0.01D;
         private const double SpaceBetween = 0.02D; // space between panels in Y
-
+        private const int SingleModeMultiplayer = 2;
 
         internal static bool RecalculatePanelSize(ConcurrentDictionary<Guid, Panel> panelsDict, int panelsInRow)
         {
@@ -31,7 +31,7 @@ namespace HSMServer.Dashboards
                 if (lastRowSize != 0)
                     rowsBefore++;
                 
-                SingleModeRelayout(singleModePanels.ToList(), panelsInRow * 2, rowsBefore);
+                SingleModeRelayout(singleModePanels.ToList(), panelsInRow * SingleModeMultiplayer, rowsBefore);
                 
                 return true;
             }
