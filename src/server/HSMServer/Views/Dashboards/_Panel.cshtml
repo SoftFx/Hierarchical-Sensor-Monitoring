@@ -87,7 +87,7 @@
 
     @if (Model.Settings.IsSingleMode)
     {
-        <div id="panelLastValue_@Model.Id" style="overflow: auto">
+        <div id="panelLastValue_@Model.Id">
             @await Html.PartialAsync("_SourceLastValue", Model)
         </div>
     }
@@ -99,11 +99,11 @@
 
 
 <script>
-    $(document).ready(function () {
+    $(() => {
         const settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
         const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
-
-        initPanel('@Model.Id', settings, ySettings, values, Number('@lastUpdate'), '@Model.DashboardId');
+         
+        initPanel('@Model.Id', settings, ySettings, values, Number('@lastUpdate'), '@Model.DashboardId');  
     })
 </script>

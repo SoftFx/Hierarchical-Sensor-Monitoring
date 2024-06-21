@@ -44,7 +44,7 @@ export class DashboardStorage {
     public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: number, dId: string){
         let panel = new Panel(id, settings, ySettings);
 
-        let result = await ChartHelper.initMultyichartCordinates(panel.settings, id)
+        let result = await ChartHelper.initContrainerCordinates(panel.settings, id)
 
         this.containerHeight = Math.max(this.containerHeight, result);
 
@@ -70,15 +70,16 @@ export class DashboardStorage {
                 'height': Number((settings.height * 1400).toFixed(5)) - 46
             })
             
+            await panel.manualCordinatesUpdate();
+            
             if (values.length === 0) {
                 $(`#emptypanel_${id}`).show();
             }
         }
-        else {
-            let panelData = $(`#panelLastValue_${panel.id}`);
-            panelData.height(Number((settings.height * 1400).toFixed(5)) - 46)
-        }
-        
+        else
+            await panel.manualCordinatesUpdate();
+
+
         replaceHtmlToMarkdown('panel_description')
     }
     

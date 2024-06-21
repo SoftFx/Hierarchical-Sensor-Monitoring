@@ -16,8 +16,7 @@ namespace HSMServer.Dashboards
         public double? Width { get; init; }
 
         public double? Height { get; init; }
-
-
+        
         public double? X { get; init; }
 
         public double? Y { get; init; }
@@ -58,13 +57,24 @@ namespace HSMServer.Dashboards
         public bool? IsSingleMode { get; set; }
         
         public bool? ShowLegend { get; set; } 
+        
+        public double? X { get; set; }
+        
+        public double? Y { get; set; }
+        
+        public double? Height { get; set; }
+        
+        
 
         internal PanelUpdate ToUpdate(Guid id) =>
             new(id)
             {
                 Hovermode = Hovermode,
                 IsSingleMode = IsSingleMode,
-                ShowLegend = ShowLegend
+                ShowLegend = ShowLegend,
+                X = X,
+                Y = Y,
+                Height = Height
             };
     }
 
