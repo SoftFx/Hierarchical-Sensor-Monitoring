@@ -8,9 +8,10 @@ namespace HSMServer.Dashboards
 {
     internal static class PanelsLayout
     {
-        private const double TotalWidthRow = 1.0 - PanelPadding; //remove right margin
-        private const double DefaultYCoef = 0.22; // coef for start point of Y coord for every row
-        private const double PanelPadding = 0.01;
+        private const double TotalWidthRow = 1.0D - PanelPadding; //remove right margin
+        private const double DefaultYCoef = 0.22D; // coef for start point of Y coord for every row
+        private const double PanelPadding = 0.01D;
+        private const double SpaceBetween = 0.02D; // space between panels in Y
 
 
         internal static bool RecalculatePanelSize(ConcurrentDictionary<Guid, Panel> panelsDict, int panelsInRow)
@@ -30,16 +31,8 @@ namespace HSMServer.Dashboards
                 if (lastRowSize != 0)
                     rowsBefore++;
                 
-                var defaultRowsCount2 = singleModePanels.Count / (panelsInRow * 2);
-                var lastRowSize2 = singleModePanels.Count % (panelsInRow * 2);
+                SingleModeRelayout(singleModePanels.ToList(), panelsInRow * 2, rowsBefore);
                 
-                Relayout(singleModePanels.Take(defaultRowsCount2 * panelsInRow * 2).ToList(), panelsInRow * 2, out y, rowsBefore); // +1 from pred
-                
-                if (defaultRowsCount2 * panelsInRow * 2 != 0)
-                    rowsBefore++;
-                
-                Relayout(singleModePanels.TakeLast(lastRowSize2).ToList(), lastRowSize2, out y, rowsBefore + defaultRowsCount2);
-
                 return true;
             }
             catch (Exception)
@@ -48,51 +41,51 @@ namespace HSMServer.Dashboards
             }
         }
 
-        private static void SingleModeRelayout(List<KeyValuePair<Guid, Panel>> pairs, int panelsInRow, int rowsExist = 0)
+        private static void SingleModeRelayout(List<KeyValuePair<Guid, Panel>> pairs, int panelsInRow, int rowsExist)
         {
-            
+            var panelWidth = TotalWidthRow / panelsInRow;
+
+            var predY = new double[panelsInRow];
+            for (var i = 0; i < panelsInRow; i++)
+                predY[i] = DefaultYCoef * rowsExist;
+           
+            var j = 0;
+            for (int i = 0; i < pairs.Count; ++i)
+            {
+                if (j >= panelsInRow)
+                    j = 0;
+                
+                var (panelId, panel) = pairs[i];
+                
+                var columnNumber = i % panelsInRow;
+                
+                panel.Update(new PanelUpdate(panelId)
+                {
+                    Height = panel.Settings.Height,
+                    Width = panelWidth - PanelPadding,
+
+                    X = panelWidth * columnNumber + PanelPadding,
+                    Y = predY[j],
+                });
+                
+                predY[j] += panel.Settings.Height + SpaceBetween;
+
+                j++;
+            }
         }
 
         private static void Relayout(List<KeyValuePair<Guid, Panel>> pairs, int panelsInRow, out double y, int rowsExist = 0)
         {
             var panelWidth = TotalWidthRow / panelsInRow;
             y = 0D;
-            var isSingleMode = false;
             for (int i = 0; i < pairs.Count; ++i)
             {
                 var (panelId, panel) = pairs[i];
-                
-                isSingleMode = panel.Settings.IsSingleMode;
                 
                 var rowNumber = i / panelsInRow + rowsExist;
                 var columnNumber = i % panelsInRow;
 
                 y = DefaultYCoef * rowNumber;
-                
-                panel.Update(new PanelUpdate(panelId)
-                {
-                    Height = PanelSettings.DefaultHeight,
-                    Width = panelWidth - PanelPadding,
-
-                    X = panelWidth * columnNumber + PanelPadding,
-                    Y = y,
-                });
-            }
-        }
-
-        private static void RelayoutSingleMode(List<KeyValuePair<Guid, Panel>> pairs, int panelsInRow, out double y, int rowsExist = 0)
-        {
-            var panelWidth = TotalWidthRow / panelsInRow;
-            y = 0D;
-            var maxHeight = 0D;
-            for (int i = 0; i < pairs.Count; ++i)
-            {
-                var (panelId, panel) = pairs[i];
-             
-                var rowNumber = i / panelsInRow + rowsExist;
-                var columnNumber = i % panelsInRow;
-
-                y = maxHeight == 0D? DefaultYCoef * rowNumber : DefaultYCoef * rowNumber ;
                 
                 panel.Update(new PanelUpdate(panelId)
                 {

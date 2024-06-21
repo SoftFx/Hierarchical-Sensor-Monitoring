@@ -63,14 +63,11 @@ namespace HSMServer.Dashboards
             IsSingleMode = update.IsSingleMode ?? IsSingleMode;
 
             if (!IsSingleMode)
-            {
-                Height = update.Height ?? Height;
                 Width = update.Width ?? Width;
-            }
             else
-            {
                 SWidth = update.Width ?? SWidth;
-            }
+            
+            Height = update.Height ?? Height;
         }
 
         public PanelSettings FromEntity(PanelSettingsEntity entity)
