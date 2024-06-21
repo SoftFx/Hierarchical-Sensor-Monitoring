@@ -2,7 +2,7 @@
 import {PanelSettings} from "./dashboard/dashboard.classes";
 
 export namespace ChartHelper {
-    export async function initMultyichartCordinates(settings: PanelSettings, id: string) : Promise<number> {
+    export async function initContrainerCordinates(settings: PanelSettings, id: string) : Promise<number> {
         return new Promise(function (resolve, reject) {
             let dashboardPanels = $('#dashboardPanels');
             let width = dashboardPanels.width();

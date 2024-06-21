@@ -125,11 +125,11 @@ namespace HSMServer.Controllers
         [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/Switch")]
         public async Task<IActionResult> GetPanel(Guid dashboardId, Guid panelId)
         {
-            if (TryGetPanel(dashboardId, panelId, out var panel))
+            if (TryGetPanel(dashboardId, panelId, out var panel) && TryGetBoard(dashboardId, out var board))
             {
                 var vm = new PanelViewModel(panel, dashboardId, GetAvailableFolders());
                 
-                return PartialView("_Panel", await vm.InitPanelData());
+                return PartialView("_Panel", await vm.InitPanelData(DateTime.UtcNow - board.DataPeriod));
             }
 
             return BadRequest();

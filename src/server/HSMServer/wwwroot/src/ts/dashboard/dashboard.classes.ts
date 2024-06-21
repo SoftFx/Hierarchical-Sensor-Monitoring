@@ -28,14 +28,30 @@ export class PanelSettings {
     showLegend: boolean
     isSingleMode: boolean
 
-    width: number
-    height: number
+    private _width: number
+    private _height: number
+
+    private _singleModeWidth: number
+    private _sHeight: number
+    
     x: number
     y:number
 
     autoscale: boolean
     range: boolean | [number, number]
 
+    public get width(){
+        return this.isSingleMode ? 
+            this._singleModeWidth :
+            this._width;
+    }
+
+    public get height(){
+        return this.isSingleMode ?
+            this._sHeight :
+            this._height;
+    }
+    
     constructor(id: string, settings: IPanelSettings, ySettings: IYRangeSettings) {
         this.id = id;
         
@@ -45,12 +61,18 @@ export class PanelSettings {
         this.showLegend = settings.showLegend;
         this.isSingleMode = settings.isSingleMode;
         
-        this.width = settings.width;
-        this.height = settings.height;
+        this._width = settings.width;
+        this._height = settings.height;
+        
+        this._sHeight = settings.sHeight;
+        this._singleModeWidth = settings.singleModeWidth;
+        
         this.x = settings.x;
         this.y = settings.y;
         
         this.autoscale = ySettings.autoScale;
         this.range = this.autoscale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)]
     }
+    
+    
 }

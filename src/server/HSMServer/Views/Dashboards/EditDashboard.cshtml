@@ -153,14 +153,14 @@
         for (let i of dashboardPanels.children('div')){
             let item = $(i);
             let plot = item.find('.js-plotly-plot');
-
+           
             panels[i.id] = {
                 width: Number((item.width() / width).toFixed(5)),
                 height: Number((item.height() / height).toFixed(5)),
                 x: Number((parseFloat(i.dataset.x || 0) / width).toFixed(5)),
                 y: Number((parseFloat(i.dataset.y || 0) / height).toFixed(5)),
             };
-            
+          
             if (plot.length > 0){
                 panels[i.id]['showlegend'] = plot[0].layout.showlegend;
             }

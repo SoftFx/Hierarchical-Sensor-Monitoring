@@ -2,28 +2,37 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using HSMCommon.Extensions;
 
 namespace HSMServer.Dashboards
 {
     internal static class PanelsLayout
     {
-        private const double TotalWidthRow = 1.0 - PanelPadding; //remove right margin
-        private const double DefaultYCoef = 0.22; // coef for start point of Y coord for every row
-        private const double PanelPadding = 0.01;
-
+        private const double TotalWidthRow = 1.0D - PanelPadding; //remove right margin
+        private const double DefaultYCoef = 0.22D; // coef for start point of Y coord for every row
+        private const double PanelPadding = 0.01D;
+        private const double SpaceBetween = 0.02D; // space between panels in Y
+        private const int SingleModeMultiplayer = 2;
 
         internal static bool RecalculatePanelSize(ConcurrentDictionary<Guid, Panel> panelsDict, int panelsInRow)
         {
             try
             {
-                var panels = panelsDict.OrderBy(x => x.Value.Name?.ToLower()).ToList();
-
+                var (panels, singleModePanels) = panelsDict.OrderBy(x => x.Value.Name?.ToLower()).SplitByCondition(x => x.Value.Settings.IsSingleMode);
+                
                 var defaultRowsCount = panels.Count / panelsInRow;
                 var lastRowSize = panels.Count % panelsInRow;
 
-                Relayout(panels.Take(defaultRowsCount * panelsInRow).ToList(), panelsInRow);
-                Relayout(panels.TakeLast(lastRowSize).ToList(), lastRowSize, defaultRowsCount);
+                Relayout(panels.Take(defaultRowsCount * panelsInRow).ToList(), panelsInRow, out var y);
+                Relayout(panels.TakeLast(lastRowSize).ToList(), lastRowSize, out y, defaultRowsCount); // + 1
+                
+                var rowsBefore = defaultRowsCount;
 
+                if (lastRowSize != 0)
+                    rowsBefore++;
+                
+                SingleModeRelayout(singleModePanels.ToList(), panelsInRow * SingleModeMultiplayer, rowsBefore);
+                
                 return true;
             }
             catch (Exception)
@@ -32,24 +41,59 @@ namespace HSMServer.Dashboards
             }
         }
 
-        private static void Relayout(List<KeyValuePair<Guid, Panel>> pairs, int panelsInRow, int rowsExist = 0)
+        private static void SingleModeRelayout(List<KeyValuePair<Guid, Panel>> pairs, int panelsInRow, int rowsExist)
         {
             var panelWidth = TotalWidthRow / panelsInRow;
 
+            var predY = new double[panelsInRow];
+            for (var i = 0; i < panelsInRow; i++)
+                predY[i] = DefaultYCoef * rowsExist;
+           
+            var j = 0;
+            for (int i = 0; i < pairs.Count; ++i)
+            {
+                if (j >= panelsInRow)
+                    j = 0;
+                
+                var (panelId, panel) = pairs[i];
+                
+                var columnNumber = i % panelsInRow;
+                
+                panel.Update(new PanelUpdate(panelId)
+                {
+                    Height = panel.Settings.Height,
+                    Width = panelWidth - PanelPadding,
+
+                    X = panelWidth * columnNumber + PanelPadding,
+                    Y = predY[j],
+                });
+                
+                predY[j] += panel.Settings.Height + SpaceBetween;
+
+                j++;
+            }
+        }
+
+        private static void Relayout(List<KeyValuePair<Guid, Panel>> pairs, int panelsInRow, out double y, int rowsExist = 0)
+        {
+            var panelWidth = TotalWidthRow / panelsInRow;
+            y = 0D;
             for (int i = 0; i < pairs.Count; ++i)
             {
                 var (panelId, panel) = pairs[i];
-
+                
                 var rowNumber = i / panelsInRow + rowsExist;
                 var columnNumber = i % panelsInRow;
 
+                y = DefaultYCoef * rowNumber;
+                
                 panel.Update(new PanelUpdate(panelId)
                 {
                     Height = PanelSettings.DefaultHeight,
                     Width = panelWidth - PanelPadding,
 
                     X = panelWidth * columnNumber + PanelPadding,
-                    Y = DefaultYCoef * rowNumber,
+                    Y = y,
                 });
             }
         }

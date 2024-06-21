@@ -30,6 +30,9 @@ namespace HSMServer.Dashboards
 
         public double Height { get; private set; } = DefaultHeight;
 
+        public double SingleModeWidth { get; private set; } = DefaultWidth;
+
+        
 
         public double X { get; private set; }
 
@@ -51,9 +54,6 @@ namespace HSMServer.Dashboards
 
         public void Update(PanelUpdate update)
         {
-            Height = update.Height ?? Height;
-            Width = update.Width ?? Width;
-
             X = update.X ?? X;
             Y = update.Y ?? Y;
 
@@ -61,12 +61,21 @@ namespace HSMServer.Dashboards
 
             Hovermode = update.Hovermode ?? Hovermode;
             IsSingleMode = update.IsSingleMode ?? IsSingleMode;
+
+            if (!IsSingleMode)
+                Width = update.Width ?? Width;
+            else
+                SingleModeWidth = update.Width ?? SingleModeWidth;
+            
+            Height = update.Height ?? Height;
         }
 
         public PanelSettings FromEntity(PanelSettingsEntity entity)
         {
             Height = entity.Height;
             Width = entity.Width;
+            
+            SingleModeWidth = entity.SingleModeWidth;
 
             X = entity.X;
             Y = entity.Y;
@@ -84,6 +93,8 @@ namespace HSMServer.Dashboards
             {
                 Height = Height,
                 Width = Width,
+                
+                SingleModeWidth = SingleModeWidth,
 
                 X = X,
                 Y = Y,
