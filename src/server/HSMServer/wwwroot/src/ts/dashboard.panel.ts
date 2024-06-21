@@ -6,7 +6,9 @@ import Plotly from "plotly.js";
 import {PanelSettings} from "./dashboard/dashboard.classes";
 import {IPanelSettings, ISourceUpdate, IYRangeSettings} from "./dashboard/dashboard.interfaces";
 import {httpPanelService, updateDashboardInterval} from "./dashboard/dashboard.storage";
-import DataTable from "datatables.net-dt";
+import DataTable, {Order} from "datatables.net-dt";
+import {Helper} from "./services/local-storage.helper";
+import {OrderArray} from "datatables.net";
 
 export class Panel {
     private _lastUpdateTime: Date = new Date(0);
@@ -64,13 +66,18 @@ export class Panel {
     }
 
     addOrderableTable() {
+        let currentOrder = Helper.read<Order>(`singlemode_${this.id}`);
+        
         $(`#${this.id} .orderable-table`).DataTable({
             search: false,
             paging: false,
             lengthChange: false,
             info: false,
-            searching: false
-        })
+            searching: false,
+            order: currentOrder === null ? [0, 'asc'] : currentOrder
+        }).on('order.dt', function(event: any, object :any, settings: any, plainSettings: any){
+            Helper.save(`singlemode_${this.id}`, Object.entries(plainSettings));
+        }.bind(this));
     }
 
     addEventListeners() {

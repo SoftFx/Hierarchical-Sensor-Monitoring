@@ -28,7 +28,7 @@ export interface IPanelSettings {
     width: number
     height: number
 
-    sWidth: number
+    singleModeWidth: number
     sHeight: number
     
     x: number

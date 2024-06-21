@@ -30,7 +30,7 @@ namespace HSMServer.Dashboards
 
         public double Height { get; private set; } = DefaultHeight;
 
-        public double SWidth { get; private set; } = DefaultWidth;
+        public double SingleModeWidth { get; private set; } = DefaultWidth;
 
         
 
@@ -65,7 +65,7 @@ namespace HSMServer.Dashboards
             if (!IsSingleMode)
                 Width = update.Width ?? Width;
             else
-                SWidth = update.Width ?? SWidth;
+                SingleModeWidth = update.Width ?? SingleModeWidth;
             
             Height = update.Height ?? Height;
         }
@@ -75,7 +75,7 @@ namespace HSMServer.Dashboards
             Height = entity.Height;
             Width = entity.Width;
             
-            SWidth = entity.SWidth;
+            SingleModeWidth = entity.SWidth;
 
             X = entity.X;
             Y = entity.Y;
@@ -94,7 +94,7 @@ namespace HSMServer.Dashboards
                 Height = Height,
                 Width = Width,
                 
-                SWidth = SWidth,
+                SWidth = SingleModeWidth,
 
                 X = X,
                 Y = Y,
