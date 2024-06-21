@@ -75,7 +75,7 @@ namespace HSMServer.Dashboards
             Height = entity.Height;
             Width = entity.Width;
             
-            SingleModeWidth = entity.SWidth;
+            SingleModeWidth = entity.SingleModeWidth;
 
             X = entity.X;
             Y = entity.Y;
@@ -94,7 +94,7 @@ namespace HSMServer.Dashboards
                 Height = Height,
                 Width = Width,
                 
-                SWidth = SingleModeWidth,
+                SingleModeWidth = SingleModeWidth,
 
                 X = X,
                 Y = Y,
