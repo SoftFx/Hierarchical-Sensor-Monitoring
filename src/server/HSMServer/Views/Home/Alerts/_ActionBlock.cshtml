@@ -113,11 +113,11 @@
                 $title.text("all chats");
             }
             
-            if (clickedIndex >= 0 && clickedIndex <= 3 && isSelected) {
+            if (clickedIndex >= 1 && clickedIndex <= 3 && isSelected) {
                 $(this).val($(this)[0].options[clickedIndex].value);
             }
             else {
-                if ($(this)[0].options[0].selected || $(this)[0].options[1].selected || $(this)[0].options[2].selected || $(this)[0].options[3].selected)
+                if ($(this)[0].options[1].selected || $(this)[0].options[2].selected || $(this)[0].options[3].selected)
                     $(this).val($(this)[0].options[clickedIndex].value)
             }
 

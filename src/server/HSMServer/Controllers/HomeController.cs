@@ -607,7 +607,7 @@ namespace HSMServer.Controllers
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
                 ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
-
+            
             var update = new SensorUpdate
             {
                 Id = sensor.Id,
@@ -797,7 +797,7 @@ namespace HSMServer.Controllers
                 Id = product.Id,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
                 TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
-                DefaultChats = newModel.DefaultChats.ToUpdate(product, _telegramChatsManager, _folderManager),
+                DefaultChats = newModel.DefaultChats?.ToUpdate(product, _telegramChatsManager, _folderManager),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
                 Description = newModel.Description ?? string.Empty,
