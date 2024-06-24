@@ -65,7 +65,7 @@ export class PanelSettings {
         this._height = settings.height;
         
         this._sHeight = settings.sHeight;
-        this._singleModeWidth = settings.singleModeWidth;
+        this._singleModeWidth = Math.max(0.2, settings.singleModeWidth);
         
         this.x = settings.x;
         this.y = settings.y;
