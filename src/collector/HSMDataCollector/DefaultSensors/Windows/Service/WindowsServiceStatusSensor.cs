@@ -1,9 +1,11 @@
-﻿using HSMDataCollector.Options;
-using System;
+﻿using System;
 using System.Linq;
 using System.ServiceProcess;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Options;
+using HSMDataCollector.Threading;
+
 
 namespace HSMDataCollector.DefaultSensors.Windows.Service
 {
@@ -13,7 +15,8 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         private readonly ServiceController _controller;
 
         private ServiceControllerStatus _lastServiceState;
-        private Timer _statusWatcher;
+        private Task _statusWatcher;
+        private CancellationTokenSource _cancellationTokenSource;
 
 
         internal WindowsServiceStatusSensor(ServiceSensorOptions options) : base(options)
@@ -23,24 +26,32 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         }
 
 
-        internal override Task<bool> Start()
+        internal override ValueTask<bool> StartAsync()
         {
             if (_statusWatcher == null)
-                _statusWatcher = new Timer(CheckServiceStatus, null, _scanPeriod, _scanPeriod);
+            {
+                _cancellationTokenSource = new CancellationTokenSource();
+                _statusWatcher = PeriodicTask.Run(CheckServiceStatus, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
+            }
 
-            return base.Start();
+            return base.StartAsync();
         }
 
-        internal override Task Stop()
+        internal override async ValueTask StopAsync()
         {
+            _cancellationTokenSource?.Cancel();
+
+            await _statusWatcher.ConfigureAwait(false);
+
+            _cancellationTokenSource?.Dispose();
             _statusWatcher?.Dispose();
             _controller?.Dispose();
 
-            return base.Stop();
+            await base.StopAsync().ConfigureAwait(false);
         }
 
 
-        private void CheckServiceStatus(object _)
+        private void CheckServiceStatus()
         {
             try
             {
@@ -58,7 +69,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             }
         }
 
-        private ServiceController GetService(string serviceName) =>
+        private static ServiceController GetService(string serviceName) =>
             ServiceController.GetServices().FirstOrDefault(s => s.ServiceName == serviceName) ??
             throw new ArgumentException($"Service {serviceName} not found!");
     }

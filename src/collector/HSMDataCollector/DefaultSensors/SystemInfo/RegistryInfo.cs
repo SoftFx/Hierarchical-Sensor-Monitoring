@@ -1,6 +1,6 @@
-﻿using Microsoft.Win32;
-using System;
-using System.Globalization;
+﻿using System;
+using Microsoft.Win32;
+
 
 namespace HSMDataCollector.DefaultSensors
 {

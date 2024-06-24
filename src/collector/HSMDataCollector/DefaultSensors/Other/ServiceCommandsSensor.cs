@@ -1,6 +1,7 @@
-﻿using HSMDataCollector.Options;
+﻿using System;
+using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
-using System;
+
 
 namespace HSMDataCollector.DefaultSensors
 {

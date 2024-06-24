@@ -1,12 +1,13 @@
-using HSMDataCollector.Options;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMDataCollector.Options;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
+
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -35,7 +36,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         }
 
 
-        internal override Task<bool> Start()
+        internal override ValueTask<bool> StartAsync()
         {
             try
             {
@@ -47,9 +48,11 @@ namespace HSMDataCollector.DefaultSensors.Windows
             catch (Exception exception)
             {
                 ThrowException(exception);
+
+                return new ValueTask<bool>(false);
             }
 
-            return base.Start();
+            return base.StartAsync();
         }
 
         private StringSensorValue BuildRecordValue(string eventId, DateTime time, string source, string message) =>

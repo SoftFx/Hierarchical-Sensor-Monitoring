@@ -1,6 +1,7 @@
-﻿using HSMDataCollector.Options;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.DefaultSensors.Diagnostic
 {

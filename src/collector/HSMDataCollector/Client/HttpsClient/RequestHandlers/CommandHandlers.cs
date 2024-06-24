@@ -1,33 +1,32 @@
-﻿using HSMDataCollector.Logging;
-using HSMDataCollector.Requests;
-using HSMDataCollector.SyncQueue;
-using HSMSensorDataObjects.SensorRequests;
-using Newtonsoft.Json;
-using Polly;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
+using Polly;
+using HSMDataCollector.Logging;
+using HSMSensorDataObjects.SensorRequests;
+using HSMSensorDataObjects;
+using System.IO;
+
+
+
 
 namespace HSMDataCollector.Client.HttpsClient
 {
-    internal sealed class CommandHandler : BaseHandlers<PriorityRequest>
+    internal sealed class CommandHandler : BaseHandlers<CommandRequestBase>
     {
-        private readonly ICommandQueue _commandQueue;
-
-
         protected override DelayBackoffType DelayStrategy => DelayBackoffType.Linear;
 
         protected override int MaxRequestAttempts => int.MaxValue;
 
+        internal override object ConvertToRequestData(CommandRequestBase value) => value;
 
-        public CommandHandler(ICommandQueue queue, Endpoints endpoints, ICollectorLogger logger) : base(queue, endpoints, logger)
+        public CommandHandler(HsmHttpsClient client, Endpoints endpoints, ICollectorLogger logger) : base(client, endpoints, logger)
         {
-            _commandQueue = queue;
         }
 
-
-        internal override object ConvertToRequestData(PriorityRequest value) => value.Request;
 
         internal override string GetUri(object rawData)
         {
@@ -42,48 +41,69 @@ namespace HSMDataCollector.Client.HttpsClient
             }
         }
 
-        internal override async Task HandleRequestResult(HttpResponseMessage response, List<PriorityRequest> values)
+        internal override async ValueTask HandleRequestResultAsync(HttpResponseMessage response, IEnumerable<CommandRequestBase> values, CancellationToken token)
         {
-            if (response != null)
+            try
             {
-                var json = await response.Content.ReadAsStringAsync();
-                var errors = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
-
-                foreach (var val in values)
+                if (response != null)
                 {
-                    var path = val.Request.Path;
-                    var hasError = errors.TryGetValue(path, out var error);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                        var errors = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(stream, cancellationToken: token).ConfigureAwait(false);
 
-                    if (hasError)
-                        _logger.Error($"Error command for {path} - {error}");
+                        foreach (var val in values)
+                        {
+                            var path = val.Path;
+                            var hasError = errors.TryGetValue(path, out var error);
 
-                    _commandQueue.SetResult(val.Key, !hasError);
+                            if (hasError)
+                                _logger.Error($"Command request for {path} has been faulted. {error}.");
+                            else
+                                _logger.Info($"Command request for {path} has been accepted.");
+                        }
+                    }
+                    else
+                    {
+                        _logger.Error($"Command request for has been faulted. Status Code: {response.StatusCode}.");
+                    }
+                }
+                else
+                {
+                    foreach (var val in values)
+                        _logger.Error($"Command for {val.Path} has been canceled.");
                 }
             }
-            else
+            catch (TaskCanceledException)
             {
-                foreach (var val in values)
-                    _commandQueue.SetCancel(val.Key);
             }
         }
 
-        internal override async Task HandleRequestResult(HttpResponseMessage response, PriorityRequest value)
+        internal override async ValueTask HandleRequestResultAsync(HttpResponseMessage response, CommandRequestBase value, CancellationToken token)
         {
-            if (response == null)
-                _commandQueue.SetCancel(value.Key);
-            else
+            try
             {
-                var isSuccess = response.IsSuccessStatusCode;
-
-                if (!isSuccess)
+                if (response == null)
+                    _logger.Error($"Command for {value.Path} has been canceled.");
+                else
                 {
-                    var json = await response.Content.ReadAsStringAsync();
-                    var error = JsonConvert.DeserializeObject<string>(json);
+                    var isSuccess = response.IsSuccessStatusCode;
 
-                    _logger.Error($"Error command for {value.Request.Path} - {error}");
+                    if (!isSuccess)
+                    {
+                        var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                        var error = await JsonSerializer.DeserializeAsync<string>(stream, cancellationToken: token).ConfigureAwait(false);
+
+                        _logger.Error($"Command request for {value.Path} has been faulted. {error}.");
+                    }
+                    else
+                    {
+                        _logger.Info($"Command request for {value.Path} has been accepted.");
+                    }
                 }
-
-                _commandQueue.SetResult(value.Key, isSuccess);
+            }
+            catch (TaskCanceledException)
+            {
             }
         }
     }

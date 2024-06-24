@@ -1,9 +1,11 @@
-﻿using HSMDataCollector.DefaultSensors;
-using HSMDataCollector.Options;
-using HSMDataCollector.PublicInterface;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
+using HSMDataCollector.DefaultSensors;
+using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
+
 
 namespace HSMDataCollector.Sensors
 {
@@ -70,20 +72,8 @@ namespace HSMDataCollector.Sensors
 
         public Func<List<U>, T> GetFunc() => _getValue;
 
-        protected override T GetValue() => _getValue.Invoke(CacheToList());
+        protected override T GetValue() => _getValue.Invoke(_cache.ToList());
 
 
-        private List<U> CacheToList()
-        {
-            var list = new List<U>(Math.Min(_cache.Count, _cacheSize));
-
-            while (!_cache.IsEmpty)
-            {
-                if (_cache.TryDequeue(out var value))
-                    list.Add(value);
-            }
-
-            return list;
-        }
     }
 }

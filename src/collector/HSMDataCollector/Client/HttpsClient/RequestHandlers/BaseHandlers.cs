@@ -1,40 +1,36 @@
-﻿using HSMDataCollector.Logging;
-using HSMDataCollector.SyncQueue;
-using Polly;
-using Polly.Retry;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Polly;
+using Polly.Retry;
+using HSMDataCollector.Logging;
+using HSMDataCollector.SyncQueue.Data;
+
 
 namespace HSMDataCollector.Client.HttpsClient
 {
     internal abstract class BaseHandlers<T> : IDisposable
     {
-        private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
-
         private readonly ResiliencePipeline<HttpResponseMessage> _pipeline;
 
         protected readonly ICollectorLogger _logger;
-        protected readonly ISyncQueue<T> _queue;
         protected readonly Endpoints _endpoints;
-
-        internal event Func<string, HttpContent, CancellationToken, Task<HttpResponseMessage>> SendRequestEvent;
 
         protected abstract DelayBackoffType DelayStrategy { get; }
 
         protected abstract int MaxRequestAttempts { get; }
 
-        protected readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
         protected int _timeout = 1000;
 
-        protected BaseHandlers(ISyncQueue<T> queue, Endpoints endpoints, ICollectorLogger logger)
+        protected HsmHttpsClient _client;
+
+        protected BaseHandlers(HsmHttpsClient client, Endpoints endpoints, ICollectorLogger logger)
         {
             _endpoints = endpoints;
             _logger = logger;
-            _queue = queue;
+            _client = client;
 
             var retryOptions = new RetryStrategyOptions<HttpResponseMessage>()
             {
@@ -50,15 +46,12 @@ namespace HSMDataCollector.Client.HttpsClient
             _pipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
                             .AddRetry(retryOptions)
                             .Build();
-
-            _queue.NewValuesEvent += RecieveDataQueue;
-            _queue.NewValueEvent += RecieveDataQueue;
         }
 
 
-        internal virtual Task HandleRequestResult(HttpResponseMessage response, List<T> values) => Task.CompletedTask;
-
-        internal virtual Task HandleRequestResult(HttpResponseMessage response, T value) => Task.CompletedTask;
+        internal virtual ValueTask HandleRequestResultAsync(HttpResponseMessage response, IEnumerable<T> values, CancellationToken token) => default;
+        
+        internal virtual ValueTask HandleRequestResultAsync(HttpResponseMessage response, T value, CancellationToken token) => default;
 
 
         internal abstract object ConvertToRequestData(T value);
@@ -77,91 +70,45 @@ namespace HSMDataCollector.Client.HttpsClient
             return default;
         }
 
-        private async Task RecieveDataQueue(List<T> values)
+        public async ValueTask<PackageSendingInfo> SendAsync(IEnumerable<T> values, CancellationToken token)
         {
-            if (await _semaphore.WaitAsync(_timeout))
-            {
-                try
-                {
-                    await HandleRequestResult(await BuildAndSendNewRequest(values), values);
-                }
-                finally
-                {
-                    _semaphore.Release();
-                }
-            }
-            else
-            {
-                foreach (var value in values)
-                    _queue.AddFail(value);
-            }
-        }
-
-        private async Task RecieveDataQueue(T value)
-        {
-            if (await _semaphore.WaitAsync(_timeout))
-            {
-                try
-                {
-                    await HandleRequestResult(await BuildAndSendNewRequest(value), value);
-                }
-                finally
-                {
-                    _semaphore.Release();
-                }
-            }
-            else
-            {
-                _queue.AddFail(value);
-            }
-        }
-
-        private Task<HttpResponseMessage> BuildAndSendNewRequest(IEnumerable<T> values)
-        {
-            var rawData = values.Select(ConvertToRequestData);
-            var request = new ClientRequestModel(rawData, GetUri(rawData));
-            return SendRequest(request);
-        }
-
-        private Task<HttpResponseMessage> BuildAndSendNewRequest(T value)
-        {
-            var rawData = ConvertToRequestData(value);
-            var request = new ClientRequestModel(rawData, GetUri(rawData));
-            return SendRequest(request);
-        }
-
-        private async Task<HttpResponseMessage> SendRequest(ClientRequestModel request)
-        {
+            HttpRequest<T> request = new HttpRequest<T>(values, GetUri(values));
             try
             {
-                var response = await _pipeline.ExecuteAsync(ExecutePipeline, request, _tokenSource.Token);
-
-                _queue.ThrowPackageRequestInfo(new PackageSendingInfo(request.JsonMessage.Length, response));
-
-                return response;
+                var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false);
+                await HandleRequestResultAsync(response, values, token).ConfigureAwait(false);
+                return new PackageSendingInfo(request.Length, response);
             }
             catch (Exception ex)
             {
-                _queue.ThrowPackageRequestInfo(new PackageSendingInfo(request?.JsonMessage?.Length ?? 0, null, exception: ex.Message));
-                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException.Message} | Id = {request.Id} Data = {request.JsonMessage}");
-
-                return default;
+                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Data = {request.Content}");
+                return new PackageSendingInfo(request.Length, null, exception: ex.Message);
             }
         }
 
-        private async ValueTask<HttpResponseMessage> ExecutePipeline(ClientRequestModel request, CancellationToken token) =>
-            await SendRequestEvent(request.Uri, request.GetContent(), token);
+        public async ValueTask<PackageSendingInfo> SendAsync(T value, CancellationToken token)
+        {
+            HttpRequest<T> request = new HttpRequest<T>(value, GetUri(value));
+            try
+            {
+                var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false);
+                await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
+                return new PackageSendingInfo(request.Length, response);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Data = {request.Content}");
+                return new PackageSendingInfo(request.Length, null, exception: ex.Message);
+            }
+        }
+
+
+        private ValueTask<HttpResponseMessage> ExecutePipelineAsync(HttpRequest<T> request, CancellationToken token) =>
+            _client.SendRequestAsync(request.Uri, request.GetContent(), token);
 
 
         public void Dispose()
         {
-            _queue.NewValuesEvent -= RecieveDataQueue;
-            _queue.NewValueEvent  -= RecieveDataQueue;
-
-            _tokenSource?.Cancel();
-            _tokenSource.Dispose();
-
-            _semaphore.Dispose();
         }
     }
 }

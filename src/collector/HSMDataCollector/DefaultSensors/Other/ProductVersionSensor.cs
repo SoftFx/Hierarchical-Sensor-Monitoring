@@ -1,6 +1,7 @@
-using HSMDataCollector.Options;
 using System;
 using System.Threading.Tasks;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.DefaultSensors.Other
 {
@@ -17,9 +18,9 @@ namespace HSMDataCollector.DefaultSensors.Other
         }
 
 
-        internal override async Task<bool> Start()
+        internal override async ValueTask<bool> StartAsync()
         {
-            var ok = await base.Start();
+            var ok = await base.StartAsync().ConfigureAwait(false);
 
             if (ok)
                 SendValue(_version, comment: $"Start: {_startTime.ToString(DefaultTimeFormat)}");
@@ -28,11 +29,11 @@ namespace HSMDataCollector.DefaultSensors.Other
         }
 
 
-        internal override Task Stop()
+        internal override ValueTask StopAsync()
         {
             SendValue(_version, comment: $"Stop: {DateTime.UtcNow.ToString(DefaultTimeFormat)}");
 
-            return base.Stop();
+            return base.StopAsync();
         }
     }
 }

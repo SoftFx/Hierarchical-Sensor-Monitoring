@@ -1,6 +1,6 @@
 ﻿using System.Net.Http;
 
-namespace HSMDataCollector.SyncQueue
+namespace HSMDataCollector.SyncQueue.Data
 {
     public readonly struct PackageSendingInfo
     {

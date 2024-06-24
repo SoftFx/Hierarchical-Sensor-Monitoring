@@ -1,7 +1,8 @@
-﻿using HSMDataCollector.Alerts;
+﻿using System.Linq;
+using HSMDataCollector.Alerts;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects.SensorRequests;
-using System.Linq;
+
 
 namespace HSMDataCollector.Converters
 {

@@ -1,7 +1,8 @@
-﻿using HSMDataCollector.Alerts;
-using HSMDataCollector.Options;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using HSMDataCollector.Alerts;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.Prototypes
 {

@@ -1,9 +1,10 @@
-﻿using HSMDataCollector.Alerts;
+﻿using System;
+using System.Collections.Generic;
+using HSMDataCollector.Alerts;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
-using System;
-using System.Collections.Generic;
+
 
 namespace HSMDataCollector.Prototypes
 {

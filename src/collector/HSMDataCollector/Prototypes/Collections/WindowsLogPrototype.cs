@@ -1,6 +1,7 @@
+using System;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
-using System;
+
 
 namespace HSMDataCollector.Prototypes.Collections
 {

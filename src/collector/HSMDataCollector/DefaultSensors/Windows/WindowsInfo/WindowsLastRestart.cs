@@ -1,8 +1,8 @@
-﻿using HSMDataCollector.Extensions;
-using HSMDataCollector.Options;
-using System;
+﻿using System;
 using System.Linq;
 using System.Management;
+using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
 
 
 namespace HSMDataCollector.DefaultSensors.Windows
@@ -12,7 +12,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         public static string WMI_CLASS_NAME = "Win32_OperatingSystem";
         public static string PROPERTY_NAME  = "LastBootUpTime";
 
-        protected override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
+        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
         public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options) { }

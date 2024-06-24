@@ -1,26 +1,28 @@
-﻿using HSMDataCollector.Extensions;
-using HSMDataCollector.Options;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
+using HSMDataCollector.Threading;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
+
 
 namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringSensorBase<T> : SensorBase<T>
     {
         private readonly IMonitoringOptions _options;
-        private Timer _sendTimer;
+        private CancellationTokenSource _cancellationTokenSource;
+        private Task _sendTask;
 
         protected bool _needSendValue = true;
-
 
         protected virtual TimeSpan TimerDueTime => PostTimePeriod;
 
         protected TimeSpan PostTimePeriod => _options.PostDataPeriod;
 
-        protected bool IsInitialized => _sendTimer != null;
+        protected bool IsInitialized => _sendTask != null;
 
 
         protected MonitoringSensorBase(SensorOptions options) : base(options)
@@ -31,34 +33,30 @@ namespace HSMDataCollector.DefaultSensors
                 throw new ArgumentNullException(nameof(monitoringOptions));
         }
 
-
-        internal override async Task<bool> Init()
+        internal override async ValueTask<bool> InitAsync()
         {
             if (!IsInitialized)
             {
-                var baseInit = await base.Init();
+                var baseInit = await base.InitAsync().ConfigureAwait(false);
 
                 if (baseInit)
-                    _sendTimer = new Timer(OnTimerTick, null, TimerDueTime, PostTimePeriod);
+                {
+                    StartSendTask();
+                }
             }
 
             return IsInitialized;
         }
 
-        internal override Task Stop()
+        internal override async ValueTask StopAsync()
         {
-            if (!IsInitialized)
-                return Task.FromResult(false);
-
-            _sendTimer?.Dispose();
-            _sendTimer = null;
-
-            return Task.CompletedTask;
+            _cancellationTokenSource?.Cancel();
+            await _sendTask;
+            _cancellationTokenSource?.Dispose();
+            _sendTask?.Dispose();
         }
 
-
         protected abstract T GetValue();
-
 
         protected virtual string GetComment() => null;
 
@@ -66,13 +64,10 @@ namespace HSMDataCollector.DefaultSensors
 
         protected virtual SensorStatus GetStatus() => SensorStatus.Ok;
 
-
-        protected void OnTimerTick(object _ = null)
+        protected void OnTimerTick()
         {
-            var value = BuildSensorValue();
-
             if (_needSendValue)
-                SendValue(value);
+                SendValue(BuildSensorValue());
         }
 
         protected void RestartTimer(TimeSpan newPostPeriod)
@@ -80,10 +75,19 @@ namespace HSMDataCollector.DefaultSensors
             if (IsInitialized)
             {
                 _options.PostDataPeriod = newPostPeriod;
-                _sendTimer.Change(TimerDueTime, PostTimePeriod);
+                _cancellationTokenSource?.Cancel();
+                _sendTask?.ConfigureAwait(false).GetAwaiter().GetResult();
+                _sendTask?.Dispose();
+                _cancellationTokenSource?.Dispose();
+                StartSendTask();
             }
         }
 
+        private void StartSendTask()
+        {
+            _cancellationTokenSource = new CancellationTokenSource();
+            _sendTask = PeriodicTask.Run(OnTimerTick, TimerDueTime, PostTimePeriod, _cancellationTokenSource.Token);
+        }
 
         private SensorValueBase BuildSensorValue()
         {

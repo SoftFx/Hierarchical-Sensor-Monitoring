@@ -1,11 +1,12 @@
-﻿using HSMDataCollector.Alerts;
+﻿using System;
+using System.Collections.Generic;
+using HSMDataCollector.Alerts;
 using HSMDataCollector.Converters;
+using HSMDataCollector.Core;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Prototypes;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
-using System;
-using System.Collections.Generic;
 
 namespace HSMDataCollector.Options
 {
@@ -21,26 +22,24 @@ namespace HSMDataCollector.Options
 
         internal SensorType Type { get; set; }
 
-
         internal string ComputerName { get; set; }
 
         internal string Module { get; set; }
 
         internal string Path { get; set; }
 
+        internal IDataProcessor DataProcessor { get; set; }
+
 
         public bool IsComputerSensor { get; set; } // singltone options sets dy default and sensor adds to .computer node
 
         public bool IsPrioritySensor { get; set; } // data sends in separate request
 
-
         public SpecialAlertTemplate TtlAlert { get; set; }
-
 
         public string Description { get; set; }
 
         public Unit? SensorUnit { get; set; }
-
 
         [Obsolete("This setting doesn't exist for sensor now")]
         public DefaultChatsMode? DefaultChats { get; set; }
@@ -51,7 +50,6 @@ namespace HSMDataCollector.Options
 
         public TimeSpan? TTL { get; set; }
 
-
         public StatisticsOptions Statistics { get; set; }
 
         public bool? EnableForGrafana { get; set; }
@@ -59,7 +57,6 @@ namespace HSMDataCollector.Options
         public bool? IsSingletonSensor { get; set; }
 
         public bool? AggregateData { get; set; }
-
 
         public DefaultAlertsOptions DefaultAlertsOptions { get; set; }
 
@@ -144,7 +141,6 @@ namespace HSMDataCollector.Options
     {
         public List<BarAlertTemplate> Alerts { get; set; }
 
-
         public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
 
         public TimeSpan BarTickPeriod { get; set; } = TimeSpan.FromSeconds(5);
@@ -155,7 +151,6 @@ namespace HSMDataCollector.Options
 
 
         internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
-
 
         internal string GetBarOptionsInfo() => $"Bar period is {BarPeriod.ToReadableView()} with updates every {BarTickPeriod.ToReadableView()}.";
     }
