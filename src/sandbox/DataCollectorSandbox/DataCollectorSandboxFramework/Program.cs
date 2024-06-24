@@ -57,7 +57,7 @@ namespace DatacollectorSandbox
             var collectorOptions = new CollectorOptions()
             {
                 //ServerAddress = "hsm.dev.soft-fx.eu",
-                AccessKey = "644f9f13-1510-48bb-a5a3-816fef3a612f", //local key
+                AccessKey = "52e9b823-b50b-4c06-8640-ed79172a9fc1", //local key
                 Module = "Collector 3.4.0",
                 ComputerName = "LocalMachine",
             };

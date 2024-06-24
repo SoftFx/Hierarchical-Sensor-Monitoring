@@ -1,8 +1,10 @@
-﻿using HSMDataCollector.Converters;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using HSMDataCollector.Converters;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
 
 
 namespace HSMDataCollector.Client.HttpsClient
@@ -19,8 +21,8 @@ namespace HSMDataCollector.Client.HttpsClient
         {
             Converters = 
             {
-                new JsonSensorConverter(),
-                new JsonCommandConverter(),
+                new JsonRequestConverter<SensorValueBase>(),
+                new JsonRequestConverter<CommandRequestBase>(),
             }
         };
 

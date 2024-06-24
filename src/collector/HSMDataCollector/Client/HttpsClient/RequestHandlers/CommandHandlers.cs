@@ -49,7 +49,8 @@ namespace HSMDataCollector.Client.HttpsClient
                 {
                     if (response.IsSuccessStatusCode)
                     {
-                        var errors = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(await response.Content.ReadAsStreamAsync(), cancellationToken: token);
+                        var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                        var errors = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(stream, cancellationToken: token).ConfigureAwait(false);
 
                         foreach (var val in values)
                         {

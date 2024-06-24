@@ -100,6 +100,13 @@ namespace HSMDataCollector.Prototypes
 
         public ProcessTimeInGCPrototype() : base()
         {
+
+#if NET6_0_OR_GREATER
+
+            Description = $"The sensor sends information about {SensorName}. {GetBarOptionsInfo()} The information is read using " +
+                "[**ETW events**](https://learn.microsoft.com/en-us/dotnet/framework/performance/garbage-collection-etw-events).";
+#endif
+
             SensorUnit = Unit.Percents;
 
             Alerts = new List<BarAlertTemplate>()
@@ -115,7 +122,8 @@ namespace HSMDataCollector.Prototypes
         {
             var options = base.Get(customOptions);
 
-            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView(), $"{WindowsTimeInGCBase.Category}/{WindowsTimeInGCBase.Counter}");
+            if (options.Description == null)
+                options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView(), $"{WindowsTimeInGCBase.Category}/{WindowsTimeInGCBase.Counter}");
 
             return options;
         }

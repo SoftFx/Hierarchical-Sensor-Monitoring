@@ -90,8 +90,6 @@ namespace HSMDataCollector.DefaultSensors
 
             PackageDataCountSensor = new PackageDataCountSensor(_prototype.PackageValuesCount.Get(options));
 
-           // _storage.QueueManager.PackageInfoEvent += _packageDataCountSensor.AddValue;
-
             return Register(PackageDataCountSensor);
         }
 
@@ -103,8 +101,6 @@ namespace HSMDataCollector.DefaultSensors
 
             PackageSizeSensor = new PackageContentSizeSensor(_prototype.PackageContentSize.Get(options));
 
-           // _storage.QueueManager.PackageRequestInfoEvent += _packageSizeSensor.AddValue;
-
             return Register(PackageSizeSensor);
         }
 
@@ -115,8 +111,6 @@ namespace HSMDataCollector.DefaultSensors
                 return this;
 
             PackageProcessTimeSensor = new PackageDataAvrProcessTimeSensor(_prototype.PackageProcessTime.Get(options));
-
-            //_storage.QueueManager.PackageInfoEvent += _packageProcessTimeSensor.AddValue;
 
             return Register(PackageProcessTimeSensor);
         }
@@ -137,17 +131,6 @@ namespace HSMDataCollector.DefaultSensors
 
         public void Dispose()
         {
-            //if (_packageProcessTimeSensor != null)
-            //    _storage.QueueManager.PackageInfoEvent -= _packageProcessTimeSensor.AddValue;
-
-            //if (_packageDataCountSensor != null)
-            //    _storage.QueueManager.PackageInfoEvent -= _packageDataCountSensor.AddValue;
-
-            //if (_queueOverflowSensor != null)
-            //    _storage.QueueManager.OverflowInfoEvent -= _queueOverflowSensor.AddValue;
-
-            //if (CollectorErrors != null)
-            //    _storage.Logger.ThrowNewError -= CollectorErrors.SendCollectorError;
         }
     }
 }
