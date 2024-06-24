@@ -3,8 +3,6 @@ using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 
 
@@ -23,13 +21,13 @@ namespace HSMDataCollector.DefaultSensors
 
         public event Action<string, Exception> ExceptionThrowing;
 
-        internal readonly IQueueManager _dataProcessor;
+        internal readonly IDataProcessor _dataProcessor;
 
         protected SensorBase(SensorOptions options)
         {
             options.Path = options.CalculateSystemPath();
             _metainfo = options;
-            _dataProcessor = options.DataProcessor;
+            _dataProcessor = options.DataProcessor ?? throw new ArgumentNullException(nameof(DataProcessor));
         }
 
         public void SendValue(SensorValueBase value)

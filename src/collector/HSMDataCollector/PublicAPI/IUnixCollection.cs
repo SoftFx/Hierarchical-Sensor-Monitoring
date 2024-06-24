@@ -1,5 +1,6 @@
-﻿using HSMDataCollector.Options;
-using System;
+﻿using System;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.PublicInterface
 {

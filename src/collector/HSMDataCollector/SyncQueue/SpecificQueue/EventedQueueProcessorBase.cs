@@ -1,21 +1,21 @@
-﻿using HSMDataCollector.Core;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Threading;
+using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
+using HSMSensorDataObjects;
 
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal abstract class EventedQueueProcessorBase<T> : QueueProcessorBase<T>
     {
-        protected readonly SemaphoreSlim _event = new SemaphoreSlim(0);
+        protected readonly AutoResetEvent _event = new AutoResetEvent(false);
 
-        public EventedQueueProcessorBase(CollectorOptions options) : base (options) { }
+        public EventedQueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base (options, queueManager, logger) { }
 
-        public override int Enqeue(T item)
+        internal override int Enqeue(T item)
         {
             int result = base.Enqeue(item);
-            _event.Release();
+            _event.Set();
             return result;
         }
 

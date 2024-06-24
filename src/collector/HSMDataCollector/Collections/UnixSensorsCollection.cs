@@ -1,8 +1,9 @@
-﻿using HSMDataCollector.Core;
+﻿using System;
+using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors.Unix;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
-using System;
+
 
 namespace HSMDataCollector.DefaultSensors
 {

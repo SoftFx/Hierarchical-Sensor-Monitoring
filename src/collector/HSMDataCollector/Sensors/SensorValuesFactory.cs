@@ -1,7 +1,8 @@
-﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
+
 
 namespace HSMDataCollector.SensorsFactory
 {

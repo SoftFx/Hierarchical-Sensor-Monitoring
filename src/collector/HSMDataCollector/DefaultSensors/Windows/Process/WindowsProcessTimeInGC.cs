@@ -1,19 +1,20 @@
-﻿using HSMDataCollector.DefaultSensors.Windows.Process;
-using HSMDataCollector.Options;
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using HSMDataCollector.DefaultSensors.Windows.Process;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-#if !NET6_0_OR_GREATER
-    internal sealed class WindowsProcessTimeInGC : WindowsTimeInGCBase
-    {
-        protected override string InstanceName => ProcessInfo.CurrentProcessName;
+//#if !NET6_0_OR_GREATER
+//    internal sealed class WindowsProcessTimeInGC : WindowsTimeInGCBase
+//    {
+//        protected override string InstanceName => ProcessInfo.CurrentProcessName;
 
 
-        internal WindowsProcessTimeInGC(BarSensorOptions options) : base(options) { }
-    }
-#else
+//        internal WindowsProcessTimeInGC(BarSensorOptions options) : base(options) { }
+//    }
+//#else
     internal sealed class WindowsProcessTimeInGC : DoubleBarPublicSensor
     {
         private ProcessEventListener _listener;
@@ -50,5 +51,5 @@ namespace HSMDataCollector.DefaultSensors.Windows
         private void OnTimeInGC(double value) => AddValue(value);
 
     }
-#endif
+//#endif
 }

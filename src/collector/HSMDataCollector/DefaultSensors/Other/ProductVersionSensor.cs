@@ -20,7 +20,7 @@ namespace HSMDataCollector.DefaultSensors.Other
 
         internal override async ValueTask<bool> StartAsync()
         {
-            var ok = await base.StartAsync();
+            var ok = await base.StartAsync().ConfigureAwait(false);
 
             if (ok)
                 SendValue(_version, comment: $"Start: {_startTime.ToString(DefaultTimeFormat)}");

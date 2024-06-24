@@ -1,15 +1,15 @@
 ﻿using System;
 
-namespace HSMDataCollector.SyncQueue.BaseQueue
+namespace HSMDataCollector.SyncQueue.Data
 {
-    internal readonly struct SyncQueueItem<T>
+    internal readonly struct QueueItem<T>
     {
         public DateTime BuildDate { get; }
 
         public T Value { get; }
 
 
-        internal SyncQueueItem(T value)
+        internal QueueItem(T value)
         {
             BuildDate = DateTime.UtcNow;
             Value = value;

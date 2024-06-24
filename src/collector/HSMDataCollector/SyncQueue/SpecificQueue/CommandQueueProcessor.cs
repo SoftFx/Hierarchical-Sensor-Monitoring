@@ -1,24 +1,41 @@
-﻿using HSMDataCollector.Core;
-using HSMSensorDataObjects;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
+using HSMDataCollector.SyncQueue.Data;
+using HSMSensorDataObjects;
+
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal sealed class CommandQueueProcessor : EventedQueueProcessorBase<CommandRequestBase>
     {
-        public CommandQueueProcessor(CollectorOptions options) : base(options) { }
+        protected override string QueueName => "Command"; 
+
+        public CommandQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
         protected override async Task ProcessingLoop(CancellationToken token)
         {
-            while (!_cancellationTokenSource.IsCancellationRequested)
+            DataPackage<CommandRequestBase> package;
+            while (!token.IsCancellationRequested)
             {
-                await _event.WaitAsync(_options.PackageCollectPeriod, token);
-
-                while (_queue.Count > 0)
+                try
                 {
-                    await _sender.SendCommandAsync(_queue.Take(_options.MaxQueueSize).ToList(), token).ConfigureAwait(false);
+                    _event.WaitOne();
+
+                    while (!_queue.IsEmpty && !token.IsCancellationRequested)
+                    {
+                        package = GetPackage();
+                        var sendingInfo =  await _sender.SendCommandAsync(package.Items.ToList(), token).ConfigureAwait(false);
+                        _queueManager.AddPackageSendingInfo(sendingInfo);
+                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex);
                 }
             }
         }

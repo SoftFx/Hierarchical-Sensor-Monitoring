@@ -13,11 +13,11 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract T GetBarData();
 
-        protected override void CollectBar(object _)
+        protected override void CollectBar()
         {
             try
             {
-                base.CollectBar(_);
+                base.CollectBar();
 
                 _internalBar.AddValue(GetBarData());
             }

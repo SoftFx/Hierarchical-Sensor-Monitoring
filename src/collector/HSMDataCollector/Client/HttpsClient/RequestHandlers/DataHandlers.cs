@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using Polly;
 using HSMDataCollector.Logging;
 using HSMSensorDataObjects.SensorValueRequests;
-using Polly;
+
 
 namespace HSMDataCollector.Client.HttpsClient
 {

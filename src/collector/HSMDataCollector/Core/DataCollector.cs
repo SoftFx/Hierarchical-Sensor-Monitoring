@@ -1,19 +1,17 @@
-﻿using HSMDataCollector.Client;
-using HSMDataCollector.DefaultSensors;
+﻿using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+using HSMDataCollector.Client;
+using HSMDataCollector.Converters;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.SyncQueue;
-using HSMDataCollector.SyncQueue.SpecificQueue;
+using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Threading.Tasks;
+
 
 namespace HSMDataCollector.Core
 {
@@ -28,23 +26,19 @@ namespace HSMDataCollector.Core
 
     public sealed class DataCollector : IDataCollector
     {
-        private ICollectorLogger _logger;
+        private readonly LoggerManager _logger = new LoggerManager();
 
-        private readonly PrototypesCollection _prototypes;
         private readonly SensorsStorage _sensorsStorage;
         private readonly CollectorOptions _options;
-        private readonly HsmHttpsClient _hsmClient;
-        private readonly QueueManager _queueManager;
+        private readonly IDataSender _dataSender;
+        private readonly DataProcessor _queueManager;
 
 
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
-        private DefaultSensorsCollection CurrentCollection => IsWindowsOS ? (DefaultSensorsCollection)Windows : (DefaultSensorsCollection)Unix;
+        public IWindowsCollection Windows => _sensorsStorage.Windows;
 
-
-        public IWindowsCollection Windows { get; }
-
-        public IUnixCollection Unix { get; }
+        public IUnixCollection Unix => _sensorsStorage.Unix;
 
 
         public CollectorStatus Status { get; private set; } = CollectorStatus.Stopped;
@@ -72,20 +66,18 @@ namespace HSMDataCollector.Core
         {
             _options = options;
 
-            _hsmClient = new HsmHttpsClient(options, _logger);
+            options.DataSender = options.DataSender ?? new HsmHttpsClient(options, _logger);
 
-            if (options.DataSender == null)
-                options.DataSender = _hsmClient;
+            _dataSender = options.DataSender;
 
-            _queueManager = new QueueManager(options, _logger);
-            _sensorsStorage = new SensorsStorage(this, _queueManager, _logger);
-            _prototypes = new PrototypesCollection(options);
+            _queueManager = new DataProcessor(options, _logger);
 
-            Windows = new WindowsSensorsCollection(_sensorsStorage, _prototypes);
-            Unix = new UnixSensorsCollection(_sensorsStorage, _prototypes);
+            _sensorsStorage = _queueManager.SensorStorage;
+        }
 
-            ToRunning += ToRunningCollector;
-            ToStopped += ToStoppedCollector;
+        private void OnSendPackage(PackageSendingInfo info)
+        {
+            _queueManager.AddPackageSendingInfo(info);
         }
 
         /// <summary>
@@ -105,18 +97,18 @@ namespace HSMDataCollector.Core
         { }
 
 
-        public Task<ConnectionResult> TestConnection() => _hsmClient.TestConnection();
+        public Task<ConnectionResult> TestConnection() => _dataSender.TestConnectionAsync().AsTask();
 
         public IDataCollector AddNLog(LoggerOptions options = null)
         {
-            _logger = new NLogLogger(options);
+            _logger.AddLogger(new NLogLogger(options));
 
             return this;
         }
 
         public IDataCollector AddCustomLogger(ICollectorLogger logger)
         {
-            _logger = logger;
+            _logger.AddLogger(logger);
 
             return this;
         }
@@ -128,13 +120,13 @@ namespace HSMDataCollector.Core
                 AddNLog();
 
             _logger.Info("Initialize timer...");
-            _queueManager.Init();
+            _queueManager.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
         [Obsolete("Use Initialize(bool, string, string)")]
         public void Initialize()
         {
-            _queueManager.Init();
+            _queueManager.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult(); ;
         }
 
 
@@ -147,19 +139,19 @@ namespace HSMDataCollector.Core
                 if (!Status.IsStopped())
                     return;
 
-                _queueManager.Init();
-
                 ChangeStatus(CollectorStatus.Starting);
 
-                await customStartingTask;
-
-                _ = _sensorsStorage.InitAsync().ContinueWith(_ => ChangeStatus(CollectorStatus.Running));
+                _ = customStartingTask.ContinueWith(_ => _queueManager.InitAsync())
+                                      .ContinueWith(_ => ChangeStatus(CollectorStatus.Running));
             }
             catch (Exception ex)
             {
                 _logger.Error(ex);
 
+                await _queueManager.StopAsync();
+
                 ChangeStatus(CollectorStatus.Stopped);
+
             }
         }
 
@@ -175,7 +167,7 @@ namespace HSMDataCollector.Core
 
                 ChangeStatus(CollectorStatus.Stopping);
 
-                await Task.WhenAll(_sensorsStorage.StopAsync(), customStartingTask);
+                await Task.WhenAll(_queueManager.StopAsync(), customStartingTask).ConfigureAwait(false);
 
                 ChangeStatus(CollectorStatus.Stopped);
             }
@@ -185,10 +177,7 @@ namespace HSMDataCollector.Core
 
                 ChangeStatus(CollectorStatus.Stopped);
             }
-            finally
-            {
-                _queueManager.Stop();
-            }
+
         }
 
         public void Dispose()
@@ -198,17 +187,11 @@ namespace HSMDataCollector.Core
 
             ChangeStatus(CollectorStatus.Stopping);
 
-            _sensorsStorage.Dispose();
+            _queueManager.Dispose();
+
+            _dataSender.Dispose();
 
             ChangeStatus(CollectorStatus.Stopped);
-
-            ToRunning -= ToRunningCollector;
-            ToStopped -= ToStoppedCollector;
-
-            CurrentCollection?.Dispose();
-
-            _queueManager.Dispose();
-            _hsmClient.Dispose();
         }
 
 
@@ -234,10 +217,6 @@ namespace HSMDataCollector.Core
                     break;
             }
         }
-
-        private void ToRunningCollector() => _ = _sensorsStorage.StartAsync();
-
-        private void ToStoppedCollector() => _queueManager.Stop();
 
 
         #region Obsolets
@@ -325,7 +304,7 @@ namespace HSMDataCollector.Core
 
         #region Custom instant sensors
 
-        public IInstantValueSensor<Version> CreateVersionSensor(string path, string description = "") => CreateInstantSensor<Version>(path, description);
+        public IInstantValueSensor<Version> CreateVersionSensor(string path, string description = "") =>CreateInstantSensor<Version>(path, description);
 
         public IInstantValueSensor<TimeSpan> CreateTimeSensor(string path, string description = "") => CreateInstantSensor<TimeSpan>(path, description);
 
@@ -360,10 +339,7 @@ namespace HSMDataCollector.Core
         private IInstantValueSensor<T> CreateInstantSensor<T>(string path, InstantSensorOptions options) => _sensorsStorage.CreateInstantSensor<T>(path, options);
 
 
-        public IServiceCommandsSensor CreateServiceCommandsSensor()
-        {
-            return (IServiceCommandsSensor)_sensorsStorage.Register(new ServiceCommandsSensor(_prototypes.ServiceCommands.Get(null)));
-        }
+        public IServiceCommandsSensor CreateServiceCommandsSensor() => _sensorsStorage.CreateServiceCommandsSensor();
 
 
         public IMonitoringRateSensor CreateM1RateSensor(string path, string desctiption = "") => CreateRateSensor(path, TimeSpan.FromMinutes(1), desctiption);

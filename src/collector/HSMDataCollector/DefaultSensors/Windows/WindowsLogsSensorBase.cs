@@ -48,6 +48,8 @@ namespace HSMDataCollector.DefaultSensors.Windows
             catch (Exception exception)
             {
                 ThrowException(exception);
+
+                return new ValueTask<bool>(false);
             }
 
             return base.StartAsync();

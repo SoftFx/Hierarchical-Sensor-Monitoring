@@ -1,36 +1,50 @@
-﻿using HSMDataCollector.Core;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
+using HSMDataCollector.SyncQueue.Data;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
+
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
-    abstract class QueueProcessorBase<T> : IDisposable
+    internal abstract class QueueProcessorBase<T> : IDisposable
     {
         private readonly TimeSpan _disposingTimeout = TimeSpan.FromSeconds(5);
         private Task _task;
         private bool _disposed;
 
-        protected readonly ConcurrentQueue<T> _queue;
+        protected abstract string QueueName { get; }
+
+        protected readonly ConcurrentQueue<QueueItem<T>> _queue = new ConcurrentQueue<QueueItem<T>>();
         protected readonly IDataSender _sender;
         protected readonly CollectorOptions _options;
         protected CancellationTokenSource _cancellationTokenSource;
+        protected readonly ICollectorLogger _logger;
+        protected readonly DataProcessor _queueManager;
 
-        public QueueProcessorBase(CollectorOptions options)
+
+        public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _sender  = options.DataSender ?? throw new ArgumentNullException(nameof(options.DataSender));
+            _queueManager = queueManager;
+            _logger = logger;
         }
 
-        public void Init()
+        internal void Init()
         {
             _cancellationTokenSource = new CancellationTokenSource();
             _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
         }
 
-        public void Stop()
+        internal void Stop()
         {
             _cancellationTokenSource?.Cancel();
             _task?.Wait(_disposingTimeout);
@@ -38,12 +52,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             _cancellationTokenSource?.Dispose();
         }
 
-        public virtual int Enqeue(T item)
+        internal virtual int Enqeue(T item)
         {
-            _queue.Enqueue(item);
+            _queue.Enqueue(new QueueItem<T>(item));
 
             int result = 0;
-            while(_queue.Count > _options.MaxQueueSize)
+            while(_queue.Count >= _options.MaxQueueSize)
             {
                 _queue.TryDequeue(out _);
                 result++;
@@ -52,13 +66,60 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return result;
         }
 
-        public virtual int Enqeue(IEnumerable<T> items)
+        internal virtual int Enqeue(IEnumerable<T> items)
         {
             int result = 0;
             foreach(var item in items)
               result += Enqeue(item);
 
             return result;
+        }
+
+
+        internal DataPackage<T> GetPackage()
+        {
+            var result = new DataPackage<T>();
+            result.Items = Elements().Take(_options.MaxValuesInPackage).Where(s => Validate(s));
+
+            IEnumerable<T> Elements()
+            {
+                DateTime now = DateTime.UtcNow;
+
+                while (_queue.TryDequeue(out QueueItem<T> item))
+                {
+                    result.AddInfo((now - item.BuildDate).TotalMilliseconds, 1);
+
+                    yield return item.Value;
+                }
+            }
+
+            return result;
+        }
+
+        private static bool Validate(T item)
+        {
+            if (item is BarSensorValueBase bar)
+            {
+                if (bar.Count <= 0)
+                    return false;
+            }
+
+            return true;
+        }
+
+        internal T GetItem(out PackageInfo info)
+        {
+            if (_queue.TryDequeue(out QueueItem<T> item))
+            {
+                info = new PackageInfo((DateTime.Now - item.BuildDate).Milliseconds, 1);
+
+                return item.Value;
+            }
+            else
+            {
+                info = default;
+                return default;
+            }
         }
 
         protected abstract Task ProcessingLoop(CancellationToken token);

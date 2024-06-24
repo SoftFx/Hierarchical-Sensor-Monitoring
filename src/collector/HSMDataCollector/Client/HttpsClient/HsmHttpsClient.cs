@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using HSMDataCollector.Client.HttpsClient;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
-using HSMDataCollector.SyncQueue;
+using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 
@@ -29,8 +29,6 @@ namespace HSMDataCollector.Client
         private readonly ICollectorLogger _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
-
-        public event Action<PackageSendingInfo> OnSendPackage;
 
         internal HsmHttpsClient(CollectorOptions options, ICollectorLogger logger)
         {
@@ -64,39 +62,39 @@ namespace HSMDataCollector.Client
             _client.Dispose();
         }
 
-        public ValueTask SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
+        public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
         {
             return _commandsHandler.SendAsync(commands, token);
         }
 
-        public ValueTask SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+        public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
         {
             return _dataHandler.SendAsync(items, token);
         }
 
-        public ValueTask SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+        public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
         {
             return _priorityDataHandler.SendAsync(items, token);
         }
 
-        public ValueTask SendFileAsync(FileSensorValue file, CancellationToken token)
+        public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
         {
             return _fileHandler.SendAsync(file, token);
         }
 
-        internal ValueTask<HttpResponseMessage> SendRequestAsync(string uri, StringContent stringContent, CancellationToken token) => new ValueTask<HttpResponseMessage>(_client.PutAsync(uri, stringContent, token));
+        internal ValueTask<HttpResponseMessage> SendRequestAsync(string uri, HttpContent stringContent, CancellationToken token) => new ValueTask<HttpResponseMessage>(_client.PostAsync(uri, stringContent, token));
 
 
-        internal async Task<ConnectionResult> TestConnection()
+        public async ValueTask<ConnectionResult> TestConnectionAsync()
         {
             try
             {
-                var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token);
+                var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token).ConfigureAwait(false);
 
                 if (connect.IsSuccessStatusCode)
                     return ConnectionResult.Ok;
 
-                var error = await connect.Content.ReadAsStringAsync();
+                var error = await connect.Content.ReadAsStringAsync().ConfigureAwait(false);
 
                 return new ConnectionResult(connect.StatusCode, $"{connect.ReasonPhrase} ({error})");
             }
@@ -105,8 +103,6 @@ namespace HSMDataCollector.Client
                 return new ConnectionResult(null, ex.Message);
             }
         }
-
-        internal void ReportPackageInfo(PackageSendingInfo packageSendingInfo) => OnSendPackage?.Invoke(packageSendingInfo);
 
     }
 }

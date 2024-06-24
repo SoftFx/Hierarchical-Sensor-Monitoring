@@ -17,7 +17,7 @@ namespace HSMDataCollector.DefaultSensors
 
         internal void Init(TimeSpan timerPeriod, int precision)
         {
-            OpenTime = timerPeriod.GetOpenTime();
+            OpenTime  = BarTimeHelper.GetOpenTime(timerPeriod);
             CloseTime = OpenTime + timerPeriod;
             Precision = precision;
         }

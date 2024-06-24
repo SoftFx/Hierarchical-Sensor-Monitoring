@@ -1,15 +1,15 @@
-﻿using HSMDataCollector.Extensions;
-using HSMDataCollector.Logging;
-using HSMDataCollector.Options;
-using HSMDataCollector.PublicInterface;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HSMDataCollector.Extensions;
+using HSMDataCollector.Logging;
+using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Sensors
 {
@@ -52,7 +52,7 @@ namespace HSMDataCollector.Sensors
                 {
                     using (var stream = new StreamReader(file))
                     {
-                        var bytes = Encoding.UTF8.GetBytes(await stream.ReadToEndAsync()).ToList();
+                        var bytes = Encoding.UTF8.GetBytes(await stream.ReadToEndAsync().ConfigureAwait(false)).ToList();
                         var value = ApplyCustomFileProperties(GetSensorValue(bytes), fileName, extensions).Complete(comment, status);
 
                         SendValue(value);

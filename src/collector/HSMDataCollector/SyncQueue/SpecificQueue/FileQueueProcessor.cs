@@ -1,6 +1,9 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
+using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
 
 
@@ -8,18 +11,27 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal sealed class FileQueueProcessor: EventedQueueProcessorBase<FileSensorValue>
     {
-        public FileQueueProcessor(CollectorOptions options) : base(options) { }
+        protected override string QueueName => "File";
+
+        public FileQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
         protected override async Task ProcessingLoop(CancellationToken token)
         {
             while (!token.IsCancellationRequested)
             {
-                await _event.WaitAsync(_options.PackageCollectPeriod, token);
-
-                while (_queue.Count > 0)
+                try
                 {
-                    if (_queue.TryDequeue(out FileSensorValue result))
-                        await _sender.SendFileAsync(result, token).ConfigureAwait(false);
+                    _event.WaitOne();
+
+                    while (!_queue.IsEmpty && !token.IsCancellationRequested)
+                    {
+                        if (_queue.TryDequeue(out QueueItem<FileSensorValue> item))
+                            await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex);
                 }
             }
         }

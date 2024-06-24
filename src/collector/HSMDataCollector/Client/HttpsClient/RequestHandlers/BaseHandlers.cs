@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Polly;
 using Polly.Retry;
 using HSMDataCollector.Logging;
-using HSMDataCollector.SyncQueue;
+using HSMDataCollector.SyncQueue.Data;
 
 
 namespace HSMDataCollector.Client.HttpsClient
@@ -49,9 +49,9 @@ namespace HSMDataCollector.Client.HttpsClient
         }
 
 
-        internal virtual ValueTask HandleRequestResultAsync(HttpResponseMessage response, IEnumerable<T> values) => default;
+        internal virtual ValueTask HandleRequestResultAsync(HttpResponseMessage response, IEnumerable<T> values, CancellationToken token) => default;
         
-        internal virtual ValueTask HandleRequestResultAsync(HttpResponseMessage response, T value) => default;
+        internal virtual ValueTask HandleRequestResultAsync(HttpResponseMessage response, T value, CancellationToken token) => default;
 
 
         internal abstract object ConvertToRequestData(T value);
@@ -70,35 +70,38 @@ namespace HSMDataCollector.Client.HttpsClient
             return default;
         }
 
-        public async ValueTask SendAsync(IEnumerable<T> values, CancellationToken token)
+        public async ValueTask<PackageSendingInfo> SendAsync(IEnumerable<T> values, CancellationToken token)
         {
-            await HandleRequestResultAsync(await SendRequestAsync(new HttpRequest<T>(values, GetUri(values)), token), values);
-        }
-
-        public async ValueTask SendAsync(T value, CancellationToken token)
-        {
-            await HandleRequestResultAsync(await SendRequestAsync(new HttpRequest<T>(value, GetUri(value)), token), value);
-        }
-
-
-        private async ValueTask<HttpResponseMessage> SendRequestAsync(HttpRequest<T> request, CancellationToken token)
-        {
+            HttpRequest<T> request = new HttpRequest<T>(values, GetUri(values));
             try
             {
-                var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token);
-
-                _client.ReportPackageInfo(new PackageSendingInfo(request.Length, response));
-
-                return response;
+                var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false);
+                await HandleRequestResultAsync(response, values, token).ConfigureAwait(false);
+                return new PackageSendingInfo(request.Length, response);
             }
             catch (Exception ex)
             {
-                _client.ReportPackageInfo(new PackageSendingInfo(request.Length, null, exception: ex.Message));
-                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Data = {request.JsonMessage}");
-
-                return default;
+                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Data = {request.Content}");
+                return new PackageSendingInfo(request.Length, null, exception: ex.Message);
             }
         }
+
+        public async ValueTask<PackageSendingInfo> SendAsync(T value, CancellationToken token)
+        {
+            HttpRequest<T> request = new HttpRequest<T>(value, GetUri(value));
+            try
+            {
+                var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false);
+                await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
+                return new PackageSendingInfo(request.Length, response);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Data = {request.Content}");
+                return new PackageSendingInfo(request.Length, null, exception: ex.Message);
+            }
+        }
+
 
         private ValueTask<HttpResponseMessage> ExecutePipelineAsync(HttpRequest<T> request, CancellationToken token) =>
             _client.SendRequestAsync(request.Uri, request.GetContent(), token);

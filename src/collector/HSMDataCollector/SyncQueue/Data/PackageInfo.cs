@@ -1,4 +1,4 @@
-﻿namespace HSMDataCollector.SyncQueue.BaseQueue
+﻿namespace HSMDataCollector.SyncQueue.Data
 {
     internal readonly struct PackageInfo
     {

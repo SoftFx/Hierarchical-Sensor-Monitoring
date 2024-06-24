@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using HSMDataCollector.DefaultSensors;
-using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
 using HSMDataCollector.Sensors;
 using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
@@ -16,21 +16,29 @@ namespace HSMDataCollector.Core
 {
     internal sealed class SensorsStorage : ConcurrentDictionary<string, SensorBase>, IDisposable
     {
-        private readonly DataCollector _collector;
+        private readonly CollectorOptions _options;
 
+        private readonly IDataProcessor _dataProcessor;
 
+        private readonly PrototypesCollection _prototypes;
 
-        internal IQueueManager QueueManager { get; }
+        public IWindowsCollection Windows { get; }
+
+        public IUnixCollection Unix { get; }
 
         internal ICollectorLogger Logger { get; }
 
 
-        internal SensorsStorage(DataCollector collector, IQueueManager queueManager, ICollectorLogger logger)
+        internal SensorsStorage(CollectorOptions options, IDataProcessor dataProcessor, ICollectorLogger logger)
         {
-            _collector = collector;
-            QueueManager = queueManager;
+            _options      = options;
+            _dataProcessor = dataProcessor;
+            Logger        = logger;
 
-            Logger = logger;
+            _prototypes = new PrototypesCollection(options, _dataProcessor);
+
+            Windows = new WindowsSensorsCollection(this, _prototypes);
+            Unix    = new UnixSensorsCollection(this, _prototypes);
         }
 
 
@@ -42,11 +50,11 @@ namespace HSMDataCollector.Core
             }
         }
 
-        internal Task InitAsync() => Task.WhenAll(Values.Select(async s => await s.InitAsync()));
+        internal Task InitAsync() => Task.WhenAll(Values.Select(async s => await s.InitAsync().ConfigureAwait(false)));
 
-        internal Task StartAsync() => Task.WhenAll(Values.Select(async s => await s.StartAsync()));
+        internal Task StartAsync() => Task.WhenAll(Values.Select(async s => await s.StartAsync().ConfigureAwait(false)));
 
-        internal Task StopAsync() => Task.WhenAll(Values.Select(async s => await s.StopAsync()));
+        internal Task StopAsync() => Task.WhenAll(Values.Select(async s => await s.StopAsync().ConfigureAwait(false)));
 
 
         internal MonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options)
@@ -108,15 +116,20 @@ namespace HSMDataCollector.Core
             return (DoubleBarPublicSensor)Register(new DoubleBarPublicSensor(options));
         }
 
+        public IServiceCommandsSensor CreateServiceCommandsSensor()
+        {
+            return (IServiceCommandsSensor)Register(new ServiceCommandsSensor(_prototypes.ServiceCommands.Get(null)));
+        }
 
-        internal SensorBase Register(SensorBase sensor)
+
+        internal SensorBase Register(SensorBase sensor, bool startSensor = false)
         {
             var path = sensor.SensorPath;
 
             if (TryGetValue(path, out var oldSensor))
                 return oldSensor;
 
-            if (_collector.Status.IsStartingOrRunning())
+            if (startSensor)
             {
                 _ = AddAndStart(sensor);
                 return sensor;
@@ -130,9 +143,9 @@ namespace HSMDataCollector.Core
         {
             var path = sensor.SensorPath;
 
-            if (!await AddSensor(sensor).InitAsync())
+            if (!await AddSensor(sensor).InitAsync().ConfigureAwait(false))
                 Logger.Error($"Failed to init {path}");
-            else if (!await sensor.StartAsync())
+            else if (!await sensor.StartAsync().ConfigureAwait(false))
                 Logger.Error($"Failed to start {path}");
 
             return sensor;
@@ -156,11 +169,11 @@ namespace HSMDataCollector.Core
         {
             options = (T)options?.Copy() ?? new T();
 
-            options.ComputerName = _collector.ComputerName;
-            options.Module = _collector.Module;
+            options.ComputerName = _options.ComputerName;
+            options.Module = _options.Module;
             options.Path = path;
             options.Type = type;
-            options.DataProcessor = QueueManager;
+            options.DataProcessor = _dataProcessor;
 
             return options;
         }

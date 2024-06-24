@@ -1,16 +1,16 @@
-﻿using HSMDataCollector.Alerts;
-using HSMDataCollector.Core;
-using HSMDataCollector.Options;
-using HSMDataCollector.PublicInterface;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
+using HSMDataCollector.Alerts;
+using HSMDataCollector.Core;
+using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
 
 namespace DatacollectorSandbox
 {
@@ -19,7 +19,7 @@ namespace DatacollectorSandbox
         private static readonly Random _random = new Random(1123213);
         private static IDataCollector _collector;
 
-        private static int _timeout = 100;
+        private static int _timeout = 1000;
 
         private static IInstantValueSensor<double> _baseDouble, _priorityDouble;
         private static IInstantValueSensor<bool> _baseBool, _priorityBool;
@@ -101,7 +101,6 @@ namespace DatacollectorSandbox
             await _collector.Start();
 
 
-
             var instantPriority = new InstantSensorOptions()
             {
                 Alerts = new List<InstantAlertTemplate>()
@@ -176,6 +175,8 @@ namespace DatacollectorSandbox
 
             bool needRestart = false;
 
+            var process = Process.GetCurrentProcess();
+
             while (true)
             {
                 //Console.WriteLine("wait");
@@ -189,6 +190,8 @@ namespace DatacollectorSandbox
                 //    needRestart = true;
                 //    break;
                 //}
+
+                //Console.WriteLine(GetCurrentThreads(process));
 
                 PushValue();
             }
@@ -258,32 +261,32 @@ namespace DatacollectorSandbox
                 _paramSensor.AddValue(GetInt());
                 _paramSensorCustom.AddValue(GetInt());
                 _paramSensorM1.AddValue(GetInt());
-                _paramSensorM5.AddValue(GetInt());
+                //_paramSensorM5.AddValue(GetInt());
 
                 await Task.Delay(_timeout);
             }
         }
 
 
-        private static void PushValue()
+        private static async Task PushValue()
         {
             _baseInt.AddValue(GetInt());
-            _priorityInt.AddValue(GetInt());
+            //_priorityInt.AddValue(GetInt());
 
             _baseBool.AddValue(_random.Next() % 2 == 0);
-            _priorityBool.AddValue(_random.Next() % 2 == 0);
+            //_priorityBool.AddValue(_random.Next() % 2 == 0);
 
             _baseDouble.AddValue(GetDouble());
-            _priorityDouble.AddValue(GetDouble());
+            //_priorityDouble.AddValue(GetDouble());
 
             _baseString.AddValue(GetRandomString(10));
-            _priorityString.AddValue(GetRandomString(10));
+           // _priorityString.AddValue(GetRandomString(10));
 
             _baseTime.AddValue(TimeSpan.FromTicks(_random.Next()));
-            _priorityTime.AddValue(TimeSpan.FromTicks(_random.Next()));
+            //_priorityTime.AddValue(TimeSpan.FromTicks(_random.Next()));
 
             _baseVersion.AddValue(GetVersion());
-            _priorityVersion.AddValue(GetVersion());
+           // _priorityVersion.AddValue(GetVersion());
 
 
             _lastInt.AddValue(GetInt());
@@ -293,10 +296,10 @@ namespace DatacollectorSandbox
             _lastVersion.AddValue(GetVersion());
             _lastSpan.AddValue(TimeSpan.FromTicks(_random.Next()));
 
-            _fileSensor.AddValue(GetRandomString(100));
-            _fileSensorCustom.AddValue(GetRandomString(100));
-            _fileSensorCustom2.AddValue(GetRandomString(100));
-            //_fileSensorByPath.SendFile(Path.Combine(Environment.CurrentDirectory, "TEST LOCAL FILE.txt"));
+            //_fileSensor.AddValue(GetRandomString(100));
+            //_fileSensorCustom.AddValue(GetRandomString(100));
+            //_fileSensorCustom2.AddValue(GetRandomString(100));
+            //await _fileSensorByPath.SendFile(Path.Combine(Environment.CurrentDirectory, "TEST LOCAL FILE.txt"));
 
             Thread.Sleep(_timeout);
 
@@ -323,5 +326,21 @@ namespace DatacollectorSandbox
 
             return new Version(GetNumber(), GetNumber(), GetNumber());
         }
+
+        private static int GetCurrentThreads(Process process)
+        {
+            int runningThreadsCount = 0;
+            foreach (ProcessThread thread in process.Threads)
+            {
+                if (thread.ThreadState == System.Diagnostics.ThreadState.Running)
+                {
+                    runningThreadsCount++;
+                }
+            }
+
+            return runningThreadsCount;
+        }
+
     }
+
 }

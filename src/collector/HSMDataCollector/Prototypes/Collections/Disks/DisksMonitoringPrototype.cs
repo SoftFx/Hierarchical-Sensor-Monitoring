@@ -1,12 +1,13 @@
-﻿using HSMDataCollector.DefaultSensors.SystemInfo;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using HSMDataCollector.DefaultSensors.SystemInfo;
 using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
-using System;
-using System.Collections.Generic;
-using System.IO;
+
 
 namespace HSMDataCollector.Prototypes
 {

@@ -1,9 +1,10 @@
-﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
-using System;
+﻿using System;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
+
 
 namespace HSMServer.ApiObjectsConverters
 {
