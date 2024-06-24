@@ -1,21 +1,20 @@
 import {convertToGraphData} from "./plotting";
 import {TimeSpanPlot, ErrorColorPlot} from "./plots";
 import {Panel} from "../ts/dashboard.panel";
-import {PanelCordinatesHelper} from "../ts/services/panel-cordinates-helper";
 import {DashboardStorage} from "../ts/dashboard/dashboard.storage";
 import {formObserver} from "./nodeData";
+import {SiteHelper} from "../ts/services/site-helper";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
-export const panelHelper = new PanelCordinatesHelper();
 
 
 window.addObserve = function(q){
     formObserver.addFormToObserve(q);
 }
 
-window.check = function (){
-    formObserver.check();
+window.manualCheckBoundaries = function (){
+    SiteHelper.ManualCheckDashboardBoundaries();
 }
 
 window.getRangeDate = function () {
