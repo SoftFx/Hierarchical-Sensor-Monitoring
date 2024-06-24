@@ -87,7 +87,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                 while (_queue.TryDequeue(out QueueItem<T> item))
                 {
-                    result.AddInfo((now - item.BuildDate).TotalMilliseconds, 1);
+                    result.AddInfo((now - item.BuildDate).TotalSeconds, 1);
 
                     yield return item.Value;
                 }

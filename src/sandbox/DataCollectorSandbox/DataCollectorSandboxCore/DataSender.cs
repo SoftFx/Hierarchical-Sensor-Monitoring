@@ -2,20 +2,12 @@
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
-using Newtonsoft.Json;
-using System.Text.Json;
 
 
 namespace DataCollectorSandboxCore
 {
     internal class DataSender : IDataSender
     {
-        public event Action<PackageSendingInfo>? OnSendPackage;
-
-        private static JsonSerializerOptions _options = new JsonSerializerOptions
-        {
-            Converters = { new VersionConverter() }
-        };
 
         public void Dispose()
         {
@@ -29,12 +21,6 @@ namespace DataCollectorSandboxCore
 
         public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
         {
-            var res = items.ToList();
-
-            var content = JsonConvert.SerializeObject(res);
-            var content1 = System.Text.Json.JsonSerializer.Serialize(res, _options);
-
-
             return default;
         }
 

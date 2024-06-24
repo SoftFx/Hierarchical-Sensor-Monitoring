@@ -46,17 +46,6 @@ namespace DatacollectorSandbox
 
         static ConcurrentDictionary<string,int> _queuesInfo = new ConcurrentDictionary<string,int>();
 
-        internal static void AddValue(string queueName, int value)
-        {
-            if (!_queuesInfo.ContainsKey(queueName))
-                _queuesInfo.TryAdd(queueName, value);
-            else
-                _queuesInfo[queueName] = _queuesInfo[queueName] + value;
-        }
-        internal static void AddValue1(string queueName, int value)
-        {
-            Console.Write(_queuesInfo.AddOrUpdate(queueName, value, (k, v) => v + value));
-        }
 
         static async Task Main(string[] args)
         {
@@ -65,32 +54,11 @@ namespace DatacollectorSandbox
             var tokenSource = new CancellationTokenSource();
 
 
-            //var task1 = Task.Run(() =>
-            //{
-            //    while (!tokenSource.IsCancellationRequested)
-            //    {
-            //        AddValue1("aaaaa", 1);
-            //        //Console.WriteLine(_queuesInfo["aaaaa"]);
-            //    };
-            //});
-
-            //var task2 = Task.Run(() =>
-            //{
-            //    while (!tokenSource.IsCancellationRequested)
-            //    {
-            //        _queuesInfo.Clear();
-            //    };
-            //});
-
-            //Task.WaitAll(task1, task2);
-
-            //return;
-
             var collectorOptions = new CollectorOptions()
             {
                 //ServerAddress = "hsm.dev.soft-fx.eu",
                 AccessKey = "644f9f13-1510-48bb-a5a3-816fef3a612f", //local key
-                Module = "Collector 3.3.0",
+                Module = "Collector 3.4.0",
                 ComputerName = "LocalMachine",
             };
 
