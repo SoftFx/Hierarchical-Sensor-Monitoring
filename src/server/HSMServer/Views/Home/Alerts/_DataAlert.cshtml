@@ -74,6 +74,9 @@
                         };
 
                         chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatName})";
+
+                        if (action.Chats.Count !=  0)
+                            chats += ", " + string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
                         
                         break;
                     }
@@ -85,7 +88,7 @@
                             color = "gray";
                         }
                         else
-                            chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
+                            chats += string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
                     
                         break;
                     }

@@ -172,7 +172,7 @@ namespace HSMServer.Model.DataAlerts
                     ChatsMode = policy.Destination.Mode.ToClient(),
                 };
 
-                if (policy.Destination.IsCustom)
+                if (policy.Destination.IsCustom || policy.Destination.IsFromParentChats)
                     foreach (var chat in policy.Destination.Chats)
                         action.Chats.Add(chat.Key);
 
