@@ -167,6 +167,9 @@
                 cache: false,
                 async: true
             }).done(function (sensorsData) {
+                if (sensorsData === '')
+                    return;
+                
                 let data = JSON.parse(sensorsData)
                 let displayChildrenInfo = false;
 
