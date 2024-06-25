@@ -12,6 +12,19 @@ namespace HSMServer.Core.Model.Policies
 
         public bool IsAllChats { get; }
     }
+    
+    public class PolicyDestinationHandler : IPolicyDestinationHandler
+    {
+        public Dictionary<Guid, string> Chats { get; }
+        
+        public bool IsAllChats { get; }
+
+        public PolicyDestinationHandler(IDictionary<Guid, string> firstKeys, IDictionary<Guid, string> secondKeys, bool isAllChats)
+        {
+            Chats = new Dictionary<Guid, string>(firstKeys.Concat(secondKeys).ToDictionary(x => x.Key, y => y.Value));
+            IsAllChats = isAllChats;
+        }
+    }
 
 
     public enum PolicyDestinationMode : byte
@@ -72,9 +85,6 @@ namespace HSMServer.Core.Model.Policies
             {
                 foreach (var (chatId, name) in update.Chats)
                     Chats.Add(chatId, name);
-
-                if (Chats.Count > 0)
-                    Mode = PolicyDestinationMode.Custom;
             }
         }
 
@@ -89,6 +99,7 @@ namespace HSMServer.Core.Model.Policies
 
         public override string ToString() => Mode switch
         {
+            PolicyDestinationMode.FromParent when Chats.Values.Count != 0 => "from parent chats, " +  string.Join(", ", Chats.Values),
             PolicyDestinationMode.FromParent => "from parent chats",
             PolicyDestinationMode.Empty => "empty destination",
             PolicyDestinationMode.Custom => string.Join(", ", Chats.Values),

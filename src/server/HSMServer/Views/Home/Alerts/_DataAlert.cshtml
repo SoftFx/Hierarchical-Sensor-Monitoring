@@ -16,6 +16,9 @@
 
 @{
     var telegramChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v);
+
+    string GetActionChats(AlertActionBase action) =>
+         string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
 }
 
 
@@ -74,6 +77,9 @@
                         };
 
                         chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatName})";
+
+                        if (action.Chats.Count !=  0)
+                            chats += $", {GetActionChats(action)}";
                         
                         break;
                     }
@@ -85,7 +91,7 @@
                             color = "gray";
                         }
                         else
-                            chats = string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
+                            chats += GetActionChats(action);
                     
                         break;
                     }

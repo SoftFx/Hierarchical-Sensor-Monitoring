@@ -77,9 +77,15 @@ namespace HSMServer.Model.DataAlerts
                     if (availableChats.TryGetValue(id, out var name))
                         Chats.Add(name);
 
+            if (policy.Destination.Mode is PolicyDestinationMode.FromParent)
+            {
+                foreach (var (id, _) in policy.Destination.Chats)
+                    if (availableChats.TryGetValue(id, out var name))
+                        Chats.Add(name);
+            }
+
             Conditions = policy.Conditions.Select(c => new ConditionExportViewModel(c)).ToList();
         }
-
 
         internal PolicyUpdate ToUpdate(Guid sensorId, Dictionary<string, Guid> availableChats)
         {
@@ -94,9 +100,12 @@ namespace HSMServer.Model.DataAlerts
                     if (keyWordsToChatsMode.TryGetValue(chat, out var chatMode))
                     {
                         mode = chatMode;
-                        chats = [];
 
-                        break;
+                        if (chatMode != PolicyDestinationMode.FromParent)
+                        {
+                            chats = [];
+                            break;
+                        }
                     }
 
                     if (availableChats.TryGetValue(chat, out var chatId))
