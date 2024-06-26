@@ -26,6 +26,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public double Height { get; init; }
         
         public double SingleModeWidth { get; init; }
+        
+        public double SingleModeHeight { get; init; }
 
 
         public double X { get; init; }

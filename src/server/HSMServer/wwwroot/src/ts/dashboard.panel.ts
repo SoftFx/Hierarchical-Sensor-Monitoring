@@ -171,17 +171,19 @@ export class Panel {
     async manualCordinatesUpdate() {
         let currPanelDiv = $('#dashboardPanels').find(`#${this.id}`).first();
         let width = $('#dashboardPanels').width();
-        let height = 1400;
+        let height = currPanelDiv.height();
+        let maxHeight = 1400;
         return fetch(window.location.pathname + `/${this.id}`, {
             method: 'PUT',
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
+                isSingleMode: this.settings.isSingleMode,
                 width: Number((currPanelDiv.width() / width).toFixed(5)),
-                height: Number((currPanelDiv.height() / height).toFixed(5)),
+                height: Number((height / maxHeight).toFixed(5)),
                 x: Number((parseFloat(currPanelDiv.data('x') || 0) / width).toFixed(5)),
-                y: Number((parseFloat(currPanelDiv.data('y') || 0) / height).toFixed(5)),
+                y: Number((parseFloat(currPanelDiv.data('y') || 0) / maxHeight).toFixed(5)),
             }),
         })
     }

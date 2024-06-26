@@ -13,6 +13,7 @@ namespace HSMServer.Dashboards
         private const double PanelPadding = 0.01D;
         private const double SpaceBetween = 0.02D; // space between panels in Y
         private const int SingleModeMultiplayer = 2;
+        private const int SingleModeMaxPanels = 5;
 
         internal static bool RecalculatePanelSize(ConcurrentDictionary<Guid, Panel> panelsDict, int panelsInRow)
         {
@@ -31,7 +32,7 @@ namespace HSMServer.Dashboards
                 if (lastRowSize != 0)
                     rowsBefore++;
                 
-                SingleModeRelayout(singleModePanels.ToList(), panelsInRow * SingleModeMultiplayer, rowsBefore);
+                SingleModeRelayout(singleModePanels.ToList(), Math.Min(panelsInRow  * SingleModeMultiplayer, SingleModeMaxPanels), rowsBefore);
                 
                 return true;
             }
@@ -61,14 +62,14 @@ namespace HSMServer.Dashboards
                 
                 panel.Update(new PanelUpdate(panelId)
                 {
-                    Height = panel.Settings.Height,
+                    Height = panel.Settings.SingleModeHeight,
                     Width = panelWidth - PanelPadding,
 
                     X = panelWidth * columnNumber + PanelPadding,
                     Y = predY[j],
                 });
                 
-                predY[j] += panel.Settings.Height + SpaceBetween;
+                predY[j] += panel.Settings.SingleModeHeight + SpaceBetween;
 
                 j++;
             }

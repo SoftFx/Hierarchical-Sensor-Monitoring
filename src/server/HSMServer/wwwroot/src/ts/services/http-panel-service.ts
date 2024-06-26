@@ -8,7 +8,9 @@ export class HttpPanelService {
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify(panel.settings)
+            body: JSON.stringify({
+                isSingleMode: panel.settings.isSingleMode
+            })
         });
     }
     

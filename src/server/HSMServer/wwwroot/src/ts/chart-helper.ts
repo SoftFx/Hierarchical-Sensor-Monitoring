@@ -17,9 +17,14 @@ export namespace ChartHelper {
             if (panel.length === 0)
                 reject();
 
-            panel.width(currWidth)
-                .height(currHeight)
-                .css('transform', 'translate(' + transitionX + 'px, ' + transitionY + 'px)')
+            if (!settings.isSingleMode)
+                panel.height(currHeight);
+            
+            if (!settings.isSingleMode || currWidth > 10){
+                panel.width(currWidth);
+            }
+            
+            panel.css('transform', 'translate(' + transitionX + 'px, ' + transitionY + 'px)')
                 .attr('data-x', transitionX)
                 .attr('data-y', transitionY);
 

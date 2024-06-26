@@ -41,7 +41,6 @@ export namespace SiteHelper {
         if (height !== 0) {
             targetNode[0].style.minHeight = height + 30 + 'px';
             targetNode[0].scrollIntoView({behavior: "instant", block: "end", inline: "nearest"});
-
         }
     }
 }

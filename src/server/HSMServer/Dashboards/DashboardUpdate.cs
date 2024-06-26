@@ -64,6 +64,8 @@ namespace HSMServer.Dashboards
         
         public double? Height { get; set; }
         
+        public double? Width { get; set; }
+        
         
 
         internal PanelUpdate ToUpdate(Guid id) =>
@@ -74,7 +76,8 @@ namespace HSMServer.Dashboards
                 ShowLegend = ShowLegend,
                 X = X,
                 Y = Y,
-                Height = Height
+                Height = Height,
+                Width = Width
             };
     }
 
