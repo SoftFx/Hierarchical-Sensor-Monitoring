@@ -32,7 +32,7 @@ export class PanelSettings {
     private _height: number
 
     private _singleModeWidth: number
-    private _sHeight: number
+    private _singleModeHeight: number
     
     x: number
     y:number
@@ -48,7 +48,7 @@ export class PanelSettings {
 
     public get height(){
         return this.isSingleMode ?
-            this._sHeight :
+            this._singleModeHeight :
             this._height;
     }
     
@@ -64,8 +64,8 @@ export class PanelSettings {
         this._width = settings.width;
         this._height = settings.height;
         
-        this._sHeight = settings.sHeight;
-        this._singleModeWidth = Math.max(0.2, settings.singleModeWidth);
+        this._singleModeHeight = settings.singleModeHeight;
+        this._singleModeWidth = settings.singleModeWidth;
         
         this.x = settings.x;
         this.y = settings.y;
