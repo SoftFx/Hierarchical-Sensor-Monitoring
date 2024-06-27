@@ -57,11 +57,26 @@ namespace HSMServer.Model.Controls
         }
 
 
-        public bool IsSelectedChat(TelegramChat chat) => ChatMode is DefaultChatMode.Custom && SelectedChats.Contains(chat.Id);
+        public bool IsSelectedChat(TelegramChat chat) => ChatMode is DefaultChatMode.Custom or DefaultChatMode.FromParent && SelectedChats.Contains(chat.Id);
 
         public bool IsSelectedMode(DefaultChatMode mode) => ChatMode == mode;
 
-        public (HashSet<Guid> ids, DefaultChatMode mode) GetCurrentChats() => IsFromParent ? GetUsedValue(Parent) : (SelectedChats, ChatMode);
+        public (HashSet<Guid> ids, DefaultChatMode mode) GetCurrentChats() =>
+            IsFromParent ? GetUsedValue(Parent) : (SelectedChats, ChatMode);
+        // {
+        //     if (!IsFromParent) 
+        //         return (SelectedChats, ChatMode);
+        //     
+        //     if (SelectedChats.Count == 0)
+        //         return GetUsedValue(Parent);
+        //         
+        //     var usedValue = GetUsedValue(Parent);
+        //
+        //     foreach (var id in SelectedChats)
+        //         usedValue.ids.Add(id);
+        //             
+        //     return usedValue;
+        // }
 
         public string GetCurrentDisplayValue(List<TelegramChat> chatList, out List<TelegramChat> allChats)
         {
@@ -76,7 +91,15 @@ namespace HSMServer.Model.Controls
 
             allChats = [.. chats.Values];
 
-            return IsFromParent ? AsFromParent(chatsName) : chatsName;
+            if (IsFromParent)
+            {
+                if (SelectedChats.Count != 0)
+                    return AsFromParent(chatsName) + ", " + SelectedChats.ToNames(chats);
+
+                return AsFromParent(chatsName);
+            }
+
+            return chatsName;
         }
 
         public string GetParentDisplayValue(List<TelegramChat> chats)
@@ -142,10 +165,12 @@ namespace HSMServer.Model.Controls
                 Chats = chats,
             };
 
-        internal PolicyDestinationSettings ToUpdate(ProductNodeViewModel product, ITelegramChatsManager chatsManager, IFolderManager folderManager) =>
-            IsFromParent && product.ParentIsFolder
-                ? new(FromFolderEntity(folderManager.GetFolderDefaultChats(product.FolderId.Value)))
+        internal PolicyDestinationSettings ToUpdate(ProductNodeViewModel product, ITelegramChatsManager chatsManager, IFolderManager folderManager)
+        {
+            return IsFromParent && product.ParentIsFolder
+                ? new (ToEntity(product.GetAvailableChats(chatsManager)), FromFolderEntity(folderManager.GetFolderDefaultChats(product.FolderId.Value)))
                 : ToModel(product.GetAvailableChats(chatsManager));
+        }
 
 
         private Dictionary<Guid, TelegramChat> ToAvailableChats(List<TelegramChat> chats) =>

@@ -52,13 +52,22 @@ namespace HSMServer.Core.Model.NodeSettings
 
             if (entity.Chats is not null)
                 foreach (var (chatId, name) in entity.Chats)
-                    Chats.Add(new Guid(chatId), name);
+                    Chats.TryAdd(new Guid(chatId), name);
+        }
+        
+        public PolicyDestinationSettings(PolicyDestinationSettingsEntity currentDestination, PolicyDestinationSettingsEntity parentDestination) : this(parentDestination)
+        {
+            Mode = (DefaultChatsMode)currentDestination.Mode;
+
+            if (currentDestination.Chats is not null)
+                foreach (var (chatId, name) in currentDestination.Chats)
+                    Chats.TryAdd(new Guid(chatId), name);
         }
 
 
         public PolicyDestinationSettings ApplyNewChats(Dictionary<Guid, string> newChats)
         {
-            var settings = new PolicyDestinationSettings(DefaultChatsMode.Custom);
+            var settings = new PolicyDestinationSettings(Mode is DefaultChatsMode.FromParent ? DefaultChatsMode.FromParent : DefaultChatsMode.Custom);
 
             foreach (var chat in Chats)
                 settings.Chats.TryAdd(chat.Key, chat.Value);
@@ -81,6 +90,7 @@ namespace HSMServer.Core.Model.NodeSettings
             {
                 DefaultChatsMode.FromFolder => $"{DefaultChatsMode.FromFolder.GetDisplayName()} ({ChatsToList()})",
                 DefaultChatsMode.Custom => ChatsToList(),
+                DefaultChatsMode.FromParent when Chats.Count != 0 => $"{Mode.GetDisplayName()}, ${ChatsToList()}",
                 _ => Mode.GetDisplayName(),
             };
 
