@@ -12,6 +12,10 @@
 @{
     var displayName = Model.GetCurrentDisplayValue(ChatsManager.GetValues(), out var allChats);
     var parentName = Model.GetParentDisplayValue(allChats);
+
+    var test = Model.GetParentChats();
+    var names = Model.GetCurrentDisplayValue(ChatsManager.GetValues(), out var allx);
+    var b = 1;
 }
 
 
@@ -56,9 +60,7 @@
                 $(this).val($(this)[0].options[clickedIndex].value);   
             }
             else {
-                const index = Array.from($("select[name='SelectedChats']")[0].selectedOptions).find(x => x.value === 'NotInitialized' || x === 'Empty');
-                
-                if (index !== undefined)
+                if (Array.from($("select[name='SelectedChats']")[0].selectedOptions).find(x => x.value === 'NotInitialized' || x.value === 'Empty') !== undefined)
                     $(this).val($(this)[0].options[clickedIndex].value);
             }
 
