@@ -31,9 +31,9 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         {
             if (_isStarted)
             {
+                _isStarted = true;
                 _cancellationTokenSource = new CancellationTokenSource();
                 _statusWatcher = PeriodicTask.Run(CheckServiceStatus, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
-                _isStarted = true;
             }
 
             return base.StartAsync();
