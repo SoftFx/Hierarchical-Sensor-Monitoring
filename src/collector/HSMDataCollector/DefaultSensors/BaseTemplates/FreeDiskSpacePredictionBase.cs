@@ -47,6 +47,8 @@ namespace HSMDataCollector.DefaultSensors
         {
             if (!_isStarted)
             {
+                _isStarted = true;
+
                 _tokenSource = new CancellationTokenSource();
 
                 _lastSpeedCheckTime = DateTime.UtcNow;
@@ -56,8 +58,6 @@ namespace HSMDataCollector.DefaultSensors
                 _requestsCount = 0;
 
                 _workTask = PeriodicTask.Run(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, _tokenSource.Token);
-
-                _isStarted = true;
             }
 
             return base.StartAsync();

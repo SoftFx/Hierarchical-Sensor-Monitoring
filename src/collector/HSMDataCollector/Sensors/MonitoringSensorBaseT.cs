@@ -32,17 +32,12 @@ namespace HSMDataCollector.DefaultSensors
                 throw new ArgumentNullException(nameof(monitoringOptions));
         }
 
-        internal override async ValueTask<bool> InitAsync()
+        internal override ValueTask<bool> InitAsync()
         {
             if (!_isStarted)
-            {
-                var baseInit = await base.InitAsync().ConfigureAwait(false);
+                StartSendTask();
 
-                if (baseInit)
-                    StartSendTask();
-            }
-
-            return _isStarted;
+            return base.InitAsync();
         }
 
         internal override ValueTask StopAsync()
@@ -75,7 +70,6 @@ namespace HSMDataCollector.DefaultSensors
             _options.PostDataPeriod = newPostPeriod;
 
             StartSendTask();
-
         }
 
         private void StopInternal()

@@ -37,18 +37,17 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override async ValueTask<bool> InitAsync()
+        internal override ValueTask<bool> InitAsync()
         {
-            var isInitialized = await base.InitAsync().ConfigureAwait(false);
 
-            if (isInitialized)
+            if (!_isStarted)
             {
+                _isStarted = true;
                 _cancellationTokenSource = new CancellationTokenSource();
                 _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token);
-                _isStarted = true;
             }
 
-            return isInitialized;
+            return base.InitAsync();
         }
 
         internal override ValueTask StopAsync()
@@ -61,6 +60,7 @@ namespace HSMDataCollector.DefaultSensors
                 _cancellationTokenSource?.Dispose();
                 _collectTask?.Dispose();
             }
+
             return base.StopAsync();
         }
 

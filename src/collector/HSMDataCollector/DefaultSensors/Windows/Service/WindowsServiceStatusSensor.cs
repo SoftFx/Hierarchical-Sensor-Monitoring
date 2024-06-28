@@ -29,7 +29,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
 
         internal override ValueTask<bool> StartAsync()
         {
-            if (_isStarted)
+            if (!_isStarted)
             {
                 _isStarted = true;
                 _cancellationTokenSource = new CancellationTokenSource();
