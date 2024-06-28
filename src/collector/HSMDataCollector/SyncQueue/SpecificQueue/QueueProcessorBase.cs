@@ -35,7 +35,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             _logger = logger;
         }
 
-        internal void Init()
+        internal void Start()
         {
             _cancellationTokenSource = new CancellationTokenSource();
             _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);

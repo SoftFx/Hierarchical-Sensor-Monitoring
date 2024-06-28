@@ -22,8 +22,7 @@ namespace HSMDataCollector.DefaultSensors
 
         protected TimeSpan PostTimePeriod => _options.PostDataPeriod;
 
-        protected bool IsInitialized => _sendTask != null;
-
+        private volatile bool _isStarted = false;
 
         protected MonitoringSensorBase(SensorOptions options) : base(options)
         {
@@ -35,25 +34,22 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override async ValueTask<bool> InitAsync()
         {
-            if (!IsInitialized)
+            if (!_isStarted)
             {
                 var baseInit = await base.InitAsync().ConfigureAwait(false);
 
                 if (baseInit)
-                {
                     StartSendTask();
-                }
             }
 
-            return IsInitialized;
+            return _isStarted;
         }
 
         internal override ValueTask StopAsync()
         {
-            _cancellationTokenSource?.Cancel();
-            _sendTask?.ConfigureAwait(false).GetAwaiter().GetResult();
-            _cancellationTokenSource?.Dispose();
-            _sendTask?.Dispose();
+            if (_isStarted)
+                StopInternal();
+
             return base.StopAsync();
         }
 
@@ -73,19 +69,27 @@ namespace HSMDataCollector.DefaultSensors
 
         protected void RestartTimer(TimeSpan newPostPeriod)
         {
-            if (IsInitialized)
-            {
-                _options.PostDataPeriod = newPostPeriod;
-                _cancellationTokenSource?.Cancel();
-                _sendTask?.ConfigureAwait(false).GetAwaiter().GetResult();
-                _sendTask?.Dispose();
-                _cancellationTokenSource?.Dispose();
-                StartSendTask();
-            }
+            if (_isStarted)
+                StopInternal();
+
+            _options.PostDataPeriod = newPostPeriod;
+
+            StartSendTask();
+
+        }
+
+        private void StopInternal()
+        {
+            _isStarted = false;
+            _cancellationTokenSource?.Cancel();
+            _sendTask?.ConfigureAwait(false).GetAwaiter().GetResult();
+            _sendTask?.Dispose();
+            _cancellationTokenSource?.Dispose();
         }
 
         private void StartSendTask()
         {
+            _isStarted = true;
             _cancellationTokenSource = new CancellationTokenSource();
             _sendTask = PeriodicTask.Run(OnTimerTick, TimerDueTime, PostTimePeriod, _cancellationTokenSource.Token);
         }

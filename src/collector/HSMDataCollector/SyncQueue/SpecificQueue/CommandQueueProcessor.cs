@@ -23,7 +23,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 try
                 {
-                    _event.WaitOne();
+                    _event.Wait(token);
+                    _event.Reset();
 
                     while (!_queue.IsEmpty && !token.IsCancellationRequested)
                     {
@@ -33,6 +34,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                     }
                 }
+                catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
                     _logger.Error(ex);

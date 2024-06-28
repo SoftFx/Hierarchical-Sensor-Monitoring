@@ -18,7 +18,7 @@ namespace HSMDataCollector.Core
     {
         private readonly CollectorOptions _options;
 
-        private readonly IDataProcessor _dataProcessor;
+        private readonly DataProcessor _dataProcessor;
 
         private readonly PrototypesCollection _prototypes;
 
@@ -29,7 +29,7 @@ namespace HSMDataCollector.Core
         internal ICollectorLogger Logger { get; }
 
 
-        internal SensorsStorage(CollectorOptions options, IDataProcessor dataProcessor, ICollectorLogger logger)
+        internal SensorsStorage(CollectorOptions options, DataProcessor dataProcessor, ICollectorLogger logger)
         {
             _options      = options;
             _dataProcessor = dataProcessor;
@@ -129,7 +129,7 @@ namespace HSMDataCollector.Core
             if (TryGetValue(path, out var oldSensor))
                 return oldSensor;
 
-            if (startSensor)
+            if (_dataProcessor.IsStarted)
             {
                 _ = AddAndStart(sensor);
                 return sensor;

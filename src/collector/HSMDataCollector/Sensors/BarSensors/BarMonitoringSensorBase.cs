@@ -22,6 +22,8 @@ namespace HSMDataCollector.DefaultSensors
         private CancellationTokenSource _cancellationTokenSource;
         protected BarType _internalBar;
 
+        private volatile bool _isStarted = false;
+
         protected sealed override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
@@ -43,6 +45,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 _cancellationTokenSource = new CancellationTokenSource();
                 _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token);
+                _isStarted = true;
             }
 
             return isInitialized;
@@ -50,10 +53,14 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override ValueTask StopAsync()
         {
-            _cancellationTokenSource?.Cancel();
-            _collectTask?.ConfigureAwait(false).GetAwaiter().GetResult();
-            _cancellationTokenSource?.Dispose();
-            _collectTask?.Dispose();
+            if (_isStarted)
+            {
+                _isStarted = false;
+                _cancellationTokenSource?.Cancel();
+                _collectTask?.ConfigureAwait(false).GetAwaiter().GetResult();
+                _cancellationTokenSource?.Dispose();
+                _collectTask?.Dispose();
+            }
             return base.StopAsync();
         }
 
