@@ -2,13 +2,11 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 
 
@@ -16,7 +14,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal abstract class QueueProcessorBase<T> : IDisposable
     {
-        private readonly TimeSpan _disposingTimeout = TimeSpan.FromSeconds(5);
         private Task _task;
         private bool _disposed;
 
@@ -38,7 +35,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             _logger = logger;
         }
 
-        internal void Init()
+        internal void Start()
         {
             _cancellationTokenSource = new CancellationTokenSource();
             _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
@@ -47,7 +44,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         internal void Stop()
         {
             _cancellationTokenSource?.Cancel();
-            _task?.Wait(_disposingTimeout);
+            _task?.ConfigureAwait(false).GetAwaiter().GetResult();
             _task?.Dispose();
             _cancellationTokenSource?.Dispose();
         }
@@ -107,20 +104,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return true;
         }
 
-        internal T GetItem(out PackageInfo info)
-        {
-            if (_queue.TryDequeue(out QueueItem<T> item))
-            {
-                info = new PackageInfo((DateTime.Now - item.BuildDate).Milliseconds, 1);
-
-                return item.Value;
-            }
-            else
-            {
-                info = default;
-                return default;
-            }
-        }
 
         protected abstract Task ProcessingLoop(CancellationToken token);
 
@@ -137,10 +120,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             if (disposing)
             {
-                _cancellationTokenSource?.Cancel();
-                _task?.Wait(_disposingTimeout);
-                _task?.Dispose();
-                _cancellationTokenSource?.Dispose();
+                Stop();
             }
 
             _disposed = true;

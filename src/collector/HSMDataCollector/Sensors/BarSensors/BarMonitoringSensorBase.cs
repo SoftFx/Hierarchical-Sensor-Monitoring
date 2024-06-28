@@ -22,6 +22,8 @@ namespace HSMDataCollector.DefaultSensors
         private CancellationTokenSource _cancellationTokenSource;
         protected BarType _internalBar;
 
+        private volatile bool _isStarted = false;
+
         protected sealed override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
@@ -35,29 +37,31 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override async ValueTask<bool> InitAsync()
+        internal override ValueTask<bool> InitAsync()
         {
-            var isInitialized = await base.InitAsync().ConfigureAwait(false);
 
-            if (isInitialized)
+            if (!_isStarted)
             {
+                _isStarted = true;
                 _cancellationTokenSource = new CancellationTokenSource();
                 _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token);
             }
 
-            return isInitialized;
+            return base.InitAsync();
         }
 
-        internal override async ValueTask StopAsync()
+        internal override ValueTask StopAsync()
         {
-            _cancellationTokenSource?.Cancel();
-            await _collectTask.ConfigureAwait(false);
-            _cancellationTokenSource?.Dispose();
-            _collectTask.Dispose();
+            if (_isStarted)
+            {
+                _isStarted = false;
+                _cancellationTokenSource?.Cancel();
+                _collectTask?.ConfigureAwait(false).GetAwaiter().GetResult();
+                _cancellationTokenSource?.Dispose();
+                _collectTask?.Dispose();
+            }
 
-            await base.StopAsync().ConfigureAwait(false);
-
-            OnTimerTick();
+            return base.StopAsync();
         }
 
 

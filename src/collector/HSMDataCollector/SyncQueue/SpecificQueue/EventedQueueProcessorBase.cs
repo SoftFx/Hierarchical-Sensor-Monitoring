@@ -8,7 +8,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal abstract class EventedQueueProcessorBase<T> : QueueProcessorBase<T>
     {
-        protected readonly AutoResetEvent _event = new AutoResetEvent(false);
+        protected readonly ManualResetEventSlim _event = new ManualResetEventSlim(false);
 
         public EventedQueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base (options, queueManager, logger) { }
 

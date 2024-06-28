@@ -33,6 +33,7 @@ namespace HSMDataCollector.DefaultSensors
 
         private long FreeSpace => _diskInfo.FreeSpace;
 
+        private volatile bool _isStarted = false;
 
         public FreeDiskSpacePredictionBase(DiskSensorOptions options, IDiskInfo diskInfo) : base(options)
         {
@@ -44,25 +45,35 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override ValueTask<bool> StartAsync()
         {
-            _tokenSource = new CancellationTokenSource();
+            if (!_isStarted)
+            {
+                _isStarted = true;
 
-            _lastSpeedCheckTime = DateTime.UtcNow;
-            _lastAvailableSpace = FreeSpace;
+                _tokenSource = new CancellationTokenSource();
 
-            _currentChangeSpeed = 0.0;
-            _requestsCount = 0;
+                _lastSpeedCheckTime = DateTime.UtcNow;
+                _lastAvailableSpace = FreeSpace;
 
-            _workTask = PeriodicTask.Run(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, _tokenSource.Token);
+                _currentChangeSpeed = 0.0;
+                _requestsCount = 0;
+
+                _workTask = PeriodicTask.Run(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, _tokenSource.Token);
+            }
 
             return base.StartAsync();
         }
 
-        internal override async ValueTask StopAsync()
+        internal override ValueTask StopAsync()
         {
-            _tokenSource?.Cancel();
-            await _workTask.ConfigureAwait(false);
-            _tokenSource?.Dispose();
-            await base.StopAsync().ConfigureAwait(false);
+            if (_isStarted)
+            {
+                _isStarted = false;
+                _tokenSource?.Cancel();
+                _workTask?.ConfigureAwait(false).GetAwaiter().GetResult();
+                _tokenSource?.Dispose();
+                _workTask?.Dispose();
+            }
+            return base.StopAsync();
         }
 
 

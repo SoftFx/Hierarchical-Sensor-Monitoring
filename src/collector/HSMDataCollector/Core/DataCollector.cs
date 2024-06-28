@@ -31,7 +31,7 @@ namespace HSMDataCollector.Core
         private readonly SensorsStorage _sensorsStorage;
         private readonly CollectorOptions _options;
         private readonly IDataSender _dataSender;
-        private readonly DataProcessor _queueManager;
+        private readonly DataProcessor _dataProcessor;
 
 
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
@@ -70,15 +70,11 @@ namespace HSMDataCollector.Core
 
             _dataSender = options.DataSender;
 
-            _queueManager = new DataProcessor(options, _logger);
+            _dataProcessor = new DataProcessor(options, _logger);
 
-            _sensorsStorage = _queueManager.SensorStorage;
+            _sensorsStorage = _dataProcessor.SensorStorage;
         }
 
-        private void OnSendPackage(PackageSendingInfo info)
-        {
-            _queueManager.AddPackageSendingInfo(info);
-        }
 
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
@@ -120,13 +116,15 @@ namespace HSMDataCollector.Core
                 AddNLog();
 
             _logger.Info("Initialize timer...");
-            _queueManager.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+            _dataProcessor.Start();
+            _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
         [Obsolete("Use Initialize(bool, string, string)")]
         public void Initialize()
         {
-            _queueManager.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult(); ;
+            _dataProcessor.Start();
+            _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
 
@@ -139,16 +137,17 @@ namespace HSMDataCollector.Core
                 if (!Status.IsStopped())
                     return;
 
+                _dataProcessor.Start();
                 ChangeStatus(CollectorStatus.Starting);
 
-                _ = customStartingTask.ContinueWith(_ => _queueManager.InitAsync())
+                _ = customStartingTask.ContinueWith(_ => _dataProcessor.InitAsync())
                                       .ContinueWith(_ => ChangeStatus(CollectorStatus.Running));
             }
             catch (Exception ex)
             {
                 _logger.Error(ex);
 
-                await _queueManager.StopAsync();
+                await _dataProcessor.StopAsync();
 
                 ChangeStatus(CollectorStatus.Stopped);
 
@@ -167,7 +166,7 @@ namespace HSMDataCollector.Core
 
                 ChangeStatus(CollectorStatus.Stopping);
 
-                await Task.WhenAll(_queueManager.StopAsync(), customStartingTask).ConfigureAwait(false);
+                await Task.WhenAll(_dataProcessor.StopAsync(), customStartingTask).ConfigureAwait(false);
 
                 ChangeStatus(CollectorStatus.Stopped);
             }
@@ -187,7 +186,7 @@ namespace HSMDataCollector.Core
 
             ChangeStatus(CollectorStatus.Stopping);
 
-            _queueManager.Dispose();
+            _dataProcessor.Dispose();
 
             _dataSender.Dispose();
 

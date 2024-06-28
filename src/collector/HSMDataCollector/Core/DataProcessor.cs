@@ -13,7 +13,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Core
 {
-    internal sealed class DataProcessor : IDataProcessor, IDisposable
+    internal sealed class DataProcessor : IDisposable
     {
         private readonly DataQueueProcessor _dataQueue;
         private readonly PriorityDataQueueProcessor _priorityQueue;
@@ -24,6 +24,8 @@ namespace HSMDataCollector.Core
         private DefaultSensorsCollection DefaultSensors => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? (DefaultSensorsCollection)SensorStorage.Windows : (DefaultSensorsCollection)SensorStorage.Unix;
 
         internal SensorsStorage SensorStorage { get; }
+
+        public bool IsStarted { get; private set; } = false;
 
         public DataProcessor(CollectorOptions options, LoggerManager logger)
         {
@@ -37,18 +39,25 @@ namespace HSMDataCollector.Core
             _commandQueue  = new CommandQueueProcessor(options, this, logger);
         }
 
+
+        public void Start()
+        {
+            IsStarted = true;
+            _dataQueue.Start();
+            _priorityQueue.Start();
+            _fileQueue.Start();
+            _commandQueue.Start();
+        }
+
         public async Task InitAsync()
         {
-            _dataQueue.Init();
-            _priorityQueue.Init();
-            _fileQueue.Init();
-            _commandQueue.Init();
             await SensorStorage.InitAsync().ConfigureAwait(false);
             await SensorStorage.StartAsync().ConfigureAwait(false);
         }
 
         public async Task StopAsync()
         {
+            IsStarted = false;
             _dataQueue.Stop();
             _priorityQueue.Stop();
             _fileQueue.Stop();

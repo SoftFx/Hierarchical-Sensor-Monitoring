@@ -21,7 +21,7 @@ namespace HSMDataCollector.DefaultSensors
 
         public event Action<string, Exception> ExceptionThrowing;
 
-        internal readonly IDataProcessor _dataProcessor;
+        internal readonly DataProcessor _dataProcessor;
 
         protected SensorBase(SensorOptions options)
         {

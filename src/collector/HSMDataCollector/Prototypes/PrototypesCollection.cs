@@ -113,7 +113,7 @@ namespace HSMDataCollector.Options
         #endregion
 
 
-        internal PrototypesCollection(CollectorOptions options, IDataProcessor dataProcessor)
+        internal PrototypesCollection(CollectorOptions options, DataProcessor dataProcessor)
         {
             T Register<T>() where T : SensorOptions, new() => new T()
             {
