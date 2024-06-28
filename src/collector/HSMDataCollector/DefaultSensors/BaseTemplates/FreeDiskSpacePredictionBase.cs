@@ -57,12 +57,13 @@ namespace HSMDataCollector.DefaultSensors
             return base.StartAsync();
         }
 
-        internal override async ValueTask StopAsync()
+        internal override ValueTask StopAsync()
         {
             _tokenSource?.Cancel();
-            await _workTask.ConfigureAwait(false);
+            _workTask?.ConfigureAwait(false).GetAwaiter().GetResult();
             _tokenSource?.Dispose();
-            await base.StopAsync().ConfigureAwait(false);
+            _workTask?.Dispose();
+            return base.StopAsync();
         }
 
 
