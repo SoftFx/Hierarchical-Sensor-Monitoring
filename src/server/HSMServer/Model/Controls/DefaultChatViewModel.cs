@@ -39,6 +39,8 @@ namespace HSMServer.Model.Controls
         public bool IsFromParent => ChatMode is DefaultChatMode.FromParent;
 
         public bool IsNotInitialized => ChatMode is DefaultChatMode.NotInitialized;
+        
+        public bool IsEmpty => ChatMode is DefaultChatMode.Empty;
 
 
         // public constructor without parameters for post actions
@@ -85,11 +87,11 @@ namespace HSMServer.Model.Controls
             
             static HashSet<Guid> GetChats(DefaultChatViewModel model)
             {
-                if (model is null)
+                if (model is null || model.IsEmpty || model.IsNotInitialized)
                     return [];
                 
                 var ids = new HashSet<Guid>();
-
+                
                 foreach (var id in model.SelectedChats)
                     ids.Add(id);
 
@@ -123,16 +125,31 @@ namespace HSMServer.Model.Controls
                 {
                     SelectedChats.ExceptWith(parentChats);
                     
+                    CurrentDisplayValue(ref parentChatNames);
+                    
                     return AsFromParent(parentChatNames) + ", " + SelectedChats.ToNames(chats);
                 }
 
+                CurrentDisplayValue(ref parentChatNames);
+                
                 return AsFromParent(parentChatNames);
             }
 
-            if (SelectedChats.Count == 0)
-                return ChatMode.GetDisplayName();
+            if (IsCustom)
+                return SelectedChats.ToNames(chats);
             
-            return SelectedChats.ToNames(chats);
+            return ChatMode.GetDisplayName();
+
+            bool CurrentDisplayValue(ref string asFromParent)
+            {
+                if ((Parent?.IsNotInitialized ?? false) || (Parent?.IsEmpty ?? false))
+                {
+                    asFromParent = Parent.ChatMode.GetDisplayName();
+                    return true;
+                }
+                
+                return false;
+            }
         }
 
         public string GetParentDisplayValue(List<TelegramChat> chats)
@@ -140,7 +157,7 @@ namespace HSMServer.Model.Controls
             var availableChats = ToAvailableChats(chats);
             var parentIds = Parent?.GetParentChats() ?? [];
             
-            var chatsName = ChatMode switch
+            var chatsName = Parent?.ChatMode switch
             {
                 DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
                 DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
@@ -173,10 +190,11 @@ namespace HSMServer.Model.Controls
         internal PolicyDestinationSettingsEntity ToEntity(Dictionary<Guid, string> availableChats)
         {
             var chats = new Dictionary<string, string>(1);
-
-            foreach (var chat in SelectedChats)
-                if (availableChats.TryGetValue(chat, out var chatName))
-                    chats.Add($"{chat}", chatName);
+            
+            if (IsFromParent || IsCustom)
+                foreach (var chat in SelectedChats)
+                    if (availableChats.TryGetValue(chat, out var chatName))
+                        chats.Add($"{chat}", chatName);
 
             return new()
             {
