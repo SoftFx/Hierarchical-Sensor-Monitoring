@@ -21,7 +21,10 @@ namespace HSMServer.Core.Model.Policies
 
         public PolicyDestinationHandler(IDictionary<Guid, string> firstKeys, IDictionary<Guid, string> secondKeys, bool isAllChats)
         {
-            Chats = new Dictionary<Guid, string>(firstKeys.Concat(secondKeys).ToDictionary(x => x.Key, y => y.Value));
+            Chats = new Dictionary<Guid, string>(firstKeys);
+            foreach (var val in secondKeys)
+                Chats.TryAdd(val.Key, val.Value);
+            
             IsAllChats = isAllChats;
         }
     }

@@ -69,11 +69,12 @@
                     case ChatsMode.FromParent:
                     {
                         var (chatIds, mode) = Model.ParentDefaultChat.GetCurrentChats();
+                        var parentChats = Model.ParentDefaultChat.GetParentChats();
                         var chatName = mode switch
                         {
                             DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
                             DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
-                            _ => chatIds.ToNames(telegramChats),
+                            _ => parentChats.ToNames(telegramChats),
                         };
 
                         chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatName})";
