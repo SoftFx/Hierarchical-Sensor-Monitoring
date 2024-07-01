@@ -54,16 +54,6 @@ namespace HSMServer.Core.Model.NodeSettings
                 foreach (var (chatId, name) in entity.Chats)
                     Chats.TryAdd(new Guid(chatId), name);
         }
-        
-        public PolicyDestinationSettings(PolicyDestinationSettingsEntity currentDestination, PolicyDestinationSettingsEntity parentDestination) : this(parentDestination)
-        {
-            Mode = (DefaultChatsMode)currentDestination.Mode;
-
-            if (currentDestination.Chats is not null)
-                foreach (var (chatId, name) in currentDestination.Chats)
-                    Chats.TryAdd(new Guid(chatId), name);
-        }
-
 
         public PolicyDestinationSettings ApplyNewChats(Dictionary<Guid, string> newChats)
         {

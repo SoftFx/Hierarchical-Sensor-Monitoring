@@ -113,15 +113,6 @@ namespace HSMServer.Model.Controls
             var chats = ToAvailableChats(chatList);
             
             var parentChats = Parent?.GetParentChats() ?? [];
-            
-            
-            // var (usedChatIds, usedMode) = GetCurrentChats();
-            // var chatsName = usedMode switch
-            // {
-            //     DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
-            //     DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
-            //     _ => usedChatIds.ToNames(chats),
-            // };
 
             allChats = [.. chats.Values];
 
@@ -129,7 +120,11 @@ namespace HSMServer.Model.Controls
             if (IsFromParent)
             {
                 if (SelectedChats.Count != 0)
+                {
+                    SelectedChats.ExceptWith(parentChats);
+                    
                     return AsFromParent(parentChatNames) + ", " + SelectedChats.ToNames(chats);
+                }
 
                 return AsFromParent(parentChatNames);
             }
@@ -143,9 +138,9 @@ namespace HSMServer.Model.Controls
         public string GetParentDisplayValue(List<TelegramChat> chats)
         {
             var availableChats = ToAvailableChats(chats);
-            var (ids, mode) = GetUsedValue(Parent);
             var parentIds = Parent?.GetParentChats() ?? [];
-            var chatsName = mode switch
+            
+            var chatsName = ChatMode switch
             {
                 DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
                 DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
@@ -169,7 +164,6 @@ namespace HSMServer.Model.Controls
                 DefaultChatsMode.Empty => DefaultChatMode.Empty,
                 _ => DefaultChatMode.NotInitialized,
             };
-
 
             return this;
         }
@@ -207,7 +201,7 @@ namespace HSMServer.Model.Controls
         internal PolicyDestinationSettings ToUpdate(ProductNodeViewModel product, ITelegramChatsManager chatsManager, IFolderManager folderManager)
         {
             return IsFromParent && product.ParentIsFolder
-                ? new (ToEntity(product.GetAvailableChats(chatsManager)), FromFolderEntity(folderManager.GetFolderDefaultChats(product.FolderId.Value)))
+                ? new(FromFolderEntity(folderManager.GetFolderDefaultChats(product.FolderId.Value)))
                 : ToModel(product.GetAvailableChats(chatsManager));
         }
 
