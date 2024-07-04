@@ -78,7 +78,9 @@
                         };
 
                         chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatName})";
-
+                        
+                        action.Chats.ExceptWith(parentChats);
+                        
                         if (action.Chats.Count !=  0)
                             chats += $", {GetActionChats(action)}";
                         

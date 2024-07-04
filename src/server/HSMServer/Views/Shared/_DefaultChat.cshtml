@@ -52,11 +52,11 @@
         $("select[name='SelectedChats']").selectpicker();
         $("select[name='SelectedChats']").off('changed.bs.select').on('changed.bs.select', function (e, clickedIndex, isSelected, previousValue, a) {
             const clickedValue = $(this)[0].options[clickedIndex].value;
-            if (clickedValue === 'Empty' || clickedValue === 'NotInitialized' && isSelected) {
+            if ((clickedValue === "FromParent" || clickedValue === 'Empty' || clickedValue === 'NotInitialized') && isSelected) {
                 $(this).val($(this)[0].options[clickedIndex].value);   
             }
             else {
-                if (Array.from($("select[name='SelectedChats']")[0].selectedOptions).find(x => x.value === 'NotInitialized' || x.value === 'Empty') !== undefined)
+                if (Array.from($("select[name='SelectedChats']")[0].selectedOptions).find(x => x.value === 'NotInitialized' || x.value === 'Empty' || x.value === "FromParent") !== undefined)
                     $(this).val($(this)[0].options[clickedIndex].value);
             }
 
