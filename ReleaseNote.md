@@ -32,8 +32,9 @@ Added manual **backup** button.
 ## Product/Node Info
 
 * **Default telegram chat** property renamed to **Telegram chats**.
-* **Telegram chats** now can be multiselected. All combinations can be selected except **Empty** and **Not initialized** values.
 * **Telegram chats** are hardcoded for the alerts destination(**Not for sensors**).
+* **Telegram chats** are hardcoded for the alerts destination(**Not for sensors**).
+* **Telegram chats** now can be multiselected. All combinations can be selected except **Empty** and **Not initialized** values(**Only for sensors**).
 * Error is now added to **View** mode.
 
 ## Tree
