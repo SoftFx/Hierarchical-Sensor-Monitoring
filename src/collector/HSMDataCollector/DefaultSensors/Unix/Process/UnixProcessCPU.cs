@@ -1,7 +1,8 @@
-﻿using HSMDataCollector.Extensions;
-using HSMDataCollector.Options;
-using System;
+﻿using System;
 using System.Diagnostics;
+using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.DefaultSensors.Unix
 {

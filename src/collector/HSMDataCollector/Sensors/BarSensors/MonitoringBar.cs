@@ -1,7 +1,8 @@
-﻿using HSMDataCollector.Extensions;
+﻿using System;
+using HSMDataCollector.Extensions;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
-using System;
+
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -16,7 +17,7 @@ namespace HSMDataCollector.DefaultSensors
 
         internal void Init(TimeSpan timerPeriod, int precision)
         {
-            OpenTime = timerPeriod.GetOpenTime();
+            OpenTime  = BarTimeHelper.GetOpenTime(timerPeriod);
             CloseTime = OpenTime + timerPeriod;
             Precision = precision;
         }
@@ -153,7 +154,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected override double CountAvr(double first, double second) => (first + second) / 2;
+        protected override double CountAvr(double first, double second) => first + second / 2;
 
         protected override double CountMean() => _totalSum / Count;
 

@@ -13,7 +13,7 @@
     var jsonOptions = new JsonSerializerOptions()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new PlotlyDoubleConverter() }
+        Converters = { new PlotlyDoubleConverter(), new VersionSourceConverter() }
     };
 
     var isYRangeAvailabe = !Model.MainSensorType.HasValue || Model.YRange.IsRangeScalePossible(Model.MainSensorType.Value);
@@ -115,6 +115,7 @@
 
         multichartRange = ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)];
 
+        // refactor to ChartHelper methods
         initMultichart('multichart', 300, true, true).then(
             (dom) => {
                 values.forEach(function (x) {

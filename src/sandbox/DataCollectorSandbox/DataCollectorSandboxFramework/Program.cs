@@ -1,14 +1,16 @@
-﻿using HSMDataCollector.Alerts;
-using HSMDataCollector.Core;
-using HSMDataCollector.Options;
-using HSMDataCollector.PublicInterface;
-using System;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Alerts;
+using HSMDataCollector.Core;
+using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
 
 namespace DatacollectorSandbox
 {
@@ -17,6 +19,7 @@ namespace DatacollectorSandbox
         private static readonly Random _random = new Random(1123213);
         private static IDataCollector _collector;
 
+        private static int _timeout = 1000;
 
         private static IInstantValueSensor<double> _baseDouble, _priorityDouble;
         private static IInstantValueSensor<bool> _baseBool, _priorityBool;
@@ -41,24 +44,30 @@ namespace DatacollectorSandbox
         private static INoParamsFuncSensor<double> _funcSensor, _funcSensorCustom, _funcSensorM1, _funcSensorM5;
         private static IParamsFuncSensor<double, int> _paramSensor, _paramSensorCustom, _paramSensorM1, _paramSensorM5;
 
+        static ConcurrentDictionary<string,int> _queuesInfo = new ConcurrentDictionary<string,int>();
+
 
         static async Task Main(string[] args)
         {
+
+
             var tokenSource = new CancellationTokenSource();
+
 
             var collectorOptions = new CollectorOptions()
             {
                 //ServerAddress = "hsm.dev.soft-fx.eu",
-                AccessKey = "2d19222d-d781-40ee-87e4-3fcaa1e0d711", //local key
-                Module = "Collector 3.3.0",
+                AccessKey = "52e9b823-b50b-4c06-8640-ed79172a9fc1", //local key
+                Module = "Collector 3.4.0",
                 ComputerName = "LocalMachine",
             };
 
             _collector = new DataCollector(collectorOptions).AddNLog(new HSMDataCollector.Logging.LoggerOptions() { WriteDebug = true });
 
-            //_collector.Windows.AddAllDefaultSensors(GetVersion());
+            _collector.Windows.AddAllDefaultSensors(GetVersion());
 
             await _collector.Start();
+
 
             var instantPriority = new InstantSensorOptions()
             {
@@ -134,19 +143,23 @@ namespace DatacollectorSandbox
 
             bool needRestart = false;
 
+            var process = Process.GetCurrentProcess();
+
             while (true)
             {
-                Console.WriteLine("wait");
-                var s = Console.ReadLine();
+                //Console.WriteLine("wait");
+                //var s = Console.ReadLine();
 
-                if (s == "e")
-                    break;
+                //if (s == "e")
+                //    break;
 
-                if (s == "r")
-                {
-                    needRestart = true;
-                    break;
-                }
+                //if (s == "r")
+                //{
+                //    needRestart = true;
+                //    break;
+                //}
+
+                //Console.WriteLine(GetCurrentThreads(process));
 
                 PushValue();
             }
@@ -216,32 +229,32 @@ namespace DatacollectorSandbox
                 _paramSensor.AddValue(GetInt());
                 _paramSensorCustom.AddValue(GetInt());
                 _paramSensorM1.AddValue(GetInt());
-                _paramSensorM5.AddValue(GetInt());
+                //_paramSensorM5.AddValue(GetInt());
 
-                await Task.Delay(2000);
+                await Task.Delay(_timeout);
             }
         }
 
 
-        private static void PushValue()
+        private static async Task PushValue()
         {
             _baseInt.AddValue(GetInt());
-            _priorityInt.AddValue(GetInt());
+            //_priorityInt.AddValue(GetInt());
 
             _baseBool.AddValue(_random.Next() % 2 == 0);
-            _priorityBool.AddValue(_random.Next() % 2 == 0);
+            //_priorityBool.AddValue(_random.Next() % 2 == 0);
 
             _baseDouble.AddValue(GetDouble());
-            _priorityDouble.AddValue(GetDouble());
+            //_priorityDouble.AddValue(GetDouble());
 
             _baseString.AddValue(GetRandomString(10));
-            _priorityString.AddValue(GetRandomString(10));
+           // _priorityString.AddValue(GetRandomString(10));
 
             _baseTime.AddValue(TimeSpan.FromTicks(_random.Next()));
-            _priorityTime.AddValue(TimeSpan.FromTicks(_random.Next()));
+            //_priorityTime.AddValue(TimeSpan.FromTicks(_random.Next()));
 
             _baseVersion.AddValue(GetVersion());
-            _priorityVersion.AddValue(GetVersion());
+           // _priorityVersion.AddValue(GetVersion());
 
 
             _lastInt.AddValue(GetInt());
@@ -251,10 +264,13 @@ namespace DatacollectorSandbox
             _lastVersion.AddValue(GetVersion());
             _lastSpan.AddValue(TimeSpan.FromTicks(_random.Next()));
 
-            _fileSensor.AddValue(GetRandomString(100));
-            _fileSensorCustom.AddValue(GetRandomString(100));
-            _fileSensorCustom2.AddValue(GetRandomString(100));
-            _fileSensorByPath.SendFile(Path.Combine(Environment.CurrentDirectory, "TEST LOCAL FILE.txt"));
+            //_fileSensor.AddValue(GetRandomString(100));
+            //_fileSensorCustom.AddValue(GetRandomString(100));
+            //_fileSensorCustom2.AddValue(GetRandomString(100));
+            //await _fileSensorByPath.SendFile(Path.Combine(Environment.CurrentDirectory, "TEST LOCAL FILE.txt"));
+
+            Thread.Sleep(_timeout);
+
         }
 
 
@@ -278,5 +294,21 @@ namespace DatacollectorSandbox
 
             return new Version(GetNumber(), GetNumber(), GetNumber());
         }
+
+        private static int GetCurrentThreads(Process process)
+        {
+            int runningThreadsCount = 0;
+            foreach (ProcessThread thread in process.Threads)
+            {
+                if (thread.ThreadState == System.Diagnostics.ThreadState.Running)
+                {
+                    runningThreadsCount++;
+                }
+            }
+
+            return runningThreadsCount;
+        }
+
     }
+
 }

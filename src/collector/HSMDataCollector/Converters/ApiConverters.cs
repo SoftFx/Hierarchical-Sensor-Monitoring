@@ -1,7 +1,8 @@
-﻿using HSMDataCollector.Alerts;
+﻿using System.Linq;
+using HSMDataCollector.Alerts;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects.SensorRequests;
-using System.Linq;
+
 
 namespace HSMDataCollector.Converters
 {
@@ -38,7 +39,6 @@ namespace HSMDataCollector.Converters
                 OriginalUnit = options.SensorUnit,
                 Description = options.Description,
 
-                DefaultChats = options.DefaultChats,
                 TTL = options.TtlAlert?.TtlValue?.Ticks ?? options.TTL?.Ticks,
                 KeepHistory = options.KeepHistory?.Ticks,
                 SelfDestroy = options.SelfDestroy?.Ticks,

@@ -1,35 +1,39 @@
-﻿using HSMDataCollector.Extensions;
+﻿using System;
+using System.Linq;
+using System.Management;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
-using System;
-using System.Diagnostics;
-using System.Threading.Tasks;
+
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
     {
-        internal const string CounterName = "System Up Time";
-        internal const string CategoryName = "System";
+        public static string WMI_CLASS_NAME = "Win32_OperatingSystem";
+        public static string PROPERTY_NAME  = "LastBootUpTime";
 
-        private readonly PerformanceCounter _performanceCounter;
-
-        protected override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
+        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
-        public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options)
+        public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options) { }
+
+
+        protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastBootTime();
+
+
+        private DateTime GetLastBootTime()
         {
-            _performanceCounter = new PerformanceCounter(CategoryName, CounterName);
-            _performanceCounter.NextValue(); // the first value is always 0
-        }
+            using (var searcher = new ManagementObjectSearcher($"SELECT {PROPERTY_NAME} FROM {WMI_CLASS_NAME}"))
+            {
+                var wmiObject = searcher.Get().OfType<ManagementObject>().FirstOrDefault();
 
+                if (wmiObject != null)
+                {
+                    return ManagementDateTimeConverter.ToDateTime(wmiObject.Properties[PROPERTY_NAME].Value.ToString()).ToUniversalTime();
+                }
+            }
 
-        protected override TimeSpan GetValue() => TimeSpan.FromSeconds(_performanceCounter.NextValue());
-
-        internal override Task Stop()
-        {
-            _performanceCounter?.Dispose();
-
-            return base.Stop();
+            return DateTime.MinValue;
         }
     }
 }

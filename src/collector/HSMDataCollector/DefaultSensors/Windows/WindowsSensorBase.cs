@@ -1,8 +1,9 @@
-﻿using HSMDataCollector.Options;
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -23,7 +24,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         internal WindowsSensorBase(BarSensorOptions options) : base(options) { }
 
 
-        internal override Task<bool> Init()
+        internal override ValueTask<bool> InitAsync()
         {
             try
             {
@@ -38,7 +39,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
                     {
                         ThrowException(new ArgumentNullException($"Performance counter: {CategoryName}/{CounterName} instance {InstanceName} not found"));
 
-                        return Task.FromResult(false);
+                        return new ValueTask<bool>(false);
                     }
 
                     _performanceCounter = new PerformanceCounter(CategoryName, CounterName, instantName);
@@ -48,18 +49,18 @@ namespace HSMDataCollector.DefaultSensors.Windows
             {
                 ThrowException(new Exception($"Error initializing performance counter: {CategoryName}/{CounterName} instance {InstanceName}: {ex}"));
 
-                return Task.FromResult(false);
+                return new ValueTask<bool>(false);
             }
 
-            return base.Init();
+            return base.InitAsync();
         }
 
 
-        internal override Task Stop()
+        internal override ValueTask StopAsync()
         {
             _performanceCounter?.Dispose();
 
-            return base.Stop();
+            return base.StopAsync();
         }
 
         protected override double GetBarData() => _performanceCounter.NextValue();

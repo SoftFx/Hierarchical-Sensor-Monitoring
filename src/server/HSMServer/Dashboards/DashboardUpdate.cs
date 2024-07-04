@@ -16,13 +16,14 @@ namespace HSMServer.Dashboards
         public double? Width { get; init; }
 
         public double? Height { get; init; }
-
-
+        
         public double? X { get; init; }
 
         public double? Y { get; init; }
 
 
+        public bool? IsSingleMode { get; init; }
+        
         public bool? ShowLegend { get; init; }
 
         public bool? ShowProduct { get; init; }
@@ -49,16 +50,34 @@ namespace HSMServer.Dashboards
     }
 
 
-    public sealed record PanelTooltipUpdateDto
+    public sealed record PanelUpdateDto
     {
-        public Guid Id { get; set; }
+        public TooltipHovermode? Hovermode { get; set; }
+        
+        public bool? IsSingleMode { get; set; }
+        
+        public bool? ShowLegend { get; set; } 
+        
+        public double? X { get; set; }
+        
+        public double? Y { get; set; }
+        
+        public double? Height { get; set; }
+        
+        public double? Width { get; set; }
+        
+        
 
-        public TooltipHovermode Hovermode { get; set; }
-
-        internal PanelUpdate ToUpdate() =>
-            new(Id)
+        internal PanelUpdate ToUpdate(Guid id) =>
+            new(id)
             {
-                Hovermode = Hovermode
+                Hovermode = Hovermode,
+                IsSingleMode = IsSingleMode,
+                ShowLegend = ShowLegend,
+                X = X,
+                Y = Y,
+                Height = Height,
+                Width = Width
             };
     }
 
@@ -76,6 +95,8 @@ namespace HSMServer.Dashboards
         public string Shape { get; init; }
 
         public bool AggregateValues { get; init; }
+        
+        public bool IsSingleMode { get; init; }
     }
 
 

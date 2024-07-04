@@ -1,0 +1,20 @@
+@using HSMServer.Datasources
+@model HSMServer.Model.Dashboards.DatasourceViewModel
+
+
+@{
+    var value = Model.Values.LastOrDefault();
+    var lastValue = value as BaseChartValue;
+}
+
+<tr id="source_@Model.Id">
+    <td>
+        <span style="flex-grow: 2; max-width: 40%">@Model.ProductName</span>
+    </td>
+    <td>
+        <span style="flex-grow: 2; max-width: 40%">@Model.DisplayLabel</span>
+    </td>
+    <td title="@lastValue?.Time">
+        <span class="last-value" style="flex-grow: 1; text-align: end">@lastValue?.GetValue()</span>
+    </td>
+</tr>

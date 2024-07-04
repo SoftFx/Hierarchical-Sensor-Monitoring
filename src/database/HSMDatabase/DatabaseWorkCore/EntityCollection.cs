@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Collections;
+using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
@@ -121,7 +122,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return list;
         }
 
-        public void Backup(string backupPath) => _database.Backup(backupPath);
+        public TaskResult<string> Backup(string backupPath) => _database.Backup(backupPath);
 
 
         private void RegisterId(Guid id)

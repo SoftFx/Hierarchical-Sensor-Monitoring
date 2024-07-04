@@ -56,7 +56,6 @@ namespace HSMServer.Model.TreeViewModel
             TTL.FromModel(model.Settings.TTL.CurValue, PredefinedIntervals.ForTimeout);
             KeepHistory.FromModel(model.Settings.KeepHistory.CurValue, PredefinedIntervals.ForKeepHistory);
             SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue, PredefinedIntervals.ForSelfDestory);
-            DefaultChats.FromModel(model.Settings.DefaultChats.CurValue);
 
             TTLAlert = new TimeToLiveAlertViewModel(model.Policies.TimeToLive, this);
         }

@@ -1,12 +1,21 @@
 import {convertToGraphData} from "./plotting";
-import {Colors, getScaleValue, IntegerPlot, Plot, TimeSpanPlot, ErrorColorPlot} from "./plots";
-import {Dashboard} from "../ts/dashboardT";
-import {DashboardStorage, Panel} from "../ts/dashboard.storage";
-import {Layout} from "../ts/plotUpdate";
+import {TimeSpanPlot, ErrorColorPlot} from "./plots";
+import {Panel} from "../ts/dashboard.panel";
+import {DashboardStorage} from "../ts/dashboard/dashboard.storage";
+import {formObserver} from "./nodeData";
+import {SiteHelper} from "../ts/services/site-helper";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
 
+
+window.addObserve = function(q){
+    formObserver.addFormToObserve(q);
+}
+
+window.manualCheckBoundaries = function (){
+    SiteHelper.ManualCheckDashboardBoundaries();
+}
 
 window.getRangeDate = function () {
     let period = $('#from_select').val();
@@ -128,7 +137,7 @@ function checkForYRange(plot) {
         $('#y-range-settings').hide()
 }
 
-window.insertSourcePlot = function (data, id, panelId, dashboardId, range = undefined) {
+export function insertSourcePlot (data, id, panelId, dashboardId, range = undefined) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)
@@ -308,28 +317,7 @@ window.initDashboard = function () {
     addDraggable(interactPanelDrag)
     addResizable(interactPanelResize)
 
-    let dict = {};
-    for (let i in currentPanel) {
-        if (dict[currentPanel[i].panelId] === undefined) {
-            dict[currentPanel[i].panelId] = {
-                sources: [
-                    {
-                        id: i,
-                    }
-                ],
-                range: currentPanel[i].range,
-                isTimeSpan: currentPanel[i].isTimeSpan,
-                requestTimeout: undefined,
-                id: currentPanel[i].panelId
-            }
-        } else {
-            dict[currentPanel[i].panelId].sources.push({
-                id: i
-            })
-        }
-    }
-
-    Dashboard.initRequests(dict);
+    dashboardStorage.initUpdateRequests()
 }
 
 window.addPanelToStorage = function (id, settings, lastUpdate) {
@@ -395,12 +383,25 @@ function addResizable(interactable) {
 
                 let item = $(target)
 
-                var update = {
-                    'width': item.width(),
-                    'height': item.height() - item.children('div').first().height()
-                };
+                let panel = dashboardStorage.getPanel(event.target.id);
+                if (panel.settings.isSingleMode){
+                    let children = item.children();
+                    let title = children[0].getBoundingClientRect();
+                    let data = item.find('table')[0].getBoundingClientRect();
+                    let childrenHeight = title.height + data.height;
+                    let childrenWidth = data.width;
+                    target.style.height = childrenHeight + 'px';
+                    if (childrenWidth > event.rect.width)
+                        target.style.width = childrenWidth + 'px';
+                }
+                else {
+                    var update = {
+                        'width': item.width(),
+                        'height': item.height() - item.children('div').first().height()
+                    };
 
-                Plotly.relayout(`panelChart_${event.target.id}`, update);
+                    Plotly.relayout(`panelChart_${event.target.id}`, update);
+                }
             }
         },
         modifiers: [
@@ -442,29 +443,8 @@ window.syncIndexes = function () {
     }
 }
 
-window.initMultyichartCordinates = function (settings, values, id) {
-    return new Promise(function (resolve, reject) {
-        let dashboardPanels = $('#dashboardPanels');
-        let width = dashboardPanels.width();
-        let height = 1400;
-
-        let currWidth = Number((settings.width * width).toFixed(5))
-        let currHeight = Number((settings.height * height).toFixed(5))
-        let transitionX = settings.x * width;
-        let transitionY = settings.y * height;
-        let panel = $(`#${id}`);
-
-        if (panel.length === 0)
-            reject();
-
-        panel.width(currWidth)
-            .height(currHeight)
-            .css('transform', 'translate(' + transitionX + 'px, ' + transitionY + 'px)')
-            .attr('data-x', transitionX)
-            .attr('data-y', transitionY);
-
-        resolve(transitionY + currHeight * 2);
-    })
+window.initPanel = async function (id, settings, ySettings, values, lastUpdate) {
+   await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate);
 }
 
 window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false, yaxisRange = true) {

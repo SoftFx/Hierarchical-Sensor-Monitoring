@@ -1,16 +1,20 @@
-using HSMDataCollector.Client.HttpsClient;
-using HSMDataCollector.Core;
-using HSMDataCollector.Logging;
-using HSMDataCollector.SyncQueue;
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Client.HttpsClient;
+using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
+using HSMDataCollector.SyncQueue.Data;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
+
 
 namespace HSMDataCollector.Client
 {
-    internal sealed class HsmHttpsClient : IDisposable
+    internal sealed class HsmHttpsClient : IDataSender, IDisposable
     {
         private const string HeaderClientName = "ClientName";
         private const string HeaderAccessKey = "Key";
@@ -19,13 +23,14 @@ namespace HSMDataCollector.Client
 
         private readonly CommandHandler _commandsHandler;
         private readonly DataHandlers _dataHandler;
+        private readonly DataHandlers _priorityDataHandler;
+        private readonly DataHandlers _fileHandler;
 
-        private readonly ILoggerManager _logger;
+        private readonly ICollectorLogger _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
 
-
-        internal HsmHttpsClient(CollectorOptions options, IQueueManager queue, ILoggerManager logger)
+        internal HsmHttpsClient(CollectorOptions options, ICollectorLogger logger)
         {
             _endpoints = new Endpoints(options);
             _logger = logger;
@@ -41,11 +46,10 @@ namespace HSMDataCollector.Client
             _client.DefaultRequestHeaders.Add(HeaderClientName, options.ClientName);
             _client.DefaultRequestHeaders.Add(HeaderAccessKey, options.AccessKey);
 
-            _commandsHandler = new CommandHandler(queue.Commands, _endpoints, _logger);
-            _commandsHandler.SendRequestEvent += _client.PostAsync;
-
-            _dataHandler = new DataHandlers(queue.Data, _endpoints, _logger);
-            _dataHandler.SendRequestEvent += _client.PostAsync;
+            _commandsHandler = new CommandHandler(this, _endpoints, _logger);
+            _dataHandler     = new DataHandlers(this, _endpoints, _logger);
+            _priorityDataHandler = new DataHandlers(this, _endpoints, _logger);
+            _fileHandler = new DataHandlers(this, _endpoints, _logger);
         }
 
 
@@ -53,25 +57,44 @@ namespace HSMDataCollector.Client
         {
             _tokenSource.Cancel();
 
-            _commandsHandler.SendRequestEvent -= _client.PostAsync;
-            _dataHandler.SendRequestEvent -= _client.PostAsync;
-
             _commandsHandler.Dispose();
             _dataHandler.Dispose();
             _client.Dispose();
         }
 
+        public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
+        {
+            return _commandsHandler.SendAsync(commands, token);
+        }
 
-        internal async Task<ConnectionResult> TestConnection()
+        public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+        {
+            return _dataHandler.SendAsync(items, token);
+        }
+
+        public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+        {
+            return _priorityDataHandler.SendAsync(items, token);
+        }
+
+        public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
+        {
+            return _fileHandler.SendAsync(file, token);
+        }
+
+        internal ValueTask<HttpResponseMessage> SendRequestAsync(string uri, HttpContent stringContent, CancellationToken token) => new ValueTask<HttpResponseMessage>(_client.PostAsync(uri, stringContent, token));
+
+
+        public async ValueTask<ConnectionResult> TestConnectionAsync()
         {
             try
             {
-                var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token);
+                var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token).ConfigureAwait(false);
 
                 if (connect.IsSuccessStatusCode)
                     return ConnectionResult.Ok;
 
-                var error = await connect.Content.ReadAsStringAsync();
+                var error = await connect.Content.ReadAsStringAsync().ConfigureAwait(false);
 
                 return new ConnectionResult(connect.StatusCode, $"{connect.ReasonPhrase} ({error})");
             }
@@ -80,5 +103,6 @@ namespace HSMDataCollector.Client
                 return new ConnectionResult(null, ex.Message);
             }
         }
+
     }
 }

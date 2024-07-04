@@ -6,12 +6,21 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
+using HSMServer.JsonConverters;
+using NLog.Targets;
 
 namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
+        private readonly JsonSerializerOptions _serializerOptions = new ()
+        {
+            Converters = { new VersionSourceConverter() },
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+        
         private readonly IDashboardManager _dashboards;
         private readonly IFolderManager _folders;
 
@@ -113,6 +122,19 @@ namespace HSMServer.Controllers
             return await EditDashboard(dashboardId);
         }
 
+        [HttpGet("Dashboards/{dashboardId:guid}/{panelId:guid}/Switch")]
+        public async Task<IActionResult> GetPanel(Guid dashboardId, Guid panelId)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel) && TryGetBoard(dashboardId, out var board))
+            {
+                var vm = new PanelViewModel(panel, dashboardId, GetAvailableFolders());
+                
+                return PartialView("_Panel", await vm.InitPanelData(DateTime.UtcNow - board.DataPeriod));
+            }
+
+            return BadRequest();
+        }
+        
         [ApiExplorerSettings(IgnoreApi = true)]
         [Route("Dashboards/{dashboardId:guid}/{panelId:guid}")]
         public async Task<IActionResult> AddDashboardPanel(Guid dashboardId, Guid panelId)
@@ -167,22 +189,6 @@ namespace HSMServer.Controllers
             return TryGetBoard(dashboardId, out var dashboard) && dashboard.AutofitPanels(width) ? Ok("Successfully relayout") : BadRequest("Couldn't relayout");
         }
 
-        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
-        public IActionResult UpdateLegendDisplay([FromQuery] bool showlegend, Guid dashboardId, Guid panelId)
-        {
-            if (TryGetPanel(dashboardId, panelId, out var panel))
-            {
-                panel.NotifyUpdate(new PanelUpdate(panel.Id)
-                {
-                    ShowLegend = showlegend,
-                });
-
-                return Ok("Successfully updated");
-            }
-
-            return BadRequest("Couldn't update panel");
-        }
-
         [HttpGet("Dashboards/{dashboardId:guid}/PanelUpdate/{panelId:guid}")]
         public ActionResult<object> GetPanelUpdates(Guid dashboardId, Guid panelId)
         {
@@ -193,19 +199,19 @@ namespace HSMServer.Controllers
                     id = x.Key,
                     update = x.Value.Source.GetSourceUpdates()
                 });
-                
+
                 return updates.ToList();
             }
 
             return _emptyResult;
         }
 
-        [HttpPut("Dashboards/{dashboardId:guid}/Panels")]
-        public IActionResult UpdatePanelSettings([FromBody] PanelTooltipUpdateDto panelTooltipUpdate, Guid dashboardId)
+        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}")]
+        public IActionResult UpdatePanelSettings([FromBody] PanelUpdateDto panelUpdate, Guid dashboardId, Guid panelId)
         {
-            if (panelTooltipUpdate is not null && TryGetPanel(dashboardId, panelTooltipUpdate.Id, out var panel))
+            if (panelUpdate is not null && TryGetPanel(dashboardId, panelId, out var panel))
             {
-                panel.NotifyUpdate(panelTooltipUpdate.ToUpdate());
+                panel.NotifyUpdate(panelUpdate.ToUpdate(panelId));
 
                 return Ok("Successfully updated");
             }
@@ -231,10 +237,9 @@ namespace HSMServer.Controllers
             if (TryGetPanel(dashboardId, panelId, out var panel) && panel.TryAddSource(sensorId, out var datasource, out error))
             {
                 var response = await datasource.Source.Initialize();
-
-                return Json(new DatasourceViewModel(response, datasource, showProduct));
+                
+                return Json(new DatasourceViewModel(response, datasource, showProduct), _serializerOptions);
             }
-
             return Json(new
             {
                 error

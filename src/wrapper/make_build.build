@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<project name="HSM_Cpp_Wrapper_build">
+
+  <property name="MSBuildPath2022" value="C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" />
+  <property name="DotNetCLI_Path" value="C:\Program Files\dotnet\dotnet.exe" />
+
+  <property name="wrapper.dir" value="${SourceDir}\src\wrapper" />
+
+	<property name="target.dir"  value="${ArtifactsDir}\${build.number}" />
+
+
+  <target name="BuildCppWrapperRelease">
+    <echo message="build starded at: ${datetime::now()}" />
+    <exec program="${MSBuildPath2022}">
+      <arg line="${wrapper.dir}\HSMCppWrapper.vcxproj" />
+      <arg line="/property:Configuration=Release" />
+      <arg line="/property:Platform=x64" />
+      <arg value="/target:Rebuild" />
+      <arg value="/verbosity:normal" />
+      <arg value="/nologo" />
+      <arg value="/maxcpucount:8" />
+    </exec>
+  </target>
+
+  <target name="BuildCppWrapperDebug">
+    <echo message="build starded at: ${datetime::now()}" />
+    <exec program="${MSBuildPath2022}">
+      <arg line="${wrapper.dir}\HSMCppWrapper.vcxproj" />
+      <arg line="/property:Configuration=Debug" />
+      <arg line="/property:Platform=x64" />
+      <arg value="/target:Rebuild" />
+      <arg value="/verbosity:normal" />
+      <arg value="/nologo" />
+      <arg value="/maxcpucount:8" />
+    </exec>
+  </target>
+
+  <target name="zipCppWrapper">
+    <delete>
+      <fileset>
+        <include name="${target.dir}\*.*" />
+      </fileset>
+    </delete>
+
+    <mkdir dir="${target.dir}" />
+
+    <zip zipfile="${target.dir}\HSMCppWrapper.${build.number}.zip">
+      <fileset basedir="${wrapper.dir}\x64\Release\" prefix="dll\HSMCppWrapper\x64\Release">
+        <include name="HSMCppWrapper.dll" />
+        <include name="HSMDataCollector.dll" />
+        <include name="HSMSensorDataObjects.dll" />
+        <include name="HSMCppWrapper.pdb" />
+        <include name="HSMDataCollector.pdb" />
+        <include name="HSMSensorDataObjects.pdb" />
+      </fileset>
+      <fileset basedir="${wrapper.dir}\x64\Release\" prefix="lib\HSMCppWrapper\x64\Release">
+        <include name="HSMCppWrapper.lib" />
+      </fileset>
+
+      <fileset basedir="${wrapper.dir}\x64\Debug\" prefix="dll\HSMCppWrapper\x64\Debug">
+        <include name="HSMCppWrapper.dll" />
+        <include name="HSMDataCollector.dll" />
+        <include name="HSMSensorDataObjects.dll" />
+        <include name="HSMCppWrapper.pdb" />
+        <include name="HSMDataCollector.pdb" />
+        <include name="HSMSensorDataObjects.pdb" />
+      </fileset>
+      <fileset basedir="${wrapper.dir}\x64\Debug\" prefix="lib\HSMCppWrapper\x64\Debug">
+        <include name="HSMCppWrapper.lib" />
+      </fileset>
+
+      <fileset basedir="${wrapper.dir}\x64\Release\" prefix="Assembly\HSM">
+        <include name="*.dll" />
+				<exclude name="HSM*.dll" />
+      </fileset>
+
+      <fileset basedir="${wrapper.dir}\include\" prefix="include\HSMCppWrapper">
+        <include name="*.h" />
+      </fileset>
+    </zip>
+
+  </target>
+</project>

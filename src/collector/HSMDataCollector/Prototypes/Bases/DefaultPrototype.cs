@@ -1,5 +1,6 @@
-﻿using HSMDataCollector.Options;
-using System.Linq;
+﻿using System.Linq;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.Prototypes
 {
@@ -33,6 +34,7 @@ namespace HSMDataCollector.Prototypes
                 IsSingletonSensor = customOptions?.IsSingletonSensor ?? defaultOptions.IsSingletonSensor,
                 AggregateData = customOptions?.AggregateData ?? defaultOptions.AggregateData,
                 Statistics = customOptions?.Statistics ?? defaultOptions.Statistics,
+                DataProcessor = customOptions?.DataProcessor ?? defaultOptions.DataProcessor,
             };
 
 

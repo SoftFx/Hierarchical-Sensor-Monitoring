@@ -30,6 +30,11 @@ namespace HSMServer.Dashboards
 
         public double Height { get; private set; } = DefaultHeight;
 
+        public double SingleModeWidth { get; private set; } = DefaultWidth;
+        
+        public double SingleModeHeight { get; private set; } = DefaultHeight;
+
+        
 
         public double X { get; private set; }
 
@@ -40,6 +45,8 @@ namespace HSMServer.Dashboards
 
         public TooltipHovermode Hovermode { get; private set; } = TooltipHovermode.X;
 
+        public bool IsSingleMode { get; private set; } = false;
+
 
         public PanelSettings()
         {
@@ -49,21 +56,33 @@ namespace HSMServer.Dashboards
 
         public void Update(PanelUpdate update)
         {
-            Height = update.Height ?? Height;
-            Width = update.Width ?? Width;
-
             X = update.X ?? X;
             Y = update.Y ?? Y;
 
             ShowLegend = update.ShowLegend ?? ShowLegend;
 
             Hovermode = update.Hovermode ?? Hovermode;
+            IsSingleMode = update.IsSingleMode ?? IsSingleMode;
+
+            if (IsSingleMode)
+            {
+                SingleModeWidth = update.Width ?? SingleModeWidth;
+                SingleModeHeight = update.Height ?? SingleModeHeight;
+            }
+            else
+            {
+                Height = update.Height ?? Height;
+                Width = update.Width ?? Width;
+            }
         }
 
         public PanelSettings FromEntity(PanelSettingsEntity entity)
         {
             Height = entity.Height;
             Width = entity.Width;
+            
+            SingleModeWidth = entity.SingleModeWidth;
+            SingleModeHeight = entity.SingleModeHeight;
 
             X = entity.X;
             Y = entity.Y;
@@ -71,6 +90,7 @@ namespace HSMServer.Dashboards
             ShowLegend = entity.ShowLegend;
 
             Hovermode = (TooltipHovermode)entity.Hovermode;
+            IsSingleMode = entity.IsSingleMode;
             
             return this;
         }
@@ -80,6 +100,9 @@ namespace HSMServer.Dashboards
             {
                 Height = Height,
                 Width = Width,
+                
+                SingleModeWidth = SingleModeWidth,
+                SingleModeHeight = SingleModeHeight,
 
                 X = X,
                 Y = Y,
@@ -87,6 +110,7 @@ namespace HSMServer.Dashboards
                 ShowLegend = ShowLegend,
                 
                 Hovermode = (byte)Hovermode,
+                IsSingleMode = IsSingleMode
             };
     }
 }

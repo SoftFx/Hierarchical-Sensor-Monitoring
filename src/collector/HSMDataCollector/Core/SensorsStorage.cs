@@ -1,35 +1,44 @@
-﻿using HSMDataCollector.DefaultSensors;
-using HSMDataCollector.Extensions;
-using HSMDataCollector.Logging;
-using HSMDataCollector.Options;
-using HSMDataCollector.Sensors;
-using HSMDataCollector.SensorsFactory;
-using HSMDataCollector.SyncQueue;
-using HSMSensorDataObjects;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMDataCollector.DefaultSensors;
+using HSMDataCollector.Logging;
+using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
+using HSMDataCollector.Sensors;
+using HSMDataCollector.SensorsFactory;
+using HSMSensorDataObjects;
+
 
 namespace HSMDataCollector.Core
 {
     internal sealed class SensorsStorage : ConcurrentDictionary<string, SensorBase>, IDisposable
     {
-        private readonly IDataCollector _collector;
+        private readonly CollectorOptions _options;
+
+        private readonly DataProcessor _dataProcessor;
+
+        private readonly PrototypesCollection _prototypes;
+
+        public IWindowsCollection Windows { get; }
+
+        public IUnixCollection Unix { get; }
+
+        internal ICollectorLogger Logger { get; }
 
 
-        internal IQueueManager QueueManager { get; }
-
-        internal ILoggerManager Logger { get; }
-
-
-        internal SensorsStorage(IDataCollector collector, IQueueManager queue, ILoggerManager logger)
+        internal SensorsStorage(CollectorOptions options, DataProcessor dataProcessor, ICollectorLogger logger)
         {
-            _collector = collector;
+            _options      = options;
+            _dataProcessor = dataProcessor;
+            Logger        = logger;
 
-            QueueManager = queue;
-            Logger = logger;
+            _prototypes = new PrototypesCollection(options, _dataProcessor);
+
+            Windows = new WindowsSensorsCollection(this, _prototypes);
+            Unix    = new UnixSensorsCollection(this, _prototypes);
         }
 
 
@@ -37,23 +46,15 @@ namespace HSMDataCollector.Core
         {
             foreach (var sensor in Values)
             {
-                if (sensor.IsProiritySensor)
-                    sensor.ReceiveSensorValue -= QueueManager.Data.Send;
-                else
-                    sensor.ReceiveSensorValue -= QueueManager.Data.Add;
-
-                sensor.SensorCommandRequest -= QueueManager.Commands.WaitServerResponse;
-                sensor.ExceptionThrowing -= WriteSensorException;
-
                 sensor.Dispose();
             }
         }
 
-        internal Task Init() => Task.WhenAll(Values.Select(s => s.Init()));
+        internal Task InitAsync() => Task.WhenAll(Values.Select(async s => await s.InitAsync().ConfigureAwait(false)));
 
-        internal Task Start() => Task.WhenAll(Values.Select(s => s.Start()));
+        internal Task StartAsync() => Task.WhenAll(Values.Select(async s => await s.StartAsync().ConfigureAwait(false)));
 
-        internal Task Stop() => Task.WhenAll(Values.Select(s => s.Stop()));
+        internal Task StopAsync() => Task.WhenAll(Values.Select(async s => await s.StopAsync().ConfigureAwait(false)));
 
 
         internal MonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options)
@@ -115,15 +116,20 @@ namespace HSMDataCollector.Core
             return (DoubleBarPublicSensor)Register(new DoubleBarPublicSensor(options));
         }
 
+        public IServiceCommandsSensor CreateServiceCommandsSensor()
+        {
+            return (IServiceCommandsSensor)Register(new ServiceCommandsSensor(_prototypes.ServiceCommands.Get(null)));
+        }
 
-        internal SensorBase Register(SensorBase sensor)
+
+        internal SensorBase Register(SensorBase sensor, bool startSensor = false)
         {
             var path = sensor.SensorPath;
 
             if (TryGetValue(path, out var oldSensor))
                 return oldSensor;
 
-            if (_collector.Status.IsStartingOrRunning())
+            if (_dataProcessor.IsStarted)
             {
                 _ = AddAndStart(sensor);
                 return sensor;
@@ -137,9 +143,9 @@ namespace HSMDataCollector.Core
         {
             var path = sensor.SensorPath;
 
-            if (!await AddSensor(sensor).Init())
+            if (!await AddSensor(sensor).InitAsync().ConfigureAwait(false))
                 Logger.Error($"Failed to init {path}");
-            else if (!await sensor.Start())
+            else if (!await sensor.StartAsync().ConfigureAwait(false))
                 Logger.Error($"Failed to start {path}");
 
             return sensor;
@@ -151,14 +157,6 @@ namespace HSMDataCollector.Core
 
             if (TryAdd(path, sensor))
             {
-                if (sensor.IsProiritySensor)
-                    sensor.ReceiveSensorValue += QueueManager.Data.Send;
-                else
-                    sensor.ReceiveSensorValue += QueueManager.Data.Add;
-
-                sensor.SensorCommandRequest += QueueManager.Commands.WaitServerResponse;
-                sensor.ExceptionThrowing += WriteSensorException;
-
                 Logger.Info($"New sensor has been added {path}");
 
                 return sensor;
@@ -171,14 +169,14 @@ namespace HSMDataCollector.Core
         {
             options = (T)options?.Copy() ?? new T();
 
-            options.ComputerName = _collector.ComputerName;
-            options.Module = _collector.Module;
+            options.ComputerName = _options.ComputerName;
+            options.Module = _options.Module;
             options.Path = path;
             options.Type = type;
+            options.DataProcessor = _dataProcessor;
 
             return options;
         }
 
-        private void WriteSensorException(string sensorPath, Exception ex) => Logger.Error($"Sensor: {sensorPath}, {ex}");
     }
 }

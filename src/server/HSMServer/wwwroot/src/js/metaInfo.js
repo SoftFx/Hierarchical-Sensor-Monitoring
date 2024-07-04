@@ -27,7 +27,6 @@ window.editInfoButtonClick = function () {
     $('#saveOnlyUniqueValuesSwitch').attr("disabled", false);
     $('#emaStatisticsSwitch').attr("disabled", false);
     $('#singletonSwitch').attr("disabled", false);
-    $('#sensorUnit').attr("disabled", false);
 
     $('#folder_ttl').removeClass('d-none');
     $('#partialSavedHistorySelect').removeClass('d-none');

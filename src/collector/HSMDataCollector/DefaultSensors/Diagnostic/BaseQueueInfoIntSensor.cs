@@ -1,6 +1,7 @@
-﻿using HSMDataCollector.Options;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.DefaultSensors.Diagnostic
 {
@@ -43,10 +44,7 @@ namespace HSMDataCollector.DefaultSensors.Diagnostic
 
         internal void AddValue(string queueName, TData value)
         {
-            if (!_queuesInfo.ContainsKey(queueName))
-                _queuesInfo.TryAdd(queueName, value);
-            else
-                _queuesInfo[queueName] = Apply(_queuesInfo[queueName], value);
+            _queuesInfo.AddOrUpdate(queueName, value, (k, v) => Apply(v, value));
 
             AddValue(value);
         }

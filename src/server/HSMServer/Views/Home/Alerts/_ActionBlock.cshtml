@@ -1,5 +1,6 @@
 ﻿@using HSMCommon.Extensions
 @using HSMServer.Extensions
+@using HSMServer.Model.TreeViewModel
 @using HSMServer.Notifications
 @using HSMServer.Model.DataAlerts
 
@@ -37,25 +38,34 @@
     <div name="sendNotificationAction" class="@isSendAction.ToVisibility() align-items-center">
         <input type="text" class="alert-block target-input target-comment" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)">
         <div class="alert-text-block operation-select">to</div>
-        <select class="selectpicker" name="Chats" multiple
-                data-width="100%" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-actions-box="true" data-container="body">
-            <option value="@ActionViewModel.AllChatsId" selected="@(Model.Chats?.Contains(ActionViewModel.AllChatsId) ?? true)">All chats</option>
-            <option value="" selected="@(Model.Chats?.Contains(ActionViewModel.DefaultChatId) ?? false)">Default chat</option>
+        @if (Model.Node is not SensorNodeViewModel)
+        {
+            <div name="Chats" class="alert-block target-input">@Model.ChatsMode.GetDisplayName()</div>
+        }
+        else
+        {
+            <select class="selectpicker" name="Chats" multiple
+                    data-width="100%" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-container="body">
+                <option class="general-group-chat-mode" value="@ChatsMode.FromParent" selected="@(Model.ChatsMode is ChatsMode.FromParent)">@ChatsMode.FromParent.GetDisplayName()</option>
+                <option class="general-group-chat-mode" value="@ChatsMode.NotInitialized" selected="@(Model.ChatsMode is ChatsMode.NotInitialized)">@ChatsMode.NotInitialized.GetDisplayName()</option>
+                <option class="general-group-chat-mode" value="@ChatsMode.Empty" selected="@(Model.ChatsMode is ChatsMode.Empty)">@ChatsMode.Empty.GetDisplayName()</option>
+                <option class="general-group-chat-mode" value="@ChatsMode.All" selected="@(Model.ChatsMode is ChatsMode.All)">@ChatsMode.All.GetDisplayName()</option>
 
-            <option data-divider="true"></option>
-            <option disabled>Groups</option>
-            @foreach (var chat in chats.GetGroups())
-            {
-                <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
-            }
+                <option data-divider="true"></option>
+                <option disabled>Groups</option>
+                @foreach (var chat in chats.GetGroups())
+                {
+                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+                }
 
-            <option data-divider="true"></option>
-            <option disabled>Users</option>
-            @foreach (var chat in chats.GetPrivates())
-            {
-                <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
-            }
-        </select>
+                <option data-divider="true"></option>
+                <option disabled>Users</option>
+                @foreach (var chat in chats.GetPrivates())
+                {
+                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+                }
+            </select>
+        }
 
         <a class="addSchedule @(hasSchedule ? "d-none" : string.Empty)"><i class="fa-regular fa-calendar-plus alert-schedule-button"></i></a>
 
@@ -102,6 +112,16 @@
                 let $title = $(this).parent().find('.filter-option-inner-inner');
                 $title.text("all chats");
             }
+            
+            if (clickedIndex >= 1 && clickedIndex <= 3 && isSelected) {
+                $(this).val($(this)[0].options[clickedIndex].value);
+            }
+            else {
+                if ($(this)[0].options[1].selected || $(this)[0].options[2].selected || $(this)[0].options[3].selected)
+                    $(this).val($(this)[0].options[clickedIndex].value)
+            }
+
+            $(this).selectpicker('refresh')
         });
 
         $("div[name='emoji']").emojioneArea({

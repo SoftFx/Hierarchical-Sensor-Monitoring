@@ -10,7 +10,7 @@ namespace HSMServer.Datasources.Aggregators
         where TState : struct
     {
         private readonly LinkedList<TState> _lastPointStates = new();
-        private readonly object _lock = new object();
+        private readonly object _lock = new();
 
         private Func<TState, TState, TState> _getAggrState;
 

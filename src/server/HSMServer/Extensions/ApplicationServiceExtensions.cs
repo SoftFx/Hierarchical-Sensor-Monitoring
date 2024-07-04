@@ -53,14 +53,15 @@ public static class ApplicationServiceExtensions
         services.AddSingleton<NotificationsCenter>()
                 .AddSingleton<DataCollectorWrapper>()
                 .AddSingleton<TreeViewModel>()
-                .AddSingleton<TelemetryCollector>();
+                .AddSingleton<TelemetryCollector>()
+                .AddSingleton<BackupDatabaseService>();
 
         services.AddHostedService<TreeSnapshotService>()
                 .AddHostedService<ClearDatabaseService>()
                 .AddHostedService<MonitoringBackgroundService>()
                 .AddHostedService<DatacollectorService>()
                 .AddHostedService<NotificationsBackgroundService>()
-                .AddHostedService<BackupDatabaseService>();
+                .AddHostedService(provider => provider.GetService<BackupDatabaseService>());
 
         services.AddSwaggerGen(o =>
         {

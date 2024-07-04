@@ -1,8 +1,10 @@
-﻿using HSMDataCollector.Extensions;
-using HSMDataCollector.Options;
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
+using HSMDataCollector.Threading;
+
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -16,10 +18,13 @@ namespace HSMDataCollector.DefaultSensors
         private readonly TimeSpan _barPeriod;
         private readonly int _precision;
 
-        private Timer _collectTimer;
+        private Task _collectTask;
+        private CancellationTokenSource _cancellationTokenSource;
         protected BarType _internalBar;
 
-        protected sealed override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
+        private volatile bool _isStarted = false;
+
+        protected sealed override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
         protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)
@@ -32,27 +37,35 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override async Task<bool> Init()
+        internal override ValueTask<bool> InitAsync()
         {
-            var isInitialized = await base.Init();
 
-            if (isInitialized)
-                _collectTimer = new Timer(CollectBar, null, _collectBarPeriod, _collectBarPeriod);
+            if (!_isStarted)
+            {
+                _isStarted = true;
+                _cancellationTokenSource = new CancellationTokenSource();
+                _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token);
+            }
 
-            return isInitialized;
+            return base.InitAsync();
         }
 
-        internal override async Task Stop()
+        internal override ValueTask StopAsync()
         {
-            _collectTimer?.Dispose();
+            if (_isStarted)
+            {
+                _isStarted = false;
+                _cancellationTokenSource?.Cancel();
+                _collectTask?.ConfigureAwait(false).GetAwaiter().GetResult();
+                _cancellationTokenSource?.Dispose();
+                _collectTask?.Dispose();
+            }
 
-            await base.Stop();
-
-            OnTimerTick();
+            return base.StopAsync();
         }
 
 
-        protected virtual void CollectBar(object _) => CheckCurrentBar();
+        protected virtual void CollectBar() => CheckCurrentBar();
 
         protected sealed override BarType GetValue()
         {
@@ -67,7 +80,7 @@ namespace HSMDataCollector.DefaultSensors
         protected sealed override BarType GetDefaultValue() =>
             new BarType()
             {
-                OpenTime = _internalBar?.OpenTime ?? DateTime.UtcNow,
+                OpenTime  = _internalBar?.OpenTime ?? DateTime.UtcNow,
                 CloseTime = _internalBar?.CloseTime ?? DateTime.UtcNow,
                 Count = 1,
             };

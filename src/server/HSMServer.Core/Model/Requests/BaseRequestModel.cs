@@ -9,6 +9,7 @@ namespace HSMServer.Core.Model.Requests
         private const string ErrorTooLongPath = "Path for the sensor is too long.";
         private const string ErrorInvalidPath = "Path has an invalid format.";
         private const string ErrorPathKey = "Path or key is empty.";
+        private const int MaxPathLength = 10;
 
         private readonly bool _failKey;
 
@@ -51,7 +52,7 @@ namespace HSMServer.Core.Model.Requests
                 message = ErrorInvalidPath;
                 return false;
             }
-            else if (PathParts.Length > ConfigurationConstants.DefaultMaxPathLength) // TODO : get maxPathLength from IConfigurationProvider
+            else if (PathParts.Length > MaxPathLength) // TODO : get maxPathLength from IServerConfig
             {
                 message = ErrorTooLongPath;
                 return false;

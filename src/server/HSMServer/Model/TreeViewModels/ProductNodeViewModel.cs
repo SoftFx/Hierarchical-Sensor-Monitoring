@@ -39,6 +39,14 @@ namespace HSMServer.Model.TreeViewModel
         }
 
 
+        public void Update(ProductModel model)
+        {
+            base.Update(model);
+
+            _ = DefaultChats.FromModel(model.Settings.DefaultChats.CurValue);
+        }
+
+
         public bool IsChangingAccessKeysAvailable(User user) =>
             user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
 

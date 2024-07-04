@@ -1,10 +1,12 @@
-﻿using HSMDataCollector.DefaultSensors.SystemInfo;
-using HSMDataCollector.Extensions;
-using HSMDataCollector.Options;
-using HSMSensorDataObjects;
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.DefaultSensors.SystemInfo;
+using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
+using HSMDataCollector.Threading;
+using HSMSensorDataObjects;
+
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -25,11 +27,13 @@ namespace HSMDataCollector.DefaultSensors
         private long _requestsCount;
         private bool _isOffTime;
 
+        private Task _workTask;
 
         private bool IsCalibration => _requestsCount <= _calibrationRequests;
 
         private long FreeSpace => _diskInfo.FreeSpace;
 
+        private volatile bool _isStarted = false;
 
         public FreeDiskSpacePredictionBase(DiskSensorOptions options, IDiskInfo diskInfo) : base(options)
         {
@@ -39,25 +43,37 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override Task<bool> Start()
+        internal override ValueTask<bool> StartAsync()
         {
-            _tokenSource = new CancellationTokenSource();
+            if (!_isStarted)
+            {
+                _isStarted = true;
 
-            _lastSpeedCheckTime = DateTime.UtcNow;
-            _lastAvailableSpace = FreeSpace;
+                _tokenSource = new CancellationTokenSource();
 
-            _currentChangeSpeed = 0.0;
-            _requestsCount = 0;
+                _lastSpeedCheckTime = DateTime.UtcNow;
+                _lastAvailableSpace = FreeSpace;
 
-            _ = UpdateDiskSpeed();
+                _currentChangeSpeed = 0.0;
+                _requestsCount = 0;
 
-            return base.Start();
+                _workTask = PeriodicTask.Run(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, _tokenSource.Token);
+            }
+
+            return base.StartAsync();
         }
 
-        internal override Task Stop()
+        internal override ValueTask StopAsync()
         {
-            _tokenSource?.Cancel();
-            return base.Stop();
+            if (_isStarted)
+            {
+                _isStarted = false;
+                _tokenSource?.Cancel();
+                _workTask?.ConfigureAwait(false).GetAwaiter().GetResult();
+                _tokenSource?.Dispose();
+                _workTask?.Dispose();
+            }
+            return base.StopAsync();
         }
 
 
@@ -100,29 +116,20 @@ namespace HSMDataCollector.DefaultSensors
             return _prevPrediction;
         }
 
-        private async Task UpdateDiskSpeed()
+        private void UpdateDiskSpeed()
         {
-            var start = DateTime.UtcNow.Ceil(_calculateSpeedDelay);
+            var utc = DateTime.UtcNow;
+            var curSpace = FreeSpace;
 
-            await Task.Delay(start - DateTime.UtcNow, _tokenSource.Token);
+            var curSpeed = (_lastAvailableSpace - curSpace) / (utc - _lastSpeedCheckTime).TotalSeconds;
 
-            while (!_tokenSource.IsCancellationRequested)
-            {
-                var utc = DateTime.UtcNow;
-                var curSpace = FreeSpace;
+            //Console.WriteLine($"Free = {curSpace}, Prev {_currentChangeSpeed} - cur {curSpeed}");
 
-                var curSpeed = (_lastAvailableSpace - curSpace) / (utc - _lastSpeedCheckTime).TotalSeconds;
+            if (curSpeed > 0.0)
+                Interlocked.Exchange(ref _currentChangeSpeed, Math.Abs(_currentChangeSpeed) > 0.0 ? _currentChangeSpeed * 0.9 + curSpeed * 0.1 : curSpeed);
 
-                //Console.WriteLine($"Free = {curSpace}, Prev {_currentChangeSpeed} - cur {curSpeed}");
-
-                if (curSpeed > 0.0)
-                    Interlocked.Exchange(ref _currentChangeSpeed, Math.Abs(_currentChangeSpeed) > 0.0 ? _currentChangeSpeed * 0.9 + curSpeed * 0.1 : curSpeed);
-
-                _lastAvailableSpace = curSpace;
-                _lastSpeedCheckTime = utc;
-
-                await Task.Delay(_calculateSpeedDelay, _tokenSource.Token);
-            }
+            _lastAvailableSpace = curSpace;
+            _lastSpeedCheckTime = utc;
         }
     }
 }

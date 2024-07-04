@@ -229,7 +229,7 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
             if (needFillFromTo) {
                 let to = getToDate();
                 let from = new Date($(`#oldest_date_${encodedId}`).val());
-
+                
                 from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
                 $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
@@ -262,7 +262,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         else
             $('#points_limit').hide()
 
-        let values = parsedData.values;
+        let values = parsedData.value.values;
         if (values.length === 0) {
             $('#no_data_' + encodedId).show();
             $('#noDataGraph').removeClass('d-none');
@@ -309,7 +309,7 @@ function isFileSensor(type) {
 }
 
 function isGraphAvailable(type) {
-    return !(type === 3 || type === 6 || type === 8);
+    return !(type === 3 || type === 6);
 }
 
 function isTableAvailable(type) {
@@ -331,6 +331,9 @@ function getToDate() {
 
 function datetimeLocal(datetime) {
     const dt = new Date(datetime);
+
+    if (isNaN(dt.getTime()))
+       return (new Date()).toISOString().slice(0, 16);
 
     return dt.toISOString().slice(0, 16);
 }

@@ -1,5 +1,6 @@
-﻿using Microsoft.Win32;
-using System;
+﻿using System;
+using Microsoft.Win32;
+
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -21,8 +22,12 @@ namespace HSMDataCollector.DefaultSensors
 
         internal static DateTime GetInstallationDate()
         {
-            if (TryLoadWindowsOsUpdateNode(out var node) && DateTime.TryParse(node.GetValue("LastDownloadsPurgeTime").ToString(), out var date))
-                return date;
+            if (TryLoadWindowsOsNode(out var node))
+            {
+                var timestamp = (long?)node.GetValue("InstallTime");
+                if (timestamp != null)
+                    return DateTime.FromFileTime(timestamp.Value).ToUniversalTime();
+            }
 
             return DateTime.MinValue;
         }

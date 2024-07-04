@@ -1,0 +1,18 @@
+@model HSMServer.Model.Dashboards.PanelViewModel
+
+<table class="cell-border compact orderable-table">
+    <thead>
+    <tr>
+        <th>Product name</th>
+        <th>Label</th>
+        <th>Value</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    @foreach (var i in @Model.Sources.Values)
+    {
+        @await Html.PartialAsync("_LastValue", i)
+    }
+    </tbody>
+</table>

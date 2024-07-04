@@ -1,7 +1,8 @@
-﻿using HSMDataCollector.Alerts;
+﻿using System.Collections.Generic;
+using HSMDataCollector.Alerts;
 using HSMDataCollector.DefaultSensors.Windows;
 using HSMSensorDataObjects.SensorRequests;
-using System.Collections.Generic;
+
 
 namespace HSMDataCollector.Prototypes.Collections.Disks
 {

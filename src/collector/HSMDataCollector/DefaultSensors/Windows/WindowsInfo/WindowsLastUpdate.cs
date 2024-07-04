@@ -1,32 +1,39 @@
-﻿using HSMDataCollector.Extensions;
+﻿using System;
+using System.Diagnostics.Eventing.Reader;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
-using System;
+
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsLastUpdate : MonitoringSensorBase<TimeSpan>
     {
-        private const string ShellCommand = "Get-WinEvent -LogName Setup | where {$_.message -match \"success\"} | select -First 1 -Property @{Name='Date';Expression={$_.TimeCreated.ToString()}} | select -ExpandProperty Date";
-        
-        
-        private readonly DateTime _lastUpdateDate;
+        private const int INSTALLATION_SUCCESS_CODE = 2;
 
-        protected override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
+        private readonly EventLogQuery _query = new EventLogQuery("SetUp", PathType.LogName) { ReverseDirection = true };
+
+        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
-        public WindowsLastUpdate(WindowsInfoSensorOptions options) : base(options)
+        public WindowsLastUpdate(SensorOptions options) : base(options) { }
+
+
+        private DateTime GetLastSuccessfulUpdateTime()
         {
-            using (var process = ProcessInfo.GetPowershellProcess(ShellCommand))
+            using (EventLogReader reader = new EventLogReader(_query))
             {
-                process.Start();
-
-                DateTime.TryParse(process.StandardOutput.ReadToEnd(), out _lastUpdateDate);
-
-                process.WaitForExit();
+                EventRecord eventRecord;
+                while ((eventRecord = reader.ReadEvent()) != null)
+                {
+                    if (eventRecord.Id == INSTALLATION_SUCCESS_CODE)
+                        return eventRecord.TimeCreated.Value;
+                }
             }
+
+            return RegistryInfo.GetInstallationDate();
         }
 
 
-        protected override TimeSpan GetValue() => DateTime.UtcNow - _lastUpdateDate.ToUniversalTime();
+        protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastSuccessfulUpdateTime().ToUniversalTime();
     }
 }

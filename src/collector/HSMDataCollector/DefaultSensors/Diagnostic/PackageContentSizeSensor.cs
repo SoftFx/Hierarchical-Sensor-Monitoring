@@ -1,6 +1,6 @@
 ﻿using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
-using HSMDataCollector.SyncQueue;
+using HSMDataCollector.SyncQueue.Data;
 
 namespace HSMDataCollector.DefaultSensors.Diagnostic
 {

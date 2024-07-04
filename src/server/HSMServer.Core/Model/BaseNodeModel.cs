@@ -17,9 +17,9 @@ namespace HSMServer.Core.Model
 
         internal ChangeInfoTable ChangeTable { get; }
 
-        public abstract PolicyCollectionBase Policies { get; }
+        public abstract BaseSettingsCollection Settings { get; }
 
-        public SettingsCollection Settings { get; } = new();
+        public abstract PolicyCollectionBase Policies { get; }
 
 
         public Guid Id { get; }
@@ -79,9 +79,6 @@ namespace HSMServer.Core.Model
             Description = entity.Description;
 
             ChangeTable.FromEntity(entity.ChangeTable);
-
-            if (entity.Settings is not null)
-                Settings.SetSettings(entity.Settings, entity.DefaultChatsSettings);
         }
 
 

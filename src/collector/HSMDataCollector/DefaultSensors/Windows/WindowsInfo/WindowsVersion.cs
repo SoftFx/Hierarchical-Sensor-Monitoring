@@ -1,7 +1,8 @@
-﻿using HSMDataCollector.Extensions;
-using HSMDataCollector.Options;
-using System;
+﻿using System;
 using System.Text;
+using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
+
 
 namespace HSMDataCollector.DefaultSensors.Windows.WindowsInfo
 {
@@ -10,7 +11,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.WindowsInfo
         private Version _lastVersion;
 
 
-        protected override TimeSpan TimerDueTime => PostTimePeriod.GetTimerDueTime();
+        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
         public WindowsVersion(WindowsInfoSensorOptions options) : base(options) { }

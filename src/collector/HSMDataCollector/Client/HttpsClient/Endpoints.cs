@@ -1,5 +1,5 @@
-﻿using HSMDataCollector.Core;
-using System;
+﻿using System;
+using HSMDataCollector.Core;
 
 namespace HSMDataCollector.Client
 {

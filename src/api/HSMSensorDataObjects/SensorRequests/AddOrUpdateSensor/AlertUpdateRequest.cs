@@ -5,8 +5,11 @@ namespace HSMSensorDataObjects.SensorRequests
 {
     public enum AlertDestinationMode : byte
     {
+        [Obsolete("Use 'FromParent' mode instead of old 'DefaultChats' mode")]
         DefaultChats = 0,
         NotInitialized = 1,
+        Empty = 2,
+        FromParent = 3,
         AllChats = 200,
     }
 

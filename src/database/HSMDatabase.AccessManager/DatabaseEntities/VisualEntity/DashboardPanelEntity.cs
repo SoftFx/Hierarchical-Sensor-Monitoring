@@ -24,6 +24,10 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public double Width { get; init; }
 
         public double Height { get; init; }
+        
+        public double SingleModeWidth { get; init; }
+        
+        public double SingleModeHeight { get; init; }
 
 
         public double X { get; init; }
@@ -34,6 +38,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public bool ShowLegend { get; init; }
 
         public byte Hovermode { get; init; }
+        
+        public bool IsSingleMode { get; init; }
     }
 
 

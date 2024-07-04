@@ -85,7 +85,7 @@ namespace HSMServer.Dashboards
                     ApplyPanelSettings(sub);
 
                 foreach (var (_, source) in Sources)
-                    source.BuildSource(YRange, AggregateValues);
+                    source.BuildSource(YRange, AggregateValues, Settings.IsSingleMode);
             }
         }
 
@@ -228,7 +228,7 @@ namespace HSMServer.Dashboards
 
                 _sensorToSourceMap[source.Sensor.Id].Add(source.Id);
 
-                source.BuildSource(YRange, AggregateValues);
+                source.BuildSource(YRange, AggregateValues, Settings.IsSingleMode);
                 SubscribeModuleToUpdates(source);
             }
 
@@ -241,6 +241,6 @@ namespace HSMServer.Dashboards
 
 
         private static bool IsSupportedType(SensorType type) => type is SensorType.Integer or SensorType.Double or
-            SensorType.Rate or SensorType.TimeSpan or SensorType.IntegerBar or SensorType.DoubleBar;
+            SensorType.Rate or SensorType.TimeSpan or SensorType.IntegerBar or SensorType.DoubleBar or SensorType.Version;
     }
 }
