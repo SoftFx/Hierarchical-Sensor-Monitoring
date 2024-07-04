@@ -78,17 +78,16 @@ namespace HSMServer.Model.Controls
                     return [];
 
                 var ids = new HashSet<Guid>();
-
-                foreach (var id in model.SelectedChats)
-                    ids.Add(id);
-
-                if (model.ChatMode == DefaultChatMode.FromParent)
-                {
-                    foreach (var id in GetChats(model.Parent))
-                    {
+                
+                if (!model.HasParent)
+                    foreach (var id in model.SelectedChats)
                         ids.Add(id);
+                else 
+                    if (model.ChatMode == DefaultChatMode.FromParent)
+                    {
+                        foreach (var id in GetChats(model.Parent))
+                            ids.Add(id);
                     }
-                }
 
                 return ids;
             }
@@ -111,8 +110,9 @@ namespace HSMServer.Model.Controls
 
             if (IsFromParent)
             {
-                if (SelectedChats.Count != 0)
-                    return AsFromParent(chatsName) + ", " + SelectedChats.ToNames(chats);
+                SelectedChats.ExceptWith(usedChatIds);
+                // if (SelectedChats.Count != 0)
+                //     return AsFromParent(chatsName) + ", " + SelectedChats.ToNames(chats);
 
                 return AsFromParent(chatsName);
             }
