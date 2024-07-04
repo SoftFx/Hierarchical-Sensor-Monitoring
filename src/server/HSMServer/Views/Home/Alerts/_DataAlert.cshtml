@@ -76,9 +76,13 @@
                             DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
                             _ => parentChats.ToNames(telegramChats),
                         };
-
+                        
+                        // chats = Model.ParentDefaultChat.GetAlertTelegramChats(ChatsManager.GetValues());
+                        
                         chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatName})";
-
+                        
+                        action.Chats.ExceptWith(parentChats);
+                        
                         if (action.Chats.Count !=  0)
                             chats += $", {GetActionChats(action)}";
                         

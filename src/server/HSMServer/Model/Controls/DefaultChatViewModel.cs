@@ -79,6 +79,11 @@ namespace HSMServer.Model.Controls
             return usedValue;
         }
 
+        public string GetAlertTelegramChats(List<TelegramChat> chats)
+        {
+            return GetCurrentDisplayValue(chats, out _);
+        }
+
         public HashSet<Guid> GetParentChats()
         {
             var chatIds = new HashSet<Guid>(1 << 4);
@@ -103,7 +108,6 @@ namespace HSMServer.Model.Controls
                     }
                 }
                 
-                
                 return ids;
             }
             
@@ -113,42 +117,31 @@ namespace HSMServer.Model.Controls
         public string GetCurrentDisplayValue(List<TelegramChat> chatList, out List<TelegramChat> allChats)
         {
             var chats = ToAvailableChats(chatList);
-            
-            var parentChats = Parent?.GetParentChats() ?? [];
-
             allChats = [.. chats.Values];
-
-            var parentChatNames = parentChats.ToNames(chats);
-            if (IsFromParent)
-            {
-                if (SelectedChats.Count != 0)
-                {
-                    SelectedChats.ExceptWith(parentChats);
-                    
-                    CurrentDisplayValue(ref parentChatNames);
-                    
-                    return AsFromParent(parentChatNames) + ", " + SelectedChats.ToNames(chats);
-                }
-
-                CurrentDisplayValue(ref parentChatNames);
-                
-                return AsFromParent(parentChatNames);
-            }
-
-            if (IsCustom)
-                return SelectedChats.ToNames(chats);
             
-            return ChatMode.GetDisplayName();
-
-            bool CurrentDisplayValue(ref string asFromParent)
+            return ChatMode switch
             {
+                DefaultChatMode.FromParent => GetFromParentValue(),
+                DefaultChatMode.Custom => SelectedChats.ToNames(chats),
+                _ => ChatMode.GetDisplayName()
+            };
+            
+            string GetFromParentValue()
+            {
+                var parentChats = Parent?.GetParentChats() ?? [];
+
+                var parentValue = string.Empty;
                 if ((Parent?.IsNotInitialized ?? false) || (Parent?.IsEmpty ?? false))
-                {
-                    asFromParent = Parent.ChatMode.GetDisplayName();
-                    return true;
-                }
+                    parentValue = Parent.ChatMode.GetDisplayName();
+                else
+                    parentValue = parentChats.ToNames(chats);
                 
-                return false;
+                //SelectedChats.ExceptWith(parentChats);
+                
+                if (SelectedChats.Count == 0)
+                    return  AsFromParent(parentValue) + ", " + SelectedChats.ToNames(chats);
+                
+                return AsFromParent(parentValue);
             }
         }
 
@@ -164,6 +157,9 @@ namespace HSMServer.Model.Controls
                 _ => parentIds.ToNames(availableChats),
             };
 
+            if (parentIds.Count == 0)
+                chatsName = DefaultChatMode.Empty.GetDisplayName();
+            
             return AsFromParent(chatsName);
         }
 

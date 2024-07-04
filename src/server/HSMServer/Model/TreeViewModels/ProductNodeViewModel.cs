@@ -43,7 +43,7 @@ namespace HSMServer.Model.TreeViewModel
         {
             base.Update(model);
 
-            DefaultChats.FromModel(model.Settings.DefaultChats.CurValue);
+            DefaultChats = DefaultChats.FromModel(model.Settings.DefaultChats.CurValue);
         }
 
 
