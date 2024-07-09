@@ -4,6 +4,7 @@ import {Panel} from "../ts/dashboard.panel";
 import {DashboardStorage} from "../ts/dashboard/dashboard.storage";
 import {formObserver} from "./nodeData";
 import {SiteHelper} from "../ts/services/site-helper";
+import {VersionPlot} from "../ts/plots/version-plot";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
@@ -203,6 +204,38 @@ export function insertSourcePlot (data, id, panelId, dashboardId, range = undefi
                 timespanLayout.xaxis.automargin = true;
 
                 Plotly.relayout(id, timespanLayout)
+            }
+            
+            if (plot instanceof VersionPlot)
+            {
+                let y = [];
+                for (let i of $(`#${id}`)[0].data)
+                    y.push(...i.y);
+
+                y = y.filter(element => {
+                    return element !== null;
+                })
+                
+                let versionLayout = plot.getLayout(y);
+
+                versionLayout.margin = {
+                    autoexpand: true,
+                    l: 30,
+                    r: 30,
+                    t: 30,
+                    b: 40,
+                };
+
+                versionLayout.legend = {
+                    y: 0,
+                    orientation: "h",
+                    yanchor: "bottom",
+                    yref: "container"
+                };
+
+                versionLayout.xaxis.automargin = true;
+
+                Plotly.relayout(id, versionLayout)
             }
 
             $('#emptypanel').hide()
