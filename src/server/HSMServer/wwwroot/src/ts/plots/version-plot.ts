@@ -34,7 +34,7 @@ export class VersionPlot extends Plot<string>{
             if (value !== -1)
                 stringRepresentation += q === true ? `${value}` : `.${value}`;
             else 
-                stringRepresentation += '.-1';
+                stringRepresentation += '.0';
         }
         
         return stringRepresentation;
