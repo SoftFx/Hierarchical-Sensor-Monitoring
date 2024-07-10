@@ -1,6 +1,6 @@
 ﻿import {Plot} from "./plot";
 import {IVersionEntity, IVersionValue} from "../entities/version-entity";
-import {Layout} from "plotly.js";
+import {Data, Layout} from "plotly.js";
 
 export class VersionPlot extends Plot<string>{
     override type = 'scatter';
@@ -64,5 +64,51 @@ export class VersionPlot extends Plot<string>{
            },
            autosize: true
        }
+    }
+    
+    static getPanelLayout(data: Data[]){
+        const layoutVals : string[] = [];
+        const layoutText: string[] = [];
+        const y: string[] = []
+        
+        for (const val of data) {
+            //@ts-ignore
+            y.push(...val.y);
+        }
+        
+        for (const yVal of y) {
+            layoutText.push(yVal.replaceAll('.-1', ''));
+            layoutVals.push(yVal);
+        }
+
+        return {
+            dragmode: 'zoom',
+            autosize: true,
+            xaxis: {
+                type: 'date',
+                autorange: true,
+                title: {
+                    //text: 'Time',
+                    font: {
+                        family: 'Courier New, monospace',
+                        size: 18,
+                        color: '#7f7f7f'
+                    }
+                },
+                rangeslider: {
+                    visible: false
+                }
+            },
+            yaxis: {
+                tickmode: "array",
+                ticktext: layoutText,
+                tickvals: layoutVals,
+                tickfont: {
+                    size: 10
+                },
+                // @ts-ignore
+                automargin: "width+height"
+            },
+        }
     }
 }
