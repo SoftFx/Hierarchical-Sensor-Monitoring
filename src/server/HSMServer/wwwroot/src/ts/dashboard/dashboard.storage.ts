@@ -79,6 +79,7 @@ export class DashboardStorage {
                 'yaxis.title.text': units,
                 'yaxis.title.font.size': 14,
                 'yaxis.title.font.color': '#7f7f7f',
+                'showlegend': panel.settings.showLegend
             }
             
             if (isTimeSapen)

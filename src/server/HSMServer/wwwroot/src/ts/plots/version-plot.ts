@@ -77,6 +77,9 @@ export class VersionPlot extends Plot<string>{
         }
         
         for (const yVal of y) {
+            if (yVal === null)
+                continue;
+            
             layoutText.push(yVal.replaceAll('.-1', ''));
             layoutVals.push(yVal);
         }
