@@ -17,6 +17,8 @@
 
 namespace hsm_wrapper
 {
+	void HSMWRAPPER_API RedirectAssembly();
+
 	class DataCollectorImpl;
 	class DataCollectorProxy;
 
