@@ -68,8 +68,7 @@
                 {
                     case ChatsMode.FromParent:
                     {
-                        var (chatIds, mode) = Model.ParentDefaultChat.GetCurrentChats();
-                        var parentChats = Model.ParentDefaultChat.GetParentChats();
+                        var (parentChats, mode) = Model.ParentDefaultChat.GetCurrentChats();
                         var chatName = mode switch
                         {
                             DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
