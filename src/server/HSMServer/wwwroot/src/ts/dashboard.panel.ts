@@ -17,10 +17,14 @@ export class Panel {
 
     id: string
     settings: PanelSettings
+    sourceType: number
+    unit: string
 
-    constructor(id: string, settings: IPanelSettings, ySettings: IYRangeSettings) {
+    constructor(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, sourceType: number, unit: string) {
         this.id = id;
         this.settings = new PanelSettings(this.id, settings, ySettings);
+        this.sourceType = sourceType;
+        this.unit = unit;
     }
 
     get lastUpdateTime(): Date {
@@ -56,6 +60,9 @@ export class Panel {
     }
 
     basePanelInit() {
+        if (this.id === 'multichart')
+            return;
+
         this._lastUpdateDiv = $('#lastUpdate_' + this.id);
 
         this.addEventListeners();
@@ -81,6 +88,9 @@ export class Panel {
     }
 
     addEventListeners() {
+        if (this.id === 'multichart')
+            return;
+        
         if (this.settings.isSingleMode)
             this.addOrderableTable();
 

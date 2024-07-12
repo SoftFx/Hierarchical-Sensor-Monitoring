@@ -21,6 +21,7 @@
     var settingsButtonsDisplayClass = @Model.Settings.IsSingleMode ? "d-none" : "";
     
     var lastUpdate = (long)(@Model.LastUpdate - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
+    var mainSensorType = Model.MainSensorType is null ? byte.MinValue : (byte)Model.MainSensorType;
 }
 
 <div id="@Model.Id" class="panel resize-draggable">
@@ -104,7 +105,7 @@
         const settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
         const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
-         
-        initPanel('@Model.Id', settings, ySettings, values, Number('@lastUpdate'), '@Model.DashboardId');  
+
+        initPanel('@Model.Id', settings, ySettings, values, Number('@lastUpdate'), '@Model.DashboardId', Number('@mainSensorType'), '@Model.MainUnit');  
     })
 </script>

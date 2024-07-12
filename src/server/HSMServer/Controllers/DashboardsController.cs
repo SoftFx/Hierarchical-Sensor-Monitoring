@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HSMServer.DTOs.Sources;
 using HSMServer.JsonConverters;
 using NLog.Targets;
 
@@ -147,6 +148,16 @@ namespace HSMServer.Controllers
             }
 
             return Redirect("Dashboards");
+        }
+        
+        [HttpPut("Dashboards/{dashboardId:guid}/{panelId:guid}/DeleteSources")]
+        public async Task<IActionResult> DeleteSources(Guid dashboardId, Guid panelId, [FromBody] DeleteSourcesDto deleteSourcesDto)
+        {
+            if (TryGetPanel(dashboardId, panelId, out var panel))
+                foreach (var id in deleteSourcesDto.Ids)
+                    panel.TryRemoveSource(id);
+            
+            return Ok();
         }
 
         [HttpDelete("Dashboards/{dashboardId:guid}/{panelId:guid}")]
