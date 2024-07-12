@@ -9,6 +9,8 @@ import {HttpPanelService} from "../services/http-panel-service";
 import {insertSourcePlot} from "../../js/dashboard";
 import {customReset} from "../../js/plotting";
 import Plotly from "plotly.js";
+import {TimeSpanPlot} from "../../js/plots";
+import {VersionPlot} from "../plots/version-plot";
 
 export const httpPanelService : HttpPanelService = new HttpPanelService();
 export const updateDashboardInterval = 120000;
@@ -41,8 +43,8 @@ export class DashboardStorage {
         return this.panels[id];
     }
     
-    public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: number, dId: string){
-        let panel = new Panel(id, settings, ySettings);
+    public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: number, dId: string, sourceType: number, unit: string){
+        let panel = new Panel(id, settings, ySettings, sourceType, unit);
 
         let result = await ChartHelper.initContrainerCordinates(panel.settings, id)
 
@@ -53,10 +55,38 @@ export class DashboardStorage {
         this.addPanel(panel, lastUpdate)
 
         if (!panel.settings.isSingleMode){
+            const data : any[] = [];
             values.forEach(function (x) {
-                insertSourcePlot(x, `panelChart_${id}`, id, dId, panel.settings.range)
+               data.push(insertSourcePlot(x, `panelChart_${id}`, id, dId, panel.settings.range)[0]);
             })
+            
+            let plot = await Plotly.addTraces(`panelChart_${id}`, data);
 
+            let layoutUpdate = {
+                'xaxis.visible': true,
+                'xaxis.type': 'date',
+                'xaxis.autorange': false,
+                'xaxis.range': getRangeDate(),
+                'yaxis.visible': true,
+                'yaxis.title.text': panel.unit,
+                'yaxis.title.font.size': 14,
+                'yaxis.title.font.color': '#7f7f7f',
+                'showlegend': panel.settings.showLegend
+            }
+            
+            if (panel.sourceType === 7)
+            {
+                // @ts-ignore
+                await Plotly.relayout(`panelChart_${id}`, TimeSpanPlot.getPanelLayout(plot.data));
+            }
+            
+            if (panel.sourceType === 8){
+                // @ts-ignore
+                await Plotly.relayout(`panelChart_${id}`, VersionPlot.getPanelLayout(plot.data));
+            }
+            // @ts-ignore
+            await Plotly.relayout(`panelChart_${id}`, layoutUpdate);
+            
             $(`#panelChart_${id}`).on('plotly_relayout', function (e, updateData){
                 let emptypanel = $(`#emptypanel_${id}`);
                 let container = $(`#${id}`);

@@ -238,6 +238,7 @@ export namespace Layout {
         let plotDiv = $('#panelChart_' + id)[0] as PlotlyHTMLElement;
         plotDiv.layout.hovermode = HovermodeUtils.toHovermode(settings.hovermode);
         plotDiv.layout.hoverdistance = settings.hoverDistance;
+        plotDiv.layout.showlegend = settings.showLegend;
         
         window.Plotly.relayout(plotDiv, plotDiv.layout)
     }
