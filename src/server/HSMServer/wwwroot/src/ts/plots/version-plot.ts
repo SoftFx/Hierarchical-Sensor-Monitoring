@@ -1,6 +1,7 @@
 ﻿import {Plot} from "./plot";
 import {IVersionEntity, IVersionValue} from "../entities/version-entity";
 import {Data, Layout} from "plotly.js";
+import {Dictionary} from "../dashboard/dashboard.interfaces";
 
 export class VersionPlot extends Plot<string>{
     override type = 'scatter';
@@ -31,10 +32,7 @@ export class VersionPlot extends Plot<string>{
         tryBuild(value.minorRevision)
         
         function tryBuild(value: number, q: boolean = false){
-            if (value !== -1)
                 stringRepresentation += q === true ? `${value}` : `.${value}`;
-            else 
-                stringRepresentation += '.0';
         }
         
         return stringRepresentation;
@@ -70,7 +68,8 @@ export class VersionPlot extends Plot<string>{
         const layoutVals : string[] = [];
         const layoutText: string[] = [];
         const y: string[] = []
-        
+
+        let map: Dictionary<string> = {};
         for (const val of data) {
             //@ts-ignore
             y.push(...val.y);
@@ -80,8 +79,12 @@ export class VersionPlot extends Plot<string>{
             if (yVal === null)
                 continue;
             
-            layoutText.push(yVal.replaceAll('.-1', ''));
+            map[yVal] = yVal;
+        }
+
+        for (const yVal of Object.keys(map)) {
             layoutVals.push(yVal);
+            layoutText.push(yVal.replaceAll('.-1', ''));
         }
 
         return {
@@ -109,6 +112,7 @@ export class VersionPlot extends Plot<string>{
                 tickfont: {
                     size: 10
                 },
+                categoryorder: 'category ascending',
                 // @ts-ignore
                 automargin: "width+height"
             },
