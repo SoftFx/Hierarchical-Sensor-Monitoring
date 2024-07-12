@@ -43,8 +43,8 @@ export class DashboardStorage {
         return this.panels[id];
     }
     
-    public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: number, dId: string){
-        let panel = new Panel(id, settings, ySettings);
+    public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: number, dId: string, sourceType: number, unit: string){
+        let panel = new Panel(id, settings, ySettings, sourceType, unit);
 
         let result = await ChartHelper.initContrainerCordinates(panel.settings, id)
 
@@ -56,15 +56,7 @@ export class DashboardStorage {
 
         if (!panel.settings.isSingleMode){
             const data : any[] = [];
-            
-            let isTimeSapen = false;
-            let isVersion = false;
-            let units = "";
             values.forEach(function (x) {
-                isTimeSapen = x.sensorInfo.plotType == 7;
-                isVersion = x.sensorInfo.plotType == 8;
-                units = x.sensorInfo.units;
-                
                data.push(insertSourcePlot(x, `panelChart_${id}`, id, dId, panel.settings.range)[0]);
             })
             
@@ -76,25 +68,24 @@ export class DashboardStorage {
                 'xaxis.autorange': false,
                 'xaxis.range': getRangeDate(),
                 'yaxis.visible': true,
-                'yaxis.title.text': units,
+                'yaxis.title.text': panel.unit,
                 'yaxis.title.font.size': 14,
                 'yaxis.title.font.color': '#7f7f7f',
                 'showlegend': panel.settings.showLegend
             }
             
-            if (isTimeSapen)
+            if (panel.sourceType === 7)
             {
                 // @ts-ignore
                 await Plotly.relayout(`panelChart_${id}`, TimeSpanPlot.getPanelLayout(plot.data));
             }
             
-            if (isVersion){
+            if (panel.sourceType === 8){
                 // @ts-ignore
                 await Plotly.relayout(`panelChart_${id}`, VersionPlot.getPanelLayout(plot.data));
             }
             // @ts-ignore
             await Plotly.relayout(`panelChart_${id}`, layoutUpdate);
-            
             
             $(`#panelChart_${id}`).on('plotly_relayout', function (e, updateData){
                 let emptypanel = $(`#emptypanel_${id}`);

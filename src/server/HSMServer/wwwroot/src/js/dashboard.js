@@ -174,79 +174,6 @@ export function insertSourcePlot (data, id, panelId, dashboardId, range = undefi
     if (panel)
         panel.lastUpdateTime = new Date(plotData[0].x.at(-1));
 
-    // Plotly.addTraces(id, plotData).then(
-    //     (data) => {
-    //         if (plot instanceof TimeSpanPlot) {
-    //             let y = [];
-    //             for (let i of $(`#${id}`)[0].data)
-    //                 y.push(...i.y);
-    //
-    //             y = y.filter(element => {
-    //                 return element !== null;
-    //             })
-    //             let timespanLayout = plot.getLayout(y);
-    //
-    //             timespanLayout.margin = {
-    //                 autoexpand: true,
-    //                 l: 30,
-    //                 r: 30,
-    //                 t: 30,
-    //                 b: 40,
-    //             };
-    //
-    //             timespanLayout.legend = {
-    //                 y: 0,
-    //                 orientation: "h",
-    //                 yanchor: "bottom",
-    //                 yref: "container"
-    //             };
-    //
-    //             timespanLayout.xaxis.automargin = true;
-    //
-    //             Plotly.relayout(id, timespanLayout)
-    //         }
-    //        
-    //         if (plot instanceof VersionPlot)
-    //         {
-    //             let y = [];
-    //             for (let i of $(`#${id}`)[0].data)
-    //                 y.push(...i.y);
-    //
-    //             y = y.filter(element => {
-    //                 return element !== null;
-    //             })
-    //            
-    //             let versionLayout = plot.getLayout(y);
-    //
-    //             versionLayout.margin = {
-    //                 autoexpand: true,
-    //                 l: 30,
-    //                 r: 30,
-    //                 t: 30,
-    //                 b: 40,
-    //             };
-    //
-    //             versionLayout.legend = {
-    //                 y: 0,
-    //                 orientation: "h",
-    //                 yanchor: "bottom",
-    //                 yref: "container"
-    //             };
-    //
-    //             versionLayout.xaxis.automargin = true;
-    //
-    //             Plotly.relayout(id, versionLayout)
-    //         }
-    //
-    //         $('#emptypanel').hide()
-    //
-    //         if (id === 'multichart')
-    //             layoutUpdate['xaxis.autorange'] = true;
-    //
-    //         Plotly.relayout(id, layoutUpdate)
-    //     }
-    // );
-
     currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
     currentPanel[data.id].isTimeSpan = plot instanceof TimeSpanPlot;
     
@@ -478,8 +405,8 @@ window.syncIndexes = function () {
     }
 }
 
-window.initPanel = async function (id, settings, ySettings, values, lastUpdate) {
-   await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate);
+window.initPanel = async function (id, settings, ySettings, values, lastUpdate, panelSourceType, unit) {
+   await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate, panelSourceType, unit);
 }
 
 window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false, yaxisRange = true) {
