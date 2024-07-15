@@ -22,8 +22,6 @@ namespace HSMDataCollector.DefaultSensors
         private CancellationTokenSource _cancellationTokenSource;
         protected BarType _internalBar;
 
-        private volatile bool _isStarted = false;
-
         protected sealed override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
@@ -39,10 +37,8 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override ValueTask<bool> InitAsync()
         {
-
-            if (!_isStarted)
+            if (_collectTask == null)
             {
-                _isStarted = true;
                 _cancellationTokenSource = new CancellationTokenSource();
                 _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token);
             }
@@ -50,18 +46,18 @@ namespace HSMDataCollector.DefaultSensors
             return base.InitAsync();
         }
 
-        internal override ValueTask StopAsync()
+        internal override async ValueTask StopAsync()
         {
-            if (_isStarted)
+            if (_collectTask != null)
             {
-                _isStarted = false;
                 _cancellationTokenSource?.Cancel();
-                _collectTask?.ConfigureAwait(false).GetAwaiter().GetResult();
+                await _collectTask.ConfigureAwait(false);
                 _cancellationTokenSource?.Dispose();
                 _collectTask?.Dispose();
+                _collectTask = null;
             }
 
-            return base.StopAsync();
+            await base.StopAsync();
         }
 
 
@@ -71,7 +67,8 @@ namespace HSMDataCollector.DefaultSensors
         {
             lock (_lockBar)
             {
-                _needSendValue = _internalBar.Count > 0;
+                if (_internalBar.Count <= 0)
+                    return null;
 
                 return _internalBar.Complete().Copy() as BarType; //need copy for correct partialBar serialization
             }
@@ -93,7 +90,7 @@ namespace HSMDataCollector.DefaultSensors
                 {
                     if (_internalBar.CloseTime < DateTime.UtcNow)
                     {
-                        OnTimerTick();
+                        SendValueAction();
                         BuildNewBar();
                     }
                 }

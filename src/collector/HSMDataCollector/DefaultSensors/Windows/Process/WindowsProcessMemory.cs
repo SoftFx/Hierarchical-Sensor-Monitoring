@@ -16,6 +16,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
         internal WindowsProcessMemory(BarSensorOptions options) : base(options) { }
 
 
-        protected override double GetBarData() => base.GetBarData().BytesToMegabytes();
+        protected override double? GetBarData() => base.GetBarData().Value.BytesToMegabytes();
     }
 }

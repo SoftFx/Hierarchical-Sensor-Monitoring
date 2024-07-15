@@ -3,14 +3,14 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal class WindowsDiskWriteSpeed : WindowsDiskBarSensorBase
+    internal sealed class WindowsDiskWriteSpeed : WindowsDiskBarSensorBase
     {
         protected override string CounterName => "Disk Write Bytes/sec";
 
 
         public WindowsDiskWriteSpeed(DiskBarSensorOptions options) : base(options) { }
-        
-        
-        protected override double GetBarData() => base.GetBarData().BytesToMegabytesDouble();
+
+
+        protected override double? GetBarData() => base.GetBarData().Value.BytesToMegabytesDouble();
     }
 }
