@@ -60,8 +60,12 @@ export class DashboardStorage {
                data.push(insertSourcePlot(x, `panelChart_${id}`, id, dId, panel.settings.range)[0]);
             })
             
+            let startTime = Date.now();
             let plot = await Plotly.addTraces(`panelChart_${id}`, data);
-
+            $('#plotly-speed').text(
+                $('#plotly-speed').text() + '<br>' + (Date.now() - startTime)
+            )
+            
             let layoutUpdate = {
                 'xaxis.visible': true,
                 'xaxis.type': 'date',

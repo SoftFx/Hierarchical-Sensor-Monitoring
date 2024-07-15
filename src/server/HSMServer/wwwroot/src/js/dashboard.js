@@ -5,9 +5,21 @@ import {DashboardStorage} from "../ts/dashboard/dashboard.storage";
 import {formObserver} from "./nodeData";
 import {SiteHelper} from "../ts/services/site-helper";
 import {VersionPlot} from "../ts/plots/version-plot";
+import {Helper} from "../ts/services/local-storage.helper";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
+
+window.testSettings = {};
+
+window.settingsOnChange = function (str, value = null){
+    if (value !== null)
+        window.testSettings[str] = value;
+    else 
+        window.testSettings[str] = !window.testSettings[str];
+    
+    Helper.save('testSettings', window.testSettings);
+}
 
 
 window.addObserve = function(q){
@@ -153,7 +165,12 @@ export function insertSourcePlot (data, id, panelId, dashboardId, range = undefi
         'yaxis.title.font.size': 14,
         'yaxis.title.font.color': '#7f7f7f',
     }
-
+    
+    // if (testSettings['ticktext'] === false;)
+    // {
+    //     plot.
+    // }
+    
     if (plot.autoscaleY !== true && plot.autoscaleY !== undefined)
         layoutUpdate['yaxis.range'] = plot.autoscaleY;
 
@@ -164,11 +181,26 @@ export function insertSourcePlot (data, id, panelId, dashboardId, range = undefi
 
     plot.id = data.id;
     plot.name = data.displayLabel;
-    plot.mode = 'lines+markers';
-    plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     plot.showlegend = true;
-    plot['marker']['color'] = data.color;
 
+    if (testSettings['customdata'] === false) {
+        plot.customdata = [];
+        plot.hoverinfo = '';
+        plot.hovertemplate = `${plot.name}<extra></extra>`
+    }
+    else {
+        plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
+    }
+    
+    if (window.testSettings['markers']) {
+        plot.mode = 'lines+markers';
+        plot['marker']['color'] = data.color;
+    }
+    else {
+        plot.mode = 'lines';
+        plot['marker'] = undefined;
+    }
+    
     let plotData = plot.getPlotData();
     let panel = dashboardStorage.getPanel(panelId)
     if (panel)
@@ -267,6 +299,11 @@ export function initDropzone() {
 
 const maxPlottedPoints = 1500;
 window.initDashboard = function () {
+    window.testSettings = Helper.read('testSettings');
+    
+    if (window.testSettings === null)
+        window.testSettings = {};
+    
     const currentRange = getRangeDate();
     const layoutUpdate = {
         'xaxis.range': currentRange

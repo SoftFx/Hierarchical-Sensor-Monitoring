@@ -14,7 +14,6 @@
     ViewData["Title"] = "Dashboards";
 }
 
-
 <div class="container p-0">
     <div class="flex-grow-1 my-2 mx-0">
         <div class="d-flex justify-content-between my-2 mb-4">
@@ -24,7 +23,9 @@
             {
                 <div class='d-flex col-md-auto'>
                     <a class="icon-link" method="GET" asp-action="@nameof(DashboardsController.CreateDashboard)">
-                        <i class="fa-solid fa-plus"><use xlink:href="#box-seam"></i> Add dashboard
+                        <i class="fa-solid fa-plus">
+                            <use xlink:href="#box-seam">
+                        </i> Add dashboard
                     </a>
                 </div>
             }

@@ -83,6 +83,69 @@
         <label>No panels</label>
     </div>
 
+
+    <div class="container d-block mx-0">
+        <div class="row">
+            <div class="col-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="customdata" oninput="settingsOnChange('customdata')">
+                            <label class="form-check-label" for="customdata">Enable custom data</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="ticktext" oninput="settingsOnChange('ticktext')">
+                            <label class="form-check-label" for="ticktext">Enable custom yaxis</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="markers" oninput="settingsOnChange('markers')">
+                            <label class="form-check-label" for="markers">Enable Markers</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-8 mb-2">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="mb-1">
+                            <label for="customGlobalValue" class="form-label">Global max points</label>
+                            <input type="range" class="form-range" min="0" max="10" step="1" id="customGlobalValue">
+                            <input type="number" class="form-control mt-2" id="rangeGlobalValue" placeholder="Enter a value">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @foreach (var panel in Model.Panels)
+            {
+                <div class="col-3">
+                    <div class="card mb-1">
+                        <div class="card-body">
+                            <div>
+                                <label for="range_@panel.Id" class="form-label">Panel: @panel.Name</label>
+                                <input type="range" class="form-range" min="0" max="10" step="1" id="range_@panel.Id">
+                                <input type="number" class="form-control mt-2" id="customrange_@panel.Id" placeholder="Enter a value">
+                            </div>
+                        </div>
+
+                        <div class="form-check ms-3">
+                            <input class="form-check-input" type="checkbox" id="globalSettings_@panel.Id" oninput="settingsOnChange('globalSettings_@panel.Id')">
+                            <label class="form-check-label" for="globalSettings_@panel.Id">Enable global srange settings</label>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div>
+        <span>History</span>
+        <span id="plotly-speed">
+
+        </span>
+    </div>
+
+
     <div id="dashboardPanels" class="flex-grow-1 dashboard ms-3 me-2 @(isEmptyDashboard ? "d-none" : string.Empty)">
         @foreach (var panel in Model.Panels)
         {
@@ -93,6 +156,37 @@
 
 
 <script>
+    const rangeSlider = document.getElementById('customGlobalValue');
+      const inputValue = document.getElementById('rangeGlobalValue');
+    
+      rangeSlider.addEventListener('input', function() {
+        settingsOnChange('rangeGlobalValue', this.value)
+        settingsOnChange('customGlobalValue', this.value)
+
+        inputValue.value = rangeSlider.value;
+      });
+    
+      inputValue.addEventListener('input', function() {
+         settingsOnChange('rangeGlobalValue', this.value)
+         settingsOnChange('customGlobalValue', this.value)
+
+        rangeSlider.value = inputValue.value;
+      });
+      
+    $('[id^="range_"]').on('input', function (){
+        settingsOnChange(this.id, this.value)
+        settingsOnChange('custom' + this.id, this.value)
+        $(`#custom${this.id}`).val(this.value);
+    })
+    
+    $('[id^="customrange_"]').on('input', function (){
+            settingsOnChange(this.id, this.value)
+            const id = this.id.replace('custom', '');
+            settingsOnChange(id, this.value)
+
+            $(`#${id}`).val(this.value);
+        })
+
     var changesCounter = 0;
     var containerHeight = 0;
 
@@ -125,7 +219,20 @@
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_description');
         initDashboard();
-
+        console.log(window.testSettings)
+        
+        for(const a of Object.entries(window.testSettings)){
+            if (typeof a[1] === 'boolean') {
+                 $('#' + a[0]).attr('checked', a[1]);     
+            }
+            
+            $('#' + a[0]).val(a[1]);
+        }
+        
+        $('#ticktext').attr('checked', window.testSettings['ticktext'])
+        $('#customdata').attr('checked', window.testSettings['customdata'])
+        $('#markers').attr('checked', window.testSettings['markers'])
+    
         if (!window.location.search.toLowerCase().includes('isModify=true'.toLowerCase()))
             disableDragAndResize();
 
