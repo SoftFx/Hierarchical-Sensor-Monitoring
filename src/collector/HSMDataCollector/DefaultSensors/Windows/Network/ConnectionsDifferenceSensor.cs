@@ -26,8 +26,8 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
 
             if (returnValue != 0)
                 return returnValue;
-
-            return null;
+            else
+                return null;
         }
     }
 }

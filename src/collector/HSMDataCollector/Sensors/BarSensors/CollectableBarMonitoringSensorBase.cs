@@ -21,7 +21,7 @@ namespace HSMDataCollector.DefaultSensors
 
                 T? value = GetBarData();
 
-                if (value != null)
+                if (value.HasValue)
                     _internalBar.AddValue(value.Value);
             }
             catch (Exception ex)

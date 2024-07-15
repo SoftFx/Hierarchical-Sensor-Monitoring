@@ -11,6 +11,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
         public WindowsDiskWriteSpeed(DiskBarSensorOptions options) : base(options) { }
 
 
-        protected override double? GetBarData() => base.GetBarData().Value.BytesToMegabytesDouble();
+        protected override double? GetBarData() => base.GetBarData()?.BytesToMegabytesDouble();
     }
 }
