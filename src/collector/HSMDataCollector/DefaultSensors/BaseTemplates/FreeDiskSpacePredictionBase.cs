@@ -33,8 +33,6 @@ namespace HSMDataCollector.DefaultSensors
 
         private long FreeSpace => _diskInfo.FreeSpace;
 
-        private volatile bool _isStarted = false;
-
         public FreeDiskSpacePredictionBase(DiskSensorOptions options, IDiskInfo diskInfo) : base(options)
         {
             _calculateSpeedDelay = TimeSpan.FromSeconds(DefaultSpaceCheckPeriodInSec);
@@ -45,10 +43,8 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override ValueTask<bool> StartAsync()
         {
-            if (!_isStarted)
+            if (_workTask == null)
             {
-                _isStarted = true;
-
                 _tokenSource = new CancellationTokenSource();
 
                 _lastSpeedCheckTime = DateTime.UtcNow;
@@ -63,17 +59,17 @@ namespace HSMDataCollector.DefaultSensors
             return base.StartAsync();
         }
 
-        internal override ValueTask StopAsync()
+        internal override async ValueTask StopAsync()
         {
-            if (_isStarted)
+            if (_workTask != null)
             {
-                _isStarted = false;
                 _tokenSource?.Cancel();
-                _workTask?.ConfigureAwait(false).GetAwaiter().GetResult();
+                await _workTask.ConfigureAwait(false);
                 _tokenSource?.Dispose();
                 _workTask?.Dispose();
+                _workTask = null;
             }
-            return base.StopAsync();
+            await base.StopAsync();
         }
 
 

@@ -7,6 +7,6 @@ namespace HSMDataCollector.DefaultSensors.Unix
         internal UnixProcessThreadCount(BarSensorOptions options) : base(options) { }
 
 
-        protected override double GetBarData() => ProcessInfo.CurrentProcess.Threads.Count;
+        protected override double? GetBarData() => ProcessInfo.CurrentProcess.Threads.Count;
     }
 }

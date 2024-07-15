@@ -32,6 +32,9 @@ namespace HSMDataCollector.DefaultSensors
 
         public void SendValue(SensorValueBase value)
         {
+            if (value == null)
+                return;
+
             value.Path = SensorPath;
 
             value.TrimLongComment();

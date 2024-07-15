@@ -18,8 +18,6 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         private Task _statusWatcher;
         private CancellationTokenSource _cancellationTokenSource;
 
-        private volatile bool _isStarted = false;
-
         internal WindowsServiceStatusSensor(ServiceSensorOptions options) : base(options)
         {
             _controller = GetService(options.ServiceName);
@@ -29,9 +27,8 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
 
         internal override ValueTask<bool> StartAsync()
         {
-            if (!_isStarted)
+            if (_statusWatcher == null)
             {
-                _isStarted = true;
                 _cancellationTokenSource = new CancellationTokenSource();
                 _statusWatcher = PeriodicTask.Run(CheckServiceStatus, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
             }
@@ -39,17 +36,17 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             return base.StartAsync();
         }
 
-        internal override ValueTask StopAsync()
+        internal override async ValueTask StopAsync()
         {
-            if (_isStarted)
+            if (_statusWatcher != null)
             {
-                _isStarted = false;
                 _cancellationTokenSource?.Cancel();
-                _statusWatcher?.ConfigureAwait(false).GetAwaiter().GetResult();
+                await _statusWatcher.ConfigureAwait(false);
                 _cancellationTokenSource?.Dispose();
                 _statusWatcher?.Dispose();
+                _statusWatcher = null;
             }
-            return base.StopAsync();
+            base.StopAsync();
         }
 
 

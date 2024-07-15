@@ -33,6 +33,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     }
                     while (_queue.Count >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
                 }
+                catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
                     _logger.Error(ex);

@@ -10,18 +10,24 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         internal ConnectionsDifferenceSensor(MonitoringInstantSensorOptions options) : base(options) { }
 
 
-        protected override int GetValue()
+        protected override int? GetValue()
         {
-            var currentValue = base.GetValue();
+            var value =  base.GetValue();
+            if (!value.HasValue)
+                return null;
+
+            var currentValue = value.Value;
             var returnValue = 0;
 
             if (_prevValue.HasValue)
                 returnValue = currentValue - _prevValue.Value;
 
-            _needSendValue = returnValue != 0;
             _prevValue = currentValue;
 
-            return returnValue;
+            if (returnValue != 0)
+                return returnValue;
+            else
+                return null;
         }
     }
 }
