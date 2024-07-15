@@ -250,7 +250,10 @@ namespace HSMDataCollector.Core
                 if (isMemory)
                     Windows.AddProcessMemory(options);
                 if (isThreads)
+                {
                     Windows.AddProcessThreadCount(options);
+                    Windows.AddProcessThreadPoolThreadCount(options);
+                }
             }
             else
             {
@@ -259,7 +262,10 @@ namespace HSMDataCollector.Core
                 if (isMemory)
                     Unix.AddProcessMemory(options);
                 if (isThreads)
+                {
                     Unix.AddProcessThreadCount(options);
+                    Unix.AddProcessThreadPoolThreadCount(options);
+                }
             }
 
             _ = Start();
