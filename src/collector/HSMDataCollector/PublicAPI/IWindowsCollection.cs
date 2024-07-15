@@ -21,6 +21,8 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddProcessThreadCount(BarSensorOptions options = null);
 
+        IWindowsCollection AddProcessThreadPoolThreadCount(BarSensorOptions options = null);
+
         IWindowsCollection AddProcessMonitoringSensors(BarSensorOptions options = null);
 
 
