@@ -12,6 +12,13 @@ export const dashboardStorage = new DashboardStorage();
 
 window.testSettings = {};
 
+window.initTestSettings = function(){
+    window.testSettings = Helper.read('testSettings');
+
+    if (window.testSettings === null)
+        window.testSettings = {};
+}
+
 window.settingsOnChange = function (str, value = null){
     if (value !== null)
         window.testSettings[str] = value;
@@ -20,7 +27,15 @@ window.settingsOnChange = function (str, value = null){
     
     Helper.save('testSettings', window.testSettings);
 }
+export function settingsOnChange(str, value = null) {
+    window.settingsOnChange(str, value);
+}
 
+export function updateSpeedHistory(newValue) {
+    window.testSettings['plotly-speed'] = window.testSettings['plotly-speed'] + newValue; 
+
+    return window.testSettings['plotly-speed'];
+}
 
 window.addObserve = function(q){
     formObserver.addFormToObserve(q);
@@ -183,7 +198,7 @@ export function insertSourcePlot (data, id, panelId, dashboardId, range = undefi
     plot.name = data.displayLabel;
     plot.showlegend = true;
 
-    if (testSettings['customdata'] === false) {
+    if (window.testSettings['customdata'] === false || window.testSettings[`customdata_${panelId}`] === false) {
         plot.customdata = [];
         plot.hoverinfo = '';
         plot.hovertemplate = `${plot.name}<extra></extra>`
@@ -192,7 +207,7 @@ export function insertSourcePlot (data, id, panelId, dashboardId, range = undefi
         plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
     }
     
-    if (window.testSettings['markers']) {
+    if (window.testSettings['markers'] || window.testSettings[`markers_${panelId}`]) {
         plot.mode = 'lines+markers';
         plot['marker']['color'] = data.color;
     }
@@ -200,6 +215,8 @@ export function insertSourcePlot (data, id, panelId, dashboardId, range = undefi
         plot.mode = 'lines';
         plot['marker'] = undefined;
     }
+    
+    plot.type = window.testSettings[`type_${panelId}`];
     
     let plotData = plot.getPlotData();
     let panel = dashboardStorage.getPanel(panelId)
@@ -299,11 +316,6 @@ export function initDropzone() {
 
 const maxPlottedPoints = 1500;
 window.initDashboard = function () {
-    window.testSettings = Helper.read('testSettings');
-    
-    if (window.testSettings === null)
-        window.testSettings = {};
-    
     const currentRange = getRangeDate();
     const layoutUpdate = {
         'xaxis.range': currentRange
@@ -442,8 +454,8 @@ window.syncIndexes = function () {
     }
 }
 
-window.initPanel = async function (id, settings, ySettings, values, lastUpdate, panelSourceType, unit) {
-   await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate, panelSourceType, unit);
+window.initPanel = async function (id, settings, ySettings, values, lastUpdate, dashboardId, panelSourceType, unit, name) {
+   await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate, dashboardId, panelSourceType, unit, name);
 }
 
 window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false, yaxisRange = true) {

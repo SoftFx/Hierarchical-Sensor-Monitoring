@@ -9,19 +9,23 @@ import {httpPanelService, updateDashboardInterval} from "./dashboard/dashboard.s
 import DataTable, {Order} from "datatables.net-dt";
 import {Helper} from "./services/local-storage.helper";
 import {OrderArray} from "datatables.net";
+import {Timer} from "./services/Timer";
 
 export class Panel {
     private _lastUpdateTime: Date = new Date(0);
     private _lastUpdateDiv: JQuery<HTMLElement>;
     private _requestTimeout: number;
+    timer: Timer = new Timer();
 
     id: string
+    name: string
     settings: PanelSettings
     sourceType: number
     unit: string
 
-    constructor(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, sourceType: number, unit: string) {
+    constructor(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, sourceType: number, unit: string, name: string) {
         this.id = id;
+        this.name = name;
         this.settings = new PanelSettings(this.id, settings, ySettings);
         this.sourceType = sourceType;
         this.unit = unit;

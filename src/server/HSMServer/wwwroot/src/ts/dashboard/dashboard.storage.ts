@@ -6,7 +6,7 @@ import getRangeDate = ChartHelper.getRangeDate;
 import replaceHtmlToMarkdown = SiteHelper.replaceHtmlToMarkdown;
 import {Panel} from "../dashboard.panel";
 import {HttpPanelService} from "../services/http-panel-service";
-import {insertSourcePlot} from "../../js/dashboard";
+import {insertSourcePlot, settingsOnChange, updateSpeedHistory} from "../../js/dashboard";
 import {customReset} from "../../js/plotting";
 import Plotly from "plotly.js";
 import {TimeSpanPlot} from "../../js/plots";
@@ -43,8 +43,9 @@ export class DashboardStorage {
         return this.panels[id];
     }
     
-    public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: number, dId: string, sourceType: number, unit: string){
-        let panel = new Panel(id, settings, ySettings, sourceType, unit);
+    public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: number, dId: string, sourceType: number, unit: string, name: string){
+        let panel = new Panel(id, settings, ySettings, sourceType, unit, name);
+        panel.timer.start();
 
         let result = await ChartHelper.initContrainerCordinates(panel.settings, id)
 
@@ -62,10 +63,10 @@ export class DashboardStorage {
             
             let startTime = Date.now();
             let plot = await Plotly.addTraces(`panelChart_${id}`, data);
-            $('#plotly-speed').text(
-                $('#plotly-speed').text() + '<br>' + (Date.now() - startTime)
-            )
-            
+            panel.timer.stop();
+            console.log(`<br><span>${panel.name}: From ${panel.timer.startTime}; To ${panel.timer.stopTime}; Duration ${panel.timer.duration}</span>`)
+            $('#plotly-speed').append(`<br><span>${panel.name}: From ${panel.timer.startTime}; To ${panel.timer.stopTime}; Duration ${panel.timer.duration}</span>`);
+            console.log('stop')
             let layoutUpdate = {
                 'xaxis.visible': true,
                 'xaxis.type': 'date',
@@ -112,7 +113,6 @@ export class DashboardStorage {
         }
         else
             await panel.manualCordinatesUpdate();
-
 
         replaceHtmlToMarkdown('panel_description')
     }
