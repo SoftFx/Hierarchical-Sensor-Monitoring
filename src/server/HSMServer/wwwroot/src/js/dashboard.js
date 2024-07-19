@@ -5,6 +5,7 @@ import {DashboardStorage} from "../ts/dashboard/dashboard.storage";
 import {formObserver} from "./nodeData";
 import {SiteHelper} from "../ts/services/site-helper";
 import {VersionPlot} from "../ts/plots/version-plot";
+import Plotly from "plotly.js";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
@@ -138,24 +139,14 @@ function checkForYRange(plot) {
         $('#y-range-settings').hide()
 }
 
+export async function createChart(chartId, data, layout, config){
+    return Plotly.newPlot(chartId, data, layout, config)
+}
+
 export function insertSourcePlot (data, id, panelId, dashboardId, range = undefined) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)
-
-    let layoutUpdate = {
-        'xaxis.visible': true,
-        'xaxis.type': 'date',
-        'xaxis.autorange': false,
-        'xaxis.range': getRangeDate(),
-        'yaxis.visible': true,
-        'yaxis.title.text': data.sensorInfo.units,
-        'yaxis.title.font.size': 14,
-        'yaxis.title.font.color': '#7f7f7f',
-    }
-
-    if (plot.autoscaleY !== true && plot.autoscaleY !== undefined)
-        layoutUpdate['yaxis.range'] = plot.autoscaleY;
 
     if (data.values.length === 0) {
         plot.x = [null]
@@ -169,14 +160,17 @@ export function insertSourcePlot (data, id, panelId, dashboardId, range = undefi
     plot.showlegend = true;
     plot['marker']['color'] = data.color;
 
+    if (plot.type === 'scatter')
+        plot.type = 'scattergl';
+    
     let plotData = plot.getPlotData();
     let panel = dashboardStorage.getPanel(panelId)
     if (panel)
         panel.lastUpdateTime = new Date(plotData[0].x.at(-1));
 
-    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
-    currentPanel[data.id].isTimeSpan = plot instanceof TimeSpanPlot;
-    
+    // currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
+    // currentPanel[data.id].isTimeSpan = plot instanceof TimeSpanPlot;
+    //
     return plotData;
 }
 

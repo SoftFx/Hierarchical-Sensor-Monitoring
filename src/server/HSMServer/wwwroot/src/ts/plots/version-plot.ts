@@ -64,7 +64,7 @@ export class VersionPlot extends Plot<string>{
        }
     }
     
-    static getPanelLayout(data: Data[]){
+    static getYaxisTicks(data: Data[]){
         const layoutVals : string[] = [];
         const layoutText: string[] = [];
         const y: string[] = []
@@ -74,11 +74,11 @@ export class VersionPlot extends Plot<string>{
             //@ts-ignore
             y.push(...val.y);
         }
-        
+
         for (const yVal of y) {
             if (yVal === null)
                 continue;
-            
+
             map[yVal] = yVal;
         }
 
@@ -88,34 +88,9 @@ export class VersionPlot extends Plot<string>{
         }
 
         return {
-            dragmode: 'zoom',
-            autosize: true,
-            xaxis: {
-                type: 'date',
-                autorange: true,
-                title: {
-                    //text: 'Time',
-                    font: {
-                        family: 'Courier New, monospace',
-                        size: 18,
-                        color: '#7f7f7f'
-                    }
-                },
-                rangeslider: {
-                    visible: false
-                }
-            },
-            yaxis: {
-                tickmode: "array",
                 ticktext: layoutText,
                 tickvals: layoutVals,
-                tickfont: {
-                    size: 10
-                },
                 categoryorder: 'category ascending',
-                // @ts-ignore
-                automargin: "width+height"
-            },
-        }
+            }
     }
 }

@@ -6,7 +6,7 @@ import getRangeDate = ChartHelper.getRangeDate;
 import replaceHtmlToMarkdown = SiteHelper.replaceHtmlToMarkdown;
 import {Panel} from "../dashboard.panel";
 import {HttpPanelService} from "../services/http-panel-service";
-import {insertSourcePlot} from "../../js/dashboard";
+import {createChart, insertSourcePlot} from "../../js/dashboard";
 import {customReset} from "../../js/plotting";
 import Plotly from "plotly.js";
 import {TimeSpanPlot} from "../../js/plots";
@@ -31,12 +31,16 @@ export class DashboardStorage {
         panel.lastUpdateTime = new Date(lastUpdate);
 
         this.panels[panel.id] = panel;
-        this.panels[panel.id].basePanelInit();
 
         window.clearInterval(this._lastUpdateIntervalId)
         this._lastUpdateIntervalId = this.checkForUpdate(this.panels);
 
         $('#dashboardPanels')[0].style.minHeight = this.containerHeight + "px";
+    }
+    
+    public basePanelInit() {
+        for (const panel of Object.entries(this.panels))
+            panel[1].basePanelInit()
     }
 
     public getPanel(id: string): Panel {
@@ -50,8 +54,6 @@ export class DashboardStorage {
 
         this.containerHeight = Math.max(this.containerHeight, result);
 
-        let plot = await ChartHelper.initMultiChart(`panelChart_${id}`, panel.settings, Number((panel.settings.height * 1400).toFixed(5)) - 46)
-
         this.addPanel(panel, lastUpdate)
 
         if (!panel.settings.isSingleMode){
@@ -60,32 +62,114 @@ export class DashboardStorage {
                data.push(insertSourcePlot(x, `panelChart_${id}`, id, dId, panel.settings.range)[0]);
             })
             
-            let plot = await Plotly.addTraces(`panelChart_${id}`, data);
-
-            let layoutUpdate = {
-                'xaxis.visible': true,
-                'xaxis.type': 'date',
-                'xaxis.autorange': false,
-                'xaxis.range': getRangeDate(),
-                'yaxis.visible': true,
-                'yaxis.title.text': panel.unit,
-                'yaxis.title.font.size': 14,
-                'yaxis.title.font.color': '#7f7f7f',
-                'showlegend': panel.settings.showLegend
-            }
-            
+             let layout = {
+                 hovermode: 'closest',
+                 hoverdistance: 1,
+                 dragmode: 'zoom',
+                 autosize: true,
+                 height: Number((panel.settings.height * 1400).toFixed(5)) - 46,
+                 margin: {
+                     // @ts-ignore
+                     autoexpand: true,
+                     l: 30,
+                     r: 30,
+                     t: 30,
+                     b: 40,
+                 },
+                 showlegend: settings.showLegend,
+                 legend: {
+                     y: 0,
+                     x: 0,
+                     orientation: "h",
+                     yanchor: "bottom",
+                     // @ts-ignore
+                     yref: "container",
+                 },
+                 xaxis: {
+                     type: 'date',
+                     visible: true,
+                     autorange: false,
+                     automargin: true,
+                     range: getRangeDate(),
+                     title: {
+                         //text: 'Time',
+                         font: {
+                             family: 'Courier New, monospace',
+                             size: 18,
+                             color: '#7f7f7f'
+                         }
+                     },
+                     rangeslider: {
+                         visible: false
+                     }
+                 },
+                 yaxis: {
+                    categoryorder : 'trace',
+                    visible: true,
+                    title: {
+                        text: panel.unit,
+                        font: {
+                            size: 14,
+                            color: '#7f7f7f'
+                        }
+                    },
+                     tickmode: "auto",
+                     // @ts-ignore
+                     ticktext: [],
+                     // @ts-ignore
+                     tickvals: [],
+                     tickfont: {
+                         size: 10
+                     },
+                     // @ts-ignore
+                     automargin: 'width+right'
+                 },
+             }
+             
             if (panel.sourceType === 7)
-            {
-                // @ts-ignore
-                await Plotly.relayout(`panelChart_${id}`, TimeSpanPlot.getPanelLayout(plot.data));
+            {                
+                const ticks = TimeSpanPlot.getYaxisTicks(data);
+                layout.yaxis.tickmode = 'array';
+                layout.yaxis.ticktext = ticks.ticktext;
+                layout.yaxis.tickvals = ticks.tickvals;
+            }
+
+            if (panel.sourceType === 8){
+
+                const ticks = VersionPlot.getYaxisTicks(data);
+                layout.yaxis.tickmode = 'array';
+                layout.yaxis.ticktext = ticks.ticktext;
+                layout.yaxis.tickvals = ticks.tickvals;
+                layout.yaxis.categoryorder = ticks.categoryorder;
             }
             
-            if (panel.sourceType === 8){
-                // @ts-ignore
-                await Plotly.relayout(`panelChart_${id}`, VersionPlot.getPanelLayout(plot.data));
+            const config = {
+                responsive: true,
+                displaylogo: false,
+                modeBarButtonsToRemove: [
+                    'pan',
+                    'lasso2d',
+                    'pan2d',
+                    'select2d',
+                    'autoScale2d',
+                    'autoScale2d',
+                    'resetScale2d'
+                ],
+                modeBarButtonsToAdd: [
+                    {
+                        name: 'resetaxes',
+                        _cat: 'resetscale',
+                        title: 'Reset axes',
+                        attr: 'zoom',
+                        val: 'reset',
+                        icon: Plotly.Icons.home,
+                        click: (plot: any) => $(plot).trigger('plotly_doubleclick')
+                    }],
+                doubleClick: false
             }
-            // @ts-ignore
-            await Plotly.relayout(`panelChart_${id}`, layoutUpdate);
+            
+            await createChart(`panelChart_${id}`, data, layout, config)
+            this.basePanelInit();
             
             $(`#panelChart_${id}`).on('plotly_relayout', function (e, updateData){
                 let emptypanel = $(`#emptypanel_${id}`);
@@ -93,11 +177,6 @@ export class DashboardStorage {
                 emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
             }).on('plotly_doubleclick', async function(){
                 await customReset($(`#panelChart_${id}`)[0], getRangeDate(), panel.settings.range)
-            })
-
-            await Plotly.relayout(plot.id, {
-                'xaxis.autorange': false,
-                'height': Number((settings.height * 1400).toFixed(5)) - 46
             })
             
             await panel.manualCordinatesUpdate();
