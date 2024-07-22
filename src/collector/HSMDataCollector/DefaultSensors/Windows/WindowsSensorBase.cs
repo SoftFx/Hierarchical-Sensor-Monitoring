@@ -63,6 +63,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
             return base.StopAsync();
         }
 
-        protected override double GetBarData() => _performanceCounter.NextValue();
+        protected override double? GetBarData() => _performanceCounter.NextValue();
     }
 }

@@ -56,8 +56,13 @@ namespace HSMDataCollector.DefaultSensors
             return ToUnix(new UnixProcessThreadCount(_prototype.ProcessThreadCount.Get(options)));
         }
 
+        public IUnixCollection AddProcessThreadPoolThreadCount(BarSensorOptions options)
+        {
+            return ToUnix(new ProcessThreadPoolThreadCount(_prototype.ProcessThreadPoolThreadCount.Get(options)));
+        }
+
         public IUnixCollection AddProcessMonitoringSensors(BarSensorOptions options) =>
-            AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options);
+            AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options).AddProcessThreadPoolThreadCount(options);
 
         #endregion
 

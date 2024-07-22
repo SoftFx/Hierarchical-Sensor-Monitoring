@@ -19,6 +19,8 @@ namespace HSMDataCollector.PublicInterface
 
         IUnixCollection AddProcessThreadCount(BarSensorOptions options = null);
 
+        IUnixCollection AddProcessThreadPoolThreadCount(BarSensorOptions options = null);
+
         IUnixCollection AddProcessMonitoringSensors(BarSensorOptions options = null);
 
 
