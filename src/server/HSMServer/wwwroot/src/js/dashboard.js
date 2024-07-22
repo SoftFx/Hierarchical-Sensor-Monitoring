@@ -5,10 +5,38 @@ import {DashboardStorage} from "../ts/dashboard/dashboard.storage";
 import {formObserver} from "./nodeData";
 import {SiteHelper} from "../ts/services/site-helper";
 import {VersionPlot} from "../ts/plots/version-plot";
+import {Helper} from "../ts/services/local-storage.helper";
+import Plotly from "plotly.js";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
 
+window.testSettings = {};
+
+window.initTestSettings = function(){
+    window.testSettings = Helper.read('testSettings');
+
+    if (window.testSettings === null)
+        window.testSettings = {};
+}
+
+window.settingsOnChange = function (str, value = null){
+    if (value !== null)
+        window.testSettings[str] = value;
+    else 
+        window.testSettings[str] = !window.testSettings[str];
+    
+    Helper.save('testSettings', window.testSettings);
+}
+export function settingsOnChange(str, value = null) {
+    window.settingsOnChange(str, value);
+}
+
+export function updateSpeedHistory(newValue) {
+    window.testSettings['plotly-speed'] = window.testSettings['plotly-speed'] + newValue; 
+
+    return window.testSettings['plotly-speed'];
+}
 
 window.addObserve = function(q){
     formObserver.addFormToObserve(q);
@@ -138,24 +166,14 @@ function checkForYRange(plot) {
         $('#y-range-settings').hide()
 }
 
+export async function createChart(chartId, data, layout, config){
+    return Plotly.newPlot(chartId, data, layout, config)
+}
+
 export function insertSourcePlot (data, id, panelId, dashboardId, range = undefined) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)
-
-    let layoutUpdate = {
-        'xaxis.visible': true,
-        'xaxis.type': 'date',
-        'xaxis.autorange': false,
-        'xaxis.range': getRangeDate(),
-        'yaxis.visible': true,
-        'yaxis.title.text': data.sensorInfo.units,
-        'yaxis.title.font.size': 14,
-        'yaxis.title.font.color': '#7f7f7f',
-    }
-
-    if (plot.autoscaleY !== true && plot.autoscaleY !== undefined)
-        layoutUpdate['yaxis.range'] = plot.autoscaleY;
 
     if (data.values.length === 0) {
         plot.x = [null]
@@ -169,14 +187,35 @@ export function insertSourcePlot (data, id, panelId, dashboardId, range = undefi
     plot.showlegend = true;
     plot['marker']['color'] = data.color;
 
+    if (plot.type === 'scatter')
+        plot.type = 'scattergl';
+    
+    if (window.testSettings[`customdata_${panelId}`] === false) {
+        plot.customdata = [];
+        plot.hoverinfo = '';
+        plot.hovertemplate = `${plot.name}<extra></extra>`
+    }
+    else {
+        plot.hovertemplate = `${plot.name}, %{customdata}<extra></extra>`
+    }
+    
+    if (window.testSettings[`markers_${panelId}`]) {
+        plot.mode = 'lines+markers';
+        plot['marker']['color'] = data.color;
+    }
+    else {
+        plot.mode = 'lines';
+        plot['marker'] = undefined;
+    }
+    
     let plotData = plot.getPlotData();
     let panel = dashboardStorage.getPanel(panelId)
     if (panel)
         panel.lastUpdateTime = new Date(plotData[0].x.at(-1));
 
-    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
-    currentPanel[data.id].isTimeSpan = plot instanceof TimeSpanPlot;
-    
+    // currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
+    // currentPanel[data.id].isTimeSpan = plot instanceof TimeSpanPlot;
+    //
     return plotData;
 }
 
@@ -267,13 +306,6 @@ export function initDropzone() {
 
 const maxPlottedPoints = 1500;
 window.initDashboard = function () {
-    const currentRange = getRangeDate();
-    const layoutUpdate = {
-        'xaxis.range': currentRange
-    }
-    for (let i of $('[id^="panelChart_"]'))
-        Plotly.relayout(i, layoutUpdate)
-
     const interactPanelResize = window.interact('.resize-draggable')
     const interactPanelDrag = window.interact('.name-draggable')
     addDraggable(interactPanelDrag)
@@ -405,8 +437,8 @@ window.syncIndexes = function () {
     }
 }
 
-window.initPanel = async function (id, settings, ySettings, values, lastUpdate, panelSourceType, unit) {
-   await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate, panelSourceType, unit);
+window.initPanel = async function (id, settings, ySettings, values, lastUpdate, dashboardId, panelSourceType, unit, name) {
+   await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate, dashboardId, panelSourceType, unit, name);
 }
 
 window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false, yaxisRange = true) {

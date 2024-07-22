@@ -13,6 +13,7 @@ namespace PerformanceTest
             //HttpClientTest.Start();
             await DataCollectorTest.Start();
 
+
             Console.ReadKey();
         }
     }

@@ -540,42 +540,18 @@ export class TimeSpanPlot extends ErrorColorPlot {
             autosize: true
         };
     }
-    
-    static getPanelLayout(data){
+
+    static getYaxisTicks(data){
         let y = [];
-        
+
         for (const val of data) {
             y.push(val.y);
         }
         let layoutTicks = TimeSpanPlot.getLayoutTicks(y);
-        
+
         return {
-            dragmode: 'zoom',
-            autosize: true,
-            xaxis: {
-                type: 'date',
-                autorange: false,
-                range: getRangeDate(),
-                title: {
-                    //text: 'Time',
-                    font: {
-                        family: 'Courier New, monospace',
-                        size: 18,
-                        color: '#7f7f7f'
-                    }
-                },
-                rangeslider: {
-                    visible: false
-                }
-            },
-            yaxis: {
-                ticktext: layoutTicks[1],
-                tickvals: layoutTicks[0],
-                tickfont: {
-                    size: 10
-                },
-                automargin: "width+height"
-            },
+            ticktext: layoutTicks[1],
+            tickvals: layoutTicks[0],
         };
     }
     
