@@ -11,7 +11,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal sealed class PriorityDataQueueProcessor : EventedQueueProcessorBase<SensorValueBase>
     {
-        protected override string QueueName => "Priority data";
+        public override string QueueName => "Priority data";
 
         public PriorityDataQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 

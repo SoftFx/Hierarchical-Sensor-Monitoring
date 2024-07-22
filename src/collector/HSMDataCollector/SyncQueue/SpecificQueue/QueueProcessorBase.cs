@@ -17,8 +17,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         private Task _task;
         private bool _disposed;
 
-        protected abstract string QueueName { get; }
-
         protected readonly ConcurrentQueue<QueueItem<T>> _queue = new ConcurrentQueue<QueueItem<T>>();
         protected readonly IDataSender _sender;
         protected readonly CollectorOptions _options;
@@ -26,6 +24,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected readonly ICollectorLogger _logger;
         protected readonly DataProcessor _queueManager;
 
+        public abstract string QueueName { get; }
 
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
         {

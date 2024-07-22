@@ -11,7 +11,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal sealed class FileQueueProcessor: EventedQueueProcessorBase<FileSensorValue>
     {
-        protected override string QueueName => "File";
+        public override string QueueName => "File";
 
         public FileQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
