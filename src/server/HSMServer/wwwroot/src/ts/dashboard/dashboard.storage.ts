@@ -171,12 +171,12 @@ export class DashboardStorage {
             }
             
             await createChart(`panelChart_${id}`, data, layout, config)
-            panel.timer.stop();
+            panel.timer.stop(); 
             console.log(`<br><span>${panel.name}: From ${panel.timer.startTime}; To ${panel.timer.stopTime}; Duration ${panel.timer.duration}</span>`)
             $('#plotly-speed').append(`<br><span>${panel.name}: From ${panel.timer.startTime}; To ${panel.timer.stopTime}; Duration ${panel.timer.duration}</span>`);
             console.log('stop')
            
-            this.basePanelInit();
+            panel.basePanelInit();
             
             $(`#panelChart_${id}`).on('plotly_relayout', function (e, updateData){
                 let emptypanel = $(`#emptypanel_${id}`);

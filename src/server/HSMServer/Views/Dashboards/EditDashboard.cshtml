@@ -174,27 +174,11 @@
 <script>
     initTestSettings();
 
-    const rangeSlider = document.getElementById('customGlobalValue');
-    const inputValue = document.getElementById('rangeGlobalValue');
     $("#plotly-speed").on('load', function (){
         console.log(window.testSettings['plotly-speed'])
         $(this).html(window.testSettings['plotly-speed'])
     });
- 
-      rangeSlider.addEventListener('input', function() {
-        settingsOnChange('rangeGlobalValue', this.value)
-        settingsOnChange('customGlobalValue', this.value)
 
-        inputValue.value = rangeSlider.value;
-      });
-    
-      inputValue.addEventListener('input', function() {
-         settingsOnChange('rangeGlobalValue', this.value)
-         settingsOnChange('customGlobalValue', this.value)
-
-        rangeSlider.value = inputValue.value;
-      });
-      
     $('[id^="range_"]').on('input', function (){
         settingsOnChange(this.id, this.value)
         settingsOnChange('custom' + this.id, this.value)

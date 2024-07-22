@@ -306,13 +306,6 @@ export function initDropzone() {
 
 const maxPlottedPoints = 1500;
 window.initDashboard = function () {
-    const currentRange = getRangeDate();
-    const layoutUpdate = {
-        'xaxis.range': currentRange
-    }
-    for (let i of $('[id^="panelChart_"]'))
-        Plotly.relayout(i, layoutUpdate)
-
     const interactPanelResize = window.interact('.resize-draggable')
     const interactPanelDrag = window.interact('.name-draggable')
     addDraggable(interactPanelDrag)
