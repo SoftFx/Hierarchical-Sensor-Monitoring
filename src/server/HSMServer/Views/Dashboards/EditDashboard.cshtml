@@ -86,35 +86,35 @@
 
     <div class="container d-block mx-0">
         <div class="row">
-            <div class="col-3">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="customdata" oninput="settingsOnChange('customdata')">
-                            <label class="form-check-label" for="customdata">Enable custom data</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="ticktext" oninput="settingsOnChange('ticktext')">
-                            <label class="form-check-label" for="ticktext">Enable custom yaxis</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="markers" oninput="settingsOnChange('markers')">
-                            <label class="form-check-label" for="markers">Enable Markers</label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-8 mb-2">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="mb-1">
-                            <label for="customGlobalValue" class="form-label">Global max points</label>
-                            <input type="range" class="form-range" min="0" max="10000" step="10" id="customGlobalValue">
-                            <input type="number" class="form-control mt-2" id="rangeGlobalValue" placeholder="Enter a value">
-                        </div>
-                    </div>
-                </div>
-            </div>
+            @* <div class="col-3"> *@
+            @*     <div class="card"> *@
+            @*         <div class="card-body"> *@
+            @*             <div class="form-check"> *@
+            @*                 <input class="form-check-input" type="checkbox" id="customdata" oninput="settingsOnChange('customdata')"> *@
+            @*                 <label class="form-check-label" for="customdata">Enable custom data</label> *@
+            @*             </div> *@
+            @*             <div class="form-check"> *@
+            @*                 <input class="form-check-input" type="checkbox" id="ticktext" oninput="settingsOnChange('ticktext')"> *@
+            @*                 <label class="form-check-label" for="ticktext">Enable custom yaxis</label> *@
+            @*             </div> *@
+            @*             <div class="form-check"> *@
+            @*                 <input class="form-check-input" type="checkbox" id="markers" oninput="settingsOnChange('markers')"> *@
+            @*                 <label class="form-check-label" for="markers">Enable Markers</label> *@
+            @*             </div> *@
+            @*         </div> *@
+            @*     </div> *@
+            @* </div> *@
+            @* <div class="col-8 mb-2"> *@
+            @*     <div class="card"> *@
+            @*         <div class="card-body"> *@
+            @*             <div class="mb-1"> *@
+            @*                 <label for="customGlobalValue" class="form-label">Global max points</label> *@
+            @*                 <input type="range" class="form-range" min="0" max="10000" step="10" id="customGlobalValue"> *@
+            @*                 <input type="number" class="form-control mt-2" id="rangeGlobalValue" placeholder="Enter a value"> *@
+            @*             </div> *@
+            @*         </div> *@
+            @*     </div> *@
+            @* </div> *@
 
             @foreach (var panel in Model.Panels)
             {
@@ -128,22 +128,23 @@
                             </div>
                         </div>
 
-                        <input type="text" class="form-control mt-2" id="type_@panel.Id" placeholder="Enter a value">
-
-
-                        <div class="form-check ms-3">
-                            <input class="form-check-input" type="checkbox" id="globalSettings_@panel.Id" oninput="settingsOnChange('globalSettings_@panel.Id')">
-                            <label class="form-check-label" for="globalSettings_@panel.Id">Enable global srange settings</label>
-                        </div>
+                        @* <div class="form-check ms-3"> *@
+                        @*     <input class="form-check-input" type="checkbox" id="globalSettings_@panel.Id" oninput="settingsOnChange('globalSettings_@panel.Id')"> *@
+                        @*     <label class="form-check-label" for="globalSettings_@panel.Id">Enable global srange settings</label> *@
+                        @* </div> *@
 
                         <div class="form-check ms-3">
                             <input class="form-check-input" type="checkbox" id="customdata_@panel.Id" oninput="settingsOnChange('customdata_@panel.Id')">
-                            <label class="form-check-label" for="customdata_@panel.Id">Enable custom data</label>
+                            <label class="form-check-label" for="customdata_@panel.Id">Enable tooltip</label>
                         </div>
 
                         <div class="form-check ms-3">
                             <input class="form-check-input" type="checkbox" id="markers_@panel.Id" oninput="settingsOnChange('markers_@panel.Id')">
-                            <label class="form-check-label" for="markers_@panel.Id">Enable Markers</label>
+                            <label class="form-check-label" for="markers_@panel.Id">Enable points</label>
+                        </div>
+                        
+                        <div class="ms-3 mb-2 mt-1 me-3">
+                            <input class="form-control" type="text" id="minvalue_@panel.Id" placeholder="Enter minvalue">
                         </div>
                     </div>
                 </div>
@@ -198,6 +199,10 @@
         settingsOnChange(this.id, this.value)
         settingsOnChange('custom' + this.id, this.value)
         $(`#custom${this.id}`).val(this.value);
+    })
+    
+    $('[id^="minvlaue_"]').on('input', function (){
+        settingsOnChange(this.id, this.value)
     })
     
     $('[id^="type_"]').on('input', function (){
