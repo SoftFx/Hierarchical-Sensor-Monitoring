@@ -1,12 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <PackageId>HSMDataCollector.HSMDataCollector</PackageId>
-    <TargetFrameworks>net8.0;net472</TargetFrameworks>
+    <TargetFrameworks>net6.0;net472</TargetFrameworks>
     <OutputType>Library</OutputType>
-    <AssemblyVersion>3.4.1</AssemblyVersion>
-    <AssemblyFileVersion>3.4.1</AssemblyFileVersion>
-    <ProductVersion>3.4.1</ProductVersion>
-    <Version>3.4.1</Version>
+    <AssemblyVersion>3.4.2</AssemblyVersion>
+    <AssemblyFileVersion>3.4.2</AssemblyFileVersion>
+    <ProductVersion>3.4.2</ProductVersion>
+    <Version>3.4.2</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
