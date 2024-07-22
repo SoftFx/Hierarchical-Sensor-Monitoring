@@ -1,9 +1,11 @@
-﻿using HSMCommon.Extensions;
-using Microsoft.Extensions.Hosting;
-using NLog;
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Hosting;
+using NLog;
+using HSMCommon.Extensions;
+using HSMServer.Threading;
+
 
 namespace HSMServer.BackgroundServices
 {
@@ -25,17 +27,11 @@ namespace HSMServer.BackgroundServices
 
         protected abstract Task ServiceActionAsync();
 
-        protected override async Task ExecuteAsync(CancellationToken token)
+        protected override Task ExecuteAsync(CancellationToken token)
         {
-            var start = DateTime.UtcNow.Ceil(Delay);
+            PeriodicTask.Run(ServiceActionAsync, DateTime.UtcNow.Ceil(Delay) - DateTime.UtcNow, Delay, token);
 
-            await Task.Delay(start - DateTime.UtcNow, token);
-
-            while (!token.IsCancellationRequested)
-            {
-                await ServiceActionAsync();
-                await Task.Delay(Delay, token);
-            }
+            return Task.CompletedTask;
         }
 
         protected virtual void RunAction(Action action)
