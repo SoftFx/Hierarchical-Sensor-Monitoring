@@ -47,7 +47,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
             }
             catch (Exception exception)
             {
-                ThrowException(exception);
+                HandleException(exception);
 
                 return new ValueTask<bool>(false);
             }
@@ -76,7 +76,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
             }
             catch (Exception exception)
             {
-                ThrowException(exception);
+                HandleException(exception);
             }
         }
 

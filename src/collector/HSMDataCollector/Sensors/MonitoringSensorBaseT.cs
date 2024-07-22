@@ -30,18 +30,33 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override ValueTask<bool> InitAsync()
         {
-            if (_sendTask == null)
-                StartSendTask();
+            try
+            {
+                if (_sendTask == null)
+                    StartSendTask();
 
-            return base.InitAsync();
+                return base.InitAsync();
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+                return new ValueTask<bool>(false);
+            }
         }
 
         internal override async ValueTask StopAsync()
         {
-            if (_sendTask != null)
+            try
+            {
+                if (_sendTask != null)
                 await StopInternalAsync();
 
-            await base.StopAsync();
+                await base.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+            }
         }
 
         protected abstract T GetValue();
@@ -59,12 +74,19 @@ namespace HSMDataCollector.DefaultSensors
 
         protected void RestartTimer(TimeSpan newPostPeriod)
         {
-            if (_sendTask != null)
-                StopInternalAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+            try
+            {
+                if (_sendTask != null)
+                    StopInternalAsync().ConfigureAwait(false).GetAwaiter().GetResult();
 
-            _options.PostDataPeriod = newPostPeriod;
+                _options.PostDataPeriod = newPostPeriod;
 
-            StartSendTask();
+                StartSendTask();
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+            }
         }
 
         private async ValueTask StopInternalAsync()
@@ -94,7 +116,7 @@ namespace HSMDataCollector.DefaultSensors
             }
             catch (Exception ex)
             {
-                ThrowException(ex);
+                HandleException(ex);
 
                 return GetSensorValue(GetDefaultValue()).Complete(ex.Message, SensorStatus.Error);
             }

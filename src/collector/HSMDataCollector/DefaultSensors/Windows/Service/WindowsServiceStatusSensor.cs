@@ -38,15 +38,22 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
 
         internal override async ValueTask StopAsync()
         {
-            if (_statusWatcher != null)
+            try
             {
-                _cancellationTokenSource?.Cancel();
-                await _statusWatcher.ConfigureAwait(false);
-                _cancellationTokenSource?.Dispose();
-                _statusWatcher?.Dispose();
-                _statusWatcher = null;
+                if (_statusWatcher != null)
+                {
+                    _cancellationTokenSource?.Cancel();
+                    await _statusWatcher.ConfigureAwait(false);
+                    _cancellationTokenSource?.Dispose();
+                    _statusWatcher?.Dispose();
+                    _statusWatcher = null;
+                }
+                await base.StopAsync();
             }
-            base.StopAsync();
+            catch (Exception ex)
+            { 
+                HandleException(ex);
+            }
         }
 
 
@@ -64,7 +71,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             }
             catch (Exception ex)
             {
-                ThrowException(ex);
+                HandleException(ex);
             }
         }
 

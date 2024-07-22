@@ -30,7 +30,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             }
             catch (Exception ex)
             {
-                ThrowException(new Exception($"Error initializing performance counter: {CategoryTcp4}/{CounterName}, {CategoryTcp6}/{CounterName}: {ex}"));
+                HandleException(new Exception($"Error initializing performance counter: {CategoryTcp4}/{CounterName}, {CategoryTcp6}/{CounterName}: {ex}"));
 
                 return new ValueTask<bool>(false);
             }

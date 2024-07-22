@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 
@@ -14,23 +15,35 @@ namespace HSMDataCollector.DefaultSensors
 
         public void AddValue(T value)
         {
-            CheckCurrentBar();
+            try
+            {
+                CheckCurrentBar();
 
-            _internalBar.AddValue(value);
+                _internalBar.AddValue(value);
+            }
+            catch (Exception ex) { HandleException(ex); }
         }
 
         public void AddPartial(T min, T max, T mean, T first, T last, int count)
         {
-            CheckCurrentBar();
+            try
+            {
+                CheckCurrentBar();
 
-            _internalBar.AddPartial(min, max, mean, first, last, count);
+                _internalBar.AddPartial(min, max, mean, first, last, count);
+            }
+            catch (Exception ex) { HandleException(ex);}
         }
 
 
         public void AddValues(IEnumerable<T> values)
         {
-            foreach (var value in values)
-                AddValue(value);
+            try
+            {
+                foreach (var value in values)
+                    AddValue(value);
+            }
+            catch (Exception ex) { HandleException(ex); }
         }
     }
 

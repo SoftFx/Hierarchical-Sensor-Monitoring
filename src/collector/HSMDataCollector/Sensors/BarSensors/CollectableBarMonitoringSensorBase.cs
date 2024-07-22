@@ -26,7 +26,7 @@ namespace HSMDataCollector.DefaultSensors
             }
             catch (Exception ex)
             {
-                ThrowException(ex);
+                HandleException(ex);
             }
         }
     }

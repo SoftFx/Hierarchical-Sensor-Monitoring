@@ -58,10 +58,10 @@ namespace HSMDataCollector.Core
         public async Task StopAsync()
         {
             IsStarted = false;
-            _dataQueue.Stop();
-            _priorityQueue.Stop();
-            _fileQueue.Stop();
-            _commandQueue.Stop();
+            await _dataQueue.StopAsync().ConfigureAwait(false);
+            await _priorityQueue.StopAsync().ConfigureAwait(false);
+            await _fileQueue.StopAsync().ConfigureAwait(false);
+            await _commandQueue.StopAsync().ConfigureAwait(false);
             await SensorStorage.StopAsync().ConfigureAwait(false);
         }
 

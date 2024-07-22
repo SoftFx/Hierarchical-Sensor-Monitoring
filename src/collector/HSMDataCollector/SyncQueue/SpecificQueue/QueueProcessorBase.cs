@@ -41,12 +41,22 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
         }
 
-        internal void Stop()
+        internal async ValueTask StopAsync()
         {
-            _cancellationTokenSource?.Cancel();
-            _task?.ConfigureAwait(false).GetAwaiter().GetResult();
-            _task?.Dispose();
-            _cancellationTokenSource?.Dispose();
+            try
+            {
+                if (_task != null)
+                {
+                    _cancellationTokenSource?.Cancel();
+                    await _task.ConfigureAwait(false);
+                    _task?.Dispose();
+                    _cancellationTokenSource?.Dispose();
+                }
+            }
+            catch (Exception ex) 
+            {
+                _logger.Error(ex);
+            }
         }
 
         internal virtual int Enqeue(T item)
@@ -76,7 +86,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         internal DataPackage<T> GetPackage()
         {
             var result = new DataPackage<T>();
-            result.Items = Elements().Take(_options.MaxValuesInPackage).Where(s => Validate(s));
+            result.Items = Elements().Take(_options.MaxValuesInPackage).Where(Validate);
 
             IEnumerable<T> Elements()
             {
@@ -93,7 +103,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return result;
         }
 
-        private static bool Validate(T item)
+        private bool Validate(T item)
         {
             if (item is BarSensorValueBase bar)
             {
@@ -120,7 +130,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             if (disposing)
             {
-                Stop();
+                StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
             }
 
             _disposed = true;
