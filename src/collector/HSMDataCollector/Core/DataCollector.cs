@@ -3,13 +3,11 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using HSMDataCollector.Client;
-using HSMDataCollector.Converters;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
 
 
@@ -73,8 +71,9 @@ namespace HSMDataCollector.Core
             _dataProcessor = new DataProcessor(options, _logger);
 
             _sensorsStorage = _dataProcessor.SensorStorage;
-        }
 
+            AppDomain.CurrentDomain.UnhandledException += UnhandledExceptionHandler;
+        }
 
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
@@ -150,7 +149,6 @@ namespace HSMDataCollector.Core
                 await _dataProcessor.StopAsync();
 
                 ChangeStatus(CollectorStatus.Stopped);
-
             }
         }
 
@@ -189,6 +187,8 @@ namespace HSMDataCollector.Core
             _dataProcessor.Dispose();
 
             _dataSender.Dispose();
+
+            AppDomain.CurrentDomain.UnhandledException -= UnhandledExceptionHandler;
 
             ChangeStatus(CollectorStatus.Stopped);
         }
@@ -505,6 +505,12 @@ namespace HSMDataCollector.Core
             });
 
         #endregion
+
+        private void UnhandledExceptionHandler(object sender, UnhandledExceptionEventArgs e)
+        {
+            if (e.ExceptionObject is Exception exception)
+                _logger.Error($"An unhandled exception occurred [Runtime terminated = {e.IsTerminating}]: {exception.Message}");
+        }
 
     }
 }

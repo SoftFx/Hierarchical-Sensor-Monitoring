@@ -12,7 +12,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal sealed class CommandQueueProcessor : EventedQueueProcessorBase<CommandRequestBase>
     {
-        protected override string QueueName => "Command"; 
+        public override string QueueName => "Command"; 
 
         public CommandQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 

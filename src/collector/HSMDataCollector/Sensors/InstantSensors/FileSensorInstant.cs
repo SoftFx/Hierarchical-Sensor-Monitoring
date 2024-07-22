@@ -63,8 +63,7 @@ namespace HSMDataCollector.Sensors
             }
             catch (Exception ex)
             {
-                _logger.Error($"{SensorPath} - {ex.Message}");
-                _dataProcessor.AddException(SensorPath, ex);
+                HandleException(ex);
                 return false;
             }
 
