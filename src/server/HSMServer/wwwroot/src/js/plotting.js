@@ -34,14 +34,21 @@ export async function customReset(plot = undefined, xaxisRange = undefined, yaxi
             return;
 
         let isPanelChart = plot.id.startsWith('panelChart');
-
-        layout['xaxis.range'] = [xaxisRange[0], !isPanelChart ? getMinRangeTo(currentPlot) : xaxisRange[1]];
-
+        
         if (yaxisRange === undefined || yaxisRange === true)
             layout['yaxis.autorange'] = true;
         else
             layout['yaxis.range'] = yaxisRange
 
+        if (!isPanelChart){
+            layout['xaxis.range'] = null;
+            layout['xaxis.autorange'] = true;
+            layout['yaxis.autorange'] = true;
+        }
+        else {
+            layout['xaxis.range'] = [xaxisRange[0], !isPanelChart ? getMinRangeTo(currentPlot) : xaxisRange[1]];
+        }
+        
         return new Promise(function (resolve, reject) {
             resolve(layout)
         })
