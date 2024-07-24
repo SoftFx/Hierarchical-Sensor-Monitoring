@@ -73,9 +73,9 @@ namespace HSMServer.Core.Cache
 
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent += SendAlertMessage;
-            //
-            // _migrator.ApplyProductMigration += UpdateProduct;
-            // _migrator.ApplySensorMigration += TryUpdateSensor;
+
+            _migrator.ApplyProductMigration += UpdateProduct;
+            _migrator.ApplySensorMigration += TryUpdateSensor;
 
             Initialize();
         }
@@ -894,8 +894,8 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
 
             _logger.Info($"Migrate product/sensors settings and alerts");
-            // _migrator.RunProductMigrations([.. _tree.Values]);
-            // _migrator.RunSensorMigrations([.. _sensors.Values]);
+            _migrator.RunProductMigrations([.. _tree.Values]);
+            _migrator.RunSensorMigrations([.. _sensors.Values]);
             _logger.Info($"Migrate product/sensors settings and alerts finished");
 
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
