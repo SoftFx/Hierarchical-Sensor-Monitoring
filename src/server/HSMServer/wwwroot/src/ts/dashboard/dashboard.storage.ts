@@ -170,7 +170,6 @@ export class DashboardStorage {
             }
 
             await createChart(`panelChart_${id}`, data, layout, config)
-            this.basePanelInit();
 
             $(`#panelChart_${id}`).on('plotly_relayout', function (e, updateData){
                 let emptypanel = $(`#emptypanel_${id}`);
@@ -179,13 +178,13 @@ export class DashboardStorage {
             }).on('plotly_doubleclick', async function(){
                 await customReset($(`#panelChart_${id}`)[0], getRangeDate(), panel.settings.range)
             })
-
             
             if (values.length === 0) {
                 $(`#emptypanel_${id}`).show();
             }
         }
-        
+
+        panel.basePanelInit();
         await panel.manualCordinatesUpdate();
 
         replaceHtmlToMarkdown('panel_description')
