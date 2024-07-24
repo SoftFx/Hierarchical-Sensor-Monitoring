@@ -10,6 +10,7 @@
     TimeSpanPlot
 } from "./plots";
 import {VersionPlot} from "../ts/plots/version-plot";
+import {ServiceAlivePlot} from "./ServiceAlivePlot";
 
 export const serviceAlivePlotName  = "ServiceAlive";
 export const serviceStatusPlotName  = "ServiceStatus";
@@ -113,7 +114,7 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
     graphData.graph.self = $(`#${graphElementId}`)[0];
 
     let plot = convertToGraphData(data, sensorInfo, graphName);
-
+    
     let zoomData = getPreviousZoomData(graphElementId);
 
     let config = {
@@ -144,10 +145,22 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
         }
     }
     
+    if (sensorInfo.plotType === 10 && sensorInfo.realType === 0)
+    {
+        layout.shapes = plot.shapes;
+    }
+    
     if (!layout.xaxis.autorange && layout.xaxis.range === undefined)
         layout.xaxis.autorange = true;
     
-    Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config)
+    Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config).then(
+        () => {
+            if (sensorInfo.plotType === 10 && sensorInfo.realType === 0) {
+                let newPlot = new ServiceAlivePlot(data);
+                Plotly.addTraces(graphElementId, newPlot.getPlotData()[0])
+            }
+        }
+    )
     customReset($(`#${graphElementId}`)[0], getCurrentFromTo(graphName))
     
     if (plot.name !== serviceAlivePlotName)
@@ -255,6 +268,16 @@ function getDataForPlotButton(graphName, id, isStatusService) {
         cache: false,
         async: true,
     });
+}
+
+export function extendLayoutForServiceAlive(layout, newShape) {
+    layout.shapes.push(newShape);
+    
+    return layout;
+}
+
+export function buildShape() {
+    
 }
 
 function getModeBarButtons(id, graphId){

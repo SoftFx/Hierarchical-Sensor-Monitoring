@@ -73,7 +73,6 @@ window.InitializeHistory = function () {
     let date = new Date();
 
     let historyPeriod = window.localStorage.getItem(`historyPeriod_${encodedId}`);
-
     if (historyPeriod != null) {
         $('#history_period').val(historyPeriod);
 
@@ -93,6 +92,11 @@ window.InitializeHistory = function () {
             if (Object.keys(sensorInfo).length === 0)
                 return;
 
+            if (sensorInfo.realType === 0 && sensorInfo.plotType === 10) {
+                $('#history_period').trigger('change');
+                return;
+            }
+            
             if (isFileSensor(sensorInfo.realType))
                 return;
 

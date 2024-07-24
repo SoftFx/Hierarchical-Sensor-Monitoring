@@ -39,6 +39,7 @@ import 'emojionearea/dist/emojionearea.min.css'
 import 'emojionearea/dist/emojionearea.min.js'
 
 import './js/interact.js'
+import './js/ServiceAlivePlot.js';
 import './js/plots.js'
 import './js/accessKey.js';
 import './js/confirmation.js';

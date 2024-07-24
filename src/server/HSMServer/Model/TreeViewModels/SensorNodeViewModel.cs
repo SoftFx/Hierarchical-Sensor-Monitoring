@@ -13,6 +13,7 @@ namespace HSMServer.Model.TreeViewModel
     {
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
+        private const string ServiceAliveName = "Service alive";
 
         public const int ValuesLimit = 4000;
 
@@ -53,7 +54,9 @@ namespace HSMServer.Model.TreeViewModel
         public bool IsDatapointFormatSupported => Type is SensorType.Integer or SensorType.Double or SensorType.Rate or SensorType.Boolean
                                                   or SensorType.String or SensorType.TimeSpan;
 
-
+        public bool IsServiceAlive => Name == ServiceAliveName;
+        
+        
         public SensorNodeViewModel(BaseSensorModel model) : base(model) { }
 
 

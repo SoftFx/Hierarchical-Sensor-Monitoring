@@ -26,7 +26,7 @@ export const Colors = {
     line: 'rgb(231, 99, 250)'
 }
 
-const MarkerSize = {
+export const MarkerSize = {
     default: 0,
     defaultLineSize: 2,
     small: 5,
@@ -592,6 +592,9 @@ export class EnumPlot extends Plot {
         this.type = 'heatmap';
         this.opacity = 0.25;
         this.name = isServiceStatus ? serviceStatusPlotName : serviceAlivePlotName;
+        
+        this.shapes = [];
+        
         this.setUpData(data);
     }
 
@@ -619,6 +622,45 @@ export class EnumPlot extends Plot {
                 }
             }
         }
+        
+        let shapeBuilder = { 
+            shouldReturn: false,
+            x0: '',
+            x1: '',
+            buildShape: function (date, isFirstDate) {
+                if (isFirstDate)
+                {
+                    this.x1 = '';
+                    this.x0 = date;
+                    return;
+                }
+                else {
+                    this.x1 = date;
+                    
+                    if (new Date(this.x0) < new Date(this.x1))
+                    {
+                        return {
+                            type: 'rect',
+                            xref: 'x',
+                            yref: 'paper',
+                            x0: this.x0,
+                            y0: 0,
+                            x1: this.x1,
+                            y1: 1,
+                            fillcolor: '#FF0000',
+                            opacity: 0.5,
+                            line: {
+                                width: 2,
+                                color: '#FF0000'
+                            }
+                        };
+                    }
+                }
+                
+                return;
+            }
+        }
+        
 
         for (let i = 0; i < data.length; i++) {
             timeObject.setUpTime(i);
@@ -630,9 +672,17 @@ export class EnumPlot extends Plot {
             }
             else {
                 if (Plot.checkTtl(data[i])) {
+                    shapeBuilder.buildShape(data[i].time, true);
                     this.z.push(0);
                     this.customdata.push(`${ServiceStatus["8"][1]} <br>`)
                 } else {
+                    const shape = shapeBuilder.buildShape(data[i].time, false);
+                    if (shape) {
+                        this.shapes.push(shape);
+                        shapeBuilder.x0 = '';
+                        shapeBuilder.x1 = '';
+                    }
+                    
                     this.z.push(this.isBackgroundPlot ? 0.7 : 0.5);
                     this.customdata.push(`${data[i].value === true ? ServiceStatus["4"][1] : ServiceStatus["1"][1]} <br>`)
                 }
@@ -644,7 +694,7 @@ export class EnumPlot extends Plot {
         let currDate = new Date(new Date(Date.now()).toUTCString()).toISOString();
         this.x.push(currDate);
     }
-
+    
     getPlotData(name = 'custom', minValue = 0, maxValue = 1) {
         this.y = [minValue, maxValue];
         this.z = [this.z];
