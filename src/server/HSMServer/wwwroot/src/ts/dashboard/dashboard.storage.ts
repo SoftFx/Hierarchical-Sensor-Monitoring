@@ -34,7 +34,7 @@ export class DashboardStorage {
 
         window.clearInterval(this._lastUpdateIntervalId)
         this._lastUpdateIntervalId = this.checkForUpdate(this.panels);
-
+        
         $('#dashboardPanels')[0].style.minHeight = this.containerHeight + "px";
     }
     
@@ -46,8 +46,9 @@ export class DashboardStorage {
     public getPanel(id: string): Panel {
         return this.panels[id];
     }
+  
     
-    public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: number, dId: string, sourceType: number, unit: string){
+    public async initPanel(id: string, settings: IPanelSettings, ySettings: IYRangeSettings, values: any[], lastUpdate: number, dId: string, sourceType: number, unit: string, range: boolean | [number, number] = undefined){
         let panel = new Panel(id, settings, ySettings, sourceType, unit);
 
         let result = await ChartHelper.initContrainerCordinates(panel.settings, id)
@@ -59,51 +60,51 @@ export class DashboardStorage {
         if (!panel.settings.isSingleMode){
             const data : any[] = [];
             values.forEach(function (x) {
-               data.push(insertSourcePlot(x, `panelChart_${id}`, id, dId, panel.settings.range)[0]);
+                data.push(insertSourcePlot(x, `panelChart_${id}`, id, dId, panel.settings.range)[0]);
             })
-            
-             let layout = {
-                 hovermode: 'closest',
-                 hoverdistance: 1,
-                 dragmode: 'zoom',
-                 autosize: true,
-                 height: Number((panel.settings.height * 1400).toFixed(5)) - 46,
-                 margin: {
-                     // @ts-ignore
-                     autoexpand: true,
-                     l: 30,
-                     r: 30,
-                     t: 30,
-                     b: 40,
-                 },
-                 showlegend: settings.showLegend,
-                 legend: {
-                     y: 0,
-                     x: 0,
-                     orientation: "h",
-                     yanchor: "bottom",
-                     // @ts-ignore
-                     yref: "container",
-                 },
-                 xaxis: {
-                     type: 'date',
-                     visible: true,
-                     autorange: false,
-                     automargin: true,
-                     range: getRangeDate(),
-                     title: {
-                         //text: 'Time',
-                         font: {
-                             family: 'Courier New, monospace',
-                             size: 18,
-                             color: '#7f7f7f'
-                         }
-                     },
-                     rangeslider: {
-                         visible: false
-                     }
-                 },
-                 yaxis: {
+
+            let layout = {
+                hovermode: 'closest',
+                hoverdistance: 1,
+                dragmode: 'zoom',
+                autosize: true,
+                height: Number((panel.settings.height * 1400).toFixed(5)) - 46,
+                margin: {
+                    // @ts-ignore
+                    autoexpand: true,
+                    l: 30,
+                    r: 30,
+                    t: 30,
+                    b: 40,
+                },
+                showlegend: settings.showLegend,
+                legend: {
+                    y: 0,
+                    x: 0,
+                    orientation: "h",
+                    yanchor: "bottom",
+                    // @ts-ignore
+                    yref: "container",
+                },
+                xaxis: {
+                    type: 'date',
+                    visible: true,
+                    autorange: false,
+                    automargin: true,
+                    range: getRangeDate(),
+                    title: {
+                        //text: 'Time',
+                        font: {
+                            family: 'Courier New, monospace',
+                            size: 18,
+                            color: '#7f7f7f'
+                        }
+                    },
+                    rangeslider: {
+                        visible: false
+                    }
+                },
+                yaxis: {
                     categoryorder : 'trace',
                     visible: true,
                     title: {
@@ -113,21 +114,21 @@ export class DashboardStorage {
                             color: '#7f7f7f'
                         }
                     },
-                     tickmode: "auto",
-                     // @ts-ignore
-                     ticktext: [],
-                     // @ts-ignore
-                     tickvals: [],
-                     tickfont: {
-                         size: 10
-                     },
-                     // @ts-ignore
-                     automargin: 'width+right'
-                 },
-             }
-             
+                    tickmode: "auto",
+                    // @ts-ignore
+                    ticktext: [],
+                    // @ts-ignore
+                    tickvals: [],
+                    tickfont: {
+                        size: 10
+                    },
+                    // @ts-ignore
+                    automargin: 'width+right'
+                },
+            }
+
             if (panel.sourceType === 7)
-            {                
+            {
                 const ticks = TimeSpanPlot.getYaxisTicks(data);
                 layout.yaxis.tickmode = 'array';
                 layout.yaxis.ticktext = ticks.ticktext;
@@ -142,7 +143,7 @@ export class DashboardStorage {
                 layout.yaxis.tickvals = ticks.tickvals;
                 layout.yaxis.categoryorder = ticks.categoryorder;
             }
-            
+
             const config = {
                 responsive: true,
                 displaylogo: false,
@@ -167,10 +168,10 @@ export class DashboardStorage {
                     }],
                 doubleClick: false
             }
-            
+
             await createChart(`panelChart_${id}`, data, layout, config)
             this.basePanelInit();
-            
+
             $(`#panelChart_${id}`).on('plotly_relayout', function (e, updateData){
                 let emptypanel = $(`#emptypanel_${id}`);
                 let container = $(`#${id}`);
@@ -178,16 +179,14 @@ export class DashboardStorage {
             }).on('plotly_doubleclick', async function(){
                 await customReset($(`#panelChart_${id}`)[0], getRangeDate(), panel.settings.range)
             })
-            
-            await panel.manualCordinatesUpdate();
+
             
             if (values.length === 0) {
                 $(`#emptypanel_${id}`).show();
             }
         }
-        else
-            await panel.manualCordinatesUpdate();
-
+        
+        await panel.manualCordinatesUpdate();
 
         replaceHtmlToMarkdown('panel_description')
     }
