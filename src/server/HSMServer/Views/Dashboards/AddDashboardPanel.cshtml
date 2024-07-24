@@ -17,9 +17,6 @@
     };
 
     var isYRangeAvailabe = !Model.MainSensorType.HasValue || Model.YRange.IsRangeScalePossible(Model.MainSensorType.Value);
-    
-    var lastUpdate = (long)(@Model.LastUpdate - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
-    var mainSensorType = Model.MainSensorType is null ? byte.MinValue : (byte)Model.MainSensorType;
 }
 
 
