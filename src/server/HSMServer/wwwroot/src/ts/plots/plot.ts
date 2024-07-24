@@ -40,7 +40,7 @@ export class Plot<T> {
         return [this];
     }
     
-    getLayout(){
+    getLayout(y: T[] = []) : Partial<Layout>{
         return {
             dragmode: 'zoom',
             autosize: true,
