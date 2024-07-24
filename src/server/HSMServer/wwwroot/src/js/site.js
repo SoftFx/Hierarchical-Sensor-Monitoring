@@ -1,4 +1,6 @@
-﻿window.hiddenColumns = {
+﻿import {currentPanel} from "./dashboard";
+
+window.hiddenColumns = {
     id: undefined,
     
     showText: "Show all columns",

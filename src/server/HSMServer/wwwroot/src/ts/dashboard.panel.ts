@@ -56,9 +56,6 @@ export class Panel {
     }
 
     basePanelInit() {
-        if (this.id === 'multichart')
-            return;
-
         this._lastUpdateDiv = $('#lastUpdate_' + this.id);
 
         this.addEventListeners();
@@ -84,9 +81,6 @@ export class Panel {
     }
 
     addEventListeners() {
-        if (this.id === 'multichart')
-            return;
-        
         if (this.settings.isSingleMode)
             this.addOrderableTable();
 

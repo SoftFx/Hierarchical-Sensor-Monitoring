@@ -540,20 +540,6 @@ export class TimeSpanPlot extends ErrorColorPlot {
             autosize: true
         };
     }
-
-    static getYaxisTicks(data){
-        let y = [];
-
-        for (const val of data) {
-            y.push(val.y);
-        }
-        let layoutTicks = TimeSpanPlot.getLayoutTicks(y);
-
-        return {
-            ticktext: layoutTicks[1],
-            tickvals: layoutTicks[0],
-        };
-    }
     
     static getLayoutTicks(y){
         const MAX_TIME_POINTS = 10

@@ -45,8 +45,8 @@
                 <i class="fa-solid fa-ellipsis-vertical button-link"></i>
             </button>
             <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-                <button id="removeSource_@Model.Id" class="dropdown-item text-decoration-none fw-normal button-link">Remove</button>
-                <button id="removeAllSources_@Model.Id" class="dropdown-item text-decoration-none fw-normal button-link">Remove all sources</button>
+                <a class="dropdown-item text-decoration-none fw-normal button-link" href="javascript:removeSource('@Model.Id')">Remove</a>
+                <a class="dropdown-item text-decoration-none fw-normal button-link" href="javascript:removeAllSources()">Remove all sources</a>
             </div>
         </div>
     </div>
@@ -56,5 +56,42 @@
 <script>
     function realtimeUpdate(id) {
         updateSource($(`#name_input_${id}`).val(), $(`#color_${id}`).val(), $(`#property_${id}`).val(), $(`#shape_${id}`).val(), $(`input[name='ShowProduct']`).is(':checked'), id);
+    }
+
+    function removeSource(sourceId) {
+        showConfirmationModal(
+            `Removing source`,
+            `Do you really want to remove selected source?`,
+            function () {
+                deletePlot(sourceId);
+            }
+        );
+    }
+
+    function deletePlot(sourceId) {
+        let model = getCurrentPlotInDashboard(sourceId)
+
+        if (model !== undefined) {
+            $.ajax({
+                type: 'delete',
+                url: window.location.pathname + '/' + sourceId
+            }).done(function (response) {
+                Plotly.deleteTraces('multichart', model.id).then(
+                    (data) => {
+                        if (data.data.length === 0) {
+                            Plotly.relayout('multichart', { 'xaxis.visible': false, 'yaxis.visible': false });
+                            $('#emptypanel').show();
+                        }
+
+                        $('[id^="source"] li')[model.oldIndex].remove();
+                        syncIndexes();
+                        if ($('[id^="source"] li').length === 0)
+                            $('#y-range-settings').show();
+                    }
+                )
+            }).fail(function (response) {
+                showToast(response.responseText);
+            });
+        }
     }
 </script>

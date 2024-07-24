@@ -1,7 +1,5 @@
 ﻿import {Plot} from "./plot";
 import {IVersionEntity, IVersionValue} from "../entities/version-entity";
-import {Data, Layout} from "plotly.js";
-import {Dictionary} from "../dashboard/dashboard.interfaces";
 
 export class VersionPlot extends Plot<string>{
     override type = 'scatter';
@@ -20,77 +18,18 @@ export class VersionPlot extends Plot<string>{
             this.customdata.push(i.tooltip);
         }
     }
+    
+
+    // compareVersion(value: VersionEntity): number {
+    //     return value === null ? 1 :
+    //         this.value.major != value.major ? (this.value.major > value.major ? 1 : -1) :
+    //             this.value.minor != value.minor ? (this.value.minor > value.minor ? 1 : -1) :
+    //                 this.value.build != value.build ? (this.value.build > value.build ? 1 : -1) :
+    //                     this.value.revision != value.revision ? (this.value.revision > value.revision ? 1 : -1) :
+    //                         0
+    // }
 
     getY(value: IVersionEntity) : string {
-        let stringRepresentation = "";
-
-        tryBuild(value.major, true)
-        tryBuild(value.minor)
-        tryBuild(value.build)
-        tryBuild(value.revision)
-        tryBuild(value.majorRevision)
-        tryBuild(value.minorRevision)
-        
-        function tryBuild(value: number, q: boolean = false){
-                stringRepresentation += q === true ? `${value}` : `.${value}`;
-        }
-        
-        return stringRepresentation;
-    }
-    
-    override getLayout(y: string[]): Partial<Layout>{
-        const layoutVals : string[] = [];
-        const layoutText: string[] = [];
-        
-        
-        for (const yVal of y) {
-            layoutText.push(yVal.replaceAll('.-1', ''));
-            layoutVals.push(yVal);
-        }
-        
-       return {
-            ...super.getLayout(),
-           yaxis: {
-               tickmode: "array",
-               ticktext: layoutText,
-               tickvals: layoutVals,
-               tickfont: {
-                   size: 10
-               },
-               // @ts-ignore
-               automargin: "width+height"
-           },
-           autosize: true
-       }
-    }
-    
-    static getYaxisTicks(data: Data[]){
-        const layoutVals : string[] = [];
-        const layoutText: string[] = [];
-        const y: string[] = []
-
-        let map: Dictionary<string> = {};
-        for (const val of data) {
-            //@ts-ignore
-            y.push(...val.y);
-        }
-
-        for (const yVal of y) {
-            if (yVal === null)
-                continue;
-
-            map[yVal] = yVal;
-        }
-
-        for (const yVal of Object.keys(map)) {
-            layoutVals.push(yVal);
-            layoutText.push(yVal.replaceAll('.-1', ''));
-        }
-
-        return {
-                ticktext: layoutText,
-                tickvals: layoutVals,
-                categoryorder: 'category ascending',
-            }
+        return `${value.major}.${value.minor}${value.build}${value.revision}${value.majorRevision}${value.minorRevision}`;
     }
 }

@@ -1,21 +1,19 @@
-import {convertToGraphData, customReset} from "./plotting";
+import {convertToGraphData} from "./plotting";
 import {TimeSpanPlot, ErrorColorPlot} from "./plots";
 import {Panel} from "../ts/dashboard.panel";
 import {DashboardStorage} from "../ts/dashboard/dashboard.storage";
 import {formObserver} from "./nodeData";
 import {SiteHelper} from "../ts/services/site-helper";
-import {VersionPlot} from "../ts/plots/version-plot";
-import Plotly from "plotly.js";
 
 const updateDashboardInterval = 120000; // 2min
 export const dashboardStorage = new DashboardStorage();
 
 
-window.addObserve = function (q) {
+window.addObserve = function(q){
     formObserver.addFormToObserve(q);
 }
 
-window.manualCheckBoundaries = function () {
+window.manualCheckBoundaries = function (){
     SiteHelper.ManualCheckDashboardBoundaries();
 }
 
@@ -101,8 +99,19 @@ export function getPlotSourceView(id) {
     })
 }
 
-export const multichartPanel = {};
+export const currentPanel = {};
 export const plotColorDelay = 1000;
+
+export function Model(id, panelId, dashboardId, sensorId, range = undefined) {
+    this.id = id;
+    this.oldIndex = id;
+    this.sensorId = sensorId;
+    this.panelId = panelId;
+    this.dashboardId = dashboardId;
+    this.updateTimeout = undefined;
+    this.requestTimeout = undefined;
+    this.range = range;
+}
 
 window.insertSourceHtml = function (data) {
     let sources = $('#sources');
@@ -116,113 +125,7 @@ window.insertSourceHtml = function (data) {
         async: true
     }).done(function (result) {
         sources.append(result);
-        setMultichartRemoveListeners();
     });
-}
-
-window.setMultichartRemoveListeners = () => {
-    $('[id^=removeSource_]').off('click').on('click', function(e) {
-        removeSource(this.id.substring('removeSource_'.length));
-    })
-
-    $('[id^=removeAllSources_]').off('click').on('click', function(e) {
-        deleteAllPlots();
-    })
-}
-
-function removeSource(sourceId) {
-    showConfirmationModal(
-        `Removing source`,
-        `Do you really want to remove selected source?`,
-        function () {
-            deletePlot(sourceId);
-        }
-    )
-}
-
-const getMultichartTraceIndex = (sourceId) => {
-    let multichartrtData = $('#multichart')[0].data;
-    for (let i = 0; i < multichartrtData.length; i++) {
-        if (multichartrtData[i].id === sourceId)
-        {
-           return i;
-        }
-    }
-    
-    return undefined;
-} 
-
-function deletePlot(sourceId) {
-    let sourceIndex = getMultichartTraceIndex(sourceId);
-    
-    if (sourceIndex !== undefined)
-        $.ajax({
-            type: 'delete',
-            url: window.location.pathname + '/' + sourceId
-        }).done(function (response) {
-            Plotly.deleteTraces('multichart', sourceIndex).then(
-                (data) => {
-                    if (data.data.length === 0) {
-                        Plotly.relayout('multichart', { 'xaxis.visible': false, 'yaxis.visible': false });
-                        $('#emptypanel').show();
-                    }
-
-                    $(`#source_${sourceId}`).remove();
-
-                    if ($('[id^="source"] li').length === 0)
-                        $('#y-range-settings').show();
-                }
-            )
-        }).fail(function (response) {
-            showToast(response.responseText);
-        });
-}
-
-function deleteAllPlots() {
-    const sourceIds = Array.from($('#multichart')[0].data, (val, index) => val.id);
-    
-    showConfirmationModal(
-        `Removing sources`,
-        `Do you really want to remove all panel sources?`,
-        function () {
-            $.ajax({
-                type: 'put',
-                url: window.location.pathname + '/DeleteSources',
-                data: JSON.stringify({
-                    ids: sourceIds
-                }),
-                contentType: 'application/json'
-            }).done((response) => {
-                let multichartLength = $('#multichart')[0].data.length;
-                Plotly.deleteTraces('multichart', Array.from({ length: multichartLength }, (_, index) => index));
-
-                for (let i of sourceIds) {
-                    $(`#source_${i}`).remove();
-                }
-
-                $('#y-range-settings').show();
-                $('#emptypanel').show();
-                Plotly.relayout('multichart', { 'xaxis.visible': false, 'yaxis.visible': false });
-            })
-        }
-    );
-}
-
-function removeAllSources() {
-    showConfirmationModal(
-        `Removing sources`,
-        `Do you really want to remove all panel sources?`,
-        function () {
-            $('#sources li').each(function (idx, li) {
-                let source = $(li);
-
-                let idAttr = source.attr('id');
-                let sourceId = idAttr.substring('source_'.length, idAttr.length);
-
-                deletePlot(sourceId);
-            })
-        }
-    );
 }
 
 function checkForYRange(plot) {
@@ -234,14 +137,24 @@ function checkForYRange(plot) {
         $('#y-range-settings').hide()
 }
 
-export async function createChart(chartId, data, layout, config) {
-    return Plotly.newPlot(chartId, data, layout, config)
-}
-
-export function insertSourcePlot(data, id, panelId, dashboardId, range = undefined) {
+export function insertSourcePlot (data, id, panelId, dashboardId, range = undefined) {
     let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)
+
+    let layoutUpdate = {
+        'xaxis.visible': true,
+        'xaxis.type': 'date',
+        'xaxis.autorange': false,
+        'xaxis.range': getRangeDate(),
+        'yaxis.visible': true,
+        'yaxis.title.text': data.sensorInfo.units,
+        'yaxis.title.font.size': 14,
+        'yaxis.title.font.color': '#7f7f7f',
+    }
+
+    if (plot.autoscaleY !== true && plot.autoscaleY !== undefined)
+        layoutUpdate['yaxis.range'] = plot.autoscaleY;
 
     if (data.values.length === 0) {
         plot.x = [null]
@@ -255,25 +168,59 @@ export function insertSourcePlot(data, id, panelId, dashboardId, range = undefin
     plot.showlegend = true;
     plot['marker']['color'] = data.color;
 
-    if (plot.type === 'scatter')
-        plot.type = 'scattergl';
-
     let plotData = plot.getPlotData();
     let panel = dashboardStorage.getPanel(panelId)
     if (panel)
         panel.lastUpdateTime = new Date(plotData[0].x.at(-1));
 
-    return plotData;
+    Plotly.addTraces(id, plotData).then(
+        (data) => {
+            if (plot instanceof TimeSpanPlot) {
+                let y = [];
+                for (let i of $(`#${id}`)[0].data)
+                    y.push(...i.y);
+
+                y = y.filter(element => {
+                    return element !== null;
+                })
+                let timespanLayout = plot.getLayout(y);
+
+                timespanLayout.margin = {
+                    autoexpand: true,
+                    l: 30,
+                    r: 30,
+                    t: 30,
+                    b: 40,
+                };
+
+                timespanLayout.legend = {
+                    y: 0,
+                    orientation: "h",
+                    yanchor: "bottom",
+                    yref: "container"
+                };
+
+                timespanLayout.xaxis.automargin = true;
+
+                Plotly.relayout(id, timespanLayout)
+            }
+
+            $('#emptypanel').hide()
+
+            if (id === 'multichart')
+                layoutUpdate['xaxis.autorange'] = true;
+
+            Plotly.relayout(id, layoutUpdate)
+        }
+    );
+
+    currentPanel[data.id] = new Model($(`#${id}`)[0].data.length - 1, panelId, dashboardId, data.sensorId, range);
+    currentPanel[data.id].isTimeSpan = plot instanceof TimeSpanPlot;
 }
 
-window.addNewSourceHtml = async function (data, id) {
+window.addNewSourceHtml = function (data, id) {
     insertSourceHtml(data);
-    var plotData = insertSourcePlot(data, id, undefined, undefined, multichartRange)[0];
-    
-    await Plotly.addTraces('multichart', plotData);
-    await Plotly.relayout('multichart', { 'xaxis.visible': true, 'yaxis.visible': true });
-
-    $('#emptypanel').hide();
+    insertSourcePlot(data, id, undefined, undefined, multichartRange);
 }
 
 export function initDropzone() {
@@ -316,11 +263,9 @@ export function initDropzone() {
             event.target.classList.remove('drop-target')
             event.relatedTarget.classList.remove('can-drop')
         },
-        ondrop: async function (event) {
+        ondrop: function (event) {
             getPlotSourceView(event.relatedTarget.id).then(
-                (data) => {
-                    addNewSourceHtml(data, 'multichart')
-                },
+                (data) => addNewSourceHtml(data, 'multichart'),
                 (error) => showToast(error)
             )
         },
@@ -439,7 +384,7 @@ function addResizable(interactable) {
                 let item = $(target)
 
                 let panel = dashboardStorage.getPanel(event.target.id);
-                if (panel.settings.isSingleMode) {
+                if (panel.settings.isSingleMode){
                     let children = item.children();
                     let title = children[0].getBoundingClientRect();
                     let data = item.find('table')[0].getBoundingClientRect();
@@ -448,7 +393,8 @@ function addResizable(interactable) {
                     target.style.height = childrenHeight + 'px';
                     if (childrenWidth > event.rect.width)
                         target.style.width = childrenWidth + 'px';
-                } else {
+                }
+                else {
                     var update = {
                         'width': item.width(),
                         'height': item.height() - item.children('div').first().height()
@@ -471,145 +417,35 @@ function addResizable(interactable) {
 }
 
 window.updateSource = function (name, color, property, shape, showProduct, id) {
-    if (multichartPanel[id] === undefined)
-        multichartPanel[id] = {};
-    
-    if (multichartPanel[id].updateTimeout !== undefined)
-        clearTimeout(multichartPanel[id].updateTimeout);
+    if (currentPanel[id] === undefined)
+        return;
 
-    multichartPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, shape, showProduct, id);
+    if (currentPanel[id].updateTimeout !== undefined)
+        clearTimeout(currentPanel[id].updateTimeout);
+
+    currentPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, shape, showProduct, id);
 }
 
-window.initPanel = async function (id, settings, ySettings, values, lastUpdate, dashboardId, panelSourceType, unit, range = undefined) {
-    await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate, dashboardId, panelSourceType, unit, range);
+window.getCurrentPlotInDashboard = function (id) {
+    return currentPanel[id]
 }
 
+window.syncIndexes = function () {
+    let sources = $('#sources li');
+    let plot = $('#multichart')[0].data;
 
-window.multiChartPanelInit = async (values, sourceType, unit = '', height = 300, range = true) => {
-    const data = [];
-    values.forEach(function (x) {
-        data.push(insertSourcePlot(x, `multichart`, undefined, undefined, range)[0]);
-    })
-
-    let layout = {
-        hovermode: 'closest',
-        hoverdistance: 1,
-        dragmode: 'zoom',
-        autosize: true,
-        height: height,
-        margin: {
-            // @ts-ignore
-            autoexpand: true,
-            l: 30,
-            r: 30,
-            t: 30,
-            b: 40,
-        },
-        showlegend: true,
-        legend: {
-            y: 0,
-            x: 0,
-            orientation: "h",
-            yanchor: "bottom",
-            // @ts-ignore
-            yref: "container",
-        },
-        xaxis: {
-            type: 'date',
-            visible: true,
-            autorange: true,
-            automargin: true,
-            range: getRangeDate(),
-            title: {
-                //text: 'Time',
-                font: {
-                    family: 'Courier New, monospace',
-                    size: 18,
-                    color: '#7f7f7f'
-                }
-            },
-            rangeslider: {
-                visible: false
-            }
-        },
-        yaxis: {
-            categoryorder: 'trace',
-            visible: true,
-            title: {
-                text: unit,
-                font: {
-                    size: 14,
-                    color: '#7f7f7f'
-                }
-            },
-            tickmode: "auto",
-            // @ts-ignore
-            ticktext: [],
-            // @ts-ignore
-            tickvals: [],
-            tickfont: {
-                size: 10
-            },
-            // @ts-ignore
-            automargin: 'width+right'
-        },
+    for (let i = 0; i < sources.length; i++) {
+        currentPanel[`${sources[i].id.substring('source_'.length, sources[i].id.length)}`].oldIndex = i;
     }
 
-    if (sourceType === 7) {
-        const ticks = TimeSpanPlot.getYaxisTicks(data);
-        layout.yaxis.tickmode = 'array';
-        layout.yaxis.ticktext = ticks.ticktext;
-        layout.yaxis.tickvals = ticks.tickvals;
-    }
-
-    if (sourceType === 8) {
-
-        const ticks = VersionPlot.getYaxisTicks(data);
-        layout.yaxis.tickmode = 'array';
-        layout.yaxis.ticktext = ticks.ticktext;
-        layout.yaxis.tickvals = ticks.tickvals;
-        layout.yaxis.categoryorder = ticks.categoryorder;
-    }
-
-    const config = {
-        responsive: true,
-        displaylogo: false,
-        modeBarButtonsToRemove: [
-            'pan',
-            'lasso2d',
-            'pan2d',
-            'select2d',
-            'autoScale2d',
-            'autoScale2d',
-            'resetScale2d'
-        ],
-        modeBarButtonsToAdd: [
-            {
-                name: 'resetaxes',
-                _cat: 'resetscale',
-                title: 'Reset axes',
-                attr: 'zoom',
-                val: 'reset',
-                icon: Plotly.Icons.home,
-                click: (plot) => $(plot).trigger('plotly_doubleclick')
-            }],
-        doubleClick: false
-    }
-
-    await createChart(`multichart`, data, layout, config)
-    $('#multichart').on('plotly_relayout', function (e, updateData) {
-        let rect = e.target.getBoundingClientRect();
-        let emptypanel = $('#emptypanel');
-        emptypanel.css('transform', `translate(${rect.width / 2 - emptypanel.width() / 2}px, ${rect.height / 2}px)`)
-    }).on('plotly_doubleclick', async function(){
-        await customReset($(`#multichart`)[0])
-    })
-
-    if (values.length === 0) {
-        $('#emptypanel').show();
+    for (let i = 0; i < plot.length; i++) {
+        currentPanel[`${plot[i].id}`].id = i;
     }
 }
 
+window.initPanel = async function (id, settings, ySettings, values, lastUpdate) {
+   await dashboardStorage.initPanel(id, settings, ySettings, values, lastUpdate);
+}
 
 window.initMultichart = function (chartId, height = 300, showlegend = true, autorange = false, yaxisRange = true) {
     return Plotly.newPlot(chartId, [], {
@@ -688,8 +524,8 @@ function showEventInfo(event) {
 }
 
 function updatePlotSource(name, color, property, shape, showProduct, id) {
-    let updatedName = defaultLabelUpdate(getMultichartTraceIndex(id), name)
-    
+    let updatedName = defaultLabelUpdate(currentPanel[id].oldIndex, name)
+
     $.ajax({
         processData: false,
         type: 'put',
@@ -701,12 +537,11 @@ function updatePlotSource(name, color, property, shape, showProduct, id) {
             property: property,
             shape: shape
         })
-    }).done(async function (response) {
-        let traceId = getMultichartTraceIndex(id);
+    }).done(function (response) {
         if (response !== '') {
-            await Plotly.deleteTraces('multichart', traceId);
-            let plotData = insertSourcePlot(response, 'multichart')[0];
-            await Plotly.addTraces('multichart', plotData, traceId);
+            Plotly.deleteTraces('multichart', currentPanel[id].id);
+            insertSourcePlot(response, 'multichart');
+            syncIndexes();
         }
 
         if (showProduct)
@@ -720,10 +555,10 @@ function updatePlotSource(name, color, property, shape, showProduct, id) {
             name: updatedName
         }
 
-        if (multichartPanel[id] !== undefined)
-            await Plotly.restyle('multichart', layoutUpdate, traceId)
+        if (currentPanel[id] !== undefined)
+            Plotly.restyle('multichart', layoutUpdate, currentPanel[id].id)
 
-        multichartPanel[id].updateTimeout = undefined;
+        currentPanel[id].updateTimeout = undefined;
     }).fail(function (response) {
         showToast(response.responseText)
     })
