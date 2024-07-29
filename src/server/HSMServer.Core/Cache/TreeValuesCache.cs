@@ -1104,7 +1104,7 @@ namespace HSMServer.Core.Cache
 
             SubscribeSensorToPolicyUpdate(sensor);
 
-            sensor.Policies.AddDefault(options);
+            //sensor.Policies.AddDefault(options);
 
             AddSensor(sensor);
             UpdateProduct(parent);
