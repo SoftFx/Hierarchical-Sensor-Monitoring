@@ -324,8 +324,10 @@ function addEnumPlot(graphId, graphName, id, isStatusService, path){
                 break;
             }
 
-        if (indexToDelete !== undefined)
+        if (indexToDelete !== undefined) {
             Plotly.deleteTraces(graphId, indexToDelete);
+            Plotly.relayout(graphId, {shapes:[]});
+        }
     } else {
         getDataForPlotButton(graphName, id, isStatusService).done(function (data){
             let escapedData = JSON.parse(data);
