@@ -661,7 +661,6 @@ export class EnumPlot extends Plot {
             }
         }
         
-
         for (let i = 0; i < data.length; i++) {
             timeObject.setUpTime(i);
 

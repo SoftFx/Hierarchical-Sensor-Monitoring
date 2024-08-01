@@ -10,7 +10,6 @@
     TimeSpanPlot
 } from "./plots";
 import {VersionPlot} from "../ts/plots/version-plot";
-import {ServiceAlivePlot} from "./ServiceAlivePlot";
 
 export const serviceAlivePlotName  = "ServiceAlive";
 export const serviceStatusPlotName  = "ServiceStatus";
@@ -153,14 +152,7 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
     if (!layout.xaxis.autorange && layout.xaxis.range === undefined)
         layout.xaxis.autorange = true;
     
-    Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config).then(
-        () => {
-            if (sensorInfo.plotType === 10 && sensorInfo.realType === 0) {
-                let newPlot = new ServiceAlivePlot(data);
-                Plotly.addTraces(graphElementId, newPlot.getPlotData()[0])
-            }
-        }
-    )
+    Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config)
     customReset($(`#${graphElementId}`)[0], getCurrentFromTo(graphName))
     
     if (plot.name !== serviceAlivePlotName)
