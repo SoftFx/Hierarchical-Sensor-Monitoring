@@ -650,7 +650,7 @@ export class EnumPlot extends Plot {
                             fillcolor: '#FF0000',
                             opacity: 0.5,
                             line: {
-                                width: 2,
+                                width: 1,
                                 color: '#FF0000'
                             }
                         };
