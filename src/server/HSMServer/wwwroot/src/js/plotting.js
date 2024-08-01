@@ -331,11 +331,12 @@ function addEnumPlot(graphId, graphName, id, isStatusService, path){
             let escapedData = JSON.parse(data);
             let yranges = graph._fullLayout.yaxis.range;
             let xranges = graph._fullLayout.xaxis.range;
-            let heatPlot = new EnumPlot(escapedData, isStatusService)
+            let heatPlot = new EnumPlot(escapedData.value.values, isStatusService)
             let updateLayout = {
                 title: heatPlot.getTitle(path),
                 hovermode: 'closest',
-                'xaxis.range': xranges
+                'xaxis.range': xranges,
+                shapes: heatPlot.shapes
             };
 
             Plotly.addTraces(graphId, heatPlot.getPlotData(currentName, yranges[0], yranges[1]), 0);
