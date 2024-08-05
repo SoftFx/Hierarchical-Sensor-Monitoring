@@ -313,7 +313,7 @@ function isFileSensor(type) {
 }
 
 function isGraphAvailable(type) {
-    return !(type === 3 || type === 6);
+    return !(type === 3 || type === 6 || type === 8);
 }
 
 function isTableAvailable(type) {
