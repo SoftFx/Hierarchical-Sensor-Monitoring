@@ -147,6 +147,8 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
     if (sensorInfo.plotType === 10 && sensorInfo.realType === 0)
     {
         layout.shapes = plot.shapes;
+        layout.hovermode= 'closest';
+        layout.hoverdistance= -1;
     }
     
     if (!layout.xaxis.autorange && layout.xaxis.range === undefined)
@@ -208,8 +210,8 @@ function getPreviousZoomData(graphElementId) {
 }
 
 export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, shape = undefined, asLine = false, range = undefined) {
-    let escapedData = JSON.parse(graphData);
-
+    let parsedData = JSON.parse(graphData);
+    let escapedData = parsedData.values; 
     switch (sensorInfo.plotType) {
         case 0:
             return new BoolPlot(escapedData, sensorInfo.units, color, range);
@@ -333,7 +335,7 @@ function addEnumPlot(graphId, graphName, id, isStatusService, path){
             let escapedData = JSON.parse(data);
             let yranges = graph._fullLayout.yaxis.range;
             let xranges = graph._fullLayout.xaxis.range;
-            let heatPlot = new EnumPlot(escapedData.value.values, isStatusService)
+            let heatPlot = new EnumPlot(escapedData.value, isStatusService)
             let updateLayout = {
                 title: heatPlot.getTitle(path),
                 hovermode: 'closest',

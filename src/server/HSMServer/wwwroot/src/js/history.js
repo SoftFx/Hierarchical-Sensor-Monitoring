@@ -284,7 +284,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
 
                 reloadHistoryRequest(from, to, body);
             }
-            displayGraph(JSON.stringify(values), sensorInfo, `graph_${encodedId}`, encodedId);
+            displayGraph(JSON.stringify(parsedData.value), sensorInfo, `graph_${encodedId}`, encodedId);
         }
 
         $("#sensorHistorySpinner").addClass("d-none");
