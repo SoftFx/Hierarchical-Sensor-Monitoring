@@ -600,6 +600,18 @@ export class EnumPlot extends Plot {
     }
 
     setUpData(data, averagevalue = 0.5) {
+        function getOpacity (color, isBackground) {
+            if (isBackground)
+            {
+                if (color === '#94ff73'){
+                    return 0;
+                }
+                else return 0.25;
+            }
+            
+            return 0.5;
+        }
+        
         for (let i = 0; i < data.length; i++) {
             this.shapes.push({
                 type: 'rect',
@@ -610,11 +622,11 @@ export class EnumPlot extends Plot {
                 x1: data[i].x1,
                 y1: 1,
                 fillcolor: data[i].color,
-                opacity: 0.5,
+                opacity: getOpacity(data[i].color, this.isBackgroundPlot),
                 line: {
                     width: 2,
                     color: data[i].color,
-                    opacity: 0.5
+                    opacity: getOpacity(data[i].color, this.isBackgroundPlot)
                 }
             });
 
