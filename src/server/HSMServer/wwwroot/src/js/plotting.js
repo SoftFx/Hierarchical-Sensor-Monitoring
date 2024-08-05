@@ -335,7 +335,12 @@ function addEnumPlot(graphId, graphName, id, isStatusService, path){
             let escapedData = JSON.parse(data);
             let yranges = graph._fullLayout.yaxis.range;
             let xranges = graph._fullLayout.xaxis.range;
-            let heatPlot = new EnumPlot(escapedData.value, isStatusService)
+
+            
+            const currdata = $('#' + graphId)[0].layout.yaxis.range;
+            const average = (currdata[0] + currdata[1]) / 2;
+
+            let heatPlot = new EnumPlot(escapedData.value.values, isStatusService, true, average)
             let updateLayout = {
                 title: heatPlot.getTitle(path),
                 hovermode: 'closest',

@@ -14,6 +14,7 @@ namespace HSMServer.Model.TreeViewModel
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
         private const string ServiceAliveName = "Service alive";
+        private const string ServiceStatusName = "Service status";
 
         public const int ValuesLimit = 4000;
 
@@ -55,6 +56,7 @@ namespace HSMServer.Model.TreeViewModel
                                                   or SensorType.String or SensorType.TimeSpan;
 
         public bool IsServiceAlive => Name == ServiceAliveName;
+        public bool IsServiceStatus => Name == ServiceStatusName;
         
         
         public SensorNodeViewModel(BaseSensorModel model) : base(model) { }
