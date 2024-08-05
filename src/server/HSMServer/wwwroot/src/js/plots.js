@@ -637,7 +637,7 @@ export class EnumPlot extends Plot {
         }
     }
 
-    getPlotData(name = 'custom', minValue = 0, maxValue = 1) {
+    getPlotData(name = 'custom') {
         if (!this.name)
             this.name = name;
 
