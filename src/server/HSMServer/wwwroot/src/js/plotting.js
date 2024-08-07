@@ -144,7 +144,7 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
         }
     }
     
-    if (sensorInfo.plotType === 10 && sensorInfo.realType === 0)
+    if (sensorInfo.plotType === 10)
     {
         layout.shapes = plot.shapes;
         layout.hovermode= 'closest';
@@ -340,13 +340,14 @@ function addEnumPlot(graphId, graphName, id, isStatusService, path){
             const average = (currdata[0] + currdata[1]) / 2;
 
             let heatPlot = new EnumPlot(escapedData.value.values, isStatusService, true, average)
-            let shapes = graph.layout.shapes;
+            let shapes = graph.layout.shapes ?? [];
 
             let updateLayout = {
                 title: heatPlot.getTitle(path),
                 hovermode: 'closest',
                 'xaxis.range': xranges,
-                shapes: [...heatPlot.shapes, ...shapes]
+                shapes: [...heatPlot.shapes, ...shapes],
+                hoverdistance: 50
             };
             
             Plotly.addTraces(graphId, heatPlot.getPlotData(currentName), 0);

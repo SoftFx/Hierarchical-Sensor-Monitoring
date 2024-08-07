@@ -606,29 +606,46 @@ export class EnumPlot extends Plot {
                 if (color === '#94ff73'){
                     return 0;
                 }
-                else return 0.25;
+
+                if (color === '#00FFFF')
+                    return 0.5;
+                
+                return 0.25;
             }
+            
+            if (color === '#00FFFF')
+                return 1;
             
             return 0.5;
         }
         
         for (let i = 0; i < data.length; i++) {
-            this.shapes.push({
-                type: 'rect',
-                xref: 'x',
-                yref: 'paper',
-                x0: data[i].x0,
-                y0: 0,
-                x1: data[i].x1,
-                y1: 1,
-                fillcolor: data[i].color,
-                opacity: getOpacity(data[i].color, this.isBackgroundPlot),
-                line: {
-                    width: 2,
-                    color: data[i].color,
-                    opacity: getOpacity(data[i].color, this.isBackgroundPlot)
+            let shape =
+                {
+                    type: 'rect',
+                    xref: 'x',
+                    yref: 'paper',
+                    x0: data[i].x0,
+                    y0: 0,
+                    x1: data[i].x1,
+                    y1: 1,
+                    fillcolor: data[i].color,
+                    opacity: getOpacity(data[i].color, this.isBackgroundPlot),
+                    line: {
+                        width: 2,
+                        color: data[i].color,
+                        opacity: getOpacity(data[i].color, this.isBackgroundPlot)
+                    }
+                };
+            
+            if (!this.isServiceStatus && data[i].color === "#00FFFF") {
+                shape.label= {
+                    text: 'Restart',
+                    textposition: 'top center',
+                    font: { size: 10, color: 'black' },
                 }
-            });
+            }
+            this.shapes.push(shape);
 
             this.x.push(data[i].x);
             this.y.push(averagevalue);
