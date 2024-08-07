@@ -595,6 +595,7 @@ export class EnumPlot extends Plot {
         this.name = isServiceStatus ? serviceStatusPlotName : serviceAlivePlotName;
 
         this.shapes = [];
+        this.annotations = [];
 
         this.setUpData(data, averagevalue);
     }
@@ -622,6 +623,7 @@ export class EnumPlot extends Plot {
         for (let i = 0; i < data.length; i++) {
             let shape =
                 {
+                    name: this.name,
                     type: 'rect',
                     xref: 'x',
                     yref: 'paper',
@@ -639,11 +641,22 @@ export class EnumPlot extends Plot {
                 };
             
             if (!this.isServiceStatus && data[i].color === "#00FFFF") {
-                shape.label= {
-                    text: 'Restart',
-                    textposition: 'top center',
-                    font: { size: 10, color: 'black' },
-                }
+                // shape.label= {
+                //     text: 'Restart',
+                //     textposition: 'top center',
+                //     font: { size: 10, color: 'black' },
+                // }
+                
+                this.annotations.push(
+                        {
+                            x: data[i].x,
+                            y: 1.1,
+                            xref: 'x',
+                            yref: 'paper',
+                            text: 'Restart',
+                            showarrow: false
+                        },
+                )
             }
             this.shapes.push(shape);
 
