@@ -11,8 +11,8 @@
 } from "./plots";
 import {VersionPlot} from "../ts/plots/version-plot";
 
-export const serviceAlivePlotName  = "ServiceAlive";
-export const serviceStatusPlotName  = "ServiceStatus";
+export const serviceAlivePlotName = "ServiceAlive";
+export const serviceStatusPlotName = "ServiceStatus";
 
 export async function customReset(plot = undefined, xaxisRange = undefined, yaxisRange = undefined) {
     await Plotly.relayout(plot, await getLayout(plot, xaxisRange, yaxisRange));
@@ -34,21 +34,20 @@ export async function customReset(plot = undefined, xaxisRange = undefined, yaxi
             return;
 
         let isPanelChart = plot.id.startsWith('panelChart');
-        
+
         if (yaxisRange === undefined || yaxisRange === true)
             layout['yaxis.autorange'] = true;
         else
             layout['yaxis.range'] = yaxisRange
 
-        if (!isPanelChart){
+        if (!isPanelChart) {
             layout['xaxis.range'] = null;
             layout['xaxis.autorange'] = true;
             layout['yaxis.autorange'] = true;
-        }
-        else {
+        } else {
             layout['xaxis.range'] = [xaxisRange[0], !isPanelChart ? getMinRangeTo(currentPlot) : xaxisRange[1]];
         }
-        
+
         return new Promise(function (resolve, reject) {
             resolve(layout)
         })
@@ -108,18 +107,16 @@ window.removePlot = function (name, isInit = false) {
     }
 }
 
-window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
+window.displayGraph = async function (data, sensorInfo, graphElementId, graphName) {
     graphData.graph.id = graphElementId;
     graphData.graph.self = $(`#${graphElementId}`)[0];
 
     let plot = convertToGraphData(data, sensorInfo, graphName);
 
-    let zoomData = getPreviousZoomData(graphElementId);
-
     let config = {
         responsive: true,
         displaylogo: false,
-        modeBarButtonsToAdd: getModeBarButtons(graphName, graphElementId),
+        modeBarButtonsToAdd: await getModeBarButtons(graphName, graphElementId),
         modeBarButtonsToRemove: [
             'pan',
             'lasso2d',
@@ -130,37 +127,42 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
         ],
         doubleClick: false
     }
-    
-    let layout;
-    if (sensorInfo.plotType === 9 || sensorInfo.plotType === 7)
-        layout = plot.getLayout();
-    else {
-        if (zoomData === undefined || zoomData === null)
-            layout = plot.getLayout()
-        else
-        {
-            let plotLayout = plot.getLayout()
-            layout = createLayoutFromZoomData(zoomData, plotLayout);
-        }
+
+    let layout = plot.getLayout();
+
+    if (sensorInfo.plotType === 10) {
+        layout.shapes = plot.shapes;
+        layout.hovermode = 'closest';
+        layout.hoverdistance = -1;
+        layout.annotations = plot.annotations;
     }
-    
+
     if (!layout.xaxis.autorange && layout.xaxis.range === undefined)
         layout.xaxis.autorange = true;
+
+    await Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config)
+    await customReset($(`#${graphElementId}`)[0], getCurrentFromTo(graphName))
     
-    Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config)
-    customReset($(`#${graphElementId}`)[0], getCurrentFromTo(graphName))
-    
-    if (plot.name !== serviceAlivePlotName)
+
+    if (plot.name === serviceAlivePlotName)
         config.modeBarButtonsToAdd.forEach(x => {
-            if(x.name === "Show/Hide service alive plot")
-                x.click();
-        })
-    else
-        config.modeBarButtonsToAdd.forEach(x => {
-            if(x.name === "Show/Hide service alive plot")
-                x.click = function (){};
+            if (x.name === "Show/Hide service alive plot")
+                x.click = () => {};
         })
 
+    if (plot.name === serviceStatusPlotName)
+        config.modeBarButtonsToAdd.forEach(x => {
+            if (x.name === "Show/Hide service status plot")
+                x.click = () => {};
+        })
+
+    if (plot.name !== serviceAlivePlotName && plot.name !== serviceStatusPlotName)
+        config.modeBarButtonsToAdd.forEach(x => {
+            if (x.name === "Show/Hide service alive plot")
+                x.click();
+        })
+    
+    
     let savedPlots = localStorage.getItem(graphData.graph.id);
     if (savedPlots) {
         removePlot('bar', true)
@@ -179,12 +181,12 @@ window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
             window.sessionStorage.setItem(graphElementId, JSON.stringify(eventData));
         });
 
-    graphDiv.on('plotly_doubleclick', function(){
+    graphDiv.on('plotly_doubleclick', function () {
         customReset(graphDiv, getCurrentFromTo(graphName))
     })
 }
 
-function getCurrentFromTo(id){
+function getCurrentFromTo(id) {
     return [$(`#from_${id}`).val(), $(`#to_${id}`).val()]
 }
 
@@ -203,8 +205,8 @@ function getPreviousZoomData(graphElementId) {
 }
 
 export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, shape = undefined, asLine = false, range = undefined) {
-    let escapedData = JSON.parse(graphData);
-
+    let parsedData = JSON.parse(graphData);
+    let escapedData = parsedData.values;
     switch (sensorInfo.plotType) {
         case 0:
             return new BoolPlot(escapedData, sensorInfo.units, color, range);
@@ -214,10 +216,10 @@ export function convertToGraphData(graphData, sensorInfo, graphName, color = Col
             return new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range);
         case 4:
             return asLine ? new IntegerPlot(escapedData, sensorInfo.units, color, shape, range)
-                          : new BarPLot(escapedData, graphName, sensorInfo.units, color);
+                : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 5:
-            return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range) 
-                          : new BarPLot(escapedData, graphName, sensorInfo.units, color);
+            return asLine ? new DoublePlot(escapedData, graphName, 'value', sensorInfo.units, color, shape, range)
+                : new BarPLot(escapedData, graphName, sensorInfo.units, color);
         case 7:
             return new TimeSpanPlot(escapedData, sensorInfo.units, color, range);
         case 8:
@@ -234,7 +236,7 @@ export function convertToGraphData(graphData, sensorInfo, graphName, color = Col
     }
 }
 
-function getBackgroundSensorId(id, isStatusService){
+function getBackgroundSensorId(id, isStatusService) {
     return $.ajax({
         type: 'GET',
         url: `${getBackgroundId}?currentId=${id}&isStatusService=${isStatusService}`,
@@ -251,25 +253,25 @@ function getDataForPlotButton(graphName, id, isStatusService) {
         data: JSON.stringify(body),
         url: `${getSensorStatus}?isStatusService=${isStatusService}`,
         contentType: 'application/json',
-        dataType: 'html',
         cache: false,
         async: true,
     });
 }
 
-function getModeBarButtons(id, graphId){
+async function getModeBarButtons(id, graphId) {
     let modeBarButtons = [];
     let serviceButtonName = 'Show/Hide service status plot';
     let heartBeatButtonName = 'Show/Hide service alive plot';
-  
-    $.when(getBackgroundSensorId(id, true), getBackgroundSensorId(id, false)).done(function(status, alive){
-        if(!jQuery.isEmptyObject(status[0]))
-            modeBarButtons.push(addPlotButton(id, serviceButtonName, true, ServiceStatusIcon, graphId, status[0].id, status[0].path))
 
-        if(!jQuery.isEmptyObject(alive[0])){
-            modeBarButtons.push(addPlotButton(id, heartBeatButtonName, false, ServiceAliveIcon, graphId, alive[0].id, alive[0].path))
-        }
-    });
+    const status = await getBackgroundSensorId(id, true);
+    const alive = await getBackgroundSensorId(id, false);
+
+    if (!jQuery.isEmptyObject(status))
+        modeBarButtons.push(addPlotButton(id, serviceButtonName, true, ServiceStatusIcon, graphId, status.id, status.path))
+
+    if (!jQuery.isEmptyObject(alive)) {
+        modeBarButtons.push(addPlotButton(id, heartBeatButtonName, false, ServiceAliveIcon, graphId, alive.id, alive.path))
+    }
 
     modeBarButtons.push({
         name: 'resetaxes',
@@ -284,7 +286,7 @@ function getModeBarButtons(id, graphId){
     return modeBarButtons;
 }
 
-function addPlotButton(graphName, name, isStatusService, icon, graphId, id, path){
+function addPlotButton(graphName, name, isStatusService, icon, graphId, id, path) {
     return {
         name: name,
         icon: icon,
@@ -294,38 +296,54 @@ function addPlotButton(graphName, name, isStatusService, icon, graphId, id, path
     }
 }
 
-function addEnumPlot(graphId, graphName, id, isStatusService, path){
+async function addEnumPlot(graphId, graphName, id, isStatusService, path) {
     let graph = $(`#${graphId}`)[0];
-    let plots = graph._fullData;
+    let plots = graph.data;
 
     let currentName = isStatusService ? serviceStatusPlotName : serviceAlivePlotName;
 
-    if (plots.map((x) => x.name).includes(currentName) && plots.length !== 1)
-    {
+    if (plots.map((x) => x.name).includes(currentName) && plots.length !== 1) {
         let indexToDelete = undefined;
-        for (let i = 0; i < plots.length; i++) 
+        
+        let newShapes = [];
+        (graph.layout.shapes ?? []).reduce((_, currentValue) => { 
+            if (currentValue.name !== currentName) {
+                newShapes.push(currentValue)
+            }
+        })
+        
+        for (let i = 0; i < plots.length; i++)
             if (plots[i].name === currentName) {
                 indexToDelete = i;
                 break;
             }
 
-        if (indexToDelete !== undefined)
-            Plotly.deleteTraces(graphId, indexToDelete);
+        if (indexToDelete !== undefined) {
+            await Plotly.deleteTraces(graphId, indexToDelete);
+            await Plotly.relayout(graphId, {shapes: newShapes, annotations: []});
+        }
     } else {
-        getDataForPlotButton(graphName, id, isStatusService).done(function (data){
-            let escapedData = JSON.parse(data);
-            let yranges = graph._fullLayout.yaxis.range;
-            let xranges = graph._fullLayout.xaxis.range;
-            let heatPlot = new EnumPlot(escapedData, isStatusService)
-            let updateLayout = {
-                title: heatPlot.getTitle(path),
-                hovermode: 'closest',
-                'xaxis.range': xranges
-            };
+        const result = await getDataForPlotButton(graphName, id, isStatusService);
+        let yranges = graph.layout.yaxis.range;
+        let xranges = graph.layout.xaxis.range;
 
-            Plotly.addTraces(graphId, heatPlot.getPlotData(currentName, yranges[0], yranges[1]), 0);
-            Plotly.update(graphId, {}, updateLayout);
-        });
+        const currdata = graph.layout.yaxis.range;
+        const average = (currdata[0] + currdata[1]) / 2;
+
+        let heatPlot = new EnumPlot(result.value.values, isStatusService, true, average)
+        let shapes = graph.layout.shapes ?? [];
+
+        let updateLayout = {
+            title: heatPlot.getTitle(path),
+            hovermode: 'closest',
+            'xaxis.range': xranges,
+            shapes: [...heatPlot.shapes, ...shapes],
+            annotations: heatPlot.annotations,
+            hoverdistance: 50
+        };
+
+        Plotly.addTraces(graphId, heatPlot.getPlotData(currentName), 0);
+        Plotly.update(graphId, {}, updateLayout);
     }
 
     if (graph._fullData.length === 1)
