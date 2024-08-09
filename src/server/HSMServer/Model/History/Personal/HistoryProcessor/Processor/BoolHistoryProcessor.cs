@@ -2,7 +2,6 @@
 using HSMServer.Core.Model;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices.JavaScript;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
@@ -16,27 +15,24 @@ namespace HSMServer.Model.History
             if (!sensor.IsServiceAlive)
                 return base.GetResultFromValues(sensor, values, compressedValuesCount);
             
-            values = base.ProcessingAndCompression(sensor, values, compressedValuesCount);
+            values = ProcessingAndCompression(sensor, values, compressedValuesCount);
 
-            var a = ProcessServiceAliveData(values);
             return new JsonResult(new
             {
-               values = ProcessServiceAliveData(values).Select(x => (object)x)
+               values = ProcessServiceAliveData(values, GetColorAndCustomData).Select(x => (object)x)
             });
         }
 
-        public List<ServiceAliveValue> ProcessServiceAliveData(List<BaseValue> values)
+        public static List<ServiceAliveValue> ProcessServiceAliveData(List<BaseValue> values, Func<BaseValue, DateTime, DateTime, (string, string)> getColorAndCustomData)
         {
-            var xs = new Dictionary<DateTime, DateTime>();
             var response = new List<ServiceAliveValue>();
 
-            DateTime startTime;
-            DateTime endTime;
-            
             for (var i = 0; i < values.Count; i++)
             {
                 var value = values[i];
 
+                DateTime startTime;
+                DateTime endTime;
                 if (value.IsTimeout)
                 {
                     startTime = value.LastUpdateTime;
@@ -52,8 +48,7 @@ namespace HSMServer.Model.History
                     endTime = value.LastUpdateTime;
                 }
                 
-                var color = GetColor(values[i]);
-                var customData = GetCustomData(values[i]) + startTime.ToDefaultFormat() + " - " + endTime.ToDefaultFormat();
+                var (color, customData) = getColorAndCustomData(values[i], startTime, endTime);
                 response.Add(new ServiceAliveValue()
                 {
                     X0 = startTime,
@@ -65,42 +60,24 @@ namespace HSMServer.Model.History
             }
 
             return response;
-
-            static string GetColor(BaseValue value)
+        }
+        
+        static (string color, string customData) GetColorAndCustomData(BaseValue value, DateTime startTime, DateTime endTime)
+        {
+            if (value is BaseValue<bool> boolValue)
             {
-                if (value is BaseValue<bool> boolValue)
+                switch (boolValue)
                 {
-                    switch (boolValue)
-                    {
-                        case {IsTimeout: true}:
-                            return "#FF0000";
-                        case {Value: false}:
-                            return "#00FFFF";
-                        default:
-                            return "#94ff73";
-                    }
+                    case {IsTimeout: true}:
+                        return ("#FF0000", $"Timeout <br> {startTime.ToDefaultFormat()} - {endTime.ToDefaultFormat()}");
+                    case {Value: false}:
+                        return ("#00FFFF", $"Restarting <br> {startTime.ToDefaultFormat()} - {endTime.ToDefaultFormat()}");
+                    default:
+                        return ("#94ff73", $"Running <br> {startTime.ToDefaultFormat()} - {endTime.ToDefaultFormat()}");
                 }
-
-                return string.Empty;
             }
-            
-            static string GetCustomData(BaseValue value)
-            {
-                if (value is BaseValue<bool> boolValue)
-                {
-                    switch (boolValue)
-                    {
-                        case {IsTimeout: true}:
-                            return "Timeout <br>";
-                        case {Value: false}:
-                            return "Restarting <br>";
-                        default:
-                            return "Running <br>";
-                    }
-                }
 
-                return string.Empty;
-            }
+            return (string.Empty, string.Empty);
         }
     }
 
