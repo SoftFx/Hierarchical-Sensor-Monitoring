@@ -42,7 +42,7 @@ namespace HSMServer.Model.History
             return Compress(values, interval);
         }
 
-        public JsonResult GetResultFromValues(SensorNodeViewModel sensor, List<BaseValue> values, int compressedValuesCount)
+        public virtual JsonResult GetResultFromValues(SensorNodeViewModel sensor, List<BaseValue> values, int compressedValuesCount)
         {
             values = ProcessingAndCompression(sensor, values, compressedValuesCount);
 
