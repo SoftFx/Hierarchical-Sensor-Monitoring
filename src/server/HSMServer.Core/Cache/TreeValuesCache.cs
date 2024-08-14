@@ -1330,8 +1330,29 @@ namespace HSMServer.Core.Cache
 
                 SendNotification(ttl.GetNotification(timeout));
             }
+            else
+                FixIncorrectLastTimeoutValue(sensor, snapshot, timeout);
 
             SensorUpdateView(sensor);
+        }
+
+        private void FixIncorrectLastTimeoutValue(BaseSensorModel sensor, LastSensorState snapshot, bool timeout)
+        {
+            if (timeout && sensor.LastTimeout is null)
+            {
+                var ttl = sensor.Policies.TimeToLive;
+                snapshot.IsExpired = true;
+
+                if (sensor.HasData)
+                {
+                    var value = sensor.GetTimeoutValue();
+
+                    if (sensor.TryAddValue(value))
+                        SaveSensorValueToDb(value, sensor.Id);
+                }
+
+                SendNotification(ttl.GetNotification(true));
+            }
         }
     }
 }
