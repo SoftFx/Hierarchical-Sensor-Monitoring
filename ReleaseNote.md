@@ -14,3 +14,8 @@
 
 * Now Service Alive sends false value when starting
 * Fixed Thread Count sensor wasn't working
+
+
+## Bug fixes
+
+* Fixed timeout(TTL) was having incorrect behaviout after restart.
