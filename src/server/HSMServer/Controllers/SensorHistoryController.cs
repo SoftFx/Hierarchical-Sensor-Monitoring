@@ -136,7 +136,6 @@ namespace HSMServer.Controllers
             return Json(HistoryProcessorFactory.BuildProcessor((int)sensor.Type).GetResultFromValues(sensor, values, model.BarsCount), _serializationsOptions);
         }
 
-
         [HttpPost]
         public void ReloadHistoryRequest([FromBody] GetSensorHistoryRequest model)
         {
