@@ -1333,7 +1333,7 @@ namespace HSMServer.Core.Cache
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
         {
             var snapshot = _snapshot.Sensors[sensor.Id];
-            if (snapshot.IsExpired != timeout || (sensor.LastTimeout is null && sensor.LastValue is not null && timeout))
+            if (snapshot.IsExpired != timeout)
             {
                 var ttl = sensor.Policies.TimeToLive;
                 snapshot.IsExpired = timeout;
