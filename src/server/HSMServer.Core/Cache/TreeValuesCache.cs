@@ -344,7 +344,7 @@ namespace HSMServer.Core.Cache
                 var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
                 var sensor = AddSensor(request, request.Type, parentProduct, request.Update.DefaultAlertsOptions);
 
-                update = update with { Id = sensor.Id };
+                update = update with {Id = sensor.Id};
             }
 
             return TryUpdateSensor(update, out error);
@@ -449,10 +449,10 @@ namespace HSMServer.Core.Cache
                 return;
 
             foreach (var (subProductId, _) in product.SubProducts)
-                ClearNodeHistory(request with { Id = subProductId });
+                ClearNodeHistory(request with {Id = subProductId});
 
             foreach (var (sensorId, _) in product.Sensors)
-                ClearSensorHistory(request with { Id = sensorId });
+                ClearSensorHistory(request with {Id = sensorId});
         }
 
         public void CheckSensorHistory(Guid sensorId)
@@ -596,8 +596,8 @@ namespace HSMServer.Core.Cache
             };
 
             return count > 0
-                   ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count, request.Options)
-                   : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.Options);
+                ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count, request.Options)
+                : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.Options);
         }
 
         private ValueTask<List<BaseValue>> GetSensorValues(Guid sensorId, SensorHistoryRequest request) =>
@@ -905,6 +905,25 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
             UpdateCacheState();
+
+            TimeoutValueAfterRestartFix();
+        }
+
+        private void TimeoutValueAfterRestartFix()
+        {
+            foreach (var (id, sensor) in _sensors)
+            {
+                if (_snapshot.Sensors.TryGetValue(id, out var state) && state.IsExpired)
+                {
+                    var lastValue = sensor.Convert(_database.GetLatestValue(id, DateTime.UtcNow.Ticks));
+                    if ((!lastValue?.IsTimeout ?? false) && sensor.LastValue is not null)
+                    {
+                        var timeoutValue = sensor.GetTimeoutValue();
+                        
+                        SaveSensorValueToDb(timeoutValue, id);
+                    }
+                }
+            }
         }
 
         private List<ProductEntity> RequestProducts()
@@ -1092,7 +1111,7 @@ namespace HSMServer.Core.Cache
             {
                 Id = Guid.NewGuid().ToString(),
                 DisplayName = request.SensorName,
-                Type = (byte)type,
+                Type = (byte) type,
                 CreationDate = DateTime.UtcNow.Ticks,
             };
 
@@ -1228,7 +1247,7 @@ namespace HSMServer.Core.Cache
 
                         SendNotification(sensor.Notifications.LeftOnlyScheduled());
 
-                        if (!_snapshot.IsFinal && sensor.LastValue is not null)
+                        if (!_snapshot.IsFinal && sensor.LastValue is not null) 
                             _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
                     }
             }
@@ -1314,7 +1333,6 @@ namespace HSMServer.Core.Cache
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
         {
             var snapshot = _snapshot.Sensors[sensor.Id];
-
             if (snapshot.IsExpired != timeout)
             {
                 var ttl = sensor.Policies.TimeToLive;
