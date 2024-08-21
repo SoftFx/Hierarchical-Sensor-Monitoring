@@ -916,7 +916,7 @@ namespace HSMServer.Core.Cache
                 if (_snapshot.Sensors.TryGetValue(id, out var state) && state.IsExpired)
                 {
                     var lastValue = sensor.Convert(_database.GetLatestValue(id, DateTime.UtcNow.Ticks));
-                    if (!lastValue.IsTimeout)
+                    if (!lastValue.IsTimeout && sensor.LastValue is not null)
                     {
                         var timeoutValue = sensor.GetTimeoutValue();
                         
