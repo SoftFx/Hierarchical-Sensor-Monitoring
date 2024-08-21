@@ -905,6 +905,25 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
             UpdateCacheState();
+
+            TimeoutValueAfterRestartFix();
+        }
+
+        private void TimeoutValueAfterRestartFix()
+        {
+            foreach (var (id, sensor) in _sensors)
+            {
+                if (_snapshot.Sensors.TryGetValue(id, out var state) && state.IsExpired)
+                {
+                    var lastValue = sensor.Convert(_database.GetLatestValue(id, DateTime.UtcNow.Ticks));
+                    if (!lastValue.IsTimeout)
+                    {
+                        var timeoutValue = sensor.GetTimeoutValue();
+                        
+                        SaveSensorValueToDb(timeoutValue, id);
+                    }
+                }
+            }
         }
 
         private List<ProductEntity> RequestProducts()
