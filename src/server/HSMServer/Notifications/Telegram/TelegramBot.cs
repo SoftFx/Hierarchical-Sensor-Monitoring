@@ -259,7 +259,7 @@ namespace HSMServer.Notifications
         {
             if (!string.IsNullOrEmpty(message))
             {
-                if (message.Length >= 4096)
+                if (message.Length >= MaxMessageLength)
                     message = message[..(MaxMessageLength - TrimmedMessage.Length)] + TrimmedMessage;
                 
                 _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
