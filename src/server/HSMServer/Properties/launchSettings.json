@@ -2,6 +2,7 @@
   "profiles": {
     "HSMServer-dev": {
       "commandName": "Project",
+      "commandLineArgs": "npm run build_dev",
       "launchBrowser": true,
       "launchUrl": "home",
       "environmentVariables": {
@@ -11,6 +12,7 @@
     },
     "HSMServer-Production": {
       "commandName": "Project",
+      "commandLineArgs": "npm run build_prod",
       "launchBrowser": true,
       "launchUrl": "api/swagger",
       "environmentVariables": {
