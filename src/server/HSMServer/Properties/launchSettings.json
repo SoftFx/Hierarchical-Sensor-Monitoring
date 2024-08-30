@@ -2,7 +2,7 @@
   "profiles": {
     "HSMServer-dev": {
       "commandName": "Project",
-      "commandLineArgs": "npm run build_dev",
+      "commandLineArgs": "npm run watch &",
       "launchBrowser": true,
       "launchUrl": "home",
       "environmentVariables": {
