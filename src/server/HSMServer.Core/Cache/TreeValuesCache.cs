@@ -1128,6 +1128,14 @@ namespace HSMServer.Core.Cache
             AddSensor(sensor);
             UpdateProduct(parent);
 
+            _journalService.AddRecord(new JournalRecordModel(sensor.Id, InitiatorInfo.System)
+            {
+                PropertyName = sensor.DisplayName,
+                Enviroment = sensor.FullPath,
+                Path = sensor.FullPath,
+                NewValue = sensor.FullPath,
+            });
+
             return sensor;
         }
 

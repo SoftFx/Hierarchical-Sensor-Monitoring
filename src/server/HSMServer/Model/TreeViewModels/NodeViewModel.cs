@@ -2,6 +2,7 @@
 using HSMServer.Helpers;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
+using System;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -26,6 +27,8 @@ namespace HSMServer.Model.TreeViewModel
         public string Path { get; private set; }
 
 
+        public DateTime CreationDate { get; private set; }
+
         //TODO: should be changed to NodeViewModel when Sensor will have its own Telegram Settings
         public ProductNodeViewModel RootProduct => Parent is null or FolderModel ? (ProductNodeViewModel)this : ((ProductNodeViewModel)Parent).RootProduct;
 
@@ -44,6 +47,8 @@ namespace HSMServer.Model.TreeViewModel
             KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder));
             SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder));
             DefaultChats = new(() => (Parent?.DefaultChats, ParentIsFolder));
+
+            CreationDate = model.CreationDate;
         }
 
 

@@ -57,8 +57,10 @@ namespace HSMServer.Model.TreeViewModel
 
         public bool IsServiceAlive => Name == ServiceAliveName;
         public bool IsServiceStatus => Name == ServiceStatusName;
-        
-        
+
+
+        public DateTime CreationTime { get; private set; }
+
         public SensorNodeViewModel(BaseSensorModel model) : base(model) { }
 
 
@@ -75,6 +77,7 @@ namespace HSMServer.Model.TreeViewModel
             Status = model.Status.ToClient();
             SelectedUnit = model.OriginalUnit;
             AggregateValues = model.AggregateValues;
+            CreationTime = model.CreationDate;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);
