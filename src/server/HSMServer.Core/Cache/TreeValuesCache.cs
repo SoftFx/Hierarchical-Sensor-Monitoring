@@ -21,6 +21,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 
 namespace HSMServer.Core.Cache
@@ -1130,10 +1131,8 @@ namespace HSMServer.Core.Cache
 
             _journalService.AddRecord(new JournalRecordModel(sensor.Id, InitiatorInfo.System)
             {
-                PropertyName = sensor.DisplayName,
-                Enviroment = sensor.FullPath,
-                Path = sensor.FullPath,
-                NewValue = sensor.FullPath,
+                PropertyName = "sensor",
+                NewValue = sensor.FullPath
             });
 
             return sensor;
