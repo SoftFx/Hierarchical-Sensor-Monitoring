@@ -18,6 +18,8 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         private Task _statusWatcher;
         private CancellationTokenSource _cancellationTokenSource;
 
+        private readonly object _locker = new object();
+
         internal WindowsServiceStatusSensor(ServiceSensorOptions options) : base(options)
         {
             _controller = GetService(options.ServiceName);
@@ -27,10 +29,13 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
 
         internal override ValueTask<bool> StartAsync()
         {
-            if (_statusWatcher == null)
+            lock (_locker)
             {
-                _cancellationTokenSource = new CancellationTokenSource();
-                _statusWatcher = PeriodicTask.Run(CheckServiceStatus, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
+                if (_statusWatcher == null)
+                {
+                    _cancellationTokenSource = new CancellationTokenSource();
+                    _statusWatcher = PeriodicTask.Run(CheckServiceStatus, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
+                }
             }
 
             return base.StartAsync();
@@ -40,14 +45,25 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         {
             try
             {
-                if (_statusWatcher != null)
+                Task taskToWait = null;
+
+                lock (_locker)
                 {
-                    _cancellationTokenSource?.Cancel();
-                    await _statusWatcher.ConfigureAwait(false);
-                    _cancellationTokenSource?.Dispose();
-                    _statusWatcher?.Dispose();
-                    _statusWatcher = null;
+                    if (_statusWatcher != null)
+                    {
+                        _cancellationTokenSource?.Cancel();
+                        taskToWait = _statusWatcher;
+                        _cancellationTokenSource?.Dispose();
+                        _statusWatcher = null;
+                    }
                 }
+
+                if (taskToWait != null)
+                {
+                    await taskToWait.ConfigureAwait(false);
+                    taskToWait?.Dispose();
+                }
+
                 await base.StopAsync();
             }
             catch (Exception ex)

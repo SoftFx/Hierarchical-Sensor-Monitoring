@@ -18,6 +18,8 @@ namespace HSMDataCollector.DefaultSensors
         private readonly TimeSpan _barPeriod;
         private readonly int _precision;
 
+        private readonly object _locker = new object();
+
         private Task _collectTask;
         private CancellationTokenSource _cancellationTokenSource;
         protected BarType _internalBar;
@@ -37,10 +39,13 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override ValueTask<bool> InitAsync()
         {
-            if (_collectTask == null)
+            lock (_locker)
             {
-                _cancellationTokenSource = new CancellationTokenSource();
-                _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token);
+                if (_collectTask == null)
+                {
+                    _cancellationTokenSource = new CancellationTokenSource();
+                    _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token);
+                }
             }
 
             return base.InitAsync();
@@ -50,14 +55,23 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
+                Task taskToWait = null;
 
-                if (_collectTask != null)
+                lock (_locker)
                 {
-                    _cancellationTokenSource?.Cancel();
-                    await _collectTask.ConfigureAwait(false);
-                    _cancellationTokenSource?.Dispose();
-                    _collectTask?.Dispose();
-                    _collectTask = null;
+                    if (_collectTask != null)
+                    {
+                        _cancellationTokenSource?.Cancel();
+                        taskToWait = _collectTask;
+                        _collectTask = null;
+                        _cancellationTokenSource?.Dispose();
+                    }
+                }
+
+                if (taskToWait != null)
+                {
+                    await taskToWait.ConfigureAwait(false);
+                    taskToWait?.Dispose();
                 }
 
                 await base.StopAsync();
