@@ -22,14 +22,14 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        public override Task StartAsync(CancellationToken token) => _center.Start().ContinueWith(_ => base.StartAsync(token)).Unwrap();
+        public override Task StartAsync(CancellationToken token) => _center.StartAsync().ContinueWith(_ => base.StartAsync(token)).Unwrap();
 
         public override Task StopAsync(CancellationToken token) => _center.DisposeAsync().AsTask().ContinueWith(_ => base.StopAsync(token)).Unwrap();
 
 
         protected override async Task ServiceActionAsync()
         {
-            _center.SendAllMessages();
+            await _center.SendAllMessagesAsync();
 
             if ((DateTime.UtcNow - _lastCenterRecalculation).TotalMinutes >= CenterRecalculationPeriodMin)
             {
