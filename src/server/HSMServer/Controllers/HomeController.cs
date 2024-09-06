@@ -783,6 +783,8 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult UpdateProductInfo(ProductInfoViewModel newModel)
         {
+            Console.WriteLine(newModel.DefaultChats.ChatMode);
+            Console.WriteLine("-----------");
             if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var product))
                 return _emptyResult;
 
