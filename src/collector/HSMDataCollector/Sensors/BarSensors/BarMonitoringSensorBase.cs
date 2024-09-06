@@ -50,7 +50,6 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-
                 if (_collectTask != null)
                 {
                     _cancellationTokenSource?.Cancel();

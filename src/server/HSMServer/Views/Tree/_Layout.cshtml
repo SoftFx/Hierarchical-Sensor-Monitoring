@@ -102,17 +102,12 @@
 
 
 <script>
-    initializeTree();
-
+    initializeTree($("#treeInterval").val() * 1000);
 
     var clipboard = new ClipboardJS('[id^="copy_"]', {
         container: document.getElementById('accessKeys_modal')
     });
-
-    var interval = $("#treeInterval").val() * 1000;
-    setTimeout(updateTreeTimer, interval);
-
-
+    
     $(document).ready(() => {
         $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
     })
@@ -136,12 +131,4 @@
 
     var refreshTreeTimeoutId;
     var isRefreshing = false;
-    function updateTreeTimer() {
-        clearTimeout(refreshTreeTimeoutId);
-        isRefreshing = true;
-
-        $('#jstree').jstree(true).refresh(true);
-
-        isRefreshing = false;
-    }
 </script>

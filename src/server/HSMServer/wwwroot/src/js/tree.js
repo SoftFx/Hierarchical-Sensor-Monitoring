@@ -1,6 +1,19 @@
 import { initDropzone} from "./dashboard";
+import {
+    afterRefresh,
+    beforeRequest,
+    initialize,
+    refresh,
+    refreshId,
+    searchState,
+    success,
+    TreeState,
+    treeStoreState
+} from "./states/tree-state";
 
 window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
+
+window.globalTreeRefresh = () => treeStoreState.dispatch(refresh());
 
 const AjaxPost = {
     type: 'POST',
@@ -14,7 +27,9 @@ var searchServerRefresh = false;
 var emptySearch = false;
 var prevState = undefined;
 
-window.initializeTree = function () {
+window.initializeTree = function (interval) {
+    treeStoreState.dispatch(initialize({interval: interval}))
+    
     initDropzone()
     
     if (window.localStorage.jstree) {
@@ -34,6 +49,14 @@ window.initializeTree = function () {
                     }
 
                     return getNode;
+                },
+                beforeSend(jqXHR, settings) {
+                    // if (treeStoreState.getState().state !== TreeState.Refreshing) {
+                    //     jqXHR.abort();
+                    // }
+                },
+                success: function (data, status, jqXHR) {
+                    treeStoreState.dispatch(success());
                 },
                 data: function (node) {
                     return {
@@ -65,8 +88,6 @@ window.initializeTree = function () {
             $('#jstree').jstree('close_all', data.node.id)
         })
     }).on('refresh.jstree', function (e, data) {
-        refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
-
         if (window.hasOwnProperty('updateSelectedNodeDataTimeoutId')) {
             updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
         }
@@ -105,6 +126,8 @@ window.initializeTree = function () {
             emptySearch = false;
             searchServerRefresh = false;
         }
+        
+        treeStoreState.dispatch(afterRefresh());
     }).on('open_node.jstree', function (e, data) {
         collapseButton.reset();
     }).on('dblclick.jstree', function (event) {
@@ -130,10 +153,11 @@ window.initializeTree = function () {
             if (!jQuery.isEmptyObject(prevState))
             {
                 applySelectedNodeToPreviousTreeState();
-                $('#jstree').jstree(true).refresh(true, true);
+                
+                treeStoreState.dispatch(refresh(false))
             }
-            else 
-                $('#jstree').jstree(true).refresh(true);
+            else
+                treeStoreState.dispatch(refresh(true))
         }
         else {
             if (value.length >= 2 && value[0] === '"' && value.at(-1) === '"')
@@ -150,6 +174,8 @@ window.initializeTree = function () {
         if (value === '')
             return;
 
+        treeStoreState.dispatch(searchState())
+
         clearTimeout(refreshTreeTimeoutId);
 
         if (window.hasOwnProperty('updateSelectedNodeDataTimeoutId')) {
@@ -158,7 +184,7 @@ window.initializeTree = function () {
 
         if (jQuery.isEmptyObject(prevState))
             prevState = $('#jstree').jstree('get_state')
-        
+
         searchClientRefresh = true;
         
         $('#jstree').hide().jstree(true).refresh(true);
@@ -263,7 +289,7 @@ function buildContextMenu(node) {
                             data: JSON.stringify(selectedNodes),
                             contentType: "application/json"
                         }).done((response) => {
-                            updateTreeTimer();
+                            treeStoreState.dispatch(refresh())
 
                             let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
 
@@ -295,7 +321,7 @@ function buildContextMenu(node) {
                         datatype: 'json',
                         async: true,
                         success: (response) => {
-                            updateTreeTimer();
+                            treeStoreState.dispatch(refresh())
 
                             let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
 
@@ -404,7 +430,7 @@ function buildContextMenu(node) {
                                 .done(() => {
                                     $('#nodeDataPanel').addClass('d-none');
 
-                                    updateTreeTimer();
+                                    treeStoreState.dispatch(refresh())
                                     showToast(`${type} has been removed`);
                                 });
                             }
@@ -525,7 +551,7 @@ function unmuteRequest(selectedNodes){
         data: JSON.stringify(selectedNodes),
         contentType: "application/json"
     }).done(() => {
-        updateTreeTimer();
+        treeStoreState.dispatch(refresh())
         if (window.hasOwnProperty('updateSelectedNodeData')) {
             updateSelectedNodeData();
         }
@@ -545,7 +571,7 @@ function muteRequest(selectedNodes) {
 }
 
 function grafanaRequest(node, action) {
-    return $.ajax(`${action}?selectedId=${node.id}`, AjaxPost).done(updateTreeTimer);
+    return $.ajax(`${action}?selectedId=${node.id}`, AjaxPost).done(treeStoreState.dispatch(refresh));
 }
 
 function getFullPathAction(nodeId) {
