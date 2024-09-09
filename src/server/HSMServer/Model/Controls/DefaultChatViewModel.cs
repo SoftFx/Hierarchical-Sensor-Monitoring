@@ -97,16 +97,15 @@ namespace HSMServer.Model.Controls
         {
             var parentIds = new HashSet<Guid>();
             var selected = SelectedChats;
-            var parentMode = DefaultChatMode.NotInitialized;
+            var parent = Parent;
+            var parentMode = parent?.ChatMode ?? DefaultChatMode.NotInitialized;
 
             if (IsFromParent)
             {
-                var parent = Parent;
                 if (parent != null)
                 {                    
-                    parentMode = parent.ChatMode;
-                    var (a, b, _, _) = parent.GetChats();
-                   
+                    var (a, b, cMode, _) = parent.GetChats();
+                    parentMode = cMode;
                     parentIds.UnionWith(a);
                     parentIds.UnionWith(b);
                 }

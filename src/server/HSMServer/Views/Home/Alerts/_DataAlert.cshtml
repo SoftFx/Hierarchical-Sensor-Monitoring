@@ -74,7 +74,7 @@
                         parentIds.UnionWith(selectedId);
                         if (parentIds.Count == 0)
                         {
-                            chatName = parentMode switch
+                            chatName = mode switch
                             {
                                 DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
                                 DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
