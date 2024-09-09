@@ -27,6 +27,12 @@ namespace HSMServer.Core.Model.Policies
             
             IsAllChats = isAllChats;
         }
+        
+        public PolicyDestinationHandler(IDictionary<Guid, string> chats, bool isAllChats)
+        {
+            Chats = new Dictionary<Guid, string>(chats);
+            IsAllChats = isAllChats;
+        }
     }
 
 

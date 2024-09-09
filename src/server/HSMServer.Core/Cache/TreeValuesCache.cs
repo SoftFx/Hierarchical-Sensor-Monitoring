@@ -73,10 +73,7 @@ namespace HSMServer.Core.Cache
 
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent += SendAlertMessage;
-            //
-            // _migrator.ApplyProductMigration += UpdateProduct;
-            // _migrator.ApplySensorMigration += TryUpdateSensor;
-
+            
             Initialize();
         }
 

@@ -62,21 +62,55 @@ namespace HSMServer.Core.Model.Policies
 
         internal IPolicyDestinationHandler TargetChats
         {
+            //tut
             get
             {
-                if (Sensor?.Parent is not null && Destination.IsFromParentChats)
+                Dictionary<Guid, string> GetParentChats(ProductModel parent)
                 {
-                    if (Destination.Chats.Count != 0)
-                    {
-
-                        return new PolicyDestinationHandler(Sensor.Parent.Settings.DefaultChats.Value.Chats,
-                            Destination.Chats, Sensor.Parent.Settings.DefaultChats.Value.IsAllChats && Destination.IsAllChats);
-                    }
+                    var dict = new Dictionary<Guid, string>();
                     
-                    return Sensor.Parent.Settings.DefaultChats.Value;
+                    foreach (var (id, name) in parent.Settings.DefaultChats.CurValue.Chats)
+                    {
+                        dict.TryAdd(id, name);
+                    }
+
+                    if (parent.Settings.DefaultChats.CurValue.IsFromParent)
+                    {
+                        var par = parent?.Parent;
+
+                        while (par != null)
+                        {
+                            foreach (var (id, name) in GetParentChats(par))
+                            {
+                                dict.TryAdd(id, name);
+                            }
+                            
+                            par = par?.Parent;
+                        }
+
+                        return dict;
+                    }
+
+                    return dict;
                 }
                 
-                return Destination;
+                var chats = new Dictionary<Guid, string>(1 << 3);
+
+                if (Destination.IsFromParentChats)
+                {
+                    foreach (var (id, name) in GetParentChats(Sensor?.Parent))
+                    {
+                        chats.TryAdd(id, name);
+                    }
+                }
+                
+                foreach (var (id, name) in Destination.Chats)
+                {
+                    chats.TryAdd(id, name);
+                }
+
+                return new PolicyDestinationHandler(chats,
+                    (Sensor?.Parent?.Settings?.DefaultChats?.Value?.IsAllChats ?? false) && Destination.IsAllChats);
             }
         }
 
