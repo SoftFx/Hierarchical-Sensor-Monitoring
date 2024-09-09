@@ -73,7 +73,7 @@ namespace HSMServer.Core.Model.Policies
         internal AlertResult(Policy policy, bool isReplace = false)
         {
             Destination = new(policy);
-
+            
             ConfirmationPeriod = policy.ConfirmationPeriod;
             SendTime = policy.Schedule.GetSendTime();
             BuildDate = DateTime.UtcNow;
