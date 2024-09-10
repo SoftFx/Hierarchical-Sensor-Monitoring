@@ -67,89 +67,79 @@ namespace HSMServer.Model.Controls
             => IsFromParent ? GetUsedValue(Parent) : (SelectedChats, ChatMode);
 
 
-        public (HashSet<Guid> ids, DefaultChatMode mode) GetChatsIdsAndParentMode()
+        public int GetChatsCount()
         {
-            var parentIds = new HashSet<Guid>();
-            var selected = SelectedChats;
-            var parentMode = DefaultChatMode.NotInitialized;
+            var response = SelectedChats.Count;
+            
             if (IsFromParent)
             {
-                var parent = Parent;
-                while (parent != null)
-                {
-                    var (a, b, _, pMode) = parent.GetChats();
-                    if (a.Count == 0 && b.Count == 0)
-                        parentMode = pMode;
-                   
-                    parentIds.UnionWith(a);
-                    parentIds.UnionWith(b);
-                   
-                    parent = parent.Parent;
-                }
+                response += Parent?.GetChatsCount() ?? 0;
             }
-            
-            parentIds.UnionWith(selected);
-            
-            return (parentIds, parentMode);
+
+            return response;
         }
 
-        public (HashSet<Guid> parentIds, HashSet<Guid> selected, DefaultChatMode mode, DefaultChatMode parentMode) GetChats()
+        public (HashSet<Guid> parentIds, HashSet<Guid> selected, DefaultChatMode mode, DefaultChatMode? parentMode) GetChats2()
         {
             var parentIds = new HashSet<Guid>();
             var selected = SelectedChats;
             var parent = Parent;
-            var parentMode = parent?.ChatMode ?? DefaultChatMode.NotInitialized;
+            var parentMode = parent?.ChatMode;
 
-            if (IsFromParent)
+            if (IsFromParent && parent is not null)
             {
-                if (parent != null)
-                {                    
-                    var (a, b, cMode, _) = parent.GetChats();
-                    parentMode = cMode;
-                    parentIds.UnionWith(a);
-                    parentIds.UnionWith(b);
-                }
+                var (ppIds, psIds, pMode, ppMode) = parent.GetChats2();
+                parentIds.UnionWith(ppIds);
+                parentIds.UnionWith(psIds);
+                parentMode = pMode;
+            }
+            
+            return (parentIds, selected, ChatMode, parentMode);
+        }
+
+        public (HashSet<Guid> parentIds, HashSet<Guid> selected, DefaultChatMode mode, DefaultChatMode? parentMode) GetChats()
+        {
+            var parentIds = new HashSet<Guid>();
+            var selected = SelectedChats;
+            var parent = Parent;
+            var parentMode = parent?.ChatMode;
+            
+            if (IsFromParent && parent is not null)
+            {
+                var (a, b) = parent.GetParentChats();
+                parentIds.UnionWith(a);
+                parentMode = b;
             }
             
             return (parentIds, selected, ChatMode, parentMode);
         }
         
-        public HashSet<Guid> GetParentChats()
+        public (HashSet<Guid> parentIds, DefaultChatMode? lastMode) GetParentChats()
         {
-            var chatIds = new HashSet<Guid>(1 << 4);
-
-            chatIds = GetChats(this);
-
-            static HashSet<Guid> GetChats(DefaultChatViewModel model)
+            var parent = Parent;
+            var lastMode = parent?.ChatMode;
+            
+            var parentIds = new HashSet<Guid>();
+            parentIds.UnionWith(parent?.SelectedChats ?? []);
+            
+            if (parent?.IsFromParent ?? false)
             {
-                if (model is null || model.IsEmpty || model.IsNotInitialized)
-                    return [];
-
-                var ids = new HashSet<Guid>();
-                
-                if (!model.HasParent)
-                    foreach (var id in model.SelectedChats)
-                        ids.Add(id);
-                else 
-                    if (model.ChatMode == DefaultChatMode.FromParent)
-                    {
-                        foreach (var id in GetChats(model.Parent))
-                            ids.Add(id);
-                    }
-
-                return ids;
+                var (a, b) = parent.GetParentChats();
+                parentIds.UnionWith(a);
+                lastMode = b;
             }
-
-            return chatIds;
+            
+            return (parentIds, lastMode);
         }
 
-        public string GetDisplayChatName(List<TelegramChat> chatList, out List<TelegramChat> allChats)
+        public (string displayChats, string parentChats) GetDisplayChatName(List<TelegramChat> chatList, out List<TelegramChat> allChats)
         {
-            var (parentIds, selected, mode, parentMode) = GetChats();
-            
             var chats = ToAvailableChats(chatList);
+            allChats = [..chats.Values];
+            var parentChats = GetParentDisplayValue(chats);
+            
             string chatsName;
-            switch (mode)
+            switch (ChatMode)
             {
                 case DefaultChatMode.NotInitialized:
                     chatsName = DefaultChatMode.NotInitialized.GetDisplayName();
@@ -157,38 +147,21 @@ namespace HSMServer.Model.Controls
                 case DefaultChatMode.Empty:
                     chatsName = DefaultChatMode.Empty.GetDisplayName();
                     break;
-                case DefaultChatMode.FromParent when selected.Count > 0:
-                    if (parentIds.Count == 0 && parentMode != DefaultChatMode.FromParent && parentMode != DefaultChatMode.Custom)
-                        chatsName = AsFromParent(parentMode.GetDisplayName());
-                    else 
-                        chatsName = AsFromParent(parentIds.ToNames(chats));
-                    chatsName += ", ";
-                    chatsName += selected.ToNames(chats);
+                case DefaultChatMode.FromParent when SelectedChats.Count == 0:
+                    chatsName = parentChats;
                     break;
-                case DefaultChatMode.FromParent when selected.Count == 0:
-                    if (parentIds.Count > 0)
-                    {
-                        chatsName = AsFromParent(parentIds.ToNames(chats));
-                    }
-                    else
-                    {
-                        chatsName = AsFromParent(parentMode.GetDisplayName());
-                    }
+                case DefaultChatMode.FromParent when SelectedChats.Count != 0:
+                    chatsName= $"{parentChats}, {SelectedChats.ToNames(chats)}";
                     break;
                 case DefaultChatMode.Custom:
-                    chatsName = selected.ToNames(chats);
+                    chatsName = SelectedChats.ToNames(chats);
                     break;
                 default:
-                    if (parentMode != DefaultChatMode.FromParent && parentMode != DefaultChatMode.Custom)
-                        chatsName = AsFromParent(parentMode.GetDisplayName());
-                    else 
-                        chatsName = AsFromParent(parentIds.ToNames(chats));
+                    chatsName = ChatMode.GetDisplayName();
                     break;
             }
 
-            allChats = [.. chats.Values];
-
-            return chatsName;
+            return (chatsName, parentChats);
         }
         
         public string GetCurrentDisplayValue(List<TelegramChat> chatList, out List<TelegramChat> allChats)
@@ -216,10 +189,8 @@ namespace HSMServer.Model.Controls
             return chatsName;
         }
 
-        public string GetParentDisplayValue(List<TelegramChat> chats)
+        public string GetParentDisplayValue(Dictionary<Guid, TelegramChat> chats)
         {
-            var availableChats = ToAvailableChats(chats);
-
             if (Parent is null)
                 return string.Empty;
             
@@ -238,7 +209,7 @@ namespace HSMServer.Model.Controls
                     chatsName = parentMode.GetDisplayName();
                     break;
                 default:
-                    chatsName = parentIds.ToNames(availableChats);
+                    chatsName = parentIds.ToNames(chats);
                     break;
             }
 

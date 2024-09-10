@@ -161,7 +161,7 @@ namespace HSMServer.Extensions
             return alert.Actions.Any(a => a.Action is ActionType.SendNotification &&
                                           ((a.ChatsMode is ChatsMode.NotInitialized && a.Chats.Count == 0)  || 
                                            (a.ChatsMode is ChatsMode.Custom && a.Chats.Count == 0) ||
-                                          (a.ChatsMode is ChatsMode.FromParent && a.Chats.Count == 0 && sensor.Parent.DefaultChats.GetChatsIdsAndParentMode().ids.Count == 0)));
+                                          (a.ChatsMode is ChatsMode.FromParent && a.Chats.Count == 0 && sensor.Parent.DefaultChats.GetChatsCount() == 0)));
         }
     }
 }

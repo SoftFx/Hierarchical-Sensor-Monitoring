@@ -10,8 +10,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var displayName = Model.GetDisplayChatName(ChatsManager.GetValues(), out var allChats);
-    var parentName = Model.GetParentDisplayValue(allChats);
+    var (displayName, parentChats) = Model.GetDisplayChatName(ChatsManager.GetValues(), out var allChats);
 }
 
 
@@ -22,7 +21,7 @@
     <select name="SelectedChats" class="default-chat selectpicker" multiple data-live-search="true" data-placeholder="Default telegram chat(s)" required>
         @if (Model.HasParent)
         {
-            <option value="@DefaultChatMode.FromParent" selected="@Model.IsSelectedMode(DefaultChatMode.FromParent)">@parentName</option>
+            <option value="@DefaultChatMode.FromParent" selected="@Model.IsSelectedMode(DefaultChatMode.FromParent)">@parentChats</option>
         }
 
         <option value="@DefaultChatMode.NotInitialized" selected="@Model.IsSelectedMode(DefaultChatMode.NotInitialized)">@DefaultChatMode.NotInitialized.GetDisplayName()</option>

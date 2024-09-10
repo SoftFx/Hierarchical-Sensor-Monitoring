@@ -26,6 +26,8 @@ namespace HSMServer.Model.DataAlerts
 
 
         public DefaultChatViewModel ParentDefaultChat { get; protected set; }
+        
+        public DefaultChatViewModel DefaultChat { get; protected set; }
 
         public bool IsModify { get; protected set; }
 
@@ -201,7 +203,11 @@ namespace HSMServer.Model.DataAlerts
 
         protected abstract ConditionViewModel CreateCondition(bool isMain);
 
-        private void InitializeDefaultChat(NodeViewModel node) => ParentDefaultChat = node.Parent?.DefaultChats;
+        private void InitializeDefaultChat(NodeViewModel node)
+        {
+            ParentDefaultChat = node.Parent?.DefaultChats;
+            DefaultChat = node.DefaultChats;
+        }
     }
 
 
