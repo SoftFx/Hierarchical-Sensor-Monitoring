@@ -597,11 +597,7 @@ window.multiChartPanelInit = async (values, sourceType, unit = '', height = 300,
     }
 
     await createChart(`multichart`, data, layout, config)
-    $('#multichart').on('plotly_relayout', function (e, updateData) {
-        let rect = e.target.getBoundingClientRect();
-        let emptypanel = $('#emptypanel');
-        emptypanel.css('transform', `translate(${rect.width / 2 - emptypanel.width() / 2}px, ${rect.height / 2}px)`)
-    }).on('plotly_doubleclick', async function(){
+    $('#multichart').on('plotly_doubleclick', async function(){
         await customReset($(`#multichart`)[0])
     })
 
