@@ -72,9 +72,7 @@ namespace HSMServer.Model.Controls
             var response = SelectedChats.Count;
             
             if (IsFromParent)
-            {
                 response += Parent?.GetChatsCount() ?? 0;
-            }
 
             return response;
         }
@@ -162,31 +160,6 @@ namespace HSMServer.Model.Controls
             }
 
             return (chatsName, parentChats);
-        }
-        
-        public string GetCurrentDisplayValue(List<TelegramChat> chatList, out List<TelegramChat> allChats)
-        {
-            var chats = ToAvailableChats(chatList);
-            var (usedChatIds, usedMode) = GetCurrentChats();
-            var chatsName = usedMode switch
-            {
-                DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
-                DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
-                _ => usedChatIds.ToNames(chats),
-            };
-
-            allChats = [.. chats.Values];
-
-            if (IsFromParent)
-            {
-                SelectedChats.ExceptWith(usedChatIds);
-                // if (SelectedChats.Count != 0)
-                //     return AsFromParent(chatsName) + ", " + SelectedChats.ToNames(chats);
-
-                return AsFromParent(chatsName);
-            }
-
-            return chatsName;
         }
 
         public string GetParentDisplayValue(Dictionary<Guid, TelegramChat> chats)

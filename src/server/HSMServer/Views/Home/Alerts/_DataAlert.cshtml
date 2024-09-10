@@ -72,43 +72,15 @@
 
                         string chatNames;
                         if (parentIds.Count != 0)
-                        {
                             chatNames = parentIds.ToNames(telegramChats);
-                        }
                         else
-                        {
                             chatNames = lastMode?.GetDisplayName();
-                        }
                         
                         chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatNames})";
                         
                         if (action.Chats.Count !=  0)
                             chats += $", {GetActionChats(action)}";
                         
-                        // var (parentIds, selectedId, mode, parentMode) = Model.ParentDefaultChat.GetChats();
-                        // var chatName = string.Empty;
-                        //
-                        // parentIds.UnionWith(selectedId);
-                        // if (parentIds.Count == 0)
-                        // {
-                        //     chatName = parentMode switch
-                        //     {
-                        //         DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
-                        //         DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
-                        //         _ => parentIds.ToNames(telegramChats),
-                        //     };
-                        // }
-                        // else
-                        //     chatName = parentIds.ToNames(telegramChats);
-                        //
-                        //
-                        // chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatName})";
-                        //
-                        // action.Chats.ExceptWith(parentIds);
-                        //
-                        // if (action.Chats.Count !=  0)
-                        //     chats += $", {GetActionChats(action)}";
-                        //
                         break;
                     }
                     case ChatsMode.Custom:
