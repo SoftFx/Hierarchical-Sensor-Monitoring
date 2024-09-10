@@ -62,12 +62,14 @@ namespace HSMServer.Core.Model.Policies
 
         internal IPolicyDestinationHandler TargetChats
         {
-            //tut
             get
             {
                 Dictionary<Guid, string> GetParentChats(ProductModel parent)
                 {
                     var dict = new Dictionary<Guid, string>();
+
+                    if (parent is null)
+                        return dict;
                     
                     foreach (var (id, name) in parent.Settings.DefaultChats.CurValue.Chats)
                     {
@@ -76,7 +78,7 @@ namespace HSMServer.Core.Model.Policies
 
                     if (parent.Settings.DefaultChats.CurValue.IsFromParent)
                     {
-                        var par = parent?.Parent;
+                        var par = parent.Parent;
 
                         while (par != null)
                         {
@@ -85,7 +87,7 @@ namespace HSMServer.Core.Model.Policies
                                 dict.TryAdd(id, name);
                             }
                             
-                            par = par?.Parent;
+                            par = par.Parent;
                         }
 
                         return dict;
