@@ -33,6 +33,8 @@ namespace HSMDataCollector.DefaultSensors
 
         private long FreeSpace => _diskInfo.FreeSpace;
 
+        private readonly object _locker = new object();
+
         public FreeDiskSpacePredictionBase(DiskSensorOptions options, IDiskInfo diskInfo) : base(options)
         {
             _calculateSpeedDelay = TimeSpan.FromSeconds(DefaultSpaceCheckPeriodInSec);
@@ -43,17 +45,20 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override ValueTask<bool> StartAsync()
         {
-            if (_workTask == null)
+            lock (_locker)
             {
-                _tokenSource = new CancellationTokenSource();
+                if (_workTask == null)
+                {
+                    _tokenSource = new CancellationTokenSource();
 
-                _lastSpeedCheckTime = DateTime.UtcNow;
-                _lastAvailableSpace = FreeSpace;
+                    _lastSpeedCheckTime = DateTime.UtcNow;
+                    _lastAvailableSpace = FreeSpace;
 
-                _currentChangeSpeed = 0.0;
-                _requestsCount = 0;
+                    _currentChangeSpeed = 0.0;
+                    _requestsCount = 0;
 
-                _workTask = PeriodicTask.Run(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, _tokenSource.Token);
+                    _workTask = PeriodicTask.Run(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, _tokenSource.Token);
+                }
             }
 
             return base.StartAsync();
@@ -63,13 +68,22 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                if (_workTask != null)
+                Task taskToWait = null;
+                lock (_locker)
                 {
-                    _tokenSource?.Cancel();
-                    await _workTask.ConfigureAwait(false);
-                    _tokenSource?.Dispose();
-                    _workTask?.Dispose();
-                    _workTask = null;
+                    if (_workTask != null)
+                    {
+                        _tokenSource?.Cancel();
+                        taskToWait = _workTask;
+                        _tokenSource?.Dispose();
+                        _workTask = null;
+                    }
+                }
+
+                if (taskToWait != null)
+                {
+                    await taskToWait.ConfigureAwait(false);
+                    taskToWait.Dispose();
                 }
                 await base.StopAsync();
             }
