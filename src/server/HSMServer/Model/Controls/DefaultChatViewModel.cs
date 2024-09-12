@@ -106,7 +106,9 @@ namespace HSMServer.Model.Controls
             {
                 var (a, b) = parent.GetParentChats();
                 parentIds.UnionWith(a);
-                parentMode = b;
+                
+                if (b is not null)
+                    parentMode = b;
             }
             
             return (parentIds, selected, ChatMode, parentMode);
@@ -124,7 +126,9 @@ namespace HSMServer.Model.Controls
             {
                 var (a, b) = parent.GetParentChats();
                 parentIds.UnionWith(a);
-                lastMode = b;
+                
+                if (b is not null)
+                    lastMode = b;
             }
             
             return (parentIds, lastMode);
