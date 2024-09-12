@@ -7,6 +7,42 @@
 
 using namespace std;
 using namespace hsm_wrapper;
+using namespace System;
+using namespace System::IO;
+using namespace System::Reflection;
+
+namespace {
+	string GetModuleFolder(HMODULE module)
+	{
+		char path[MAX_PATH] = "";
+		GetModuleFileName(module, path, _countof(path));
+		string result = path;
+		const size_t index = result.find_last_of('\\');
+		result = result.substr(0, 1 + index);
+		return result;
+	}
+}
+
+Assembly^ ResolveAssembly(Object^ sender, ResolveEventArgs^ args)
+{
+	// Resolve assembly path.
+	String^ folderPath = msclr::interop::marshal_as<String^>(GetModuleFolder(GetModuleHandleA("HSMCppWrapper.dll")));
+	String^ assemblyPath = Path::Combine(folderPath, (gcnew AssemblyName(args->Name))->Name + ".dll");
+	if (File::Exists(assemblyPath) == false)
+		return nullptr;
+
+	return Assembly::LoadFrom(assemblyPath);
+}
+
+void hsm_wrapper::RedirectAssembly() {
+	static bool s_init = false;
+	if (!s_init)
+	{
+		AppDomain^ currentDomain = AppDomain::CurrentDomain;
+		currentDomain->AssemblyResolve += gcnew ResolveEventHandler(&ResolveAssembly);
+		s_init = true;
+	}
+}
 
 
 DataCollectorImplWrapper::DataCollectorImplWrapper(const std::string& product_key, const std::string& address, int port, const std::string& module) 

@@ -26,7 +26,7 @@ namespace HSMServer.Notifications
         }
 
 
-        public Task Start() => TelegramBot.StartBot();
+        public Task StartAsync() => TelegramBot.StartBotAsync();
 
         public ValueTask DisposeAsync()
         {
@@ -41,9 +41,9 @@ namespace HSMServer.Notifications
         }
 
 
-        internal void SendAllMessages()
+        internal ValueTask SendAllMessagesAsync()
         {
-            TelegramBot.SendMessages();
+            return TelegramBot.SendMessagesAsync();
         }
 
         internal Task RecalculateState()

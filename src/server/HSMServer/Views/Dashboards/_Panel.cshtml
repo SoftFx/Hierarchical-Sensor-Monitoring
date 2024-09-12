@@ -21,11 +21,12 @@
     var settingsButtonsDisplayClass = @Model.Settings.IsSingleMode ? "d-none" : "";
     
     var lastUpdate = (long)(@Model.LastUpdate - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
+    var mainSensorType = Model.MainSensorType is null ? byte.MinValue : (byte)Model.MainSensorType;
 }
 
 <div id="@Model.Id" class="panel resize-draggable">
     <div class="d-flex flex-column">
-        <span id="emptypanel_@Model.Id" style="font-size: larger; position: fixed; z-index: 300; color: rgb(128,128,128); display: none">Empty panel</span>
+        <span id="emptypanel_@Model.Id" style="font-size: larger; position: absolute; z-index: 300; color: rgb(128,128,128); display: none; top: 50%; left: 50%; transform: translate(-50%, -50%); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-align: center;">Empty panel</span>
         <div class="d-flex flex-row justify-content-between align-items-center px-1 pt-1 name-draggable">
             <div class="d-inline-block overflow-hidden">
                 <div class="d-flex">
@@ -104,7 +105,7 @@
         const settings = @Html.Raw(JsonSerializer.Serialize(Model.Settings, jsonOptions));
         const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
         const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
-         
-        initPanel('@Model.Id', settings, ySettings, values, Number('@lastUpdate'), '@Model.DashboardId');  
+
+        initPanel('@Model.Id', settings, ySettings, values, Number('@lastUpdate'), '@Model.DashboardId', Number('@mainSensorType'), '@Model.MainUnit');  
     })
 </script>

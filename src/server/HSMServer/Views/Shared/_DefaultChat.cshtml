@@ -10,8 +10,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var displayName = Model.GetCurrentDisplayValue(ChatsManager.GetValues(), out var allChats);
-    var parentName = Model.GetParentDisplayValue(allChats);
+    var (displayName, parentChats) = Model.GetDisplayChatName(ChatsManager.GetValues(), out var allChats);
 }
 
 
@@ -22,7 +21,7 @@
     <select name="SelectedChats" class="default-chat selectpicker" multiple data-live-search="true" data-placeholder="Default telegram chat(s)" required>
         @if (Model.HasParent)
         {
-            <option value="@DefaultChatMode.FromParent" selected="@Model.IsSelectedMode(DefaultChatMode.FromParent)">@parentName</option>
+            <option value="@DefaultChatMode.FromParent" selected="@Model.IsSelectedMode(DefaultChatMode.FromParent)">@parentChats</option>
         }
 
         <option value="@DefaultChatMode.NotInitialized" selected="@Model.IsSelectedMode(DefaultChatMode.NotInitialized)">@DefaultChatMode.NotInitialized.GetDisplayName()</option>
@@ -50,7 +49,19 @@
 <script>
     $(document).ready(function () {
         $("select[name='SelectedChats']").selectpicker();
-    });
+        $("select[name='SelectedChats']").off('changed.bs.select').on('changed.bs.select', function (e, clickedIndex, isSelected, previousValue, a) {
+            const clickedValue = $(this)[0].options[clickedIndex].value;
+            if ((clickedValue === 'Empty' || clickedValue === 'NotInitialized') && isSelected) {
+                $(this).val($(this)[0].options[clickedIndex].value);   
+            }
+            else {
+                if (Array.from($("select[name='SelectedChats']")[0].selectedOptions).find(x => x.value === 'NotInitialized' || x.value === 'Empty') !== undefined)
+                    $(this).val($(this)[0].options[clickedIndex].value);
+            }
+
+            $(this).selectpicker('refresh')
+        });
+    })
 
     function fillDefaultChatMode(formData) {
         let chatsMode = '@DefaultChatMode.Custom';
@@ -58,8 +69,7 @@
 
         $(document).find("select[name='SelectedChats']:first option").each(function () {
             if ($(this).is(':selected')) {
-                if ($(this).val() === '@DefaultChatMode.FromParent' ||
-                    $(this).val() === '@DefaultChatMode.NotInitialized' ||
+                if ($(this).val() === '@DefaultChatMode.FromParent' || $(this).val() === '@DefaultChatMode.NotInitialized' ||
                     $(this).val() === '@DefaultChatMode.Empty') {
                     chatsMode = $(this).val();
                     chats = [];

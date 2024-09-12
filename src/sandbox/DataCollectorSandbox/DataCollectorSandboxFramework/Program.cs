@@ -54,6 +54,8 @@ namespace DatacollectorSandbox
             var tokenSource = new CancellationTokenSource();
 
 
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+
             var collectorOptions = new CollectorOptions()
             {
                 //ServerAddress = "hsm.dev.soft-fx.eu",
@@ -161,7 +163,7 @@ namespace DatacollectorSandbox
 
                 //Console.WriteLine(GetCurrentThreads(process));
 
-                PushValue();
+                await PushValue();
             }
 
             tokenSource.Cancel();
@@ -205,6 +207,11 @@ namespace DatacollectorSandbox
             Console.ReadLine();
 
             _collector.Dispose();
+        }
+
+        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            Console.WriteLine(e);
         }
 
         private static async Task PushByTimer(CancellationTokenSource source)

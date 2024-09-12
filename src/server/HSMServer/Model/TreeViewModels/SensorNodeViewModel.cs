@@ -13,6 +13,8 @@ namespace HSMServer.Model.TreeViewModel
     {
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
+        private const string ServiceAliveName = "Service alive";
+        private const string ServiceStatusName = "Service status";
 
         public const int ValuesLimit = 4000;
 
@@ -53,6 +55,11 @@ namespace HSMServer.Model.TreeViewModel
         public bool IsDatapointFormatSupported => Type is SensorType.Integer or SensorType.Double or SensorType.Rate or SensorType.Boolean
                                                   or SensorType.String or SensorType.TimeSpan;
 
+        public bool IsServiceAlive => Name == ServiceAliveName;
+        public bool IsServiceStatus => Name == ServiceStatusName;
+
+
+        public DateTime CreationTime { get; private set; }
 
         public SensorNodeViewModel(BaseSensorModel model) : base(model) { }
 
@@ -70,6 +77,7 @@ namespace HSMServer.Model.TreeViewModel
             Status = model.Status.ToClient();
             SelectedUnit = model.OriginalUnit;
             AggregateValues = model.AggregateValues;
+            CreationTime = model.CreationDate;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);

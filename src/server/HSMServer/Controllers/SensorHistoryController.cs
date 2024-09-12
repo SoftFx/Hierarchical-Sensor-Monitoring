@@ -133,9 +133,8 @@ namespace HSMServer.Controllers
             if (localValue is not null && (values.Count == 0 || values[0].Time != localValue.Time))
                 values.Add(localValue);
             
-            return Json(HistoryProcessorFactory.BuildProcessor(model.Type).GetResultFromValues(sensor, values, model.BarsCount), _serializationsOptions);
+            return Json(HistoryProcessorFactory.BuildProcessor((int)sensor.Type).GetResultFromValues(sensor, values, model.BarsCount), _serializationsOptions);
         }
-
 
         [HttpPost]
         public void ReloadHistoryRequest([FromBody] GetSensorHistoryRequest model)

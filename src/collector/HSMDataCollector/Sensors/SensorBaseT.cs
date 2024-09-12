@@ -21,7 +21,11 @@ namespace HSMDataCollector.DefaultSensors
 
         public void SendValue(T value, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
-            SendValue(GetSensorValue(value).Complete(comment, status));
+            try
+            {
+                SendValue(GetSensorValue(value).Complete(comment, status));
+            }
+            catch (Exception ex) { HandleException(ex); }
         }
 
 

@@ -20,7 +20,7 @@ namespace HSMDataCollector.DefaultSensors.Unix
         }
 
 
-        protected override double GetBarData()
+        protected override double? GetBarData()
         {
             var endCpuUsage = _currentProcess.TotalProcessorTime;
             var endTime = DateTime.UtcNow;

@@ -18,7 +18,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         private Task _statusWatcher;
         private CancellationTokenSource _cancellationTokenSource;
 
-        private volatile bool _isStarted = false;
+        private readonly object _locker = new object();
 
         internal WindowsServiceStatusSensor(ServiceSensorOptions options) : base(options)
         {
@@ -29,27 +29,47 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
 
         internal override ValueTask<bool> StartAsync()
         {
-            if (!_isStarted)
+            lock (_locker)
             {
-                _isStarted = true;
-                _cancellationTokenSource = new CancellationTokenSource();
-                _statusWatcher = PeriodicTask.Run(CheckServiceStatus, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
+                if (_statusWatcher == null)
+                {
+                    _cancellationTokenSource = new CancellationTokenSource();
+                    _statusWatcher = PeriodicTask.Run(CheckServiceStatus, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
+                }
             }
 
             return base.StartAsync();
         }
 
-        internal override ValueTask StopAsync()
+        internal override async ValueTask StopAsync()
         {
-            if (_isStarted)
+            try
             {
-                _isStarted = false;
-                _cancellationTokenSource?.Cancel();
-                _statusWatcher?.ConfigureAwait(false).GetAwaiter().GetResult();
-                _cancellationTokenSource?.Dispose();
-                _statusWatcher?.Dispose();
+                Task taskToWait = null;
+
+                lock (_locker)
+                {
+                    if (_statusWatcher != null)
+                    {
+                        _cancellationTokenSource?.Cancel();
+                        taskToWait = _statusWatcher;
+                        _cancellationTokenSource?.Dispose();
+                        _statusWatcher = null;
+                    }
+                }
+
+                if (taskToWait != null)
+                {
+                    await taskToWait.ConfigureAwait(false);
+                    taskToWait?.Dispose();
+                }
+
+                await base.StopAsync();
             }
-            return base.StopAsync();
+            catch (Exception ex)
+            { 
+                HandleException(ex);
+            }
         }
 
 
@@ -67,7 +87,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             }
             catch (Exception ex)
             {
-                ThrowException(ex);
+                HandleException(ex);
             }
         }
 

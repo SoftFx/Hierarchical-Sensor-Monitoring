@@ -37,7 +37,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
                     if (instantName == null)
                     {
-                        ThrowException(new ArgumentNullException($"Performance counter: {CategoryName}/{CounterName} instance {InstanceName} not found"));
+                        HandleException(new ArgumentNullException($"Performance counter: {CategoryName}/{CounterName} instance {InstanceName} not found"));
 
                         return new ValueTask<bool>(false);
                     }
@@ -47,7 +47,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
             }
             catch (Exception ex)
             {
-                ThrowException(new Exception($"Error initializing performance counter: {CategoryName}/{CounterName} instance {InstanceName}: {ex}"));
+                HandleException(new Exception($"Error initializing performance counter: {CategoryName}/{CounterName} instance {InstanceName}: {ex}"));
 
                 return new ValueTask<bool>(false);
             }
@@ -63,6 +63,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
             return base.StopAsync();
         }
 
-        protected override double GetBarData() => _performanceCounter.NextValue();
+        protected override double? GetBarData() => _performanceCounter.NextValue();
     }
 }

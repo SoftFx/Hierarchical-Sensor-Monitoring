@@ -8,6 +8,6 @@ namespace HSMDataCollector.DefaultSensors.Unix
         internal UnixProcessMemory(BarSensorOptions options) : base(options) { }
 
 
-        protected override double GetBarData() => ProcessInfo.CurrentProcess.WorkingSet64.BytesToMegabytes();
+        protected override double? GetBarData() => ProcessInfo.CurrentProcess.WorkingSet64.BytesToMegabytes();
     }
 }

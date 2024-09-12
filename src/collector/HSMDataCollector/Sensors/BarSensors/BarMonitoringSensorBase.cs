@@ -18,11 +18,11 @@ namespace HSMDataCollector.DefaultSensors
         private readonly TimeSpan _barPeriod;
         private readonly int _precision;
 
+        private readonly object _locker = new object();
+
         private Task _collectTask;
         private CancellationTokenSource _cancellationTokenSource;
         protected BarType _internalBar;
-
-        private volatile bool _isStarted = false;
 
         protected sealed override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
@@ -39,29 +39,47 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override ValueTask<bool> InitAsync()
         {
-
-            if (!_isStarted)
+            lock (_locker)
             {
-                _isStarted = true;
-                _cancellationTokenSource = new CancellationTokenSource();
-                _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token);
+                if (_collectTask == null)
+                {
+                    _cancellationTokenSource = new CancellationTokenSource();
+                    _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token);
+                }
             }
 
             return base.InitAsync();
         }
 
-        internal override ValueTask StopAsync()
+        internal override async ValueTask StopAsync()
         {
-            if (_isStarted)
+            try
             {
-                _isStarted = false;
-                _cancellationTokenSource?.Cancel();
-                _collectTask?.ConfigureAwait(false).GetAwaiter().GetResult();
-                _cancellationTokenSource?.Dispose();
-                _collectTask?.Dispose();
-            }
+                Task taskToWait = null;
 
-            return base.StopAsync();
+                lock (_locker)
+                {
+                    if (_collectTask != null)
+                    {
+                        _cancellationTokenSource?.Cancel();
+                        taskToWait = _collectTask;
+                        _collectTask = null;
+                        _cancellationTokenSource?.Dispose();
+                    }
+                }
+
+                if (taskToWait != null)
+                {
+                    await taskToWait.ConfigureAwait(false);
+                    taskToWait?.Dispose();
+                }
+
+                await base.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+            }
         }
 
 
@@ -71,7 +89,8 @@ namespace HSMDataCollector.DefaultSensors
         {
             lock (_lockBar)
             {
-                _needSendValue = _internalBar.Count > 0;
+                if (_internalBar.Count <= 0)
+                    return null;
 
                 return _internalBar.Complete().Copy() as BarType; //need copy for correct partialBar serialization
             }
@@ -93,14 +112,14 @@ namespace HSMDataCollector.DefaultSensors
                 {
                     if (_internalBar.CloseTime < DateTime.UtcNow)
                     {
-                        OnTimerTick();
+                        SendValueAction();
                         BuildNewBar();
                     }
                 }
             }
             catch (Exception ex)
             {
-                ThrowException(ex);
+                HandleException(ex);
             }
         }
 

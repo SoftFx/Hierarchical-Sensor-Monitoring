@@ -2,6 +2,7 @@
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using HSMDataCollector.Converters;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -19,6 +20,7 @@ namespace HSMDataCollector.Client.HttpsClient
 
         private static JsonSerializerOptions _options = new JsonSerializerOptions 
         {
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
             Converters = 
             {
                 new JsonRequestConverter<SensorValueBase>(),

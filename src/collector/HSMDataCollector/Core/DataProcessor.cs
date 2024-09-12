@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using HSMDataCollector.DefaultSensors;
+using HSMDataCollector.DefaultSensors.Diagnostic;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMDataCollector.SyncQueue.SpecificQueue;
@@ -58,10 +59,10 @@ namespace HSMDataCollector.Core
         public async Task StopAsync()
         {
             IsStarted = false;
-            _dataQueue.Stop();
-            _priorityQueue.Stop();
-            _fileQueue.Stop();
-            _commandQueue.Stop();
+            await _dataQueue.StopAsync().ConfigureAwait(false);
+            await _priorityQueue.StopAsync().ConfigureAwait(false);
+            await _fileQueue.StopAsync().ConfigureAwait(false);
+            await _commandQueue.StopAsync().ConfigureAwait(false);
             await SensorStorage.StopAsync().ConfigureAwait(false);
         }
 
@@ -74,19 +75,19 @@ namespace HSMDataCollector.Core
             SensorStorage?.Dispose();
         }
 
-        public void AddData(SensorValueBase data) => SendQueueOverflow(_dataQueue.Enqeue(data));
+        public void AddData(SensorBase sender, SensorValueBase data) => SendQueueOverflow(sender, _dataQueue.Enqeue(data), _dataQueue.QueueName);
 
-        public void AddData(IEnumerable<SensorValueBase> items) => SendQueueOverflow(_dataQueue.Enqeue(items));
+        public void AddData(SensorBase sender, IEnumerable<SensorValueBase> items) => SendQueueOverflow(sender, _dataQueue.Enqeue(items), _dataQueue.QueueName);
 
-        public void AddPriorityData(SensorValueBase data) => SendQueueOverflow(_priorityQueue.Enqeue(data));
+        public void AddPriorityData(SensorBase sender, SensorValueBase data) => SendQueueOverflow(sender, _priorityQueue.Enqeue(data), _dataQueue.QueueName);
 
-        public void AddPriorityData(IEnumerable<SensorValueBase> items) => SendQueueOverflow(_priorityQueue.Enqeue(items));
+        public void AddPriorityData(SensorBase sender, IEnumerable<SensorValueBase> items) => SendQueueOverflow(sender, _priorityQueue.Enqeue(items), _dataQueue.QueueName);
 
-        public void AddCommand(CommandRequestBase command) => SendQueueOverflow(_commandQueue.Enqeue(command));
+        public void AddCommand(SensorBase sender, CommandRequestBase command) => SendQueueOverflow(sender, _commandQueue.Enqeue(command), _dataQueue.QueueName);
 
-        public void AddCommand(IEnumerable<CommandRequestBase> commands) => SendQueueOverflow(_commandQueue.Enqeue(commands));
+        public void AddCommand(SensorBase sender, IEnumerable<CommandRequestBase> commands) => SendQueueOverflow(sender, _commandQueue.Enqeue(commands), _dataQueue.QueueName);
 
-        public void AddFile(FileSensorValue file) => SendQueueOverflow(_fileQueue.Enqeue(file));
+        public void AddFile(SensorBase sender, FileSensorValue file) => SendQueueOverflow(sender, _fileQueue.Enqeue(file), _dataQueue.QueueName);
 
         public void AddException(string sensorPath, Exception ex)
         {
@@ -107,10 +108,13 @@ namespace HSMDataCollector.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void SendQueueOverflow(int overflow)
+        private void SendQueueOverflow(SensorBase sender, int overflow, string queueName)
         {
+            if (sender is QueueOverflowSensor)
+                return;
+
             if (overflow > 0)
-                DefaultSensors.QueueOverflowSensor?.AddValue(overflow);
+                DefaultSensors.QueueOverflowSensor?.AddValue(queueName, overflow);
         }
 
     }

@@ -67,8 +67,8 @@
         </div>
     </div>
 
-    <div class="dropzone" style="max-width: 98%;min-width: 100%; width: 100%!important;">
-        <span id="emptypanel" style="font-size: larger; position: fixed; z-index: 300; transform: translate(100px, 100px); color: rgb(128,128,128); display: none">Empty panel</span>
+    <div class="dropzone" style="max-width: 98%; min-width: 100%; width: 100%!important; position: relative;">
+        <span id="emptypanel" style="font-size: larger; z-index: 300; color: rgb(128,128,128); display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-align: center;">Empty panel</span>
         <div id="multichart"></div>
     </div>
 
@@ -90,6 +90,10 @@
     <label class="col-form-label fw-bold">Sources:</label>
     <div id="plots" class="mt-1">
         <ul id="sources" class="list-group">
+            @foreach (var (_, source) in Model.Sources)
+            {
+                @await Html.PartialAsync("_SourceSettings", source);
+            }
         </ul>
     </div>
 
@@ -102,39 +106,27 @@
 @await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
 
-<script>
+<script>  
+   
     let rangePreviewUpdate;
-    
     var multichartRange;
-    $(document).ready(function () {
+    
+    $(() => {
+        setMultichartRemoveListeners();
+                
         if ('@isYRangeAvailabe' !== 'True')
             $('#y-range-settings').hide();
 
-        let values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
-        let ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
-
+        const ySettings = @Html.Raw(JsonSerializer.Serialize(Model.YRange, jsonOptions));
+        const values = @Html.Raw(JsonSerializer.Serialize(Model.Sources.Values, jsonOptions));
         multichartRange = ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)];
 
-        // refactor to ChartHelper methods
-        initMultichart('multichart', 300, true, true).then(
-            (dom) => {
-                values.forEach(function (x) {
-                    addNewSourceHtml(x, 'multichart');
-                })
-
-                $('#multichart').on('plotly_relayout', function (e, updateData){
-                    let rect = e.target.getBoundingClientRect();
-                    let emptypanel = $('#emptypanel');
-                    emptypanel.css('transform', `translate(${rect.width / 2 - emptypanel .width() / 2}px, ${rect.height / 2}px)`)
-                })
-
-                if (values.length === 0) {
-                    $('#emptypanel').show();
-                }
-
-                window.dispatchEvent(new Event('resize'));
-            }
-        );
+        multiChartPanelInit(values, '@Model.MainSensorType', '@(Model.MainUnit.HasValue ? Model.MainUnit : "")', 300, multichartRange)
+        
+        if ($('#multichart')[0].data.length === 0)
+            Plotly.relayout('multichart', { 'xaxis.visible': false, 'yaxis.visible': false });
+        
+        window.dispatchEvent(new Event('resize'));
 
         $('#editablePanelSettings form').on('submit', function (event){
             event.preventDefault();
@@ -214,22 +206,5 @@
         }).done(function (viewData) {
             $(`#templates`).append(viewData);
         });
-    }
-
-    function removeAllSources() {
-        showConfirmationModal(
-            `Removing sources`,
-            `Do you really want to remove all panel sources?`,
-            function () {
-                $('#sources li').each(function (idx, li) {
-                    let source = $(li);
-
-                    let idAttr = source.attr('id');
-                    let sourceId = idAttr.substring('source_'.length, idAttr.length);
-
-                    deletePlot(sourceId);
-                })
-            }
-        );
     }
 </script>

@@ -48,6 +48,8 @@ namespace HSMServer.Model.ViewModel
 
         public string Description { get; set; }
 
+        public DateTime CreationDate { get; private set; }
+
 
         public NodeInfoBaseViewModel() { }
 
@@ -56,6 +58,8 @@ namespace HSMServer.Model.ViewModel
             EncodedId = model.EncodedId;
             Header = $"{model.RootProduct.Name}{model.Path}";
             RootProductId = model.RootProduct.Id;
+            CreationDate = model.CreationDate;
+
         }
 
         internal NodeInfoBaseViewModel(FolderModel model) : this((BaseNodeViewModel)model)

@@ -9,7 +9,8 @@ export class HttpPanelService {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                isSingleMode: panel.settings.isSingleMode
+                isSingleMode: panel.settings.isSingleMode,
+                showLegend: panel.settings.showLegend
             })
         });
     }

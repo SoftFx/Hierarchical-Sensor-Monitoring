@@ -16,13 +16,11 @@ namespace HSMDataCollector.DefaultSensors
         private CancellationTokenSource _cancellationTokenSource;
         private Task _sendTask;
 
-        protected bool _needSendValue = true;
+        private readonly object _lock = new object();
 
         protected virtual TimeSpan TimerDueTime => PostTimePeriod;
 
         protected TimeSpan PostTimePeriod => _options.PostDataPeriod;
-
-        private volatile bool _isStarted = false;
 
         protected MonitoringSensorBase(SensorOptions options) : base(options)
         {
@@ -34,18 +32,31 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override ValueTask<bool> InitAsync()
         {
-            if (!_isStarted)
+            try
+            {
                 StartSendTask();
 
-            return base.InitAsync();
+                return base.InitAsync();
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+                return new ValueTask<bool>(false);
+            }
         }
 
-        internal override ValueTask StopAsync()
+        internal override async ValueTask StopAsync()
         {
-            if (_isStarted)
-                StopInternal();
+            try
+            {
+                await StopInternalAsync();
 
-            return base.StopAsync();
+                await base.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+            }
         }
 
         protected abstract T GetValue();
@@ -56,47 +67,74 @@ namespace HSMDataCollector.DefaultSensors
 
         protected virtual SensorStatus GetStatus() => SensorStatus.Ok;
 
-        protected void OnTimerTick()
+        protected void SendValueAction()
         {
-            if (_needSendValue)
-                SendValue(BuildSensorValue());
+            SendValue(BuildSensorValue());
         }
 
-        protected void RestartTimer(TimeSpan newPostPeriod)
+        protected async Task RestartTimerAsync(TimeSpan newPostPeriod)
         {
-            if (_isStarted)
-                StopInternal();
+            try
+            {
+                await StopInternalAsync().ConfigureAwait(false);
 
-            _options.PostDataPeriod = newPostPeriod;
+                _options.PostDataPeriod = newPostPeriod;
 
-            StartSendTask();
+                StartSendTask();
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+            }
         }
 
-        private void StopInternal()
+        private async ValueTask StopInternalAsync()
         {
-            _isStarted = false;
-            _cancellationTokenSource?.Cancel();
-            _sendTask?.ConfigureAwait(false).GetAwaiter().GetResult();
-            _sendTask?.Dispose();
-            _cancellationTokenSource?.Dispose();
+            Task taskToAwait = null;
+
+            lock (_lock)
+            {
+                if (_sendTask != null)
+                {
+                    _cancellationTokenSource?.Cancel();
+                    taskToAwait = _sendTask;
+                    _sendTask = null;
+                    _cancellationTokenSource?.Dispose();
+                }
+            }
+
+            if (taskToAwait != null)
+            {
+                await taskToAwait.ConfigureAwait(false);
+                taskToAwait.Dispose();
+            }
         }
 
         private void StartSendTask()
         {
-            _isStarted = true;
-            _cancellationTokenSource = new CancellationTokenSource();
-            _sendTask = PeriodicTask.Run(OnTimerTick, TimerDueTime, PostTimePeriod, _cancellationTokenSource.Token);
+            lock (_lock)
+            {
+                if (_sendTask == null)
+                {
+                    _cancellationTokenSource = new CancellationTokenSource();
+                    _sendTask = PeriodicTask.Run(SendValueAction, TimerDueTime, PostTimePeriod, _cancellationTokenSource.Token);
+                }
+            }
         }
 
         private SensorValueBase BuildSensorValue()
         {
             try
             {
-                return GetSensorValue(GetValue()).Complete(GetComment(), GetStatus());
+                T value = GetValue();
+                if (value == null)
+                    return default;
+
+                return GetSensorValue(value).Complete(GetComment(), GetStatus());
             }
             catch (Exception ex)
             {
-                ThrowException(ex);
+                HandleException(ex);
 
                 return GetSensorValue(GetDefaultValue()).Complete(ex.Message, SensorStatus.Error);
             }

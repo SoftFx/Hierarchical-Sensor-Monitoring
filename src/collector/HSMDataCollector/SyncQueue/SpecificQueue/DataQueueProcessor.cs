@@ -11,7 +11,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal sealed class DataQueueProcessor : QueueProcessorBase<SensorValueBase>
     {
-        protected override string QueueName => "Data";
+        public override string QueueName => "Data";
 
         public DataQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
@@ -33,6 +33,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     }
                     while (_queue.Count >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
                 }
+                catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
                     _logger.Error(ex);

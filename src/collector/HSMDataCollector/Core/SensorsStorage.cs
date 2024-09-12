@@ -122,7 +122,7 @@ namespace HSMDataCollector.Core
         }
 
 
-        internal SensorBase Register(SensorBase sensor, bool startSensor = false)
+        internal SensorBase Register(SensorBase sensor)
         {
             var path = sensor.SensorPath;
 
@@ -134,19 +134,17 @@ namespace HSMDataCollector.Core
                 _ = AddAndStart(sensor);
                 return sensor;
             }
-
-            return AddSensor(sensor);
+            else
+                return AddSensor(sensor);
         }
 
 
         private async Task<SensorBase> AddAndStart(SensorBase sensor)
         {
-            var path = sensor.SensorPath;
-
             if (!await AddSensor(sensor).InitAsync().ConfigureAwait(false))
-                Logger.Error($"Failed to init {path}");
+                Logger.Error($"Failed to init {sensor.SensorPath}");
             else if (!await sensor.StartAsync().ConfigureAwait(false))
-                Logger.Error($"Failed to start {path}");
+                Logger.Error($"Failed to start {sensor.SensorPath}");
 
             return sensor;
         }

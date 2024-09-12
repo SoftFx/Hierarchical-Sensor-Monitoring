@@ -11,7 +11,7 @@ namespace HSMDataCollector.DefaultSensors
         protected CollectableBarMonitoringSensorBase(BarSensorOptions options) : base(options) { }
 
 
-        protected abstract T GetBarData();
+        protected abstract T? GetBarData();
 
         protected override void CollectBar()
         {
@@ -19,11 +19,14 @@ namespace HSMDataCollector.DefaultSensors
             {
                 base.CollectBar();
 
-                _internalBar.AddValue(GetBarData());
+                T? value = GetBarData();
+
+                if (value.HasValue)
+                    _internalBar.AddValue(value.Value);
             }
             catch (Exception ex)
             {
-                ThrowException(ex);
+                HandleException(ex);
             }
         }
     }

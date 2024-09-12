@@ -12,14 +12,42 @@ namespace HSMDataCollector.Logging
         }
 
 
-        public void Debug(string message) => _logger?.Debug(message);
+        public void Debug(string message)
+        {
+            try
+            {
+                _logger?.Debug(message);
+            }
+            catch { }
+        }
 
-        public void Info(string message) => _logger?.Info(message);
+        public void Info(string message)
+        {
+            try
+            {
+                _logger?.Info(message);
+            }
+            catch { }
+        }
 
 
-        public void Error(string message) => _logger?.Error(message);
+        public void Error(string message)
+        {
+            try
+            {
+                _logger?.Error(message);
+            }
+            catch { }
+        }
 
-        public void Error(Exception ex) => _logger?.Error(ex);
+        public void Error(Exception ex)
+        {
+            try
+            {
+                _logger?.Error(ex);
+            }
+            catch { }
+        }
 
     }
 }

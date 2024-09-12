@@ -6,7 +6,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
-    internal abstract class BaseSocketsSensor : MonitoringSensorBase<int>
+    internal abstract class BaseSocketsSensor : MonitoringSensorBase<int?>
     {
         private const string CategoryTcp4 = "TCPv4";
         private const string CategoryTcp6 = "TCPv6";
@@ -30,7 +30,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             }
             catch (Exception ex)
             {
-                ThrowException(new Exception($"Error initializing performance counter: {CategoryTcp4}/{CounterName}, {CategoryTcp6}/{CounterName}: {ex}"));
+                HandleException(new Exception($"Error initializing performance counter: {CategoryTcp4}/{CounterName}, {CategoryTcp6}/{CounterName}: {ex}"));
 
                 return new ValueTask<bool>(false);
             }
@@ -46,6 +46,6 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             return base.StopAsync();
         }
 
-        protected override int GetValue() => (int)(_counterTCPv4.NextValue() + _counterTCPv6.NextValue());
+        protected override int? GetValue() => (int?)(_counterTCPv4.NextValue() + _counterTCPv6.NextValue());
     }
 }

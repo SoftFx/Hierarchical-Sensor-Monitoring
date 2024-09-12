@@ -12,6 +12,8 @@ namespace HSMDataCollector.Options
 
         internal ProcessThreadCountPrototype ProcessThreadCount { get; }
 
+        internal ProcessThreadPoolThreadCountPrototype ProcessThreadPoolThreadCount { get; }
+
         internal ProcessTimeInGCPrototype ProcessTimeInGC { get; }
 
         internal ProcessMemoryPrototype ProcessMemory { get; }
@@ -124,6 +126,7 @@ namespace HSMDataCollector.Options
 
 
             ProcessThreadCount = Register<ProcessThreadCountPrototype>();
+            ProcessThreadPoolThreadCount = Register<ProcessThreadPoolThreadCountPrototype>();
             ProcessTimeInGC = Register<ProcessTimeInGCPrototype>();
             ProcessMemory = Register<ProcessMemoryPrototype>();
             ProcessCpu = Register<ProcessCpuPrototype>();
