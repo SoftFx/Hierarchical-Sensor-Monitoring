@@ -1082,7 +1082,7 @@ namespace HSMServer.Core.Cache
                         KeepHistory = new TimeIntervalModel(TimeInterval.Month),
                         SelfDestroy = new TimeIntervalModel(TimeInterval.Month),
 
-                        DefaultChats = new PolicyDestinationSettings(product.FolderId != null ? DefaultChatsMode.FromFolder : DefaultChatsMode.NotInitialized),
+                        DefaultChats = new PolicyDestinationSettings(DefaultChatsMode.FromParent),
                     };
 
                     product.Update(update);

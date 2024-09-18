@@ -78,7 +78,7 @@ namespace HSMServer.Core.Model.NodeSettings
         public override string ToString() =>
             Mode switch
             {
-                DefaultChatsMode.FromFolder => $"{DefaultChatsMode.FromFolder.GetDisplayName()} ({ChatsToList()})",
+                DefaultChatsMode.FromFolder when Chats.Count != 0 => $"{DefaultChatsMode.FromParent.GetDisplayName()}, ${ChatsToList()}",
                 DefaultChatsMode.Custom => ChatsToList(),
                 DefaultChatsMode.FromParent when Chats.Count != 0 => $"{Mode.GetDisplayName()}, ${ChatsToList()}",
                 _ => Mode.GetDisplayName(),
