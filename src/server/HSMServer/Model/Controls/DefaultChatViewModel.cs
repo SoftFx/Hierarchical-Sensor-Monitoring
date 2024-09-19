@@ -169,7 +169,7 @@ namespace HSMServer.Model.Controls
         public string GetParentDisplayValue(Dictionary<Guid, TelegramChat> chats)
         {
             if (Parent is null)
-                return string.Empty;
+                return AsFromParent("parent is not initialized");
             
             var (parentIds, selectedId, mode, parentMode) = Parent.GetChats();
             parentIds.UnionWith(selectedId);
@@ -238,15 +238,12 @@ namespace HSMServer.Model.Controls
         internal static PolicyDestinationSettingsEntity FromFolderEntity(Dictionary<string, string> chats) =>
             new()
             {
-                Mode = (byte) DefaultChatsMode.FromFolder,
-                Chats = chats,
+                Mode = (byte) DefaultChatsMode.FromParent,
             };
 
         internal PolicyDestinationSettings ToUpdate(ProductNodeViewModel product, ITelegramChatsManager chatsManager, IFolderManager folderManager)
         {
-            return IsFromParent && product.ParentIsFolder
-                ? new(FromFolderEntity(folderManager.GetFolderDefaultChats(product.FolderId.Value)))
-                : ToModel(product.GetAvailableChats(chatsManager));
+            return ToModel(product.GetAvailableChats(chatsManager));
         }
 
 

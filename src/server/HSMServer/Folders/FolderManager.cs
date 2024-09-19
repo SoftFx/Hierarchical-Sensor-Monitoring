@@ -331,7 +331,7 @@ namespace HSMServer.Folders
 
         private PolicyDestinationSettings GetCorePolicy(PolicyDestinationSettings model, FolderModel folder, ActionType action)
         {
-            if (model.IsFromFolder)
+            if (model.IsFromFolder || model.IsFromParent)
             {
                 var chat = folder.DefaultChats;
                 var entity = action is ActionType.Delete
