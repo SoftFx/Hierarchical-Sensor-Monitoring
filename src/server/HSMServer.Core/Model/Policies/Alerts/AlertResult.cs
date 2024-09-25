@@ -141,18 +141,20 @@ namespace HSMServer.Core.Model.Policies
             return false;
         }
 
-        public string BuildFullComment(string comment, int extraCnt = 0)
+        public string BuildFullComment(string comment, int itemsCount = 1)
         {
-            var sb = new StringBuilder(1 << 5);
-            var totalCnt = Count + extraCnt;
+            var sb = new StringBuilder(256);
 
             sb.Append($"{Icon} {comment}");
 
-            if (totalCnt > 1)
-                sb.Append($" ({totalCnt} times)");
+            if (itemsCount == 1)
+            {
+                if (Count > 1)
+                    sb.Append($" ({Count} times)");
 
-            if (RetryCount > 0)
-                sb.Append($" #{RetryCount}");
+                if (RetryCount > 0)
+                    sb.Append($" #{RetryCount}");
+            }
 
             return sb.ToString().Trim();
         }

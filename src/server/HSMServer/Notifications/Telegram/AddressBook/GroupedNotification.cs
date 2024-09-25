@@ -83,12 +83,12 @@ namespace HSMServer.Notifications.Telegram.AddressBook
         {
             if (!_groupedItems.IsEmpty || GroupByPath)
             {
-                _baseState[_mainDiff] = GroupByPath ? $"{_groupedPath}" : BuildGroupedString(); ;
+                _baseState[_mainDiff] = GroupByPath ? $"{_groupedPath}" : BuildGroupedString();
 
-                return _baseAlert.BuildFullComment(_baseState.BuildComment());
+                return _baseAlert.BuildFullComment(_baseState.BuildComment(), _totalItems);
             }
 
-            return _baseAlert.BuildFullComment(_baseAlert.LastComment, _totalItems - 1); //remove main as extra
+            return _baseAlert.BuildFullComment(_baseAlert.LastComment, _totalItems); //remove main as extra
         }
 
 
