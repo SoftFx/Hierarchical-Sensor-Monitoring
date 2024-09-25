@@ -848,6 +848,7 @@ namespace HSMServer.Core.Cache
 
             if (sensor == null)
             {
+                _logger.Info($"Creating new sensor - Name = {sensor.DisplayName}, Path = {sensor.Path}, CurrentNumber of sensors in cache = {_sensors.Count}");
                 sensor = AddSensor(storeInfo, value.Type, parentProduct, DefaultAlertsOptions.None);
             }
             else if (sensor.State == SensorState.Blocked)
