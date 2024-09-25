@@ -582,7 +582,26 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _logger.Info("Starting disposing DatabaseCode...");
             _environmentDatabase.Dispose();
-            _sensorValuesDatabases.ToList().ForEach(d => d.Dispose());
+            using (var enumerator = _sensorValuesDatabases.GetEnumerator())
+            {
+                while (enumerator.MoveNext())
+                {
+                    var item = enumerator.Current;
+
+                    item?.Dispose();
+                }
+            }
+            
+            using (var enumerator = _journalValuesDatabases.GetEnumerator())
+            {
+                while (enumerator.MoveNext())
+                {
+                    var item = enumerator.Current;
+
+                    item?.Dispose();
+                }
+            }
+            
             _logger.Info("DatabaseCore dispposed");
         }
     }
