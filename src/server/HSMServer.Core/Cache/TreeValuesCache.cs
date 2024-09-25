@@ -71,10 +71,9 @@ namespace HSMServer.Core.Cache
             _journalService = journalService;
 
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
-
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent += SendAlertMessage;
-            
+
             Initialize();
         }
 
@@ -848,7 +847,9 @@ namespace HSMServer.Core.Cache
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
 
             if (sensor == null)
+            {
                 sensor = AddSensor(storeInfo, value.Type, parentProduct, DefaultAlertsOptions.None);
+            }
             else if (sensor.State == SensorState.Blocked)
                 return;
 

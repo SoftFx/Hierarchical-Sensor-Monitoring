@@ -580,8 +580,10 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void Dispose()
         {
+            _logger.Info("Starting disposing DatabaseCode...");
             _environmentDatabase.Dispose();
             _sensorValuesDatabases.ToList().ForEach(d => d.Dispose());
+            _logger.Info("DatabaseCore dispposed");
         }
     }
 }
