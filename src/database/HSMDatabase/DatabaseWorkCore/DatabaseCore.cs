@@ -580,7 +580,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void Dispose()
         {
-            _logger.Info("Starting disposing DatabaseCode...");
+            _logger.Info($"Starting disposing {nameof(DatabaseCore)}...");
             _environmentDatabase.Dispose();
             using (var enumerator = _sensorValuesDatabases.GetEnumerator())
             {
@@ -602,7 +602,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 }
             }
             
-            _logger.Info("DatabaseCore dispposed");
+            _logger.Info($"{nameof(DatabaseCore)} dispposed");
         }
     }
 }

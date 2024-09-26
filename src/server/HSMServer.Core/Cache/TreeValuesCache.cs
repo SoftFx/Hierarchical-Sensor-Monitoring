@@ -893,11 +893,6 @@ namespace HSMServer.Core.Cache
             var accessKeysEntities = _database.GetAccessKeys();
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
 
-            _logger.Info($"Migrate product/sensors settings and alerts");
-            // _migrator.RunProductMigrations([.. _tree.Values]);
-            // _migrator.RunSensorMigrations([.. _sensors.Values]);
-            _logger.Info($"Migrate product/sensors settings and alerts finished");
-
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
             ApplyAccessKeys([.. accessKeysEntities]);
             _logger.Info($"{nameof(accessKeysEntities)} applied");
