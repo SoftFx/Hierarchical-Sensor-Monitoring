@@ -62,7 +62,7 @@
         RateSensor = 9,
 
         /// <summary>
-        /// Simple sensor which collects data of Enum type in speed format and sends the collected data instantly
+        /// Simple sensor which collects data of Enum type and sends the collected data instantly
         /// </summary>
         EnumSensor = 10,
 
