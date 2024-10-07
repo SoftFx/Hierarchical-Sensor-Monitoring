@@ -23,6 +23,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using NLog.Fluent;
 
 namespace HSMServer.Core.Cache
 {
@@ -339,6 +340,18 @@ namespace HSMServer.Core.Cache
                 }
 
                 var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
+                if (product is null)
+                {
+                    _logger.Info($"product is null, sensorPath={request.Path}");
+                }
+                else
+                {
+                    _logger.Info($"product already exists, parentProductName={parentProduct.DisplayName}, sensorPath={request.Path}, parentSensorsCount={parentProduct.Sensors.Count}");
+                    if (parentProduct.Sensors.Count > 0)
+                    {
+                        _logger.Info($"isSensorsExistsInParent={parentProduct.Sensors.Values.FirstOrDefault(x => x.DisplayName == request.SensorName) != null}");
+                    }
+                }
                 var sensor = AddSensor(request, request.Type, parentProduct, request.Update.DefaultAlertsOptions);
 
                 update = update with {Id = sensor.Id};
