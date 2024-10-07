@@ -993,11 +993,12 @@ namespace HSMServer.Core.Cache
                     if (_tree.TryGetValue(parentId, out var parent) && _sensors.TryGetValue(sensorId, out var sensor))
                         parent.AddSensor(sensor);
                     else
-                    {                        
-                        RemoveSensor(sensorId);
+                    {         
                         _logger.Info($"Removing sensor id={sensorId}, parentId={parentId}," +
                                      $" sensorExists={_sensors.ContainsKey(sensorId)}" +
-                                     $"parentExists={_tree.ContainsKey(parentId)}");
+                                     $"parentExists={_tree.ContainsKey(parentId)}" +
+                                     $"NO REMOVE WILL BE APPLIED");
+                        //RemoveSensor(sensorId);
                     }
                 }
             _logger.Info("Links between products and their sensors are built");
