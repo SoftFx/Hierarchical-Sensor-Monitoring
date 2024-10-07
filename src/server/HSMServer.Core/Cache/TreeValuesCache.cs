@@ -888,7 +888,7 @@ namespace HSMServer.Core.Cache
 
             ApplyProducts(RequestProducts());
             ApplySensors(RequestSensors(), RequestPolicies());
-
+            
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _database.GetAccessKeys();
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
@@ -989,11 +989,16 @@ namespace HSMServer.Core.Cache
                 {
                     var parentId = Guid.Parse(sensorEntity.ProductId);
                     var sensorId = Guid.Parse(sensorEntity.Id);
-
+                    
                     if (_tree.TryGetValue(parentId, out var parent) && _sensors.TryGetValue(sensorId, out var sensor))
                         parent.AddSensor(sensor);
                     else
+                    {                        
                         RemoveSensor(sensorId);
+                        _logger.Info($"Removing sensor id={sensorId}, parentId={parentId}," +
+                                     $" sensorExists={_sensors.ContainsKey(sensorId)}" +
+                                     $"parentExists={_tree.ContainsKey(parentId)}");
+                    }
                 }
             _logger.Info("Links between products and their sensors are built");
 
@@ -1242,6 +1247,7 @@ namespace HSMServer.Core.Cache
             void ApplyLastValues(Dictionary<Guid, byte[]> lasts)
             {
                 foreach (var (sensorId, value) in lasts)
+                {
                     if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
                     {
                         sensor.AddDbValue(value);
@@ -1251,6 +1257,21 @@ namespace HSMServer.Core.Cache
                         if (!_snapshot.IsFinal && sensor.LastValue is not null) 
                             _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
                     }
+                    else
+                    {
+                        var logMsg =
+                            $"sensorId to fulfill data={sensorId}, isValueNull={value == null}, isSensorExists={_sensors.TryGetValue(sensorId, out _)}";
+
+                        if (_sensors.TryGetValue(sensorId, out var sensor2))
+                        {
+                            logMsg +=
+                                $", sensorName={sensor2.DisplayName}, sensorPath={sensor2.Path}, parentname={sensor2.Root.DisplayName}";
+                        }
+                        
+                        _logger.Info(logMsg);
+                    }
+                }
+                  
             }
 
             if (_snapshot.IsFinal)
