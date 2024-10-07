@@ -9,6 +9,7 @@ namespace HSMSensorDataObjects
         public string Description { get; set; }
         public int Color { get; set; }
 
+        public EnumOption() { }
 
         public EnumOption(int key, string value, string description, Color color) : this(key, value, description, color.ToArgb()) { }
 
