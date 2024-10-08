@@ -352,6 +352,8 @@ namespace HSMServer.Core.Cache
                         _logger.Info($"isSensorsExistsInParent={parentProduct.Sensors.Values.FirstOrDefault(x => x.DisplayName == request.SensorName) != null}");
                     }
                 }
+
+                _logger.Info($"product name ={product?.DisplayName}, sensorPath={request.Path}, parentProdocut={parentProduct?.DisplayName}");
                 var sensor = AddSensor(request, request.Type, parentProduct, request.Update.DefaultAlertsOptions);
 
                 update = update with {Id = sensor.Id};
