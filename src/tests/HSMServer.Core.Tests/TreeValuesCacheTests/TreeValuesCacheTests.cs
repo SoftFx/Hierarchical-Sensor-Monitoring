@@ -202,7 +202,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Products without parent")]
         public async void GetProductsWithoutParentTest()
         {
-            var actualProducts = _valuesCache.GetProducts();
+            var actualProducts = _valuesCache.GetProducts().ToList();
 
             await TestProductsWithoutParent(actualProducts);
         }

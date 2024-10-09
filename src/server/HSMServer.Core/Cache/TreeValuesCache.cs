@@ -245,13 +245,12 @@ namespace HSMServer.Core.Cache
         public string GetProductNameById(Guid id) => GetProduct(id)?.DisplayName;
 
         /// <returns>list of root products (without parent)</returns>
-        /// ToDO: refactor to IEnumerable
-        public List<ProductModel> GetProducts()
+        public IEnumerable<ProductModel> GetProducts()
         {
             _productLock.EnterReadLock();
             try
             {
-                return _tree.Values.Where(p => p.IsRoot).ToList();
+                return _tree.Values.Where(p => p.IsRoot);
             }
             finally
             {
