@@ -45,7 +45,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             await Task.Delay(1000);
 
             var expectedProducts = _databaseCoreManager.DatabaseCore.GetAllProducts();
-            var actualProducts = _valuesCache.GetAllNodes().ToList();
+            var actualProducts = _valuesCache.GetAllNodes();
 
             ModelsTester.TestProducts(expectedProducts, actualProducts);
         }
@@ -202,7 +202,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Products without parent")]
         public async void GetProductsWithoutParentTest()
         {
-            var actualProducts = _valuesCache.GetProducts().ToList();
+            var actualProducts = _valuesCache.GetProducts();
 
             await TestProductsWithoutParent(actualProducts);
         }

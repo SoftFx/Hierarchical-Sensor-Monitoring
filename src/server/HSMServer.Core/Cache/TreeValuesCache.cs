@@ -102,12 +102,12 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public IEnumerable<ProductModel> GetAllNodes()
+        public List<ProductModel> GetAllNodes()
         {
             _productLock.EnterReadLock();
             try
             {
-                return _tree.Values;
+                return _tree.Values.ToList();
             }
             finally
             {
@@ -245,12 +245,12 @@ namespace HSMServer.Core.Cache
         public string GetProductNameById(Guid id) => GetProduct(id)?.DisplayName;
 
         /// <returns>list of root products (without parent)</returns>
-        public IEnumerable<ProductModel> GetProducts()
+        public List<ProductModel> GetProducts()
         {
             _productLock.EnterReadLock();
             try
             {
-                return _tree.Values.Where(p => p.IsRoot);
+                return _tree.Values.Where(p => p.IsRoot).ToList();
             }
             finally
             {
