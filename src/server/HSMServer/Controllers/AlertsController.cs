@@ -78,9 +78,10 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult ExportAlerts(Guid selectedId)
         {
-            var node = _cache.GetProduct(selectedId);
-
-            return node is null ? _emptyResult : ExportModelToFile(node.FullPath, AddNodeAlertsToGroup(new PolicyExportGroup(), node.Id));
+            if (_cache.TryGetProduct(selectedId, out var product))
+                return ExportModelToFile(product.FullPath, AddNodeAlertsToGroup(new PolicyExportGroup(), product.Id));
+            
+            return _emptyResult;
         }
 
 
@@ -161,9 +162,8 @@ namespace HSMServer.Controllers
         private PolicyExportGroup AddNodeAlertsToGroup(PolicyExportGroup exportGroup, Guid nodeId)
         {
             var renderedSensors = CurrentUser.Tree.SearchedSensors;
-            var node = _cache.GetProduct(nodeId);
 
-            if (node is not null)
+            if (_cache.TryGetProduct(nodeId, out var node))
             {
                 var relativeNodes = new LinkedList<string>();
 

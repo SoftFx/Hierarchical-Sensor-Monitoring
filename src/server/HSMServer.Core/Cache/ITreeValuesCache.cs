@@ -35,7 +35,7 @@ namespace HSMServer.Core.Cache
         ProductModel GetProduct(Guid id);
         ProductModel GetProductByName(string name);
         bool TryGetProductByName(string name, out ProductModel product);
-        string GetProductNameById(Guid id);
+        bool TryGetProductNameById(Guid id, out string name);
         List<ProductModel> GetProducts();
         List<ProductModel> GetAllNodes();
 
@@ -52,7 +52,9 @@ namespace HSMServer.Core.Cache
         List<AccessKeyModel> GetMasterKeys();
         
         bool TryGetKey(Guid id, out AccessKeyModel key, out string message);
-        bool TryGetProduct(Guid id, out ProductModel product, out string message);
+        bool TryGetRootProduct(Guid id, out ProductModel product, out string message);
+        bool TryGetProduct(Guid productId, out ProductModel product);
+        bool TryGetProduct(string productId, out ProductModel product);
 
         void SetLastKeyUsage(Guid key, string ip);
         

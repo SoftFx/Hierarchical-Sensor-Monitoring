@@ -67,11 +67,11 @@ namespace HSMServer.Controllers
                 SelectedProductId = selectedId.ToGuid(),
                 CloseModal = closeModal,
                 ReturnType = returnType,
-                Products = new List<ProductModel>()
-                {
-                    TreeValuesCache.GetProduct(selectedId.ToGuid())
-                }
+                Products = new List<ProductModel>(),
             };
+            
+            if (TreeValuesCache.TryGetProduct(selectedId, out var product))
+                key.Products.Add(product);   
 
             return GetPartialNewAccessKey(key);
         }
@@ -83,7 +83,12 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
             {
                 if (key.ReturnType is not AccessKeyReturnType.Table)
-                    return GetPartialNewAccessKey(key.ToNotModify(TreeValuesCache.GetProduct(key.SelectedProductId)));
+                {
+                    if (TreeValuesCache.TryGetProduct(key.SelectedProductId, out var product))
+                        return GetPartialNewAccessKey(key.ToNotModify(product));
+                    
+                    return GetPartialNewAccessKey(key.ToNotModify([]));
+                }
 
                 return GetPartialNewAccessKey(key.ToNotModify(CurrentUser.IsAdmin ? TreeValuesCache.GetProducts().ToArray() : Array.Empty<ProductModel>()));
             }
@@ -105,7 +110,13 @@ namespace HSMServer.Controllers
         {
             var key = TreeValuesCache.GetAccessKey(selectedKey.ToGuid());
 
-            return GetPartialNewAccessKey(new EditAccessKeyViewModel(key).ToModify(key.IsMaster ? null : TreeValuesCache.GetProduct(key.ProductId), closeModal));
+            var editKey = new EditAccessKeyViewModel(key);
+            if (key.IsMaster)
+                editKey.ToMasterModify(closeModal);
+            else if (TreeValuesCache.TryGetProduct(key.ProductId, out var product))
+                editKey.ToModify(product, closeModal);
+
+            return GetPartialNewAccessKey(editKey);
         }
 
         [HttpPost]
@@ -113,7 +124,14 @@ namespace HSMServer.Controllers
         public IActionResult ModifyAccessKey(EditAccessKeyViewModel key)
         {
             if (!ModelState.IsValid)
-                return GetPartialNewAccessKey(key.ToModify(key.IsMaster ? null : TreeValuesCache.GetProduct(key.SelectedProductId), key.CloseModal));
+            {
+                if (key.IsMaster)
+                    key.ToMasterModify(key.CloseModal);
+                else if (TreeValuesCache.TryGetProduct(key.SelectedProductId, out var product))
+                    key.ToModify(product, key.CloseModal);
+                
+                return GetPartialNewAccessKey(key);
+            }
 
             TreeValuesCache.UpdateAccessKey(key.ToAccessKeyUpdate());
 

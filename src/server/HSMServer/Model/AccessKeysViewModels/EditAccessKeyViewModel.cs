@@ -117,13 +117,24 @@ namespace HSMServer.Model.AccessKeysViewModels
         
         internal EditAccessKeyViewModel ToModify(ProductModel product, bool closeModal)
         {
-            Products = new List<ProductModel>()
-            {
-                product ?? _masterProductModel
-            };
+            Products = new List<ProductModel>();
+            if (product is not null)
+                Products.Add(product);
+            
             IsModify = true;
             CloseModal = closeModal;
             return this;
+        }
+
+        internal EditAccessKeyViewModel ToMasterModify(bool closeModal)
+        {
+            Products = new List<ProductModel>()
+            {
+                _masterProductModel
+            };
+            IsModify = true;
+            CloseModal = closeModal;
+            return this;   
         }
 
         internal AccessKeyUpdate ToAccessKeyUpdate() =>

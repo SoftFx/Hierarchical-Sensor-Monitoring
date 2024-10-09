@@ -846,7 +846,15 @@ namespace HSMServer.Controllers
             return sensor?.Path;
         }
 
-        private AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions) =>
-            _treeValuesCache.GetProduct(productId).AccessKeys.Values.FirstOrDefault(x => x.IsValid(permissions, out _));
+        private AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions)
+        {
+            if (_treeValuesCache.TryGetProduct(productId, out var product))
+            {
+                return product.AccessKeys.Values
+                    .FirstOrDefault(x => x.IsValid(permissions, out _));
+            }
+
+            return null;
+        }
     }
 }
