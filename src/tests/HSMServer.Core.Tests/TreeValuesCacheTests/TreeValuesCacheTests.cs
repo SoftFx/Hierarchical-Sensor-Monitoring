@@ -45,7 +45,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             await Task.Delay(1000);
 
             var expectedProducts = _databaseCoreManager.DatabaseCore.GetAllProducts();
-            var actualProducts = _valuesCache.GetAllNodes();
+            var actualProducts = _valuesCache.GetAllNodes().ToList();
 
             ModelsTester.TestProducts(expectedProducts, actualProducts);
         }
