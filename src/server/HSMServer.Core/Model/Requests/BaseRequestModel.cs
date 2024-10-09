@@ -66,7 +66,7 @@ namespace HSMServer.Core.Model.Requests
         {
             path = path.FirstOrDefault() == CommonConstants.SensorPathSeparator ? path[1..] : path;
 
-            return path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.TrimEntries);
+            return path.Split(CommonConstants.SensorPathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
     }
 }
