@@ -17,6 +17,17 @@ namespace HSMDataCollector.Converters
             return info;
         }
 
+        internal static AddOrUpdateSensorRequest ToApi(this EnumSensorOptions options)
+        {
+            var info = options.ToBaseInfo();
+
+            info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
+
+            info.EnumOptions = options.EnumOptions?.ToList();
+
+            return info;
+        }
+
 
         internal static AddOrUpdateSensorRequest ToApi(this BarSensorOptions options)
         {
