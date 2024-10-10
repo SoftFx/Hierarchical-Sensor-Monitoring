@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -11,6 +12,7 @@ using HSMDataCollector.Alerts;
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using HSMSensorDataObjects.SensorRequests;
 
 namespace DatacollectorSandbox
 {
@@ -70,6 +72,50 @@ namespace DatacollectorSandbox
 
             await _collector.Start();
 
+            _collector.Windows.SubscribeToWindowsServiceStatus("_AdminEye");
+            _collector.Windows.SubscribeToWindowsServiceStatus(new ServiceSensorOptions() { ServiceName = "_sfxClusterService", IsHostService = false });
+            //_collector.Windows.SubscribeToWindowsServiceStatus("_sfxClusterService12");
+
+
+            var sensor = _collector.CreateEnumSensor($"enum/test", new EnumSensorOptions
+            {
+                EnumOptions = new List<HSMSensorDataObjects.EnumOption> {
+                    new HSMSensorDataObjects.EnumOption(1, "Stopped", " Service Stopped ", Color.FromArgb(0xFF0000)),
+                    new HSMSensorDataObjects.EnumOption(2, "Starting", "Service starting", Color.FromArgb(0xBFFFBF)),
+                    new HSMSensorDataObjects.EnumOption(3, "Started", "Service started", Color.FromArgb(0x00FF00)),
+                    new HSMSensorDataObjects.EnumOption(4, "Stopping", "Service Stopping", Color.FromArgb(0x809EFF)),
+                },
+                SensorLocation = SensorLocation.Module,
+            }); ;
+
+
+            //while (true)
+            //{
+            //    sensor.AddValue(1);
+            //    Thread.Sleep(5000);
+            //    sensor.AddValue(2);
+            //    Thread.Sleep(5000);
+            //    sensor.AddValue(3);
+            //    Thread.Sleep(5000);
+            //    sensor.AddValue(4);
+            //    Thread.Sleep(5000);
+            //}
+
+            var sens1 = _collector.CreateIntSensor("test_default", new InstantSensorOptions { SensorLocation = SensorLocation.Module });
+            sens1.AddValue(1);
+
+            var sens2 = _collector.CreateIntSensor($"{collectorOptions.ComputerName}/.computer/test_computer", new InstantSensorOptions { SensorLocation = SensorLocation.Product });
+            sens2.AddValue(1);
+
+            var sens3 = _collector.CreateIntSensor("/.module/test_module", new InstantSensorOptions { SensorLocation = SensorLocation.Module });
+            sens3.AddValue(1);
+
+            var sens4 = _collector.CreateIntSensor("test_root", new InstantSensorOptions { SensorLocation = SensorLocation.Product });
+            sens4.AddValue(1);
+
+
+            Console.ReadKey();
+            return;
 
             var instantPriority = new InstantSensorOptions()
             {

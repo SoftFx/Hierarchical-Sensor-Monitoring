@@ -10,7 +10,7 @@ namespace HSMServer.Datasources
             => sensor.Type switch
             {
                 SensorType.IntegerBar or SensorType.DoubleBar => property.IsBarView() || property.IsBarLine() || property.IsBarIntLine() || property.IsBarDoubleLine(),
-                SensorType.Integer or SensorType.Double or SensorType.Rate => property.IsInstantView() || property.IsInstantDoubleLine(),
+                SensorType.Integer or SensorType.Double or SensorType.Rate or SensorType.Enum => property.IsInstantView() || property.IsInstantDoubleLine(),
                 SensorType.TimeSpan or SensorType.Version => property.IsInstantView(),
 
                 _ => false,
@@ -47,6 +47,9 @@ namespace HSMServer.Datasources
                 SensorType.Version when property.IsInstantView() => new VersionSensorLineDatasource(),
 
                 SensorType.Boolean => new PointDatasource(),
+
+                SensorType.Enum when property.IsInstantView() => new EnumLineDatasource(),
+                SensorType.Enum when property.IsInstantDoubleLine() => new EnumToNullDoubleLineDatasource(),
 
                 _ => throw new Exception($"History visualization for {sensor.Type} sensor by {property} is not supported")
             };

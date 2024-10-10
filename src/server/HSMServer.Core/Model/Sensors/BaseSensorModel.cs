@@ -1,8 +1,10 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMSensorDataObjects;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.Model.Sensors;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,6 +31,8 @@ namespace HSMServer.Core.Model
         internal abstract ValuesStorage Storage { get; }
 
         public abstract SensorType Type { get; }
+
+        public Dictionary<int, EnumOptionModel> EnumOptions { get; private set; } = new Dictionary<int, EnumOptionModel>();
 
 
         public bool IsSingleton { get; private set; }
@@ -98,6 +102,14 @@ namespace HSMServer.Core.Model
             AggregateValues = entity.AggregateValues;
             IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
+            if (entity.EnumOptions != null)
+            {
+                foreach (var option in entity.EnumOptions)
+                {
+                    EnumOptions.TryAdd(option.Key, new EnumOptionModel(option.Value));
+                }
+            }
+
         }
 
 
@@ -141,6 +153,18 @@ namespace HSMServer.Core.Model
             if (update.Policies != null)
                 Policies.TryUpdate(update.Policies, update.Initiator, out error);
 
+
+            if (update.EnumOptions != null)
+            {
+                if (EnumOptions.Count == 0 || update.Initiator.IsForceUpdate)
+                {
+                    foreach (var enumOption in update.EnumOptions)
+                    {
+                        EnumOptions.TryAdd(enumOption.Key, new EnumOptionModel(enumOption));
+                    }
+                }
+            }
+
             return string.IsNullOrEmpty(error);
         }
 
@@ -170,6 +194,7 @@ namespace HSMServer.Core.Model
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
             ChangeTable = ChangeTable.ToEntity(),
+            EnumOptions = EnumOptions?.ToDictionary(k => k.Key, v => v.Value.ToEntity()),
         };
     }
 }

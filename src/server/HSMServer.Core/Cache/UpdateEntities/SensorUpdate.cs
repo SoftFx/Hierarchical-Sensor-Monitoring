@@ -1,9 +1,12 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
-using HSMServer.Core.TableOfChanges;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using HSMSensorDataObjects;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
+using SensorStatus = HSMServer.Core.Model.SensorStatus;
+
 
 namespace HSMServer.Core.Cache.UpdateEntities
 {
@@ -32,6 +35,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public DefaultAlertsOptions DefaultAlertsOptions { get; init; }
 
+        public List<EnumOption> EnumOptions { get; init; }
 
         [SetsRequiredMembers]
         public SensorUpdate() : base() { }
