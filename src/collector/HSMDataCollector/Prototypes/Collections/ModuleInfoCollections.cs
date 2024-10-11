@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Security.Cryptography.X509Certificates;
+using System.ServiceProcess;
 using HSMDataCollector.Alerts;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
@@ -73,33 +76,52 @@ namespace HSMDataCollector.Prototypes
     }
 
 
-    internal sealed class ServiceStatusPrototype : InstantSensorOptionsPrototype<ServiceSensorOptions>
+    internal sealed class ServiceStatusPrototype : EnumSensorOptionsPrototype<ServiceSensorOptions>
     {
-        protected override string SensorName => "Service status";
+        private string _sensorName;
 
+        protected override string SensorName => _sensorName;
+
+        private string _category;
+        protected override string Category => _category;
 
         public ServiceStatusPrototype() : base()
         {
-            Description = "This sensor subscribes to the specified [**Windows service**](https://en.wikipedia.org/wiki/Windows_service) and sends status changes. " +
-                "Windows service has the following statuses: \n\n" +
-                "* ContinuePending - The service continue is pending.  \n" +
-                "* Paused - The service is paused. \n" +
-                "* PausePending - The service pause is pending. \n" +
-                "* Running - The service is running.\n" +
-                "* StartPending - The service is starting.\n" +
-                "* Stopped - The service is not running.\n" +
-                "* StopPending - The service is stopping. \n\n" +
-                "More information you can find [**here**](https://learn.microsoft.com/en-us/dotnet/api/system.serviceprocess.servicecontrollerstatus?view=dotnet-plat-ext-7.0)";
-
-            Type = SensorType.IntSensor;
+            AggregateData = true;
         }
 
 
         public override ServiceSensorOptions Get(ServiceSensorOptions customOptions)
         {
-            var options = base.Get(customOptions);
+            _sensorName = customOptions.IsHostService? "Service status" : customOptions.ServiceName;
+            _category  = customOptions.IsHostService ? "" : "Windows Services";
 
+            var options = DefaultPrototype.Merge(this, customOptions);
+
+            options.IsHostService = customOptions.IsHostService;
             options.ServiceName = customOptions.ServiceName;
+
+            options.IsComputerSensor = !options.IsHostService;
+
+            options.Path = DefaultPrototype.RevealDefaultPath(options, Category, SensorName);
+
+            options.EnumOptions = new List<EnumOption>
+            {
+                new EnumOption((int)ServiceControllerStatus.ContinuePending, nameof(ServiceControllerStatus.ContinuePending), "The service continue is pending", 0xFFB403),
+                new EnumOption((int)ServiceControllerStatus.Paused,          nameof(ServiceControllerStatus.Paused),          "The service is paused.",          0x0314FF),
+                new EnumOption((int)ServiceControllerStatus.PausePending,    nameof(ServiceControllerStatus.PausePending),    "The service pause is pending.",   0x809EFF),
+                new EnumOption((int)ServiceControllerStatus.Running,         nameof(ServiceControllerStatus.Running),         "The service is running.",         0x00FF00),
+                new EnumOption((int)ServiceControllerStatus.StartPending,    nameof(ServiceControllerStatus.StartPending),    "The service start pending.",      0xBFFFBF),
+                new EnumOption((int)ServiceControllerStatus.Stopped,         nameof(ServiceControllerStatus.Stopped),         "The service is stopped.",         0xFF0000),
+                new EnumOption((int)ServiceControllerStatus.StopPending,     nameof(ServiceControllerStatus.StopPending),     "The service stop pending.",       0xFD6464)
+            };
+
+            options.Description = $"This sensor subscribes to the specified [**Windows service**](https://en.wikipedia.org/wiki/Windows_service) {(options.IsHostService ? $"[{options.ServiceName}]": "")} and sends status changes." +
+                " Windows service has the following statuses: \n\n";
+
+            options.Description += options.GenerateEnumOptionsDecription();
+
+            options.Description += "\nMore information you can find [**here**](https://learn.microsoft.com/en-us/dotnet/api/system.serviceprocess.servicecontrollerstatus?view=dotnet-plat-ext-7.0)";
 
             return options;
         }

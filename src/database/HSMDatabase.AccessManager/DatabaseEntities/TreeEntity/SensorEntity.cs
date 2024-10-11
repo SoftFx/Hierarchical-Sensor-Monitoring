@@ -1,4 +1,7 @@
-﻿namespace HSMDatabase.AccessManager.DatabaseEntities
+﻿using System.Collections.Generic;
+
+
+namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public sealed record SensorEntity : BaseNodeEntity
     {
@@ -21,5 +24,8 @@
         public int Integration { get; init; }
 
         public int Statistics { get; init; }
+
+        public Dictionary<int, EnumOptionEntity> EnumOptions { get; init; }
+
     }
 }

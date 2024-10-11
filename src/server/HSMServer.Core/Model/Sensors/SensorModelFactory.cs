@@ -19,6 +19,7 @@ namespace HSMServer.Core.Model
                 SensorType.TimeSpan => new TimeSpanSensorModel(entity),
                 SensorType.Version => new VersionSensorModel(entity),
                 SensorType.Rate => new RateSensorModel(entity),
+                SensorType.Enum => new EnumSensorModel(entity),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }

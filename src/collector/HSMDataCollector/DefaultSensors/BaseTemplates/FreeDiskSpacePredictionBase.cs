@@ -87,6 +87,7 @@ namespace HSMDataCollector.DefaultSensors
                 }
                 await base.StopAsync();
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
                 HandleException(ex);

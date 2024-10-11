@@ -19,6 +19,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.File => BuildFileValue(),
                 SensorType.TimeSpan => BuildTimeSpanValue(),
                 SensorType.Version => BuildVersionValue(),
+                SensorType.Enum => BuildEnumValue(),
                 _ => null,
             };
 
@@ -133,6 +134,14 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
         }
 
+        internal static EnumValue BuildEnumValue() =>
+          new()
+          {
+              Comment = RandomGenerator.GetRandomString(),
+              Time = DateTime.UtcNow,
+              Status = SensorStatus.Ok,
+              Value = RandomGenerator.GetRandomInt(),
+          };
 
         private static Dictionary<double, T> GetPercentileValues<T>(Func<T> getValue, int size = 2)
         {

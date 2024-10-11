@@ -138,6 +138,14 @@ namespace HSMServer.ApiObjectsConverters
                 LastValue = value.LastValue,
             };
 
+        public static EnumValue Convert(this EnumSensorValue value) =>
+            new()
+            {
+                Comment = value.Comment,
+                Time = value.Time,
+                Status = value.Status.Convert(),
+                Value = value.Value
+            };
 
         public static BaseValue Convert(this SensorValueBase value) =>
             value switch
@@ -152,6 +160,7 @@ namespace HSMServer.ApiObjectsConverters
                 VersionSensorValue sv => sv.Convert(),
                 FileSensorValue sv => sv.Convert(),
                 RateSensorValue sv => sv.Convert(),
+                EnumSensorValue sv => sv.Convert(),
                 _ => null
             };
 
@@ -260,6 +269,7 @@ namespace HSMServer.ApiObjectsConverters
                 Policies = request.Alerts?.Select(policy => policy.Convert(initiator)).ToList(),
                 DefaultAlertsOptions = (Core.Model.DefaultAlertsOptions)request.DefaultAlertsOptions,
                 Initiator = initiator,
+                EnumOptions = request.EnumOptions,
             };
         }
 
@@ -311,6 +321,7 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorType.IntegerBarSensor => SensorType.IntegerBar,
                 HSMSensorDataObjects.SensorType.DoubleBarSensor => SensorType.DoubleBar,
                 HSMSensorDataObjects.SensorType.RateSensor => SensorType.Rate,
+                HSMSensorDataObjects.SensorType.EnumSensor => SensorType.Enum,
                 _ => throw new NotImplementedException(),
             };
 

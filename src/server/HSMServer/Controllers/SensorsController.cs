@@ -460,27 +460,35 @@ namespace HSMServer.Controllers
         private async Task<TaskResult> TryBuildAndAddData<T>(T value)
             where T : SensorValueBase
         {
-            var infoRequest = await IsValidPublicApiRequest(value);
-
-            if (infoRequest.IsOk)
+            try
             {
-                var info = infoRequest.Value;
+                var infoRequest = await IsValidPublicApiRequest(value);
 
-                var storeInfo = new StoreInfo(info.Key.Id, value.Path)
+                if (infoRequest.IsOk)
                 {
-                    BaseValue = value.Convert(),
-                    Product = info.Product
-                };
+                    var info = infoRequest.Value;
 
-                var result = CanAddToQueue(storeInfo, out var error);
+                    var storeInfo = new StoreInfo(info.Key.Id, value.Path)
+                    {
+                        BaseValue = value.Convert(),
+                        Product = info.Product
+                    };
 
-                if (result)
-                {
-                    _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(1);
-                    _collector.WebRequestsSensors.Total.AddReceiveData(1);
+                    var result = CanAddToQueue(storeInfo, out var error);
+
+                    if (result)
+                    {
+                        _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(1);
+                        _collector.WebRequestsSensors.Total.AddReceiveData(1);
+                    }
+
+                    return result ? TaskResult.Ok : new TaskResult(error);
                 }
 
-                return result ? TaskResult.Ok : new TaskResult(error);
+            }
+            catch (Exception ex)
+            {
+
             }
 
             return _invalidRequestResult;

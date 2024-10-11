@@ -79,15 +79,15 @@ namespace HSMDataCollector.Core
 
         public void AddData(SensorBase sender, IEnumerable<SensorValueBase> items) => SendQueueOverflow(sender, _dataQueue.Enqeue(items), _dataQueue.QueueName);
 
-        public void AddPriorityData(SensorBase sender, SensorValueBase data) => SendQueueOverflow(sender, _priorityQueue.Enqeue(data), _dataQueue.QueueName);
+        public void AddPriorityData(SensorBase sender, SensorValueBase data) => SendQueueOverflow(sender, _priorityQueue.Enqeue(data), _priorityQueue.QueueName);
 
-        public void AddPriorityData(SensorBase sender, IEnumerable<SensorValueBase> items) => SendQueueOverflow(sender, _priorityQueue.Enqeue(items), _dataQueue.QueueName);
+        public void AddPriorityData(SensorBase sender, IEnumerable<SensorValueBase> items) => SendQueueOverflow(sender, _priorityQueue.Enqeue(items), _priorityQueue.QueueName);
 
-        public void AddCommand(SensorBase sender, CommandRequestBase command) => SendQueueOverflow(sender, _commandQueue.Enqeue(command), _dataQueue.QueueName);
+        public void AddCommand(SensorBase sender, CommandRequestBase command) => SendQueueOverflow(sender, _commandQueue.Enqeue(command), _commandQueue.QueueName);
 
-        public void AddCommand(SensorBase sender, IEnumerable<CommandRequestBase> commands) => SendQueueOverflow(sender, _commandQueue.Enqeue(commands), _dataQueue.QueueName);
+        public void AddCommand(SensorBase sender, IEnumerable<CommandRequestBase> commands) => SendQueueOverflow(sender, _commandQueue.Enqeue(commands), _commandQueue.QueueName);
 
-        public void AddFile(SensorBase sender, FileSensorValue file) => SendQueueOverflow(sender, _fileQueue.Enqeue(file), _dataQueue.QueueName);
+        public void AddFile(SensorBase sender, FileSensorValue file) => SendQueueOverflow(sender, _fileQueue.Enqeue(file), _fileQueue.QueueName);
 
         public void AddException(string sensorPath, Exception ex)
         {
@@ -98,13 +98,17 @@ namespace HSMDataCollector.Core
 
         public void AddPackageInfo(string name, PackageInfo info)
         {
-            DefaultSensors.PackageProcessTimeSensor?.AddValue(name, info);
-            DefaultSensors.PackageDataCountSensor?.AddValue(name, info);
+            if (info.ValuesCount != 0)
+            {
+                DefaultSensors.PackageProcessTimeSensor?.AddValue(name, info);
+                DefaultSensors.PackageDataCountSensor?.AddValue(name, info);
+            }
         }
 
         public void AddPackageSendingInfo(PackageSendingInfo info)
         {
-            DefaultSensors.PackageSizeSensor?.AddValue(info);
+            if (info.ContentSize != 0)
+                DefaultSensors.PackageSizeSensor?.AddValue(info);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

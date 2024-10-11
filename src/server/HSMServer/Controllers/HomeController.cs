@@ -646,6 +646,7 @@ namespace HSMServer.Controllers
                 (byte)SensorType.Rate => new NumericDataAlertViewModel<RateValue>(entity),
                 (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue>(entity),
                 (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue>(entity),
+                (byte)SensorType.Enum => new NumericDataAlertViewModel<EnumValue>(entity),
                 TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(entity),
                 _ => null,
             };
@@ -694,6 +695,7 @@ namespace HSMServer.Controllers
                 SensorType.Rate => new NumericConditionViewModel(false),
                 SensorType.IntegerBar => new BarConditionViewModel(false),
                 SensorType.DoubleBar => new BarConditionViewModel(false),
+                SensorType.Enum => new NumericConditionViewModel(false),
                 _ => null,
             };
 

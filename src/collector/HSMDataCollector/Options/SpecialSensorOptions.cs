@@ -59,14 +59,15 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class ServiceSensorOptions : InstantSensorOptions
+    public sealed class ServiceSensorOptions : EnumSensorOptions
     {
         public string ServiceName { get; set; }
 
+        public bool IsHostService { get; set; } = true;
 
         public ServiceSensorOptions() { }
 
-        public ServiceSensorOptions(string serviceName)
+        public ServiceSensorOptions(string serviceName) : base()
         {
             ServiceName = serviceName;
         }

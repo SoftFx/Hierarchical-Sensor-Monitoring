@@ -71,11 +71,12 @@ namespace HSMDataCollector.DefaultSensors
                 if (taskToWait != null)
                 {
                     await taskToWait.ConfigureAwait(false);
-                    taskToWait?.Dispose();
+                    taskToWait.Dispose();
                 }
 
                 await base.StopAsync();
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
                 HandleException(ex);

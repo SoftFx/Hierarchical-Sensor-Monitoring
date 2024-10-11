@@ -24,6 +24,9 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 {
                     await Task.Delay(_options.PackageCollectPeriod, token).ConfigureAwait(false);
 
+                    if (_queue.IsEmpty)
+                        continue;
+
                     do
                     {
                         package = GetPackage();

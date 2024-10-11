@@ -24,7 +24,7 @@ namespace HSMServer.Core.Model
         TimeSpan,
         Version,
         Rate,
-        Enum, //should be last because it's not implemented type
+        Enum,
     }
 
 
