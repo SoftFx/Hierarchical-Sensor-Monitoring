@@ -141,10 +141,11 @@ namespace HSMServer.Model.History
             SensorType.TimeSpan => Build((TimeSpanValue)value),
             SensorType.File => Build((FileValue)value),
             SensorType.Version => Build((VersionValue)value),
+            SensorType.Enum => Build((EnumValue)value),
             _ => throw new ArgumentException($"Sensor type {_model.Type} is not allowed for history table"),
         };
 
-        private static SimpleSensorValueViewModel Build<T>(BaseValue<T> value) =>
+        private SimpleSensorValueViewModel Build<T>(BaseValue<T> value) =>
             new()
             {
                 Value = GetTableValue(value),
@@ -158,7 +159,7 @@ namespace HSMServer.Model.History
                 IsTimeout = value.IsTimeout
             };
 
-        private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : struct, INumber<T> =>
+        private BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : struct, INumber<T> =>
             new()
             {
                 OpenTime = value.OpenTime,
@@ -180,11 +181,12 @@ namespace HSMServer.Model.History
                 IsTimeout = value.IsTimeout
             };
 
-        private static string GetTableValue<T>(BaseValue<T> value) => value switch
+        private string GetTableValue<T>(BaseValue<T> value) => value switch
         {
             VersionValue version => version.Value?.RemoveTailZeroes() ?? string.Empty,
             TimeSpanValue timespan => timespan.Value.ToReadableView(),
             RateValue rate => Math.Round(rate.Value, 5).ToString(),
+            EnumValue v => _model.EnumOptions.TryGetValue(v.Value, out var option) ? option.Value : v.Value.ToString(),
             _ => value.Value?.ToString(),
         };
     }

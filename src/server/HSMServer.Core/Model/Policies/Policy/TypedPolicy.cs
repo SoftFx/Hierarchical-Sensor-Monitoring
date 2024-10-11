@@ -112,4 +112,9 @@ namespace HSMServer.Core.Model.Policies
     {
         protected override PolicyCondition<DoubleBarValue, double> BasePolicyCondition => new PolicyDoubleCondition<DoubleBarValue>();
     }
+
+    public sealed class EnumPolicy : SingleSensorPolicy<EnumValue, int>
+    {
+        protected override PolicyCondition<EnumValue, int> BasePolicyCondition => new PolicyIntegerCondition<EnumValue>();
+    }
 }

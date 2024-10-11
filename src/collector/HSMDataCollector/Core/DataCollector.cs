@@ -321,7 +321,6 @@ namespace HSMDataCollector.Core
 
         public IInstantValueSensor<int> CreateIntSensor(string path, string description = "") => CreateInstantSensor<int>(path, description);
 
-
         public IInstantValueSensor<Version> CreateVersionSensor(string path, InstantSensorOptions options) => CreateInstantSensor<Version>(path, options);
 
         public IInstantValueSensor<TimeSpan> CreateTimeSensor(string path, InstantSensorOptions options) => CreateInstantSensor<TimeSpan>(path, options);
@@ -333,6 +332,10 @@ namespace HSMDataCollector.Core
         public IInstantValueSensor<bool> CreateBoolSensor(string path, InstantSensorOptions options) => CreateInstantSensor<bool>(path, options);
 
         public IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOptions options) => CreateInstantSensor<int>(path, options);
+
+        public IInstantValueSensor<int> CreateEnumSensor(string path, string description = "") => CreateInstantSensor<int>(path, new EnumSensorOptions { Description = description });
+
+        public IInstantValueSensor<int> CreateEnumSensor(string path, EnumSensorOptions options) => _sensorsStorage.CreateEnumInstantSensor(path, options);
 
 
         private IInstantValueSensor<T> CreateInstantSensor<T>(string path, string description) =>
@@ -509,7 +512,7 @@ namespace HSMDataCollector.Core
         private void UnhandledExceptionHandler(object sender, UnhandledExceptionEventArgs e)
         {
             if (e.ExceptionObject is Exception exception)
-                _logger.Error($"An unhandled exception occurred [Runtime terminated = {e.IsTerminating}]: {exception.Message}");
+                _logger.Error($"An unhandled exception occurred [Runtime terminated = {e.IsTerminating}]: {exception}");
         }
 
     }

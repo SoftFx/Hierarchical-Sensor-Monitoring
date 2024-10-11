@@ -16,6 +16,7 @@ namespace HSMServer.Model.History
                 SensorType.DoubleBar => new DoubleBarHistoryProcessor(),
                 SensorType.TimeSpan => new TimeSpanHistoryProcessor(),
                 SensorType.Version => new VersionHistoryProcessor(),
+                SensorType.Enum => new EnumHistoryProcessor(),
                 _ => new EmptyHistoryProcessor(), // Types that typically won't occur in that case
             };
     }

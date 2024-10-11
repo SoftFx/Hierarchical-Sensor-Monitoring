@@ -10,7 +10,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 
         public ProductModel Product { get; init; }
 
-        
+
         public StoreInfo(string key, string path) : base(key, path) { }
 
         public StoreInfo(Guid key, string path) : base(key, path){}

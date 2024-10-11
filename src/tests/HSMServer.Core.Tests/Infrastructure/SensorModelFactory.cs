@@ -21,6 +21,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.File => new FileSensorModel(entity),
                 SensorType.TimeSpan => new TimeSpanSensorModel(entity),
                 SensorType.Version => new VersionSensorModel(entity),
+                SensorType.Enum => new EnumSensorModel(entity),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }

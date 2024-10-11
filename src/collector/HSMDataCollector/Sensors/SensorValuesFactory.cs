@@ -24,6 +24,8 @@ namespace HSMDataCollector.SensorsFactory
                     return SensorType.TimeSpanSensor;
                 case Type type when type == typeof(Version):
                     return SensorType.VersionSensor;
+                case Type type when type == typeof(Enum): 
+                    return SensorType.EnumSensor;
                 default:
                     throw new ArgumentException($"Unsupported instant sensor type {typeof(T).Name}");
             }
@@ -87,6 +89,11 @@ namespace HSMDataCollector.SensorsFactory
                     return (val) => new FileSensorValue()
                     {
                         Value = val is List<byte> bytes ? bytes : default
+                    };
+                case SensorType.EnumSensor:
+                    return (val) => new EnumSensorValue()
+                    {
+                        Value = val is int intV ? intV : default
                     };
                 default:
                     return null;

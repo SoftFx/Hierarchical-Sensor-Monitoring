@@ -43,6 +43,7 @@ public class AlertMessageViewModel
             SensorType.String => AlertState.Build((BaseValue<string>)value, sensor),
             SensorType.Version => AlertState.Build((BaseValue<Version>)value, sensor),
             SensorType.TimeSpan => AlertState.Build((BaseValue<TimeSpan>)value, sensor),
+            SensorType.Enum => AlertState.Build((BaseValue<int>)value, sensor),
             _ => AlertState.BuildBase(value, sensor)
         };
 

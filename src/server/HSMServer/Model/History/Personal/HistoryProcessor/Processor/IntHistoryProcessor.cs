@@ -19,11 +19,11 @@ namespace HSMServer.Model.History
 
             return new JsonResult(new
             {
-                values = BoolHistoryProcessor.ProcessServiceAliveData(values, GetColorAndCustomData).Select(x => (object)x)
+                values = BoolHistoryProcessor.ProcessServiceAliveData(sensor, values, GetColorAndCustomData).Select(x => (object)x)
             });
         }
         
-        static (string color, string customdata) GetColorAndCustomData(BaseValue value, DateTime startTime, DateTime endTime)
+        private (string color, string customdata) GetColorAndCustomData(SensorNodeViewModel sensor, BaseValue value, DateTime startTime, DateTime endTime)
         {
             if (value is BaseValue<int> intValue)
             {

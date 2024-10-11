@@ -101,6 +101,13 @@ namespace HSMDataCollector.Core
             return (SensorInstant<T>)Register(new SensorInstant<T>(options));
         }
 
+        internal SensorInstant<int> CreateEnumInstantSensor(string path, EnumSensorOptions options)
+        {
+            options = FillOptions(path, SensorType.EnumSensor, options);
+
+            return (SensorInstant<int>)Register(new SensorInstant<int>(options));
+        }
+
 
         internal IntBarPublicSensor CreateIntBarSensor(string path, BarSensorOptions options)
         {

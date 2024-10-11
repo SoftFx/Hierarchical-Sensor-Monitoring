@@ -1,11 +1,13 @@
-﻿using HSMServer.Core;
+﻿using System;
+using System.Linq;
+using System.Collections.Generic;
+using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Model.Sensors;
 using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -61,7 +63,12 @@ namespace HSMServer.Model.TreeViewModel
 
         public DateTime CreationTime { get; private set; }
 
-        public SensorNodeViewModel(BaseSensorModel model) : base(model) { }
+        public Dictionary<int, EnumOptionModel> EnumOptions { get; private set; }
+
+        public SensorNodeViewModel(BaseSensorModel model) : base(model) 
+        {
+            EnumOptions = model.EnumOptions;
+        }
 
 
         internal void Update(BaseSensorModel model)
@@ -78,6 +85,7 @@ namespace HSMServer.Model.TreeViewModel
             SelectedUnit = model.OriginalUnit;
             AggregateValues = model.AggregateValues;
             CreationTime = model.CreationDate;
+            EnumOptions = model.EnumOptions;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);
@@ -122,6 +130,7 @@ namespace HSMServer.Model.TreeViewModel
             RatePolicy p => new NumericDataAlertViewModel<RateValue>(p, this),
             IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue>(p, this),
             DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue>(p, this),
+            EnumPolicy p => new NumericDataAlertViewModel<EnumValue>(p, this),
             _ => null,
         };
 

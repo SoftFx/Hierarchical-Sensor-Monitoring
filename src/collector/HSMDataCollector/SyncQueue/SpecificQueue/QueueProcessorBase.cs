@@ -52,7 +52,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     _cancellationTokenSource?.Dispose();
                 }
             }
-            catch (Exception ex) 
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
             {
                 _logger.Error(ex);
             }
