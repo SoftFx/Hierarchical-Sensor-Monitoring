@@ -185,7 +185,7 @@ namespace HSMServer.Core.Cache
 
         public void UpdateProduct(ProductUpdate update)
         {
-            if (TryGetProduct(update.Id, out ProductModel product))
+            if (!TryGetProduct(update.Id, out ProductModel product))
                 return;
 
             _productLock.EnterWriteLock();
