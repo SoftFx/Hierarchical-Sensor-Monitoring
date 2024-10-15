@@ -489,7 +489,6 @@ namespace HSMServer.Core.Cache
                 }
 
                 var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
-                _logger.Info($"product name ={product?.DisplayName}, sensorPath={request.Path}, parentProdocut={parentProduct?.DisplayName}");
                 var sensor = AddSensor(request, request.Type, parentProduct, request.Update.DefaultAlertsOptions);
 
                 update = update with {Id = sensor.Id};
@@ -1038,8 +1037,7 @@ namespace HSMServer.Core.Cache
 
             if (sensor == null)
             {
-                _logger.Info(
-                    $"Creating new sensor - Name = {storeInfo.SensorName}, Path = {storeInfo.Path}, CurrentNumber of sensors in cache = {_sensors.Count}");
+                _logger.Info($"Creating new sensor - Name = {storeInfo.SensorName}, Path = {storeInfo.Path}, CurrentNumber of sensors in cache = {_sensors.Count}");
                 sensor = AddSensor(storeInfo, value.Type, parentProduct, DefaultAlertsOptions.None);
             }
             else if (sensor.State == SensorState.Blocked)
