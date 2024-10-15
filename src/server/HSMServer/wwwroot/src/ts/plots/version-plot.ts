@@ -32,6 +32,9 @@ export class VersionPlot extends Plot<string>{
         tryBuild(value.minorRevision)
         
         function tryBuild(value: number, q: boolean = false){
+            if (value < 0)
+                stringRepresentation += '.-1';
+            else 
                 stringRepresentation += q === true ? `${value}` : `.${value}`;
         }
         

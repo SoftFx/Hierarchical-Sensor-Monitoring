@@ -555,15 +555,14 @@ window.multiChartPanelInit = async (values, sourceType, unit = '', height = 300,
         },
     }
 
-    if (sourceType === 7) {
+    if (sourceType === 'TimeSpan') {
         const ticks = TimeSpanPlot.getYaxisTicks(data);
         layout.yaxis.tickmode = 'array';
         layout.yaxis.ticktext = ticks.ticktext;
         layout.yaxis.tickvals = ticks.tickvals;
     }
 
-    if (sourceType === 8) {
-
+    if (sourceType === 'Version') {
         const ticks = VersionPlot.getYaxisTicks(data);
         layout.yaxis.tickmode = 'array';
         layout.yaxis.ticktext = ticks.ticktext;
