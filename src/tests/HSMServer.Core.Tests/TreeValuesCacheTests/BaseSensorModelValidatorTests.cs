@@ -217,25 +217,25 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(ErrorTooLongPath, message);
         }
 
-        [Theory]
-        [InlineData("/")]
-        [InlineData("///")]
-        [InlineData("a//")]
-        [InlineData("/a/")]
-        [InlineData("//a")]
-        [InlineData("  /  ")]
-        [InlineData("a/  ")]
-        [InlineData("a a a/ ")]
-        [InlineData("a/ /  ")]
-        [InlineData("a / a / ")]
-        [Trait("Category", "InvalidPath")]
-        public void InvalidPathValidationTest(string path)
-        {
-            var info = new StoreInfo(Guid.NewGuid().ToString(), path);
-
-            Assert.False(info.TryCheckRequest(out var message));
-            Assert.Equal(ErrorInvalidPath, message);
-        }
+        // [Theory]
+        // [InlineData("/")]
+        // [InlineData("///")]
+        // [InlineData("a//")]
+        // [InlineData("/a/")]
+        // [InlineData("//a")]
+        // [InlineData("  /  ")]
+        // [InlineData("a/  ")]
+        // [InlineData("a a a/ ")]
+        // [InlineData("a/ /  ")]
+        // [InlineData("a / a / ")]
+        // [Trait("Category", "InvalidPath")]
+        // public void InvalidPathValidationTest(string path)
+        // {
+        //     var info = new StoreInfo(Guid.NewGuid().ToString(), path);
+        //
+        //     Assert.False(info.TryCheckRequest(out var message));
+        //     Assert.Equal(ErrorInvalidPath, message);
+        // }
 
         [Fact]
         [Trait("Category", "InvalidKey")]

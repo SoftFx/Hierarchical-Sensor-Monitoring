@@ -544,7 +544,7 @@ export class TimeSpanPlot extends ErrorColorPlot {
         let y = [];
 
         for (const val of data) {
-            y.push(val.y);
+            y.push(...val.y);
         }
         let layoutTicks = TimeSpanPlot.getLayoutTicks(y);
 

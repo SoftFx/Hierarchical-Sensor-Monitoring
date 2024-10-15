@@ -21,7 +21,7 @@ namespace HSMServer.Notifications
         private const int SendMessageRetryCount = 10;
         private const string ConfigurationsError = "Invalid Bot configurations.";
         private const string TrimmedMessage = " [this message was trimmed]";
-        private const int MaxMessageLength = 4096;
+        private const int MaxMessageLength = 1000;
         public const string BotIsNotRunningError = "Telegram Bot is not running.";
 
         private readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();

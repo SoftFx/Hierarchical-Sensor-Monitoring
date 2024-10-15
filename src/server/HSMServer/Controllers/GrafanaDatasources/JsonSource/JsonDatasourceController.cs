@@ -51,7 +51,12 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             if (!TryGetKey(out var key, out var message))
                 return BadRequest(message);
 
-            var products = key.IsMaster ? _cache.GetProducts() : new List<ProductModel>(1) { _cache.GetProduct(key.ProductId) };
+            var products = new List<ProductModel>();
+            if (key.IsMaster)
+                products = _cache.GetProducts();
+            else if (_cache.TryGetProduct(key.ProductId, out var product))
+                products.Add(product);
+            
             var metrics = products.OrderBy(p => p.DisplayName).Select(u => new Metric(u.DisplayName, u.Id));
 
             return JsonSerializer.Serialize(metrics, _options);

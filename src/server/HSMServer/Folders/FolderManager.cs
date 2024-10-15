@@ -269,9 +269,7 @@ namespace HSMServer.Folders
 
         private bool TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator, ActionType action = ActionType.Update)
         {
-            var product = _cache.GetProduct(productId);
-
-            if (product is not null)
+            if (_cache.TryGetProduct(productId, out var product))
             {
                 var defaultChats = product.Settings.DefaultChats.Value;
 

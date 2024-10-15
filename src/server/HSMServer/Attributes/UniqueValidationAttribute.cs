@@ -54,7 +54,14 @@ namespace HSMServer.Attributes
         private static bool IsValidAccessKey(IEnumerable<AccessKeyModel> keys, string displayName, Guid id) =>
             !keys.Any(x => x.DisplayName == displayName && x.Id != id);
 
-        private static IEnumerable<AccessKeyModel> GetProductKeys(ITreeValuesCache cache, Guid productId) =>
-            cache.GetProduct(productId).AccessKeys.Values;
+        private static IEnumerable<AccessKeyModel> GetProductKeys(ITreeValuesCache cache, Guid productId)
+        {
+            if (cache.TryGetProduct(productId, out var product))
+            {
+                return product.AccessKeys.Values;
+            }
+            
+            return [];
+        }
     }
 }
