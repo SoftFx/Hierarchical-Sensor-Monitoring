@@ -1470,21 +1470,7 @@ namespace HSMServer.Core.Cache
                         SendNotification(sensor.Notifications.LeftOnlyScheduled());
 
                         if (!_snapshot.IsFinal && sensor.LastValue is not null)
-                            _snapshot.Sensors[sensorId]
-                                .SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
-                    }
-                    else
-                    {
-                        var logMsg =
-                            $"sensorId to fulfill data={sensorId}, isValueNull={value == null}, isSensorExists={_sensors.TryGetValue(sensorId, out _)}";
-
-                        if (_sensors.TryGetValue(sensorId, out var sensor2))
-                        {
-                            logMsg +=
-                                $", sensorName={sensor2.DisplayName}, sensorPath={sensor2.Path}, parentname={sensor2.Root.DisplayName}";
-                        }
-
-                        _logger.Info(logMsg);
+                            _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
                     }
                 }
             }
