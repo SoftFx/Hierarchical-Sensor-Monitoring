@@ -1,0 +1,13 @@
+services:
+  app:
+    image: 'hsmonitoring/hierarchical_sensor_monitoring:latest'
+    restart: unless-stopped
+    user: '0'
+    ports:
+      - '44330:44330'
+      - '44333:44333'
+    volumes:
+      - ./Logs:/app/Logs
+      - ./Config:/app/Config
+      - ./Databases:/app/Databases
+      - ./DatabasesBackups:/app/DatabasesBackups

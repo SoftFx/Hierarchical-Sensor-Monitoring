@@ -14,7 +14,6 @@ namespace HSMDataCollector.DefaultSensors
 
         private readonly SensorOptions _metainfo;
 
-
         public string SensorPath => _metainfo.Path;
 
         internal bool IsProiritySensor => _metainfo.IsPrioritySensor;
@@ -25,43 +24,62 @@ namespace HSMDataCollector.DefaultSensors
 
         protected SensorBase(SensorOptions options)
         {
-            options.Path = options.CalculateSystemPath();
-            _metainfo = options;
+            options.Path   = options.CalculateSystemPath();
+            _metainfo      = options;
             _dataProcessor = options.DataProcessor ?? throw new ArgumentNullException(nameof(DataProcessor));
         }
 
         public void SendValue(SensorValueBase value)
         {
-            value.Path = SensorPath;
-
-            value.TrimLongComment();
-
-            if (value is FileSensorValue file)
+            try
             {
-                _dataProcessor.AddFile(file);
-                return;
-            }
+                if (value == null)
+                    return;
 
-            if (IsProiritySensor)
-                _dataProcessor.AddPriorityData(value);
-            else
-                _dataProcessor.AddData(value);
+                value.Path = SensorPath;
+
+                value.TrimLongComment();
+
+                if (value is FileSensorValue file)
+                {
+                _dataProcessor.AddFile(this, file);
+                    return;
+                }
+
+                if (IsProiritySensor)
+                    _dataProcessor.AddPriorityData(this, value);
+                else
+                    _dataProcessor.AddData(this, value);
+            }
+            catch (Exception ex) 
+            {
+                HandleException(ex);
+            }
         }
 
         internal virtual ValueTask<bool> InitAsync()
         {
-            _dataProcessor.AddCommand(_metainfo.ApiRequest);
+            try
+            {
+                _dataProcessor.AddCommand(this, _metainfo.ApiRequest);
 
-            return new ValueTask<bool>(true);
+                return new ValueTask<bool>(true);
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+
+                return new ValueTask<bool>(false);
+            }
         }
 
         internal virtual ValueTask<bool> StartAsync() => new ValueTask<bool>(true);
 
         internal virtual ValueTask StopAsync() => default;
 
-        protected void ThrowException(Exception ex)
+        protected void HandleException(Exception ex)
         {
-            _dataProcessor.AddException(SensorPath, ex);
+            _dataProcessor?.AddException(SensorPath, ex);
             ExceptionThrowing?.Invoke(SensorPath, ex);
         }
 

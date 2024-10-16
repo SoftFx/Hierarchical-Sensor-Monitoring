@@ -269,9 +269,7 @@ namespace HSMServer.Folders
 
         private bool TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator, ActionType action = ActionType.Update)
         {
-            var product = _cache.GetProduct(productId);
-
-            if (product is not null)
+            if (_cache.TryGetProduct(productId, out var product))
             {
                 var defaultChats = product.Settings.DefaultChats.Value;
 
@@ -331,7 +329,7 @@ namespace HSMServer.Folders
 
         private PolicyDestinationSettings GetCorePolicy(PolicyDestinationSettings model, FolderModel folder, ActionType action)
         {
-            if (model.IsFromFolder)
+            if (model.IsFromFolder || model.IsFromParent)
             {
                 var chat = folder.DefaultChats;
                 var entity = action is ActionType.Delete

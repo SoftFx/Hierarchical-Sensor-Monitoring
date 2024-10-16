@@ -6,8 +6,8 @@ namespace HSMDataCollector.Prototypes
 {
     internal static class DefaultPrototype
     {
-        private const string ComputerFolder = ".computer";
-        private const string ModuleFolder = ".module";
+        internal const string ComputerFolder = ".computer";
+        internal const string ModuleFolder = ".module";
         private const string PathSeparator = "/";
 
 

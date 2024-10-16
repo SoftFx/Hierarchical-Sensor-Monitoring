@@ -1,11 +1,13 @@
-﻿using HSMServer.Core;
+﻿using System;
+using System.Linq;
+using System.Collections.Generic;
+using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Model.Sensors;
 using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -13,6 +15,8 @@ namespace HSMServer.Model.TreeViewModel
     {
         private const string ExtensionPattern = "Extension: ";
         private const string FileNamePattern = "File name: ";
+        private const string ServiceAliveName = "Service alive";
+        private const string ServiceStatusName = "Service status";
 
         public const int ValuesLimit = 4000;
 
@@ -53,8 +57,18 @@ namespace HSMServer.Model.TreeViewModel
         public bool IsDatapointFormatSupported => Type is SensorType.Integer or SensorType.Double or SensorType.Rate or SensorType.Boolean
                                                   or SensorType.String or SensorType.TimeSpan;
 
+        public bool IsServiceAlive => Name == ServiceAliveName;
+        public bool IsServiceStatus => Name == ServiceStatusName;
 
-        public SensorNodeViewModel(BaseSensorModel model) : base(model) { }
+
+        public DateTime CreationTime { get; private set; }
+
+        public Dictionary<int, EnumOptionModel> EnumOptions { get; private set; }
+
+        public SensorNodeViewModel(BaseSensorModel model) : base(model) 
+        {
+            EnumOptions = model.EnumOptions;
+        }
 
 
         internal void Update(BaseSensorModel model)
@@ -70,6 +84,8 @@ namespace HSMServer.Model.TreeViewModel
             Status = model.Status.ToClient();
             SelectedUnit = model.OriginalUnit;
             AggregateValues = model.AggregateValues;
+            CreationTime = model.CreationDate;
+            EnumOptions = model.EnumOptions;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);
@@ -114,6 +130,7 @@ namespace HSMServer.Model.TreeViewModel
             RatePolicy p => new NumericDataAlertViewModel<RateValue>(p, this),
             IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue>(p, this),
             DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue>(p, this),
+            EnumPolicy p => new NumericDataAlertViewModel<EnumValue>(p, this),
             _ => null,
         };
 

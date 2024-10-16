@@ -171,11 +171,7 @@ export class DashboardStorage {
 
             await createChart(`panelChart_${id}`, data, layout, config)
 
-            $(`#panelChart_${id}`).on('plotly_relayout', function (e, updateData){
-                let emptypanel = $(`#emptypanel_${id}`);
-                let container = $(`#${id}`);
-                emptypanel.css('transform', `translate(${container.width() / 2 - emptypanel.width() / 2}px, ${container.height() / 2}px)`)
-            }).on('plotly_doubleclick', async function(){
+            $(`#panelChart_${id}`).on('plotly_doubleclick', async function(){
                 await customReset($(`#panelChart_${id}`)[0], getRangeDate(), panel.settings.range)
             })
             

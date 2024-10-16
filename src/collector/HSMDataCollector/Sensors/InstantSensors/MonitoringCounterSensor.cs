@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
@@ -39,10 +40,14 @@ namespace HSMDataCollector.Sensors
 
         public void AddValue(double value, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
-            Interlocked.Exchange(ref _sum, _sum + value);
+            try
+            {
+                Interlocked.Exchange(ref _sum, _sum + value);
 
-            _lastComment = comment;
-            _lastStatus = status;
+                _lastComment = comment;
+                _lastStatus = status;
+            }
+            catch (Exception ex) { HandleException(ex); }
         }
     }
 }

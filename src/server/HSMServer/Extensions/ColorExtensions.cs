@@ -26,5 +26,32 @@ namespace HSMServer.Extensions
 
             return $"#{randomHex.PadLeft(6, '0')}";
         }
+
+        /// <summary>
+        /// Get specified color in HTML format #RRGGBB for numbers from 0 to 8
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static string GetDefaultColor(int value) =>
+            value switch
+            {
+                0 => "#0x00000",
+                1 => "#0xFF0000",
+                2 => "#0xBFFFBF",
+                3 => "#0xFD6464",
+                4 => "#0x00FF00",
+                5 => "#0xFFB403",
+                6 => "#0x809EFF",
+                7 => "#0x0314FF",
+                8 => "#0x666699",
+                _ => "#0x00000"
+            };
+
+        /// <summary>
+        ///  return color in HTML format #RRGGBB
+        /// </summary>
+        /// <param name="value"> color in ARGB format </param>
+        /// <returns></returns>
+        public static string ArgbToHtml(int value) => $"#{Convert.ToString(value & 0xFFFFFF, 16)}";
     }
 }

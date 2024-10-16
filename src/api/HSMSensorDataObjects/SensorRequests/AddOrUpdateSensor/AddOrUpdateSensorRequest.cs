@@ -99,5 +99,7 @@ namespace HSMSensorDataObjects.SensorRequests
         public DefaultAlertsOptions DefaultAlertsOptions { get; set; }
 
         public bool IsForceUpdate { get; set; } // if true then DataCollector can chage user settings
+
+        public List<EnumOption> EnumOptions { get; set;}
     }
 }

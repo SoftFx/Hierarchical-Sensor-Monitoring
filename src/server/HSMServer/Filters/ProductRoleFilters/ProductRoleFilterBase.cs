@@ -18,9 +18,9 @@ namespace HSMServer.Filters.ProductRoleFilters
         {
             var result = base.TryGetEntityId(context, out productId);
 
-            if (result && context.Controller is AccessKeysController keysController)
+            if (result && context.Controller is AccessKeysController keysController && productId.HasValue)
             {
-                var product = keysController.TreeValuesCache.GetProduct(productId.Value);
+                keysController.TreeValuesCache.TryGetProduct(productId.Value, out var product);
                 while (product?.Parent != null)
                 {
                     productId = product.Parent.Id;

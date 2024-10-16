@@ -1,10 +1,11 @@
-﻿using HSMDataCollector.Logging;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+
 
 namespace HSMDataCollector.Core
 {
@@ -195,6 +196,11 @@ namespace HSMDataCollector.Core
         IInstantValueSensor<TimeSpan> CreateTimeSensor(string path, string description = "");
 
         IInstantValueSensor<TimeSpan> CreateTimeSensor(string path, InstantSensorOptions options);
+
+
+        IInstantValueSensor<int> CreateEnumSensor(string path, string description = "");
+
+        IInstantValueSensor<int> CreateEnumSensor(string path, EnumSensorOptions options);
 
         #endregion
 

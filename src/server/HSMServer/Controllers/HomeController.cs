@@ -646,6 +646,7 @@ namespace HSMServer.Controllers
                 (byte)SensorType.Rate => new NumericDataAlertViewModel<RateValue>(entity),
                 (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue>(entity),
                 (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue>(entity),
+                (byte)SensorType.Enum => new NumericDataAlertViewModel<EnumValue>(entity),
                 TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(entity),
                 _ => null,
             };
@@ -694,6 +695,7 @@ namespace HSMServer.Controllers
                 SensorType.Rate => new NumericConditionViewModel(false),
                 SensorType.IntegerBar => new BarConditionViewModel(false),
                 SensorType.DoubleBar => new BarConditionViewModel(false),
+                SensorType.Enum => new NumericConditionViewModel(false),
                 _ => null,
             };
 
@@ -846,7 +848,15 @@ namespace HSMServer.Controllers
             return sensor?.Path;
         }
 
-        private AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions) =>
-            _treeValuesCache.GetProduct(productId).AccessKeys.Values.FirstOrDefault(x => x.IsValid(permissions, out _));
+        private AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions)
+        {
+            if (_treeValuesCache.TryGetProduct(productId, out var product))
+            {
+                return product.AccessKeys.Values
+                    .FirstOrDefault(x => x.IsValid(permissions, out _));
+            }
+
+            return null;
+        }
     }
 }

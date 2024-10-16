@@ -11,14 +11,25 @@
     var valuesParentDivId = $"values_parent_{sensorId}";
 
     var history_period = HistoryPeriod.Default;
+
+    var selectedItems = Enum.GetValues<HistoryPeriod>().Select(x =>
+    {
+        if (Model.IsServiceAlive && x == HistoryPeriod.ThreeDays)
+        {
+            history_period = HistoryPeriod.ThreeDays;
+            return new SelectListItem {Value = x.ToString(), Text = x.GetDisplayName(), Selected = true};
+        }
+        
+        return new SelectListItem {Value = x.ToString(), Text = x.GetDisplayName(), Selected = false};
+    }).ToList();
 }
 
 <div id='historyDataPanel' class='pt-3 text-break hidden_element'>
     <div class="d-flex justify-content-between">
         <div id="datePickerFromTo">
             <label class="me-1">Period:</label>
-            <select asp-for="@history_period" class="me-2" asp-items="@Enum.GetValues<HistoryPeriod>().Select(x => new SelectListItem{ Value = x.ToString(), Text = x.GetDisplayName()})"></select>
-
+            <select asp-for="@history_period" class="me-2" asp-items="@selectedItems"></select>
+            
             <label class="me-1" id="from_@(sensorId)_label" for="from_@sensorId">From:</label>
             <input class="me-2" type="datetime-local" id="from_@sensorId" name="from">
 

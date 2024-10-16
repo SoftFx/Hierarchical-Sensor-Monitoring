@@ -3,13 +3,11 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using HSMDataCollector.Client;
-using HSMDataCollector.Converters;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
 
 
@@ -73,8 +71,9 @@ namespace HSMDataCollector.Core
             _dataProcessor = new DataProcessor(options, _logger);
 
             _sensorsStorage = _dataProcessor.SensorStorage;
-        }
 
+            AppDomain.CurrentDomain.UnhandledException += UnhandledExceptionHandler;
+        }
 
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
@@ -150,7 +149,6 @@ namespace HSMDataCollector.Core
                 await _dataProcessor.StopAsync();
 
                 ChangeStatus(CollectorStatus.Stopped);
-
             }
         }
 
@@ -189,6 +187,8 @@ namespace HSMDataCollector.Core
             _dataProcessor.Dispose();
 
             _dataSender.Dispose();
+
+            AppDomain.CurrentDomain.UnhandledException -= UnhandledExceptionHandler;
 
             ChangeStatus(CollectorStatus.Stopped);
         }
@@ -250,7 +250,10 @@ namespace HSMDataCollector.Core
                 if (isMemory)
                     Windows.AddProcessMemory(options);
                 if (isThreads)
+                {
                     Windows.AddProcessThreadCount(options);
+                    Windows.AddProcessThreadPoolThreadCount(options);
+                }
             }
             else
             {
@@ -259,7 +262,10 @@ namespace HSMDataCollector.Core
                 if (isMemory)
                     Unix.AddProcessMemory(options);
                 if (isThreads)
+                {
                     Unix.AddProcessThreadCount(options);
+                    Unix.AddProcessThreadPoolThreadCount(options);
+                }
             }
 
             _ = Start();
@@ -315,7 +321,6 @@ namespace HSMDataCollector.Core
 
         public IInstantValueSensor<int> CreateIntSensor(string path, string description = "") => CreateInstantSensor<int>(path, description);
 
-
         public IInstantValueSensor<Version> CreateVersionSensor(string path, InstantSensorOptions options) => CreateInstantSensor<Version>(path, options);
 
         public IInstantValueSensor<TimeSpan> CreateTimeSensor(string path, InstantSensorOptions options) => CreateInstantSensor<TimeSpan>(path, options);
@@ -327,6 +332,10 @@ namespace HSMDataCollector.Core
         public IInstantValueSensor<bool> CreateBoolSensor(string path, InstantSensorOptions options) => CreateInstantSensor<bool>(path, options);
 
         public IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOptions options) => CreateInstantSensor<int>(path, options);
+
+        public IInstantValueSensor<int> CreateEnumSensor(string path, string description = "") => CreateInstantSensor<int>(path, new EnumSensorOptions { Description = description });
+
+        public IInstantValueSensor<int> CreateEnumSensor(string path, EnumSensorOptions options) => _sensorsStorage.CreateEnumInstantSensor(path, options);
 
 
         private IInstantValueSensor<T> CreateInstantSensor<T>(string path, string description) =>
@@ -499,6 +508,12 @@ namespace HSMDataCollector.Core
             });
 
         #endregion
+
+        private void UnhandledExceptionHandler(object sender, UnhandledExceptionEventArgs e)
+        {
+            if (e.ExceptionObject is Exception exception)
+                _logger.Error($"An unhandled exception occurred [Runtime terminated = {e.IsTerminating}]: {exception}");
+        }
 
     }
 }

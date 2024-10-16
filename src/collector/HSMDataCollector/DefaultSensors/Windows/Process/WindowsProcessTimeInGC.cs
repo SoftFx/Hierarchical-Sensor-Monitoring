@@ -32,7 +32,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
             }
             catch (Exception ex)
             {
-                ThrowException(new Exception($"Error initializing performance counter: {WindowsTimeInGCBase.Category}/{WindowsTimeInGCBase.Counter} instance {ProcessInfo.CurrentProcessName}: {ex}"));
+                HandleException(new Exception($"Error initializing performance counter: {WindowsTimeInGCBase.Category}/{WindowsTimeInGCBase.Counter} instance {ProcessInfo.CurrentProcessName}: {ex}"));
 
                 return new ValueTask<bool>(false);
             }

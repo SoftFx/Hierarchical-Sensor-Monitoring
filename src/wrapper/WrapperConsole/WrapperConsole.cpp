@@ -10,6 +10,7 @@ using namespace hsm_wrapper;
 
 int main()
 {
+	RedirectAssembly();
     
     DataCollectorProxy collector("bf9fc183-64bf-4c54-89e5-f129e34854d8", "https://hsm.dev.soft-fx.eu", 44330, "console");
 

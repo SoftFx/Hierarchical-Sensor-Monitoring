@@ -24,7 +24,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     {
         private readonly TreeViewModel _treeViewModel;
 
-        private delegate string GetProductNameById(Guid id);
+        private delegate bool GetProductNameById(Guid id, out string name);
         private delegate ProductModel GetProduct(Guid id);
         private delegate ProductEntity GetProductFromDb(string id);
 
@@ -111,7 +111,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var productName = productNames[i];
                 var product = addedProducts[i];
 
-                Assert.Equal(productName, _valuesCache.GetProductNameById(product.Id));
+                Assert.True(_valuesCache.TryGetProductNameById(product.Id, out var name));
+                Assert.Equal(productName, name);
                 ModelsTester.TestProductModel(productName, product);
 
                 ModelsTester.TestProductModel(product, _valuesCache.GetProduct(product.Id));
@@ -139,7 +140,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             for (int i = 0; i < count; ++i)
                 TestRemovedProduct(addedProducts[i],
-                                   _valuesCache.GetProductNameById,
+                                   _valuesCache.TryGetProductNameById,
                                    _valuesCache.GetProduct,
                                    _databaseCoreManager.DatabaseCore.GetProduct);
         }
@@ -190,7 +191,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.Equal(deletedProductsCount, expectedDeletedProductIds.Count);
             foreach (var productId in expectedDeletedProductIds)
                 TestRemovedProduct(productId,
-                                   _valuesCache.GetProductNameById,
+                                   _valuesCache.TryGetProductNameById,
                                    _valuesCache.GetProduct,
                                    _databaseCoreManager.DatabaseCore.GetProduct);
 
@@ -247,9 +248,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Get product name")]
         public void GetProductName_NonExistingId_Test()
         {
-            var productName = _valuesCache.GetProductNameById(Guid.NewGuid());
-
-            Assert.Null(productName);
+            Assert.False(_valuesCache.TryGetProductNameById(Guid.NewGuid(), out _));
         }
 
 
@@ -638,7 +637,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private static void TestRemovedProduct(Guid productId, GetProductNameById getProductName,
         GetProduct getProduct, GetProductFromDb getProductFromDb)
         {
-            Assert.Null(getProductName?.Invoke(productId));
+            Assert.False(getProductName?.Invoke(productId, out var name));
             Assert.Null(getProduct?.Invoke(productId));
             Assert.Null(getProductFromDb?.Invoke(productId.ToString()));
         }

@@ -136,4 +136,11 @@ namespace HSMServer.Core.Model
     {
         public override SensorType Type => SensorType.DoubleBar;
     }
+
+    public record EnumValue : BaseValue<int>
+    {
+        public override SensorType Type => SensorType.Enum;
+
+        public override bool TryParseValue(string value, out int parsedValue) => int.TryParse(value, out parsedValue);
+    }
 }

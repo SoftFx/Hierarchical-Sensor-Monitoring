@@ -101,6 +101,13 @@ namespace HSMDataCollector.Core
             return (SensorInstant<T>)Register(new SensorInstant<T>(options));
         }
 
+        internal SensorInstant<int> CreateEnumInstantSensor(string path, EnumSensorOptions options)
+        {
+            options = FillOptions(path, SensorType.EnumSensor, options);
+
+            return (SensorInstant<int>)Register(new SensorInstant<int>(options));
+        }
+
 
         internal IntBarPublicSensor CreateIntBarSensor(string path, BarSensorOptions options)
         {
@@ -122,7 +129,7 @@ namespace HSMDataCollector.Core
         }
 
 
-        internal SensorBase Register(SensorBase sensor, bool startSensor = false)
+        internal SensorBase Register(SensorBase sensor)
         {
             var path = sensor.SensorPath;
 
@@ -134,19 +141,17 @@ namespace HSMDataCollector.Core
                 _ = AddAndStart(sensor);
                 return sensor;
             }
-
-            return AddSensor(sensor);
+            else
+                return AddSensor(sensor);
         }
 
 
         private async Task<SensorBase> AddAndStart(SensorBase sensor)
         {
-            var path = sensor.SensorPath;
-
             if (!await AddSensor(sensor).InitAsync().ConfigureAwait(false))
-                Logger.Error($"Failed to init {path}");
+                Logger.Error($"Failed to init {sensor.SensorPath}");
             else if (!await sensor.StartAsync().ConfigureAwait(false))
-                Logger.Error($"Failed to start {path}");
+                Logger.Error($"Failed to start {sensor.SensorPath}");
 
             return sensor;
         }

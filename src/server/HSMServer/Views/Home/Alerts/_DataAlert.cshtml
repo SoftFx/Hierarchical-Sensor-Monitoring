@@ -68,17 +68,15 @@
                 {
                     case ChatsMode.FromParent:
                     {
-                        var (parentChats, mode) = Model.ParentDefaultChat.GetCurrentChats();
-                        var chatName = mode switch
-                        {
-                            DefaultChatMode.NotInitialized => DefaultChatMode.NotInitialized.GetDisplayName(),
-                            DefaultChatMode.Empty => DefaultChatMode.Empty.GetDisplayName(),
-                            _ => parentChats.ToNames(telegramChats),
-                        };
+                        var (parentIds, lastMode) = Model.DefaultChat.GetParentChats();
 
-                        chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatName})";
+                        string chatNames;
+                        if (parentIds.Count != 0)
+                            chatNames = parentIds.ToNames(telegramChats);
+                        else
+                            chatNames = lastMode?.GetDisplayName();
                         
-                        action.Chats.ExceptWith(parentChats);
+                        chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatNames})";
                         
                         if (action.Chats.Count !=  0)
                             chats += $", {GetActionChats(action)}";

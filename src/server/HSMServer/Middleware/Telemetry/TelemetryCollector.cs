@@ -61,7 +61,7 @@ namespace HSMServer.Middleware.Telemetry
             if (!_cache.TryGetKey(apiKeyId, out var apiKey, out error))
                 return false;
 
-            if (!_cache.TryGetProduct(apiKey.ProductId, out var product, out error))
+            if (!_cache.TryGetRootProduct(apiKey.ProductId, out var product, out error))
                 return false;
 
             if (TryGetRemoteIP(context, out var remoteIp))

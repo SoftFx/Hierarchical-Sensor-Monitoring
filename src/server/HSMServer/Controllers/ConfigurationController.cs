@@ -107,7 +107,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public Task<string> RestartTelegramBot() => _telegramBot.StartBot();
+        public Task<string> RestartTelegramBot() => _telegramBot.StartBotAsync();
 
 
         [HttpGet]

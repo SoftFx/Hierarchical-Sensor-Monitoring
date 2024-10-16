@@ -56,6 +56,7 @@ namespace HSMServer.ApiObjectsConverters
                     SensorType.TimeSpanSensor => JsonSerializer.Deserialize<TimeSpanSensorValue>(ref reader, options),
                     SensorType.VersionSensor => DeserializeVersion(ref reader, options),
                     SensorType.RateSensor => JsonSerializer.Deserialize<RateSensorValue>(ref reader, options),
+                    SensorType.EnumSensor => JsonSerializer.Deserialize<EnumSensorValue>(ref reader, options),
                     _ => throw new JsonException(UnexpectedSensorTypeError),
                 };
             }

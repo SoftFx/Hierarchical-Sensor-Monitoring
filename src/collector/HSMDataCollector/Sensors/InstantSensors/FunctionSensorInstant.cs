@@ -16,7 +16,7 @@ namespace HSMDataCollector.Sensors
 
         TimeSpan IBaseFuncSensor.GetInterval() => PostTimePeriod;
 
-        void IBaseFuncSensor.RestartTimer(TimeSpan timeSpan) => RestartTimer(timeSpan);
+        void IBaseFuncSensor.RestartTimer(TimeSpan timeSpan) => RestartTimerAsync(timeSpan);
 
 
         protected U CheckFunc<U>(U function)

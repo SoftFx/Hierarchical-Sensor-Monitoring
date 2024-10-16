@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 using HSMDataCollector.Alerts;
 using HSMDataCollector.Converters;
 using HSMDataCollector.Core;
@@ -62,19 +64,23 @@ namespace HSMDataCollector.Options
 
         public bool IsForceUpdate { get; set; } // if true then DataCollector can chage user settings
 
+        public SensorLocation SensorLocation { get; set; }
 
         internal string CalculateSystemPath()
         {
-            var computer = ComputerName;
-            var module = IsComputerSensor ? null : Module;
-
-            if (string.IsNullOrEmpty(computer))
+            if (IsComputerSensor)
             {
-                computer = module;
-                module = null;
+                return DefaultPrototype.BuildPath(ComputerName, Path);
             }
-
-            return DefaultPrototype.BuildPath(computer, module, Path);
+            else
+            {
+                switch (SensorLocation)
+                {
+                    case SensorLocation.Module:  return DefaultPrototype.BuildPath(ComputerName, Module, Path);
+                    case SensorLocation.Product: return DefaultPrototype.BuildPath(Path);
+                    default: return DefaultPrototype.BuildPath(Path);
+                }
+            }
         }
 
         internal object Copy() => MemberwiseClone();
@@ -94,6 +100,33 @@ namespace HSMDataCollector.Options
         public List<InstantAlertTemplate> Alerts { get; set; }
 
         internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
+    }
+
+    public class EnumSensorOptions : InstantSensorOptions
+    {
+        internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
+        public List<EnumOption> EnumOptions { get; set; }
+
+        public EnumSensorOptions()
+        {
+            AggregateData = true;
+        }
+
+        public string GenerateEnumOptionsDecription()
+        {
+            if (EnumOptions?.Count == 0)
+                return string.Empty;
+
+            var sb = new StringBuilder(1024);
+            foreach (var option in EnumOptions)
+            {
+               sb.AppendLine($"* {option.Value} - {option.Description}");
+            }
+
+            sb.AppendLine();;
+
+            return sb.ToString();
+        }
     }
 
 

@@ -1,4 +1,4 @@
-﻿import { serviceAlivePlotName, ServiceStatus, serviceStatusPlotName } from "./plotting";
+﻿import {serviceAlivePlotName, ServiceStatus, serviceStatusPlotName} from "./plotting";
 
 export const ServiceAliveIcon = {
     'width': 500,
@@ -26,7 +26,7 @@ export const Colors = {
     line: 'rgb(231, 99, 250)'
 }
 
-const MarkerSize = {
+export const MarkerSize = {
     default: 0,
     defaultLineSize: 2,
     small: 5,
@@ -37,7 +37,7 @@ const MarkerSize = {
 export class Plot {
     id = undefined;
     ids = undefined;
-    
+
     x = [];
     y = [];
     customdata = [];
@@ -48,23 +48,24 @@ export class Plot {
 
     #customYaxisName = undefined;
     customColor = Colors.default;
-    
+
     autoscaleY = true;
-    
+
     constructor(data, customYaxisName = undefined, customColor = Colors.default, range = undefined) {
         this.autoscaleY = range ?? true;
         this.#customYaxisName = customYaxisName;
         this.line = {
             color: Colors.defaultTrace
         }
-        
+
         this.customColor = customColor;
-        if (customColor && customColor !== Colors.default){
+        if (customColor && customColor !== Colors.default) {
             this.line.color = customColor;
         }
     }
 
-    setUpData(data) { }
+    setUpData(data) {
+    }
 
     getPlotData() {
         return [this];
@@ -153,18 +154,17 @@ export class Plot {
 
         if (Number.POSITIVE_INFINITY === customValue)
             customValue = Number.MAX_VALUE;
-        
+
         if (Plot.checkError(value)) {
             this.customdata.push(customValue + '<br>' + value.comment);
             return;
         }
 
-        if (value.tooltip !== undefined && value.tooltip !== null)
-        {
+        if (value.tooltip !== undefined && value.tooltip !== null) {
             this.customdata.push(customValue + '<br>' + value.tooltip);
             return;
         }
-        
+
         this.customdata.push(`${customValue}`);
     }
 
@@ -245,13 +245,13 @@ export class BoolPlot extends Plot {
 
         this.hovertemplate = "%{x}, %{customdata}<extra></extra>";
     }
-    
+
     addCustomData(value, compareFunc = null, customField = 'value') {
         if (this.autoscaleY !== undefined && this.autoscaleY !== true) {
             this.customdata.push(value.tooltip);
             return;
         }
-        
+
         if (Plot.checkTtl(value)) {
             this.customdata.push(value.comment);
             return;
@@ -264,8 +264,7 @@ export class BoolPlot extends Plot {
             return;
         }
 
-        if (value.tooltip !== undefined && value.tooltip !== null)
-        {
+        if (value.tooltip !== undefined && value.tooltip !== null) {
             this.customdata.push(customValue + '<br>' + value.tooltip);
             return;
         }
@@ -402,8 +401,8 @@ export class BarPLot extends Plot {
         this.high = [];
         this.low = [];
         this.open = [];
-        this.increasing = { line: { color: 'green' } };
-        this.decreasing = { line: { color: 'green' } };
+        this.increasing = {line: {color: 'green'}};
+        this.decreasing = {line: {color: 'green'}};
 
         this.text = [];
         this.hovertemplate = '%{customdata} <extra>this.name</extra>'
@@ -488,7 +487,7 @@ export class TimeSpanPlot extends ErrorColorPlot {
     static getTimeSpanValue(value) {
         if (!isNaN(Number(value.value)))
             return new TimeSpan.TimeSpan(value.value, 0, 0, 0, 0);
-        
+
         if (Plot.checkNaN(value.value))
             return "NaN";
 
@@ -541,11 +540,11 @@ export class TimeSpanPlot extends ErrorColorPlot {
         };
     }
 
-    static getYaxisTicks(data){
+    static getYaxisTicks(data) {
         let y = [];
 
         for (const val of data) {
-            y.push(val.y);
+            y.push(...val.y);
         }
         let layoutTicks = TimeSpanPlot.getLayoutTicks(y);
 
@@ -554,8 +553,8 @@ export class TimeSpanPlot extends ErrorColorPlot {
             tickvals: layoutTicks[0],
         };
     }
-    
-    static getLayoutTicks(y){
+
+    static getLayoutTicks(y) {
         const MAX_TIME_POINTS = 10
 
         let maxVal = Math.max(...y)
@@ -571,85 +570,104 @@ export class TimeSpanPlot extends ErrorColorPlot {
             tValsCustomData.push(TimeSpanPlot.getTimeSpanAsText(new TimeSpan.TimeSpan(cur)))
             cur += step;
         }
-        
+
         return [tVals, tValsCustomData];
     }
 }
 
 export class EnumPlot extends Plot {
-    constructor(data, isServiceStatus, isBackgroundPlot = true) {
+    constructor(data, isServiceStatus, isBackgroundPlot = true, averagevalue = 0.5) {
         super();
 
         this.isBackgroundPlot = isBackgroundPlot;
-        this.z = [];
         this.customdata = [];
         this.isServiceStatus = isServiceStatus;
         this.hovertemplate = '%{customdata}<extra></extra>';
-        this.colorscale = [[0, '#FF0000'], [0.5, '#00FF00'], [0.7, 'white'], [1, 'grey']];
-        this.zmin = 0;
-        this.zmax = 1;
-        this.showscale = false;
-        this.type = 'heatmap';
-        this.opacity = 0.25;
+        this.type = 'scatter';
+        this.mode = 'markers';
+        this.marker = {
+            color: [],
+            size: 20,
+            opacity: 1,
+        };
+
+        this.opacity = 0;
         this.name = isServiceStatus ? serviceStatusPlotName : serviceAlivePlotName;
-        this.setUpData(data);
+
+        this.shapes = [];
+        this.annotations = [];
+
+        this.setUpData(data, averagevalue);
     }
 
-    setUpData(data) {
-        let timeObject = {
-            beginTime: "",
-            endTime: "",
-
-            data: data,
-
-            getCustomString: function () {
-                return `${this.beginTime} - ${this.endTime}`;
-            },
-
-            setUpTime: function (index) {
-                this.beginTime = new Date(this.data[index].time).toUTCString();
-
-                if (this.data[index].lastReceivingTime !== null && !!!this.data[index].isTimeout)
-                    this.endTime = new Date(this.data[index].lastReceivingTime).toUTCString()
-                else {
-                    if (index + 1 < this.data.length)
-                        this.endTime = new Date(this.data[index + 1].time).toUTCString()
-                    else
-                        this.endTime = 'now';
+    setUpData(data, averagevalue = 0.5) {
+        function getOpacity (color, isBackground) {
+            if (isBackground)
+            {
+                if (color === '#94ff73'){
+                    return 0;
                 }
-            }
-        }
 
+                if (color === '#00FFFF')
+                    return 0.5;
+                
+                return 0.25;
+            }
+            
+            if (color === '#00FFFF')
+                return 1;
+            
+            return 0.5;
+        }
+        
         for (let i = 0; i < data.length; i++) {
-            timeObject.setUpTime(i);
-
-            this.x.push(data[i].time);
-            if (this.isServiceStatus) {
-                this.customdata.push(`${ServiceStatus[`${data[i].value}`][1]} <br>`)
-                this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? this.isBackgroundPlot ? 0.7 : 0.5 : 0)
+            let shape =
+                {
+                    name: this.name,
+                    type: 'rect',
+                    xref: 'x',
+                    yref: 'paper',
+                    x0: data[i].x0,
+                    y0: 0,
+                    x1: data[i].x1,
+                    y1: 1,
+                    fillcolor: data[i].color,
+                    opacity: getOpacity(data[i].color, this.isBackgroundPlot),
+                    line: {
+                        width: 2,
+                        color: data[i].color,
+                        opacity: getOpacity(data[i].color, this.isBackgroundPlot)
+                    }
+                };
+            
+            if (!this.isServiceStatus && data[i].color === "#00FFFF") {
+                // shape.label= {
+                //     text: 'Restart',
+                //     textposition: 'top center',
+                //     font: { size: 10, color: 'black' },
+                // }
+                
+                this.annotations.push(
+                        {
+                            x: data[i].x,
+                            y: 1.1,
+                            xref: 'x',
+                            yref: 'paper',
+                            text: 'Restart',
+                            showarrow: false
+                        },
+                )
             }
-            else {
-                if (Plot.checkTtl(data[i])) {
-                    this.z.push(0);
-                    this.customdata.push(`${ServiceStatus["8"][1]} <br>`)
-                } else {
-                    this.z.push(this.isBackgroundPlot ? 0.7 : 0.5);
-                    this.customdata.push(`${data[i].value === true ? ServiceStatus["4"][1] : ServiceStatus["1"][1]} <br>`)
-                }
-            }
+            this.shapes.push(shape);
 
-            this.customdata[this.customdata.length - 1] += timeObject.getCustomString();
+            this.x.push(data[i].x);
+            this.y.push(averagevalue);
+            this.marker.color.push(data[i].color);
+            this.customdata.push(data[i].customData);
         }
-
-        let currDate = new Date(new Date(Date.now()).toUTCString()).toISOString();
-        this.x.push(currDate);
     }
 
-    getPlotData(name = 'custom', minValue = 0, maxValue = 1) {
-        this.y = [minValue, maxValue];
-        this.z = [this.z];
-        this.customdata = [this.customdata];
-
+    getPlotData(name = 'custom') {
         if (!this.name)
             this.name = name;
 

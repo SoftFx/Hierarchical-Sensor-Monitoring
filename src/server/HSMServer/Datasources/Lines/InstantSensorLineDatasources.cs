@@ -33,6 +33,10 @@ namespace HSMServer.Datasources
         protected override double ConvertToChartType(double value) => value;
     }
 
+    public sealed class EnumLineDatasource : InstantBaseLineDatasource<EnumValue, int, int>
+    {
+        protected override int ConvertToChartType(int value) => value;
+    }
 
     public abstract class InstantBaseNullDoubleLineDatasource<TValue> : BaseNumberLineDatasource<TValue, double?, double>
        where TValue : BaseInstantValue
@@ -52,4 +56,6 @@ namespace HSMServer.Datasources
     public sealed class DoubleToNullDoubleDatasource : InstantBaseNullDoubleLineDatasource<DoubleValue> { }
 
     public sealed class RateToNullDoubleDatasource : InstantBaseNullDoubleLineDatasource<RateValue> { }
+
+    public sealed class EnumToNullDoubleLineDatasource : InstantBaseNullDoubleLineDatasource<EnumValue> { }
 }

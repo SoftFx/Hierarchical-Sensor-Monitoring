@@ -14,42 +14,73 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         private readonly TimeSpan _scanPeriod = TimeSpan.FromSeconds(5);
         private readonly ServiceController _controller;
 
-        private ServiceControllerStatus _lastServiceState;
+        private ServiceControllerStatus? _lastServiceState;
         private Task _statusWatcher;
         private CancellationTokenSource _cancellationTokenSource;
 
-        private volatile bool _isStarted = false;
+        private readonly object _locker = new object();
 
         internal WindowsServiceStatusSensor(ServiceSensorOptions options) : base(options)
         {
-            _controller = GetService(options.ServiceName);
-            _lastServiceState = _controller.Status;
+            try
+            {
+                _controller = ServiceController.GetServices().FirstOrDefault(s => s.ServiceName == options.ServiceName) ?? throw new ArgumentException($"Service {options.ServiceName} not found!");
+            }
+            catch(Exception ex)
+            {
+                HandleException(ex);
+            }
         }
 
 
         internal override ValueTask<bool> StartAsync()
         {
-            if (!_isStarted)
+            lock (_locker)
             {
-                _isStarted = true;
-                _cancellationTokenSource = new CancellationTokenSource();
-                _statusWatcher = PeriodicTask.Run(CheckServiceStatus, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
+                if (_controller == null)
+                {
+                    SendValue(0, HSMSensorDataObjects.SensorStatus.Error, $"Service not found");
+                }
+                else if (_statusWatcher == null)
+                {
+                    _cancellationTokenSource = new CancellationTokenSource();
+                    _statusWatcher = PeriodicTask.Run(CheckServiceStatus, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
+                }
             }
 
             return base.StartAsync();
         }
 
-        internal override ValueTask StopAsync()
+        internal override async ValueTask StopAsync()
         {
-            if (_isStarted)
+            try
             {
-                _isStarted = false;
-                _cancellationTokenSource?.Cancel();
-                _statusWatcher?.ConfigureAwait(false).GetAwaiter().GetResult();
-                _cancellationTokenSource?.Dispose();
-                _statusWatcher?.Dispose();
+                Task taskToWait = null;
+
+                lock (_locker)
+                {
+                    if (_statusWatcher != null)
+                    {
+                        _cancellationTokenSource?.Cancel();
+                        taskToWait = _statusWatcher;
+                        _cancellationTokenSource?.Dispose();
+                        _statusWatcher = null;
+                    }
+                }
+
+                if (taskToWait != null)
+                {
+                    await taskToWait.ConfigureAwait(false);
+                    taskToWait.Dispose();
+                }
+
+                await base.StopAsync();
             }
-            return base.StopAsync();
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+            }
         }
 
 
@@ -61,18 +92,15 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
 
                 if (_controller.Status != _lastServiceState)
                 {
+                    SendValue((int)_controller.Status);
                     _lastServiceState = _controller.Status;
-                    SendValue((int)_lastServiceState);
                 }
             }
             catch (Exception ex)
             {
-                ThrowException(ex);
+                HandleException(ex);
             }
         }
 
-        private static ServiceController GetService(string serviceName) =>
-            ServiceController.GetServices().FirstOrDefault(s => s.ServiceName == serviceName) ??
-            throw new ArgumentException($"Service {serviceName} not found!");
     }
 }

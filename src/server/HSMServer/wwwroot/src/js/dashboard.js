@@ -239,7 +239,7 @@ export async function createChart(chartId, data, layout, config) {
 }
 
 export function insertSourcePlot(data, id, panelId, dashboardId, range = undefined) {
-    let plot = convertToGraphData(JSON.stringify(data.values), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
+    let plot = convertToGraphData(JSON.stringify({values: data.values}), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)
 
@@ -555,15 +555,14 @@ window.multiChartPanelInit = async (values, sourceType, unit = '', height = 300,
         },
     }
 
-    if (sourceType === 7) {
+    if (sourceType === 'TimeSpan') {
         const ticks = TimeSpanPlot.getYaxisTicks(data);
         layout.yaxis.tickmode = 'array';
         layout.yaxis.ticktext = ticks.ticktext;
         layout.yaxis.tickvals = ticks.tickvals;
     }
 
-    if (sourceType === 8) {
-
+    if (sourceType === 'Version') {
         const ticks = VersionPlot.getYaxisTicks(data);
         layout.yaxis.tickmode = 'array';
         layout.yaxis.ticktext = ticks.ticktext;
@@ -597,11 +596,7 @@ window.multiChartPanelInit = async (values, sourceType, unit = '', height = 300,
     }
 
     await createChart(`multichart`, data, layout, config)
-    $('#multichart').on('plotly_relayout', function (e, updateData) {
-        let rect = e.target.getBoundingClientRect();
-        let emptypanel = $('#emptypanel');
-        emptypanel.css('transform', `translate(${rect.width / 2 - emptypanel.width() / 2}px, ${rect.height / 2}px)`)
-    }).on('plotly_doubleclick', async function(){
+    $('#multichart').on('plotly_doubleclick', async function(){
         await customReset($(`#multichart`)[0])
     })
 
