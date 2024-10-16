@@ -24,7 +24,7 @@
 
 ## Notification
 
-* Added Repeat notification grouping logic.
+* Removed '#' from grouping logic.
 * Now messages have max length, that equals to 1000 symbols.
 
 ## Alerts
