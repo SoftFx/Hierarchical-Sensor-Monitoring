@@ -77,22 +77,12 @@ namespace HSMServer.Model.Controls
             return response;
         }
 
-        public (HashSet<Guid> parentIds, HashSet<Guid> selected, DefaultChatMode mode, DefaultChatMode? parentMode) GetChats2()
+        public DefaultChatMode GetChatMode()
         {
-            var parentIds = new HashSet<Guid>();
-            var selected = SelectedChats;
-            var parent = Parent;
-            var parentMode = parent?.ChatMode;
+            if (ChatMode is not DefaultChatMode.FromParent)
+                return ChatMode;
 
-            if (IsFromParent && parent is not null)
-            {
-                var (ppIds, psIds, pMode, ppMode) = parent.GetChats2();
-                parentIds.UnionWith(ppIds);
-                parentIds.UnionWith(psIds);
-                parentMode = pMode;
-            }
-            
-            return (parentIds, selected, ChatMode, parentMode);
+            return Parent?.GetChatMode() ?? ChatMode;
         }
 
         public (HashSet<Guid> parentIds, HashSet<Guid> selected, DefaultChatMode mode, DefaultChatMode? parentMode) GetChats()
@@ -104,7 +94,7 @@ namespace HSMServer.Model.Controls
             
             if (IsFromParent && parent is not null)
             {
-                var (a, b) = parent.GetParentChats();
+                var (a, b) = GetParentChats();
                 parentIds.UnionWith(a);
                 
                 if (b is not null)

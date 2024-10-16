@@ -4,6 +4,7 @@ using HSMServer.Model.DataAlerts;
 using HSMServer.Model.TreeViewModel;
 using System;
 using System.Linq;
+using HSMServer.Model.Controls;
 
 namespace HSMServer.Extensions
 {
@@ -159,6 +160,7 @@ namespace HSMServer.Extensions
         public static bool IsNotInitializedDestination(this DataAlertViewModelBase alert, SensorNodeViewModel sensor)
         {
             return alert.Actions.Any(a => a.Action is ActionType.SendNotification &&
+                                          (a.ChatsMode is ChatsMode.FromParent && sensor.DefaultChats.GetChatMode() is not DefaultChatMode.Empty) &&
                                           ((a.ChatsMode is ChatsMode.NotInitialized && a.Chats.Count == 0)  || 
                                            (a.ChatsMode is ChatsMode.Custom && a.Chats.Count == 0) ||
                                           (a.ChatsMode is ChatsMode.FromParent && a.Chats.Count == 0 && sensor.Parent.DefaultChats.GetChatsCount() == 0)));
