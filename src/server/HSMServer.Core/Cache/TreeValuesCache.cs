@@ -526,8 +526,7 @@ namespace HSMServer.Core.Cache
                 if (result)
                 {
                     var (oldValue, newValue) =
-                        request.GetValues(lastValue,
-                            sensor.LastValue); // value can be rebuild in storage so use LastValue
+                        request.GetValues(lastValue, sensor.LastValue); // value can be rebuild in storage so use LastValue
 
                     _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator)
                     {
@@ -539,7 +538,7 @@ namespace HSMServer.Core.Cache
                     });
 
                     if (sensor.LastDbValue != null)
-                        SaveSensorValueToDb(sensor.LastDbValue, request.Id, true);
+                        SaveSensorValueToDb(sensor.LastDbValue, request.Id, false);
 
                     SensorUpdateViewAndNotify(sensor);
                 }
