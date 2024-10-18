@@ -2,15 +2,18 @@
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMServer.ConcurrentStorage;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Exceptions;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Managers;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Folders;
 using HSMServer.Notifications.Telegram.AddressBook;
 using HSMServer.ServerConfiguration;
+using Telegram.Bot.Types.Enums;
 
 
 namespace HSMServer.Notifications
@@ -235,7 +238,13 @@ namespace HSMServer.Notifications
                     try
                     {
                         var telegramChat = await _bot.GetChatAsync(chat.ChatId, _tokenSource.Token);
-
+        
+                        if (telegramChat.Type is ChatType.Group && (telegramChat.Permissions is null || !HaveSendPermissions(telegramChat.Permissions)))
+                        {
+                            if (await _chatsManager.TryRemove(new RemoveRequest(chat.Id, InitiatorInfo.System)))
+                                continue;
+                        }
+                        
                         var chatName = chat.Type is ConnectedChatType.TelegramPrivate ? telegramChat.Username : telegramChat.Title;
                         var chatDescription = telegramChat.Description;
 
@@ -253,10 +262,17 @@ namespace HSMServer.Notifications
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error($"Telegram chat name '{chat.Name}' updating is failed - {ex}");
+                        _ = await _chatsManager.TryRemove(new RemoveRequest(chat.Id, InitiatorInfo.System));
+                        _logger.Error($"Telegram chat name '{chat.Name}' updating is failed - {ex}, deleting the chat");
                     }
                 }
             }
+        }
+
+        private bool HaveSendPermissions(ChatPermissions permissions)
+        {
+            return permissions.CanSendMessages.HasValue && permissions.CanSendMessages.Value &&
+                   permissions.CanSendOtherMessages.HasValue && permissions.CanSendOtherMessages.Value;
         }
 
         //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
