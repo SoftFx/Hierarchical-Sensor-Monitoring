@@ -30,8 +30,8 @@ namespace HSMDataCollector.DefaultSensors.Windows
             {
                 process.Start();
 
-                long.TryParse(process.StandardOutput.ReadToEnd(), out mSeconds);
-
+                double.TryParse(process.StandardOutput.ReadToEnd(), out var dValue);
+                mSeconds = (long)dValue;
                 process.WaitForExit();
             }
 
