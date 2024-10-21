@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Linq;
-using System.Management;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 
@@ -9,10 +7,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
     {
-        private readonly string _lastBootTimeCommand = "((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalMilliseconds";
-        
-        public static string WMI_CLASS_NAME = "Win32_OperatingSystem";
-        public static string PROPERTY_NAME  = "LastBootUpTime";
+        public const string LastBootTimeCommand = "((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalMilliseconds";
 
         protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
@@ -26,12 +21,13 @@ namespace HSMDataCollector.DefaultSensors.Windows
         private long GetLastBootTime()
         {
             var mSeconds = 0L;
-            using (var process = ProcessInfo.GetPowershellProcess(_lastBootTimeCommand))
+            using (var process = ProcessInfo.GetPowershellProcess(LastBootTimeCommand))
             {
                 process.Start();
 
                 double.TryParse(process.StandardOutput.ReadToEnd(), out var dValue);
                 mSeconds = (long)dValue;
+
                 process.WaitForExit();
             }
 
