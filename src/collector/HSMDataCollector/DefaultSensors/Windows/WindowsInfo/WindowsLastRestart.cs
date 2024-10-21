@@ -20,22 +20,22 @@ namespace HSMDataCollector.DefaultSensors.Windows
         public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options) { }
 
 
-        protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastBootTime();
+        protected override TimeSpan GetValue() => TimeSpan.FromMilliseconds(GetLastBootTime());
 
 
-        private DateTime GetLastBootTime()
+        private long GetLastBootTime()
         {
-            DateTime lastBootTime;
+            var mSeconds = 0L;
             using (var process = ProcessInfo.GetPowershellProcess(_lastBootTimeCommand))
             {
                 process.Start();
 
-                DateTime.TryParse(process.StandardOutput.ReadToEnd(), out lastBootTime);
+                long.TryParse(process.StandardOutput.ReadToEnd(), out mSeconds);
 
                 process.WaitForExit();
             }
 
-            return lastBootTime;
+            return mSeconds;
         }
     }
 }
