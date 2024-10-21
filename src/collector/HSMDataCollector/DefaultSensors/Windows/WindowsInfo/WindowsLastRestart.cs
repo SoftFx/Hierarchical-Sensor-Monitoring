@@ -9,6 +9,8 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
     {
+        private readonly string _lastBootTimeCommand = "((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalMilliseconds";
+        
         public static string WMI_CLASS_NAME = "Win32_OperatingSystem";
         public static string PROPERTY_NAME  = "LastBootUpTime";
 
@@ -23,17 +25,17 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         private DateTime GetLastBootTime()
         {
-            using (var searcher = new ManagementObjectSearcher($"SELECT {PROPERTY_NAME} FROM {WMI_CLASS_NAME}"))
+            DateTime lastBootTime;
+            using (var process = ProcessInfo.GetPowershellProcess(_lastBootTimeCommand))
             {
-                var wmiObject = searcher.Get().OfType<ManagementObject>().FirstOrDefault();
+                process.Start();
 
-                if (wmiObject != null)
-                {
-                    return ManagementDateTimeConverter.ToDateTime(wmiObject.Properties[PROPERTY_NAME].Value.ToString()).ToUniversalTime();
-                }
+                DateTime.TryParse(process.StandardOutput.ReadToEnd(), out lastBootTime);
+
+                process.WaitForExit();
             }
 
-            return DateTime.MinValue;
+            return lastBootTime;
         }
     }
 }
