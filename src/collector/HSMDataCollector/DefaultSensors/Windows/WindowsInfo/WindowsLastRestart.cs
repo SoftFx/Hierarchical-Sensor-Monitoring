@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Linq;
-using System.Management;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 
@@ -9,8 +7,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
     {
-        public static string WMI_CLASS_NAME = "Win32_OperatingSystem";
-        public static string PROPERTY_NAME  = "LastBootUpTime";
+        public const string LastBootTimeCommand = "((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalMilliseconds";
 
         protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
@@ -18,22 +15,23 @@ namespace HSMDataCollector.DefaultSensors.Windows
         public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options) { }
 
 
-        protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastBootTime();
+        protected override TimeSpan GetValue() => TimeSpan.FromMilliseconds(GetLastBootTime());
 
 
-        private DateTime GetLastBootTime()
+        private long GetLastBootTime()
         {
-            using (var searcher = new ManagementObjectSearcher($"SELECT {PROPERTY_NAME} FROM {WMI_CLASS_NAME}"))
+            var mSeconds = 0L;
+            using (var process = ProcessInfo.GetPowershellProcess(LastBootTimeCommand))
             {
-                var wmiObject = searcher.Get().OfType<ManagementObject>().FirstOrDefault();
+                process.Start();
 
-                if (wmiObject != null)
-                {
-                    return ManagementDateTimeConverter.ToDateTime(wmiObject.Properties[PROPERTY_NAME].Value.ToString()).ToUniversalTime();
-                }
+                double.TryParse(process.StandardOutput.ReadToEnd(), out var dValue);
+                mSeconds = (long)dValue;
+
+                process.WaitForExit();
             }
 
-            return DateTime.MinValue;
+            return mSeconds;
         }
     }
 }
