@@ -1,6 +1,4 @@
-﻿@using HSMCommon.Constants
-@using HSMServer.Constants
-@using HSMServer.Controllers
+﻿@using HSMServer.Controllers
 @using HSMServer.Model.Configuration
 
 @model ConfigurationViewModel
@@ -60,6 +58,32 @@
 
 
 <script>
+    const obs = [];
+    
+    function check(){
+        let result = true;
+        for (const i of obs) {
+            result &= i.check();
+        }
+        
+        return result;
+    }
+    
+    window.addEventListener('beforeunload', function (e) {    
+        if (!check()) 
+        {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+    
+    $(document).ready(function() {
+        obs.push(createFormObserver("serverSettings_form"));
+        obs.push(createFormObserver("backupSettings_form"));
+        obs.push(createFormObserver("selfMonitoringSettings_form"));
+        obs.push(createFormObserver("telegramSettings_form"));
+    });
+    
     function savingFormSubscribe(formId, successMessage) {
         $(document).off("submit", `#${formId}`).on("submit", `#${formId}`, function (event) {
             event.preventDefault();

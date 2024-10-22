@@ -144,7 +144,7 @@ namespace HSMServer.Notifications
 
         internal async Task<string> StopBotAsync()
         {
-            _tokenSource.Cancel();
+            await _tokenSource.CancelAsync();
 
             var bot = _bot;
             _bot = null;
