@@ -7,3 +7,8 @@
 ## HSM Plots
 
 * Label 'Restart' now is set ot 45 angle
+
+
+## Notifications
+
+* Added deletion sync for group telegram chats
