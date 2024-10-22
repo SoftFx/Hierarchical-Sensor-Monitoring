@@ -1,4 +1,12 @@
-﻿window.hiddenColumns = {
+﻿import {MutationObserverService} from "../ts/services/mutation-observer-service";
+
+window.createFormObserver = function (id){
+    const obs = new MutationObserverService();
+    obs.addFormToObserve(id);
+    return obs; 
+}
+
+window.hiddenColumns = {
     id: undefined,
     
     showText: "Show all columns",
