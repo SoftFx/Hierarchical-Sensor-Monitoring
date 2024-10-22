@@ -262,8 +262,7 @@ namespace HSMServer.Notifications
                     }
                     catch (Exception ex)
                     {
-                        _ = await _chatsManager.TryRemove(new RemoveRequest(chat.Id, InitiatorInfo.System));
-                        _logger.Error($"Telegram chat name '{chat.Name}' updating is failed - {ex}, deleting the chat");
+                        _logger.Error($"Telegram chat name '{chat.Name}' updating is failed - {ex}");
                     }
                 }
             }

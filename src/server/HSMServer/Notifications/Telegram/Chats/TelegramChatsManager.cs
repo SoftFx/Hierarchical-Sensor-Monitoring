@@ -36,8 +36,7 @@ namespace HSMServer.Notifications
 
         protected override Action<TelegramChatEntity> UpdateInDb => _database.UpdateTelegramChat;
 
-        protected override Action<TelegramChat> RemoveFromDb =>
-            chat => _database.RemoveTelegramChat(chat.Id.ToByteArray());
+        protected override Action<TelegramChat> RemoveFromDb => chat => _database.RemoveTelegramChat(chat.Id.ToByteArray());
 
         protected override Func<List<TelegramChatEntity>> GetFromDb => _database.GetTelegramChats;
 
@@ -45,8 +44,7 @@ namespace HSMServer.Notifications
         public event Func<Guid, Guid, string, Task<string>> ConnectChatToFolder;
 
 
-        public TelegramChatsManager(IDatabaseCore database, ITreeValuesCache cache, IUserManager userManager,
-            IServerConfig config)
+        public TelegramChatsManager(IDatabaseCore database, ITreeValuesCache cache, IUserManager userManager, IServerConfig config)
         {
             _cache = cache;
             _database = database;
