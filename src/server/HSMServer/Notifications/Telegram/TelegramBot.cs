@@ -239,7 +239,7 @@ namespace HSMServer.Notifications
                     {
                         var telegramChat = await _bot.GetChatAsync(chat.ChatId, _tokenSource.Token);
         
-                        if (telegramChat.Type is ChatType.Group && (telegramChat.Permissions is null || !HaveSendPermissions(telegramChat.Permissions)))
+                        if (ShouldGroupBeDeleted(telegramChat))
                         {
                             if (await _chatsManager.TryRemove(new RemoveRequest(chat.Id, InitiatorInfo.System)))
                                 continue;
@@ -269,10 +269,24 @@ namespace HSMServer.Notifications
             }
         }
 
-        private bool HaveSendPermissions(ChatPermissions permissions)
+        private static bool ShouldGroupBeDeleted(Chat telegramChat)
         {
-            return permissions.CanSendMessages.HasValue && permissions.CanSendMessages.Value &&
-                   permissions.CanSendOtherMessages.HasValue && permissions.CanSendOtherMessages.Value;
+            if (telegramChat is null)
+                return true;
+            
+            return telegramChat.Type switch
+            {
+                ChatType.Private => false,
+                ChatType.Group => HasNoPermissions(telegramChat.Permissions),
+                _ => false
+            };
+
+            static bool HasNoPermissions(ChatPermissions permissions)
+            {
+                return permissions is null || 
+                       (permissions.CanSendMessages.HasValue && permissions.CanSendMessages.Value &&
+                        permissions.CanSendOtherMessages.HasValue && permissions.CanSendOtherMessages.Value);
+            }
         }
 
         //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
@@ -319,7 +333,5 @@ namespace HSMServer.Notifications
                 }
             }
         }
-
-
     }
 }
