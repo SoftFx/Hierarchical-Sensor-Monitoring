@@ -5,6 +5,10 @@ namespace HSMServer.Model.Configuration
 {
     public class TelegramSettingsViewModel
     {
+        private const string Stopped = "Stopped"; 
+        private const string Running = "Running"; 
+
+
         [Display(Name = "Bot token")]
         public string BotToken { get; set; }
 
@@ -25,7 +29,7 @@ namespace HSMServer.Model.Configuration
             IsEnabled = config.Telegram.IsRunning;
             BotToken = config.Telegram.BotToken;
             BotName = config.Telegram.BotName;
-            Status = isBotRunning ? "Running" : "Stopped";
+            Status = isBotRunning ? Running : Stopped;
         }
     }
 }
