@@ -58,12 +58,12 @@
 
 
 <script>
-    const obs = [];
+    const obs = {};
     
     function check(){
         let result = true;
-        for (const i of obs) {
-            result &= i.check();
+        for (const i in obs) {
+            result &= obs[i].check();
         }
         
         return result;
@@ -78,10 +78,10 @@
     });
     
     $(document).ready(function() {
-        obs.push(createFormObserver("serverSettings_form"));
-        obs.push(createFormObserver("backupSettings_form"));
-        obs.push(createFormObserver("selfMonitoringSettings_form"));
-        obs.push(createFormObserver("telegramSettings_form"));
+        obs["serverSettings_form"] = createFormObserver("serverSettings_form");
+        obs["backupSettings_form"] = createFormObserver("backupSettings_form");
+        obs["selfMonitoringSettings_form"] = createFormObserver("selfMonitoringSettings_form");
+        obs["telegramSettings_form"] = createFormObserver("telegramSettings_form");
     });
     
     function savingFormSubscribe(formId, successMessage) {
@@ -100,6 +100,7 @@
                 async: true,
                 success: function (viewData) {
                     $(`#${formId}`).html(viewData);
+                    obs[formId] = createFormObserver(formId);
                     showToast(successMessage);
                 }
             });
