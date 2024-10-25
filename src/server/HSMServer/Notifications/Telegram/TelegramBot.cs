@@ -283,8 +283,8 @@ namespace HSMServer.Notifications
             static bool HasNoPermissions(ChatPermissions permissions)
             {
                 return permissions is null || 
-                       (permissions.CanSendMessages.HasValue && permissions.CanSendMessages.Value &&
-                        permissions.CanSendOtherMessages.HasValue && permissions.CanSendOtherMessages.Value);
+                       ((!permissions.CanSendMessages.HasValue || !permissions.CanSendMessages.Value) &&
+                        (!permissions.CanSendOtherMessages.HasValue || !permissions.CanSendOtherMessages.Value));
             }
         }
 
