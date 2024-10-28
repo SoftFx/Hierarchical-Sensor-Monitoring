@@ -266,7 +266,8 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         else
             $('#points_limit').hide()
 
-        let values = parsedData.value.values;
+        console.log(parsedData);
+        let values = parsedData.values;
         if (values.length === 0) {
             $('#no_data_' + encodedId).show();
             $('#noDataGraph').removeClass('d-none');
@@ -284,7 +285,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
 
                 reloadHistoryRequest(from, to, body);
             }
-            displayGraph(JSON.stringify(parsedData.value), sensorInfo, `graph_${encodedId}`, encodedId);
+            displayGraph(parsedData, sensorInfo, `graph_${encodedId}`, encodedId);
         }
 
         $("#sensorHistorySpinner").addClass("d-none");

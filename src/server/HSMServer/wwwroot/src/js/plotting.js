@@ -1,10 +1,10 @@
 ﻿import {
     BarPLot,
-    BoolPlot, Colors,
+    BoolPlot,
+    Colors,
     DoublePlot,
     EnumPlot,
     IntegerPlot,
-    Plot,
     ServiceAliveIcon,
     ServiceStatusIcon,
     TimeSpanPlot
@@ -129,7 +129,7 @@ window.displayGraph = async function (data, sensorInfo, graphElementId, graphNam
     }
 
     let layout = plot.getLayout();
-
+    
     if (sensorInfo.plotType === 10) {
         layout.shapes = plot.shapes;
         layout.hovermode = 'closest';
@@ -200,13 +200,8 @@ function createLayoutFromZoomData(zoomData, layout) {
     return layout;
 }
 
-function getPreviousZoomData(graphElementId) {
-    return window.sessionStorage.getItem(graphElementId);
-}
-
 export function convertToGraphData(graphData, sensorInfo, graphName, color = Colors.default, shape = undefined, asLine = false, range = undefined) {
-    let parsedData = JSON.parse(graphData);
-    let escapedData = parsedData.values;
+    let escapedData = graphData.values;
     switch (sensorInfo.plotType) {
         case 0:
             return new BoolPlot(escapedData, sensorInfo.units, color, range);
@@ -330,7 +325,7 @@ async function addEnumPlot(graphId, graphName, id, isStatusService, path) {
         const currdata = graph.layout.yaxis.range;
         const average = (currdata[0] + currdata[1]) / 2;
 
-        let heatPlot = new EnumPlot(result.value.values, isStatusService, true, average)
+        let heatPlot = new EnumPlot(result.values, isStatusService, true, average)
         let shapes = graph.layout.shapes ?? [];
 
         let updateLayout = {

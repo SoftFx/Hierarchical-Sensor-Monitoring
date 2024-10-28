@@ -19,6 +19,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using HSMServer.Core.Model.Requests;
+using HSMServer.Dashboards;
 using HSMServer.JsonConverters;
 
 namespace HSMServer.Controllers
@@ -126,6 +128,23 @@ namespace HSMServer.Controllers
             if (model == null || !TryGetSensor(model.EncodedId, out var sensor))
                 return _emptyJsonResult;
 
+            if (sensor.Type is SensorType.Version)
+            {
+                var sensorModel = _cache.GetSensor(sensor.Id);
+                var source = new PanelDatasource(sensorModel);
+                source.BuildSource(new PanelRangeSettings(){AutoScale = true}, false, false);
+                
+                var request = await source.Source.Initialize(new SensorHistoryRequest()
+                {
+                    From = model.FromUtc,
+                    To = model.ToUtc,
+                    Count = model.Count,
+                    Options = model.Options,
+                });
+                
+                return Json(new DatasourceViewModel(request, source, false), _serializationsOptions);
+            }
+            
             var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
 
             var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
@@ -133,7 +152,7 @@ namespace HSMServer.Controllers
             if (localValue is not null && (values.Count == 0 || values[0].Time != localValue.Time))
                 values.Add(localValue);
             
-            return Json(HistoryProcessorFactory.BuildProcessor((int)sensor.Type).GetResultFromValues(sensor, values, model.BarsCount), _serializationsOptions);
+            return HistoryProcessorFactory.BuildProcessor((int)sensor.Type).GetResultFromValues(sensor, values, model.BarsCount);
         }
 
         [HttpPost]

@@ -135,6 +135,11 @@ public class DatasourceViewModel
         ChartType = response.ChartType;
     }
 
+    public async Task LoadDataFromTo()
+    {
+        
+    }
+
 
     private List<SelectListItem> GetAvailableProperties(BaseSensorModel sensor)
     {
