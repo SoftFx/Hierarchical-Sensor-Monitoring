@@ -337,12 +337,12 @@ async function addEnumPlot(graphId, graphName, id, isStatusService, path) {
             hoverdistance: 50
         };
 
-        Plotly.addTraces(graphId, heatPlot.getPlotData(currentName), 0);
-        Plotly.update(graphId, {}, updateLayout);
+        await Plotly.addTraces(graphId, heatPlot.getPlotData(currentName), 0);
+        await Plotly.update(graphId, {}, updateLayout);
     }
 
     if (graph._fullData.length === 1)
-        Plotly.update(graphId, {}, {
+        await Plotly.update(graphId, {}, {
             hovermode: 'closest',
             title: {}
         });

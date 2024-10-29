@@ -5,6 +5,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Datasources.Aggregators;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -84,6 +85,11 @@ namespace HSMServer.Datasources
                 Values = _newVisibleValues.Select(_filter).ToList(),
             };
 
+        }
+
+        public async Task<List<BaseValue>> InitializeStatic(SensorHistoryRequest request)
+        {
+            return await _sensor.GetHistoryData(request);
         }
 
         public UpdateChartSourceResponse GetSourceUpdates() =>

@@ -21,6 +21,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Dashboards;
+using HSMServer.Datasources;
 using HSMServer.JsonConverters;
 
 namespace HSMServer.Controllers
@@ -128,24 +129,34 @@ namespace HSMServer.Controllers
             if (model == null || !TryGetSensor(model.EncodedId, out var sensor))
                 return _emptyJsonResult;
 
-            if (sensor.Type is SensorType.Version)
+            async Task<InitChartSourceResponse> GetVersionValues()
             {
                 var sensorModel = _cache.GetSensor(sensor.Id);
                 var source = new PanelDatasource(sensorModel);
                 source.BuildSource(new PanelRangeSettings(){AutoScale = true}, false, false);
-                
-                var request = await source.Source.Initialize(new SensorHistoryRequest()
+
+                return await source.Source.Initialize(new SensorHistoryRequest()
                 {
                     From = model.FromUtc,
                     To = model.ToUtc,
                     Count = model.Count,
                     Options = model.Options,
                 });
-                
-                return Json(new DatasourceViewModel(request, source, false), _serializationsOptions);
+            }
+
+            return Json(await GetVersionValues());
+            
+            if (sensor.Type is SensorType.Version)
+            {
+                var a = await GetVersionValues();
+                var values1 = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
+
+                // this doesn't return ok ata to frontend
+                return new JsonResult(a, _serializationsOptions);
             }
             
-            var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
+            var values = 
+                await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
 
             var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
 
@@ -233,6 +244,7 @@ namespace HSMServer.Controllers
             if (!TryGetSensor(model.EncodedId, out var sensor))
                 return null;
 
+            Console.WriteLine("Latest history model");
             var lastUpdate = sensor?.LastValue?.ReceivingTime ?? DateTime.MinValue;
             var lastTimeout = sensor?.LastTimeout?.ReceivingTime ?? DateTime.MinValue;
 

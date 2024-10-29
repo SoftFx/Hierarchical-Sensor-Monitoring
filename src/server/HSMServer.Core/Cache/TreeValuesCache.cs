@@ -798,7 +798,6 @@ namespace HSMServer.Core.Cache
                     if (sensor is FileSensorModel)
                         _fileHistoryLocks[sensorId] = true;
 
-
                     var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
 
                     if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) &&
