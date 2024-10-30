@@ -178,8 +178,7 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options)
         {
-            // return ToWindows(new WindowsLastUpdate(_prototype.WindowsLastUpdate.Get(options)));
-            return this;
+            return ToWindows(new WindowsLastUpdate(_prototype.WindowsLastUpdate.Get(options)));
         }
 
         public IWindowsCollection AddWindowsLastRestart(WindowsInfoSensorOptions options)
