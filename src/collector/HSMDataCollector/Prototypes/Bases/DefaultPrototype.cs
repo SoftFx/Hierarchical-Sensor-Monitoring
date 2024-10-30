@@ -1,4 +1,7 @@
-﻿using System.Linq;
+﻿using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Web;
 using HSMDataCollector.Options;
 
 
@@ -35,6 +38,8 @@ namespace HSMDataCollector.Prototypes
                 AggregateData = customOptions?.AggregateData ?? defaultOptions.AggregateData,
                 Statistics = customOptions?.Statistics ?? defaultOptions.Statistics,
                 DataProcessor = customOptions?.DataProcessor ?? defaultOptions.DataProcessor,
+
+                SensorLocation = customOptions?.SensorLocation ?? defaultOptions.SensorLocation,
             };
 
 

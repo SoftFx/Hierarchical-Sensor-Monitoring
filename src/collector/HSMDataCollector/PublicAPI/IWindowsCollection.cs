@@ -118,5 +118,7 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);
 
         IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options);
+
+        bool UnsubscribeWindowsServiceStatus(ServiceSensorOptions options);
     }
 }

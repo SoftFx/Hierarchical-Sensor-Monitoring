@@ -72,10 +72,14 @@ namespace DatacollectorSandbox
 
             await _collector.Start();
 
-            _collector.Windows.SubscribeToWindowsServiceStatus("_AdminEye");
-            _collector.Windows.SubscribeToWindowsServiceStatus(new ServiceSensorOptions() { ServiceName = "_sfxClusterService", IsHostService = false });
-            //_collector.Windows.SubscribeToWindowsServiceStatus("_sfxClusterService12");
 
+            _collector.Windows.SubscribeToWindowsServiceStatus(new ServiceSensorOptions() { ServiceName = "CaddyServer", IsHostService = false, SensorLocation = SensorLocation.Product,  SensorPath = $"{_collector.ComputerName}/CaddyService" });
+            //_collector.Windows.SubscribeToWindowsServiceStatus("CaddyServer");
+
+
+           // bool result = _collector.Windows.UnsubscribeWindowsServiceStatus(new ServiceSensorOptions() { IsHostService = false, SensorLocation = SensorLocation.Product, SensorPath = $"{_collector.ComputerName}/CaddyService" });
+
+            //Console.WriteLine(result);
 
             var sensor = _collector.CreateEnumSensor($"enum/test", new EnumSensorOptions
             {

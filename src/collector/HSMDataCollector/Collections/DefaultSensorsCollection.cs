@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors.Diagnostic;
 using HSMDataCollector.DefaultSensors.Other;
@@ -127,6 +129,19 @@ namespace HSMDataCollector.DefaultSensors
             _storage.Register(sensor);
 
             return this;
+        }
+
+        protected bool Unregister(string sensorName)
+        {
+            if (!IsCorrectOs)
+                throw _notSupportedException;
+
+            var result = _storage.TryRemove(sensorName, out SensorBase sensor);
+
+            if (result)
+                sensor.Dispose();
+
+            return result;
         }
 
         public void Dispose()
