@@ -12,24 +12,23 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
     internal sealed class WindowsServiceStatusSensor : SensorBase<int>
     {
         private readonly TimeSpan _scanPeriod = TimeSpan.FromSeconds(5);
-        private readonly ServiceController _controller;
+        private readonly TimeSpan _faultStateDelay = TimeSpan.FromHours(1);
+        private readonly string _serviceName;
+
+        private ServiceController _service;
 
         private ServiceControllerStatus? _lastServiceState;
         private Task _statusWatcher;
         private CancellationTokenSource _cancellationTokenSource;
 
+        private bool _faultState = true;
+
         private readonly object _locker = new object();
+
 
         internal WindowsServiceStatusSensor(ServiceSensorOptions options) : base(options)
         {
-            try
-            {
-                _controller = ServiceController.GetServices().FirstOrDefault(s => s.ServiceName == options.ServiceName) ?? throw new ArgumentException($"Service {options.ServiceName} not found!");
-            }
-            catch(Exception ex)
-            {
-                HandleException(ex);
-            }
+            _serviceName = options.ServiceName;
         }
 
 
@@ -37,19 +36,16 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         {
             lock (_locker)
             {
-                if (_controller == null)
-                {
-                    SendValue(0, HSMSensorDataObjects.SensorStatus.Error, $"Service not found");
-                }
-                else if (_statusWatcher == null)
+                if (_statusWatcher == null)
                 {
                     _cancellationTokenSource = new CancellationTokenSource();
-                    _statusWatcher = PeriodicTask.Run(CheckServiceStatus, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
+                    _statusWatcher = PeriodicTask.Run(CheckServiceStatusAsync, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
                 }
             }
 
             return base.StartAsync();
         }
+
 
         internal override async ValueTask StopAsync()
         {
@@ -84,21 +80,40 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         }
 
 
-        private void CheckServiceStatus()
+        private async Task CheckServiceStatusAsync()
         {
             try
             {
-                _controller.Refresh();
-
-                if (_controller.Status != _lastServiceState)
+                if (_faultState)
                 {
-                    SendValue((int)_controller.Status);
-                    _lastServiceState = _controller.Status;
+                    _service = ServiceController.GetServices().FirstOrDefault(s => s.ServiceName == _serviceName);
+                    if (_service == null)
+                    {
+                        SendValue(-1, HSMSensorDataObjects.SensorStatus.Error, "Service not found!");
+                        _lastServiceState = null;
+                        await Task.Delay(_faultStateDelay - _scanPeriod);
+                        return;
+                    }
+
+                    _faultState = false;
+                }
+                
+                if (!_faultState)
+                {
+                    _service.Refresh();
+
+                    if (_service.Status != _lastServiceState)
+                    {
+                        SendValue((int)_service.Status);
+                        _lastServiceState = _service.Status;
+                    }
                 }
             }
             catch (Exception ex)
             {
                 HandleException(ex);
+                _faultState = true;
+                _lastServiceState = null;
             }
         }
 

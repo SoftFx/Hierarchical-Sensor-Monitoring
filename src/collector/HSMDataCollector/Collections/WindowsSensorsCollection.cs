@@ -5,6 +5,7 @@ using HSMDataCollector.DefaultSensors.Windows.Network;
 using HSMDataCollector.DefaultSensors.Windows.Service;
 using HSMDataCollector.DefaultSensors.Windows.WindowsInfo;
 using HSMDataCollector.Options;
+using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
 
 
@@ -285,6 +286,13 @@ namespace HSMDataCollector.DefaultSensors
                                    : throw new ArgumentNullException(nameof(options));
         }
 
+
+        public bool UnsubscribeWindowsServiceStatus(ServiceSensorOptions options)
+        {
+            var opt = _prototype.ServiceStatus.Get(options);
+
+            return Unregister(opt.Path);
+        }
 
         private WindowsSensorsCollection ToWindows(SensorBase sensor) => (WindowsSensorsCollection)Register(sensor);
     }
