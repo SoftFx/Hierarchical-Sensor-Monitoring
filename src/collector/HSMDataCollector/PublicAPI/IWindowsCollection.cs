@@ -60,6 +60,7 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null);
 
 
+        [Obsolete("Deprecated. No longer sends information about last update time.")]
         IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options = null);
 
         IWindowsCollection AddWindowsLastRestart(WindowsInfoSensorOptions options = null);
