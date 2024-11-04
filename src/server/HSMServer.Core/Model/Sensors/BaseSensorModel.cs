@@ -49,6 +49,7 @@ namespace HSMServer.Core.Model
 
         public SensorState State { get; private set; }
 
+        public TableSettingsModel TableSettings { get; private set; } = new();
 
         public SensorResult? Status
         {
@@ -95,6 +96,9 @@ namespace HSMServer.Core.Model
             if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
 
+            if (entity.TableSettings is not null)
+                TableSettings = new TableSettingsModel(entity.TableSettings);
+            
             State = (SensorState)entity.State;
             OriginalUnit = (Unit?)entity.OriginalUnit;
             Integration = (Integration)entity.Integration;
@@ -135,7 +139,12 @@ namespace HSMServer.Core.Model
         internal bool TryUpdate(SensorUpdate update, out string error)
         {
             Update(update);
+            //
+            // TableSettings = UpdateProperty(TableSettings, update.TableSettings ?? TableSettings, update.Initiator);
 
+            TableSettings.MaxCommentHideSize = UpdateProperty(TableSettings.MaxCommentHideSize, update.MaxCommentHideSize ?? TableSettings.MaxCommentHideSize, update.Initiator);
+            TableSettings.IsHideEnabled = UpdateProperty(TableSettings.IsHideEnabled, update.IsHideEnabled ?? TableSettings.IsHideEnabled, update.Initiator);
+            
             Statistics = UpdateProperty(Statistics, update.Statistics ?? Statistics, update.Initiator);
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
@@ -195,6 +204,7 @@ namespace HSMServer.Core.Model
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
             ChangeTable = ChangeTable.ToEntity(),
             EnumOptions = EnumOptions?.ToDictionary(k => k.Key, v => v.Value.ToEntity()),
+            TableSettings = TableSettings.ToEntity()
         };
     }
 }
