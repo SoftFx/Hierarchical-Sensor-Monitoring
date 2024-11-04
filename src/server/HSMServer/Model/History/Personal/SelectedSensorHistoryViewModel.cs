@@ -67,7 +67,6 @@ namespace HSMServer.Model.History
                 _lastBar = _sensor.LastValue as BarBaseValue;
 
             Table = new HistoryTableViewModel(_sensor);
-            Chart = new ChartValuesViewModel(_sensor);
             
             NewValuesCnt = 0;
 

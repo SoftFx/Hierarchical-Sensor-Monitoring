@@ -87,9 +87,16 @@ namespace HSMServer.Datasources
 
         }
 
-        public async Task<List<BaseValue>> InitializeStatic(SensorHistoryRequest request)
+        public List<BaseChartValue> InitializeStatic(List<BaseValue> values)
         {
-            return await _sensor.GetHistoryData(request);
+            var versionPoints = new List<BaseChartValue>(values.Capacity);
+            foreach (var value in values)
+            {
+                if (DataAggregator.TryAddNewPoint(value, out var newPoint))
+                    versionPoints.Add(newPoint);
+            }
+            
+            return versionPoints;
         }
 
         public UpdateChartSourceResponse GetSourceUpdates() =>

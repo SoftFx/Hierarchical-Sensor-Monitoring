@@ -56,7 +56,6 @@ window.initialize = function () {
 
 window.searchHistory = function (encodedId) {
     const {from, to} = getFromAndTo(encodedId);
-    console.log("Searching " + from + " " + to + " " + $('#history_period').val())
 
     GetSensortInfo(encodedId).done(function (types) {
         if (Object.keys(types).length === 0)
@@ -263,7 +262,6 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         else
             $('#points_limit').hide()
 
-        console.log(parsedData);
         let values = parsedData.values;
         if (values.length === 0) {
             $('#no_data_' + encodedId).show();
@@ -276,9 +274,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
             if (needFillFromTo) {
                 let from = new Date(values[0].receivingTime);
                 let to = getToDate();
-                console.log(values[0])
-                console.log(from)
-                console.log(to)
+
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
                 $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
 

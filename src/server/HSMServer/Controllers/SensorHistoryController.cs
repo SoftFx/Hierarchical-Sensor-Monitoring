@@ -128,42 +128,23 @@ namespace HSMServer.Controllers
         {
             if (model == null || !TryGetSensor(model.EncodedId, out var sensor))
                 return _emptyJsonResult;
-
-            async Task<InitChartSourceResponse> GetVersionValues()
-            {
-                var sensorModel = _cache.GetSensor(sensor.Id);
-                var source = new PanelDatasource(sensorModel);
-                source.BuildSource(new PanelRangeSettings(){AutoScale = true}, false, false);
-
-                return await source.Source.Initialize(new SensorHistoryRequest()
-                {
-                    From = model.FromUtc,
-                    To = model.ToUtc,
-                    Count = model.Count,
-                    Options = model.Options,
-                });
-            }
-
-            return Json(await GetVersionValues());
             
-            if (sensor.Type is SensorType.Version)
-            {
-                var a = await GetVersionValues();
-                var values1 = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
-
-                // this doesn't return ok ata to frontend
-                return new JsonResult(a, _serializationsOptions);
-            }
-            
-            var values = 
-                await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
+            var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
 
             var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
 
             if (localValue is not null && (values.Count == 0 || values[0].Time != localValue.Time))
                 values.Add(localValue);
+
+            var processor = HistoryProcessorFactory.BuildProcessor((int) sensor.Type);
+
+            if (processor is VersionHistoryProcessor versionProcessor)
+            {
+                var cacheSensor = _cache.GetSensor(sensor.Id);
+                versionProcessor.AttachSensor(cacheSensor);
+            }
             
-            return HistoryProcessorFactory.BuildProcessor((int)sensor.Type).GetResultFromValues(sensor, values, model.BarsCount);
+            return processor.GetResultFromValues(sensor, values, model.BarsCount);
         }
 
         [HttpPost]
