@@ -56,6 +56,7 @@ window.initialize = function () {
 
 window.searchHistory = function (encodedId) {
     const {from, to} = getFromAndTo(encodedId);
+
     GetSensortInfo(encodedId).done(function (types) {
         if (Object.keys(types).length === 0)
             return;
@@ -91,11 +92,6 @@ window.InitializeHistory = function () {
         GetSensortInfo(encodedId).done(function (sensorInfo) {
             if (Object.keys(sensorInfo).length === 0)
                 return;
-
-            if (sensorInfo.realType === 0 && sensorInfo.plotType === 10) {
-                $('#history_period').trigger('change');
-                return;
-            }
             
             if (isFileSensor(sensorInfo.realType))
                 return;
@@ -256,7 +252,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         dataType: 'html',
         cache: false,
         async: true
-    }).done(function (data) {
+    }).done(async function (data) {
         $("#tableHistoryRefreshButton").addClass("d-none");
         $('#allColumnsButton').addClass("d-none");
 
@@ -266,7 +262,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         else
             $('#points_limit').hide()
 
-        let values = parsedData.value.values;
+        let values = parsedData.values;
         if (values.length === 0) {
             $('#no_data_' + encodedId).show();
             $('#noDataGraph').removeClass('d-none');
@@ -284,7 +280,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
 
                 reloadHistoryRequest(from, to, body);
             }
-            displayGraph(JSON.stringify(parsedData.value), sensorInfo, `graph_${encodedId}`, encodedId);
+            await displayGraph(parsedData, sensorInfo, `graph_${encodedId}`, encodedId);
         }
 
         $("#sensorHistorySpinner").addClass("d-none");
@@ -313,7 +309,7 @@ function isFileSensor(type) {
 }
 
 function isGraphAvailable(type) {
-    return !(type === 3 || type === 6 || type === 8);
+    return !(type === 3 || type === 6);
 }
 
 function isTableAvailable(type) {

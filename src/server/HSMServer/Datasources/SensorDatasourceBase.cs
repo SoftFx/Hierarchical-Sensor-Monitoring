@@ -5,6 +5,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Datasources.Aggregators;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -84,6 +85,18 @@ namespace HSMServer.Datasources
                 Values = _newVisibleValues.Select(_filter).ToList(),
             };
 
+        }
+
+        public List<BaseChartValue> InitializeStatic(List<BaseValue> values)
+        {
+            var versionPoints = new List<BaseChartValue>(values.Capacity);
+            foreach (var value in values)
+            {
+                if (DataAggregator.TryAddNewPoint(value, out var newPoint))
+                    versionPoints.Add(newPoint);
+            }
+            
+            return versionPoints;
         }
 
         public UpdateChartSourceResponse GetSourceUpdates() =>
