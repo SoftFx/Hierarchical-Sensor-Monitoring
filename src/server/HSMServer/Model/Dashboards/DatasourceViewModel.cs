@@ -71,6 +71,8 @@ public class DatasourceViewModel
 
     public Guid Id { get; set; }
 
+    public bool ShowProperty { get; set; }
+
 
     public PlottedProperty Property { get; set; }
 
@@ -95,7 +97,8 @@ public class DatasourceViewModel
     {
         _panelSource = source;
         ShowProduct = showProduct;
-
+        ShowProperty = source.ShowProperty;
+        
         Id = source.Id;
         SensorId = source.SensorId;
         Color = source.Color.ToRGB();

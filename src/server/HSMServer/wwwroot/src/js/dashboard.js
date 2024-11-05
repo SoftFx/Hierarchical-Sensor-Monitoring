@@ -74,11 +74,11 @@ function defaultLabelUpdate(id, name) {
     if (label.length === 0)
         return name;
 
-    if (label.val().startsWith(sensorNameDefault)) {
-        label.val(sensorNameDefault + ` (${property.text()})`)
-
-        return label.val();
-    }
+    // if (label.val().startsWith(sensorNameDefault)) {
+    //     label.val(sensorNameDefault + ` (${property.text()})`)
+    //
+    //     return label.val();
+    // }
 
     return name;
 }
@@ -470,14 +470,14 @@ function addResizable(interactable) {
     })
 }
 
-window.updateSource = function (name, color, property, shape, showProduct, id) {
+window.updateSource = function (name, color, property, shape, showProduct, showProperty, id) {
     if (multichartPanel[id] === undefined)
         multichartPanel[id] = {};
     
     if (multichartPanel[id].updateTimeout !== undefined)
         clearTimeout(multichartPanel[id].updateTimeout);
 
-    multichartPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, shape, showProduct, id);
+    multichartPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, shape, showProduct, showProperty, id);
 }
 
 window.initPanel = async function (id, settings, ySettings, values, lastUpdate, dashboardId, panelSourceType, unit, range = undefined) {
@@ -682,7 +682,7 @@ function showEventInfo(event) {
     $(`#${id}.cloned`).remove();
 }
 
-function updatePlotSource(name, color, property, shape, showProduct, id) {
+function updatePlotSource(name, color, property, shape, showProduct, showProperty, id) {
     let updatedName = defaultLabelUpdate(getMultichartTraceIndex(id), name)
     
     $.ajax({
@@ -694,7 +694,8 @@ function updatePlotSource(name, color, property, shape, showProduct, id) {
             label: updatedName,
             color: color,
             property: property,
-            shape: shape
+            shape: shape,
+            showProperty: showProperty
         })
     }).done(async function (response) {
         let traceId = getMultichartTraceIndex(id);
@@ -706,6 +707,9 @@ function updatePlotSource(name, color, property, shape, showProduct, id) {
 
         if (showProduct)
             updatedName = $(`#productName_${id}`).text() + updatedName;
+
+        if (showProperty)
+            updatedName = updatedName + ` (${property})`;
 
         let layoutUpdate = {
             'hovertemplate': `${updatedName}, %{customdata}<extra></extra>`,

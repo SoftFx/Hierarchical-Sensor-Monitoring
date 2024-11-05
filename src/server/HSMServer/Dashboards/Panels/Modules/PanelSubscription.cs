@@ -69,11 +69,12 @@ namespace HSMServer.Dashboards
             return entity;
         }
 
-        public PanelSubscription UpdatePanelSettings(PanelRangeSettings ySetting, bool aggrValues)
+        public PanelSubscription UpdatePanelSettings(PanelRangeSettings ySetting, bool aggrValues, bool showProperty)
         {
             _panelAggrValue = aggrValues;
             _panelYSettings = ySetting;
-
+            ShowProperty = showProperty;
+            
             return this;
         }
 

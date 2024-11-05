@@ -41,6 +41,9 @@
                     <label class="fw-bold me-1">Label:</label>
                     <input class="form-control" type="text" placeholder="Example: {product} - {diskName}" asp-for="Label" onchange="javascript:updateTemplate('@Model.Id')" required />
 
+                    <label class="fw-bold text-nowrap me-1">Show property:</label>
+                    <input class="form-check-input" type="checkbox" asp-for="ShowProperty" onchange="javascript:updateTemplate('@Model.Id')" />
+
                     <label class="fw-bold ms-2 me-1">Property:</label>
                     <select class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties.ToSelectedItems(k => k.GetDisplayName())" onfocusout="javascript:updateTemplate('@Model.Id')"></select>
 

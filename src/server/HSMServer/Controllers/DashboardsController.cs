@@ -184,6 +184,7 @@ namespace HSMServer.Controllers
                     Name = model.Name,
                     Description = model.Description ?? string.Empty,
                     ShowProduct = model.ShowProduct,
+                    ShowProperties = model.ShowProperties,
                     IsAggregateValues = model.AggregateValues,
 
                     AutoScale = model.YRange.AutoScale,
