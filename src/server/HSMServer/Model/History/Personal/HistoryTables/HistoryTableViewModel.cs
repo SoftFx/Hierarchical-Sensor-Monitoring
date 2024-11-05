@@ -10,6 +10,7 @@ using System.Linq;
 using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMServer.Core.Model.Sensors;
 
 namespace HSMServer.Model.History
 {
@@ -21,6 +22,8 @@ namespace HSMServer.Model.History
         private IAsyncEnumerator<List<BaseValue>> _pagesEnumerator;
 
 
+        public TableSettingsModel TableSettings => _model.TableSettings;
+        
         public List<TableValueViewModel> CurrentTablePage
         {
             get

@@ -31,6 +31,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HSMServer.DTOs.Sensors;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
@@ -769,6 +770,32 @@ namespace HSMServer.Controllers
             sensorNodeViewModel?.Update(sensor);
 
             return Ok();
+        }
+
+        [HttpPost("Home/{sensorId:guid}")]
+        public async Task<IActionResult> UpdateSensorTableSettings(Guid sensorId, [FromBody] TableSettingsUpdateDto tableSettingsUpdateDto)
+        {
+            var sensor = _treeValuesCache.GetSensor(sensorId);
+            
+            if (sensor is null)
+                return BadRequest("No sensor found");
+
+            if (tableSettingsUpdateDto.MaxCommentHideSize is not null &&
+                tableSettingsUpdateDto.MaxCommentHideSize < 0)
+                return BadRequest("Can't use negative numbers");
+
+            var update = new SensorUpdate
+            {
+                Id = sensor.Id,
+                IsHideEnabled = tableSettingsUpdateDto.IsHideEnabled,
+                MaxCommentHideSize = tableSettingsUpdateDto.MaxCommentHideSize,
+                Initiator = CurrentInitiator
+            };
+
+            if (_treeValuesCache.TryUpdateSensor(update, out var error))
+                return Ok("Successfully updated");
+
+            return BadRequest(error);
         }
 
         #endregion
