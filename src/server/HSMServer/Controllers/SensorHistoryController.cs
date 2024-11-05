@@ -225,7 +225,6 @@ namespace HSMServer.Controllers
             if (!TryGetSensor(model.EncodedId, out var sensor))
                 return null;
 
-            Console.WriteLine("Latest history model");
             var lastUpdate = sensor?.LastValue?.ReceivingTime ?? DateTime.MinValue;
             var lastTimeout = sensor?.LastTimeout?.ReceivingTime ?? DateTime.MinValue;
 
