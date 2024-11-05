@@ -139,8 +139,6 @@ namespace HSMServer.Core.Model
         internal bool TryUpdate(SensorUpdate update, out string error)
         {
             Update(update);
-            //
-            // TableSettings = UpdateProperty(TableSettings, update.TableSettings ?? TableSettings, update.Initiator);
 
             TableSettings.MaxCommentHideSize = UpdateProperty(TableSettings.MaxCommentHideSize, update.MaxCommentHideSize ?? TableSettings.MaxCommentHideSize, update.Initiator);
             TableSettings.IsHideEnabled = UpdateProperty(TableSettings.IsHideEnabled, update.IsHideEnabled ?? TableSettings.IsHideEnabled, update.Initiator);
