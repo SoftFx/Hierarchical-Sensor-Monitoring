@@ -222,9 +222,11 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
         if (noValuesElement != null) {
             $('#no_data_' + encodedId).show();
             $('#noDataValues').removeClass('d-none');
+            $('#commentTrimming').addClass('d-none')
         } else {
             $('#no_data_' + encodedId).hide();
             $('#noDataValues').addClass('d-none');
+            $('#commentTrimming').removeClass('d-none')
 
             if (needFillFromTo) {
                 let to = getToDate();
@@ -272,7 +274,11 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
             $('#noDataGraph').addClass('d-none');
 
             if (needFillFromTo) {
-                let from = new Date(values[0].receivingTime);
+                let time = values[0].receivingTime;
+                if (sensorInfo.realType === 8)
+                    time = values.at(-1).time;
+
+                let from = new Date(time);
                 let to = getToDate();
 
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
