@@ -61,28 +61,6 @@ window.getRangeDate = function () {
     return [new Date(newDate).toISOString(), lastDate]
 }
 
-function defaultLabelUpdate(id, name) {
-    let sources = $('#sources').find('li');
-    if (sources.length <= id)
-        return name;
-
-    let row = sources[id];
-    let label = $(row).find('input[id^="name_input"]')
-    let property = $(row).find(`select[id^='property_']`).find(':selected');
-    let sensorNameDefault = $(row).find('input[id^="name_default"]').val();
-
-    if (label.length === 0)
-        return name;
-
-    // if (label.val().startsWith(sensorNameDefault)) {
-    //     label.val(sensorNameDefault + ` (${property.text()})`)
-    //
-    //     return label.val();
-    // }
-
-    return name;
-}
-
 export function getPlotSourceView(id) {
     let showProduct = $(`input[name='ShowProduct']`).is(':checked');
 
@@ -486,6 +464,7 @@ window.initPanel = async function (id, settings, ySettings, values, lastUpdate, 
 
 
 window.multiChartPanelInit = async (values, sourceType, unit = '', height = 300, range = true) => {
+    showProperiesInLabels();
     const data = [];
     values.forEach(function (x) {
         data.push(insertSourcePlot(x, `multichart`, undefined, undefined, range)[0]);
@@ -683,15 +662,13 @@ function showEventInfo(event) {
 }
 
 function updatePlotSource(name, color, property, shape, showProduct, showProperty, id) {
-    let updatedName = defaultLabelUpdate(getMultichartTraceIndex(id), name)
-    
     $.ajax({
         processData: false,
         type: 'put',
         contentType: 'application/json',
         url: window.location.pathname + '/' + id,
         data: JSON.stringify({
-            label: updatedName,
+            label: name,
             color: color,
             property: property,
             shape: shape,
@@ -706,17 +683,21 @@ function updatePlotSource(name, color, property, shape, showProduct, showPropert
         }
 
         if (showProduct)
-            updatedName = $(`#productName_${id}`).text() + updatedName;
+            name = $(`#productName_${id}`).text() + name;
 
-        if (showProperty)
-            updatedName = updatedName + ` (${property})`;
+        if (showProperty || $(`#ShowProperties`).is(':checked')) {
+            name = name + ` (${property})`;
+            $('#label_property_' + id).text(`(${property})`).removeClass('d-none');
+        }
+        else
+            $('#label_property_' + id).addClass('d-none');
 
         let layoutUpdate = {
-            'hovertemplate': `${updatedName}, %{customdata}<extra></extra>`,
+            'hovertemplate': `${name}, %{customdata}<extra></extra>`,
             'line.color': color,
             'marker.color': color,
             'line.shape': shape,
-            name: updatedName
+            name: name
         }
 
         if (multichartPanel[id] !== undefined)

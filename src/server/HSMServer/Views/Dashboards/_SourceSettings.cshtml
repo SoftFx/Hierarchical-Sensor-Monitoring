@@ -59,6 +59,6 @@
 
 <script>
     function realtimeUpdate(id) {
-        updateSource($(`#name_input_${id}`).val(), $(`#color_${id}`).val(), $(`#property_${id}`).val(), $(`#shape_${id}`).val(), $(`input[name='ShowProduct']`).is(':checked'), $(`input[name='ShowProperty']`).is(':checked'), id);
+        updateSource($(`#name_input_${id}`).val(), $(`#color_${id}`).val(), $(`#property_${id}`).val(), $(`#shape_${id}`).val(), $(`input[name='ShowProduct']`).is(':checked'), $(`#showSensorProperty_input_${id}`).is(':checked'), id);
     }
 </script>

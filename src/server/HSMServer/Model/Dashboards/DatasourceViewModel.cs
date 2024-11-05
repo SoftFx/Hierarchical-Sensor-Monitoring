@@ -88,7 +88,7 @@ public class DatasourceViewModel
 
     public string DisplayProduct => $"[{ProductName}] ";
 
-    public string DisplayLabel => ShowProduct ? $"{DisplayProduct}{Label}" : Label;
+    public string DisplayLabel => $"{(ShowProduct ? DisplayProduct : string.Empty)}{Label}{(ShowProperty ? $" ({Property.GetDisplayName()})" : string.Empty)}";
 
 
     public DatasourceViewModel() { }

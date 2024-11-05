@@ -51,7 +51,7 @@ namespace HSMServer.Dashboards
             };
 
             Source = DatasourceFactory.Build(Sensor, settings);
-            ShowProperty = showProperty;
+            ShowProperty = showProperty ? showProperty : ShowProperty;
             
             return this;
         }
