@@ -12,7 +12,8 @@
     bool TryGetShortComment(string comment, out string shortComment)
     {
         shortComment = string.Empty;
-        if (comment.Length > Model.TableSettings.MaxCommentHideSize)
+
+        if (comment?.Length > Model.TableSettings.MaxCommentHideSize)
         {
             shortComment = comment[..Model.TableSettings.MaxCommentHideSize];
             return true;
