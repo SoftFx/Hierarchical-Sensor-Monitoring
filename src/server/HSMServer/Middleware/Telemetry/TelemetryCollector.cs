@@ -16,7 +16,6 @@ namespace HSMServer.Middleware.Telemetry
 
         private const string XForvardHeader = "X-Forwarded-For"; // real ip without vpn redirection
         private const string EmptyClient = "No name";
-        private const string InvalidAccessKey = "Invalid access key";
 
         private protected readonly ClientStatisticsSensors _statistics = _collector.WebRequestsSensors;
 
@@ -86,7 +85,7 @@ namespace HSMServer.Middleware.Telemetry
             apiKey = Guid.Empty;
 
             var result = context.TryReadInfo(AccessKeyHeader, out var key) && !string.IsNullOrEmpty(key) && Guid.TryParse(key, out apiKey);
-            error = result ? string.Empty : InvalidAccessKey;
+            error = result ? string.Empty : "Invalid access key";
 
             return result;
         }
