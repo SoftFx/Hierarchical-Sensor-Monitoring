@@ -3,10 +3,10 @@
     <PackageId>HSMDataCollector.HSMDataCollector</PackageId>
     <TargetFrameworks>net6.0;net472</TargetFrameworks>
     <OutputType>Library</OutputType>
-    <AssemblyVersion>3.4.4</AssemblyVersion>
-    <AssemblyFileVersion>3.4.4</AssemblyFileVersion>
-    <ProductVersion>3.4.4</ProductVersion>
-    <Version>3.4.4</Version>
+    <AssemblyVersion>3.4.5</AssemblyVersion>
+    <AssemblyFileVersion>3.4.5</AssemblyFileVersion>
+    <ProductVersion>3.4.5</ProductVersion>
+    <Version>3.4.5</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
