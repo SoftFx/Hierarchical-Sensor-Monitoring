@@ -8,9 +8,6 @@ using Polly;
 using HSMDataCollector.Logging;
 using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects;
-using System.IO;
-
-
 
 
 namespace HSMDataCollector.Client.HttpsClient
@@ -47,9 +44,9 @@ namespace HSMDataCollector.Client.HttpsClient
             {
                 if (response != null)
                 {
+                    var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
                     if (response.IsSuccessStatusCode)
                     {
-                        var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
                         var errors = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(stream, cancellationToken: token).ConfigureAwait(false);
 
                         foreach (var val in values)
@@ -65,7 +62,8 @@ namespace HSMDataCollector.Client.HttpsClient
                     }
                     else
                     {
-                        _logger.Error($"Command request for has been faulted. Status Code: {response.StatusCode}.");
+                        var error = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        _logger.Error($"Command request for has been faulted. Status Code: {response.StatusCode}, Status Text: {error}.");
                     }
                 }
                 else
