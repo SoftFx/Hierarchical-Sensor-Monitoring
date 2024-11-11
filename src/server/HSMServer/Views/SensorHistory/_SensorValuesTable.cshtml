@@ -1,5 +1,4 @@
-﻿@using HSMServer.Core.Model
-@using HSMServer.Model.History;
+﻿@using HSMServer.Model.History;
 @using HSMServer.Extensions;
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -9,8 +8,38 @@
 @{
     var currentPage = Model.CurrentTablePage;
     var olderTime = currentPage.LastOrDefault()?.ReceivingTime;
+
+    bool TryGetShortComment(string comment, out string shortComment)
+    {
+        shortComment = string.Empty;
+
+        if (comment?.Length > Model.TableSettings.MaxCommentHideSize)
+        {
+            shortComment = comment[..Model.TableSettings.MaxCommentHideSize];
+            return true;
+        }
+
+        return false;
+    }
 }
 
+<div id="commentTrimming" class="container justify-content-end mt-1 me-2 pe-2">
+    <div class="row">
+        <div class="col d-flex pe-0">
+            <div class="d-flex align-items-center mr-3">
+                <input class="form-check-input mt-0" checked="@Model.TableSettings.IsHideEnabled" type="checkbox" id="enableCommentTrimming">
+                <label class="form-check-label ml-2 ms-1" for="enableCommentTrimming">Enable comment trimming</label>
+            </div>
+            <div class="d-flex align-items-center ms-2">
+                <input class="form-control" type="number" min="1" max="2000000000" disabled="@(!Model.TableSettings.IsHideEnabled)" value="@Model.TableSettings.MaxCommentHideSize" id="maxSize" placeholder="Max size">
+                <label class="ml-2 ms-1 text-nowrap" for="maxSize">Max size</label>
+            </div>
+            <div class="d-flex align-items-center ms-2">
+                <button id="saveTableSettings" class="btn btn-primary" style="display: none" onclick="saveTableSettings()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 @if (Model.Pages.Count == 0)
 {
@@ -18,139 +47,150 @@
 }
 else
 {
-    <input id="oldest_date_@Model.SensorId" style='display: none' value="@olderTime" />
+    <input id="oldest_date_@Model.SensorId" style='display: none' value="@olderTime"/>
     <div>
         <table class='table table-striped'>
             <thead>
-                <tr class="text-nowrap">
-                    @if (Model.IsBarSensor)
+            <tr class="text-nowrap">
+                @if (Model.IsBarSensor)
+                {
+                    <th class="text-nowrap">Open time</th>
+                    <th id="lastUpdateTime_header" class="d-none text-nowrap">Last update time</th>
+                    <th id="closeTime_header" class="d-none text-nowrap">Close time</th>
+                }
+                else
+                {
+                    <th class="text-nowrap" title="Creating time">Date</th>
+                    <th id="lastUpdateTime_header" class="@(Model.AggregateValues ? string.Empty : "d-none") text-nowrap">Last update time</th>
+                }
+                <th id="receivingTime_header" class="d-none text-nowrap">Receiving time</th>
+                @if (Model.IsBarSensor)
+                {
+                    <th id="firstValue_header" class="d-none">First value</th>
+                    <th id="lastValue_header" class="d-none">Last value</th>
+                    <th>Min</th>
+                    <th>Mean</th>
+                    <th>Max</th>
+                    <th>Count</th>
+                    @if (Model.IsEma)
                     {
-                        <th class="text-nowrap">Open time</th>
-                        <th id="lastUpdateTime_header" class="d-none text-nowrap">Last update time</th>
-                        <th id="closeTime_header" class="d-none text-nowrap">Close time</th>
+                        <th>EMA (Min)</th>
+                        <th>EMA (Mean)</th>
+                        <th>EMA (Max)</th>
+                        <th>EMA (Count)</th>
                     }
-                    else
+                }
+                else
+                {
+                    <th id="aggregatedValuesCount_header" class="d-none">Aggregated values count</th>
+                    <th>Value</th>
+                    @if (Model.IsEma)
                     {
-                        <th class="text-nowrap" title="Creating time">Date</th>
-                        <th id="lastUpdateTime_header" class="@(Model.AggregateValues ? string.Empty : "d-none") text-nowrap">Last update time</th>
+                        <th>EMA (Value)</th>
                     }
-                    <th id="receivingTime_header" class="d-none text-nowrap">Receiving time</th>
-                    @if (Model.IsBarSensor)
-                    {
-                        <th id="firstValue_header" class="d-none">First value</th>
-                        <th id="lastValue_header" class="d-none">Last value</th>
-                        <th>Min</th>
-                        <th>Mean</th>
-                        <th>Max</th>
-                        <th>Count</th>
-                        @if (Model.IsEma)
-                        {
-                            <th>EMA (Min)</th>
-                            <th>EMA (Mean)</th>
-                            <th>EMA (Max)</th>
-                            <th>EMA (Count)</th>
-                        }
-                    }
-                    else
-                    {
-                        <th id="aggregatedValuesCount_header" class="d-none">Aggregated values count</th>
-                        <th>Value</th>
-                        @if (Model.IsEma)
-                        {
-                            <th>EMA (Value)</th>
-                        }
-                    }
-                    <th>Status</th>
-                    <th>Comment</th>
-                </tr>
+                }
+                <th>Status</th>
+                <th>Comment</th>
+            </tr>
             </thead>
             <tbody>
-                @for (int i = 0; i < currentPage.Count; ++i)
-                {
-                    var value = currentPage[i];
-                    var barValue = value as BarSensorValueViewModel;
-                    var simpleValue = value as SimpleSensorValueViewModel;
+            @for (int i = 0; i < currentPage.Count; ++i)
+            {
+                var value = currentPage[i];
+                var barValue = value as BarSensorValueViewModel;
+                var simpleValue = value as SimpleSensorValueViewModel;
 
-                    <tr>
-                        @if (Model.IsBarSensor)
+                <tr>
+                    @if (Model.IsBarSensor)
+                    {
+                        <td class="text-nowrap">@barValue.OpenTime.ToDefaultFormat()</td>
+                        <td id="lastUpdateTime_value@(i)" class="d-none text-nowrap">@value.Time.ToDefaultFormat()</td>
+                        <td id="closeTime_value@(i)" class="d-none text-nowrap">@barValue.CloseTime.ToDefaultFormat()</td>
+                    }
+                    else
+                    {
+                        <td class="text-nowrap">@value.Time.ToDefaultFormat()</td>
+                        if (value.IsTimeout)
                         {
-                            <td class="text-nowrap">@barValue.OpenTime.ToDefaultFormat()</td>
-                            <td id="lastUpdateTime_value@(i)" class="d-none text-nowrap">@value.Time.ToDefaultFormat()</td>
-                            <td id="closeTime_value@(i)" class="d-none text-nowrap">@barValue.CloseTime.ToDefaultFormat()</td>
+                            <td id="lastUpdateTime_value@(i)" class="@(Model.AggregateValues ? string.Empty : "d-none") text-nowrap"></td>
                         }
                         else
                         {
-                            <td class="text-nowrap">@value.Time.ToDefaultFormat()</td>
-                            if (value.IsTimeout)
-                            {
-                                <td id="lastUpdateTime_value@(i)" class="@(Model.AggregateValues ? string.Empty : "d-none") text-nowrap"></td>
-                            }
-                            else
-                            {
-                                <td id="lastUpdateTime_value@(i)" class="@(Model.AggregateValues ? string.Empty : "d-none") text-nowrap">@simpleValue.LastUpdateTime.ToDefaultFormat()</td>
-                            }
+                            <td id="lastUpdateTime_value@(i)" class="@(Model.AggregateValues ? string.Empty : "d-none") text-nowrap">@simpleValue.LastUpdateTime.ToDefaultFormat()</td>
                         }
-                        <td id="receivingTime_value@(i)" class="d-none text-nowrap">@value.ReceivingTime.ToDefaultFormat()</td>
-                        @if (Model.IsBarSensor)
+                    }
+                    <td id="receivingTime_value@(i)" class="d-none text-nowrap">@value.ReceivingTime.ToDefaultFormat()</td>
+                    @if (Model.IsBarSensor)
+                    {
+                        @if (value.IsTimeout)
                         {
-                            @if (value.IsTimeout)
+                            <td id="firstValue_value@(i)" class="d-none"></td>
+                            <td id="lastValue_value@(i)" class="d-none"></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            @if (Model.IsEma)
                             {
-                                <td id="firstValue_value@(i)" class="d-none"></td>
-                                <td id="lastValue_value@(i)" class="d-none"></td>
                                 <td></td>
                                 <td></td>
                                 <td></td>
                                 <td></td>
-                                @if (Model.IsEma)
-                                {
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                }
-                            }
-                            else
-                            {
-                                <td id="firstValue_value@(i)" class="d-none">@barValue.FirstValue</td>
-                                <td id="lastValue_value@(i)" class="d-none">@barValue.LastValue</td>
-                                <td>@barValue.Min</td>
-                                <td>@barValue.Mean</td>
-                                <td>@barValue.Max</td>
-                                <td>@barValue.Count</td>
-                                @if (Model.IsEma)
-                                {
-                                    <td>@barValue.EmaMin</td>
-                                    <td>@barValue.EmaMean</td>
-                                    <td>@barValue.EmaMax</td>
-                                    <td>@barValue.EmaCount</td>
-                                }
                             }
                         }
                         else
                         {
-                            if (value.IsTimeout)
+                            <td id="firstValue_value@(i)" class="d-none">@barValue.FirstValue</td>
+                            <td id="lastValue_value@(i)" class="d-none">@barValue.LastValue</td>
+                            <td>@barValue.Min</td>
+                            <td>@barValue.Mean</td>
+                            <td>@barValue.Max</td>
+                            <td>@barValue.Count</td>
+                            @if (Model.IsEma)
                             {
-                                <td id="aggregatedValuesCount_value@(i)" class="d-none"></td>
-                                <td></td>
-                                @if (Model.IsEma)
-                                {
-                                    <td></td>
-                                }
-                            }
-                            else
-                            {
-                                <td id="aggregatedValuesCount_value@(i)" class="d-none">@simpleValue.AggregatedValuesCount</td>
-                                <td>@simpleValue.Value</td>
-                                @if (Model.IsEma)
-                                {
-                                    <td>@simpleValue.EmaValue</td>
-                                }
+                                <td>@barValue.EmaMin</td>
+                                <td>@barValue.EmaMean</td>
+                                <td>@barValue.EmaMax</td>
+                                <td>@barValue.EmaCount</td>
                             }
                         }
-                        <td>@value.Status.ToIconStatus()</td>
-                        <td>@value.Comment</td>
-                    </tr>
-                }
+                    }
+                    else
+                    {
+                        if (value.IsTimeout)
+                        {
+                            <td id="aggregatedValuesCount_value@(i)" class="d-none"></td>
+                            <td></td>
+                            @if (Model.IsEma)
+                            {
+                                <td></td>
+                            }
+                        }
+                        else
+                        {
+                            <td id="aggregatedValuesCount_value@(i)" class="d-none">@simpleValue.AggregatedValuesCount</td>
+                            <td>@simpleValue.Value</td>
+                            @if (Model.IsEma)
+                            {
+                                <td>@simpleValue.EmaValue</td>
+                            }
+                        }
+                    }
+                    <td>@value.Status.ToIconStatus()</td>
+                    <td>
+                        @if (Model.TableSettings.IsHideEnabled && TryGetShortComment(value.Comment, out var shortComment))
+                        {
+                            <span>@shortComment</span>
+                            <span style="cursor: pointer; color: blue; text-decoration: underline" onclick="showFullText(this)">...</span>
+                            <span style="display: none">@value.Comment</span>
+                        }
+                        else
+                        {
+                            <span>@value.Comment</span>
+                        }
+                    </td>
+                </tr>
+            }
             </tbody>
         </table>
 
@@ -186,5 +226,37 @@ else
 
     if (@Model.CurrentIndex === 0) {
         $('#prevPageButton').addClass('disabled');
+    }
+
+    function showFullText(element) {
+        element.style.display = 'none';
+        element.previousElementSibling.style.display = 'none';
+        element.nextElementSibling.style.display = 'inline';
+    }
+    
+    $('#maxSize').on('input', function (){
+        $('#saveTableSettings').show();
+    });
+
+    $('#enableCommentTrimming').on('change', function (){
+        $('#saveTableSettings').show();
+        $('#maxSize').attr('disabled', !this.checked)
+    });
+    
+    async function saveTableSettings(){
+        fetch(window.location.pathname, {
+            method: 'post',
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                isHideEnabled: $('#enableCommentTrimming')[0].checked,
+                maxCommentHideSize: $('#maxSize').val()
+            })
+        }).then(response => response.text())
+        .then(text => {
+            showToast(text, "Update info");
+            refreshTable();
+        });   
     }
 </script>

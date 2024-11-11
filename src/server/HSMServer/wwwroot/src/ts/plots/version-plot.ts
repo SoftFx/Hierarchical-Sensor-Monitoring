@@ -41,12 +41,11 @@ export class VersionPlot extends Plot<string>{
         return stringRepresentation;
     }
     
-    override getLayout(y: string[]): Partial<Layout>{
+    getLayout(): Partial<Layout>{
         const layoutVals : string[] = [];
         const layoutText: string[] = [];
         
-        
-        for (const yVal of y) {
+        for (const yVal of this.y) {
             layoutText.push(yVal.replaceAll('.-1', ''));
             layoutVals.push(yVal);
         }
@@ -60,6 +59,7 @@ export class VersionPlot extends Plot<string>{
                tickfont: {
                    size: 10
                },
+               categoryorder: 'category ascending',
                // @ts-ignore
                automargin: "width+height"
            },

@@ -53,9 +53,9 @@ namespace HSMServer.Middleware.Telemetry
         private bool TryBuildPublicApiInfo(HttpContext context, out PublicApiRequestInfo info, out string error)
         {
             info = null;
-            error = null;
+            error = string.Empty;
 
-            if (!TryGetApiKey(context, out var apiKeyId))
+            if (!TryGetApiKey(context, out var apiKeyId, out error))
                 return false;
 
             if (!_cache.TryGetKey(apiKeyId, out var apiKey, out error))
@@ -80,12 +80,16 @@ namespace HSMServer.Middleware.Telemetry
             return true;
         }
 
-        private static bool TryGetApiKey(HttpContext context, out Guid apiKey)
+        private static bool TryGetApiKey(HttpContext context, out Guid apiKey, out string error)
         {
             apiKey = Guid.Empty;
 
-            return context.TryReadInfo(AccessKeyHeader, out var key) && !string.IsNullOrEmpty(key) && Guid.TryParse(key, out apiKey);
+            var result = context.TryReadInfo(AccessKeyHeader, out var key) && !string.IsNullOrEmpty(key) && Guid.TryParse(key, out apiKey);
+            error = result ? string.Empty : "Invalid access key";
+
+            return result;
         }
+        
 
         private static bool TryGetRemoteIP(HttpContext context, out string remoteIp)
         {

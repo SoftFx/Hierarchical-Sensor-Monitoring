@@ -217,7 +217,7 @@ export async function createChart(chartId, data, layout, config) {
 }
 
 export function insertSourcePlot(data, id, panelId, dashboardId, range = undefined) {
-    let plot = convertToGraphData(JSON.stringify({values: data.values}), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
+    let plot = convertToGraphData(data, data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)
 

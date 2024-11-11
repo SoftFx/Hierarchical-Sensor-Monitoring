@@ -32,6 +32,10 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public bool? IsSingleton { get; init; }
 
+        public bool? IsHideEnabled { get; init; }
+    
+        public int? MaxCommentHideSize { get; init; }
+        
 
         public DefaultAlertsOptions DefaultAlertsOptions { get; init; }
 

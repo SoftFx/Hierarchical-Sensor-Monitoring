@@ -16,7 +16,7 @@ namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
-        private readonly JsonSerializerOptions _serializerOptions = new ()
+        public static readonly JsonSerializerOptions SerializerOptions = new ()
         {
             Converters = { new VersionSourceConverter() },
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -250,7 +250,7 @@ namespace HSMServer.Controllers
             {
                 var response = await datasource.Source.Initialize();
                 
-                return Json(new DatasourceViewModel(response, datasource, showProduct), _serializerOptions);
+                return Json(new DatasourceViewModel(response, datasource, showProduct), SerializerOptions);
             }
             return Json(new
             {
