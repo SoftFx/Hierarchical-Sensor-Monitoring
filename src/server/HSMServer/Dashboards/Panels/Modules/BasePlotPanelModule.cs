@@ -54,12 +54,14 @@ namespace HSMServer.Dashboards
 
         public Color Color { get; protected set; }
 
+        public bool ShowProperty { get;  set; }
 
         protected BasePlotPanelModule() : base()
         {
             Color = Color.FromName(ColorExtensions.GenerateRandomColor());
             Property = PlottedProperty.Value;
             Shape = PlottedShape.linear;
+            ShowProperty = true;
         }
 
         protected BasePlotPanelModule(TEntity entity) : base(entity)
@@ -68,6 +70,7 @@ namespace HSMServer.Dashboards
             Shape = (PlottedShape)entity.Shape;
             Color = Color.FromName(entity.Color);
             Label = entity.Label;
+            ShowProperty = entity.ShowProperty;
         }
 
 
@@ -83,7 +86,8 @@ namespace HSMServer.Dashboards
 
             Color = update.Color is not null ? Color.FromName(update.Color) : Color;
             Label = !string.IsNullOrEmpty(update.Label) ? update.Label : Label;
-
+            ShowProperty = update.ShowProperty;
+            
             if (Enum.TryParse<PlottedProperty>(update.Property, out var newProperty) && Property != newProperty)
                 Property = ApplyDependentChange(newProperty);
 
@@ -105,6 +109,7 @@ namespace HSMServer.Dashboards
             entity.Shape = (byte)Shape;
             entity.Color = Color.Name;
             entity.Label = Label;
+            entity.ShowProperty = ShowProperty;
 
             return entity;
         }

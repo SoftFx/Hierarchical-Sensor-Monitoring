@@ -27,6 +27,8 @@ namespace HSMServer.Dashboards
         public bool? ShowLegend { get; init; }
 
         public bool? ShowProduct { get; init; }
+        
+        public bool? ShowProperties { get; init; }
 
         public bool? IsAggregateValues { get; init; }
 
@@ -39,7 +41,7 @@ namespace HSMServer.Dashboards
         public TooltipHovermode? Hovermode { get; init; }
 
 
-        public bool NeedSourceRebuild => IsAggregateValues.HasValue || MinY.HasValue || MaxY.HasValue || AutoScale.HasValue;
+        public bool NeedSourceRebuild => IsAggregateValues.HasValue || MinY.HasValue || MaxY.HasValue || AutoScale.HasValue || ShowProperties.HasValue;
 
 
         [SetsRequiredMembers]
@@ -97,6 +99,8 @@ namespace HSMServer.Dashboards
         public bool AggregateValues { get; init; }
         
         public bool IsSingleMode { get; init; }
+        
+        public bool ShowProperty { get; init; }
     }
 
 

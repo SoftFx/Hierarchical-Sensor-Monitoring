@@ -61,6 +61,10 @@
                             <input type="checkbox" asp-for="ShowProduct" class="form-check-input" onchange="javascript:showProductInLabels()"/>
                             <label class="form-check-label" asp-for="ShowProduct"></label>
                         </div>
+                        <div class="form-check ms-4">
+                            <input type="checkbox" asp-for="ShowProperties" class="form-check-input" onchange="javascript:showProperiesInLabels()"/>
+                            <label class="form-check-label" asp-for="ShowProperties"></label>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -193,6 +197,35 @@
                 $(`#productName_${sourceId}`).removeClass('d-none');
             else
                 $(`#productName_${sourceId}`).addClass('d-none');
+
+            realtimeUpdate(sourceId);
+        });
+    }
+
+    function showProperiesInLabels() {
+        $('#sources li').each(function (idx, li) {
+            let source = $(li);
+
+            let idAttr = source.attr('id');
+            let sourceId = idAttr.substring('source_'.length, idAttr.length);
+
+            if ($(`input[name='ShowProperties']`).is(':checked')) {
+                $(`#label_property_${sourceId}`).removeClass('d-none');
+                $(`#showSensorProperty_input_${sourceId}`).attr('disabled', true).removeClass('fw-bold').addClass('fw-normal');
+                $(`#showSensorProperty_${sourceId}`).removeClass('fw-bold').addClass('fw-normal');
+            }
+            else {
+                const showProperty = $(`#showSensorProperty_input_${sourceId}`);
+                const labelProperty = $(`#label_property_${sourceId}`);
+                const showSensorProperty = $(`#showSensorProperty_${sourceId}`);
+                if (!showProperty.is(':checked')) {
+                    labelProperty.addClass('d-none');
+                }
+                
+                showProperty.attr('disabled', false);
+                showSensorProperty.addClass('fw-bold').removeClass('fw-normal');
+                showProperty.addClass('fw-bold').removeClass('fw-normal')
+            }
 
             realtimeUpdate(sourceId);
         });

@@ -39,6 +39,8 @@ namespace HSMServer.Model.Dashboards
         public PlottedShape Shape { get; set; }
 
         public string Label { get; set; }
+        
+        public bool ShowProperty { get; set; }
 
 
         //public bool IsSubscribed { get; set; }
@@ -61,6 +63,7 @@ namespace HSMServer.Model.Dashboards
             Shape = subscription.Shape;
             Folders = subscription.Folders;
 
+            ShowProperty = subscription.ShowProperty;
             //IsSubscribed = subscription.IsSubscribed;
             IsApplied = subscription.IsApplied;
         }
@@ -75,7 +78,8 @@ namespace HSMServer.Model.Dashboards
 
                 FoldersFilter = new(Folders),
                 Label = Label?.Trim(),
-
+                
+                ShowProperty = ShowProperty
                 //IsSubscribed = IsSubscribed,
             };
     }
