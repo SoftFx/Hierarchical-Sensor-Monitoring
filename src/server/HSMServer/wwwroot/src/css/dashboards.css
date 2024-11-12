@@ -1,4 +1,24 @@
-﻿
+﻿.color-box {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    margin-right: 5px;
+    border: 1px solid #000;
+    position: relative;
+}
+
+.color-box button:hover {
+    color: darkred;
+}
+.column {
+    display: flex;
+    flex: 1 2 auto;
+    flex-wrap: wrap;
+    height: 200px;
+    width: auto;
+    flex-direction: column;
+}
+
 .dropdown-submenu {
     position: relative;
 }

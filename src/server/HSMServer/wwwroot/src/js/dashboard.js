@@ -472,7 +472,7 @@ window.multiChartPanelInit = async (values, sourceType, unit = '', height = 300,
 
     let layout = {
         hovermode: 'closest',
-        hoverdistance: 1,
+        hoverdistance: 20,
         dragmode: 'zoom',
         autosize: true,
         height: height,

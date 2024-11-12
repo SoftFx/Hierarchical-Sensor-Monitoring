@@ -13,7 +13,7 @@
     var jsonOptions = new JsonSerializerOptions()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new PlotlyDoubleConverter(), new VersionSourceConverter() }
+        Converters = {new PlotlyDoubleConverter(), new VersionSourceConverter()}
     };
 
     var isYRangeAvailabe = !Model.MainSensorType.HasValue || Model.YRange.IsRangeScalePossible(Model.MainSensorType.Value);
@@ -91,12 +91,86 @@
         }
     </div>
 
-    <label class="col-form-label fw-bold">Sources:</label>
+    <div class="d-flex col-form fw-bold justify-content-between">
+        <div>
+            <label class="col-form-label fw-bold">Sources:</label>
+            <span class="col-form-label fw-bold">123</span>
+        </div>
+
+        <div class="d-flex">
+            <label for="test">Enable stricted</label>
+            <input id="test" type="checkbox"/>
+
+            <span>Color Picker</span>
+            <button class="btn btn-secondary d-flex" data-bs-toggle="modal" data-bs-target="#colorModal">Default Colors</button>
+            <div class="modal fade" id="colorModal" tabindex="-1" aria-labelledby="colorModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="colorModalLabel">Default Colors</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body d-flex justify-content-between flex-row">
+                            <div id="defaultColors" class="column">
+                                <div class="d-flex">
+                                    <div class="color-box" style="background-color: yellow;"></div>
+                                    <button class="btn btn-primary">-</button>
+                                </div>
+                                <div class="d-flex">
+                                    <div class="color-box" style="background-color: red;"></div>
+                                    <button class="btn btn-primary">-</button>
+                                </div>
+                                <div class="d-flex">
+                                    <div class="color-box" style="background-color: green;"></div>
+                                    <button class="btn btn-primary">-</button>
+                                </div>
+                                <div class="d-flex">
+                                    <div class="color-box" style="background-color: yellow;"></div>
+                                    <button class="btn btn-primary">-</button>
+                                </div>
+                                <div class="d-flex">
+                                    <div class="color-box" style="background-color: red;"></div>
+                                    <button class="btn btn-primary">-</button>
+                                </div>
+                                <div class="d-flex">
+                                    <div class="color-box" style="background-color: green;"></div>
+                                    <button class="btn btn-primary">-</button>
+                                </div>
+                                <div class="d-flex">
+                                    <div class="color-box" style="background-color: yellow;"></div>
+                                    <button class="btn btn-primary">-</button>
+                                </div>
+                                <div class="d-flex">
+                                    <div class="color-box" style="background-color: red;"></div>
+                                    <button class="btn btn-primary">-</button>
+                                </div>
+                                <div class="d-flex">
+                                    <div class="color-box" style="background-color: green;"></div>
+                                    <button class="btn btn-primary">-</button>
+                                </div>
+                                <div class="d-flex">
+                                    <div class="color-box" style="background-color: green;"></div>
+                                    <button class="btn btn-primary">-</button>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="form-group mt-2">
+                                    <label for="modalColorInput">Choose color</label> 
+                                    <input type="color" class="form-control" id="modalColorInput">
+                                </div>
+                                <button class="btn btn-primary mt-2" onclick="addColorFromModal()">Add</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <div id="plots" class="mt-1">
         <ul id="sources" class="list-group">
             @foreach (var (_, source) in Model.Sources)
             {
-                @await Html.PartialAsync("_SourceSettings", source);
+                @await Html.PartialAsync("_SourceSettings", source)
             }
         </ul>
     </div>
@@ -110,8 +184,23 @@
 @await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
 
-<script>  
-   
+<script>
+    const selectedColors = [];
+
+    function addColorFromModal() {
+        const colorList = document.getElementById('defaultColors');
+        if (colorList.children.length >= 20)
+            return;
+        const color = document.createElement('div');
+        color.className = 'd-flex';
+        color.innerHTML = `
+             <div class="color-box" style="background-color: ${$('#modalColorInput').val()};"></div>
+             <button class="btn btn-primary">-</button>
+        `;
+
+        colorList.appendChild(color);
+    }
+
     let rangePreviewUpdate;
     var multichartRange;
     
