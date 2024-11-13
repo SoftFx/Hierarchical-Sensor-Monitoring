@@ -209,22 +209,19 @@
             let idAttr = source.attr('id');
             let sourceId = idAttr.substring('source_'.length, idAttr.length);
 
+            const showPropertyInput = $(`#showSensorProperty_input_${sourceId}`);
+            const propertyLabel = $(`#label_property_${sourceId}`);
+            const showSensorPropertyLabel = $(`#showSensorProperty_${sourceId}`);
+            
             if ($(`input[name='ShowProperties']`).is(':checked')) {
-                $(`#label_property_${sourceId}`).removeClass('d-none');
-                $(`#showSensorProperty_input_${sourceId}`).attr('disabled', true).removeClass('fw-bold').addClass('fw-normal');
-                $(`#showSensorProperty_${sourceId}`).removeClass('fw-bold').addClass('fw-normal');
+                propertyLabel.removeClass('d-none');
+                showPropertyInput.attr('disabled', true).removeClass('fw-bold').addClass('fw-normal').prop('checked', true);
+                showSensorPropertyLabel.removeClass('fw-bold').addClass('fw-normal');
             }
             else {
-                const showProperty = $(`#showSensorProperty_input_${sourceId}`);
-                const labelProperty = $(`#label_property_${sourceId}`);
-                const showSensorProperty = $(`#showSensorProperty_${sourceId}`);
-                if (!showProperty.is(':checked')) {
-                    labelProperty.addClass('d-none');
-                }
-                
-                showProperty.attr('disabled', false);
-                showSensorProperty.addClass('fw-bold').removeClass('fw-normal');
-                showProperty.addClass('fw-bold').removeClass('fw-normal')
+                propertyLabel.addClass('d-none'); 
+                showPropertyInput.attr('disabled', false).addClass('fw-bold').removeClass('fw-normal').prop('checked', false);
+                showSensorPropertyLabel.addClass('fw-bold').removeClass('fw-normal');
             }
 
             realtimeUpdate(sourceId);
