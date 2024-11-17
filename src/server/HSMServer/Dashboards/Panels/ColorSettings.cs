@@ -43,7 +43,6 @@ public sealed class ColorSettings
             Colors = [..DefaultColors];
 
         if (update.ColorSettings?.Colors != null)
-            foreach (var color in update.ColorSettings.Colors)
-                Colors.Add(Color.FromName(color));
+            Colors = update.ColorSettings.Colors.Select(Color.FromName).ToList();
     }
 }

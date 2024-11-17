@@ -23,31 +23,41 @@
 <div class="w-100 overflow-y-auto p-2">
     <div id="panelSettings" class="my-2">
         <div id="editablePanelSettings" class="my-2">
-            <form method="post" asp-action="@nameof(DashboardsController.SaveDashboardPanel)" asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
+            <form method="post" asp-action="@nameof(DashboardsController.SaveDashboardPanel)"
+                  asp-route-dashboardId="@Model.DashboardId" asp-route-panelId="@Model.Id">
                 <div class="d-flex justify-content-between mb-1">
                     <div class="d-flex align-items-center flex-grow-1">
                         <label asp-for="Name" class="me-2"></label>
-                        <input class="form-control" required maxlength="30" asp-for="Name" placeholder="@nameof(Model.Name)"/>
+                        <input class="form-control" required maxlength="30" asp-for="Name"
+                               placeholder="@nameof(Model.Name)"/>
                     </div>
 
                     <button type="submit" class="btn btn-primary independentSizeButton ms-2">Save</button>
                 </div>
 
-                <textarea id='description' maxlength="250" class="form-control w-100" type='text' asp-for="Description" placeholder="@nameof(Model.Description)"></textarea>
+                <textarea id='description' maxlength="250" class="form-control w-100" type='text' asp-for="Description"
+                          placeholder="@nameof(Model.Description)"></textarea>
 
                 <div class="d-flex">
-                    <div id="y-range-settings" class="form-control w-auto no-border align-items-center" style="display: flex">
-                        <div id="autoscale-range" class="d-flex no-border align-items-center @(Model.YRange.AutoScale ? "disabled-group" : "")">
+                    <div id="y-range-settings" class="form-control w-auto no-border align-items-center"
+                         style="display: flex">
+                        <div id="autoscale-range"
+                             class="d-flex no-border align-items-center @(Model.YRange.AutoScale ? "disabled-group" : "")">
                             <span>Y axis settings:</span>
 
                             <label class="form-check-label w-auto ms-2" asp-for="YRange.MinValue"></label>
-                            <input type="number" step="any" asp-for="YRange.MinValue" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
+                            <input type="number" step="any" asp-for="YRange.MinValue"
+                                   class="form-control form-control-sm ms-1"
+                                   style="flex: 0 0 content; max-width: 7rem"/>
 
                             <label class="form-check-label w-auto ms-2" asp-for="YRange.MaxValue"></label>
-                            <input type="number" step="any" asp-for="YRange.MaxValue" class="form-control form-control-sm ms-1" style="flex: 0 0 content; max-width: 7rem"/>
+                            <input type="number" step="any" asp-for="YRange.MaxValue"
+                                   class="form-control form-control-sm ms-1"
+                                   style="flex: 0 0 content; max-width: 7rem"/>
                         </div>
 
-                        <input id="autoscale" class="form-check-input my-0 mx-1" asp-for="YRange.AutoScale" type="checkbox"/>
+                        <input id="autoscale" class="form-check-input my-0 mx-1" asp-for="YRange.AutoScale"
+                               type="checkbox"/>
                         <label class="form-check-label" asp-for="YRange.AutoScale"></label>
                     </div>
                     <div class="d-flex flex-row align-items-center justify-content-end mt-2 flex-grow-1">
@@ -55,14 +65,17 @@
                             <input type="checkbox" asp-for="AggregateValues" class="form-check-input"/>
                             <label class="form-check-label" asp-for="AggregateValues"></label>
                         </div>
-                        <i class='fas fa-question-circle ms-1' title='If the setting is checked, the requested period will be divided into 100 equal sections and an aggregate point will be created for each subsection. The aggregation function depends on the source property. If source property is Min then aggregation function is Min(el1, el2). For source properties Max and Count the aggregation function is Max(el1, el2) and for Mean, Value and EMA (all) the function is Mean(el1, el2).'></i>
+                        <i class='fas fa-question-circle ms-1'
+                           title='If the setting is checked, the requested period will be divided into 100 equal sections and an aggregate point will be created for each subsection. The aggregation function depends on the source property. If source property is Min then aggregation function is Min(el1, el2). For source properties Max and Count the aggregation function is Max(el1, el2) and for Mean, Value and EMA (all) the function is Mean(el1, el2).'></i>
 
                         <div class="form-check ms-4">
-                            <input type="checkbox" asp-for="ShowProduct" class="form-check-input" onchange="javascript:showProductInLabels()"/>
+                            <input type="checkbox" asp-for="ShowProduct" class="form-check-input"
+                                   onchange="javascript:showProductInLabels()"/>
                             <label class="form-check-label" asp-for="ShowProduct"></label>
                         </div>
                         <div class="form-check ms-4">
-                            <input type="checkbox" asp-for="ShowProperties" class="form-check-input" onchange="javascript:showProperiesInLabels()"/>
+                            <input type="checkbox" asp-for="ShowProperties" class="form-check-input"
+                                   onchange="javascript:showProperiesInLabels()"/>
                             <label class="form-check-label" asp-for="ShowProperties"></label>
                         </div>
                     </div>
@@ -72,14 +85,16 @@
     </div>
 
     <div class="dropzone" style="max-width: 98%; min-width: 100%; width: 100%!important; position: relative;">
-        <span id="emptypanel" style="font-size: larger; z-index: 300; color: rgb(128,128,128); display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-align: center;">Empty panel</span>
+        <span id="emptypanel"
+              style="font-size: larger; z-index: 300; color: rgb(128,128,128); display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-align: center;">Empty panel</span>
         <div id="multichart"></div>
     </div>
 
 
     <div class="d-flex align-items-center">
         <label class="col-form-label fw-bold">Templates:</label>
-        <i class='fas fa-question-circle mx-2' title="Templates provide the ability to connect several sources with the same path template at once.&#013;Path input supports 2 types of variables that help to create sensor path templates. The variable supports letters, digits and symbols '_', '.', '$'.&#013;&#013;Variables:&#013;* - unnamed;&#013;{piece} - named (can be used in Label input)."></i>
+        <i class='fas fa-question-circle mx-2'
+           title="Templates provide the ability to connect several sources with the same path template at once.&#013;Path input supports 2 types of variables that help to create sensor path templates. The variable supports letters, digits and symbols '_', '.', '$'.&#013;&#013;Variables:&#013;* - unnamed;&#013;{piece} - named (can be used in Label input)."></i>
         <a href="javascript:addTemplate();" class="mx-2">
             <i class="fa-solid fa-plus"></i> Add
         </a>
@@ -102,7 +117,9 @@
             <input class="mx-1" id="test" type="checkbox"/>
 
             <span>Color Picker</span>
-            <button class="btn btn-secondary d-flex" data-bs-toggle="modal" data-bs-target="#colorModal">Default Colors</button>
+            <button class="btn btn-secondary d-flex" data-bs-toggle="modal" data-bs-target="#colorModal">Default
+                Colors
+            </button>
             <div class="modal fade" id="colorModal" tabindex="-1" aria-labelledby="colorModalLabel" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
@@ -124,11 +141,16 @@
                             </div>
                             <div>
                                 <div class="form-group mt-2">
-                                    <label for="modalColorInput">Choose color</label> 
+                                    <label for="modalColorInput">Choose color</label>
                                     <input type="color" class="form-control" id="modalColorInput">
                                 </div>
                                 <button class="btn btn-primary mt-2" onclick="addColorFromModal()">Add</button>
-                                <button class="btn btn-primary mt-2" onclick="restoreDefaultColors()">Restore defaults</button>
+                                <button class="btn btn-primary mt-2" onclick="restoreDefaultColors()">Restore defaults
+                                </button>
+
+                                <div>
+                                    <button class="btn btn-primary mt-2 w-100" onclick="saveColors()">Save</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -161,15 +183,15 @@
         const colorList = document.getElementById('defaultColors');
         if (colorList.children.length >= 20)
             return;
-        
+
         const newColorRGBValue = $('#modalColorInput').val();
-        for(const i of selectedColors){
-            if (i === newColorRGBValue){
+        for (const i of selectedColors) {
+            if (i === newColorRGBValue) {
                 showToast('Color already exists', 'Adding color info')
                 return;
             }
         }
-        
+
         const color = document.createElement('div');
         color.className = 'd-flex m-1';
         color.innerHTML = `
@@ -182,15 +204,30 @@
         colorList.appendChild(color);
         selectedColors.push(newColorRGBValue);
     }
-    
-    function deleteColor(colorNode){
-        console.log(colorNode)
-        
+
+    function rgbStringToHex(rgbString) {
+        // Extract the numbers from the rgb string
+        let rgbArray = rgbString.match(/\d+/g).map(Number);
+
+        // Convert the numbers to a hex string
+        const componentToHex = (c) => {
+            const hex = c.toString(16).toUpperCase();
+            return hex.length === 1 ? "0" + hex : hex;
+        };
+
+        // Concatenate the hex values and return the result
+        return "#" + componentToHex(rgbArray[0]) + componentToHex(rgbArray[1]) + componentToHex(rgbArray[2]);
+    }
+
+    function deleteColor(colorNode) {
+        let indexToRemove = selectedColors.findIndex((x) => x === rgbStringToHex(colorNode.previousSibling.previousSibling.style['background-color']))
+        selectedColors.splice(indexToRemove, 1)
+
         colorNode.parentNode.parentNode.removeChild(colorNode.parentNode)
     }
-    
-    async function restoreDefaultColors(){
-      await fetch(window.location.pathname, {
+
+    async function restoreDefaultColors() {
+        await fetch(window.location.pathname, {
             method: 'PUT',
             headers: {
                 "Content-Type": "application/json",
@@ -202,17 +239,33 @@
             })
         }).then((response) => {
             window.location.reload();
-      });
+        });
+    }
+
+    async function saveColors() {
+        await fetch(window.location.pathname, {
+            method: 'PUT',
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                colorSettings: {
+                    colors: selectedColors
+                }
+            })
+        }).then((response) => {
+            window.location.reload();
+        });
     }
 
     let rangePreviewUpdate;
     var multichartRange;
-    
+
     $(() => {
         selectedColors = @Html.Raw(@JsonSerializer.Serialize(Model.ColorSettings.Colors.Select(x => x.Name).ToList()))
-        
+
         setMultichartRemoveListeners();
-                
+
         if ('@isYRangeAvailabe' !== 'True')
             $('#y-range-settings').hide();
 
@@ -221,21 +274,21 @@
         multichartRange = ySettings.autoScale === true ? true : [Number(ySettings.minValue), Number(ySettings.maxValue)];
 
         multiChartPanelInit(values, '@Model.MainSensorType', '@(Model.MainUnit.HasValue ? Model.MainUnit : "")', 300, multichartRange)
-        
+
         if ($('#multichart')[0].data.length === 0)
-            Plotly.relayout('multichart', { 'xaxis.visible': false, 'yaxis.visible': false });
-        
+            Plotly.relayout('multichart', {'xaxis.visible': false, 'yaxis.visible': false});
+
         window.dispatchEvent(new Event('resize'));
 
-        $('#editablePanelSettings form').on('submit', function (event){
+        $('#editablePanelSettings form').on('submit', function (event) {
             event.preventDefault();
             event.stopImmediatePropagation();
 
             submit((id) => window.location.href = `/Dashboards/${id}`)
         })
     })
-    
-    function submit(callback){
+
+    function submit(callback) {
         let form = $('#editablePanelSettings form')[0];
         $.ajax({
             type: 'post',
@@ -246,37 +299,37 @@
             contentType: false,
             cache: false,
             async: true
-        }).done(function(id){
+        }).done(function (id) {
             callback(id);
-        }).fail(function (response){
+        }).fail(function (response) {
             showToast(response.responseText);
         })
     }
-    
-    $('#YRange_MinValue').on('change', function (){
+
+    $('#YRange_MinValue').on('change', function () {
         rangeUpdate(600)
     })
-    
-    $('#YRange_MaxValue').on('change', function (){
+
+    $('#YRange_MaxValue').on('change', function () {
         rangeUpdate(600)
     })
-    
+
     function rangeUpdate(time) {
         clearTimeout(rangePreviewUpdate)
-        rangePreviewUpdate = setTimeout(function (){
+        rangePreviewUpdate = setTimeout(function () {
             submit(() => window.location.reload())
         }, time);
     }
-    
-    $('#autoscale').on('change', function (){
+
+    $('#autoscale').on('change', function () {
         if ($(this).is(':checked'))
             $('#autoscale-range').addClass('disabled-group')
         else
             $('#autoscale-range').removeClass('disabled-group')
-            
+
         rangeUpdate(200)
     })
-    
+
     $('#multichart').on('plotly_legendclick', function (data) {
         return false;
     });
@@ -308,15 +361,14 @@
                 $(`#label_property_${sourceId}`).removeClass('d-none');
                 $(`#showSensorProperty_input_${sourceId}`).attr('disabled', true).removeClass('fw-bold').addClass('fw-normal');
                 $(`#showSensorProperty_${sourceId}`).removeClass('fw-bold').addClass('fw-normal');
-            }
-            else {
+            } else {
                 const showProperty = $(`#showSensorProperty_input_${sourceId}`);
                 const labelProperty = $(`#label_property_${sourceId}`);
                 const showSensorProperty = $(`#showSensorProperty_${sourceId}`);
                 if (!showProperty.is(':checked')) {
                     labelProperty.addClass('d-none');
                 }
-                
+
                 showProperty.attr('disabled', false);
                 showSensorProperty.addClass('fw-bold').removeClass('fw-normal');
                 showProperty.addClass('fw-bold').removeClass('fw-normal')
