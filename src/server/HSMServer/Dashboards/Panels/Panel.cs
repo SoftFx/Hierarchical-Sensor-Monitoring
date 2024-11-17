@@ -27,6 +27,7 @@ namespace HSMServer.Dashboards
 
         public PanelSettings Settings { get; } = new();
 
+        public ColorSettings ColorSettings { get; } = new();
 
         public SensorType? MainSensorType { get; private set; }
 
@@ -63,6 +64,9 @@ namespace HSMServer.Dashboards
 
             if (entity.Settings is not null)
                 Settings.FromEntity(entity.Settings);
+            
+            if (entity.ColorSettings is not null)
+                ColorSettings.FromEntity(entity.ColorSettings);
 
             YRange.FromEntity(entity.YRangeSettings);
 
@@ -82,6 +86,7 @@ namespace HSMServer.Dashboards
 
             YRange.Update(update);
             Settings.Update(update);
+            ColorSettings.Update(update);
 
             if (update.NeedSourceRebuild)
             {
@@ -102,7 +107,8 @@ namespace HSMServer.Dashboards
 
             entity.YRangeSettings = YRange.ToEntity();
             entity.Settings = Settings.ToEntity();
-
+            entity.ColorSettings = ColorSettings.ToEntity();
+            
             entity.IsNotAggregate = !AggregateValues;
             entity.ShowProduct = ShowProduct;
             entity.ShowProperties = ShowProperties;

@@ -12,6 +12,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public ChartRangeEntity YRangeSettings { get; set; } = new();
 
         public PanelSettingsEntity Settings { get; set; }
+        
+        public ColorSettingsEntity ColorSettings { get; set; }
 
         public bool IsNotAggregate { get; set; }
 
@@ -20,6 +22,11 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public bool ShowProperties { get; set; }
     }
 
+    public sealed record ColorSettingsEntity
+    {
+        public List<string> Colors { get; init; } 
+    }
+    
 
     public sealed record PanelSettingsEntity
     {

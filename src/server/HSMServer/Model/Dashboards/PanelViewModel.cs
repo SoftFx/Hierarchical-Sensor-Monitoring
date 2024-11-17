@@ -49,6 +49,7 @@ public sealed class PanelViewModel
 
     public PanelSettings Settings { get; set; }
 
+    public ColorSettings ColorSettings { get; set; }
 
     public PanelViewModel() { }
 
@@ -66,6 +67,8 @@ public sealed class PanelViewModel
         Settings = panel.Settings;
         YRange = panel.YRange;
 
+        ColorSettings = panel.ColorSettings;
+        
         Sources = new CDict<DatasourceViewModel>(panel.Sources.ToDictionary(y => y.Value.Id, x => BuildSourceViewModel(x.Value)));
         Templates = new CDict<TemplateViewModel>(panel.Subscriptions.ToDictionary(y => y.Value.Id, x => new TemplateViewModel(x.Value, availableFolders)));
 

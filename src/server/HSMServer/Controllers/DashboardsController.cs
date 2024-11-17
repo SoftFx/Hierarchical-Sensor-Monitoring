@@ -10,7 +10,6 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using HSMServer.DTOs.Sources;
 using HSMServer.JsonConverters;
-using NLog.Targets;
 
 namespace HSMServer.Controllers
 {

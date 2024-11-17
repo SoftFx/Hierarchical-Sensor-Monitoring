@@ -102,6 +102,7 @@ public class DatasourceViewModel
         Id = source.Id;
         SensorId = source.SensorId;
         Color = source.Color.ToRGB();
+
         Label = source.Label;
 
         var sensor = source.Sensor;

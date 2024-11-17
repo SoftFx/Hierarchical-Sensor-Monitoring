@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Drawing;
 
 namespace HSMServer.Dashboards
 {
@@ -40,6 +41,7 @@ namespace HSMServer.Dashboards
 
         public TooltipHovermode? Hovermode { get; init; }
 
+        public ColorSettingsUpdate ColorSettings { get; set; }
 
         public bool NeedSourceRebuild => IsAggregateValues.HasValue || MinY.HasValue || MaxY.HasValue || AutoScale.HasValue || ShowProperties.HasValue;
 
@@ -68,6 +70,7 @@ namespace HSMServer.Dashboards
         
         public double? Width { get; set; }
         
+        public ColorSettingsUpdate ColorSettings { get; set; }
         
 
         internal PanelUpdate ToUpdate(Guid id) =>
@@ -79,10 +82,17 @@ namespace HSMServer.Dashboards
                 X = X,
                 Y = Y,
                 Height = Height,
-                Width = Width
+                Width = Width,
+                ColorSettings = ColorSettings,
             };
     }
 
+    public record ColorSettingsUpdate
+    {
+        public bool? RestoreDefault { get; set; }
+        
+        public List<string> Colors { get; set; }
+    }
 
     public record PanelSourceUpdate
     {
