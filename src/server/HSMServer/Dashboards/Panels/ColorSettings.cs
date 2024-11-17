@@ -23,6 +23,8 @@ public sealed class ColorSettings
 
     public List<Color> Colors { get; set; } = [..DefaultColors];
 
+    public bool IsEnabled { get; set; } = false;
+
     public void FromEntity(ColorSettingsEntity entityColorSettings)
     {
         foreach (var color in entityColorSettings.Colors)
@@ -39,6 +41,8 @@ public sealed class ColorSettings
 
     public void Update(PanelUpdate update)
     {
+        IsEnabled = update.ColorSettings?.IsEnabled ?? IsEnabled;
+
         if (update.ColorSettings?.RestoreDefault != null && update.ColorSettings.RestoreDefault.Value)
             Colors = [..DefaultColors];
 

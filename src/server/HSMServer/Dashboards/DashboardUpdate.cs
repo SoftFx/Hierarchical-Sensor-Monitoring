@@ -89,6 +89,8 @@ namespace HSMServer.Dashboards
 
     public record ColorSettingsUpdate
     {
+        public bool IsEnabled { get; set; }
+        
         public bool? RestoreDefault { get; set; }
         
         public List<string> Colors { get; set; }

@@ -90,6 +90,7 @@ namespace HSMServer.Dashboards
 
             if (update.NeedSourceRebuild)
             {
+                // TODO: нужна логика ребилда цвета???
                 foreach (var (_, sub) in Subscriptions)
                     ApplyPanelSettings(sub);
 
