@@ -675,3 +675,16 @@ input[type="search"]::-webkit-search-cancel-button {
     opacity: 0.5;
     pointer-events: none;
 }
+
+.btn-minus{
+    border:none;
+    cursor: pointer;
+    --bs-btn-bg:white;
+    --bs-btn-color:black;
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: red;
+}
+
+.btn-minus:focus{
+    outline: none;
+}

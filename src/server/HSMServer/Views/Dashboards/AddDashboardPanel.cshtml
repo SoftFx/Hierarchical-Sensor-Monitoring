@@ -112,45 +112,17 @@
                         </div>
                         <div class="modal-body d-flex justify-content-between flex-row">
                             <div id="defaultColors" class="column">
-                                <div class="d-flex">
-                                    <div class="color-box" style="background-color: yellow;"></div>
-                                    <button class="btn btn-primary">-</button>
+                                <div class="d-flex m-1">
+                                    <div class="color-box" style="background-color: yellow;" onclick="deleteColor(this)"></div>
+                                    <button class="btn btn-minus btn-sm no-border">
+                                        <i class="fa fa-trash" aria-hidden="true"></i>
+                                    </button>
                                 </div>
-                                <div class="d-flex">
-                                    <div class="color-box" style="background-color: red;"></div>
-                                    <button class="btn btn-primary">-</button>
-                                </div>
-                                <div class="d-flex">
-                                    <div class="color-box" style="background-color: green;"></div>
-                                    <button class="btn btn-primary">-</button>
-                                </div>
-                                <div class="d-flex">
-                                    <div class="color-box" style="background-color: yellow;"></div>
-                                    <button class="btn btn-primary">-</button>
-                                </div>
-                                <div class="d-flex">
-                                    <div class="color-box" style="background-color: red;"></div>
-                                    <button class="btn btn-primary">-</button>
-                                </div>
-                                <div class="d-flex">
-                                    <div class="color-box" style="background-color: green;"></div>
-                                    <button class="btn btn-primary">-</button>
-                                </div>
-                                <div class="d-flex">
-                                    <div class="color-box" style="background-color: yellow;"></div>
-                                    <button class="btn btn-primary">-</button>
-                                </div>
-                                <div class="d-flex">
-                                    <div class="color-box" style="background-color: red;"></div>
-                                    <button class="btn btn-primary">-</button>
-                                </div>
-                                <div class="d-flex">
-                                    <div class="color-box" style="background-color: green;"></div>
-                                    <button class="btn btn-primary">-</button>
-                                </div>
-                                <div class="d-flex">
-                                    <div class="color-box" style="background-color: green;"></div>
-                                    <button class="btn btn-primary">-</button>
+                                <div class="d-flex m-1">
+                                    <div class="color-box" style="background-color: red;" onclick="deleteColor(this)"></div>
+                                    <button class="btn btn-minus btn-sm no-border">
+                                        <i class="fa fa-trash" aria-hidden="true"></i>
+                                    </button>
                                 </div>
                             </div>
                             <div>
@@ -191,14 +163,30 @@
         const colorList = document.getElementById('defaultColors');
         if (colorList.children.length >= 20)
             return;
+        
+        const newColorRGBValue = $('#modalColorInput').val();
+        for(const i of selectedColors){
+            if (i === newColorRGBValue){
+                showToast('Color already exists', 'Adding color info')
+                return;
+            }
+        }
+        
         const color = document.createElement('div');
-        color.className = 'd-flex';
+        color.className = 'd-flex m-1';
         color.innerHTML = `
-             <div class="color-box" style="background-color: ${$('#modalColorInput').val()};"></div>
-             <button class="btn btn-primary">-</button>
+             <div class="color-box" style="background-color: ${newColorRGBValue};"></div>
+             <button class="btn btn-minus btn-sm no-border" onclick="deleteColor(this)">
+             <i class="fa fa-trash" aria-hidden="true"></i>
+                </button>
         `;
 
         colorList.appendChild(color);
+        selectedColors.push(newColorRGBValue);
+    }
+    
+    function deleteColor(colorNode){
+        colorNode.parentNode.parentNode.removeChild(colorNode.parentNode)
     }
 
     let rangePreviewUpdate;
