@@ -29,7 +29,39 @@
                         <a href="https://plotly.com/javascript/line-charts/#line-shape-options-for-interpolation" target="_blank" class="fw-bold ms-2 me-1">Shape:</a>
                         <select id="shape_@Model.Id" class="form-select w-auto" title="Shape of chart line" asp-for="Shape" asp-items="@Model.AvailableShapes" onchange="javascript:realtimeUpdate('@Model.Id')"></select>
 
-                        <input id="color_@Model.Id" type="color" asp-for="Color" class="form-control form-control-color mx-1" oninput="javascript:realtimeUpdate('@Model.Id')" />
+                        <button id="pallette_@Model.Id" class="btn btn-primary ms-1 py-3 px-3" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" type="button" 
+                                style="background-color: @Model.Color;
+                                    border: var(--bs-border-width) solid var(--bs-border-color);
+                                    border-radius: var(--bs-border-radius);"></button>
+                        <div class="dropdown">
+                            <div class="dropdown-menu py-2 px-2" aria-labelledby="pallette_@Model.Id">
+                                <div class="d-flex justify-content-between flex-row">
+                                    <div class="color-grid flex-grow-1">
+                                        <a class="dropdown-item color-option" style="background-color: #ff0000;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #ff7f00;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #ffff00;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #00ff00;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #0000ff;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #0000ff;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #0000ff;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #0000ff;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #0000ff;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #0000ff;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #0000ff;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #4b0082;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #4b0082;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #4b0082;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #4b0082;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #4b0082;"></a>
+                                        <a class="dropdown-item color-option" style="background-color: #9400d3;"></a>
+                                    </div>
+                                    <div class="py-1">
+                                        <input id="color_@Model.Id" type="color" asp-for="Color" class="form-control form-control-color h-100 dropdown-color" oninput="javascript:realtimeUpdate('@Model.Id')"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                     </div>
                     <div class="d-flex align-items-center">
                         @if (Folders.TryGetValueById(Model.Folder, out var folder))
@@ -59,6 +91,8 @@
 
 <script>
     function realtimeUpdate(id) {
-        updateSource($(`#name_input_${id}`).val(), $(`#color_${id}`).val(), $(`#property_${id}`).val(), $(`#shape_${id}`).val(), $(`input[name='ShowProduct']`).is(':checked'), $(`#showSensorProperty_input_${id}`).is(':checked'), id);
+        const color = $(`#color_${id}`).val();
+        $(`#pallette_${id}`).css('background-color', color);
+        updateSource($(`#name_input_${id}`).val(), color, $(`#property_${id}`).val(), $(`#shape_${id}`).val(), $(`input[name='ShowProduct']`).is(':checked'), $(`#showSensorProperty_input_${id}`).is(':checked'), id);
     }
 </script>

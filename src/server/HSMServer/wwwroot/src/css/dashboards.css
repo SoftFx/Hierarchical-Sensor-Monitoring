@@ -46,3 +46,28 @@
     -moz-border-radius: 6px 0 6px 6px;
     border-radius: 6px 0 6px 6px;
 }
+
+.color-grid {
+    display: flex;
+    flex: 1 2 auto;
+    flex-wrap: wrap;
+    height: 200px;
+    width: auto;
+    min-width: 200px;
+    flex-direction: column; /* Adjust the max-width as needed */
+}
+
+.dropdown-item.color-option {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    border: 1px solid #000;
+    position: relative;
+    margin-bottom: 5px;
+    margin-top: 5px;
+    margin-right: 5px;
+}
+
+.dropdown-item.color-option:hover {
+    opacity: 0.7;
+}
