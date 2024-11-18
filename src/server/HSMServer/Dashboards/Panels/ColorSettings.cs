@@ -7,7 +7,7 @@ namespace HSMServer.Dashboards;
 
 public sealed class ColorSettings
 {
-    public static Color[] DefaultColors { get; } =
+    private static readonly Color[] _defaultColors =
     [
         Color.FromName("#7B2D43"),
         Color.FromName("#629CD6"),
@@ -21,22 +21,28 @@ public sealed class ColorSettings
         Color.FromName("#62C69C"),
     ];
 
-    public List<Color> Colors { get; set; } = [..DefaultColors];
+    public List<string> Colors { get; set; } = [.._defaultColors.Select(x => x.Name)];
 
     public bool IsEnabled { get; set; } = false;
 
     public void FromEntity(ColorSettingsEntity entityColorSettings)
     {
-        foreach (var color in entityColorSettings.Colors)
-        {
-            Colors.Add(Color.FromName(color));
-        }
+        Colors = entityColorSettings.Colors;
+        IsEnabled = entityColorSettings.IsEnabled;
     }
 
     public ColorSettingsEntity ToEntity() =>
         new()
         {
-            Colors = Colors.Select(x => x.Name).ToList()
+            Colors = Colors,
+            IsEnabled = IsEnabled
+        };
+
+    public ColorSettingsUpdate ToUpdate() =>
+        new()
+        {
+            Colors = Colors,
+            IsEnabled = IsEnabled,
         };
 
     public void Update(PanelUpdate update)
@@ -44,9 +50,9 @@ public sealed class ColorSettings
         IsEnabled = update.ColorSettings?.IsEnabled ?? IsEnabled;
 
         if (update.ColorSettings?.RestoreDefault != null && update.ColorSettings.RestoreDefault.Value)
-            Colors = [..DefaultColors];
+            Colors = [.._defaultColors.Select(x => x.Name)];
 
         if (update.ColorSettings?.Colors != null)
-            Colors = update.ColorSettings.Colors.Select(Color.FromName).ToList();
+            Colors = update.ColorSettings.Colors;
     }
 }

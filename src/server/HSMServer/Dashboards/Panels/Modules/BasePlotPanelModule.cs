@@ -52,7 +52,7 @@ namespace HSMServer.Dashboards
 
         public string Label { get; protected set; }
 
-        public Color Color { get; protected set; }
+        public Color Color { get; set; }
 
         public bool ShowProperty { get;  set; }
 

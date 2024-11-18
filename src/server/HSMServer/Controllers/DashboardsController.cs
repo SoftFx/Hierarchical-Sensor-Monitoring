@@ -189,6 +189,7 @@ namespace HSMServer.Controllers
                     AutoScale = model.YRange.AutoScale,
                     MaxY = model.YRange.MaxValue,
                     MinY = model.YRange.MinValue,
+                    ColorSettings = model.ColorSettings.ToUpdate(),
                 });
 
             return Ok(dashboardId);

@@ -5,6 +5,7 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System;
+using System.Drawing;
 using System.Linq;
 using System.Text;
 
@@ -86,11 +87,26 @@ namespace HSMServer.Dashboards
 
             YRange.Update(update);
             Settings.Update(update);
+            
+            var shouldRebuildColors = update.ColorSettings?.ShouldRebuildColors(ColorSettings) ?? false;
             ColorSettings.Update(update);
+
+            if (shouldRebuildColors)
+            {
+                var i = 0;
+                foreach (var (_, source) in Sources)
+                {
+                    if (i >= ColorSettings.Colors.Count)
+                        i = 0;
+                    
+                    source.Color = Color.FromName(ColorSettings.Colors[i]);
+
+                    i++;
+                }
+            }
 
             if (update.NeedSourceRebuild)
             {
-                // TODO: нужна логика ребилда цвета???
                 foreach (var (_, sub) in Subscriptions)
                     ApplyPanelSettings(sub);
 

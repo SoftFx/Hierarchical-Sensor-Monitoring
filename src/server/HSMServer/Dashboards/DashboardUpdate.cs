@@ -89,11 +89,47 @@ namespace HSMServer.Dashboards
 
     public record ColorSettingsUpdate
     {
-        public bool IsEnabled { get; set; }
+        public bool? IsEnabled { get; init; }
         
-        public bool? RestoreDefault { get; set; }
+        public bool? RestoreDefault { get; init; }
         
-        public List<string> Colors { get; set; }
+        public List<string> Colors { get; init; }
+
+        public bool ShouldRebuildColors(ColorSettings beforeUpdateSettings)
+        {
+            return (beforeUpdateSettings.IsEnabled is false && IsEnabled is not null && IsEnabled.Value) ||
+                   AnyNewColors();
+            
+            bool AnyNewColors()
+            {
+                if (RestoreDefault is not null && RestoreDefault.Value)
+                    return true;
+                
+                if (Colors is null or [])
+                    return false;
+                
+                var found = false;
+               
+                for (var i = Colors.Count - 1; i >= 0; i--)
+                {
+                    for (var j = beforeUpdateSettings.Colors.Count - 1; j >= 0; j--)
+                    {
+                        if (beforeUpdateSettings.Colors[j] == Colors[i])
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!found)
+                        return true;
+
+                    found = false;
+                }
+
+                return true;
+            }
+        }
     }
 
     public record PanelSourceUpdate

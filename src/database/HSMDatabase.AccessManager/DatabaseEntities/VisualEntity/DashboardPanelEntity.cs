@@ -25,6 +25,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
     public sealed record ColorSettingsEntity
     {
         public List<string> Colors { get; init; } 
+        
+        public bool IsEnabled { get; set; }
     }
     
 
