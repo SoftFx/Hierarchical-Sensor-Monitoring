@@ -18,10 +18,10 @@
                         <label id="productName_@Model.Id" class="text-nowrap me-1 @(Model.ShowProduct ? string.Empty : "d-none")">@Model.DisplayProduct</label>
                         <input id='name_input_@Model.Id' class="form-control" asp-for="Label" type="text" oninput="javascript:realtimeUpdate('@Model.Id')" />
                         <input id='name_default_@Model.Id' class="d-none" value="@Model.SensorName">
-
-                        <label id="label_property_@Model.Id" class="text-nowrap mx-1 @(Model.ShowProperty ? string.Empty : "d-none")">(@Model.Property)</label>
-                        <label id="showSensorProperty_@Model.Id" class="fw-bold text-nowrap ms-2 me-1" >Show property</label>
-                        <input id="showSensorProperty_input_@Model.Id" class="form-check-input" type="checkbox" asp-for="ShowProperty" oninput="javascript:realtimeUpdate('@Model.Id')" />
+                        
+                        <label id="label_property_@Model.Id" class="text-nowrap mx-1 @(Model.ShowProperty ? string.Empty : "d-none")">(@Model.Property)</label> 
+                        @* <label id="showSensorProperty_@Model.Id" class="fw-bold text-nowrap ms-2 me-1" >Show property</label> *@
+                        @* <input id="showSensorProperty_input_@Model.Id" class="form-check-input" type="checkbox" asp-for="ShowProperty" oninput="javascript:realtimeUpdate('@Model.Id')" /> *@
 
                         <label class="fw-bold ms-2 me-1">Property:</label>
                         <select id="property_@Model.Id" class="form-select w-auto" title="Property to output" asp-for="Property" asp-items="@Model.AvailableProperties" onchange="javascript:realtimeUpdate('@Model.Id')"></select>
