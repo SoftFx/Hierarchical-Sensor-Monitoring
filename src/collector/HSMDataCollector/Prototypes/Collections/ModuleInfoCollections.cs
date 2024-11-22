@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Security.Cryptography.X509Certificates;
 using System.ServiceProcess;
 using HSMDataCollector.Alerts;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.Prototypes
@@ -86,6 +85,7 @@ namespace HSMDataCollector.Prototypes
         public ServiceStatusPrototype() : base()
         {
             AggregateData = true;
+            EnableForGrafana = false;
         }
 
 
@@ -119,6 +119,11 @@ namespace HSMDataCollector.Prototypes
             options.Description += options.GenerateEnumOptionsDecription();
 
             options.Description += "\nMore information you can find [**here**](https://learn.microsoft.com/en-us/dotnet/api/system.serviceprocess.servicecontrollerstatus?view=dotnet-plat-ext-7.0)";
+
+            options.Alerts = new List<InstantAlertTemplate>
+            {
+                AlertsFactory.IfValue(AlertOperation.NotEqual, (int)ServiceControllerStatus.Running).ThenSetSensorError().AndSendNotification($"[$product] $path: $value").Build(),
+            };
 
             return options;
         }
