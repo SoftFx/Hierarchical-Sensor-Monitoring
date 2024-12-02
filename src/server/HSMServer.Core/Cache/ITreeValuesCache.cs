@@ -57,8 +57,8 @@ namespace HSMServer.Core.Cache
         bool TryGetProduct(string productId, out ProductModel product);
 
         void SetLastKeyUsage(Guid key, string ip);
-        
-        
+
+
         bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);
         bool TryUpdateSensor(SensorUpdate updatedSensor, out string error);
         bool TryGetSensorByPath(string product, string path, out BaseSensorModel sensor);

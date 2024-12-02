@@ -152,6 +152,20 @@
             <param name="sensorCommands"></param>
             <returns>Dictionary that contains commands error. Key is path to sensor, Value is error</returns>
         </member>
+        <member name="M:HSMServer.Extensions.ColorExtensions.GetDefaultColor(System.Int32)">
+            <summary>
+            Get specified color in HTML format #RRGGBB for numbers from 0 to 8
+            </summary>
+            <param name="value"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Extensions.ColorExtensions.ArgbToHtml(System.Int32)">
+            <summary>
+             return color in HTML format #RRGGBB
+            </summary>
+            <param name="value"> color in ARGB format </param>
+            <returns></returns>
+        </member>
         <member name="T:HSMServer.Filters.DataRequestHeaderSwaggerFilter">
             <summary>
             Swagger filter for adding required string 'Key' in API requests header
