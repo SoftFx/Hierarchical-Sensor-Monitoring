@@ -1,6 +1,14 @@
-﻿using HSMCommon.Collections;
+﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using NLog;
+using HSMCommon.Collections;
 using HSMCommon.Constants;
 using HSMCommon.Extensions;
+using HSMCommon.Threading;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -16,21 +24,13 @@ using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.TreeStateSnapshot;
-using NLog;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+
 
 namespace HSMServer.Core.Cache
 {
     public sealed class TreeValuesCache : ITreeValuesCache, IDisposable
     {
-        private readonly ReaderWriterLockSlim _productLock = new(LockRecursionPolicy.SupportsRecursion);
-        private readonly ReaderWriterLockSlim _sensorLock = new(LockRecursionPolicy.SupportsRecursion);
-        private readonly ReaderWriterLockSlim _keyLock = new(LockRecursionPolicy.SupportsRecursion);
+        private readonly ReaderWriterLockSlim _lock = new(LockRecursionPolicy.SupportsRecursion);
 
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
@@ -87,16 +87,11 @@ namespace HSMServer.Core.Cache
 
         public void SaveLastStateToDb()
         {
-            _sensorLock.EnterWriteLock();
-            try
+            using (_lock.GetWriteLock())
             {
                 foreach (var sensor in _sensors.Values)
                     if (sensor is IBarSensor barModel && barModel.LocalLastValue != default)
                         SaveSensorValueToDb(barModel.LocalLastValue, sensor.Id);
-            }
-            finally
-            {
-                _sensorLock.ExitWriteLock();
             }
         }
 
@@ -117,67 +112,57 @@ namespace HSMServer.Core.Cache
 
         public List<ProductModel> GetAllNodes()
         {
-            _productLock.EnterReadLock();
-            try
+            using (_lock.GetReadLock())
             {
-                return _tree.Values.ToList();
-            }
-            finally
-            {
-                _productLock.ExitReadLock();
+                return [.. _tree.Values];
             }
         }
 
         public List<BaseSensorModel> GetSensors()
         {
-            _sensorLock.EnterReadLock();
-            try
+            using (_lock.GetReadLock())
             {
-                return _sensors.Values.ToList();
-            }
-            finally
-            {
-                _sensorLock.ExitReadLock();
+                return [.. _sensors.Values];
             }
         }
 
-        public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
+        public List<AccessKeyModel> GetAccessKeys()
+        {
+            using (_lock.GetReadLock())
+            {
+                return [.. _keys.Values];
+            }
+        }
 
-        public ProductModel AddProduct(string productName, Guid authorId) =>
-            AddProduct(new ProductModel(productName, authorId));
+        public ProductModel AddProduct(string productName, Guid authorId)
+        {
+            using (_lock.GetWriteLock())
+            {
+               return AddProduct(new ProductModel(productName, authorId));
+            }
+        }
 
         private void UpdateProduct(ProductModel product)
         {
-            _productLock.EnterWriteLock();
-            try
-            {
-                _database.UpdateProduct(product.ToEntity());
-
-                ChangeProductEvent?.Invoke(product, ActionType.Update);
-            }
-            finally
-            {
-                _productLock.ExitWriteLock();
-            }
+            _database.UpdateProduct(product.ToEntity());
+            ChangeProductEvent?.Invoke(product, ActionType.Update);
         }
 
         public bool TryGetProduct(Guid productId, out ProductModel product)
         {
-            _productLock.EnterReadLock();
-            try
+            using (_lock.GetReadLock())
             {
                 return _tree.TryGetValue(productId, out product);
-            }
-            finally
-            {
-                _productLock.ExitReadLock();
             }
         }
 
         public bool TryGetProduct(string productId, out ProductModel product)
         {
-            if (Guid.TryParse(productId, out var id))
-                return TryGetProduct(id, out product);
+            using (_lock.GetReadLock())
+            {
+                if (Guid.TryParse(productId, out var id))
+                    return TryGetProduct(id, out product);
+            }
 
             product = null;
             return false;
@@ -185,19 +170,14 @@ namespace HSMServer.Core.Cache
 
         public void UpdateProduct(ProductUpdate update)
         {
-            if (!TryGetProduct(update.Id, out ProductModel product))
-                return;
-
-            _productLock.EnterWriteLock();
-            try
+            using (_lock.GetWriteLock())
             {
+                if (!_tree.TryGetValue(update.Id, out ProductModel product))
+                    return;
+
                 _database.UpdateProduct(product.Update(update).ToEntity());
 
                 NotifyAboutProductChange(product);
-            }
-            finally
-            {
-                _productLock.ExitWriteLock();
             }
         }
 
@@ -205,67 +185,53 @@ namespace HSMServer.Core.Cache
         {
             void RemoveProduct(Guid productId)
             {
-                _productLock.EnterWriteLock();
-                try
-                {
-                    if (!_tree.TryRemove(productId, out var product))
-                        return;
 
-                    foreach (var (subProductId, _) in product.SubProducts)
-                        RemoveProduct(subProductId);
+                if (!_tree.TryRemove(productId, out var product))
+                    return;
 
-                    foreach (var (sensorId, _) in product.Sensors)
-                        RemoveSensor(sensorId, initiator, parentId: product.Parent?.Id);
+                foreach (var (subProductId, _) in product.SubProducts)
+                    RemoveProduct(subProductId);
 
-                    RemoveBaseNodeSubscription(product);
+                foreach (var (sensorId, _) in product.Sensors)
+                    RemoveSensor(sensorId, initiator, parentId: product.Parent?.Id);
 
-                    product.Parent?.SubProducts.TryRemove(productId, out _);
-                    _database.RemoveProduct(product.Id.ToString());
+                RemoveBaseNodeSubscription(product);
 
-                    foreach (var (id, _) in product.AccessKeys)
-                        RemoveAccessKey(id);
+                product.Parent?.SubProducts.TryRemove(productId, out _);
+                _database.RemoveProduct(product.Id.ToString());
 
-                    ChangeProductEvent?.Invoke(product, ActionType.Delete);
-                }
-                finally
-                {
-                    _productLock.ExitWriteLock();
-                }
+                foreach (var (id, _) in product.AccessKeys)
+                    RemoveAccessKey(id);
+
+                ChangeProductEvent?.Invoke(product, ActionType.Delete);
             }
 
-            if (TryGetProduct(productId, out var product))
+            using (_lock.GetWriteLock())
             {
-                RemoveProduct(productId);
+                if (TryGetProduct(productId, out var product))
+                {
+                    RemoveProduct(productId);
 
-                if (!product.IsRoot)
-                    UpdateProduct(product.Parent);
+                    if (!product.IsRoot)
+                        UpdateProduct(product.Parent);
+                }
             }
         }
 
         public ProductModel GetProduct(Guid id)
         {
-            _productLock.EnterReadLock();
-            try
+            using(_lock.GetReadLock())
             {
                 return _tree.GetValueOrDefault(id);
-            }
-            finally
-            {
-                _productLock.ExitReadLock();
             }
         }
 
         /// <returns>product (without parent) with name = name</returns>
         public ProductModel GetProductByName(string name)
         {
-            _productLock.EnterReadLock();
-            try
+            using (_lock.GetReadLock())
             {
                 return _tree.FirstOrDefault(p => p.Value.IsRoot && p.Value.DisplayName == name).Value;
-            }
-            finally
-            {
-                _productLock.ExitReadLock();
             }
         }
 
@@ -291,14 +257,9 @@ namespace HSMServer.Core.Cache
         /// <returns>list of root products (without parent)</returns>
         public List<ProductModel> GetProducts()
         {
-            _productLock.EnterReadLock();
-            try
+            using (_lock.GetReadLock())
             {
                 return _tree.Values.Where(p => p.IsRoot).ToList();
-            }
-            finally
-            {
-                _productLock.ExitReadLock();
             }
         }
 
@@ -353,17 +314,12 @@ namespace HSMServer.Core.Cache
 
         public bool TryGetRootProduct(Guid id, out ProductModel product, out string error)
         {
-            _productLock.EnterReadLock();
-            try
+            using (_lock.GetReadLock())
             {
                 var ok = TryGetProduct(id, out product) && product.IsRoot;
                 error = !ok ? ErrorProductNotFound : null;
 
                 return ok;
-            }
-            finally
-            {
-                _productLock.ExitReadLock();
             }
         }
 
@@ -374,18 +330,21 @@ namespace HSMServer.Core.Cache
 
         public bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message)
         {
-            sensorId = Guid.Empty;
+            using (_lock.GetReadLock())
+            {
+                sensorId = Guid.Empty;
 
-            if (!TryCheckProductKey(request, out var product, out message))
-                return false;
+                if (!TryCheckProductKey(request, out var product, out message))
+                    return false;
 
-            var accessKey = GetAccessKeyModel(request);
-            var sensorChecking = TryGetSensor(request, product, accessKey, out var sensor, out message);
+                var accessKey = GetAccessKeyModel(request);
+                var sensorChecking = TryGetSensor(request, product, accessKey, out var sensor, out message);
 
-            if (sensor is not null)
-                sensorId = sensor.Id;
+                if (sensor is not null)
+                    sensorId = sensor.Id;
 
-            return sensorChecking;
+                return sensorChecking;
+            }
         }
 
         private bool TryCheckProductKey(BaseRequestModel request, out ProductModel product, out string message)
@@ -406,74 +365,120 @@ namespace HSMServer.Core.Cache
 
         public AccessKeyModel AddAccessKey(AccessKeyModel key)
         {
-            if (AddKeyToTree(key))
+            using (_lock.GetWriteLock())
             {
-                _database.AddAccessKey(key.ToAccessKeyEntity());
+                try
+                {
+                    if (AddKeyToTree(key))
+                    {
+                        _database.AddAccessKey(key.ToAccessKeyEntity());
 
-                ChangeAccessKeyEvent?.Invoke(key, ActionType.Add);
+                        ChangeAccessKeyEvent?.Invoke(key, ActionType.Add);
 
-                return key;
+                        return key;
+                    }
+                    else 
+                    {
+                        _logger.Error($"{nameof(AddAccessKey)} an error occurred: {key}");
+                        return null;
+                    }
+                }
+                catch(Exception ex) 
+                {
+                    _logger.Error(nameof(AddAccessKey), ex);
+                    return null;
+                }
             }
-
-            return null;
         }
 
         public AccessKeyModel RemoveAccessKey(Guid id)
         {
-            _keyLock.EnterWriteLock();
-            try
+            using (_lock.GetWriteLock())
             {
-                if (_keys.TryRemove(id, out var key))
+                try
                 {
-                    if (TryGetProduct(key.ProductId, out var product))
+                    if (_keys.TryRemove(id, out var key))
                     {
-                        product.AccessKeys.TryRemove(id, out _);
-                        ChangeProductEvent?.Invoke(product, ActionType.Update);
+                        if (TryGetProduct(key.ProductId, out var product))
+                        {
+                            product.AccessKeys.TryRemove(id, out _);
+                            ChangeProductEvent?.Invoke(product, ActionType.Update);
+                        }
+
+                        _database.RemoveAccessKey(id);
+                        _snapshot.Keys.Remove(id);
+
+                        ChangeAccessKeyEvent?.Invoke(key, ActionType.Delete);
+
+                        return key;
                     }
-
-                    _database.RemoveAccessKey(id);
-                    _snapshot.Keys.Remove(id);
-
-                    ChangeAccessKeyEvent?.Invoke(key, ActionType.Delete);
+                    else
+                    {
+                        _logger.Error($"{nameof(RemoveAccessKey)} key not found: {id}");
+                        return null;
+                    }
                 }
-
-                return key;
-            }
-            finally
-            {
-                _keyLock.ExitWriteLock();
+                catch (Exception ex)
+                {
+                    _logger.Error($"{nameof(RemoveAccessKey)} an error occurred: {id}", ex);
+                    return null;
+                }
             }
         }
 
         public AccessKeyModel UpdateAccessKey(AccessKeyUpdate updatedKey)
         {
-            _keyLock.EnterWriteLock();
-            try
+            using (_lock.GetWriteLock())
             {
-                if (!_keys.TryGetValue(updatedKey.Id, out var key))
+                try
+                {
+                    if (_keys.TryGetValue(updatedKey.Id, out var key))
+                    {
+
+                        key.Update(updatedKey);
+                        _database.UpdateAccessKey(key.ToAccessKeyEntity());
+
+                        ChangeAccessKeyEvent?.Invoke(key, ActionType.Update);
+
+                        return key;
+                    }
+                    else
+                    {
+                        _logger.Error($"{nameof(UpdateAccessKey)} key not found: {updatedKey}");
+                        return null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(nameof(UpdateAccessKey), ex);
                     return null;
-
-                key.Update(updatedKey);
-                _database.UpdateAccessKey(key.ToAccessKeyEntity());
-
-                ChangeAccessKeyEvent?.Invoke(key, ActionType.Update);
-
-                return key;
-            }
-            finally
-            {
-                _keyLock.ExitWriteLock();
+                }
             }
         }
 
         public AccessKeyModel UpdateAccessKeyState(Guid id, KeyState newState)
         {
-            return !_keys.TryGetValue(id, out var key) ? null : UpdateAccessKey(new AccessKeyUpdate(key.Id, newState));
+            using (_lock.GetWriteLock())
+            {
+                return !_keys.TryGetValue(id, out var key) ? null : UpdateAccessKey(new AccessKeyUpdate(key.Id, newState));
+            }
         }
 
-        public AccessKeyModel GetAccessKey(Guid id) => _keys.GetValueOrDefault(id);
+        public AccessKeyModel GetAccessKey(Guid id)
+        {
+            using (_lock.GetReadLock())
+            {
+                return _keys.GetValueOrDefault(id);
+            }
+        }
 
-        public List<AccessKeyModel> GetMasterKeys() => GetAccessKeys().Where(x => x.IsMaster).ToList();
+        public List<AccessKeyModel> GetMasterKeys()
+        {
+            using (_lock.GetReadLock())
+            {
+                return _keys.Values.Where(x => x.IsMaster).ToList();
+            }
+        }
 
 
         public bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel request, out string error)
@@ -499,57 +504,82 @@ namespace HSMServer.Core.Cache
 
         public bool TryUpdateSensor(SensorUpdate update, out string error)
         {
-            if (!_sensors.TryGetValue(update.Id, out var sensor))
+            using (_lock.GetReadLock())
             {
-                error = "Sensor doesn't exist";
-                return false;
+                try
+                {
+                    if (!_sensors.TryGetValue(update.Id, out var sensor))
+                    {
+                        error = "Sensor doesn't exist";
+                        return false;
+                    }
+
+                    sensor.TryUpdate(update, out error);
+                    _database.UpdateSensor(sensor.ToEntity());
+
+                    SensorUpdateView(sensor);
+
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    error = ex.Message;
+                    return false;
+                }
             }
-
-            sensor.TryUpdate(update, out error);
-            _database.UpdateSensor(sensor.ToEntity());
-
-            SensorUpdateView(sensor);
-
-            return true;
         }
 
         public void UpdateSensorValue(UpdateSensorValueRequestModel request)
         {
-            var sensor = GetSensor(request.Id);
-            var lastValue = sensor.LastValue;
-
-            if (request.Comment is not null && (!request.ChangeLast || lastValue is not null))
+            using (_lock.GetReadLock())
             {
-                var value = request.BuildNewValue(sensor);
-                var result = request.ChangeLast ? sensor.TryUpdateLastValue(value) : sensor.TryAddValue(value);
-
-                if (result)
+                try
                 {
-                    var (oldValue, newValue) =
-                        request.GetValues(lastValue, sensor.LastValue); // value can be rebuild in storage so use LastValue
-
-                    _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator)
+                    if (_sensors.TryGetValue(request.Id, out BaseSensorModel sensor))
                     {
-                        PropertyName = request.PropertyName,
-                        Enviroment = request.Environment,
-                        Path = sensor.FullPath,
-                        OldValue = request.BuildComment(lastValue?.Status, lastValue?.Comment, oldValue),
-                        NewValue = request.BuildComment(value: newValue)
-                    });
+                        var lastValue = sensor.LastValue;
 
-                    if (sensor.LastDbValue != null)
-                        SaveSensorValueToDb(sensor.LastDbValue, request.Id, false);
+                        if (request.Comment is not null && (!request.ChangeLast || lastValue is not null))
+                        {
+                            var value = request.BuildNewValue(sensor);
+                            var result = request.ChangeLast ? sensor.TryUpdateLastValue(value) : sensor.TryAddValue(value);
 
-                    SensorUpdateViewAndNotify(sensor);
+                            if (result)
+                            {
+                                var (oldValue, newValue) =
+                                    request.GetValues(lastValue, sensor.LastValue); // value can be rebuild in storage so use LastValue
+
+                                _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator)
+                                {
+                                    PropertyName = request.PropertyName,
+                                    Enviroment = request.Environment,
+                                    Path = sensor.FullPath,
+                                    OldValue = request.BuildComment(lastValue?.Status, lastValue?.Comment, oldValue),
+                                    NewValue = request.BuildComment(value: newValue)
+                                });
+
+                                if (sensor.LastDbValue != null)
+                                    SaveSensorValueToDb(sensor.LastDbValue, request.Id, false);
+
+                                SensorUpdateViewAndNotify(sensor);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        _logger.Error($"Update Sensor error: [{request.Id}] sensor not found. {request}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Update Sensor error: {request}", ex);
                 }
             }
         }
 
         public void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null)
         {
-            _sensorLock.EnterWriteLock();
-            _productLock.EnterWriteLock();
-            try
+            using (_lock.GetWriteLock())
             {
                 if (!_sensors.TryRemove(sensorId, out var sensor))
                     return;
@@ -576,29 +606,27 @@ namespace HSMServer.Core.Cache
 
                 ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
             }
-            finally
-            {
-                _sensorLock.ExitWriteLock();
-                _productLock.ExitWriteLock();
-            }
         }
 
         public void UpdateMutedSensorState(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null)
         {
-            if (!_sensors.TryGetValue(sensorId, out var sensor) || sensor.State is SensorState.Blocked)
-                return;
-
-            if (sensor.EndOfMuting != endOfMuting)
+            using (_lock.GetWriteLock())
             {
-                TryUpdateSensor(new SensorUpdate
-                {
-                    Id = sensorId,
-                    State = endOfMuting is null ? SensorState.Available : SensorState.Muted,
-                    EndOfMutingPeriod = endOfMuting,
-                    Initiator = initiator
-                }, out _);
+                if (!_sensors.TryGetValue(sensorId, out var sensor) || sensor.State is SensorState.Blocked)
+                    return;
 
-                sensor.Revalidate();
+                if (sensor.EndOfMuting != endOfMuting)
+                {
+                    TryUpdateSensor(new SensorUpdate
+                    {
+                        Id = sensorId,
+                        State = endOfMuting is null ? SensorState.Available : SensorState.Muted,
+                        EndOfMutingPeriod = endOfMuting,
+                        Initiator = initiator
+                    }, out _);
+
+                    sensor.Revalidate();
+                }
             }
         }
 
@@ -628,8 +656,7 @@ namespace HSMServer.Core.Cache
 
         public void ClearSensorHistory(ClearHistoryRequest request)
         {
-            _sensorLock.EnterWriteLock();
-            try
+            using (_lock.GetWriteLock())
             {
                 if (!_sensors.TryGetValue(request.Id, out var sensor))
                     return;
@@ -663,10 +690,6 @@ namespace HSMServer.Core.Cache
 
                 SensorUpdateView(sensor);
             }
-            finally
-            {
-                _sensorLock.ExitWriteLock();
-            }
         }
 
         private bool IsBorderedValue(BaseSensorModel sensor, long pointTicks, out BaseValue latest)
@@ -688,16 +711,12 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId)
         {
-            _sensorLock.EnterReadLock();
-            try
+            using (_lock.GetReadLock())
             {
                 return _sensors.GetValueOrDefault(sensorId);
             }
-            finally
-            {
-                _sensorLock.ExitReadLock();
-            }
         }
+
 
         public IEnumerable<BaseSensorModel> GetSensorsByFolder(HashSet<Guid> folderIds = null)
         {
@@ -710,9 +729,10 @@ namespace HSMServer.Core.Cache
                 _ => GetSensorByFolder,
             };
 
-            foreach (var (_, sensor) in _sensors)
-                if (filter(sensor))
-                    yield return sensor;
+            using (_lock.GetReadLock())
+            {
+                return _sensors.Where(x => filter(x.Value)).Select(x => x.Value).ToList();
+            }
         }
 
         public bool TryGetSensorByPath(string productName, string path, out BaseSensorModel sensor)
@@ -744,12 +764,15 @@ namespace HSMServer.Core.Cache
         {
             var sensorId = message.SensorId;
 
-            if (_sensors.TryGetValue(sensorId, out var sensor) && sensor.CanSendNotifications)
+            using (_lock.GetReadLock())
             {
-                var product = GetProductByName(sensor.RootProductName);
+                if (_sensors.TryGetValue(sensorId, out var sensor) && sensor.CanSendNotifications)
+                {
+                    var product = GetProductByName(sensor.RootProductName);
 
-                if (product.FolderId.HasValue)
-                    NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
+                    if (product.FolderId.HasValue)
+                        NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
+                }
             }
         }
 
@@ -1071,24 +1094,28 @@ namespace HSMServer.Core.Cache
 
         private void Initialize()
         {
-            _logger.Info($"{nameof(TreeValuesCache)} is initializing");
 
-            ApplyProducts(RequestProducts());
-            ApplySensors(RequestSensors(), RequestPolicies());
+            using (_lock.GetWriteLock())
+            {
+                _logger.Info($"{nameof(TreeValuesCache)} is initializing");
 
-            _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
-            var accessKeysEntities = _database.GetAccessKeys();
-            _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
+                ApplyProducts(RequestProducts());
+                ApplySensors(RequestSensors(), RequestPolicies());
 
-            _logger.Info($"{nameof(accessKeysEntities)} are applying");
-            ApplyAccessKeys([.. accessKeysEntities]);
-            _logger.Info($"{nameof(accessKeysEntities)} applied");
+                _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
+                var accessKeysEntities = _database.GetAccessKeys();
+                _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
 
-            _logger.Info($"{nameof(TreeValuesCache)} initialized");
+                _logger.Info($"{nameof(accessKeysEntities)} are applying");
+                ApplyAccessKeys([.. accessKeysEntities]);
+                _logger.Info($"{nameof(accessKeysEntities)} applied");
 
-            UpdateCacheState();
+                _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
-            TimeoutValueAfterRestartFix();
+                UpdateCacheState();
+
+                TimeoutValueAfterRestartFix();
+            }
         }
 
         private void TimeoutValueAfterRestartFix()
@@ -1223,24 +1250,25 @@ namespace HSMServer.Core.Cache
 
         private void ApplyAccessKeys(List<AccessKeyEntity> entities)
         {
-            foreach (var keyEntity in entities)
-                AddKeyToTree(new AccessKeyModel(keyEntity));
-
-            foreach (var product in GetAllNodes())
+            using (_lock.GetWriteLock())
             {
-                if (product.AccessKeys.IsEmpty)
-                    AddAccessKey(AccessKeyModel.BuildDefault(product));
+                foreach (var keyEntity in entities)
+                    AddKeyToTree(new AccessKeyModel(keyEntity));
+
+                foreach (var product in _tree.Values)
+                {
+                    if (product.AccessKeys.IsEmpty)
+                        AddAccessKey(AccessKeyModel.BuildDefault(product));
+                }
             }
         }
 
-        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct,
-            BaseRequestModel request)
+        private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseRequestModel request)
         {
-            _productLock.EnterWriteLock();
-            try
+            using (_lock.GetWriteLock())
             {
                 var pathParts = request.PathParts;
-                var authorId = GetAccessKey(request.Key).AuthorId;
+                var authorId = _keys.GetValueOrDefault(request.Key).AuthorId;
 
                 for (int i = 0; i < pathParts.Length - 1; ++i)
                 {
@@ -1264,52 +1292,40 @@ namespace HSMServer.Core.Cache
 
                 return parentProduct;
             }
-            finally
-            {
-                _productLock.ExitWriteLock();
-            }
         }
 
         private ProductModel AddProduct(ProductModel product)
         {
-            _productLock.EnterWriteLock();
-            try
+            if (_tree.TryAdd(product.Id, product))
             {
-                if (_tree.TryAdd(product.Id, product))
+                if (product.IsRoot)
                 {
-                    if (product.IsRoot)
+                    var update = new ProductUpdate
                     {
-                        var update = new ProductUpdate
-                        {
-                            Id = product.Id,
-                            TTL = new TimeIntervalModel(TimeInterval.None),
-                            KeepHistory = new TimeIntervalModel(TimeInterval.Month),
-                            SelfDestroy = new TimeIntervalModel(TimeInterval.Month),
+                        Id = product.Id,
+                        TTL = new TimeIntervalModel(TimeInterval.None),
+                        KeepHistory = new TimeIntervalModel(TimeInterval.Month),
+                        SelfDestroy = new TimeIntervalModel(TimeInterval.Month),
 
-                            DefaultChats = new PolicyDestinationSettings(DefaultChatsMode.FromParent),
-                        };
+                        DefaultChats = new PolicyDestinationSettings(DefaultChatsMode.FromParent),
+                    };
 
-                        product.Update(update);
-                    }
-
-                    AddBaseNodeSubscription(product);
-                    _database.AddProduct(product.ToEntity());
-
-                    ChangeProductEvent?.Invoke(product, ActionType.Add);
-
-                    foreach (var (_, key) in product.AccessKeys)
-                        AddAccessKey(key);
-
-                    if (product.AccessKeys.IsEmpty)
-                        AddAccessKey(AccessKeyModel.BuildDefault(product));
+                    product.Update(update);
                 }
 
-                return product;
+                AddBaseNodeSubscription(product);
+                _database.AddProduct(product.ToEntity());
+
+                ChangeProductEvent?.Invoke(product, ActionType.Add);
+
+                foreach (var (_, key) in product.AccessKeys)
+                    AddAccessKey(key);
+
+                if (product.AccessKeys.IsEmpty)
+                    AddAccessKey(AccessKeyModel.BuildDefault(product));
             }
-            finally
-            {
-                _productLock.ExitWriteLock();
-            }
+
+            return product;
         }
 
         public void AddOrUpdateSensor()
@@ -1376,26 +1392,27 @@ namespace HSMServer.Core.Cache
 
         private bool TryGetProductByKey(BaseRequestModel request, out ProductModel product, out string message)
         {
-            product = null;
-
-            var keyModel = GetAccessKeyModel(request);
-
-            if (keyModel == AccessKeyModel.InvalidKey)
+            using (_lock.GetReadLock())
             {
-                message = ErrorKeyNotFound;
-                return false;
+                product = null;
+
+                if (!_keys.TryGetValue(request.Key, out var keyModel))
+                {
+                    message = ErrorKeyNotFound;
+                    return false;
+                }
+
+                if (keyModel.IsMaster)
+                {
+                    message = ErrorMasterKey;
+                    return false;
+                }
+
+                var hasProduct = _tree.TryGetValue(keyModel.ProductId, out product);
+                message = hasProduct ? string.Empty : ErrorKeyNotFound;
+
+                return hasProduct;
             }
-
-            if (keyModel.IsMaster)
-            {
-                message = ErrorMasterKey;
-                return false;
-            }
-
-            var hasProduct = TryGetProduct(keyModel.ProductId, out product);
-            message = hasProduct ? string.Empty : ErrorKeyNotFound;
-
-            return hasProduct;
         }
 
         private static bool TryGetSensor(BaseRequestModel request, ProductModel product,
@@ -1452,8 +1469,13 @@ namespace HSMServer.Core.Cache
             return null;
         }
 
-        private AccessKeyModel GetAccessKeyModel(BaseRequestModel request) =>
-            _keys.TryGetValue(request.Key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
+        private AccessKeyModel GetAccessKeyModel(BaseRequestModel request)
+        {
+            using (_lock.GetReadLock())
+            {
+                return _keys.TryGetValue(request.Key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
+            }
+        }
 
         private void FillSensorsData()
         {
@@ -1522,22 +1544,25 @@ namespace HSMServer.Core.Cache
             _confirmationManager.FlushMessages();
             _scheduleManager.FlushMessages();
 
-            foreach (var sensor in GetSensors())
-                CheckSensorTimeout(sensor);
+            using (_lock.GetWriteLock())
+            {
+                foreach (var sensor in _sensors.Values)
+                {
+                    CheckSensorTimeout(sensor);
 
-            foreach (var key in GetAccessKeys())
-                if (key.IsExpired && key.State < KeyState.Expired)
-                    UpdateAccessKeyState(key.Id, KeyState.Expired);
+                    if (sensor.EndOfMuting <= DateTime.UtcNow)
+                        UpdateMutedSensorState(sensor.Id, InitiatorInfo.System);
+                }
 
-            foreach (var sensor in GetSensors())
-                if (sensor.EndOfMuting <= DateTime.UtcNow)
-                    UpdateMutedSensorState(sensor.Id, InitiatorInfo.System);
+                foreach (var key in _keys.Values)
+                    if (key.IsExpired && key.State < KeyState.Expired)
+                        UpdateAccessKeyState(key.Id, KeyState.Expired);
+            }
         }
 
         public void ClearEmptyNodes(ProductModel product)
         {
-            _productLock.EnterWriteLock();
-            try
+            using (_lock.GetWriteLock())
             {
                 foreach (var (_, node) in product.SubProducts)
                     ClearEmptyNodes(node);
@@ -1545,10 +1570,6 @@ namespace HSMServer.Core.Cache
                 if (!product.IsRoot && product.IsEmpty &&
                     product.Settings.SelfDestroy.Value.GetShiftedTime(product.CreationDate) < DateTime.UtcNow)
                     RemoveProduct(product.Id, InitiatorInfo.AsSystemForce("Old empty node"));
-            }
-            finally
-            {
-                _productLock.ExitWriteLock();
             }
         }
 
