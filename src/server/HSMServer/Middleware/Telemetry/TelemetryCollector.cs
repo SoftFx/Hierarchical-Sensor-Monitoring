@@ -114,6 +114,6 @@ namespace HSMServer.Middleware.Telemetry
             return ip is not null;
         }
 
-        private static string GetClientName(HttpContext context) => context.TryReadInfo(ClientNameHeader, out var name) && !string.IsNullOrWhiteSpace(name) ? name.ToString() : EmptyClient;
+        private static string GetClientName(HttpContext context) => context.TryReadInfo(ClientNameHeader, out var name) && !string.IsNullOrWhiteSpace(name) ? name : EmptyClient;
     }
 }
