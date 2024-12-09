@@ -91,7 +91,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
                     {
                         SendValue(-1, HSMSensorDataObjects.SensorStatus.Error, "Service not found!");
                         _lastServiceState = null;
-                        await Task.Delay(_faultStateDelay - _scanPeriod);
+                        await Task.Delay(_faultStateDelay - _scanPeriod, _cancellationTokenSource.Token);
                         return;
                     }
 
