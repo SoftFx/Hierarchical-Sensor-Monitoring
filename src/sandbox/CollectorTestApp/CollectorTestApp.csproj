@@ -11,7 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
-    <ProjectReference Include="..\HSMDataCollector\HSMDataCollector.csproj" />
+    <ProjectReference Include="..\..\collector\HSMDataCollector\HSMDataCollector.csproj" />
   </ItemGroup>
 
 </Project>
