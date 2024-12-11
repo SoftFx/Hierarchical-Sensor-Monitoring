@@ -36,6 +36,7 @@ namespace HSMServer.Notifications
             _folderManager.RemoveFolderFromChats -= _telegramChatsManager.RemoveFolderFromChats;
             _folderManager.AddFolderToChats -= _telegramChatsManager.AddFolderToChats;
             _folderManager.Removed -= _telegramChatsManager.RemoveFolderHandler;
+            _folderManager.GetChatName -= _telegramChatsManager.GetChatName;
 
             return TelegramBot.DisposeAsync();
         }

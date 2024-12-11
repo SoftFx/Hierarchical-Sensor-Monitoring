@@ -1,50 +1,58 @@
-﻿using HSMCommon.Collections;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using HSMCommon.Collections;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
+
 
 namespace HSMServer.Core.Confirmation
 {
     internal sealed class ConfirmationManager : BaseTimeManager
     {
-        private readonly CDict<CDict<CPriorityQueue<AlertResult, DateTime>>> _tree = new(); //sensorId -> alertId -> alertResult
-        private readonly ConcurrentDictionary<Guid, AlertResult> _lastStatusUpdates = new();
+        private readonly Dictionary<Guid, Dictionary<Guid, CPriorityQueue<AlertResult, DateTime>>> _tree = new(); //sensorId -> alertId -> alertResult
+        private readonly Dictionary<Guid, AlertResult> _lastStatusUpdates = new();
 
+        private readonly object _lock = new object();
 
         internal void RegisterNotification(PolicyResult policyResult)
         {
             try
             {
-                var newAlerts = new Dictionary<Guid, AlertResult>(policyResult.Alerts);
-                var sensorId = policyResult.SensorId;
-                var branch = _tree[sensorId];
-
-                FlushNotValidAlerts(branch, newAlerts);
-
-                if (policyResult.IsEmpty)
-                    return;
-
-                foreach (var alertId in newAlerts.Keys.ToList())
+                lock (_lock)
                 {
-                    var alert = newAlerts[alertId];
+                    var newAlerts = new Dictionary<Guid, AlertResult>(policyResult.Alerts);
+                    var sensorId = policyResult.SensorId;
 
-                    if (!alert.IsValidAlert)
-                        newAlerts.Remove(alertId);
-                    else if (alert.ConfirmationPeriod is not null)
+                    if(!_tree.ContainsKey(sensorId))
+                        _tree.Add(sensorId, []);
+
+                    var branch = _tree[sensorId];
+
+                    FlushNotValidAlerts(branch, newAlerts);
+
+                    if (policyResult.IsEmpty)
+                        return;
+
+                    foreach (var alertId in newAlerts.Keys.ToList())
                     {
-                        branch[alertId].Enqueue(alert, DateTime.UtcNow);
-                        newAlerts.Remove(alertId);
+                        var alert = newAlerts[alertId];
 
-                        if (alert.IsStatusIsChangeResult)
-                            _lastStatusUpdates.AddOrUpdate(alertId, alert, (_, _) => alert);
+                        if (!alert.IsValidAlert)
+                            newAlerts.Remove(alertId);
+                        else if (alert.ConfirmationPeriod is not null)
+                        {
+                            branch[alertId].Enqueue(alert, DateTime.UtcNow);
+                            newAlerts.Remove(alertId);
+
+                            if (alert.IsStatusIsChangeResult)
+                                _lastStatusUpdates.Add(alertId, alert);
+                        }
                     }
-                }
 
-                SendAlertMessage(sensorId, [.. newAlerts.Values]);
+                    SendAlertMessage(sensorId, [.. newAlerts.Values]);
+                }
             }
             catch (Exception ex)
             {
@@ -52,55 +60,58 @@ namespace HSMServer.Core.Confirmation
             }
         }
 
-        private void FlushNotValidAlerts(CDict<CPriorityQueue<AlertResult,DateTime>> branch, Dictionary<Guid, AlertResult> newAlerts)
+        private void FlushNotValidAlerts(Dictionary<Guid, CPriorityQueue<AlertResult,DateTime>> branch, Dictionary<Guid, AlertResult> newAlerts)
         {
             foreach (var (storedAlertId, _) in branch)
                 if (!newAlerts.ContainsKey(storedAlertId) && !_lastStatusUpdates.ContainsKey(storedAlertId))
-                    branch.TryRemove(storedAlertId, out _);
+                    branch.Remove(storedAlertId, out _);
         }
         
         internal override void FlushMessages()
         {
             try
             {
-                foreach (var (sensorId, sensorAlerts) in _tree)
+                lock (_lock)
                 {
-                    var thrownAlerts = new List<AlertResult>(1 << 4);
-
-                    foreach (var (alertId, allResults) in sensorAlerts)
+                    foreach (var (sensorId, sensorAlerts) in _tree)
                     {
-                        while (allResults.TryPeek(out var result, out var stateTime))
+                        var thrownAlerts = new List<AlertResult>(1 << 4);
+
+                        foreach (var (alertId, allResults) in sensorAlerts)
                         {
-                            if ((DateTime.UtcNow - stateTime).Ticks > result.ConfirmationPeriod.Value)
+                            while (allResults.TryPeek(out var result, out var stateTime))
                             {
-                                if (!result.IsStatusIsChangeResult)
+                                if ((DateTime.UtcNow - stateTime).Ticks > result.ConfirmationPeriod.Value)
                                 {
-                                    allResults.TryDequeue(out _, out _);
-                                    thrownAlerts.Add(result);
+                                    if (!result.IsStatusIsChangeResult)
+                                    {
+                                        allResults.TryDequeue(out _, out _);
+                                        thrownAlerts.Add(result);
+                                    }
+                                    else
+                                    {
+                                        if (allResults.TryPeekValue(out var first) &&
+                                            _lastStatusUpdates.TryGetValue(alertId, out var last) &&
+                                            first.LastState.PrevStatus != last.LastState.Status)
+                                            thrownAlerts.AddRange(allResults.UnwrapToList());
+
+                                        _lastStatusUpdates.Remove(alertId, out _);
+                                        allResults.Clear();
+                                    }
                                 }
                                 else
-                                {
-                                    if (allResults.TryPeekValue(out var first) &&
-                                        _lastStatusUpdates.TryGetValue(alertId, out var last) &&
-                                        first.LastState.PrevStatus != last.LastState.Status)
-                                        thrownAlerts.AddRange(allResults.UnwrapToList());
-
-                                    _lastStatusUpdates.TryRemove(alertId, out _);
-                                    allResults.Clear();
-                                }
+                                    break;
                             }
-                            else
-                                break;
+
+                            if (allResults.IsEmpty)
+                                sensorAlerts.Remove(alertId, out _);
                         }
 
-                        if (allResults.IsEmpty)
-                            sensorAlerts.TryRemove(alertId, out _);
+                        if (sensorAlerts.Count == 0)
+                            _tree.Remove(sensorId, out _);
+
+                        SendAlertMessage(sensorId, thrownAlerts);
                     }
-
-                    if (sensorAlerts.IsEmpty)
-                        _tree.TryRemove(sensorId, out _);
-
-                    SendAlertMessage(sensorId, thrownAlerts);
                 }
             }
             catch (Exception ex)

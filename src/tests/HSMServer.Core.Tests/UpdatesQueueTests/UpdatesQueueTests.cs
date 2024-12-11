@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -15,15 +16,15 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         public async Task AddItemTest()
         {
             StoreInfo receivedInfo = default;
-            void GetItem(List<StoreInfo> items)
+            void GetItem(IEnumerable<StoreInfo> items)
             {
-                receivedInfo = items[0];
+                receivedInfo = items.FirstOrDefault();
             }
 
             StoreInfo storeInfo = BuildStoreInfo(0);
             var updatesQueue = new UpdatesQueue();
             updatesQueue.AddItem(storeInfo);
-            updatesQueue.NewItemsEvent += GetItem;
+            updatesQueue.ItemsAdded += GetItem;
 
             await Task.Delay(DelayTime);
             Assert.Equal(storeInfo, receivedInfo);
@@ -34,15 +35,15 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         public async Task AddEmptyItemTest()
         {
             StoreInfo receivedInfo = default;
-            void GetItem(List<StoreInfo> items)
+            void GetItem(IEnumerable<StoreInfo> items)
             {
-                receivedInfo = items[0];
+                receivedInfo = items.FirstOrDefault();
             }
 
             StoreInfo storeInfo = new("", "/");
             var updatesQueue = new UpdatesQueue();
             updatesQueue.AddItem(storeInfo);
-            updatesQueue.NewItemsEvent += GetItem;
+            updatesQueue.ItemsAdded += GetItem;
 
             await Task.Delay(DelayTime);
             Assert.Equal(storeInfo, receivedInfo);
@@ -56,7 +57,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         public async Task AddItemsTest(int count)
         {
             List<StoreInfo> receivedInfo = new(count);
-            void GetItem(List<StoreInfo> items)
+            void GetItem(IEnumerable<StoreInfo> items)
             {
                 receivedInfo.AddRange(items);
             }
@@ -65,7 +66,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
 
             var updatesQueue = new UpdatesQueue();
             updatesQueue.AddItems(items);
-            updatesQueue.NewItemsEvent += GetItem;
+            updatesQueue.ItemsAdded += GetItem;
 
             await Task.Delay(DelayTime);
             Assert.Equal(items.Count, receivedInfo.Count);
@@ -81,7 +82,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         public async Task AddEmptyItemsTest(int count)
         {
             List<StoreInfo> receivedInfo = new(count);
-            void GetItem(List<StoreInfo> storeInfo)
+            void GetItem(IEnumerable<StoreInfo> storeInfo)
             {
                 receivedInfo.AddRange(storeInfo);
             }
@@ -95,7 +96,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
 
             var updatesQueue = new UpdatesQueue();
             updatesQueue.AddItems(items);
-            updatesQueue.NewItemsEvent += GetItem;
+            updatesQueue.ItemsAdded += GetItem;
 
             await Task.Delay(DelayTime);
             Assert.Equal(items.Count, receivedInfo.Count);

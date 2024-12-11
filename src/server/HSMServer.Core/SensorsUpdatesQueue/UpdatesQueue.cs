@@ -1,7 +1,8 @@
-﻿using System;
+﻿using NLog;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -9,65 +10,77 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 {
     public sealed class UpdatesQueue : IUpdatesQueue
     {
-        private const int PackageMaxSize = 100;
-        private const int Delay = 10;
+        private const int PackageMaxSize = 1000;
+        private readonly ManualResetEventSlim _event = new ManualResetEventSlim();
 
-        private readonly ConcurrentQueue<StoreInfo> _queue;
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-        private bool _run;
+        private readonly ConcurrentQueue<StoreInfo> _queue = new ConcurrentQueue<StoreInfo>();
 
+        private readonly CancellationTokenSource _cts = new CancellationTokenSource();
 
-        public event Action<List<StoreInfo>> NewItemsEvent;
+        private readonly Task _task;
+
+        public event Action<IEnumerable<StoreInfo>> ItemsAdded;
 
 
         public UpdatesQueue()
         {
-            _queue = new ConcurrentQueue<StoreInfo>();
-            _run = true;
-
-            ThreadPool.QueueUserWorkItem(RunManageThread);
+            _task = Task.Run(() => ProcessingLoop(_cts.Token), _cts.Token);
         }
 
 
-        public void AddItem(StoreInfo storeInfo) =>
+        public void AddItem(StoreInfo storeInfo)
+        {
             _queue.Enqueue(storeInfo);
+            _event.Set();
+        }
 
-        public void AddItems(List<StoreInfo> storeInfos)
+        public void AddItems(IEnumerable<StoreInfo> storeInfos)
         {
             foreach (var store in storeInfos)
                 AddItem(store);
         }
 
-        public void Dispose() => _run = false;
-
-
-        private async void RunManageThread(object _)
+        public void Dispose()
         {
-            while (_run)
-            {
-                var data = GetDataPackage();
+            _cts.Cancel();
+            _task.Wait();
+            _cts.Dispose();
+            _event.Dispose();
+            _task.Dispose();
+        }
 
-                if (data.Count > 0)
-                    NewItemsEvent?.Invoke(data);
-                else
-                    await Task.Delay(Delay);
+
+        private void ProcessingLoop(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    _event.Wait(token);
+                    _event.Reset();
+
+                    while (!_queue.IsEmpty && !token.IsCancellationRequested)
+                        ItemsAdded?.Invoke(GetDataPackage());
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex);
+                }
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private List<StoreInfo> GetDataPackage()
+        private IEnumerable<StoreInfo> GetDataPackage()
         {
-            var data = new List<StoreInfo>(PackageMaxSize);
-
             for (int i = 0; i < PackageMaxSize; ++i)
             {
                 if (!_queue.TryDequeue(out var value))
                     break;
 
-                data.Add(value);
+                yield return value;
             }
-
-            return data;
         }
     }
 }
