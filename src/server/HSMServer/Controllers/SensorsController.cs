@@ -280,7 +280,7 @@ namespace HSMServer.Controllers
                         BaseValue = convertedValue
                     };
 
-                    if (!CanAddToQueue(storeInfo, out var message))
+                    if (!TryAddToQueue(storeInfo, out var message))
                         result[storeInfo.Path] = message;
                 }
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
@@ -430,7 +430,7 @@ namespace HSMServer.Controllers
         }
 
 
-        private bool CanAddToQueue(StoreInfo storeInfo, out string message)
+        private bool TryAddToQueue(StoreInfo storeInfo, out string message)
         {
             if (storeInfo.TryCheckRequest(out message) && _cache.TryCheckKeyWritePermissions(storeInfo, out message))
             {
@@ -474,7 +474,7 @@ namespace HSMServer.Controllers
                         Product = info.Product
                     };
 
-                    var result = CanAddToQueue(storeInfo, out var error);
+                    var result = TryAddToQueue(storeInfo, out var error);
 
                     if (result)
                     {

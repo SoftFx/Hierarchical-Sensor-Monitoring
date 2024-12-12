@@ -77,7 +77,7 @@ namespace HSMServer.Core.Cache
             _updatesQueue = updatesQueue;
             _journalService = journalService;
 
-            _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
+            _updatesQueue.ItemsAdded += OnItemsAdded;
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent += SendAlertMessage;
 
@@ -103,7 +103,7 @@ namespace HSMServer.Core.Cache
             _confirmationManager.NewMessageEvent -= _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent -= SendAlertMessage;
 
-            _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
+            _updatesQueue.ItemsAdded -= OnItemsAdded;
 
             _updatesQueue.Dispose();
             _database.Dispose();
@@ -485,21 +485,27 @@ namespace HSMServer.Core.Cache
         {
             var update = request.Update;
 
-            if (update.Id == Guid.Empty)
+            using (_lock.GetUpgradeableReadLock())
             {
-                if (!TryGetProductByKey(request, out var product, out _))
+                if (update.Id == Guid.Empty)
                 {
-                    error = $"Product with this key {request.Key} doesn't exists";
-                    return false;
+                    using (_lock.GetWriteLock())
+                    {
+                        if (!TryGetProductByKey(request, out var product, out _))
+                        {
+                            error = $"Product with this key {request.Key} doesn't exists";
+                            return false;
+                        }
+
+                        var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
+                        var sensor = AddSensor(request, request.Type, parentProduct, request.Update.DefaultAlertsOptions);
+
+                        update = update with { Id = sensor.Id };
+                    }
                 }
 
-                var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
-                var sensor = AddSensor(request, request.Type, parentProduct, request.Update.DefaultAlertsOptions);
-
-                update = update with {Id = sensor.Id};
+                return TryUpdateSensor(update, out error);
             }
-
-            return TryUpdateSensor(update, out error);
         }
 
         public bool TryUpdateSensor(SensorUpdate update, out string error)
@@ -806,37 +812,40 @@ namespace HSMServer.Core.Cache
         private ValueTask<List<BaseValue>> GetSensorValues(Guid sensorId, SensorHistoryRequest request) =>
             GetSensorValuesPage(sensorId, request.From, request.To, request.Count, request.Options).Flatten();
 
-        public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to,
-            int count, RequestOptions options = default)
+        public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, RequestOptions options = default)
         {
             bool IsNotTimout(BaseValue value) => !value.IsTimeout;
 
 
-            if (_sensors.TryGetValue(sensorId, out var sensor))
+            using (_lock.GetReadLock())
             {
-                if (sensor is FileSensorModel && _fileHistoryLocks[sensorId])
-                    yield return new List<BaseValue>();
-                else
+
+                if (_sensors.TryGetValue(sensorId, out var sensor))
                 {
-                    if (sensor is FileSensorModel)
-                        _fileHistoryLocks[sensorId] = true;
-
-                    var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
-
-                    if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) &&
-                        (includeTtl || IsNotTimout(latest)))
-                        from = latest.ReceivingTime;
-
-                    await foreach (var page in _database.GetSensorValuesPage(sensorId, from, to, count))
+                    if (sensor is FileSensorModel && _fileHistoryLocks[sensorId])
+                        yield return new List<BaseValue>();
+                    else
                     {
-                        var convertedValues = sensor.Convert(page);
+                        if (sensor is FileSensorModel)
+                            _fileHistoryLocks[sensorId] = true;
 
-                        yield return (includeTtl ? convertedValues : convertedValues.Where(IsNotTimout)).ToList();
+                        var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
+
+                        if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) &&
+                            (includeTtl || IsNotTimout(latest)))
+                            from = latest.ReceivingTime;
+
+                        await foreach (var page in _database.GetSensorValuesPage(sensorId, from, to, count))
+                        {
+                            var convertedValues = sensor.Convert(page);
+
+                            yield return (includeTtl ? convertedValues : convertedValues.Where(IsNotTimout)).ToList();
+                        }
+
+
+                        if (sensor is FileSensorModel)
+                            _fileHistoryLocks[sensorId] = false;
                     }
-
-
-                    if (sensor is FileSensorModel)
-                        _fileHistoryLocks[sensorId] = false;
                 }
             }
         }
@@ -1036,7 +1045,7 @@ namespace HSMServer.Core.Cache
             RemoveBaseNodeSubscription(sensor);
         }
 
-        private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
+        private void OnItemsAdded(IEnumerable<StoreInfo> storeInfos)
         {
             foreach (var store in storeInfos)
                 AddNewSensorValue(store);
@@ -1044,32 +1053,38 @@ namespace HSMServer.Core.Cache
 
         internal void AddNewSensorValue(StoreInfo storeInfo)
         {
-            var product = storeInfo?.Product;
-
-            if (product == null && !TryGetProductByKey(storeInfo, out product, out _))
-                return;
-
-            var parentProduct = AddNonExistingProductsAndGetParentProduct(product, storeInfo);
-
-            var sensorName = storeInfo.SensorName;
-            var value = storeInfo.BaseValue;
-
-            var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
-
-            if (sensor == null)
+            using (_lock.GetUpgradeableReadLock())
             {
-                _logger.Info($"Creating new sensor - Name = {storeInfo.SensorName}, Path = {storeInfo.Path}, CurrentNumber of sensors in cache = {_sensors.Count}");
-                sensor = AddSensor(storeInfo, value.Type, parentProduct, DefaultAlertsOptions.None);
+                var product = storeInfo?.Product;
+
+                if (product == null && !TryGetProductByKey(storeInfo, out product, out _))
+                    return;
+
+                var parentProduct = AddNonExistingProductsAndGetParentProduct(product, storeInfo);
+
+                var sensorName = storeInfo.SensorName;
+                var value = storeInfo.BaseValue;
+
+                var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
+
+                if (sensor == null)
+                {
+                    using (_lock.GetWriteLock())
+                    {
+                        _logger.Info($"Creating new sensor - Name = {storeInfo.SensorName}, Path = {storeInfo.Path}, CurrentNumber of sensors in cache = {_sensors.Count}");
+                        sensor = AddSensor(storeInfo, value.Type, parentProduct, DefaultAlertsOptions.None);
+                    }
+                }
+                else if (sensor.State == SensorState.Blocked)
+                    return;
+
+                var oldStatus = sensor.Status;
+
+                if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
+                    SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
+
+                SensorUpdateViewAndNotify(sensor);
             }
-            else if (sensor.State == SensorState.Blocked)
-                return;
-
-            var oldStatus = sensor.Status;
-
-            if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
-                SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
-
-            SensorUpdateViewAndNotify(sensor);
         }
 
 
@@ -1328,12 +1343,7 @@ namespace HSMServer.Core.Cache
             return product;
         }
 
-        public void AddOrUpdateSensor()
-        {
-        }
-
-        private BaseSensorModel AddSensor(BaseRequestModel request, SensorType type, ProductModel parent,
-            DefaultAlertsOptions options)
+        private BaseSensorModel AddSensor(BaseRequestModel request, SensorType type, ProductModel parent, DefaultAlertsOptions options)
         {
             SensorEntity entity = new()
             {

@@ -5,11 +5,11 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 {
     public interface IUpdatesQueue : IDisposable
     {
-        event Action<List<StoreInfo>> NewItemsEvent;
+        event Action<IEnumerable<StoreInfo>> ItemsAdded;
 
 
         void AddItem(StoreInfo storeInfo);
 
-        void AddItems(List<StoreInfo> storeInfos);
+        void AddItems(IEnumerable<StoreInfo> storeInfos);
     }
 }
