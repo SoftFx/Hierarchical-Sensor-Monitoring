@@ -1,4 +1,5 @@
-﻿using HSMSensorDataObjects.HistoryRequests;
+﻿using HSMDataCollector.DefaultSensors;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -105,7 +106,40 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
+        public static IntegerBarValue Convert(this IntMonitoringBar value) =>
+            new()
+            {
+                Comment = value.Comment,
+                Time = value.Time,
+                Status = value.Status.Convert(),
+                Count = value.Count,
+                OpenTime = value.OpenTime,
+                CloseTime = value.CloseTime,
+                Min = value.Min,
+                Max = value.Max,
+                Mean = value.Mean,
+                FirstValue = value.FirstValue,
+                LastValue = value.LastValue,
+            };
+
         public static IntegerBarValue Convert(this IntBarSensorValue value) =>
+            new()
+            {
+                Comment = value.Comment,
+                Time = value.Time,
+                Status = value.Status.Convert(),
+                Count = value.Count,
+                OpenTime = value.OpenTime,
+                CloseTime = value.CloseTime,
+                Min = value.Min,
+                Max = value.Max,
+                Mean = value.Mean,
+                FirstValue = value.FirstValue,
+                LastValue = value.LastValue,
+            };
+
+
+        public static DoubleBarValue Convert(this DoubleMonitoringBar value) =>
             new()
             {
                 Comment = value.Comment,
@@ -161,6 +195,8 @@ namespace HSMServer.ApiObjectsConverters
                 FileSensorValue sv => sv.Convert(),
                 RateSensorValue sv => sv.Convert(),
                 EnumSensorValue sv => sv.Convert(),
+                DoubleMonitoringBar sv => sv.Convert(),
+                IntMonitoringBar sv => sv.Convert(),
                 _ => null
             };
 
