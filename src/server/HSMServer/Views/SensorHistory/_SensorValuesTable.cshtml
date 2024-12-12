@@ -176,7 +176,9 @@ else
                             }
                         }
                     }
+
                     <td>@value.Status.ToIconStatus()</td>
+
                     <td>
                         @if (Model.TableSettings.IsHideEnabled && TryGetShortComment(value.Comment, out var shortComment))
                         {

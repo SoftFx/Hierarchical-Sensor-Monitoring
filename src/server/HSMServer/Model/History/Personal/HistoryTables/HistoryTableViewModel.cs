@@ -53,6 +53,8 @@ namespace HSMServer.Model.History
 
         public bool IsBarSensor => _model.Type.IsBar();
 
+        public bool IsAliveSensor => string.Equals(_model.DisplayName, _serviceAliveSensorName);
+
         public int LastIndex => Pages.Count - 1;
 
 
@@ -134,7 +136,8 @@ namespace HSMServer.Model.History
 
         private TableValueViewModel Build(BaseValue value) => _model.Type switch
         {
-            SensorType.Boolean => Build((BooleanValue)value),
+            //SensorType.Boolean => Build((BooleanValue)value),
+            SensorType.Boolean => IsAliveSensor ? BuildIsAliveSensorValues((BooleanValue)value) : Build((BooleanValue)value),
             SensorType.Integer => Build((IntegerValue)value),
             SensorType.Double => Build((DoubleValue)value),
             SensorType.Rate => Build((RateValue)value),
@@ -147,6 +150,10 @@ namespace HSMServer.Model.History
             SensorType.Enum => Build((EnumValue)value),
             _ => throw new ArgumentException($"Sensor type {_model.Type} is not allowed for history table"),
         };
+
+        private const string _serviceAliveSensorName = "Service alive";
+
+       
 
         private SimpleSensorValueViewModel Build<T>(BaseValue<T> value) =>
             new()
@@ -183,6 +190,28 @@ namespace HSMServer.Model.History
                 ReceivingTime = value.ReceivingTime,
                 IsTimeout = value.IsTimeout
             };
+
+        private SimpleSensorValueViewModel BuildIsAliveSensorValues(BaseValue<bool> value) =>
+            new()
+            {
+                Value = value.Value ? "Running" : "Restarted",
+                EmaValue = value.EmaValue?.ToString(),
+                Time = value.Time.ToUniversalTime(),
+                Status = value.Status.ToClient(),
+                Comment = BuildIsAliveSensorComment(value),
+                ReceivingTime = value.ReceivingTime,
+                LastUpdateTime = value.LastUpdateTime,
+                AggregatedValuesCount = value.AggregatedValuesCount,
+                IsTimeout = value.IsTimeout
+            };
+
+        private string BuildIsAliveSensorComment(BaseValue<bool> value)
+        {
+            if (!string.IsNullOrEmpty(value.Comment))
+                return value.Comment;
+
+            return value.Value ? "Service is working" : "Service has been restarted";
+        }
 
         private string GetTableValue<T>(BaseValue<T> value) => value switch
         {
