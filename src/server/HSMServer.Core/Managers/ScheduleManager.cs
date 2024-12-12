@@ -25,6 +25,9 @@ namespace HSMServer.Core.Managers
 
                 foreach (var alert in applyAlerts)
                 {
+                    if (!_storage.ContainsKey(alert.SendTime))
+                        _storage.Add(alert.SendTime, []);
+
                     var grouppedAlerts = _storage[alert.SendTime];
 
                     if (!grouppedAlerts.TryGetValue(sensorId, out var sensorGroup))

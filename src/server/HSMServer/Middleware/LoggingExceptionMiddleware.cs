@@ -21,7 +21,7 @@ namespace HSMServer.Middleware
             }
             catch (Exception ex)
             {
-                _logger.Error($"Error during executing {context.Request}", ex);
+                _logger.Error($"Error during executing {context.Request.Method} {context.Request.Host} {context.Request.Path} {context.Request.Protocol} => {context.Response.StatusCode}", ex);
 
                 throw;
             }
