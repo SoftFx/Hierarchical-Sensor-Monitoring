@@ -116,7 +116,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
 
     private IOrderedEnumerable<JournalRecordViewModel> GetOrderedRecords(DataTableParameters parameters)
     {
-        bool Search(string value) => value.Contains(parameters.Search.Value, StringComparison.OrdinalIgnoreCase);
+        bool Search(string value) => value?.Contains(parameters.Search.Value, StringComparison.OrdinalIgnoreCase) ?? false;
         bool Filter(JournalRecordViewModel record) => Search(record.SearchValue) || (parameters.NeedSearchPath && Search(record.Path));
         bool EmptyFilter(JournalRecordViewModel _) => true;
 
