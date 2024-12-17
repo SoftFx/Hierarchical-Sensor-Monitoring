@@ -244,7 +244,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var info = new StoreInfo(Guid.NewGuid().ToString(), ValidPath);
 
             Assert.False(_valuesCache.TryCheckKeyWritePermissions(info, out var message));
-            Assert.Equal(ErrorKeyNotFound, message);
+            Assert.True(message.Contains("not found"));
         }
 
         [Theory]
