@@ -1,8 +1,7 @@
-﻿using HSMCommon.Collections;
+﻿using System;
+using System.Collections.Generic;
 using HSMCommon.Extensions;
 using HSMServer.Core.Model.Policies;
-using System;
-using System.Collections.Generic;
 
 namespace HSMServer.Core.Managers
 {
@@ -16,33 +15,38 @@ namespace HSMServer.Core.Managers
         {
             lock (_lock)
             {
-                var sendFirstAlerts = new List<AlertResult>(1 << 2);
-                var sensorId = message.SensorId;
-
-                var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
-
-                SendAlertMessage(sensorId, notApplyAlerts);
-
-                foreach (var alert in applyAlerts)
+                try
                 {
-                    if (!_storage.ContainsKey(alert.SendTime))
-                        _storage.Add(alert.SendTime, []);
+                    var sendFirstAlerts = new List<AlertResult>(1 << 2);
+                    var sensorId = message.SensorId;
 
-                    var grouppedAlerts = _storage[alert.SendTime];
+                    var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
 
-                    if (!grouppedAlerts.TryGetValue(sensorId, out var sensorGroup))
+                    SendAlertMessage(sensorId, notApplyAlerts);
+
+                    foreach (var alert in applyAlerts)
                     {
-                        sensorGroup = new ScheduleAlertMessage(sensorId);
-                        grouppedAlerts.TryAdd(sensorId, sensorGroup);
+
+                        var grouppedAlerts = _storage.GetOrAdd(alert.SendTime);
+
+                        if (!grouppedAlerts.TryGetValue(sensorId, out var sensorGroup))
+                        {
+                            sensorGroup = new ScheduleAlertMessage(sensorId);
+                            grouppedAlerts.TryAdd(sensorId, sensorGroup);
+                        }
+
+                        if (sensorGroup.ShouldSendFirstMessage(alert))
+                            sendFirstAlerts.Add(alert);
+
+                        sensorGroup.AddAlert(alert);
                     }
 
-                    if (sensorGroup.ShouldSendFirstMessage(alert))
-                        sendFirstAlerts.Add(alert);
-
-                    sensorGroup.AddAlert(alert);
+                    SendAlertMessage(sensorId, sendFirstAlerts);
                 }
-
-                SendAlertMessage(sensorId, sendFirstAlerts);
+                catch (Exception ex) 
+                {
+                    _logger.Error(ex);
+                }
             }
         }
 
@@ -51,14 +55,21 @@ namespace HSMServer.Core.Managers
         {
             lock (_lock)
             {
-                foreach (var (sendTime, branch) in _storage)
-                    if (sendTime < DateTime.UtcNow && _storage.Remove(sendTime, out _))
-                    {
-                        foreach (var (_, message) in branch)
-                            SendAlertMessage(message.FilterMessage());
+                try
+                {
+                    foreach (var (sendTime, branch) in _storage)
+                        if (sendTime < DateTime.UtcNow && _storage.Remove(sendTime, out _))
+                        {
+                            foreach (var (_, message) in branch)
+                                SendAlertMessage(message.FilterMessage());
 
-                        branch.Clear();
-                    }
+                            branch.Clear();
+                        }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex);
+                }
             }
         }
     }
