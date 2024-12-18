@@ -100,7 +100,7 @@ namespace HSMServer.Core.Confirmation
                                     break;
                             }
 
-                            if (allResults.Count > 0)
+                            if (allResults.Count == 0)
                                 sensorAlerts.Remove(alertId, out _);
                         }
 
