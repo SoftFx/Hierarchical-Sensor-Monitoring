@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using HSMCommon.Collections;
+using HSMCommon.Extensions;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
@@ -11,7 +12,7 @@ namespace HSMServer.Core.Confirmation
 {
     internal sealed class ConfirmationManager : BaseTimeManager
     {
-        private readonly Dictionary<Guid, Dictionary<Guid, CPriorityQueue<AlertResult, DateTime>>> _tree = new(); //sensorId -> alertId -> alertResult
+        private readonly Dictionary<Guid, Dictionary<Guid, PriorityQueue<AlertResult, DateTime>>> _tree = new(); //sensorId -> alertId -> alertResult
         private readonly Dictionary<Guid, AlertResult> _lastStatusUpdates = new();
 
         private readonly object _lock = new object();
@@ -24,11 +25,7 @@ namespace HSMServer.Core.Confirmation
                 {
                     var newAlerts = new Dictionary<Guid, AlertResult>(policyResult.Alerts);
                     var sensorId = policyResult.SensorId;
-
-                    if(!_tree.ContainsKey(sensorId))
-                        _tree.Add(sensorId, []);
-
-                    var branch = _tree[sensorId];
+                    var branch = _tree.GetOrAdd(sensorId);
 
                     FlushNotValidAlerts(branch, newAlerts);
 
@@ -43,7 +40,7 @@ namespace HSMServer.Core.Confirmation
                             newAlerts.Remove(alertId);
                         else if (alert.ConfirmationPeriod is not null)
                         {
-                            branch[alertId].Enqueue(alert, DateTime.UtcNow);
+                            branch.GetOrAdd(alertId).Enqueue(alert, DateTime.UtcNow);
                             newAlerts.Remove(alertId);
 
                             if (alert.IsStatusIsChangeResult)
@@ -60,7 +57,7 @@ namespace HSMServer.Core.Confirmation
             }
         }
 
-        private void FlushNotValidAlerts(Dictionary<Guid, CPriorityQueue<AlertResult,DateTime>> branch, Dictionary<Guid, AlertResult> newAlerts)
+        private void FlushNotValidAlerts(Dictionary<Guid, PriorityQueue<AlertResult,DateTime>> branch, Dictionary<Guid, AlertResult> newAlerts)
         {
             foreach (var (storedAlertId, _) in branch)
                 if (!newAlerts.ContainsKey(storedAlertId) && !_lastStatusUpdates.ContainsKey(storedAlertId))
@@ -90,10 +87,10 @@ namespace HSMServer.Core.Confirmation
                                     }
                                     else
                                     {
-                                        if (allResults.TryPeekValue(out var first) &&
+                                        if (allResults.TryPeek(out var first, out _) &&
                                             _lastStatusUpdates.TryGetValue(alertId, out var last) &&
                                             first.LastState.PrevStatus != last.LastState.Status)
-                                            thrownAlerts.AddRange(allResults.UnwrapToList());
+                                            thrownAlerts.AddRange(allResults.UnorderedItems.Select(x => x.Element));
 
                                         _lastStatusUpdates.Remove(alertId, out _);
                                         allResults.Clear();
@@ -103,7 +100,7 @@ namespace HSMServer.Core.Confirmation
                                     break;
                             }
 
-                            if (allResults.IsEmpty)
+                            if (allResults.Count == 0)
                                 sensorAlerts.Remove(alertId, out _);
                         }
 
