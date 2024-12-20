@@ -143,5 +143,11 @@ namespace HSMServer.Notifications
             """.EscapeMarkdownV2();
 
         private static string ServerStatus() => $"HSM server {ServerConfig.Version} is alive.".EscapeMarkdownV2();
+
+        public Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, HandleErrorSource source, CancellationToken cancellationToken)
+        {
+            _logger.Error($"Telegram bot '{botClient.BotId}' (source: '{source}') error: {exception}");
+            return Task.CompletedTask;
+        }
     }
 }

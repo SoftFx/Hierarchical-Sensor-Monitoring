@@ -237,7 +237,7 @@ namespace HSMServer.Notifications
                 {
                     try
                     {
-                        var telegramChat = await _bot.GetChatAsync(chat.ChatId, _tokenSource.Token);
+                        ChatFullInfo telegramChat = await _bot.GetChat(chat.ChatId, _tokenSource.Token);
         
                         if (ShouldGroupBeDeleted(telegramChat))
                         {
@@ -268,7 +268,7 @@ namespace HSMServer.Notifications
             }
         }
 
-        private static bool ShouldGroupBeDeleted(Chat telegramChat)
+        private static bool ShouldGroupBeDeleted(ChatFullInfo telegramChat)
         {
             if (telegramChat is null)
                 return true;
@@ -283,8 +283,8 @@ namespace HSMServer.Notifications
             static bool HasNoPermissions(ChatPermissions permissions)
             {
                 return permissions is null || 
-                       ((!permissions.CanSendMessages.HasValue || !permissions.CanSendMessages.Value) &&
-                        (!permissions.CanSendOtherMessages.HasValue || !permissions.CanSendOtherMessages.Value));
+                       ((!permissions.CanSendMessages || !permissions.CanSendMessages) &&
+                        (!permissions.CanSendOtherMessages || !permissions.CanSendOtherMessages));
             }
         }
 

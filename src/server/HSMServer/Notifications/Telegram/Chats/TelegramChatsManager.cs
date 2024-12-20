@@ -103,9 +103,10 @@ namespace HSMServer.Notifications
                 chat.Update(new TelegramChatUpdate()
                 {
                     Id = chat.Id,
+                    Name = isUserChat ? message.From.Username : message.Chat.Title
 
-                    Name = isUserChat ? message.From.Username : message.Chat.Title,
-                    Description = message.Chat.Description,
+                    //v21: The new Chat structure contains only common fields that are always filled. The new ChatFullInfo structure inherits from Chat and is returned only by GetChatAsync method, with all the extra fields.
+                    //Description = message.Chat.Description
                 });
             }
 
