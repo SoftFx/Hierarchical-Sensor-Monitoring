@@ -7,6 +7,14 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="600" Width="1000">
     <Grid>
+        <DockPanel Name="panelWaitingImage" ZIndex ="-1" Visibility="Hidden">
+            <local:WaitingControl/>
+        </DockPanel>
+
+        <DockPanel Name="panelFog" ZIndex ="-1" Background="White" Opacity="0.5" Visibility="Hidden"/>
+
+        <Grid>
+               
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -81,5 +89,6 @@
 
 
 
+    </Grid>
     </Grid>
 </Window>
