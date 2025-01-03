@@ -73,8 +73,21 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool HasTimeout(DateTime? time) => IsActive && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 
-        internal bool ResendNotification(DateTime? time) => HasTimeout(time) && Schedule.IsActive
-            && DateTime.UtcNow >= _lastTTLNotificationTime?.Add(Schedule.GetShiftTime());
+        internal bool ResendNotification(DateTime? time)
+        {
+            if (!HasTimeout(time))
+                return false;
+
+            if(!Schedule.IsActive)
+                return false;
+
+            if (!_lastTTLNotificationTime.HasValue)
+                return true;
+
+            return DateTime.UtcNow - _lastTTLNotificationTime >= Schedule.GetShiftTime();
+
+             //DateTime.UtcNow >= _lastTTLNotificationTime?.Add(Schedule.GetShiftTime());
+        }
 
         internal PolicyResult GetNotification(bool timeout)
         {

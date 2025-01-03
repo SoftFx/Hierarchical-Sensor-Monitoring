@@ -76,7 +76,7 @@ namespace HSMServer.Notifications
             {
                 try
                 {
-                    var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _tokenSource.Token);
+                    var link = await _bot.CreateChatInviteLink(new ChatId(chatId), cancellationToken: _tokenSource.Token);
 
                     return (link.InviteLink, null);
                 }
