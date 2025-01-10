@@ -248,6 +248,26 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         [Theory]
+        [InlineData("s/s /s"  , "s/s/s")]
+        [InlineData("s/ s /s ", "s/s/s")]
+        [InlineData("s /s/s " , "s/s/s")]
+        [InlineData(" s/s/s " , "s/s/s")]
+        [InlineData("s/s/ s " , "s/s/s")]
+        [InlineData("s/s/s "  , "s/s/s")]
+        [InlineData("s", "s")]
+        [InlineData("s ", "s")]
+        [InlineData(" s", "s")]
+        [InlineData(" s ", "s")]
+        [InlineData(" ", "")]
+        [Trait("Category", "TrimPath")]
+        public void TrimPathTest(string path, string result)
+        {
+            var info = new StoreInfo(Guid.NewGuid().ToString(), path);
+
+            Assert.Equal(info.Path, result);
+        }
+
+        [Theory]
         [InlineData(KeyPermissions.CanAddNodes)]
         [InlineData(KeyPermissions.CanAddSensors)]
         [Trait("Category", "SmallRules")]

@@ -1129,7 +1129,8 @@ namespace HSMServer.Core.Cache
                         return;
                 }
             }
-            else if (sensor.State == SensorState.Blocked)
+
+            if (sensor.State == SensorState.Blocked)
                 return;
 
             using (_lock.GetReadLock())
