@@ -75,7 +75,7 @@ namespace HSMServer.Folders
             if(!TryGetValue(folderId, out FolderModel folder))
                 throw new ApplicationException($"Folder '{folderId}' not found");
 
-            return folder.TelegramChats.ToList();
+            return folder.DefaultChats.SelectedChats.ToList();
         }
 
         public override void Dispose()
