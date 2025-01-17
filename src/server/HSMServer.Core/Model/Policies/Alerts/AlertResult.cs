@@ -11,11 +11,9 @@ namespace HSMServer.Core.Model.Policies
 
         public bool AllChats { get; init; }
 
-
         public AlertDestination(Policy policy)
         {
             var target = policy.TargetChats;
-
             Chats = new HashSet<Guid>(target.Chats.Keys);
             AllChats = target.IsAllChats;
         }
@@ -88,7 +86,7 @@ namespace HSMServer.Core.Model.Policies
             IsStatusIsChangeResult = policy.Conditions.IsStatusChangeResult();
             IsScheduleAlert = policy.UseScheduleManagerLogic;
             IsReplaceAlert = isReplace && IsScheduleAlert;
-            IsValidAlert = Destination.HasChats && Template is not null;
+            IsValidAlert = (policy.Destination.IsFromParentChats || Destination.HasChats) && Template is not null;
 
             if (policy is TTLPolicy ttlPolicy)
                 RetryCount = ttlPolicy.RetryCount;

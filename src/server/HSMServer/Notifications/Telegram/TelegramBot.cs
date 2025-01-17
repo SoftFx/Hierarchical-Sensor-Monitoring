@@ -92,7 +92,9 @@ namespace HSMServer.Notifications
         internal void SendTestMessage(ChatId chatId, string message)
         {
             if (IsBotRunning)
-                _bot.SendTextMessageAsync(chatId, message, cancellationToken: _tokenSource.Token);
+            {
+               var a = _bot.SendTextMessageAsync(chatId, message, cancellationToken: _tokenSource.Token);
+            }
         }
 
         internal async Task<string> StartBotAsync()
@@ -170,10 +172,11 @@ namespace HSMServer.Notifications
             try
             {
                 if (CanSendNotifications && _folderManager.TryGetValue(message.FolderId, out var folder))
+                {
                     foreach (var alert in message)
                     {
                         var chatIds = alert.Destination.Chats;
-                        
+
                         foreach (var chatId in chatIds)
                             if (_chatsManager.TryGetValue(chatId, out var chat) && chat.SendMessages)
                             {
@@ -188,6 +191,7 @@ namespace HSMServer.Notifications
                                 }
                             }
                     }
+                }
             }
             catch (Exception ex)
             {

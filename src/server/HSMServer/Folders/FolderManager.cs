@@ -27,7 +27,6 @@ namespace HSMServer.Folders
         private readonly IDatabaseCore _databaseCore;
         private readonly IJournalService _journalService;
 
-
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
 
         protected override Action<FolderEntity> UpdateInDb => _databaseCore.UpdateFolder;
@@ -50,6 +49,7 @@ namespace HSMServer.Folders
 
             _cache = cache;
             _cache.ChangeProductEvent += ChangeProductHandler;
+            _cache.FillFolderChats += FillFolderChats;
 
             _userManager = userManager;
             _journalService = journalService;
@@ -57,9 +57,30 @@ namespace HSMServer.Folders
             _userManager.Added += AddUserHandler;
         }
 
+        private void FillFolderChats(FolderEventArgs e)
+        {
+            try 
+            {
+                e.ChatIDs.AddRange(FillFolderChats(e.FolderId));
+            }
+            catch(Exception ex) 
+            {
+                e.Error = ex.Message;
+                // logger?
+            }
+        }
+
+        private List<Guid> FillFolderChats(Guid folderId)
+        {
+            if(!TryGetValue(folderId, out FolderModel folder))
+                throw new ApplicationException($"Folder '{folderId}' not found");
+
+            return folder.TelegramChats.ToList();
+        }
 
         public override void Dispose()
         {
+            _cache.FillFolderChats -= FillFolderChats;
             _cache.ChangeProductEvent -= ChangeProductHandler;
             _userManager.Removed -= RemoveUserHandler;
         }
