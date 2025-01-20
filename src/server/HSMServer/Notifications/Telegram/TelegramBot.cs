@@ -93,7 +93,7 @@ namespace HSMServer.Notifications
         {
             if (IsBotRunning)
             {
-               var a = _bot.SendTextMessageAsync(chatId, message, cancellationToken: _tokenSource.Token);
+               _bot.SendTextMessageAsync(chatId, message, cancellationToken: _tokenSource.Token);
             }
         }
 
