@@ -20,25 +20,17 @@ export class VersionPlot extends Plot<string>{
             this.customdata.push(i.tooltip);
         }
     }
-
     getY(value: IVersionEntity): string {
         let stringRepresentation = "";
 
         //VersionExtensions: version.Revision == 0 ? version.ToString(3) : version.ToString();
 
-        if (value.revision == 0) {
-            tryBuild(value.major, true)
-            tryBuild(value.minor)
-            tryBuild(value.build)
-        }
-        else {
-            tryBuild(value.major, true)
-            tryBuild(value.minor)
-            tryBuild(value.build)
-            tryBuild(value.revision)
-            tryBuild(value.majorRevision)
-            tryBuild(value.minorRevision)
-        }
+        tryBuild(value.major, true);
+        tryBuild(value.minor);
+        tryBuild(value.build);
+
+        if (value.revision != 0)
+            tryBuild(value.revision);
 
         function tryBuild(value: number, q: boolean = false) {
             if (value < 0)
