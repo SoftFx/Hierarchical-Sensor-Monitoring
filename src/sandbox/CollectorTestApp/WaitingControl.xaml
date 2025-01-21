@@ -1,0 +1,24 @@
+﻿<UserControl x:Class="CollectorTestApp.WaitingControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             mc:Ignorable="d">
+    
+    <Grid Width="160" Height="160">
+        <Ellipse Name="circle2" Width="160" Height="160" Stroke ="Gainsboro" StrokeThickness ="20"  StrokeDashCap="Round"/>
+        <Ellipse Name="circle" Width="150" Height="150" Stroke ="Gray" StrokeThickness ="10" StrokeDashArray="16,2,24,2" StrokeDashOffset="0"  StrokeDashCap="Round" >
+            <Ellipse.Triggers>
+                <EventTrigger RoutedEvent="Ellipse.Loaded">
+                    <EventTrigger.Actions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="circle" Storyboard.TargetProperty="StrokeDashOffset" To="-44" Duration="0:0:10" RepeatBehavior="Forever"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger.Actions>
+                </EventTrigger>
+            </Ellipse.Triggers>
+        </Ellipse>
+    </Grid>
+</UserControl>
