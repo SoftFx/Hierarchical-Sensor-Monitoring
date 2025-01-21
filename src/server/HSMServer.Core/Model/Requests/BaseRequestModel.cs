@@ -28,14 +28,14 @@ namespace HSMServer.Core.Model.Requests
 
         public BaseRequestModel(string key, string path)
         {
-            Path = path;
-
             _failKey = !Guid.TryParse(key, out var guid);
 
             if (!_failKey)
                 Key = guid;
 
-            PathParts = GetPathParts(Path);
+            PathParts = GetPathParts(path);
+
+            Path = string.Join(CommonConstants.SensorPathSeparator, PathParts);
         }
 
 

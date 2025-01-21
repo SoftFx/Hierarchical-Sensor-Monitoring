@@ -25,6 +25,7 @@ namespace HSMServer.Core.Cache
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
 
         event Action<AlertMessage> NewAlertMessageEvent;
+        event Action<FolderEventArgs> FillFolderChats;
 
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();

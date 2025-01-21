@@ -23,7 +23,7 @@ using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.TreeStateSnapshot;
-using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+
 
 
 namespace HSMServer.Core.Cache
@@ -44,6 +44,7 @@ namespace HSMServer.Core.Cache
             return $"{Key}:{Path}";
         }
     }
+
 
     public sealed class TreeValuesCache : ITreeValuesCache, IDisposable
     {
@@ -84,7 +85,7 @@ namespace HSMServer.Core.Cache
         public event Action<ProductModel, ActionType> ChangeProductEvent;
 
         public event Action<AlertMessage> NewAlertMessageEvent;
-
+        public event Action<FolderEventArgs> FillFolderChats;
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue,
             IJournalService journalService)
@@ -821,7 +822,6 @@ namespace HSMServer.Core.Cache
             return sensor is not null;
         }
 
-
         public void SendAlertMessage(AlertMessage message)
         {
             var sensorId = message.SensorId;
@@ -833,10 +833,39 @@ namespace HSMServer.Core.Cache
                     var product = GetProductByName(sensor.RootProductName);
 
                     if (product.FolderId.HasValue)
+                    {
+                        //TODO: move to Policy => GetParentChats when FolderModel will be moved into Core project
+                        List<Guid> folderChats = GetFolderChats(product.FolderId.Value);
+
+                        foreach(AlertResult alert in message)
+                        {
+                            foreach (Guid folderId in folderChats)
+                            {
+                                if(!alert.Destination.Chats.Contains(folderId))
+                                    alert.Destination.Chats.Add(folderId);
+                            }
+                        }
+
                         NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
+                    }
                 }
             }
         }
+
+
+              
+
+        private List<Guid> GetFolderChats(Guid folderId)
+        {
+            FolderEventArgs args = new FolderEventArgs(folderId);
+            FillFolderChats?.Invoke(args);
+
+            if (!string.IsNullOrEmpty(args.Error))
+                _logger.Error($"Loading folder temegrem chats error: {args.Error}");
+
+            return args.ChatIDs;
+        }
+
 
         private void SensorUpdateViewAndNotify(BaseSensorModel sensor)
         {
@@ -1129,7 +1158,8 @@ namespace HSMServer.Core.Cache
                         return;
                 }
             }
-            else if (sensor.State == SensorState.Blocked)
+
+            if (sensor.State == SensorState.Blocked)
                 return;
 
             using (_lock.GetReadLock())
