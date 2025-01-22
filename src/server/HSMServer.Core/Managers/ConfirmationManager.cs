@@ -18,6 +18,11 @@ namespace HSMServer.Core.Confirmation
 
         internal void RegisterNotification(PolicyResult policyResult)
         {
+            _logger.Info($"Send telegram: RegisterNotification enter: sensor:{policyResult.SensorId}, is empty: {policyResult.IsEmpty}");
+
+            if (policyResult.IsEmpty)
+                return;
+
             try
             {
                 lock (_lock)
@@ -27,9 +32,6 @@ namespace HSMServer.Core.Confirmation
                     var branch = _tree.GetOrAdd(sensorId);
 
                     FlushNotValidAlerts(branch, newAlerts);
-
-                    if (policyResult.IsEmpty)
-                        return;
 
                     foreach (var alertId in newAlerts.Keys.ToList())
                     {
@@ -47,7 +49,10 @@ namespace HSMServer.Core.Confirmation
                         }
                     }
 
-                    SendAlertMessage(sensorId, [.. newAlerts.Values]);
+                    List<AlertResult> alerts = [.. newAlerts.Values];
+
+                    _logger.Info($"Send telegram: RegisterNotification enter: sensor:{policyResult.SensorId}, SendAlertMessage {alerts.Count} alerts");
+                    SendAlertMessage(sensorId, alerts);
                 }
             }
             catch (Exception ex)
