@@ -25,8 +25,6 @@ namespace HSMServer.Core.Confirmation
 
             try
             {
-                //_logger.Debug($"Send telegram: RegisterNotification enter: sensor:{policyResult.SensorId}");
-
                 lock (_lock)
                 {
                     var newAlerts = new Dictionary<Guid, AlertResult>(policyResult.Alerts);
@@ -34,8 +32,6 @@ namespace HSMServer.Core.Confirmation
                     var branch = _tree.GetOrAdd(sensorId);
 
                     FlushNotValidAlerts(branch, newAlerts);
-
-                    _logger.Debug($"Send telegram: RegisterNotification enter: sensor:{policyResult.SensorId}, in lock");
 
                     foreach (var alertId in newAlerts.Keys.ToList())
                     {
