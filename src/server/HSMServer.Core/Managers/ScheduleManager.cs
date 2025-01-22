@@ -14,7 +14,7 @@ namespace HSMServer.Core.Managers
         internal void ProcessMessage(AlertMessage message)
         {
 
-            _logger.Debug("Send telegram: ProcessMessage enter");
+            _logger.Info("Send telegram: ProcessMessage enter");
             lock (_lock)
             {
                 try
@@ -24,7 +24,7 @@ namespace HSMServer.Core.Managers
 
                     var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
 
-                    _logger.Debug($"Send telegram: ProcessMessage SendAlertMessage notApplyAlerts: {notApplyAlerts.Count}");
+                    _logger.Info($"Send telegram: ProcessMessage SendAlertMessage notApplyAlerts: {notApplyAlerts.Count}");
                     SendAlertMessage(sensorId, notApplyAlerts);
 
                     foreach (var alert in applyAlerts)
@@ -44,7 +44,7 @@ namespace HSMServer.Core.Managers
                         sensorGroup.AddAlert(alert);
                     }
 
-                    _logger.Debug($"Send telegram: ProcessMessage SendAlertMessage sendFirstAlerts: {sendFirstAlerts.Count}");
+                    _logger.Info($"Send telegram: ProcessMessage SendAlertMessage sendFirstAlerts: {sendFirstAlerts.Count}");
                     SendAlertMessage(sensorId, sendFirstAlerts);
                 }
                 catch (Exception ex) 

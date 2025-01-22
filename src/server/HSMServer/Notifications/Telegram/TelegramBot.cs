@@ -171,7 +171,7 @@ namespace HSMServer.Notifications
         {
             try
             {
-                _logger.Debug($"Send telegram: TestStoreMessage enter");
+                _logger.Info($"Send telegram: TestStoreMessage enter");
                 if (!CanSendNotifications || !_folderManager.TryGetValue(message.FolderId, out var _))
                     return;
 
@@ -319,7 +319,7 @@ namespace HSMServer.Notifications
                         break;
 
                     await (_bot?.SendMessage(chat, message, cancellationToken: _tokenSource.Token) ?? Task.CompletedTask).ConfigureAwait(false);
-                    _logger.Debug($"Send telegram: SendMessageAsync: message '{message}' is sent");
+                    _logger.Info($"Send telegram: SendMessageAsync: message '{message}' is sent");
                     break;
                 }
                 catch (ApiRequestException ex)

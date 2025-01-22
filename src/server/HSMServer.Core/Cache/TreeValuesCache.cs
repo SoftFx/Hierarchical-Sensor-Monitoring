@@ -824,7 +824,7 @@ namespace HSMServer.Core.Cache
 
         public void SendAlertMessage(AlertMessage message)
         {
-            _logger.Debug($"Send telegram: SendAlertMessage enter");
+            _logger.Info($"Send telegram: SendAlertMessage enter");
             var sensorId = message.SensorId;
 
             using (_lock.GetReadLock())
@@ -847,7 +847,7 @@ namespace HSMServer.Core.Cache
                             }
                         }
 
-                        _logger.Debug($"Send telegram: NewAlertMessageEvent Invoke");
+                        _logger.Info($"Send telegram: NewAlertMessageEvent Invoke");
                         NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
                     }
                 }
