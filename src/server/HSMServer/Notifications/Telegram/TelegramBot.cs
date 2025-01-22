@@ -171,6 +171,7 @@ namespace HSMServer.Notifications
         {
             try
             {
+                _logger.Debug($"Send telegram: TestStoreMessage enter");
                 if (!CanSendNotifications || !_folderManager.TryGetValue(message.FolderId, out var _))
                     return;
 
@@ -195,7 +196,7 @@ namespace HSMServer.Notifications
             }
             catch (Exception ex)
             {
-                _logger.Error(ex);
+                _logger.Error($"Send telegram: {ex}");
             }
         }
 
@@ -318,11 +319,12 @@ namespace HSMServer.Notifications
                         break;
 
                     await (_bot?.SendMessage(chat, message, cancellationToken: _tokenSource.Token) ?? Task.CompletedTask).ConfigureAwait(false);
+                    _logger.Debug($"Send telegram: SendMessageAsync: message '{message}' is sent");
                     break;
                 }
                 catch (ApiRequestException ex)
                 {
-                    _logger.Error($"An error ({ex.Message}) has been occurred while sending message #{retry} [{chat.Identifier}] {message}");
+                    _logger.Error($"Send telegram: An error ({ex.Message}) has been occurred while sending message #{retry} [{chat.Identifier}] {message}");
                     break;
                 }
                 catch (OperationCanceledException)
@@ -331,7 +333,7 @@ namespace HSMServer.Notifications
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"An error ({ex.Message}) has been occurred while sending message #{retry} [{chat.Identifier}] {message}");
+                    _logger.Error($"Send telegram: An error ({ex.Message}) has been occurred while sending message #{retry} [{chat.Identifier}] {message}");
 
                     await Task.Delay(SendMessageRetryTimeout * retry, _tokenSource.Token).ConfigureAwait(false);
                     retry++;
