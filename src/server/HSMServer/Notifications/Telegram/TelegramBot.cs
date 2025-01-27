@@ -171,7 +171,8 @@ namespace HSMServer.Notifications
         {
             try
             {
-                _logger.Info($"Send telegram: TestStoreMessage enter");
+                //_logger.Info($"Send telegram: Telegram bot: StoreMessage enter");
+
                 if (!CanSendNotifications || !_folderManager.TryGetValue(message.FolderId, out var _))
                     return;
 
@@ -184,10 +185,12 @@ namespace HSMServer.Notifications
                         {
                             if (chat.MessagesAggregationTimeSec == 0)
                             {
+                                _logger.Info($"Send telegram: Telegram bot: SendMessageAsync '{alert}'");
                                 await SendMessageAsync(chat.ChatId, alert.ToString()).ConfigureAwait(false);
                             }
                             else
                             {
+                                _logger.Info($"Send telegram: Telegram bot: builder.AddMessage '{alert}'");
                                 IMessageBuilder builder = message is ScheduleAlertMessage ? chat.ScheduleMessageBuilder : chat.MessageBuilder;
                                 builder.AddMessage(alert);
                             }
@@ -196,7 +199,7 @@ namespace HSMServer.Notifications
             }
             catch (Exception ex)
             {
-                _logger.Error($"Send telegram: {ex}");
+                _logger.Error($"Send telegram: StoreMessage error: {ex}");
             }
         }
 
@@ -204,6 +207,8 @@ namespace HSMServer.Notifications
         {
             if (!CanSendNotifications)
                 return;
+
+            _logger.Info($"Send telegram: Telegram bot: send chats notifications");
 
             try
             {
