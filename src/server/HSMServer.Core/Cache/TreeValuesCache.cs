@@ -847,7 +847,7 @@ namespace HSMServer.Core.Cache
                             }
                         }
 
-                        _logger.Info($"Send telegram: NewAlertMessageEvent Invoke");
+                        //_logger.Info($"Send telegram: NewAlertMessageEvent Invoke");
                         NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
                     }
                 }
