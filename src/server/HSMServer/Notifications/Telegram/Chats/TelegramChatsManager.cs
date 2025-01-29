@@ -7,6 +7,7 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Folders;
 using HSMServer.Notifications.Telegram.Tokens;
 using HSMServer.ServerConfiguration;
+using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -30,7 +31,7 @@ namespace HSMServer.Notifications
         public TokensManager TokenManager { get; } = new();
 
         internal string BotName => _config.BotName;
-
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         protected override Action<TelegramChatEntity> AddToDb => _database.AddTelegramChat;
 
@@ -91,9 +92,8 @@ namespace HSMServer.Notifications
             {
                 bool isUserChat = message?.Chat?.Type == ChatType.Private;
 
-                chat = new TelegramChat()
+                chat = new TelegramChat(message.Chat)
                 {
-                    ChatId = message.Chat,
                     AuthorId = token.User.Id,
                     Author = token.User.Name,
                     AuthorizationTime = DateTime.UtcNow,
@@ -149,5 +149,28 @@ namespace HSMServer.Notifications
 
 
         protected override TelegramChat FromEntity(TelegramChatEntity entity) => new(entity);
+
+        public async Task MigrateToSupergroup(long oldChatId, long newChatId)
+        {
+            await Task.Run(() =>
+                {
+                    TelegramChat chat = GetChatByChatId(oldChatId);
+                    
+                    if(chat == null)
+                    {
+                        _logger.Warn($"MigrateToSupergroup: Chat '{oldChatId}' not found");
+                        return;
+                    }
+
+                    chat.UpdateChatId(newChatId);
+                    _logger.Info($"MigrateToSupergroup: Chat '{oldChatId}' was updated to supergroup '{newChatId}'");
+
+                    _database.UpdateTelegramChat(chat.ToEntity());
+                    _logger.Info($"MigrateToSupergroup: Chat '{newChatId}' was updated in DB");
+                }
+            );
+        }
+
+
     }
 }
