@@ -27,10 +27,18 @@ namespace HSMServer.Notifications
         private readonly ITreeValuesCache _cache;
         private readonly TelegramConfig _config;
 
-        private string BotName => $"@{_config.BotName.ToLower()}";
+        private string BotName
+        {
+            get
+            {
+                return _config.BotName.StartsWith('@')?
+                    _config.BotName.ToLower() :
+                    $"@{_config.BotName.ToLower()}";
+            }
+        }
 
 
-        internal TelegramUpdateHandler(ITelegramChatsManager chatsManager, ITreeValuesCache cache, IFolderManager folderManager, TelegramConfig config)
+    internal TelegramUpdateHandler(ITelegramChatsManager chatsManager, ITreeValuesCache cache, IFolderManager folderManager, TelegramConfig config)
         {
             _folderManager = folderManager;
             _chatsManager = chatsManager;
@@ -41,9 +49,21 @@ namespace HSMServer.Notifications
 
         public async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cToken)
         {
+            if(update?.Message is null)
+                return;
+
+            if(update.Message.MigrateToChatId.HasValue)
+            {
+                _logger.Info($"Migrate to Supergroup: '{update.Message.Chat.Id}' -> '{update.Message.MigrateToChatId.Value}'");
+                await _chatsManager.MigrateToSupergroup( update.Message.Chat.Id, update.Message.MigrateToChatId.Value);
+                return;
+            }
+
             try
             {
-                if (update is null || update.Message is null || update.Message.Chat is null || string.IsNullOrEmpty(update.Message.Text) || update.Type is not UpdateType.Message)
+                if (update.Message.Chat is null ||
+                    string.IsNullOrEmpty(update.Message.Text) ||
+                    update.Type is not UpdateType.Message)
                     return;
 
                 var message = update.Message;
@@ -67,9 +87,9 @@ namespace HSMServer.Notifications
                     TelegramBotCommands.Help => Help(),
                     _ => null,
                 };
-
+                
                 if (!string.IsNullOrEmpty(response))
-                    await botClient.SendTextMessageAsync(message.Chat, response, parseMode: ParseMode.MarkdownV2, cancellationToken: cToken);
+                    await botClient.SendMessage(message.Chat, response, parseMode: ParseMode.MarkdownV2, cancellationToken: cToken);
                 else
                     _logger.Warn($"There is some invalid update message: {msgText}");
             }
@@ -78,6 +98,7 @@ namespace HSMServer.Notifications
                 _logger.Error($"Invalid message has been received: {update?.Type} - {update?.Message}. Exception: {ex}");
             }
         }
+
 
         public Task HandlePollingErrorAsync(ITelegramBotClient _, Exception ex, CancellationToken token)
         {
