@@ -30,17 +30,18 @@
 }
 
 
-<div name="alertAction" class="d-flex flex-row align-items-center alert-blocks-group py-1 ms-3">
+<div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-3">
     <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add alert-and me-3">and</div>
 
     <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions"></select>
 
-    <div name="sendNotificationAction" class="@isSendAction.ToVisibility() align-items-center">
+    <div name="sendNotificationAction" class="@isSendAction.ToVisibility() align-items-center flex-wrap">
         <input type="text" class="alert-block target-input target-comment" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)">
         <div class="alert-text-block operation-select">to</div>
 
+
         <select class="selectpicker" name="Chats" multiple
-                data-width="100%" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-container="body">
+                data-width="auto" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-container="body">
             <option class="general-group-chat-mode" value="@ChatsMode.FromParent" selected="@(Model.ChatsMode is ChatsMode.FromParent)">@ChatsMode.FromParent.GetDisplayName()</option>
             <option class="general-group-chat-mode" value="@ChatsMode.NotInitialized" selected="@(Model.ChatsMode is ChatsMode.NotInitialized)">@ChatsMode.NotInitialized.GetDisplayName()</option>
             <option class="general-group-chat-mode" value="@ChatsMode.Empty" selected="@(Model.ChatsMode is ChatsMode.Empty)">@ChatsMode.Empty.GetDisplayName()</option>
@@ -60,6 +61,8 @@
                 <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
             }
         </select>
+
+
 
         <a class="addSchedule @(hasSchedule ? "d-none" : string.Empty)">
             <i class="fa-regular fa-calendar-plus alert-schedule-button"></i>
@@ -91,7 +94,7 @@
         <div name="emoji" class="target-input">@Model.Icon</div>
     </div>
 
-    <a class="deleteAction">
+    <a class="deleteAction align-self-end">
         <i class="fa-solid fa-xmark alert-delete-button"></i>
     </a>
 </div>
@@ -104,15 +107,15 @@
         $("select[name='Chats']").off('changed.bs.select').on('changed.bs.select', function (e, clickedIndex, isSelected, previousValue) {
             let allSelected = true;
 
-            $(this).children().each(function() {
+            $(this).children().each(function () {
                 allSelected &= $(this).is(':selected');
             });
-            
+
             if (allSelected) {
                 let $title = $(this).parent().find('.filter-option-inner-inner');
                 $title.text("all chats");
             }
-            
+
             if (clickedIndex >= 1 && clickedIndex <= 3 && isSelected) {
                 $(this).val($(this)[0].options[clickedIndex].value);
             }
