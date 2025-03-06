@@ -1073,7 +1073,7 @@ namespace HSMServer.Core.Cache
                 if (!alertTemplateModel.IsMatch(sensor.FullPath))
                     continue;
 
- 
+                AddAlertFromTemplate(sensor, alertTemplateModel);
             }
 
             _database.AddAlertTemplate(alertTemplateModel.ToEntity());
