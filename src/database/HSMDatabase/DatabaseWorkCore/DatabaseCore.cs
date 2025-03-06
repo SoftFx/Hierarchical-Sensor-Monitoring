@@ -578,6 +578,37 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
+        #region Alert template
+
+        public void AddAlertTemplate(AlertTemplateEntity entity)
+        {
+            _environmentDatabase.AddAlertTemplateIdToList(entity.Id);
+            _environmentDatabase.AddAlertTemplate(entity);
+        }
+
+        public void UpdateAlertTemplate(AlertTemplateEntity entity) => _environmentDatabase.AddAlertTemplate(entity);
+
+        public void RemoveAlertTemplate(Guid id) => _environmentDatabase.RemoveAlertTemplate(id.ToByteArray());
+
+        public List<AlertTemplateEntity> GetAllAlertTemplates()
+        {
+            var ids = _environmentDatabase.GetAllAlertTemplatesIds();
+
+            var result = new List<AlertTemplateEntity>(ids.Count);
+
+            foreach (var id in ids)
+            {
+                var template = _environmentDatabase.GetAlertTemplate(id);
+
+                if (template != null)
+                    result.Add(template);
+            }
+
+            return result;
+        }
+
+        #endregion
+
         public void Dispose()
         {
             _logger.Info($"Starting disposing {nameof(DatabaseCore)}...");

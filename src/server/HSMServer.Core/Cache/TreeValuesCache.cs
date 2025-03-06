@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using NLog;
 using HSMCommon.Collections;
 using HSMCommon.Constants;
@@ -23,7 +24,8 @@ using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.TreeStateSnapshot;
-using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+using SensorType = HSMServer.Core.Model.SensorType;
+using HSMServer.PathTemplates;
 
 
 namespace HSMServer.Core.Cache
@@ -65,6 +67,7 @@ namespace HSMServer.Core.Cache
         private readonly Dictionary<Guid, BaseSensorModel> _sensors = new();
         private readonly Dictionary<Guid, AccessKeyModel> _keys = new();
         private readonly Dictionary<Guid, ProductModel> _tree = new();
+        private readonly Dictionary<Guid, AlertTemplateModel> _alertTemplates = new();
 
         private readonly CDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
@@ -141,6 +144,23 @@ namespace HSMServer.Core.Cache
             using (_lock.GetReadLock())
             {
                 return [.. _sensors.Values];
+            }
+        }
+
+        public List<BaseSensorModel> GetSensors(string wildcard, SensorType? sensorType = null)
+        {
+            PathTemplateConverter converter = new PathTemplateConverter();
+            if (!converter.ApplyNewTemplate(wildcard, out string errors))
+                return [];
+
+            using (_lock.GetReadLock())
+            {
+                var result = _sensors.Values.Where(x => converter.IsMatch(x.FullPath));
+
+                if (sensorType.HasValue)
+                    result = result.Where(x => x.Type == sensorType);
+
+                return result.ToList();
             }
         }
 
@@ -963,6 +983,165 @@ namespace HSMServer.Core.Cache
                 RemoveChatsFromPolicies(product, chatsHash, initiator);
         }
 
+
+        public AlertTemplateModel GetAlertTemplate(Guid id)
+        {
+            try
+            {
+                using (_lock.GetReadLock())
+                {
+                    if (!_alertTemplates.TryGetValue(id, out AlertTemplateModel result))
+                        return null;
+
+                    return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"An error was occurred while getting alert template with id = {id}", ex);
+                return null;
+            }
+        }
+
+
+        private void AddAlertFromTemplate(BaseSensorModel sensor, AlertTemplateModel alertTemplateModel)
+        {
+            PolicyUpdate ttlPolicyUpdate = null;
+            List<PolicyUpdate> policyUpdates = [];
+
+            if (alertTemplateModel.TTLPolicy is not null)
+                ttlPolicyUpdate = new PolicyUpdate(alertTemplateModel.TTLPolicy, InitiatorInfo.AlertTemplate) { Id = new Guid(), TemplateId = alertTemplateModel.Id };
+
+            foreach (var policy in alertTemplateModel.Policies)
+                policyUpdates.Add(new PolicyUpdate(policy, InitiatorInfo.AlertTemplate) { Id = new Guid(), TemplateId = alertTemplateModel.Id });
+
+            if (ttlPolicyUpdate != null || policyUpdates.Count > 0)
+            {
+                var sensorUpdate = new SensorUpdate()
+                {
+                    Id = sensor.Id,
+                    Policies = policyUpdates,
+                    TTLPolicy = ttlPolicyUpdate,
+                    TTL = alertTemplateModel.TTL,
+                    Initiator = InitiatorInfo.AlertTemplate
+                };
+
+                if (!TryUpdateSensorInternal(sensorUpdate, out var error))
+                    _logger.Error($"An error was occurred while updating sensor with alert template {alertTemplateModel}: {error}");
+            }
+        }
+
+
+        private void AddAlertTemplateInternal(AlertTemplateModel alertTemplateModel)
+        {
+            _alertTemplates.GetOrAdd(alertTemplateModel.Id, () => alertTemplateModel);
+
+            foreach (var sensor in _sensors.Values)
+            {
+                if (!alertTemplateModel.IsMatch(sensor.FullPath))
+                    continue;
+
+ 
+            }
+
+            _database.AddAlertTemplate(alertTemplateModel.ToEntity());
+        }
+
+        public void AddAlertTemplate(AlertTemplateModel alertTemplateModel)
+        {
+            try
+            {
+                using (_lock.GetWriteLock())
+                {
+                    if (_alertTemplates.ContainsKey(alertTemplateModel.Id))
+                        RemoveAlertTemplateInternal(alertTemplateModel.Id);
+
+                    AddAlertTemplateInternal(alertTemplateModel);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"An error was occurred while adding alert template {alertTemplateModel}", ex);
+            }
+        }
+
+
+        public List<AlertTemplateModel> GetAlertTemplateModels()
+        {
+            try
+            {
+                using (_lock.GetReadLock())
+                {
+                    return [.. _alertTemplates.Values];
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("An error was occurred while getting alert templates", ex);
+            }
+
+            return [];
+        }
+
+        private void RemoveAlertTemplateInternal(Guid id)
+        {
+            PolicyUpdate ttl = null;
+            List<PolicyUpdate> policyUpdates = [];
+            SensorUpdate update;
+
+            foreach (var sensor in _sensors.Values)
+            {
+                if (sensor.Policies.TimeToLive.TemplateId == id)
+                    ttl = new PolicyUpdate();
+
+                if (sensor.Policies.Any(x => x.TemplateId == id))
+                    policyUpdates = sensor.Policies.Where(x => x.TemplateId != id).Select(x => new PolicyUpdate(x)).ToList();
+
+                if (ttl != null || policyUpdates.Count > 0)
+                {
+                    update = new SensorUpdate()
+                    {
+                        Id = sensor.Id,
+                        TTLPolicy = null,
+                        Policies = policyUpdates,
+                        Initiator = InitiatorInfo.AlertTemplate,
+                    };
+
+                    if (!TryUpdateSensorInternal(update, out var error))
+                        _logger.Error($"An error was occurred while updating sensor while removing alert template [{id}]: {error}");
+
+                    ttl = null;
+                    policyUpdates.Clear();
+                }
+            }
+
+            foreach (var sensor in _sensors.Values.Where(x => x.Policies.Any(x => x.TemplateId == id)))
+            {
+                foreach (var policy in sensor.Policies.Where(x => x.TemplateId == id).ToList())
+                    sensor.Policies.RemovePolicy(policy.Id);
+
+                SensorUpdateView(sensor);
+            }
+
+            _alertTemplates.Remove(id);
+            _database.RemoveAlertTemplate(id);
+        }
+
+        public void RemoveAlertTemplate(Guid id)
+        {
+            try
+            {
+                using (_lock.GetWriteLock())
+                {
+                    RemoveAlertTemplateInternal(id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"An error was occurred while removing alert template [{id}]", ex);
+            }
+        }
+
         private void RemoveChatsFromPolicies(ProductModel product, HashSet<Guid> chats, InitiatorInfo initiator)
         {
             if (TryGetPolicyUpdate(product.Policies.TimeToLive, chats, initiator, out var productTtlUpdate))
@@ -1182,6 +1361,21 @@ namespace HSMServer.Core.Cache
                 ApplyAccessKeys([.. accessKeysEntities]);
                 _logger.Info($"{nameof(accessKeysEntities)} applied");
 
+                _logger.Info($"{nameof(IDatabaseCore.GetAllAlertTemplates)} is requesting");
+                var alertTemlatesEntities = _database.GetAllAlertTemplates();
+                _logger.Info($"{nameof(IDatabaseCore.GetAllAlertTemplates)} requested");
+
+                _logger.Info($"{nameof(alertTemlatesEntities)} are applying");
+                foreach (var template in alertTemlatesEntities)
+                {
+                    var model = new AlertTemplateModel(template);
+                    if (!_alertTemplates.ContainsKey(new Guid(template.Id)))
+                        _alertTemplates.Add(model.Id, model);
+                    else
+                        _database.RemoveAlertTemplate(new Guid(template.Id));
+                }
+                _logger.Info($"{nameof(alertTemlatesEntities)} applied");
+
                 _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
                 UpdateCacheState();
@@ -1231,7 +1425,18 @@ namespace HSMServer.Core.Cache
             var policyEntities = _database.GetAllPolicies();
             _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} requested");
 
-            return policyEntities.ToDictionary(k => new Guid(k.Id).ToString(), v => v);
+            var result = new Dictionary<string, PolicyEntity>();
+
+            foreach (var policyEntity in policyEntities)
+            {
+                var key = new Guid(policyEntity.Id).ToString();
+                if (!result.ContainsKey(key))
+                    result.Add(key, policyEntity);
+                else
+                    _logger.Error($"Duplicate policy id found {key}");
+            }
+
+            return result;
         }
 
         private void ApplyProducts(List<ProductEntity> productEntities)
@@ -1456,6 +1661,12 @@ namespace HSMServer.Core.Cache
             try
             {
                 _sensors.Add(sensor.Id, sensor);
+
+                foreach (var template in _alertTemplates.Values)
+                {
+                    if (template.IsMatch(sensor.FullPath))
+                        AddAlertFromTemplate(sensor, template);
+                }
 
                 foreach(var accessKey in productModel.AccessKeys)
                     _sensorsByKey.Add(new SensorKey(accessKey.Key, sensor.Path), sensor);
@@ -1703,6 +1914,11 @@ namespace HSMServer.Core.Cache
             }
 
             SensorUpdateView(sensor);
+        }
+
+        private static string WildCardToRegular(string value)
+        {
+            return "^" + Regex.Escape(value).Replace("\\?", ".").Replace("\\*", ".*") + "$";
         }
     }
 }
