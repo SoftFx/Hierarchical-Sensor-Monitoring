@@ -102,7 +102,7 @@ namespace HSMServer.Model.TreeViewModel
 
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
 
-            DataAlerts[(byte)Type] = model.Policies.Select(BuildAlert).ToList();
+            DataAlerts[(byte)Type] = model.Policies.Select(x => DataAlertViewModel.BuildAlert(x, this)).ToList();
 
             AlertIcons.Clear();
             foreach (var alert in model.PolicyResult)
@@ -117,22 +117,6 @@ namespace HSMServer.Model.TreeViewModel
                 AlertIcons[icon] += alert.Count;
             }
         }
-
-        private DataAlertViewModelBase BuildAlert(Policy policy) => policy switch
-        {
-            FilePolicy p => new FileDataAlertViewModel(p, this),
-            StringPolicy p => new StringDataAlertViewModel(p, this),
-            BooleanPolicy p => new DataAlertViewModel<BooleanValue>(p, this),
-            VersionPolicy p => new SingleDataAlertViewModel<VersionValue>(p, this),
-            TimeSpanPolicy p => new SingleDataAlertViewModel<TimeSpanValue>(p, this),
-            IntegerPolicy p => new NumericDataAlertViewModel<IntegerValue>(p, this),
-            DoublePolicy p => new NumericDataAlertViewModel<DoubleValue>(p, this),
-            RatePolicy p => new NumericDataAlertViewModel<RateValue>(p, this),
-            IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue>(p, this),
-            DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue>(p, this),
-            EnumPolicy p => new NumericDataAlertViewModel<EnumValue>(p, this),
-            _ => null,
-        };
 
         private static string GetFileNameString(SensorType sensorType, string value)
         {

@@ -374,6 +374,10 @@ img .tree-png-icon {
     opacity: 0.5;
 }
 
+.templatedAlert {
+    background-color: #dee2e6
+}
+
 .meta-info-label {
     min-width: 18rem;
 }
@@ -674,4 +678,8 @@ input[type="search"]::-webkit-search-cancel-button {
 .disabled-group {
     opacity: 0.5;
     pointer-events: none;
+}
+
+.alert-template-tooltip {
+    --bs-tooltip-max-width: 800px !important;
 }

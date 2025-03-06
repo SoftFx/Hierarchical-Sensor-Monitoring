@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
@@ -71,6 +72,26 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public InitiatorInfo Initiator { get; init; }
 
         public bool IsParentRequest { get; init; }
+
+        public Guid? TemplateId { get; init; }
+
+        public PolicyUpdate() { }
+
+        public PolicyUpdate (Policy policy, InitiatorInfo initiator = null)
+        {
+            Conditions = policy.Conditions.Select(x => new PolicyConditionUpdate(x.Operation, x.Property, x.Target, x.Combination)).ToList();
+            Destination = new PolicyDestinationUpdate(policy.Destination);
+            Schedule = new PolicyScheduleUpdate() { RepeatMode = policy.Schedule.RepeatMode, InstantSend = policy.Schedule.InstantSend, Time = policy.Schedule.Time };
+            ConfirmationPeriod = policy.ConfirmationPeriod;
+            Id = policy.Id;
+            Status = policy.Status;
+            Template = policy.Template;
+            IsDisabled = policy.IsDisabled;
+            Icon = policy.Icon;
+            TemplateId = policy.TemplateId;
+            Initiator = initiator;
+        }
+
     }
 
 
@@ -129,5 +150,14 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public bool? InstantSend { get; init; }
 
         public DateTime? Time { get; init; }
+
+        public PolicyScheduleUpdate() { }
+
+        public PolicyScheduleUpdate(PolicySchedule schedule)
+        {
+            RepeatMode = schedule.RepeatMode;
+            InstantSend = schedule.InstantSend;
+            Time = schedule.Time;
+        }
     }
 }

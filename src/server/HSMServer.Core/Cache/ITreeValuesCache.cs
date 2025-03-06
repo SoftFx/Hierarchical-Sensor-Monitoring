@@ -28,6 +28,7 @@ namespace HSMServer.Core.Cache
         event Action<FolderEventArgs> FillFolderChats;
 
         List<BaseSensorModel> GetSensors();
+        List<BaseSensorModel> GetSensors(string wildcard, SensorType? type);
         List<AccessKeyModel> GetAccessKeys();
 
         ProductModel AddProduct(string productName, Guid authorId);
@@ -87,5 +88,13 @@ namespace HSMServer.Core.Cache
         void SaveLastStateToDb();
 
         void RemoveChatsFromPolicies(Guid folderId, List<Guid> chats, InitiatorInfo initiator);
+
+        List<AlertTemplateModel> GetAlertTemplateModels();
+
+        void AddAlertTemplate(AlertTemplateModel model);
+
+        AlertTemplateModel GetAlertTemplate(Guid id);
+
+        void RemoveAlertTemplate(Guid id);
     }
 }

@@ -63,5 +63,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string Icon { get; init; }
 
         public long? ConfirmationPeriod { get; init; }
+
+        public byte[] TemplateId { get; init; }
     }
 }

@@ -67,22 +67,22 @@
                 switch (action.ChatsMode)
                 {
                     case ChatsMode.FromParent:
-                        {
-                            var (parentIds, lastMode) = Model.DefaultChat.GetParentChats();
+                    {
+                        var (parentIds, lastMode) = Model.DefaultChat?.GetParentChats() ?? ([], null);
 
-                            string chatNames;
-                            if (parentIds.Count != 0)
-                                chatNames = parentIds.ToNames(telegramChats);
-                            else
-                                chatNames = lastMode?.GetDisplayName();
+                        string chatNames;
+                        if (parentIds.Count != 0)
+                            chatNames = parentIds.ToNames(telegramChats);
+                        else
+                            chatNames = lastMode?.GetDisplayName();
 
-                            chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatNames})";
+                        chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatNames})";
+                        
+                        if (action.Chats.Count !=  0)
+                            chats += $", {GetActionChats(action)}";
 
-                            if (action.Chats.Count != 0)
-                                chats += $", {GetActionChats(action)}";
-
-                            break;
-                        }
+                        break;
+                    }
                     case ChatsMode.Custom:
                         {
                             if (action.Chats.Count == 0)
@@ -151,7 +151,7 @@
 </div>
 
 <div id="alertConstructor_@Model.Id" class="dataAlertRow d-flex flex-row align-items-center @(!Model.IsModify ? "d-none" : string.Empty)">
-    <div class="card mb-2 w-100 @(Model.IsDisabled ? "disabledAlert" : string.Empty)">
+    <div class="card mb-2 w-100 @(Model.IsDisabled ? "disabledAlert" : string.Empty) @(Model.TemplateId != null ? "templatedAlert" : string.Empty)" >
         <div class="card-body py-2">
             <div class="d-flex flex-row align-items-center fullCondition">
                 @{
@@ -202,6 +202,7 @@
     <input class="d-none" type="checkbox" asp-for="IsDisabled" value="@Model.IsDisabled">
     <input class="d-none" asp-for="Id" value="@Model.Id" />
     <input class="d-none" asp-for="EntityId" value="@Model.EntityId" />
+    <input class="d-none" asp-for="TemplateId" value="@Model.TemplateId" />
 </div>
 
 
@@ -211,7 +212,7 @@
             let element = $(this).parents("div.fullCondition:first");
 
             $.ajax({
-                url: `@Url.Action(nameof(HomeController.AddAlertCondition), ViewConstants.HomeController)?sensorId=@Model.EntityId`,
+                url: `@Url.Action(nameof(HomeController.AddAlertCondition), ViewConstants.HomeController)?type=@Model.Type`,
                 cache: false
             }).done(function (viewData) {
                 var conditionsBlock = element.find($(`div[name='conditionsBlock']`));

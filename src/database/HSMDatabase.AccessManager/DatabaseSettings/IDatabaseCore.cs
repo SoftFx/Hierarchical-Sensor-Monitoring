@@ -109,6 +109,12 @@ namespace HSMServer.Core.DataLayer
 
         #endregion
 
+        #region Alert Templates
+        List<AlertTemplateEntity> GetAllAlertTemplates();
+        void AddAlertTemplate(AlertTemplateEntity policy);
+        void RemoveAlertTemplate(Guid id);
+        #endregion
+
         #region Journal
 
         void AddJournalValue(JournalKey journalKey, JournalRecordEntity value);

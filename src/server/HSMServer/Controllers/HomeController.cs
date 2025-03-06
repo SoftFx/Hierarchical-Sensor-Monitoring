@@ -357,7 +357,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public string GetNodePath([FromQuery] string selectedId, [FromQuery] bool isFullPath = false)
+        public string GetNodePath([FromQuery] string selectedId, [FromQuery] bool isFullPath = true)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
@@ -632,43 +632,30 @@ namespace HSMServer.Controllers
 
         public IActionResult AddDataPolicy(byte type, Guid entityId)
         {
-            if (!TryGetSelectedNode(entityId, out var entity))
-                return _emptyResult;
+            TryGetSelectedNode(entityId, out var entity);
 
-            DataAlertViewModelBase viewModel = type switch
-            {
-                (byte)SensorType.File => new FileDataAlertViewModel(entity),
-                (byte)SensorType.String => new StringDataAlertViewModel(entity),
-                (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(entity),
-                (byte)SensorType.Version => new SingleDataAlertViewModel<VersionValue>(entity),
-                (byte)SensorType.TimeSpan => new SingleDataAlertViewModel<TimeSpanValue>(entity),
-                (byte)SensorType.Integer => new NumericDataAlertViewModel<IntegerValue>(entity),
-                (byte)SensorType.Double => new NumericDataAlertViewModel<DoubleValue>(entity),
-                (byte)SensorType.Rate => new NumericDataAlertViewModel<RateValue>(entity),
-                (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue>(entity),
-                (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue>(entity),
-                (byte)SensorType.Enum => new NumericDataAlertViewModel<EnumValue>(entity),
-                TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(entity),
-                _ => null,
-            };
+            DataAlertViewModelBase viewModel = DataAlertViewModel.BuildAlert(type, entity);
 
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
 
-        public IActionResult AddAlertCondition(Guid sensorId) => _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
-            ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(sensor))
-            : _emptyResult;
-
-        public IActionResult AddAlertAction(Guid entityId, bool isMain, bool isTtl) => TryGetSelectedNode(entityId, out var entity)
-            ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, isTtl, entity))
-            : _emptyResult;
-
-        public IActionResult GetOperation(Guid sensorId, AlertProperty property)
+        public IActionResult AddAlertCondition(byte type)
         {
-            if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
-                return _emptyResult;
+            return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(type));
+        }
 
-            var condition = BuildAlertCondition(sensor);
+        public IActionResult AddAlertAction(Guid entityId, bool isMain, bool isTtl)
+        {
+            HashSet<Guid> chats = [];
+            if (TryGetSelectedNode(entityId, out var entity))
+                entity.TryGetChats(out chats);
+
+            return PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, isTtl, chats));
+        }
+
+        public IActionResult GetOperation(byte type, AlertProperty property)
+        {
+            var condition = BuildAlertCondition(type);
 
             return property switch
             {
@@ -683,20 +670,20 @@ namespace HSMServer.Controllers
 
         public IActionResult IsTargetVisible(PolicyOperation operation) => Json(operation.IsTargetVisible());
 
-        private static ConditionViewModel BuildAlertCondition(SensorNodeViewModel sensor) =>
-            sensor.Type switch
+        private static ConditionViewModel BuildAlertCondition(byte type) =>
+            type switch
             {
-                SensorType.File => new FileConditionViewModel(false),
-                SensorType.String => new StringConditionViewModel(false),
-                SensorType.Boolean => new CommonConditionViewModel(false),
-                SensorType.Version => new SingleConditionViewModel(false),
-                SensorType.TimeSpan => new SingleConditionViewModel(false),
-                SensorType.Integer => new NumericConditionViewModel(false),
-                SensorType.Double => new NumericConditionViewModel(false),
-                SensorType.Rate => new NumericConditionViewModel(false),
-                SensorType.IntegerBar => new BarConditionViewModel(false),
-                SensorType.DoubleBar => new BarConditionViewModel(false),
-                SensorType.Enum => new NumericConditionViewModel(false),
+                (byte)SensorType.File => new FileConditionViewModel(false),
+                (byte)SensorType.String => new StringConditionViewModel(false),
+                (byte)SensorType.Boolean => new CommonConditionViewModel(false),
+                (byte)SensorType.Version => new SingleConditionViewModel(false),
+                (byte)SensorType.TimeSpan => new SingleConditionViewModel(false),
+                (byte)SensorType.Integer => new NumericConditionViewModel(false),
+                (byte)SensorType.Double => new NumericConditionViewModel(false),
+                (byte)SensorType.Rate => new NumericConditionViewModel(false),
+                (byte)SensorType.IntegerBar => new BarConditionViewModel(false),
+                (byte)SensorType.DoubleBar => new BarConditionViewModel(false),
+                (byte)SensorType.Enum => new NumericConditionViewModel(false),
                 _ => null,
             };
 

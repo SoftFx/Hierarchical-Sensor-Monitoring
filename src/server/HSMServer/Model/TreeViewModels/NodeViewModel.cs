@@ -32,7 +32,7 @@ namespace HSMServer.Model.TreeViewModel
         //TODO: should be changed to NodeViewModel when Sensor will have its own Telegram Settings
         public ProductNodeViewModel RootProduct => Parent is null or FolderModel ? (ProductNodeViewModel)this : ((ProductNodeViewModel)Parent).RootProduct;
 
-        public string FullPath => $"{RootProduct?.Name}{Path}";
+        public string FullPath => $"{(RootProduct is not null ? $"{RootProduct.Name}/" : string.Empty)}{Path}";
 
         internal bool ParentIsFolder => Parent is FolderModel;
 
