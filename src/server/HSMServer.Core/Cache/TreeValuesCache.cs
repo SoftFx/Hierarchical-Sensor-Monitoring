@@ -27,7 +27,6 @@ using HSMServer.Core.TreeStateSnapshot;
 using SensorType = HSMServer.Core.Model.SensorType;
 using HSMServer.PathTemplates;
 
-
 namespace HSMServer.Core.Cache
 {
     internal record struct SensorKey
@@ -46,6 +45,7 @@ namespace HSMServer.Core.Cache
             return $"{Key}:{Path}";
         }
     }
+
 
     public sealed class TreeValuesCache : ITreeValuesCache, IDisposable
     {
@@ -87,7 +87,7 @@ namespace HSMServer.Core.Cache
         public event Action<ProductModel, ActionType> ChangeProductEvent;
 
         public event Action<AlertMessage> NewAlertMessageEvent;
-
+        public event Action<FolderEventArgs> FillFolderChats;
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue,
             IJournalService journalService)
@@ -841,9 +841,9 @@ namespace HSMServer.Core.Cache
             return sensor is not null;
         }
 
-
         public void SendAlertMessage(AlertMessage message)
         {
+            _logger.Info($"Send telegram: SendAlertMessage enter");
             var sensorId = message.SensorId;
 
             using (_lock.GetReadLock())
@@ -853,15 +853,47 @@ namespace HSMServer.Core.Cache
                     var product = GetProductByName(sensor.RootProductName);
 
                     if (product.FolderId.HasValue)
+                    {
+                        //TODO: move to Policy => GetParentChats when FolderModel will be moved into Core project
+                        List<Guid> folderChats = GetFolderChats(product.FolderId.Value);
+
+                        foreach(AlertResult alert in message)
+                        {
+                            foreach (Guid folderId in folderChats)
+                            {
+                                if(!alert.Destination.Chats.Contains(folderId))
+                                    alert.Destination.Chats.Add(folderId);
+                            }
+                        }
+
+                        //_logger.Info($"Send telegram: NewAlertMessageEvent Invoke");
                         NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
+                    }
                 }
             }
         }
 
+
+              
+
+        private List<Guid> GetFolderChats(Guid folderId)
+        {
+            FolderEventArgs args = new FolderEventArgs(folderId);
+            FillFolderChats?.Invoke(args);
+
+            if (!string.IsNullOrEmpty(args.Error))
+                _logger.Error($"Loading folder temegrem chats error: {args.Error}");
+
+            return args.ChatIDs;
+        }
+
+
         private void SensorUpdateViewAndNotify(BaseSensorModel sensor)
         {
             SensorUpdateView(sensor);
-            SendNotification(sensor.Notifications);
+
+            if (!sensor.Notifications.IsEmpty)
+                SendNotification(sensor.Notifications);
         }
 
         private void SendNotification(PolicyResult result) => _confirmationManager.RegisterNotification(result);

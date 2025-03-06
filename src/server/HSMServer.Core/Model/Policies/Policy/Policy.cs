@@ -66,39 +66,7 @@ namespace HSMServer.Core.Model.Policies
         {
             get
             {
-                Dictionary<Guid, string> GetParentChats(ProductModel parent)
-                {
-                    var dict = new Dictionary<Guid, string>();
-
-                    if (parent is null)
-                        return dict;
-                    
-                    foreach (var (id, name) in parent.Settings.DefaultChats.CurValue.Chats)
-                    {
-                        dict.TryAdd(id, name);
-                    }
-
-                    if (parent.Settings.DefaultChats.CurValue.IsFromParent)
-                    {
-                        var par = parent.Parent;
-
-                        while (par != null)
-                        {
-                            foreach (var (id, name) in GetParentChats(par))
-                            {
-                                dict.TryAdd(id, name);
-                            }
-                            
-                            par = par.Parent;
-                        }
-
-                        return dict;
-                    }
-
-                    return dict;
-                }
-                
-                var chats = new Dictionary<Guid, string>(1 << 3);
+                var chats = new Dictionary<Guid, string>();
 
                 if (Destination.IsFromParentChats)
                 {
@@ -116,6 +84,40 @@ namespace HSMServer.Core.Model.Policies
                 return new PolicyDestinationHandler(chats,
                     (Sensor?.Parent?.Settings?.DefaultChats?.Value?.IsAllChats ?? false) && Destination.IsAllChats);
             }
+        }
+
+        internal Dictionary<Guid, string> GetParentChats(ProductModel parent)
+        {
+            var dict = new Dictionary<Guid, string>();
+
+            if (parent is null)
+                return dict;
+
+            foreach (var (id, name) in parent.Settings.DefaultChats.CurValue.Chats)
+            {
+                dict.TryAdd(id, name);
+            }
+
+            if (parent.Settings.DefaultChats.CurValue.IsFromParent)
+            {
+                var par = parent.Parent;
+
+                //TODO: Add folder chats when parent.FolderId.HasValue
+
+                while (par != null)
+                {
+                    foreach (var (id, name) in GetParentChats(par))
+                    {
+                        dict.TryAdd(id, name);
+                    }
+
+                    par = par.Parent;
+                }
+
+                return dict;
+            }
+
+            return dict;
         }
 
 

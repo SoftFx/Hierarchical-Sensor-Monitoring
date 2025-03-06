@@ -33,5 +33,7 @@ namespace HSMServer.Notifications
         Task RemoveFolderFromChats(Guid folderId, List<Guid> chats, InitiatorInfo initiator);
 
         void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator);
+
+        Task MigrateToSupergroup(long oldChatId, long newChatId);
     }
 }
