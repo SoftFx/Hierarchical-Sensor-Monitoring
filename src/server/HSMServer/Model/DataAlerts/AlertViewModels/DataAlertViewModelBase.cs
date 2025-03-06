@@ -214,7 +214,7 @@ namespace HSMServer.Model.DataAlerts
                                 else
                                     chatNames = lastMode?.GetDisplayName();
 
-                                chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatNames})";
+                                chats = $"{ChatsMode.FromParent.GetDisplayName()} {(string.IsNullOrEmpty(chatNames) ? "" : $"({chatNames})")}";
 
                                 if (action.Chats.Count != 0)
                                     chats += $", {GetActionChats(action)}";
