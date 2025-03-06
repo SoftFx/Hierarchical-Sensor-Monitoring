@@ -84,17 +84,17 @@
                         break;
                     }
                     case ChatsMode.Custom:
-                    {
-                        if (action.Chats.Count == 0)
                         {
-                            chats = "(chats are not initialized)";
-                            color = "gray";
+                            if (action.Chats.Count == 0)
+                            {
+                                chats = "(chats are not initialized)";
+                                color = "gray";
+                            }
+                            else
+                                chats += GetActionChats(action);
+
+                            break;
                         }
-                        else
-                            chats += GetActionChats(action);
-                    
-                        break;
-                    }
                     default:
                         chats = action.ChatsMode.GetDisplayName();
                         break;
@@ -134,7 +134,8 @@
                     <span>and</span>
                 }
 
-                @Html.Raw(actions[i]);
+                @Html.Raw(actions[i])
+                ;
             }
         }
         else
@@ -157,10 +158,10 @@
                     var isTtlCondition = Model.Conditions.FirstOrDefault()?.Property is AlertProperty.TimeToLive;
                 }
 
-                <div class="alert-text-block alert-add">If</div>
+                <div class="alert-text-block alert-add" style="width: 40px;">If</div>
 
                 <div name="conditionsBlock" class="d-flex flex-row flex-wrap align-items-center">
-                    @foreach (var condition in Model.Conditions) 
+                    @foreach (var condition in Model.Conditions)
                     {
                         @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionBlock.cshtml", condition)
                     }
@@ -172,8 +173,8 @@
                 }
             </div>
 
-            <div class="d-flex flex-row align-items-center alert-blocks-group fullAction @(Model.IsTtl ? "ttlAction" : string.Empty)">
-                <div class="alert-text-block alert-add">then</div>
+            <div class="d-flex flex-row align-items-top alert-blocks-group fullAction @(Model.IsTtl ? "ttlAction" : string.Empty)">
+                <div class="alert-text-block alert-add" style="width: 40px;">then</div>
 
                 <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center">
                     @foreach (var action in Model.Actions)
@@ -182,7 +183,7 @@
                     }
                 </div>
 
-                <a class="addAction"><i class="fa-solid fa-plus alert-add-button"></i></a>
+                <a class="addAction align-self-end"><i class="fa-solid fa-plus alert-add-button"></i></a>
             </div>
         </div>
     </div>
@@ -263,7 +264,7 @@
                 processData: false,
                 contentType: false,
                 async: true,
-                success: function (response){
+                success: function (response) {
                     if (response)
                         showToast(response, "Test message");
                 }
