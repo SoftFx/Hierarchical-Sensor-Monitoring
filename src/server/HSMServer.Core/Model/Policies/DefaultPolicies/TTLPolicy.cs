@@ -3,11 +3,13 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using System;
 using System.Text;
+using System.Xml.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
     public sealed class TTLPolicy : DefaultPolicyBase
     {
+        public const byte Key = 255;
         public const string DefaultIcon = "🕑";
         public const string DefaultTemplate = "[$product]$path";
 
@@ -33,6 +35,10 @@ namespace HSMServer.Core.Model.Policies
             }
         }
 
+        public TTLPolicy()
+        {
+            _okPolicy = new OkPolicy(this, null); 
+        }
 
         internal TTLPolicy(BaseNodeModel node, PolicyEntity entity)
         {
@@ -64,7 +70,7 @@ namespace HSMServer.Core.Model.Policies
             FullUpdate(update, Sensor);
         }
 
-        internal void FullUpdate(PolicyUpdate update, BaseSensorModel sensor = null)
+        public void FullUpdate(PolicyUpdate update, BaseSensorModel sensor = null)
         {
             TryUpdate(update, out _, sensor);
 

@@ -17,7 +17,7 @@
 <div name="alertCondition" class="d-flex flex-row align-items-center alert-blocks-group ms-3 py-1">
     <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add me-3">and</div>
 
-    <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
+    <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems" data-type="@ViewData["type"]"></select>
 
     <div class="flex-row align-items-center operation">
         @if (condition is AlertProperty.TimeToLive or AlertProperty.ConfirmationPeriod)
@@ -41,7 +41,7 @@
 <script>
     $('select[name="Property"]').off("change").on("change", function () {
         let dataAlert = $(this).parents("div.dataAlertRow:first");
-        let sensorId = dataAlert.find($(`input[name='EntityId']`)).val();
+        let type = $('select[name="Property"]').data('type');
 
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
         let operation = conditionBlock.find($(`div.operation`));
@@ -49,7 +49,7 @@
         let property = $(this).val();
 
         $.ajax({
-            url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?sensorId=${sensorId}&property=${property}`,
+            url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?sensorType=${type}&property=${property}`,
             cache: false
         }).done(function (viewData) {
             operation.html(viewData);

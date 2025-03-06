@@ -1,0 +1,115 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Core.Model
+@using HSMServer.Core.Model.Policies
+@using HSMServer.Helpers
+@using HSMServer.Model.Authentication
+@using HSMServer.Model.DataAlerts
+@using HSMServer.Model.Folders.ViewModels
+@using HSMServer.Model.DataAlertTemplates
+@using HSMCommon.Extensions
+
+
+@model DataAlertTemplateViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    const byte ttlType = TimeToLiveAlertViewModel.AlertKey;
+    var hasAlerts = Model.DataAlerts.Any(a => a.Value.Any(v => v.IsAlertDisplayed));
+
+    byte sensorType;
+
+    List<SelectListItem> sensorTypes = new List<SelectListItem>() { new SelectListItem("Any", DataAlertTemplateViewModel.AnyType.ToString(), true) };
+    sensorTypes.AddRange(Html.GetEnumSelectList<SensorType>());
+
+    if (Model.Type >= 0)
+    {
+        sensorType = Model.Type;
+        sensorTypes.FirstOrDefault(x => x.Value == sensorType.ToString()).Selected = true;
+    }
+    else
+    {
+        sensorType = 0;
+    }
+}
+<form id="addAlertTemplate_form" method="post" action="@Html.Raw(Url.Action(nameof(AlertTemplatesController.AlertTemplate), ViewConstants.AlertTemplatesController))">
+    <div class="row">
+        <h5>@(Model.IsNew ? "New alert template" : "Edit alert template")</h5>
+    </div>
+    <div class="row">
+        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="PathTemplate"></label>
+        <div class="col w-auto">
+            <input type='text' class='form-control' asp-for="PathTemplate" placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" />
+            <span asp-validation-for="PathTemplate"></span>
+        </div>
+    </div>
+    <div class="row py-2">
+        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Name"></label>
+        <div class="col w-75">
+            <input type='text' class="form-control " asp-for="Name"/>
+            <span asp-validation-for="Name"></span>
+        </div>
+        <label class="col-auto col-form-label d-flex justify-content-end" asp-for="Type"></label>
+        <div class="col w-25">
+            <select class='form-control' asp-for="Type" asp-items="@sensorTypes">
+            </select>
+            <span asp-validation-for="Type"></span>
+        </div>
+        <input type='text' class='d-none' asp-for="Id" />
+
+        <div class="d-flex align-items-center">
+            <label class="col-form-label fw-bold">Alerts:</label>
+
+            <a id="addDataAlert" href="javascript:addDataAlert('@false', '@Model.EncodedId');" class="btn btn-link p-0 m-0 ms-2">
+                <i class="fa-solid fa-plus"></i> Add
+            </a>
+
+            <a id="addTtlAlert" href="javascript:addDataAlert('@true', '@Model.EncodedId');" class="btn btn-link p-0 m-0 ms-2 @(Model.HasTimeToLive ? "disabled" : string.Empty)">
+                <i class="fa-solid fa-plus"></i> Add TTL
+            </a>
+        </div>
+
+        <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()" class="d-none help-popover">
+            Comment help
+        </a>
+        <div id="dataAlertsList_@ttlType">
+            @if (Model.HasTimeToLive && Model.DataAlerts.TryGetValue(ttlType, out var ttlAlerts) && ttlAlerts.Count > 0)
+            {
+                @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", ttlAlerts[0])
+            }
+        </div>
+        @if (Model.DataAlerts.Count > 0)
+        {
+            @foreach (var (type, alerts) in Model.DataAlerts)
+            {
+                if (type == ttlType)
+                    continue;
+
+                <div id="dataAlertsList_@type">
+                    @foreach (var alert in alerts)
+                    {
+                        @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            <div id="dataAlertsList_@sensorType">
+            </div>
+        }
+    </div>
+    <div id="affected_sensors" class="form-group mt-3 d-none">
+        <div class="card mb-2 w-100">
+            <div id="affected_sensors_cardbody" class="card-body py-2">
+            </div>
+        </div>
+    </div>
+    <div class="form-group mt-3">
+        <div align="right">
+            <button id="submit_form" class="btn btn-secondary col-2" type="button">@(Model.IsNew ? "Create" : "Save")</button>
+            <a class="btn btn-secondary col-2 px-2" type="button" href="@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))">Cancel</a>
+        </div>
+    </div>
+</form>

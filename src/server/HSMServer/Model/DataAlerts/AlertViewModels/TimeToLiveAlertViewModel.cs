@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model.Policies;
+﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.DataAlerts
@@ -7,16 +8,27 @@ namespace HSMServer.Model.DataAlerts
     {
         public const byte AlertKey = byte.MaxValue;
 
+        public override SensorType Type => SensorType.Boolean;
+
+        public override bool IsTtl => true;
 
         protected override string DefaultCommentTemplate { get; } = TTLPolicy.DefaultTemplate;
 
         protected override string DefaultIcon { get; } = TTLPolicy.DefaultIcon;
 
-        public override bool IsTtl { get; } = true;
-
+        public TimeToLiveAlertViewModel() : base()
+        {
+            FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true });
+        }
 
         public TimeToLiveAlertViewModel(NodeViewModel node) : base(node)
         {
+            if (node is null)
+            {
+                FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true });
+                return;
+            }
+
             FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout, () => (node.Parent?.TTL, node.ParentIsFolder)) { IsAlertBlock = true });
         }
 
