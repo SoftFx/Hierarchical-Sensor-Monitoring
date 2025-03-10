@@ -162,9 +162,15 @@ namespace HSMServer.Controllers
 
         private (byte?, List<BaseSensorModel>) GetAffectedSensors(byte type, string path)
         {
+            byte? sensorType = null;
+
             var sensors = _cache.GetSensors(path, type == DataAlertTemplateViewModel.AnyType ? null : (SensorType)type);
-            byte sensorType = (byte)sensors.FirstOrDefault()?.Type;
-            sensors = sensors.Where(x => x.Type == (SensorType)sensorType).ToList();
+
+            if (sensors.Count > 0)
+            {
+                sensorType = (byte)sensors.FirstOrDefault()?.Type;
+                sensors = sensors.Where(x => x.Type == (SensorType)sensorType).ToList();
+            }
 
             return (sensorType, sensors);
         }
