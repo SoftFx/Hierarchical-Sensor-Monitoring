@@ -6,7 +6,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
+    internal sealed class WindowsInstallDate : MonitoringSensorBase<TimeSpan>
     {
         public const string WMI_OBJECT = "Win32_OperatingSystem=@";
 
@@ -15,12 +15,13 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(TimeSpan.FromMinutes(1));//BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
-        public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options) { }
+        public WindowsInstallDate(WindowsInfoSensorOptions options) : base(options) { }
+
 
         protected override TimeSpan GetValue()
         {
             _managementObject.Get();
-            var installDate = ManagementDateTimeConverter.ToDateTime(_managementObject["LastBootUpTime"].ToString()).ToUniversalTime();
+            var installDate = ManagementDateTimeConverter.ToDateTime(_managementObject["InstallDate"].ToString()).ToUniversalTime();
             return DateTime.UtcNow - installDate;
         }
     }

@@ -188,13 +188,18 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsLastRestart(_prototype.WindowsLastRestart.Get(options)));
         }
 
+        public IWindowsCollection AddWindowsInstallDate(WindowsInfoSensorOptions options)
+        {
+            return ToWindows(new WindowsInstallDate(_prototype.WindowsInstallDate.Get(options)));
+        }
+
         public IWindowsCollection AddWindowsVersion(WindowsInfoSensorOptions options)
         {
             return ToWindows(new WindowsVersion(_prototype.WindowsVersion.Get(options)));
         }
 
         public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions, InstantSensorOptions logsOptions) =>
-            AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
+            AddWindowsInstallDate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
 
         public IWindowsCollection AddWindowsApplicationErrorLogs(InstantSensorOptions options = null)
         {

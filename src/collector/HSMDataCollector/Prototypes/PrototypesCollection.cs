@@ -54,6 +54,8 @@ namespace HSMDataCollector.Options
 
         internal WindowsLastRestartPrototype WindowsLastRestart { get; }
 
+        internal WindowsInstallDatePrototype WindowsInstallDate { get; }
+
         internal WindowsLastUpdatePrototype WindowsLastUpdate { get; }
 
         internal WindowsVersionPrototype WindowsVersion { get; }
@@ -144,6 +146,7 @@ namespace HSMDataCollector.Options
             UnixFreeSpaceOnDisk = Register<UnixFreeSpaceOnDiskPrototype>();
 
             WindowsLastRestart = Register<WindowsLastRestartPrototype>();
+            WindowsInstallDate = Register<WindowsInstallDatePrototype>();
             WindowsLastUpdate = Register<WindowsLastUpdatePrototype>();
             WindowsVersion = Register<WindowsVersionPrototype>();
 
