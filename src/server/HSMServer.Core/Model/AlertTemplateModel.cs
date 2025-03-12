@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.PathTemplates;
 
@@ -14,7 +15,7 @@ namespace HSMServer.Core.Model
 
         private PathTemplateConverter _pathTemplateConverter = new PathTemplateConverter();
 
-        public TimeIntervalModel TTL { get; set; }
+        public TimeIntervalModel TTL { get; set; } = TimeIntervalModel.None;
 
         public TTLPolicy TTLPolicy { get; set; }
 
@@ -44,8 +45,9 @@ namespace HSMServer.Core.Model
 
             if (entity.TTLPolicy != null)
             {
-                TTLPolicy = new TTLPolicy();
-                TTLPolicy.Apply(entity.TTLPolicy);
+                TimeIntervalSettingProperty ttl = new TimeIntervalSettingProperty();
+                ttl.TrySetValue(new TimeIntervalModel(entity.TTL));
+                TTLPolicy = new TTLPolicy(ttl, entity.TTLPolicy);
             }
 
             if (entity.Policies != null)
@@ -75,6 +77,7 @@ namespace HSMServer.Core.Model
                 Name = Name,
                 Path = Path,
                 TTLPolicy = TTLPolicy?.ToEntity(),
+                TTL = TTL?.ToEntity(),
                 Policies = Policies?.Select(x => x.ToEntity()).ToList() ?? [],
                 SensorType = SensorType,
             };

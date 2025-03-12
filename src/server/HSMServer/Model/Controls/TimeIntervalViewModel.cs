@@ -113,6 +113,15 @@ namespace HSMServer.Model
             CustomSpan = model.CustomSpan;
         }
 
+        internal TimeIntervalViewModel(HashSet<TimeInterval> intervals, TimeIntervalViewModel model)
+        {
+            Interval = model.TimeInterval;
+            CustomSpan = model.CustomSpan;
+
+            IntervalItems = BuildSelectedList(intervals);
+        }
+
+
         internal TimeIntervalViewModel(TimeIntervalEntity entity, HashSet<TimeInterval> intervals) : this(intervals)
         {
             FromModel(new TimeIntervalModel(entity), intervals);

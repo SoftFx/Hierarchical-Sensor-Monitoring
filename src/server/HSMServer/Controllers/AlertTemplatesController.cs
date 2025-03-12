@@ -138,7 +138,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult AlertTemplate(DataAlertTemplateViewModel data)
         {
-            if (_cache.GetAlertTemplateModels().Any(x => x.Name == data.Name && x.Id != data.Id))
+            if (_cache.GetAlertTemplateModels().Any( x => x.Name == data.Name && x.Id != data.Id))
                ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
 
             if (ModelState.IsValid)

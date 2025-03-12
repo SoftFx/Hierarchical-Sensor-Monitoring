@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.DataAlerts;
 
 
@@ -54,10 +55,11 @@ namespace HSMServer.Model.DataAlertTemplates
 
             if (model.TTLPolicy != null)
             {
-                var ttl = DataAlertViewModel.BuildAlert(model.TTLPolicy);
-                ttl.IsModify = true;
-                DataAlerts.Add(TTLPolicy.Key, new List<DataAlertViewModelBase>() { ttl });
+                var interval = new TimeIntervalViewModel().FromModel(model.TTL, PredefinedIntervals.ForTimeout);
+                var ttl = new TimeToLiveAlertViewModel(model.TTLPolicy, interval) { IsModify = true };
+                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = [ttl];
             }
+
 
             if(model.Policies.Count > 0)
                 DataAlerts.Add(type, model.Policies.Select(x => { var result = DataAlertViewModel.BuildAlert(x); result.IsModify = true; return result; }).ToList());
@@ -76,15 +78,15 @@ namespace HSMServer.Model.DataAlertTemplates
 
             result.TryApplyPathTemplate(PathTemplate, out _);
 
-            if (DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts))
-                if (alerts != null)
-                {
-                    result.TTLPolicy = new TTLPolicy();
-                    alerts[0].Id = new Guid();
-                    var update = alerts[0].ToUpdate([]);
-                    result.TTLPolicy.FullUpdate(update);
-                    result.TTL = alerts[0].Conditions[0].TimeToLive.ToModel();
-                }
+            var ttl = DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+
+            if (ttl != null)
+            {
+                result.TTLPolicy = new TTLPolicy();
+                var update = ttl.ToTimeToLiveUpdate(InitiatorInfo.AlertTemplate, []);
+                result.TTLPolicy.FullUpdate(update);
+                result.TTL = ttl.Conditions?[0].TimeToLive.ToModel() ?? TimeIntervalModel.None;
+            }
 
             byte key = DataAlerts.Keys.FirstOrDefault(x => x != TimeToLiveAlertViewModel.AlertKey);
 

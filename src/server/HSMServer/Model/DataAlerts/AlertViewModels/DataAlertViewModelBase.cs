@@ -111,6 +111,7 @@ namespace HSMServer.Model.DataAlerts
                 Destination = actions.Destination,
                 Schedule = actions.Schedule,
                 Initiator = initiator,
+                TemplateId = TemplateId,
             };
         }
 
