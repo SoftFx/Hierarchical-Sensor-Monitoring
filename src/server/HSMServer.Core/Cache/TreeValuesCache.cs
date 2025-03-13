@@ -1049,6 +1049,9 @@ namespace HSMServer.Core.Cache
 
             if (ttlPolicyUpdate != null || policyUpdates.Count > 0)
             {
+                foreach (var policy in sensor.Policies)
+                    policyUpdates.Add(new PolicyUpdate(policy));
+
                 var sensorUpdate = new SensorUpdate()
                 {
                     Id = sensor.Id,

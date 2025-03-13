@@ -19,6 +19,8 @@
 
     string GetActionChats(AlertActionBase action) =>
          string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
+
+    bool isTemplate = ViewBag.IsTemplate ?? false;
 }
 
 
@@ -193,8 +195,11 @@
             <i class="fa-solid fa-ellipsis-vertical button-link"></i>
         </button>
         <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-            <a class="dropdown-item text-decoration-none fw-normal button-link showMessage">Show message</a>
-            <a class="dropdown-item text-decoration-none fw-normal button-link enable">@(Model.IsDisabled ? "Enable" : "Disable")</a>
+            @if(!isTemplate)
+            {
+                <a class="dropdown-item text-decoration-none fw-normal button-link showMessage">Show message</a>
+                <a class="dropdown-item text-decoration-none fw-normal button-link enable">@(Model.IsDisabled ? "Enable" : "Disable")</a>
+            }
             <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
         </div>
     </div>

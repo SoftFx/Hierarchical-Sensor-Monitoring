@@ -32,6 +32,8 @@
     {
         sensorType = 0;
     }
+
+    ViewBag.IsTemplate = true;
 }
 <form id="addAlertTemplate_form" method="post" action="@Html.Raw(Url.Action(nameof(AlertTemplatesController.AlertTemplate), ViewConstants.AlertTemplatesController))">
     <div class="row">

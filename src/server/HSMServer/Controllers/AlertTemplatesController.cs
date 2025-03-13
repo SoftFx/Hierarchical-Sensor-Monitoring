@@ -14,6 +14,7 @@ using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
+using Microsoft.Extensions.Hosting;
 
 
 namespace HSMServer.Controllers
@@ -119,9 +120,9 @@ namespace HSMServer.Controllers
 
 
         [HttpGet]
-        public IActionResult New()
+        public IActionResult New(string path = "")
         {
-             return View("AlertTemplate", new DataAlertTemplateViewModel());
+             return View("AlertTemplate", new DataAlertTemplateViewModel() { PathTemplate = path});
         }
 
         [HttpGet]

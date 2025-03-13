@@ -30,6 +30,8 @@
 <script>
     $(document).ready(function() {
         initForm();
+        if($('#PathTemplate').val() != '')
+            updateForm(false);
     });
 
     function initForm(){
@@ -37,19 +39,24 @@
             onSensorTypeChanged();
         });
 
-        $('#PathTemplate').off("change").on("change", function () {
-            updateForm();
-        });
-
         $("#submit_form").off('click').on('click', function () {
             submitForm();
+        });
+
+        let timeout = null;
+        document.getElementById("PathTemplate").addEventListener("input", () => {
+            clearTimeout(timeout);
+
+            timeout = setTimeout(() => {
+                updateForm();
+            }, 500);
         });
     }
 
     function onSensorTypeChanged(needUpdateForm = true) {
 
         if(needUpdateForm)
-            updateForm();
+            updateForm(false);
 
         var val = $('#Type').val();
 
@@ -108,7 +115,7 @@
         });
     }
 
-    function updateForm() {
+    function updateForm(needChangeType = true) {
         var type = $('#Type').val();
         var path = $('#PathTemplate').val();
 
@@ -119,18 +126,14 @@
 
                 var data = JSON.parse(viewData);
 
-                if (data['Type'] != null) {
+                if (needChangeType & data['Type'] != null) {
                     $('#Type').val(data['Type']);
                     onSensorTypeChanged(false);
                 }
 
                 var dataName = data['Name'];
-                if (dataName){
-                    var name = $('#Name').val();
-                    if (!name) {
-                         $('#Name').val(dataName);
-                    }
-                }
+                if (dataName)
+                    $('#Name').val(dataName);
 
                 if (data['Sensors'] != null) {
                     $('#affected_sensors_cardbody').empty();
@@ -138,10 +141,10 @@
                     $('#affected_sensors').removeClass('d-none');
                 }
                 else {
-                    $('#affected_sensors').removeClass('d-none').addClass('d-none');
                     $('#affected_sensors_cardbody').empty();
+                    $('#affected_sensors_cardbody').html("No sensors were found along the specified path.");
+                    $('#affected_sensors').removeClass('d-none');
                 }
-
             }
         });
     }

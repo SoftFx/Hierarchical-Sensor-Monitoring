@@ -440,7 +440,7 @@ function buildContextMenu(node) {
             };
         }
 
-        if (isManager && !isSensor) {
+        if (!isSensor) {
             var alertsSubmenu = {}
 
             alertsSubmenu["Export"] = {
@@ -505,6 +505,18 @@ function buildContextMenu(node) {
                 "separator_before": true,
                 "submenu": alertsSubmenu,
             };
+        }
+
+        if (isSensor) {
+            contextMenu["AlertTemplate"] = {
+                "label": `Add alert template...`,
+                separator_before: true,
+                "action": _ => {
+                    $.ajax(`${getNodePathAction}?selectedId=${node.id}`, AjaxPost).done((path) => {
+                        window.location = '../AlertTemplates/New/?path=' + path;
+                    });
+                }
+            }
         }
     }
 
