@@ -608,7 +608,7 @@ namespace HSMServer.Controllers
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
                 ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
-            
+
             var update = new SensorUpdate
             {
                 Id = sensor.Id,

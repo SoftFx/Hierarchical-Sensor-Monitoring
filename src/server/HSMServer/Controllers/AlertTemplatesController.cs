@@ -14,6 +14,7 @@ using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
+using Microsoft.Extensions.Hosting;
 
 
 namespace HSMServer.Controllers
@@ -119,9 +120,9 @@ namespace HSMServer.Controllers
 
 
         [HttpGet]
-        public IActionResult New()
+        public IActionResult New(string path = "")
         {
-             return View("AlertTemplate", new DataAlertTemplateViewModel());
+             return View("AlertTemplate", new DataAlertTemplateViewModel() { PathTemplate = path});
         }
 
         [HttpGet]
@@ -138,7 +139,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult AlertTemplate(DataAlertTemplateViewModel data)
         {
-            if (_cache.GetAlertTemplateModels().Any(x => x.Name == data.Name && x.Id != data.Id))
+            if (_cache.GetAlertTemplateModels().Any( x => x.Name == data.Name && x.Id != data.Id))
                ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
 
             if (ModelState.IsValid)
