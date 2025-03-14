@@ -1040,24 +1040,26 @@ namespace HSMServer.Core.Cache
         {
             PolicyUpdate ttlPolicyUpdate = null;
             List<PolicyUpdate> policyUpdates = [];
+            TimeIntervalModel ttl = null;
 
             if (alertTemplateModel.TTLPolicy is not null)
-                ttlPolicyUpdate = new PolicyUpdate(alertTemplateModel.TTLPolicy, InitiatorInfo.AlertTemplate) { Id = new Guid(), TemplateId = alertTemplateModel.Id };
+            {
+                ttlPolicyUpdate = new PolicyUpdate(alertTemplateModel.TTLPolicy, InitiatorInfo.AlertTemplate) { TemplateId = alertTemplateModel.Id };
+                ttl = alertTemplateModel.TTL;
+            }
 
             foreach (var policy in alertTemplateModel.Policies)
-                policyUpdates.Add(new PolicyUpdate(policy, InitiatorInfo.AlertTemplate) { Id = new Guid(), TemplateId = alertTemplateModel.Id });
+                policyUpdates.Add(new PolicyUpdate(policy, InitiatorInfo.AlertTemplate) { TemplateId = alertTemplateModel.Id });
 
             if (ttlPolicyUpdate != null || policyUpdates.Count > 0)
             {
-                foreach (var policy in sensor.Policies)
-                    policyUpdates.Add(new PolicyUpdate(policy));
 
                 var sensorUpdate = new SensorUpdate()
                 {
                     Id = sensor.Id,
                     Policies = policyUpdates,
                     TTLPolicy = ttlPolicyUpdate,
-                    TTL = alertTemplateModel.TTL,
+                    TTL = ttl,
                     Initiator = InitiatorInfo.AlertTemplate
                 };
 
@@ -1120,40 +1122,13 @@ namespace HSMServer.Core.Cache
 
         private void RemoveAlertTemplateInternal(Guid id)
         {
-            PolicyUpdate ttl = null;
-            List<PolicyUpdate> policyUpdates = [];
-            SensorUpdate update;
-
             foreach (var sensor in _sensors.Values)
             {
-                if (sensor.Policies.TimeToLive.TemplateId == id)
-                    ttl = new PolicyUpdate();
-
-                if (sensor.Policies.Any(x => x.TemplateId == id))
-                    policyUpdates = sensor.Policies.Where(x => x.TemplateId != id).Select(x => new PolicyUpdate(x)).ToList();
-
-                if (ttl != null || policyUpdates.Count > 0)
-                {
-                    update = new SensorUpdate()
-                    {
-                        Id = sensor.Id,
-                        TTLPolicy = null,
-                        Policies = policyUpdates,
-                        Initiator = InitiatorInfo.AlertTemplate,
-                    };
-
-                    if (!TryUpdateSensorInternal(update, out var error))
-                        _logger.Error($"An error was occurred while updating sensor while removing alert template [{id}]: {error}");
-
-                    ttl = null;
-                    policyUpdates.Clear();
-                }
-            }
-
-            foreach (var sensor in _sensors.Values.Where(x => x.Policies.Any(x => x.TemplateId == id)))
-            {
                 foreach (var policy in sensor.Policies.Where(x => x.TemplateId == id).ToList())
-                    sensor.Policies.RemovePolicy(policy.Id);
+                    sensor.Policies.RemovePolicy(policy.Id, InitiatorInfo.AlertTemplate);
+
+                if (sensor.Policies.TimeToLive.TemplateId == id)
+                    sensor.Policies.UpdateTTL(new PolicyUpdate() { Initiator = InitiatorInfo.AlertTemplate });
 
                 SensorUpdateView(sensor);
             }

@@ -55,9 +55,9 @@ namespace HSMServer.Core.Model
                 Policies = new List<Policy>();
                 foreach (PolicyEntity item in entity.Policies)
                 {
-                    var pol = Policy.BuildPolicy(SensorType);
-                    pol.Apply(item);
-                    Policies.Add(pol);
+                    var policy = Policy.BuildPolicy(SensorType);
+                    policy.Apply(item);
+                    Policies.Add(policy);
                 }
             }
 

@@ -193,31 +193,11 @@ namespace HSMServer.Core.Model.Policies
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
             var errors = new StringBuilder(1 << 5);
 
-            foreach (var (id, policy) in _storage)
-                if (AlertChangeTable[id.ToString()].CanChange(initiator))
-                {
-                    if (updates.TryGetValue(id, out var update))
-                    {
-                        var oldPolicy = policy.ToString();
-
-                        if (policy.TryUpdate(update, out var err))
-                        {
-                            CallJournal(id, oldPolicy, policy.ToString(), initiator);
-                            Uploaded?.Invoke(ActionType.Update, policy);
-                        }
-                        else
-                            errors.AppendLine(err);
-                    }
-                    else
-                        RemovePolicy(id, initiator);
-                }
-
-            var prioritySensorsExist = _storage.Any(u => !AlertChangeTable[u.Key.ToString()].CanChange(initiator));
-
-            if (!prioritySensorsExist)
+            if (initiator == InitiatorInfo.AlertTemplate)
             {
                 foreach (var update in updatesList)
-                    if (update.Id == Guid.Empty)
+                {
+                    if (AlertChangeTable[update.Id.ToString()].CanChange(initiator))
                     {
                         var policy = new PolicyType();
 
@@ -231,6 +211,49 @@ namespace HSMServer.Core.Model.Policies
                         else
                             errors.AppendLine(err);
                     }
+                }
+            }
+            else
+            {
+                foreach (var (id, policy) in _storage)
+                    if (AlertChangeTable[id.ToString()].CanChange(initiator))
+                    {
+                        if (updates.TryGetValue(id, out var update))
+                        {
+                            var oldPolicy = policy.ToString();
+
+                            if (policy.TryUpdate(update, out var err))
+                            {
+                                CallJournal(id, oldPolicy, policy.ToString(), initiator);
+                                Uploaded?.Invoke(ActionType.Update, policy);
+                            }
+                            else
+                                errors.AppendLine(err);
+                        }
+                        else
+                            RemovePolicy(id, initiator);
+                    }
+
+                var prioritySensorsExist = _storage.Any(u => !AlertChangeTable[u.Key.ToString()].CanChange(initiator));
+
+                if (!prioritySensorsExist)
+                {
+                    foreach (var update in updatesList)
+                        if (update.Id == Guid.Empty)
+                        {
+                            var policy = new PolicyType();
+
+                            if (policy.TryUpdate(update, out var err, _sensor))
+                            {
+                                AddPolicy(policy);
+
+                                CallJournal(policy.Id, string.Empty, policy.ToString(), initiator);
+                                Uploaded?.Invoke(ActionType.Add, policy);
+                            }
+                            else
+                                errors.AppendLine(err);
+                        }
+                }
             }
 
             if (_sensor?.LastValue is ValueType valueT)
