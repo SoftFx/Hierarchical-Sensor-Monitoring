@@ -31,7 +31,7 @@
     $(document).ready(function() {
         initForm();
         if($('#PathTemplate').val() != '')
-            updateForm(false);
+            updateForm(@(Model.IsNew.ToString().ToLower()));
     });
 
     function initForm(){

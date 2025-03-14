@@ -201,6 +201,9 @@ namespace HSMServer.Core.Model.Policies
                     return condition;
                 }
 
+                if (update.Id != Guid.Empty)
+                    Id = update.Id;
+
                 Sensor ??= sensor;
 
                 Destination.Update(update.Destination);

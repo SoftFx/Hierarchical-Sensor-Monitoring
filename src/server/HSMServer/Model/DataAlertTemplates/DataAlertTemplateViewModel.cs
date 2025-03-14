@@ -82,6 +82,9 @@ namespace HSMServer.Model.DataAlertTemplates
 
             if (ttl != null)
             {
+                if (ttl.Id == Guid.Empty)
+                    ttl.Id = Guid.NewGuid();
+
                 result.TTLPolicy = new TTLPolicy();
                 var update = ttl.ToTimeToLiveUpdate(InitiatorInfo.AlertTemplate, []);
                 result.TTLPolicy.FullUpdate(update);
@@ -97,6 +100,9 @@ namespace HSMServer.Model.DataAlertTemplates
 
                 foreach (var item in alerts)
                 {
+                    if (item.Id == Guid.Empty)
+                        item.Id = Guid.NewGuid();
+
                     var policy = Policy.BuildPolicy(key);
                     var update = item.ToUpdate([]);
                     policy.UpdatePolicy(update);
