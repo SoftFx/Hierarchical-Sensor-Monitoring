@@ -1130,6 +1130,8 @@ namespace HSMServer.Core.Cache
                 if (sensor.Policies.TimeToLive.TemplateId == id)
                     sensor.Policies.UpdateTTL(new PolicyUpdate() { Initiator = InitiatorInfo.AlertTemplate });
 
+                sensor.Revalidate();
+
                 SensorUpdateView(sensor);
             }
 
