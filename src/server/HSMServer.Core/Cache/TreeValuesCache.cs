@@ -1330,9 +1330,10 @@ namespace HSMServer.Core.Cache
 
                 if (sensor.TryAddValue(storeInfo.BaseValue) && sensor.LastDbValue != null)
                     SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
+
+                SensorUpdateViewAndNotify(sensor);
             }
 
-            SensorUpdateViewAndNotify(sensor);
         }
 
 

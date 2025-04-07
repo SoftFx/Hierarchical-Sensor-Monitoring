@@ -41,6 +41,8 @@ namespace HSMDatabase.LevelDB
                 {
                     _database = new DB(name, _databaseOptions);
 
+                    _database.Compact();
+
                     return;
                 }
                 catch (Exception ex)
@@ -382,6 +384,10 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        public void Compact()
+        {
+            _database.Compact();
+        }
 
         public void Dispose()
         {

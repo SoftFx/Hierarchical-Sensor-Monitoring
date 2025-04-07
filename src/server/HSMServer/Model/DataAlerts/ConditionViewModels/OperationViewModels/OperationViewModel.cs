@@ -21,6 +21,7 @@ namespace HSMServer.Model.DataAlerts
 
         public string Target { get; private set; }
 
+        public virtual string Pattern { get; private set; } = string.Empty;
 
         internal OperationViewModel()
         {

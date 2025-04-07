@@ -62,7 +62,7 @@
 
         $("[id^='dataAlertsList_']").each(function () {
             var type = $(this).attr('id').replace('dataAlertsList_', '');
-            if (type != @ttlType) {
+            if (type != @ttlType && type != val) {
                 $(this).empty();
                 $(this).attr('id', 'dataAlertsList_' + val);
             }

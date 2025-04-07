@@ -74,6 +74,9 @@ namespace DatacollectorSandbox
 
 
             _collector.Windows.SubscribeToWindowsServiceStatus(new ServiceSensorOptions() { ServiceName = "CaddyServer", IsHostService = false, SensorLocation = SensorLocation.Product,  SensorPath = $"{_collector.ComputerName}/CaddyService" });
+
+            var sensor = _collector.CreateStringSensor("Test", new InstantSensorOptions() { AggregateData = true, KeepHistory = TimeSpan.FromMinutes(1) });
+
             //_collector.Windows.SubscribeToWindowsServiceStatus("CaddyServer");
 
 
@@ -94,10 +97,10 @@ namespace DatacollectorSandbox
 
             while (true)
             {
-                _baseInt = _collector.CreateIntSensor("instant/ Test/int");
-                _baseInt.AddValue(GetInt());
-
-                Thread.Sleep(1000);
+                sensor.AddValue("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+                Thread.Sleep(100);
+                sensor.AddValue("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
+                Thread.Sleep(100);
             }
 
 

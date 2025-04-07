@@ -91,5 +91,7 @@ namespace HSMDatabase.AccessManager
         void AddAlertTemplate(AlertTemplateEntity alertTemplate);
         void RemoveAlertTemplate(byte[] id);
         #endregion
+
+        void Compact();
     }
 }
