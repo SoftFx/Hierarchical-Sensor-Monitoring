@@ -11,7 +11,7 @@ namespace HSMServer.BackgroundServices
         private readonly ITreeValuesCache _cache;
 
 
-        public override TimeSpan Delay { get; } = TimeSpan.FromHours(1);
+        public override TimeSpan Delay { get; } = TimeSpan.FromMinutes(5);//TimeSpan.FromHours(1);
 
 
         public ClearDatabaseService(ITreeValuesCache cache)

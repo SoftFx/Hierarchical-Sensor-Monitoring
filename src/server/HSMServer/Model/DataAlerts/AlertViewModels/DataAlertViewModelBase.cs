@@ -18,7 +18,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public class DataAlertViewModelBase
     {
-        public List<AlertConditionBase> Conditions { get; } = new();
+        public List<ConditionViewModel> Conditions { get; } = new();
 
         public List<AlertActionBase> Actions { get; } = new();
 

@@ -118,5 +118,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 return Enumerable.Empty<(byte[], byte[])>();
             }
         }
+
+        public void Compact()
+        {
+            _openedDb.Compact();
+        }
+
     }
 }

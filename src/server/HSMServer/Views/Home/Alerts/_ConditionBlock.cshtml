@@ -46,6 +46,8 @@
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
         let operation = conditionBlock.find($(`div.operation`));
 
+        alert(operation);
+
         let property = $(this).val();
 
         $.ajax({

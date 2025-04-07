@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model.Policies;
+using Microsoft.Extensions.FileSystemGlobbing.Internal.Patterns;
 using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
@@ -63,4 +64,21 @@ namespace HSMServer.Model.DataAlerts
 
         public override bool IsTargetRequired { get; } = false;
     }
+
+    public sealed class VersionOperation : OperationViewModel
+    {
+        protected override List<PolicyOperation> Operations { get; } = new()
+        {
+            PolicyOperation.Equal,
+            PolicyOperation.NotEqual,
+            PolicyOperation.Contains,
+            PolicyOperation.StartsWith,
+            PolicyOperation.EndsWith,
+        };
+
+        public override bool IsTargetRequired { get; } = false;
+
+        public override string Pattern => "^(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)$";
+    }
+
 }

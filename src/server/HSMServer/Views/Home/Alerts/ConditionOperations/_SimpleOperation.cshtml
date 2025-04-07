@@ -11,7 +11,7 @@
 
 <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
 <input class="alert-block target-input target-value @(Model.Operation.IsTargetVisible() ? string.Empty : "d-none")"
-       type="text" asp-for="Target" value="@Model.Target" placeholder="<enter a value>" required="@(Model.IsTargetRequired ? true : false)"/>
+       type="text" asp-for="Target" value="@Model.Target" placeholder="<enter a value>" required="@(Model.IsTargetRequired ? "required" : string.Empty)" pattern="@Model.Pattern"/>
 
 
 <script>
@@ -26,7 +26,7 @@
             cache: false
         }).done(function (isTargetVisible) {
             if (isTargetVisible) {
-                target.val("");
+                //target.val("");
                 target.attr('required', '@Model.IsTargetRequired' === 'True' ? true : false);
 
                 target.removeClass("d-none");

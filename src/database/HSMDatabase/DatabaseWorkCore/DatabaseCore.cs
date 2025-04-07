@@ -28,11 +28,11 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly IDatabaseSettings _settings;
 
-
         public IDashboardCollection Dashboards { get; }
 
         public ISnapshotDatabase Snapshots { get; }
 
+        public bool IsCompactRunning { get; private set; }
 
         public long TotalDbSize => _settings.DatabaseFolder.GetSize();
 
@@ -608,6 +608,23 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         #endregion
+
+        public void Compact()
+        {
+            if (IsCompactRunning)
+                return;
+
+            IsCompactRunning = true;
+
+            _environmentDatabase.Compact();
+            foreach (var db in _sensorValuesDatabases)
+                db.Compact();
+
+            foreach (var db in _journalValuesDatabases)
+                db.Compact();
+
+            IsCompactRunning = false;
+        }
 
         public void Dispose()
         {
