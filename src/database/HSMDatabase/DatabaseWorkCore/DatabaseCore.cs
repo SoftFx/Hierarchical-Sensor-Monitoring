@@ -13,8 +13,10 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Text.Json;
+using System.Xml.Linq;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -622,29 +624,51 @@ namespace HSMDatabase.DatabaseWorkCore
             try
             {
                 _logger.Info($"CompactDB start: Enviroment database {ConfigDbSize}");
-                name = "enviroment_database";
-                _environmentDatabase.Compact();
+                try
+                {
+                    _environmentDatabase.Compact();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"An error was occurred while compacting database [Enviroment]: {ex.Message}", ex);
+                }
                 _logger.Info($"CompactDB stop: Enviroment database {ConfigDbSize}");
 
                 _logger.Info($"CompactDB start: Sensor values database {SensorHistoryDbSize}");
-                foreach (var db in _sensorValuesDatabases)
+                try
                 {
-                    name = db.Name;
-                    db.Compact();
+                    foreach (var db in _sensorValuesDatabases)
+                    {
+                        name = db.Name;
+                        db.Compact();
+                    }
                 }
+                catch (Exception ex)
+                {
+                    _logger.Error($"An error was occurred while compacting database [{name}]: {ex.Message}", ex);
+                }
+
                 _logger.Info($"CompactDB stop: Sensor values database {SensorHistoryDbSize}");
 
                 _logger.Info($"CompactDB start: Journal database {JournalDbSize}");
-                foreach (var db in _journalValuesDatabases)
+                try
                 {
-                    name = db.Name;
-                    db.Compact();
+                    foreach (var db in _journalValuesDatabases)
+                    {
+                        name = db.Name;
+                        db.Compact();
+                    }
                 }
+                catch (Exception ex)
+                {
+                    _logger.Error($"An error was occurred while compacting database [{name}]: {ex.Message}", ex);
+                }
+
                 _logger.Info($"CompactDB stop: Journal database {JournalDbSize}");
             }
             catch (Exception ex)
             {
-                _logger.Error($"An error was occurred while compacting database: {name}", ex);
+                _logger.Error($"An error was occurred while compacting databases: {ex.Message}", ex);
             }
             finally
             {
