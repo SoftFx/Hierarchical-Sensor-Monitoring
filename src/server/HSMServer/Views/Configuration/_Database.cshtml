@@ -4,9 +4,6 @@
 
 @model ConfigurationViewModel
 
-@{
-    var disabled = Model.IsCompactRunning ? "disabled" : string.Empty;
-}
 
 <div class="row mt-5 d-flex align-items-center">
     <div class="col-2">
@@ -16,7 +13,7 @@
         <input id="dbTotalSize" class="form-control" type="number" value="@Model.TotalDbSize" disabled>
     </div>
     <div class="col-auto">
-        <button id="dbButton" class="btn btn-primary" type="button" style ="width: 15em" onclick="compact()" @disabled>
+        <button id="dbButton" class="btn btn-primary" type="button" style ="width: 15em" onclick="compact()">
             <span id="dbSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
             <span id="dbButtonName">Compact</span>
         </button>

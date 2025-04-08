@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Constants;
+using HSMCommon.Extensions;
 using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
@@ -616,14 +617,40 @@ namespace HSMDatabase.DatabaseWorkCore
 
             IsCompactRunning = true;
 
-            _environmentDatabase.Compact();
-            foreach (var db in _sensorValuesDatabases)
-                db.Compact();
+            string name = string.Empty;
 
-            foreach (var db in _journalValuesDatabases)
-                db.Compact();
+            try
+            {
+                _logger.Info($"CompactDB start: Enviroment database {ConfigDbSize}");
+                name = "enviroment_database";
+                _environmentDatabase.Compact();
+                _logger.Info($"CompactDB stop: Enviroment database {ConfigDbSize}");
 
-            IsCompactRunning = false;
+                _logger.Info($"CompactDB start: Sensor values database {SensorHistoryDbSize}");
+                foreach (var db in _sensorValuesDatabases)
+                {
+                    name = db.Name;
+                    db.Compact();
+                }
+                _logger.Info($"CompactDB stop: Sensor values database {SensorHistoryDbSize}");
+
+                _logger.Info($"CompactDB start: Journal database {JournalDbSize}");
+                foreach (var db in _journalValuesDatabases)
+                {
+                    name = db.Name;
+                    db.Compact();
+                }
+                _logger.Info($"CompactDB stop: Journal database {JournalDbSize}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"An error was occurred while compacting database: {name}", ex);
+            }
+            finally
+            {
+                IsCompactRunning = false;
+            }
+
         }
 
         public void Dispose()
