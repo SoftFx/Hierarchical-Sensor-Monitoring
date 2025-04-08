@@ -41,8 +41,6 @@ namespace HSMDatabase.LevelDB
                 {
                     _database = new DB(name, _databaseOptions);
 
-                    _database.Compact();
-
                     return;
                 }
                 catch (Exception ex)
