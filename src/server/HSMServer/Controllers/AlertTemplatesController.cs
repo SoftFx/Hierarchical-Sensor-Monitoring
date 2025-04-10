@@ -15,6 +15,7 @@ using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using Microsoft.Extensions.Hosting;
+using Microsoft.VisualBasic;
 
 
 namespace HSMServer.Controllers
@@ -148,6 +149,8 @@ namespace HSMServer.Controllers
                 _cache.AddAlertTemplate(model);
                 return Ok();
             }
+
+            data = new DataAlertTemplateViewModel(data.ToModel());
 
             return PartialView("_AlertTemplate", data);
         }

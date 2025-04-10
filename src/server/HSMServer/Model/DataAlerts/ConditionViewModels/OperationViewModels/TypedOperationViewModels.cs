@@ -1,6 +1,6 @@
 ﻿using HSMServer.Core.Model.Policies;
-using Microsoft.Extensions.FileSystemGlobbing.Internal.Patterns;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -15,7 +15,7 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.IsError
         };
 
-        public override bool IsTargetRequired { get; } = false;
+        public override bool IsTargetRequired => false;
     }
 
 
@@ -31,7 +31,7 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.IsChanged,
         };
 
-        public override bool IsTargetRequired { get; } = false;
+        public override bool IsTargetRequired => true;
     }
 
 
@@ -47,7 +47,7 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.Equal,
         };
 
-        public override bool IsTargetRequired { get; } = true;
+        public override bool IsTargetRequired => true;
     }
 
 
@@ -62,7 +62,7 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.EndsWith,
         };
 
-        public override bool IsTargetRequired { get; } = false;
+        public override bool IsTargetRequired => true;
     }
 
     public sealed class VersionOperation : OperationViewModel
@@ -76,9 +76,9 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.EndsWith,
         };
 
-        public override bool IsTargetRequired { get; } = false;
+        public override bool IsTargetRequired => true;
 
-        public override string Pattern => "^(\\d+\\.)?(\\d+\\.)?(\\*|\\d+)$";
+        //public override string Pattern => "\\d+\\.\\d+\\.\\d+";
     }
 
 }

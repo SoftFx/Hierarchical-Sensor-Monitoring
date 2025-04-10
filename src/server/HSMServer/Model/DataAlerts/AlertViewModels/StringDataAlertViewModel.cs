@@ -7,7 +7,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class StringDataAlertViewModel : DataAlertViewModel<StringValue>
     {
-        public override SensorType Type => SensorType.Boolean;
+        public override SensorType Type => SensorType.String;
 
         public StringDataAlertViewModel() : base() { }
 

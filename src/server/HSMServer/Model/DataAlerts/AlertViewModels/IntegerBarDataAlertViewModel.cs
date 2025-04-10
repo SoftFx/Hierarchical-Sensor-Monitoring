@@ -7,7 +7,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class IntegerBarDataAlertViewModel : BarDataAlertViewModel<IntegerBarValue>
     {
-        public override SensorType Type => SensorType.Boolean;
+        public override SensorType Type => SensorType.IntegerBar;
 
         public IntegerBarDataAlertViewModel() : base() { }
 

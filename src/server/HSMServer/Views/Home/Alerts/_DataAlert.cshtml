@@ -17,10 +17,12 @@
 @{
     var telegramChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v);
 
-    string GetActionChats(AlertActionBase action) =>
+    string GetActionChats(ActionViewModel action) =>
          string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
 
     bool isTemplate = ViewBag.IsTemplate ?? false;
+
+    ViewData["type"] = (byte)Model.Type;
 }
 
 

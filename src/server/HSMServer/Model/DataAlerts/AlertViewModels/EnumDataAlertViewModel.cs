@@ -6,7 +6,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class EnumDataAlertViewModel : NumericDataAlertViewModel<EnumValue>
     {
-        public override SensorType Type => SensorType.Boolean;
+        public override SensorType Type => SensorType.Enum;
 
         public EnumDataAlertViewModel() : base() { }
 

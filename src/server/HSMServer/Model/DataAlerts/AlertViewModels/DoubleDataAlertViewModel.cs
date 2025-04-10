@@ -6,7 +6,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class DoubleDataAlertViewModel : NumericDataAlertViewModel<DoubleValue>
     {
-        public override SensorType Type => SensorType.Boolean;
+        public override SensorType Type => SensorType.Double;
 
         public DoubleDataAlertViewModel() : base() { }
 

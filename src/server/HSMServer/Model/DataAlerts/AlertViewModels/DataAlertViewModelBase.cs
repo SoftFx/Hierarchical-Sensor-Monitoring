@@ -20,7 +20,7 @@ namespace HSMServer.Model.DataAlerts
     {
         public List<ConditionViewModel> Conditions { get; } = new();
 
-        public List<AlertActionBase> Actions { get; } = new();
+        public List<ActionViewModel> Actions { get; } = new();
 
 
         public bool IsDisabled { get; set; }
@@ -152,7 +152,7 @@ namespace HSMServer.Model.DataAlerts
         {
             var telegramChats = manager.GetValues().ToDictionary(k => k.Id, v => v);
 
-            string GetActionChats(AlertActionBase action) =>
+            string GetActionChats(ActionViewModel action) =>
                  string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
 
             var sb = new StringBuilder(128);
