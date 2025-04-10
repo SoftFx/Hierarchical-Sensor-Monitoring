@@ -43,8 +43,10 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public class AlertConditionBase
+    public class ConditionViewModel
     {
+        protected virtual List<AlertProperty> Properties { get; }
+
         public AlertProperty Property { get; set; }
 
 
@@ -56,18 +58,12 @@ namespace HSMServer.Model.DataAlerts
         public PolicyOperation? Operation { get; set; }
 
         public string Target { get; set; }
-    }
-
-
-    public abstract class ConditionViewModel : AlertConditionBase
-    {
-        protected abstract List<AlertProperty> Properties { get; }
-
 
         public List<SelectListItem> PropertiesItems { get; }
 
         public bool IsMain { get; }
 
+        public ConditionViewModel() { }
 
         public ConditionViewModel(bool isMain)
         {

@@ -7,7 +7,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class TimeSpanDataAlertViewModel : SingleDataAlertViewModel<TimeSpanValue>
     {
-        public override SensorType Type => SensorType.Boolean;
+        public override SensorType Type => SensorType.TimeSpan;
 
         public TimeSpanDataAlertViewModel() : base() { }
 

@@ -41,17 +41,15 @@
 <script>
     $('select[name="Property"]').off("change").on("change", function () {
         let dataAlert = $(this).parents("div.dataAlertRow:first");
-        let type = $('select[name="Property"]').data('type');
+        let type = $(this).data('type');
 
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
         let operation = conditionBlock.find($(`div.operation`));
 
-        alert(operation);
-
         let property = $(this).val();
 
         $.ajax({
-            url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?sensorType=${type}&property=${property}`,
+            url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?type=${type}&property=${property}`,
             cache: false
         }).done(function (viewData) {
             operation.html(viewData);

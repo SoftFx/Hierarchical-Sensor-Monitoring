@@ -7,7 +7,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class DoubleBarDataAlertViewModel : BarDataAlertViewModel<DoubleBarValue>
     {
-        public override SensorType Type => SensorType.Boolean;
+        public override SensorType Type => SensorType.DoubleBar;
 
 
         public DoubleBarDataAlertViewModel() : base() { }

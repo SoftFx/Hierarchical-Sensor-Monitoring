@@ -11,17 +11,15 @@ namespace HSMServer.Model.DataAlerts
     {
         protected abstract List<PolicyOperation> Operations { get; }
 
-        public abstract bool IsTargetRequired { get; }
-
-
         public List<SelectListItem> OperationsItems { get; }
-
 
         public PolicyOperation Operation { get; private set; }
 
         public string Target { get; private set; }
 
-        public virtual string Pattern { get; private set; } = string.Empty;
+        public abstract bool IsTargetRequired { get; }
+
+        public virtual string Pattern { get; }
 
         internal OperationViewModel()
         {

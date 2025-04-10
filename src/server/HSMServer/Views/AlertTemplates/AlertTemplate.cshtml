@@ -164,6 +164,7 @@
             setFormDataAlertsProperty(formData, "input", type, i, $(this), "IsDisabled");
             setFormDataAlertsProperty(formData, "input", type, i, $(this), "TemplateId");
 
+
             $(this).find(`div[name='alertCondition']`).each(function (j) {
                 setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
 
