@@ -111,8 +111,8 @@ public static class ApplicationServiceExtensions
         {
             var kestrelListenAction = KestrelListenOptions(config.ServerCertificate);
 
-            options.ListenAnyIP(config.Kestrel.SensorPort, kestrelListenAction);
-            options.ListenAnyIP(config.Kestrel.SitePort, kestrelListenAction);
+            options.ListenLocalhost(config.Kestrel.SensorPort, kestrelListenAction);
+            options.ListenLocalhost(config.Kestrel.SitePort, kestrelListenAction);
 
             options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
             options.Limits.MinRequestBodyDataRate = null; //???

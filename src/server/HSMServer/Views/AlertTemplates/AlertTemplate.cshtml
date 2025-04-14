@@ -132,8 +132,10 @@
                 }
 
                 var dataName = data['Name'];
-                if (dataName)
-                    $('#Name').val(dataName);
+                if (dataName){
+                    if ($('#Name').val().trim() === "")
+                        $('#Name').val(dataName);
+                }
 
                 if (data['Sensors'] != null) {
                     $('#affected_sensors_cardbody').empty();
