@@ -20,13 +20,7 @@
 
     var isSecondaryCondition = !Model.IsMain;
 
-    var chats = new List<TelegramChat>();
-    // if (Model.Node.TryGetChats(out var availableChats))
-    //     foreach (var chat in ChatsManager.GetValues())
-    //     {
-    //         if (availableChats.Contains(chat.Id))
-    //             chats.Add(chat);
-    //     }
+    var chats = ChatsManager.GetValues().Where(x => Model.AvailableChats.Contains(x.Id)).ToList();
 }
 
 
