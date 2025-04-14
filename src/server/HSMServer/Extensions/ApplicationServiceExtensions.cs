@@ -25,6 +25,7 @@ using Microsoft.OpenApi.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Security.Authentication;
 using System.Threading.Tasks;
 
@@ -111,10 +112,8 @@ public static class ApplicationServiceExtensions
         {
             var kestrelListenAction = KestrelListenOptions(config.ServerCertificate);
 
-            options.ListenLocalhost(config.Kestrel.SensorPort, kestrelListenAction);
-            options.ListenLocalhost(config.Kestrel.SitePort, kestrelListenAction);
-            options.ListenAnyIP(config.Kestrel.SensorPort, kestrelListenAction);
-            options.ListenAnyIP(config.Kestrel.SitePort, kestrelListenAction);
+            options.Listen(IPAddress.Any, config.Kestrel.SensorPort, kestrelListenAction);
+            options.Listen(IPAddress.Any, config.Kestrel.SitePort, kestrelListenAction);
 
             options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
             options.Limits.MinRequestBodyDataRate = null; //???
