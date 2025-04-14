@@ -113,6 +113,8 @@ public static class ApplicationServiceExtensions
 
             options.ListenLocalhost(config.Kestrel.SensorPort, kestrelListenAction);
             options.ListenLocalhost(config.Kestrel.SitePort, kestrelListenAction);
+            options.ListenAnyIP(config.Kestrel.SensorPort, kestrelListenAction);
+            options.ListenAnyIP(config.Kestrel.SitePort, kestrelListenAction);
 
             options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
             options.Limits.MinRequestBodyDataRate = null; //???
