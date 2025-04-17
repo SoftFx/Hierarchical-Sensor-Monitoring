@@ -1,12 +1,15 @@
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 
-# Установка базовых утилит
-RUN apt-get update && apt-get install -y \
-    procps \
+# Установка зависимостей и очистка кеша
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        procps \
+        wget \
     && rm -rf /var/lib/apt/lists/*
 
-RUN dotnet tool install --global dotnet-dump
+# Установка dotnet-dump через direct download (без dotnet tool)
+RUN wget https://aka.ms/dotnet-dump/linux-x64 -O /usr/local/bin/dotnet-dump \
+    && chmod +x /usr/local/bin/dotnet-dump
 
-# Настройка PATH для dotnet-tools
-ENV PATH="${PATH}:/root/.dotnet/tools"
+
 
