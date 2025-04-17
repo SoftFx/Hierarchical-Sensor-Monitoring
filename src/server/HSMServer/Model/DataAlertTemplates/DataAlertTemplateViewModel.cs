@@ -1,11 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.Folders;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
+using HSMServer.Model.Folders;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 
 namespace HSMServer.Model.DataAlertTemplates
@@ -31,6 +36,11 @@ namespace HSMServer.Model.DataAlertTemplates
 
         public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; set; } = [];
 
+        [DisplayName("Folder")]
+        public Guid? FolderId {  get; set; }
+
+        public SelectList AvailableFolders { get; set; }
+
         public bool HasTimeToLive => DataAlerts.ContainsKey(TimeToLiveAlertViewModel.AlertKey);
 
         public bool IsNew { get; set; } = true;
@@ -46,6 +56,7 @@ namespace HSMServer.Model.DataAlertTemplates
             Name = model.Name;
             PathTemplate = model.Path;
             Type = model.SensorType;
+            FolderId = model.FolderId;
 
             IsNew = false;
 
@@ -65,6 +76,15 @@ namespace HSMServer.Model.DataAlertTemplates
                 DataAlerts.Add(type, model.Policies.Select(x => { var result = DataAlertViewModel.BuildAlert(x); result.IsModify = true; return result; }).ToList());
         }
 
+        public DataAlertTemplateViewModel(AlertTemplateModel model, IEnumerable<FolderModel> availableFolders) : this(model)
+        {
+            SetAvailableFolders(availableFolders);
+        }
+
+        public DataAlertTemplateViewModel(IEnumerable<FolderModel> availableFolders) : this()
+        {
+            SetAvailableFolders(availableFolders);
+        }
 
         public AlertTemplateModel ToModel()
         {
@@ -74,6 +94,7 @@ namespace HSMServer.Model.DataAlertTemplates
                 Name = Name,
                 Path = PathTemplate,
                 SensorType = Type,
+                FolderId = FolderId,
             };
 
             result.TryApplyPathTemplate(PathTemplate, out _);
@@ -113,5 +134,9 @@ namespace HSMServer.Model.DataAlertTemplates
             return result;
         }
 
+        private void SetAvailableFolders(IEnumerable<FolderModel> availableFolders)
+        {
+            AvailableFolders = new SelectList(availableFolders, "Id", "Name", FolderId);
+        }
     }
 }

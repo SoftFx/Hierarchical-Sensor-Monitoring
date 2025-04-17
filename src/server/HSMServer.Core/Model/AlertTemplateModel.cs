@@ -29,6 +29,8 @@ namespace HSMServer.Core.Model
 
         public byte SensorType { get; set; }
 
+        public Guid? FolderId { get; set; }
+
         public bool IsMatch(string path) => _pathTemplateConverter.IsMatch(path);
 
         public AlertTemplateModel()
@@ -42,6 +44,7 @@ namespace HSMServer.Core.Model
             Name = entity.Name;
             Path = entity.Path;
             SensorType = entity.SensorType;
+            FolderId = entity.FolderId;
 
             if (entity.TTLPolicy != null)
             {

@@ -7,8 +7,10 @@
 @using HSMServer.Model.DataAlerts
 @using HSMServer.Model.Folders.ViewModels
 @using HSMServer.Model.DataAlertTemplates
+@using HSMServer.Folders
 @using HSMCommon.Extensions
 
+@inject IFolderManager FolderManager;
 
 @model DataAlertTemplateViewModel
 
@@ -39,7 +41,15 @@
     <div class="row">
         <h5>@(Model.IsNew ? "New alert template" : "Edit alert template")</h5>
     </div>
-    <div class="row">
+    <div class="row py-2">
+        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="FolderId"></label>
+        <div class="col w-auto">
+            <select type='text' class='form-control' asp-for="FolderId" asp-items="@Model.AvailableFolders">
+                <option></option>
+            </select>
+        </div>
+    </div>
+    <div class="row py-2">
         <label class="col-1 col-form-label d-flex justify-content-end" asp-for="PathTemplate"></label>
         <div class="col w-auto">
             <input type='text' class='form-control' asp-for="PathTemplate" placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" />

@@ -28,7 +28,7 @@ namespace HSMServer.Core.Cache
         event Action<FolderEventArgs> FillFolderChats;
 
         List<BaseSensorModel> GetSensors();
-        List<BaseSensorModel> GetSensors(string wildcard, SensorType? type);
+        List<BaseSensorModel> GetSensors(string wildcard, SensorType? type, Guid? folderId);
         List<AccessKeyModel> GetAccessKeys();
 
         ProductModel AddProduct(string productName, Guid authorId);

@@ -147,7 +147,7 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public List<BaseSensorModel> GetSensors(string wildcard, SensorType? sensorType = null)
+        public List<BaseSensorModel> GetSensors(string wildcard, SensorType? sensorType = null, Guid? folderId = null)
         {
             PathTemplateConverter converter = new PathTemplateConverter();
             if (!converter.ApplyNewTemplate(wildcard, out string errors))
@@ -156,6 +156,9 @@ namespace HSMServer.Core.Cache
             using (_lock.GetReadLock())
             {
                 var result = _sensors.Values.Where(x => converter.IsMatch(x.FullPath));
+
+                if (folderId != null)
+                    result = result.Where(x => x.Root.FolderId == folderId);
 
                 if (sensorType.HasValue)
                     result = result.Where(x => x.Type == sensorType);
