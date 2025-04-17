@@ -43,6 +43,10 @@
             submitForm();
         });
 
+        $("#FolderId").off('click').on('click', function () {
+            updateForm(false);
+        });
+
         let timeout = null;
         document.getElementById("PathTemplate").addEventListener("input", () => {
             clearTimeout(timeout);
@@ -118,9 +122,10 @@
     function updateForm(needChangeType = true) {
         var type = $('#Type').val();
         var path = $('#PathTemplate').val();
+        var folderId = $('#FolderId').val();
 
         $.ajax({
-            url: `@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)?type=${type}&path=${path}`,
+            url: `@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)?type=${type}&path=${path}&folderId=${folderId}`,
             cache: false,
             success: (viewData) => {
 

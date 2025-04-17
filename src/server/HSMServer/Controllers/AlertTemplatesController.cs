@@ -16,6 +16,7 @@ using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using Microsoft.Extensions.Hosting;
 using Microsoft.VisualBasic;
+using System.IO;
 
 
 namespace HSMServer.Controllers
@@ -65,7 +66,7 @@ namespace HSMServer.Controllers
             {
                 Keys = templates.Select(x =>
                 {
-                    var (type, sensors) = GetAffectedSensors(x.SensorType, x.Path);
+                    var (type, sensors) = GetAffectedSensors(x.SensorType, x.Path, x.FolderId);
                     return new DataAlertTemplateViewModel(x) { Sensors = sensors };
                 }).ToList(),
             };
@@ -108,9 +109,9 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult UpdateTemplate(byte type, string path)
+        public IActionResult UpdateTemplate(byte type, string path, Guid? folderId = null)
         {
-            var (sensorType, sensors) = GetAffectedSensors(type, path);
+            var (sensorType, sensors) = GetAffectedSensors(type, path, folderId);
 
             var name = GetTemplateName(path);
 
@@ -121,9 +122,22 @@ namespace HSMServer.Controllers
 
 
         [HttpGet]
-        public IActionResult New(string path = "")
+        public IActionResult New(Guid? id = null)
         {
-             return View("AlertTemplate", new DataAlertTemplateViewModel() { PathTemplate = path});
+            var model = new DataAlertTemplateViewModel(_folders.GetUserFolders(CurrentUser));
+
+            if (id.HasValue)
+            {
+                var sensor = _cache.GetSensor(id.Value);
+                if (sensor != null)
+                {
+                    model.FolderId = sensor.Root.FolderId;
+                    model.PathTemplate = sensor.FullPath;
+                    model.Type = (byte)sensor.Type;
+                }
+            }
+
+             return View("AlertTemplate", model);
         }
 
         [HttpGet]
@@ -134,7 +148,7 @@ namespace HSMServer.Controllers
             if (data is null)
                 return _emptyResult;
 
-            return View("AlertTemplate", new DataAlertTemplateViewModel(data));
+            return View("AlertTemplate", new DataAlertTemplateViewModel(data, _folders.GetUserFolders(CurrentUser)));
         }
 
         [HttpPost]
@@ -150,7 +164,7 @@ namespace HSMServer.Controllers
                 return Ok();
             }
 
-            data = new DataAlertTemplateViewModel(data.ToModel());
+            data = new DataAlertTemplateViewModel(data.ToModel(), _folders.GetUserFolders(CurrentUser));
 
             return PartialView("_AlertTemplate", data);
         }
@@ -164,11 +178,11 @@ namespace HSMServer.Controllers
         }
 
 
-        private (byte?, List<BaseSensorModel>) GetAffectedSensors(byte type, string path)
+        private (byte?, List<BaseSensorModel>) GetAffectedSensors(byte type, string path, Guid? folder)
         {
             byte? sensorType = null;
 
-            var sensors = _cache.GetSensors(path, type == DataAlertTemplateViewModel.AnyType ? null : (SensorType)type);
+            var sensors = _cache.GetSensors(path, type == DataAlertTemplateViewModel.AnyType ? null : (SensorType)type, folder);
 
             if (sensors.Count > 0)
             {
