@@ -3,8 +3,6 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0
 # Установка базовых утилит
 RUN apt-get update && apt-get install -y \
     procps \
-    curl \
-    dotnet-sdk-8.0 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN dotnet tool install --global dotnet-dump
