@@ -3,28 +3,11 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0
 # Установка базовых утилит
 RUN apt-get update && apt-get install -y \
     procps \
-    wget \
     curl \
-    gnupg \
+    dotnet-sdk-8.0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Добавление репозитория Microsoft (для Debian 12)
-RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
-    && dpkg -i packages-microsoft-prod.deb \
-    && rm packages-microsoft-prod.deb
-
-# Установка dotnet-dump
-RUN apt-get update && apt-get install -y \
-    dotnet-dump \
-    && rm -rf /var/lib/apt/lists/*
-
-# Создание рабочих директорий
-RUN mkdir -p /app/Config \
-    /app/Databases \
-    /app/DatabasesBackup \
-    /app/Logs \
-    /app/docker_scripts \
-    /app/grafana
+RUN dotnet tool install --global dotnet-dump
 
 # Настройка PATH для dotnet-tools
 ENV PATH="${PATH}:/root/.dotnet/tools"
