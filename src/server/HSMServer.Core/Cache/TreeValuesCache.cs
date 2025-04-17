@@ -149,22 +149,27 @@ namespace HSMServer.Core.Cache
 
         public List<BaseSensorModel> GetSensors(string wildcard, SensorType? sensorType = null, Guid? folderId = null)
         {
+            using (_lock.GetReadLock())
+            {
+                return GetSensorsInternal(wildcard, sensorType, folderId).ToList();
+            }
+        }
+
+        private IEnumerable<BaseSensorModel> GetSensorsInternal(string wildcard, SensorType? sensorType = null, Guid? folderId = null)
+        {
             PathTemplateConverter converter = new PathTemplateConverter();
             if (!converter.ApplyNewTemplate(wildcard, out string errors))
                 return [];
 
-            using (_lock.GetReadLock())
-            {
-                var result = _sensors.Values.Where(x => converter.IsMatch(x.FullPath));
+            var result = _sensors.Values.Where(x => converter.IsMatch(x.FullPath));
 
-                if (folderId != null)
-                    result = result.Where(x => x.Root.FolderId == folderId);
+            if (folderId != null)
+                result = result.Where(x => x.Root.FolderId == folderId);
 
-                if (sensorType.HasValue)
-                    result = result.Where(x => x.Type == sensorType);
+            if (sensorType.HasValue)
+                result = result.Where(x => x.Type == sensorType);
 
-                return result.ToList();
-            }
+            return result;
         }
 
         public List<AccessKeyModel> GetAccessKeys()
@@ -1076,13 +1081,8 @@ namespace HSMServer.Core.Cache
         {
             _alertTemplates.GetOrAdd(alertTemplateModel.Id, () => alertTemplateModel);
 
-            foreach (var sensor in _sensors.Values)
-            {
-                if (!alertTemplateModel.IsMatch(sensor.FullPath))
-                    continue;
-
+            foreach (var sensor in GetSensorsInternal(alertTemplateModel.Path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId))
                 AddAlertFromTemplate(sensor, alertTemplateModel);
-            }
 
             _database.AddAlertTemplate(alertTemplateModel.ToEntity());
         }
@@ -1680,7 +1680,7 @@ namespace HSMServer.Core.Cache
 
                 foreach (var template in _alertTemplates.Values)
                 {
-                    if (template.IsMatch(sensor.FullPath))
+                    if (template.IsMatch(sensor))
                         AddAlertFromTemplate(sensor, template);
                 }
 

@@ -31,7 +31,6 @@ namespace HSMServer.Core.Model
 
         public Guid? FolderId { get; set; }
 
-        public bool IsMatch(string path) => _pathTemplateConverter.IsMatch(path);
 
         public AlertTemplateModel()
         {
@@ -86,5 +85,20 @@ namespace HSMServer.Core.Model
             };
         }
 
+        public SensorType? GetSensorType() => SensorType == AnyType ? null : (SensorType)SensorType;
+
+        public bool IsMatch(BaseSensorModel sensor)
+        {
+            if (!_pathTemplateConverter.IsMatch(sensor.FullPath))
+                return false;
+
+            if (GetSensorType().HasValue && GetSensorType() != sensor.Type)
+                return false;
+
+            if (sensor.Root.FolderId != FolderId)
+                return false;
+
+            return true;
+        }
     }
 }
