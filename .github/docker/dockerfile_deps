@@ -1,15 +1,15 @@
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 
-# Установка зависимостей и очистка кеша
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        procps \
+    apt-get install -y \
         wget \
+        apt-transport-https \
+        procps \
+    # Установка procdump
+    && wget https://packages.microsoft.com/config/debian/$(cat /etc/debian_version | cut -d'.' -f1)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
+    && dpkg -i packages-microsoft-prod.deb \
+    && rm packages-microsoft-prod.deb \
+    && apt-get update \
+    && apt-get install -y procdump \
+    # Очистка кеша
     && rm -rf /var/lib/apt/lists/*
-
-# Установка dotnet-dump через direct download (без dotnet tool)
-RUN wget https://aka.ms/dotnet-dump/linux-x64 -O /usr/local/bin/dotnet-dump \
-    && chmod +x /usr/local/bin/dotnet-dump
-
-
-
