@@ -29,7 +29,7 @@ namespace HSMServer.Core.Model
 
         public byte SensorType { get; set; }
 
-        public Guid? FolderId { get; set; }
+        public Guid FolderId { get; set; }
 
 
         public AlertTemplateModel()

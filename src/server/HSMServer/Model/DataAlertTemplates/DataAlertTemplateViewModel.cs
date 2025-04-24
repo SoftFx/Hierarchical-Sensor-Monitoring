@@ -37,7 +37,7 @@ namespace HSMServer.Model.DataAlertTemplates
         public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; set; } = [];
 
         [DisplayName("Folder")]
-        public Guid? FolderId {  get; set; }
+        public Guid FolderId {  get; set; }
 
         public SelectList AvailableFolders { get; set; }
 
@@ -136,7 +136,7 @@ namespace HSMServer.Model.DataAlertTemplates
 
         private void SetAvailableFolders(IEnumerable<FolderModel> availableFolders)
         {
-            AvailableFolders = new SelectList(availableFolders, "Id", "Name", FolderId);
+            AvailableFolders = new SelectList(availableFolders.OrderBy(x => x.Name), "Id", "Name", FolderId);
         }
     }
 }

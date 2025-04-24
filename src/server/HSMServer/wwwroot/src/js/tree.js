@@ -513,7 +513,7 @@ function buildContextMenu(node) {
                 separator_before: true,
                 "action": _ => {
                     $.ajax(`${getNodePathAction}?selectedId=${node.id}`, AjaxPost).done((path) => {
-                        window.location = '../AlertTemplates/New/?id=' + node.id;
+                        window.location = `${createAlertTemplate}?id=${node.id}`;
                     });
                 }
             }
