@@ -14,9 +14,7 @@ using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
-using Microsoft.Extensions.Hosting;
-using Microsoft.VisualBasic;
-using System.IO;
+
 
 
 namespace HSMServer.Controllers
@@ -109,11 +107,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult UpdateTemplate(byte type, string path, Guid? folderId = null)
+        public IActionResult UpdateTemplate(byte type, string path, Guid folderId)
         {
             var (sensorType, sensors) = GetAffectedSensors(type, path, folderId);
 
-            var name = GetTemplateName(path);
+            var name = GetTemplateName(path, folderId);
 
             var response = new UpdateResponse(sensorType, sensors, name);
 
@@ -124,20 +122,22 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult New(Guid? id = null)
         {
-            var model = new DataAlertTemplateViewModel(_folders.GetUserFolders(CurrentUser));
+            var folders = _folders.GetUserFolders(CurrentUser);
+            var model = new DataAlertTemplateViewModel(folders);
 
             if (id.HasValue)
             {
                 var sensor = _cache.GetSensor(id.Value);
                 if (sensor != null)
                 {
-                    model.FolderId = sensor.Root.FolderId;
-                    model.PathTemplate = sensor.FullPath;
+                    model.FolderId = sensor.Root.FolderId.HasValue ? sensor.Root.FolderId.Value : folders.FirstOrDefault().Id;
+                    model.PathTemplate = $"*/{sensor.Path}";
                     model.Type = (byte)sensor.Type;
+                    model.Name = GetTemplateName(sensor.Path, model.FolderId);
                 }
             }
 
-             return View("AlertTemplate", model);
+            return View("AlertTemplate", model);
         }
 
         [HttpGet]
@@ -154,8 +154,8 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult AlertTemplate(DataAlertTemplateViewModel data)
         {
-            if (_cache.GetAlertTemplateModels().Any( x => x.Name == data.Name && x.Id != data.Id))
-               ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
+            if (_cache.GetAlertTemplateModels().Any(x => x.Name == data.Name && x.Id != data.Id))
+                ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
 
             if (ModelState.IsValid)
             {
@@ -178,7 +178,7 @@ namespace HSMServer.Controllers
         }
 
 
-        private (byte?, List<BaseSensorModel>) GetAffectedSensors(byte type, string path, Guid? folder)
+        private (byte?, List<BaseSensorModel>) GetAffectedSensors(byte type, string path, Guid folder)
         {
             byte? sensorType = null;
 
@@ -193,17 +193,21 @@ namespace HSMServer.Controllers
             return (sensorType, sensors);
         }
 
-        private static string GetTemplateName(string path)
+        private string GetTemplateName(string path, Guid folderId)
         {
+
+            var folderName = _folders.GetUserFolders(CurrentUser).FirstOrDefault(x => x.Id == folderId)?.Name ?? string.Empty;
+
             if (!string.IsNullOrWhiteSpace(path))
             {
                 var result = path.Split('/');
 
                 if (result.Length > 0)
-                    return result[^1];
+                    return $"{folderName}/{result[^1]}";
             }
 
             return string.Empty;
         }
+
     }
 }

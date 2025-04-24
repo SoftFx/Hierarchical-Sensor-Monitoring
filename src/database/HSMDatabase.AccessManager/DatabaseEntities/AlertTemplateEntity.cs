@@ -20,7 +20,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public string Path { get; init; }
 
-        public Guid? FolderId { get; init; }
+        public Guid FolderId { get; init; }
 
     }
 }
