@@ -61,7 +61,7 @@ namespace DatacollectorSandbox
             var collectorOptions = new CollectorOptions()
             {
                 //ServerAddress = "hsm.dev.soft-fx.eu",
-                AccessKey = "8590351e-4752-4591-b1b9-80753d3e5542", //local key
+                AccessKey = "01ab0c6a-e5b2-4e63-825d-ec6c819d6ab8", //local key
                 Module = "Collector 3.4.0",
                 ComputerName = "LocalMachine",
             };
@@ -94,13 +94,11 @@ namespace DatacollectorSandbox
             //    },
             //    SensorLocation = SensorLocation.Module,
             //});
-
+            var sens = _collector.CreateIntSensor("test_default", new InstantSensorOptions { SensorLocation = SensorLocation.Module });
             while (true)
             {
-                sensor.AddValue("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
-                Thread.Sleep(100);
-                sensor.AddValue("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
-                Thread.Sleep(100);
+                sens.AddValue(1);
+                Thread.Sleep(1000);
             }
 
 

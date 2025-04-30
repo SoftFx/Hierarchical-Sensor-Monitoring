@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Management;
+using System.Threading.Tasks;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 
@@ -7,31 +9,33 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
     {
-        public const string LastBootTimeCommand = "((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalMilliseconds";
-
         protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
         public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options) { }
 
 
-        protected override TimeSpan GetValue() => TimeSpan.FromMilliseconds(GetLastBootTime());
+        protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastBootTime().ToUniversalTime();
 
-
-        private long GetLastBootTime()
+        internal override ValueTask<bool> StartAsync()
         {
-            var mSeconds = 0L;
-            using (var process = ProcessInfo.GetPowershellProcess(LastBootTimeCommand))
+            SendValueAction();
+            return base.StartAsync();
+        }
+
+        private DateTime GetLastBootTime()
+        {
+            using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT LastBootUpTime FROM Win32_OperatingSystem"))
+            using (ManagementObjectCollection results = searcher.Get())
             {
-                process.Start();
-
-                double.TryParse(process.StandardOutput.ReadToEnd(), out var dValue);
-                mSeconds = (long)dValue;
-
-                process.WaitForExit();
+                foreach (ManagementObject mo in results)
+                {
+                    string lastBootUpTime = mo["LastBootUpTime"].ToString();
+                    return ManagementDateTimeConverter.ToDateTime(lastBootUpTime);
+                }
             }
 
-            return mSeconds;
+            throw new Exception("Can't get the date of the last reboot of Windows");
         }
     }
 }
