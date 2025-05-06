@@ -152,8 +152,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult RefreshTree(SearchPattern searchPattern) =>
-            PartialView("~/Views/Tree/_Tree.cshtml", CurrentUser.Tree.GetUserTree(searchPattern));
+        public IActionResult RefreshTree(SearchPattern searchPattern)
+            {
+            var a = PartialView("~/Views/Tree/_Tree.cshtml", CurrentUser.Tree.GetUserTree(searchPattern));
+            return a;
+    }
 
         [HttpGet]
         public IActionResult ApplyFilter(UserFilterViewModel viewModel)

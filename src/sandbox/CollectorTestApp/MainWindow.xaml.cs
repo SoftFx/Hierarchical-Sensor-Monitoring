@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
@@ -37,6 +38,9 @@ namespace CollectorTestApp
 
             textLog.TextChanged += (a, b) => textLog.ScrollToEnd();
             Closing += MainWindow_Closing;
+
+            string firstID = textAccessKey.Text.Split(new char[] { '-' })[0];
+            Title = $"HSM text: {firstID}";
         }
 
         private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -265,6 +269,71 @@ namespace CollectorTestApp
                 _textSensor = _dataCollector.CreateStringSensor(textSensorPath.Text);
 
             _textSensor.AddValue(textToSend.Text);
+        }
+
+        DispatcherTimer? _timer;
+
+        private void buttonAutoSend_Click(object sender, RoutedEventArgs e)
+        {
+            CreateSensors( (int)sliderCount.Value);
+
+            if (buttonAutoSend.IsChecked ?? false)
+            {
+                _timer = new DispatcherTimer();
+
+                double millisec = sliderInterval.Value * 1000;
+                _timer.Interval = TimeSpan.FromMilliseconds(millisec);
+                _timer.Tick += timer_Tick;
+
+                _timer.Start();
+            }
+            else
+            {
+                _timer?.Stop();
+                _timer = null;
+                buttonAutoSentText.Text = string.Empty;
+            }
+        }
+
+        List<IInstantValueSensor<string>> _textSensors = new List<IInstantValueSensor<string>>();
+
+
+
+        private void CreateSensors(int count)
+        {
+            _textSensors.Clear();
+
+            for (int i = 0; i < count; i++)
+            {
+                string sensorName = $"{textSensorPath.Text} ({i})";
+                _textSensors.Add( _dataCollector.CreateStringSensor(sensorName));
+            }
+        }
+
+        private void timer_Tick(object? sender, EventArgs e)
+        {
+
+
+            foreach (var sensor in _textSensors)
+            {
+                string message = $"{textToSend.Text}_{DateTime.Now.Millisecond}";
+                var random = new Random().Next(0, 100);
+                string comment = $"Comment: random = {random}";
+
+                HSMSensorDataObjects.SensorStatus status = HSMSensorDataObjects.SensorStatus.Ok;
+
+                if (random > 90)
+                    status = HSMSensorDataObjects.SensorStatus.Error;
+                else if (random < 30)
+                    status = HSMSensorDataObjects.SensorStatus.OffTime;
+
+                sensor.AddValue(message, status, comment);
+                
+
+                
+            }
+
+            buttonAutoSentText.Text = $"{DateTime.Now.ToShortTimeString}: sent {_textSensors.Count} sensors";
         }
     }
 

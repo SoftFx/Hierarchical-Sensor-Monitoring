@@ -99,8 +99,8 @@ window.initializeTree = function () {
         if (emptySearch !== undefined && emptySearch === true)
         {
             let selectedIds = $('#jstree').jstree('get_selected');
-            if (selectedIds.length > 0)
-                $(`#${selectedIds[0]}`)[0].scrollIntoView();
+            //if (selectedIds.length > 0)
+            //    $(`#${selectedIds[0]}`)[0].scrollIntoView();
 
             emptySearch = false;
             searchServerRefresh = false;

@@ -60,13 +60,24 @@
                 <TextBlock Margin="5,5,10,0">Send text:</TextBlock>
                 <TextBox Margin="5,0,5,0"  Name="textSensorPath">Text sensor</TextBox>
 
-                <DockPanel Grid.Column="1" Grid.Row="7" Margin="5,0,0,0">
-                    <Button DockPanel.Dock="Right" Name="buttonSendText" Padding="5,0" Margin="4,5,5,5" Click="buttonSendText_Click">Send</Button>
-                    <TextBox Grid.Column="1" Grid.Row="7" Margin="0,5,0,5" TextWrapping="Wrap" Name="textToSend">Any text</TextBox>
+                    <DockPanel Grid.Column="1" Grid.Row="7" Margin="5,0,0,0">
+                        <Button DockPanel.Dock="Right" Name="buttonSendText" Padding="5,0" Margin="4,5,5,5" Click="buttonSendText_Click">Send 1 time</Button>
+ <TextBox Grid.Column="1" Grid.Row="7" Margin="0,5,0,5" TextWrapping="Wrap" Name="textToSend">Any text</TextBox>
 
-                </DockPanel>
-            </StackPanel>
-        </GroupBox>
+                    </DockPanel>
+
+                    <TextBlock Margin="5,5,10,0">Sensors count:</TextBlock>
+                    <Slider Name="sliderCount" TickPlacement="TopLeft" Minimum="0" Maximum="10" Value="3"/>
+
+                    <TextBlock Margin="5,5,10,0">Interval (sec):</TextBlock>
+                    <Slider Name="sliderInterval" TickPlacement="TopLeft" Minimum="0.5" Maximum="10" Value="2"/>
+                
+                    <ToggleButton DockPanel.Dock="Right" Name="buttonAutoSend" Padding="5,0" Margin="4,5,5,0" Click="buttonAutoSend_Click">Send per sec</ToggleButton>
+                    <TextBlock Name="buttonAutoSentText" Margin="5,0,10,0" Foreground="Gray"></TextBlock>
+                </StackPanel>
+
+
+            </GroupBox>
 
         <!--<TextBlock Grid.Column="0" Grid.Row="6" Margin="10,5,10,5">Send text:</TextBlock>
         <TextBox Grid.Column="1" Grid.Row="6" Margin="2,5,5,5"  Name="textSensorPath">Text sensor</TextBox>
