@@ -18,7 +18,7 @@
 
     public sealed class TimeToLiveOperation : IntervalOperationViewModel
     {
-        public override string TargetName { get; } = nameof(AlertConditionBase.TimeToLive);
+        public override string TargetName { get; } = nameof(ConditionViewModel.TimeToLive);
 
         public override string Operation { get; } = "is";
 
@@ -29,7 +29,7 @@
 
     public sealed class ConfirmationPeriodOperation : IntervalOperationViewModel
     {
-        public override string TargetName { get; } = nameof(AlertConditionBase.ConfirmationPeriod);
+        public override string TargetName { get; } = nameof(ConditionViewModel.ConfirmationPeriod);
 
         public override string Operation { get; } = "is more than";
 

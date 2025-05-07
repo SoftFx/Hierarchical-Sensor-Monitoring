@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.PathTemplates;
 
@@ -14,7 +15,7 @@ namespace HSMServer.Core.Model
 
         private PathTemplateConverter _pathTemplateConverter = new PathTemplateConverter();
 
-        public TimeIntervalModel TTL { get; set; }
+        public TimeIntervalModel TTL { get; set; } = TimeIntervalModel.None;
 
         public TTLPolicy TTLPolicy { get; set; }
 
@@ -28,7 +29,8 @@ namespace HSMServer.Core.Model
 
         public byte SensorType { get; set; }
 
-        public bool IsMatch(string path) => _pathTemplateConverter.IsMatch(path);
+        public Guid FolderId { get; set; }
+
 
         public AlertTemplateModel()
         {
@@ -41,11 +43,13 @@ namespace HSMServer.Core.Model
             Name = entity.Name;
             Path = entity.Path;
             SensorType = entity.SensorType;
+            FolderId = entity.FolderId;
 
             if (entity.TTLPolicy != null)
             {
-                TTLPolicy = new TTLPolicy();
-                TTLPolicy.Apply(entity.TTLPolicy);
+                TimeIntervalSettingProperty ttl = new TimeIntervalSettingProperty();
+                ttl.TrySetValue(new TimeIntervalModel(entity.TTL));
+                TTLPolicy = new TTLPolicy(ttl, entity.TTLPolicy);
             }
 
             if (entity.Policies != null)
@@ -53,9 +57,9 @@ namespace HSMServer.Core.Model
                 Policies = new List<Policy>();
                 foreach (PolicyEntity item in entity.Policies)
                 {
-                    var pol = Policy.BuildPolicy(SensorType);
-                    pol.Apply(item);
-                    Policies.Add(pol);
+                    var policy = Policy.BuildPolicy(SensorType);
+                    policy.Apply(item);
+                    Policies.Add(policy);
                 }
             }
 
@@ -75,10 +79,26 @@ namespace HSMServer.Core.Model
                 Name = Name,
                 Path = Path,
                 TTLPolicy = TTLPolicy?.ToEntity(),
+                TTL = TTL?.ToEntity(),
                 Policies = Policies?.Select(x => x.ToEntity()).ToList() ?? [],
                 SensorType = SensorType,
             };
         }
 
+        public SensorType? GetSensorType() => SensorType == AnyType ? null : (SensorType)SensorType;
+
+        public bool IsMatch(BaseSensorModel sensor)
+        {
+            if (!_pathTemplateConverter.IsMatch(sensor.FullPath))
+                return false;
+
+            if (GetSensorType().HasValue && GetSensorType() != sensor.Type)
+                return false;
+
+            if (sensor.Root.FolderId != FolderId)
+                return false;
+
+            return true;
+        }
     }
 }

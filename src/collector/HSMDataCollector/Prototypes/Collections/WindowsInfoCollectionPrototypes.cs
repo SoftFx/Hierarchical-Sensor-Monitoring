@@ -42,7 +42,7 @@ namespace HSMDataCollector.Prototypes
         public WindowsLastRestartPrototype() : base()
         {
             Description = $"This sensor sends information about the time of the last OS restart." +
-                          $" The information is read using the [**WMI**](https://learn.microsoft.com/ru-ru/windows/win32/wmisdk/wmi-start-page) class '{WindowsLastRestart.WMI_OBJECT}'.";
+                          $" The information is read using WMI (Win32_OperatingSystem).";
 
             Type = SensorType.TimeSpanSensor;
         }
@@ -77,8 +77,8 @@ namespace HSMDataCollector.Prototypes
 
         public WindowsLastUpdatePrototype() : base()
         {
-            Description = "This sensor sends information about the time of the last OS update. The sensor reads Windows Logs from **Setup** category. " +
-                "The information is read using [**Event log**](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.eventlog?view=dotnet-plat-ext-7.0).";
+            Description = "This sensor sends information about the time of the last OS update." +
+                " The information is read using WMI (Win32_QuickFixEngineering).";
 
             Type = SensorType.TimeSpanSensor;
 

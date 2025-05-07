@@ -732,6 +732,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
+        public void Compact()
+        {
+            _database.Compact();
+        }
+
         public void Dispose() => _database.Dispose();
 
         private List<string> GetListOfKeys(byte[] key, string error)

@@ -25,9 +25,9 @@
 <table class="table table-striped">
   <thead>
     <tr>
-      <th scope="col">Path Template</th>
       <th scope="col">Name</th>
-      <th scope="col">Sensors</th>
+      <th scope="col">Path Template</th>
+      <th scope="col">Affected Sensors</th>
       <th scope="col">Actions</th>
     </tr>
   </thead>
@@ -35,7 +35,8 @@
       @foreach(var item in Model.Keys)
       {
       <tr>
-        <td scope="row" data-bs-toggle="tooltip" data-bs-html="true" data-bs-custom-class ="alert-template-tooltip" title="@{
+        <td scope="row">@item.Name</td>
+        <td data-bs-toggle="tooltip" data-bs-html="true" data-bs-custom-class ="alert-template-tooltip" title="@{
                                     foreach (var alerts in item.DataAlerts.Values)
                                         foreach (var alert in alerts)
                                         {
@@ -46,7 +47,6 @@
                                         }
                                 }">
         @item.PathTemplate</td>
-        <td>@item.Name</td>
         <td data-bs-toggle="tooltip" data-bs-html="true" data-bs-custom-class ="alert-template-tooltip" title="@{
                             foreach(var sensor in item.Sensors)
                             {

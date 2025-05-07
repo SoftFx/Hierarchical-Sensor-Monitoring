@@ -56,7 +56,7 @@ namespace HSMServer.Model.ViewModel
         internal NodeInfoBaseViewModel(NodeViewModel model) : this((BaseNodeViewModel)model)
         {
             EncodedId = model.EncodedId;
-            Header = $"{model.RootProduct.Name}{model.Path}";
+            Header = $"{model.RootProduct.Name}/{model.Path}";
             RootProductId = model.RootProduct.Id;
             CreationDate = model.CreationDate;
 

@@ -16,6 +16,7 @@ using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 
 
+
 namespace HSMServer.Controllers
 {
     [Authorize]
@@ -63,7 +64,7 @@ namespace HSMServer.Controllers
             {
                 Keys = templates.Select(x =>
                 {
-                    var (type, sensors) = GetAffectedSensors(x.SensorType, x.Path);
+                    var (type, sensors) = GetAffectedSensors(x.SensorType, x.Path, x.FolderId);
                     return new DataAlertTemplateViewModel(x) { Sensors = sensors };
                 }).ToList(),
             };
@@ -106,11 +107,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult UpdateTemplate(byte type, string path)
+        public IActionResult UpdateTemplate(byte type, string path, Guid folderId)
         {
-            var (sensorType, sensors) = GetAffectedSensors(type, path);
+            var (sensorType, sensors) = GetAffectedSensors(type, path, folderId);
 
-            var name = GetTemplateName(path);
+            var name = GetTemplateName(path, folderId);
 
             var response = new UpdateResponse(sensorType, sensors, name);
 
@@ -119,9 +120,24 @@ namespace HSMServer.Controllers
 
 
         [HttpGet]
-        public IActionResult New()
+        public IActionResult New(Guid? id = null)
         {
-             return View("AlertTemplate", new DataAlertTemplateViewModel());
+            var folders = _folders.GetUserFolders(CurrentUser);
+            var model = new DataAlertTemplateViewModel(folders);
+
+            if (id.HasValue)
+            {
+                var sensor = _cache.GetSensor(id.Value);
+                if (sensor != null)
+                {
+                    model.FolderId = sensor.Root.FolderId.HasValue ? sensor.Root.FolderId.Value : folders.FirstOrDefault().Id;
+                    model.PathTemplate = $"*/{sensor.Path}";
+                    model.Type = (byte)sensor.Type;
+                    model.Name = GetTemplateName(sensor.Path, model.FolderId);
+                }
+            }
+
+            return View("AlertTemplate", model);
         }
 
         [HttpGet]
@@ -132,14 +148,14 @@ namespace HSMServer.Controllers
             if (data is null)
                 return _emptyResult;
 
-            return View("AlertTemplate", new DataAlertTemplateViewModel(data));
+            return View("AlertTemplate", new DataAlertTemplateViewModel(data, _folders.GetUserFolders(CurrentUser)));
         }
 
         [HttpPost]
         public IActionResult AlertTemplate(DataAlertTemplateViewModel data)
         {
             if (_cache.GetAlertTemplateModels().Any(x => x.Name == data.Name && x.Id != data.Id))
-               ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
+                ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
 
             if (ModelState.IsValid)
             {
@@ -147,6 +163,8 @@ namespace HSMServer.Controllers
                 _cache.AddAlertTemplate(model);
                 return Ok();
             }
+
+            data = new DataAlertTemplateViewModel(data.ToModel(), _folders.GetUserFolders(CurrentUser));
 
             return PartialView("_AlertTemplate", data);
         }
@@ -160,11 +178,11 @@ namespace HSMServer.Controllers
         }
 
 
-        private (byte?, List<BaseSensorModel>) GetAffectedSensors(byte type, string path)
+        private (byte?, List<BaseSensorModel>) GetAffectedSensors(byte type, string path, Guid folder)
         {
             byte? sensorType = null;
 
-            var sensors = _cache.GetSensors(path, type == DataAlertTemplateViewModel.AnyType ? null : (SensorType)type);
+            var sensors = _cache.GetSensors(path, type == DataAlertTemplateViewModel.AnyType ? null : (SensorType)type, folder);
 
             if (sensors.Count > 0)
             {
@@ -175,17 +193,21 @@ namespace HSMServer.Controllers
             return (sensorType, sensors);
         }
 
-        private static string GetTemplateName(string path)
+        private string GetTemplateName(string path, Guid folderId)
         {
+
+            var folderName = _folders.GetUserFolders(CurrentUser).FirstOrDefault(x => x.Id == folderId)?.Name ?? string.Empty;
+
             if (!string.IsNullOrWhiteSpace(path))
             {
                 var result = path.Split('/');
 
                 if (result.Length > 0)
-                    return result[^1];
+                    return $"{folderName}/{result[^1]}";
             }
 
             return string.Empty;
         }
+
     }
 }

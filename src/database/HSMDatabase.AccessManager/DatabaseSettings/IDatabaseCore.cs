@@ -13,6 +13,7 @@ namespace HSMServer.Core.DataLayer
 
         ISnapshotDatabase Snapshots { get; }
 
+        public bool IsCompactRunning { get; }
 
         long SensorHistoryDbSize { get; }
 
@@ -124,5 +125,7 @@ namespace HSMServer.Core.DataLayer
         IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count);
 
         #endregion
+
+        void Compact();
     }
 }

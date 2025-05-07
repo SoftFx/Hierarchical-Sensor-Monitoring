@@ -6,7 +6,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class RateDataAlertViewModel : NumericDataAlertViewModel<RateValue>
     {
-        public override SensorType Type => SensorType.Boolean;
+        public override SensorType Type => SensorType.Rate;
 
         public RateDataAlertViewModel() : base() { }
 

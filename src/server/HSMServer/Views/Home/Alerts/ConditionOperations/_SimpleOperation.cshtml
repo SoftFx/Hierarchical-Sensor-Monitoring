@@ -8,10 +8,10 @@
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-
 <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
 <input class="alert-block target-input target-value @(Model.Operation.IsTargetVisible() ? string.Empty : "d-none")"
-       type="text" asp-for="Target" value="@Model.Target" placeholder="<enter a value>" required="@(Model.IsTargetRequired ? true : false)"/>
+       type="text" name="Target" value="@Model.Target" placeholder="<enter a value>" @(string.IsNullOrEmpty(Model.Pattern) ? string.Empty : $"pattern={Model.Pattern}")
+           @(Model.IsTargetRequired ? "required" : string.Empty) />
 
 
 <script>
@@ -26,14 +26,9 @@
             cache: false
         }).done(function (isTargetVisible) {
             if (isTargetVisible) {
-                target.val("");
-                target.attr('required', '@Model.IsTargetRequired' === 'True' ? true : false);
-
                 target.removeClass("d-none");
             }
             else {
-                target.attr('required', false);
-
                 target.addClass('d-none');
             }
         });

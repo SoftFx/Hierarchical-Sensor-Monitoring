@@ -16,5 +16,7 @@ namespace HSMServer.Model.DataAlerts
 
         public VersionDataAlertViewModel(Policy<VersionValue> policy, SensorNodeViewModel sensor) : base(policy, sensor) { }
 
+        protected override ConditionViewModel CreateCondition(bool isMain) => new VersionConditionViewModel(isMain);
+
     }
 }

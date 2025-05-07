@@ -7,7 +7,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class FileDataAlertViewModel : DataAlertViewModel<FileValue>
     {
-        public override SensorType Type => SensorType.Boolean;
+        public override SensorType Type => SensorType.File;
 
         public FileDataAlertViewModel() : base() { }
 

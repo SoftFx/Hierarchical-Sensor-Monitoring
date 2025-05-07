@@ -1,10 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
+using HSMServer.Folders;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
+using HSMServer.Model.Folders;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 
 namespace HSMServer.Model.DataAlertTemplates
@@ -30,6 +36,11 @@ namespace HSMServer.Model.DataAlertTemplates
 
         public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; set; } = [];
 
+        [DisplayName("Folder")]
+        public Guid FolderId {  get; set; }
+
+        public SelectList AvailableFolders { get; set; }
+
         public bool HasTimeToLive => DataAlerts.ContainsKey(TimeToLiveAlertViewModel.AlertKey);
 
         public bool IsNew { get; set; } = true;
@@ -45,6 +56,7 @@ namespace HSMServer.Model.DataAlertTemplates
             Name = model.Name;
             PathTemplate = model.Path;
             Type = model.SensorType;
+            FolderId = model.FolderId;
 
             IsNew = false;
 
@@ -54,15 +66,25 @@ namespace HSMServer.Model.DataAlertTemplates
 
             if (model.TTLPolicy != null)
             {
-                var ttl = DataAlertViewModel.BuildAlert(model.TTLPolicy);
-                ttl.IsModify = true;
-                DataAlerts.Add(TTLPolicy.Key, new List<DataAlertViewModelBase>() { ttl });
+                var interval = new TimeIntervalViewModel().FromModel(model.TTL, PredefinedIntervals.ForTimeout);
+                var ttl = new TimeToLiveAlertViewModel(model.TTLPolicy, interval) { IsModify = true };
+                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = [ttl];
             }
+
 
             if(model.Policies.Count > 0)
                 DataAlerts.Add(type, model.Policies.Select(x => { var result = DataAlertViewModel.BuildAlert(x); result.IsModify = true; return result; }).ToList());
         }
 
+        public DataAlertTemplateViewModel(AlertTemplateModel model, IEnumerable<FolderModel> availableFolders) : this(model)
+        {
+            SetAvailableFolders(availableFolders);
+        }
+
+        public DataAlertTemplateViewModel(IEnumerable<FolderModel> availableFolders) : this()
+        {
+            SetAvailableFolders(availableFolders);
+        }
 
         public AlertTemplateModel ToModel()
         {
@@ -72,19 +94,23 @@ namespace HSMServer.Model.DataAlertTemplates
                 Name = Name,
                 Path = PathTemplate,
                 SensorType = Type,
+                FolderId = FolderId,
             };
 
             result.TryApplyPathTemplate(PathTemplate, out _);
 
-            if (DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts))
-                if (alerts != null)
-                {
-                    result.TTLPolicy = new TTLPolicy();
-                    alerts[0].Id = new Guid();
-                    var update = alerts[0].ToUpdate([]);
-                    result.TTLPolicy.FullUpdate(update);
-                    result.TTL = alerts[0].Conditions[0].TimeToLive.ToModel();
-                }
+            var ttl = DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+
+            if (ttl != null)
+            {
+                if (ttl.Id == Guid.Empty)
+                    ttl.Id = Guid.NewGuid();
+
+                result.TTLPolicy = new TTLPolicy();
+                var update = ttl.ToTimeToLiveUpdate(InitiatorInfo.AlertTemplate, []);
+                result.TTLPolicy.FullUpdate(update);
+                result.TTL = ttl.Conditions?[0].TimeToLive.ToModel() ?? TimeIntervalModel.None;
+            }
 
             byte key = DataAlerts.Keys.FirstOrDefault(x => x != TimeToLiveAlertViewModel.AlertKey);
 
@@ -95,6 +121,9 @@ namespace HSMServer.Model.DataAlertTemplates
 
                 foreach (var item in alerts)
                 {
+                    if (item.Id == Guid.Empty)
+                        item.Id = Guid.NewGuid();
+
                     var policy = Policy.BuildPolicy(key);
                     var update = item.ToUpdate([]);
                     policy.UpdatePolicy(update);
@@ -105,5 +134,9 @@ namespace HSMServer.Model.DataAlertTemplates
             return result;
         }
 
+        private void SetAvailableFolders(IEnumerable<FolderModel> availableFolders)
+        {
+            AvailableFolders = new SelectList(availableFolders.OrderBy(x => x.Name), "Id", "Name", FolderId);
+        }
     }
 }

@@ -12,19 +12,21 @@ using System.IO;
 using NLog;
 using HSMCommon.Extensions;
 using System.Text;
+using HSMServer.Core.DataLayer;
 
 namespace HSMServer.Controllers
 {
     [Authorize]
     [AuthorizeIsAdmin]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService) : Controller
+    public class ConfigurationController(IServerConfig config, NotificationsCenter notifications, BackupDatabaseService backupService, IDatabaseCore database) : Controller
     {
         private readonly TelegramBot _telegramBot = notifications.TelegramBot;
 
         protected readonly Logger _logger = LogManager.GetLogger(typeof(ConfigurationController).Name);
 
-        public IActionResult Index() => View(new ConfigurationViewModel(config, _telegramBot.IsBotRunning));
+
+        public IActionResult Index() => View(new ConfigurationViewModel(config, _telegramBot.IsBotRunning, database));
 
         [HttpPost]
         public IActionResult SaveServerSettings(ServerSettingsViewModel settings)

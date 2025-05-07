@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Constants;
+using HSMCommon.Extensions;
 using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
@@ -12,8 +13,10 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Text.Json;
+using System.Xml.Linq;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -28,11 +31,11 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly IDatabaseSettings _settings;
 
-
         public IDashboardCollection Dashboards { get; }
 
         public ISnapshotDatabase Snapshots { get; }
 
+        public bool IsCompactRunning { get; private set; }
 
         public long TotalDbSize => _settings.DatabaseFolder.GetSize();
 
@@ -608,6 +611,71 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         #endregion
+
+        public void Compact()
+        {
+            if (IsCompactRunning)
+                return;
+
+            IsCompactRunning = true;
+
+            string name = string.Empty;
+
+            try
+            {
+                _logger.Info($"CompactDB start: Enviroment database {ConfigDbSize}");
+                try
+                {
+                    _environmentDatabase.Compact();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"An error was occurred while compacting database [Enviroment]: {ex.Message}", ex);
+                }
+                _logger.Info($"CompactDB stop: Enviroment database {ConfigDbSize}");
+
+                _logger.Info($"CompactDB start: Sensor values database {SensorHistoryDbSize}");
+                try
+                {
+                    foreach (var db in _sensorValuesDatabases)
+                    {
+                        name = db.Name;
+                        db.Compact();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"An error was occurred while compacting database [{name}]: {ex.Message}", ex);
+                }
+
+                _logger.Info($"CompactDB stop: Sensor values database {SensorHistoryDbSize}");
+
+                _logger.Info($"CompactDB start: Journal database {JournalDbSize}");
+                try
+                {
+                    foreach (var db in _journalValuesDatabases)
+                    {
+                        name = db.Name;
+                        db.Compact();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"An error was occurred while compacting database [{name}]: {ex.Message}", ex);
+                }
+
+                _logger.Info($"CompactDB stop: Journal database {JournalDbSize}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"An error was occurred while compacting databases: {ex.Message}", ex);
+            }
+            finally
+            {
+                IsCompactRunning = false;
+            }
+
+        }
 
         public void Dispose()
         {

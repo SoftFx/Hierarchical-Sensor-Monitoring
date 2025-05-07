@@ -18,9 +18,9 @@ namespace HSMServer.Model.DataAlerts
 {
     public class DataAlertViewModelBase
     {
-        public List<AlertConditionBase> Conditions { get; } = new();
+        public List<ConditionViewModel> Conditions { get; } = new();
 
-        public List<AlertActionBase> Actions { get; } = new();
+        public List<ActionViewModel> Actions { get; } = new();
 
 
         public bool IsDisabled { get; set; }
@@ -111,6 +111,7 @@ namespace HSMServer.Model.DataAlerts
                 Destination = actions.Destination,
                 Schedule = actions.Schedule,
                 Initiator = initiator,
+                TemplateId = TemplateId,
             };
         }
 
@@ -151,7 +152,7 @@ namespace HSMServer.Model.DataAlerts
         {
             var telegramChats = manager.GetValues().ToDictionary(k => k.Id, v => v);
 
-            string GetActionChats(AlertActionBase action) =>
+            string GetActionChats(ActionViewModel action) =>
                  string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
 
             var sb = new StringBuilder(128);
@@ -367,15 +368,15 @@ namespace HSMServer.Model.DataAlerts
         {
             FilePolicy p => new FileDataAlertViewModel(p, model),
             StringPolicy p => new StringDataAlertViewModel(p, model),
-            BooleanPolicy p => new DataAlertViewModel<BooleanValue>(p, model),
-            VersionPolicy p => new SingleDataAlertViewModel<VersionValue>(p, model),
-            TimeSpanPolicy p => new SingleDataAlertViewModel<TimeSpanValue>(p, model),
-            IntegerPolicy p => new NumericDataAlertViewModel<IntegerValue>(p, model),
-            DoublePolicy p => new NumericDataAlertViewModel<DoubleValue>(p, model),
-            RatePolicy p => new NumericDataAlertViewModel<RateValue>(p, model),
-            IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue>(p, model),
-            DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue>(p, model),
-            EnumPolicy p => new NumericDataAlertViewModel<EnumValue>(p, model),
+            BooleanPolicy p => new BooleanDataAlertViewModel(p, model),
+            VersionPolicy p => new VersionDataAlertViewModel(p, model),
+            TimeSpanPolicy p => new TimeSpanDataAlertViewModel(p, model),
+            IntegerPolicy p => new IntegerDataAlertViewModel(p, model),
+            DoublePolicy p => new DoubleDataAlertViewModel(p, model),
+            RatePolicy p => new RateDataAlertViewModel(p, model),
+            IntegerBarPolicy p => new IntegerBarDataAlertViewModel(p, model),
+            DoubleBarPolicy p => new DoubleBarDataAlertViewModel(p, model),
+            EnumPolicy p => new EnumDataAlertViewModel(p, model),
             TTLPolicy p => new TimeToLiveAlertViewModel(p, model),
             _ => null
         };

@@ -382,6 +382,10 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        public void Compact()
+        {
+            _database.Compact();
+        }
 
         public void Dispose()
         {

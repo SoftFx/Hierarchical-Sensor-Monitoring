@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Management;
+using System.Threading.Tasks;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 
@@ -8,20 +9,32 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
     {
-        public const string WMI_OBJECT = "Win32_OperatingSystem=@";
-
-        private ManagementObject _managementObject = new ManagementObject(WMI_OBJECT);
+        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
         protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(TimeSpan.FromMinutes(1));//BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
-        public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options) { }
+        protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastBootTime().ToUniversalTime();
 
-        protected override TimeSpan GetValue()
+        internal override ValueTask<bool> StartAsync()
         {
-            _managementObject.Get();
-            var installDate = ManagementDateTimeConverter.ToDateTime(_managementObject["LastBootUpTime"].ToString()).ToUniversalTime();
-            return DateTime.UtcNow - installDate;
+            SendValueAction();
+            return base.StartAsync();
+        }
+
+        private DateTime GetLastBootTime()
+        {
+            using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT LastBootUpTime FROM Win32_OperatingSystem"))
+            using (ManagementObjectCollection results = searcher.Get())
+            {
+                foreach (ManagementObject mo in results)
+                {
+                    string lastBootUpTime = mo["LastBootUpTime"].ToString();
+                    return ManagementDateTimeConverter.ToDateTime(lastBootUpTime);
+                }
+            }
+
+            throw new Exception("Can't get the date of the last reboot of Windows");
         }
     }
 }

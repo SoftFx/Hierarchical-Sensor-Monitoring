@@ -147,21 +147,29 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public List<BaseSensorModel> GetSensors(string wildcard, SensorType? sensorType = null)
+        public List<BaseSensorModel> GetSensors(string wildcard, SensorType? sensorType = null, Guid? folderId = null)
+        {
+            using (_lock.GetReadLock())
+            {
+                return GetSensorsInternal(wildcard, sensorType, folderId).ToList();
+            }
+        }
+
+        private IEnumerable<BaseSensorModel> GetSensorsInternal(string wildcard, SensorType? sensorType = null, Guid? folderId = null)
         {
             PathTemplateConverter converter = new PathTemplateConverter();
             if (!converter.ApplyNewTemplate(wildcard, out string errors))
                 return [];
 
-            using (_lock.GetReadLock())
-            {
-                var result = _sensors.Values.Where(x => converter.IsMatch(x.FullPath));
+            var result = _sensors.Values.Where(x => converter.IsMatch(x.FullPath));
 
-                if (sensorType.HasValue)
-                    result = result.Where(x => x.Type == sensorType);
+            if (folderId != null)
+                result = result.Where(x => x.Root.FolderId == folderId);
 
-                return result.ToList();
-            }
+            if (sensorType.HasValue)
+                result = result.Where(x => x.Type == sensorType);
+
+            return result;
         }
 
         public List<AccessKeyModel> GetAccessKeys()
@@ -874,8 +882,6 @@ namespace HSMServer.Core.Cache
         }
 
 
-              
-
         private List<Guid> GetFolderChats(Guid folderId)
         {
             FolderEventArgs args = new FolderEventArgs(folderId);
@@ -893,10 +899,17 @@ namespace HSMServer.Core.Cache
             SensorUpdateView(sensor);
 
             if (!sensor.Notifications.IsEmpty)
-                SendNotification(sensor.Notifications);
+            {
+                SendNotification(sensor.Id, sensor.Notifications);
+            }
+            else
+            {
+                if (!sensor.ConfirmationResult.IsEmpty)
+                    _confirmationManager.UpdateNotifications(sensor.Id, sensor.ConfirmationResult);
+            }
         }
 
-        private void SendNotification(PolicyResult result) => _confirmationManager.RegisterNotification(result);
+        private void SendNotification(Guid sensorId, PolicyResult result) => _confirmationManager.RegisterNotification(sensorId, result);
 
         private void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
@@ -1040,21 +1053,26 @@ namespace HSMServer.Core.Cache
         {
             PolicyUpdate ttlPolicyUpdate = null;
             List<PolicyUpdate> policyUpdates = [];
+            TimeIntervalModel ttl = null;
 
             if (alertTemplateModel.TTLPolicy is not null)
-                ttlPolicyUpdate = new PolicyUpdate(alertTemplateModel.TTLPolicy, InitiatorInfo.AlertTemplate) { Id = new Guid(), TemplateId = alertTemplateModel.Id };
+            {
+                ttlPolicyUpdate = new PolicyUpdate(alertTemplateModel.TTLPolicy, InitiatorInfo.AlertTemplate) { TemplateId = alertTemplateModel.Id };
+                ttl = alertTemplateModel.TTL;
+            }
 
             foreach (var policy in alertTemplateModel.Policies)
-                policyUpdates.Add(new PolicyUpdate(policy, InitiatorInfo.AlertTemplate) { Id = new Guid(), TemplateId = alertTemplateModel.Id });
+                policyUpdates.Add(new PolicyUpdate(policy, InitiatorInfo.AlertTemplate) { TemplateId = alertTemplateModel.Id });
 
             if (ttlPolicyUpdate != null || policyUpdates.Count > 0)
             {
+
                 var sensorUpdate = new SensorUpdate()
                 {
                     Id = sensor.Id,
                     Policies = policyUpdates,
                     TTLPolicy = ttlPolicyUpdate,
-                    TTL = alertTemplateModel.TTL,
+                    TTL = ttl,
                     Initiator = InitiatorInfo.AlertTemplate
                 };
 
@@ -1068,13 +1086,8 @@ namespace HSMServer.Core.Cache
         {
             _alertTemplates.GetOrAdd(alertTemplateModel.Id, () => alertTemplateModel);
 
-            foreach (var sensor in _sensors.Values)
-            {
-                if (!alertTemplateModel.IsMatch(sensor.FullPath))
-                    continue;
-
+            foreach (var sensor in GetSensorsInternal(alertTemplateModel.Path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId))
                 AddAlertFromTemplate(sensor, alertTemplateModel);
-            }
 
             _database.AddAlertTemplate(alertTemplateModel.ToEntity());
         }
@@ -1117,40 +1130,15 @@ namespace HSMServer.Core.Cache
 
         private void RemoveAlertTemplateInternal(Guid id)
         {
-            PolicyUpdate ttl = null;
-            List<PolicyUpdate> policyUpdates = [];
-            SensorUpdate update;
-
             foreach (var sensor in _sensors.Values)
             {
-                if (sensor.Policies.TimeToLive.TemplateId == id)
-                    ttl = new PolicyUpdate();
-
-                if (sensor.Policies.Any(x => x.TemplateId == id))
-                    policyUpdates = sensor.Policies.Where(x => x.TemplateId != id).Select(x => new PolicyUpdate(x)).ToList();
-
-                if (ttl != null || policyUpdates.Count > 0)
-                {
-                    update = new SensorUpdate()
-                    {
-                        Id = sensor.Id,
-                        TTLPolicy = null,
-                        Policies = policyUpdates,
-                        Initiator = InitiatorInfo.AlertTemplate,
-                    };
-
-                    if (!TryUpdateSensorInternal(update, out var error))
-                        _logger.Error($"An error was occurred while updating sensor while removing alert template [{id}]: {error}");
-
-                    ttl = null;
-                    policyUpdates.Clear();
-                }
-            }
-
-            foreach (var sensor in _sensors.Values.Where(x => x.Policies.Any(x => x.TemplateId == id)))
-            {
                 foreach (var policy in sensor.Policies.Where(x => x.TemplateId == id).ToList())
-                    sensor.Policies.RemovePolicy(policy.Id);
+                    sensor.Policies.RemovePolicy(policy.Id, InitiatorInfo.AlertTemplate);
+
+                if (sensor.Policies.TimeToLive.TemplateId == id)
+                    sensor.Policies.UpdateTTL(new PolicyUpdate() { Initiator = InitiatorInfo.AlertTemplate });
+
+                sensor.Revalidate();
 
                 SensorUpdateView(sensor);
             }
@@ -1350,9 +1338,10 @@ namespace HSMServer.Core.Cache
 
                 if (sensor.TryAddValue(storeInfo.BaseValue) && sensor.LastDbValue != null)
                     SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
+
+                SensorUpdateViewAndNotify(sensor);
             }
 
-            SensorUpdateViewAndNotify(sensor);
         }
 
 
@@ -1696,7 +1685,7 @@ namespace HSMServer.Core.Cache
 
                 foreach (var template in _alertTemplates.Values)
                 {
-                    if (template.IsMatch(sensor.FullPath))
+                    if (template.IsMatch(sensor))
                         AddAlertFromTemplate(sensor, template);
                 }
 
@@ -1826,7 +1815,7 @@ namespace HSMServer.Core.Cache
                     {
                         sensor.AddDbValue(value);
 
-                        SendNotification(sensor.Notifications.LeftOnlyScheduled());
+                        SendNotification(sensor.Id, sensor.Notifications.LeftOnlyScheduled());
 
                         if (!_snapshot.IsFinal && sensor.LastValue is not null)
                             _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
@@ -1922,7 +1911,7 @@ namespace HSMServer.Core.Cache
             var ttl = sensor.Policies.TimeToLive;
 
             if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
-                SendNotification(ttl.GetNotification(true));
+                SendNotification(sensor.Id, ttl.GetNotification(true));
         }
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
@@ -1942,7 +1931,7 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                SendNotification(ttl.GetNotification(timeout));
+                SendNotification(sensor.Id, ttl.GetNotification(timeout));
             }
 
             SensorUpdateView(sensor);

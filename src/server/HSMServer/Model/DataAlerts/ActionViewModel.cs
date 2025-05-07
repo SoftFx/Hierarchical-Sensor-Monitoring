@@ -49,8 +49,10 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public class AlertActionBase
+    public class ActionViewModel
     {
+        public static readonly string SetErrorStatus = $"set {SensorStatus.Error.ToSelectIcon()} {SensorStatus.Error.GetDisplayName()} status";
+
         public ActionType Action { get; set; }
 
 
@@ -70,12 +72,6 @@ namespace HSMServer.Model.DataAlerts
 
 
         public string DisplayComment { get; set; }
-    }
-
-
-    public class ActionViewModel : AlertActionBase
-    {
-        public static readonly string SetErrorStatus = $"set {SensorStatus.Error.ToSelectIcon()} {SensorStatus.Error.GetDisplayName()} status";
 
         private readonly Dictionary<ActionType, string> _actions = new()
         {
@@ -93,6 +89,8 @@ namespace HSMServer.Model.DataAlerts
 
         public bool IsTtl { get; }
 
+
+        public ActionViewModel() { }
 
         public ActionViewModel(bool isMain, bool isTtl)
         {

@@ -30,6 +30,8 @@
 <script>
     $(document).ready(function() {
         initForm();
+        if($('#PathTemplate').val() != '')
+            updateForm(@(Model.IsNew.ToString().ToLower()));
     });
 
     function initForm(){
@@ -37,25 +39,34 @@
             onSensorTypeChanged();
         });
 
-        $('#PathTemplate').off("change").on("change", function () {
-            updateForm();
-        });
-
         $("#submit_form").off('click').on('click', function () {
             submitForm();
+        });
+
+        $("#FolderId").off('click').on('click', function () {
+            updateForm(false);
+        });
+
+        let timeout = null;
+        document.getElementById("PathTemplate").addEventListener("input", () => {
+            clearTimeout(timeout);
+
+            timeout = setTimeout(() => {
+                updateForm();
+            }, 500);
         });
     }
 
     function onSensorTypeChanged(needUpdateForm = true) {
 
         if(needUpdateForm)
-            updateForm();
+            updateForm(false);
 
         var val = $('#Type').val();
 
         $("[id^='dataAlertsList_']").each(function () {
             var type = $(this).attr('id').replace('dataAlertsList_', '');
-            if (type != @ttlType) {
+            if (type != @ttlType && type != val) {
                 $(this).empty();
                 $(this).attr('id', 'dataAlertsList_' + val);
             }
@@ -108,28 +119,26 @@
         });
     }
 
-    function updateForm() {
+    function updateForm(needChangeType = true) {
         var type = $('#Type').val();
         var path = $('#PathTemplate').val();
+        var folderId = $('#FolderId').val();
 
         $.ajax({
-            url: `@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)?type=${type}&path=${path}`,
+            url: `@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)?type=${type}&path=${path}&folderId=${folderId}`,
             cache: false,
             success: (viewData) => {
 
                 var data = JSON.parse(viewData);
 
-                if (data['Type'] != null) {
+                if (needChangeType & data['Type'] != null) {
                     $('#Type').val(data['Type']);
                     onSensorTypeChanged(false);
                 }
 
                 var dataName = data['Name'];
                 if (dataName){
-                    var name = $('#Name').val();
-                    if (!name) {
-                         $('#Name').val(dataName);
-                    }
+                    $('#Name').val(dataName);
                 }
 
                 if (data['Sensors'] != null) {
@@ -138,10 +147,10 @@
                     $('#affected_sensors').removeClass('d-none');
                 }
                 else {
-                    $('#affected_sensors').removeClass('d-none').addClass('d-none');
                     $('#affected_sensors_cardbody').empty();
+                    $('#affected_sensors_cardbody').html("No sensors were found along the specified path.");
+                    $('#affected_sensors').removeClass('d-none');
                 }
-
             }
         });
     }
@@ -160,6 +169,7 @@
             setFormDataAlertsProperty(formData, "input", type, i, $(this), "EntityId");
             setFormDataAlertsProperty(formData, "input", type, i, $(this), "IsDisabled");
             setFormDataAlertsProperty(formData, "input", type, i, $(this), "TemplateId");
+
 
             $(this).find(`div[name='alertCondition']`).each(function (j) {
                 setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");

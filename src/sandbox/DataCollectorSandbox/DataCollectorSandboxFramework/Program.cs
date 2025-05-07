@@ -61,7 +61,7 @@ namespace DatacollectorSandbox
             var collectorOptions = new CollectorOptions()
             {
                 //ServerAddress = "hsm.dev.soft-fx.eu",
-                AccessKey = "8590351e-4752-4591-b1b9-80753d3e5542", //local key
+                AccessKey = "01ab0c6a-e5b2-4e63-825d-ec6c819d6ab8", //local key
                 Module = "Collector 3.4.0",
                 ComputerName = "LocalMachine",
             };
@@ -74,6 +74,9 @@ namespace DatacollectorSandbox
 
 
             _collector.Windows.SubscribeToWindowsServiceStatus(new ServiceSensorOptions() { ServiceName = "CaddyServer", IsHostService = false, SensorLocation = SensorLocation.Product,  SensorPath = $"{_collector.ComputerName}/CaddyService" });
+
+            var sensor = _collector.CreateStringSensor("Test", new InstantSensorOptions() { AggregateData = true, KeepHistory = TimeSpan.FromMinutes(1) });
+
             //_collector.Windows.SubscribeToWindowsServiceStatus("CaddyServer");
 
 
@@ -91,12 +94,10 @@ namespace DatacollectorSandbox
             //    },
             //    SensorLocation = SensorLocation.Module,
             //});
-
+            var sens = _collector.CreateIntSensor("test_default", new InstantSensorOptions { SensorLocation = SensorLocation.Module });
             while (true)
             {
-                _baseInt = _collector.CreateIntSensor("instant/ Test/int");
-                _baseInt.AddValue(GetInt());
-
+                sens.AddValue(1);
                 Thread.Sleep(1000);
             }
 

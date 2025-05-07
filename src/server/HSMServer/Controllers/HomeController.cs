@@ -33,6 +33,8 @@ using System.Text;
 using System.Threading.Tasks;
 using HSMServer.DTOs.Sensors;
 using TimeInterval = HSMServer.Model.TimeInterval;
+using HSMServer.Core.DataLayer;
+using System.Text.Json;
 
 namespace HSMServer.Controllers
 {
@@ -45,16 +47,19 @@ namespace HSMServer.Controllers
         private readonly IJournalService _journalService;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
+        private readonly IDatabaseCore _database;
+
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager) : base(userManager)
+                              IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager, IDatabaseCore database) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
             _journalService = journalService;
             _telegramChatsManager = telegramChatsManager;
+            _database = database;
         }
 
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -608,7 +613,7 @@ namespace HSMServer.Controllers
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
                 ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
-            
+
             var update = new SensorUpdate
             {
                 Id = sensor.Id,
@@ -676,7 +681,7 @@ namespace HSMServer.Controllers
                 (byte)SensorType.File => new FileConditionViewModel(false),
                 (byte)SensorType.String => new StringConditionViewModel(false),
                 (byte)SensorType.Boolean => new CommonConditionViewModel(false),
-                (byte)SensorType.Version => new SingleConditionViewModel(false),
+                (byte)SensorType.Version => new VersionConditionViewModel(false),
                 (byte)SensorType.TimeSpan => new SingleConditionViewModel(false),
                 (byte)SensorType.Integer => new NumericConditionViewModel(false),
                 (byte)SensorType.Double => new NumericConditionViewModel(false),
@@ -763,7 +768,7 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> UpdateSensorTableSettings(Guid sensorId, [FromBody] TableSettingsUpdateDto tableSettingsUpdateDto)
         {
             var sensor = _treeValuesCache.GetSensor(sensorId);
-            
+
             if (sensor is null)
                 return BadRequest("No sensor found");
 
@@ -853,6 +858,17 @@ namespace HSMServer.Controllers
             return await _folderManager.TryUpdate(update)
                 ? PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[update.Id]))
                 : _emptyResult;
+        }
+
+        [HttpGet]
+        public JsonResult Compact()
+        {
+            if (_database.IsCompactRunning)
+                return Json(JsonSerializer.Serialize(new { Status = "Error", Error = "Compact already running" }));
+
+            _database.Compact();
+
+            return Json(JsonSerializer.Serialize(new { Status = "Ok", Result = Math.Round(_database.TotalDbSize / (double)(1 << 20), 2, MidpointRounding.AwayFromZero) }));
         }
 
         private string GetSensorPath(string encodedId)

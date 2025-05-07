@@ -1,21 +1,20 @@
-﻿using HSMServer.Core.Model.Policies;
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using HSMServer.Core.Model.Policies;
+
 
 namespace HSMServer.Core.Model
 {
-    public readonly struct PolicyResult : IEnumerable<AlertResult>
+    public sealed class PolicyResult : IEnumerable<AlertResult>
     {
         internal static PolicyResult Ok => new();
 
-
         public Dictionary<Guid, AlertResult> Alerts { get; }
 
-        public Guid SensorId { get; }
-
-
         public bool IsEmpty => Alerts.Count == 0;
+
 
 
         public PolicyResult()
@@ -23,12 +22,8 @@ namespace HSMServer.Core.Model
             Alerts = [];
         }
 
-        internal PolicyResult(Guid sensorId) : this()
-        {
-            SensorId = sensorId;
-        }
 
-        internal PolicyResult(Guid sensorId, Policy policy) : this(sensorId)
+        internal PolicyResult(Policy policy) : this()
         {
             AddAlert(policy);
         }
@@ -36,13 +31,15 @@ namespace HSMServer.Core.Model
 
         internal void AddSingleAlert(Policy policy)
         {
-            RemoveAlert(policy);
+            ArgumentNullException.ThrowIfNull(policy);
 
-            Alerts.Add(policy.Id, new AlertResult(policy, true));
+            Alerts[policy.Id] = new AlertResult(policy, true);
         }
 
         internal void AddAlert(Policy policy)
         {
+            ArgumentNullException.ThrowIfNull(policy);
+
             var key = policy.Id;
 
             if (Alerts.TryGetValue(key, out var alert))
@@ -53,17 +50,21 @@ namespace HSMServer.Core.Model
 
         internal PolicyResult LeftOnlyScheduled()
         {
-            foreach (var (id, alert) in Alerts)
-                if (!alert.IsScheduleAlert)
-                    Alerts.Remove(id);
+            var keysToRemove = Alerts
+                .Where(pair => !pair.Value.IsScheduleAlert)
+                .Select(pair => pair.Key)
+                .ToList();
+
+            foreach (var id in keysToRemove)
+                Alerts.Remove(id);
 
             return this;
         }
 
 
-        internal void RemoveAlert(Policy policy) => Alerts.Remove(policy.Id, out var _);
+        internal void RemoveAlert(Policy policy) => Alerts.Remove(policy.Id);
 
-        internal void RemoveAlert(AlertResult alert) => Alerts.Remove(alert.PolicyId, out var _);
+        internal void RemoveAlert(AlertResult alert) => Alerts.Remove(alert.PolicyId);
 
 
         public IEnumerator<AlertResult> GetEnumerator() => Alerts.Values.GetEnumerator();

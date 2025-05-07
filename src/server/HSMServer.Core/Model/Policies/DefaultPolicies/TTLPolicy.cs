@@ -55,6 +55,20 @@ namespace HSMServer.Core.Model.Policies
             _okPolicy = new OkPolicy(this, node);
         }
 
+        internal TTLPolicy(TimeIntervalSettingProperty interval, PolicyEntity entity)
+        {
+            _ttl = interval;
+
+            Apply(entity ?? new PolicyEntity
+            {
+                Id = Id.ToByteArray(),
+                Template = DefaultTemplate,
+                Icon = DefaultIcon,
+                Destination = new PolicyDestinationEntity() { UseDefaultChats = true },
+            }, null);
+
+            _okPolicy = new OkPolicy(this, null);
+        }
 
         internal void ApplyParent(TTLPolicy parent, bool disable = false)
         {
