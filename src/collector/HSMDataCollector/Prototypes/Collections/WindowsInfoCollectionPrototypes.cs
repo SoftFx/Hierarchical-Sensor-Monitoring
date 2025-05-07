@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using HSMDataCollector.Alerts;
-using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
@@ -12,6 +11,8 @@ namespace HSMDataCollector.Prototypes
 {
     internal abstract class WindowsInfoMonitoringPrototype : MonitoringInstantSensorOptionsPrototype<WindowsInfoSensorOptions>
     {
+        protected const string _wmiUrl = "https://learn.microsoft.com/windows/win32/wmisdk/wmi-start-page";
+
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromHours(12);
 
         protected override string Category => WindowsOsInfo;
@@ -42,7 +43,7 @@ namespace HSMDataCollector.Prototypes
         public WindowsLastRestartPrototype() : base()
         {
             Description = $"This sensor sends information about the time of the last OS restart." +
-                          $" The information is read using WMI (Win32_OperatingSystem).";
+                          $" The information is read using the [**WMI**]({_wmiUrl}) class 'Win32_OperatingSystem'.";
 
             Type = SensorType.TimeSpanSensor;
         }
@@ -56,7 +57,7 @@ namespace HSMDataCollector.Prototypes
         public WindowsInstallDatePrototype() : base()
         {
             Description = $"This sensor sends information about the time of the OS install date." +
-                          $" The information is read using the [**WMI**](https://learn.microsoft.com/ru-ru/windows/win32/wmisdk/wmi-start-page) class '{WindowsInstallDate.WMI_OBJECT}'.";
+                          $" The information is read using the [**WMI**]({_wmiUrl}) class 'Win32_OperatingSystem'.";
 
             Type = SensorType.TimeSpanSensor;
 
@@ -78,7 +79,7 @@ namespace HSMDataCollector.Prototypes
         public WindowsLastUpdatePrototype() : base()
         {
             Description = "This sensor sends information about the time of the last OS update." +
-                " The information is read using WMI (Win32_QuickFixEngineering).";
+                $" The information is read using the [**WMI**]({_wmiUrl}) class 'Win32_QuickFixEngineering'.";
 
             Type = SensorType.TimeSpanSensor;
 

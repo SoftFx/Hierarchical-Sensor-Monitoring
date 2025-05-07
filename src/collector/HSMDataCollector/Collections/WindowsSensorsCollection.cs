@@ -198,7 +198,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
         public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions, InstantSensorOptions logsOptions) =>
-            AddWindowsInstallDate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
+            AddWindowsInstallDate(infoOptions).AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
 
         public IWindowsCollection AddWindowsApplicationErrorLogs(InstantSensorOptions options = null)
         {
