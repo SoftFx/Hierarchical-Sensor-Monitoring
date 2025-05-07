@@ -73,6 +73,7 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
+            _messageDeduplicator?.Dispose();
             _dataQueue?.Dispose();
             _priorityQueue?.Dispose();
             _fileQueue?.Dispose();

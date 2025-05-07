@@ -32,6 +32,6 @@ namespace HSMDataCollector.Core
 
         internal string ServerUrl => ServerAddress.TrimEnd('/');
 
-        public TimeSpan ExceptionDeduplicatorWindow { get; set; } = TimeSpan.FromMinutes(1);
+        public TimeSpan ExceptionDeduplicatorWindow { get; set; } = TimeSpan.FromHours(1);
     }
 }
