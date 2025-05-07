@@ -36,6 +36,8 @@
     var importAlerts = "@Url.Action(nameof(AlertsController.ImportAlerts), ViewConstants.AlertsController)";
 
     var getSourceSettings = "@Url.Action(nameof(DashboardsController.GetSourceSettings), ViewConstants.DashboardsController)";
+
+    var createAlertTemplate = "@Url.Action(nameof(AlertTemplatesController.New), ViewConstants.AlertTemplatesController)";
 </script>
 
 
@@ -136,12 +138,35 @@
 
     var refreshTreeTimeoutId;
     var isRefreshing = false;
+
     function updateTreeTimer() {
-        clearTimeout(refreshTreeTimeoutId);
+        if (isRefreshing) return;
+
+        const treeElement = $('#jstree');
+        const treeWrapper = document.querySelector('.tree-wrapper');
+        const scrollPosition = treeWrapper.scrollTop;
+
+        if (!treeElement.hasClass('jstree')) {
+            console.warn('Tree not initialized yet');
+            setTimeout(updateTreeTimer, 500);
+            return;
+        }
+
         isRefreshing = true;
+        clearTimeout(refreshTreeTimeoutId);
 
-        $('#jstree').jstree(true).refresh(true);
+        treeElement.off('refresh.jstree');
 
-        isRefreshing = false;
+        treeElement.on('refresh.jstree', function () {
+            treeWrapper.scrollTop = scrollPosition;
+            isRefreshing = false;
+        });
+
+        try {
+            treeElement.jstree(true).refresh(true);
+        } catch (e) {
+            console.error('Tree refresh failed:', e);
+            isRefreshing = false;
+        }
     }
 </script>

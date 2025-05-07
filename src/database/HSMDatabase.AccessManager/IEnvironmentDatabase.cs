@@ -82,5 +82,16 @@ namespace HSMDatabase.AccessManager
         void RemoveTelegramChatFromList(byte[] chatId);
 
         #endregion
+
+        #region Alert templates
+
+        List<byte[]> GetAllAlertTemplatesIds();
+        AlertTemplateEntity GetAlertTemplate(byte[] id);
+        void AddAlertTemplateIdToList(byte[] id);
+        void AddAlertTemplate(AlertTemplateEntity alertTemplate);
+        void RemoveAlertTemplate(byte[] id);
+        #endregion
+
+        void Compact();
     }
 }

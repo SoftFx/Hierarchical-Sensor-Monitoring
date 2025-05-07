@@ -3,6 +3,7 @@ using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Http;
+using NLog;
 using System;
 using System.Net;
 using System.Threading.Tasks;
@@ -19,28 +20,37 @@ namespace HSMServer.Middleware.Telemetry
 
         private protected readonly ClientStatisticsSensors _statistics = _collector.WebRequestsSensors;
 
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         public async Task<bool> TryRegisterPublicApiRequest(HttpContext context)
         {
-            if (IsPublicApiRequest(context))
+            try
             {
-                _statistics.Total.AddRequestData(context.Request);
-
-                if (TryBuildPublicApiInfo(context, out var info, out var error))
+                if (IsPublicApiRequest(context))
                 {
-                    context.SetPublicApiInfo(info);
+                    _statistics.Total.AddRequestData(context.Request);
 
-                    _statistics[info.TelemetryPath].AddRequestData(context.Request);
-                }
-                else
-                {
-                    await context.SetAccessError(error);
+                    if (TryBuildPublicApiInfo(context, out var info, out var error))
+                    {
+                        context.SetPublicApiInfo(info);
 
-                    return false;
+                        _statistics[info.TelemetryPath].AddRequestData(context.Request);
+                    }
+                    else
+                    {
+                        await context.SetAccessError(error);
+
+                        return false;
+                    }
                 }
+
+                return true;
             }
-
-            return true;
+            catch (Exception ex) 
+            {
+                _logger.Error(ex);
+                return false;
+            }
         }
 
         [Obsolete("Should be removed ater migration from v3 to v4")]

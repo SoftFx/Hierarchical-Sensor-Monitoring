@@ -9,7 +9,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook
     {
         internal void ApplyToGroup(AlertResult result)
         {
-            var groups = GetOrAdd(result.Key);
+            var groups = GetOrAdd(result.Key, new List<GroupedNotification>());
 
             foreach (var group in groups)
                 if (group.TryApply(result))

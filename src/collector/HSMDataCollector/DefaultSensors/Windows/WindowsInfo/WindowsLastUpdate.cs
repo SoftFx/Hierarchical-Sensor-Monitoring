@@ -1,5 +1,7 @@
 ﻿using System;
-using System.Diagnostics.Eventing.Reader;
+using System.Linq;
+using System.Management;
+using System.Threading.Tasks;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 
@@ -8,29 +10,29 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsLastUpdate : MonitoringSensorBase<TimeSpan>
     {
-        private const int INSTALLATION_SUCCESS_CODE = 2;
-
-        private readonly EventLogQuery _query = new EventLogQuery("SetUp", PathType.LogName) { ReverseDirection = true };
-
         protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
         public WindowsLastUpdate(SensorOptions options) : base(options) { }
 
+        internal override ValueTask<bool> StartAsync()
+        {
+            SendValueAction();
+            return base.StartAsync();
+        }
 
         private DateTime GetLastSuccessfulUpdateTime()
         {
-            using (EventLogReader reader = new EventLogReader(_query))
+            using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_QuickFixEngineering"))
+            using (var results = searcher.Get())
             {
-                EventRecord eventRecord;
-                while ((eventRecord = reader.ReadEvent()) != null)
-                {
-                    if (eventRecord.Id == INSTALLATION_SUCCESS_CODE)
-                        return eventRecord.TimeCreated.Value;
-                }
-            }
+                var lastUpdate = results.Cast<ManagementObject>()
+                    .Select(x => DateTime.Parse(x["InstalledOn"].ToString()))
+                    .OrderByDescending(x => x)
+                    .FirstOrDefault();
 
-            return RegistryInfo.GetInstallationDate();
+                return lastUpdate;
+            }
         }
 
 

@@ -26,7 +26,27 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 
         public UpdatesQueue()
         {
-            _task = Task.Run(() => ProcessingLoop(_cts.Token), _cts.Token);
+            _task = Task.Run(() =>
+            {
+                var token = _cts.Token;
+
+                while (!token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        _event.Wait(token);
+                        _event.Reset();
+
+                        while (!_queue.IsEmpty && !token.IsCancellationRequested)
+                            ItemsAdded?.Invoke(GetDataPackage());
+                    }
+                    catch (OperationCanceledException) { }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex);
+                    }
+                }
+            });
         }
 
 
@@ -51,26 +71,6 @@ namespace HSMServer.Core.SensorsUpdatesQueue
             _task.Dispose();
         }
 
-
-        private void ProcessingLoop(CancellationToken token)
-        {
-            while (!token.IsCancellationRequested)
-            {
-                try
-                {
-                    _event.Wait(token);
-                    _event.Reset();
-
-                    while (!_queue.IsEmpty && !token.IsCancellationRequested)
-                        ItemsAdded?.Invoke(GetDataPackage());
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex);
-                }
-            }
-        }
 
         private IEnumerable<StoreInfo> GetDataPackage()
         {

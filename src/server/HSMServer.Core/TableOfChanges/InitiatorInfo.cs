@@ -7,6 +7,7 @@ namespace HSMServer.Core.TableOfChanges
     {
         System = 0,
         DataCollector = 10,
+        AlertTemplate = 15,
         ServerMigration = 20,
         User = 100,
     }
@@ -16,6 +17,7 @@ namespace HSMServer.Core.TableOfChanges
     {
         public static InitiatorInfo System { get; } = new InitiatorInfo(InitiatorType.System);
 
+        public static InitiatorInfo AlertTemplate { get; } = new InitiatorInfo(InitiatorType.AlertTemplate);
 
         public InitiatorType Type { get; }
 
@@ -52,7 +54,6 @@ namespace HSMServer.Core.TableOfChanges
         public static InitiatorInfo AsUser(string username) => new(InitiatorType.User, username);
 
         public static InitiatorInfo AsCollector(string key, bool isForce) => new(InitiatorType.DataCollector, key, isForce);
-
 
         public InitiatorInfoEntity ToEntity() => new()
         {

@@ -27,6 +27,9 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="telegram-tab" data-bs-toggle="tab" data-bs-target="#telegram" type="button" role="tab" aria-controls="telegram" aria-selected="false">Telegram</button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="database-tab" data-bs-toggle="tab" data-bs-target="#database" type="button" role="tab" aria-controls="database" aria-selected="false">Database</button>
+            </li>
         </ul>
         <div class="tab-content w-100">
             <div class="tab-pane fade show active" id="server" role="tabpanel" aria-labelledby="server-tab">
@@ -51,6 +54,10 @@
                 <form id="telegramSettings_form" asp-action="@nameof(ConfigurationController.SaveTelegramSettings)">
                     @await Html.PartialAsync("_Telegram", Model.Telegram)
                 </form>
+            </div>
+
+            <div class="tab-pane fade" id="database" role="tabpanel" aria-labelledby="database-tab">
+                    @await Html.PartialAsync("_Database", Model)
             </div>
         </div>
     </div>

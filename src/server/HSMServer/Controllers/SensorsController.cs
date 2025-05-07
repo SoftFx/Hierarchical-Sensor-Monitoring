@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -43,7 +44,7 @@ namespace HSMServer.Controllers
 
         private static readonly TaskResult _invalidRequestResult = new(InvalidRequest);
 
-        private readonly ILogger<SensorsController> _logger;
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly DataCollectorWrapper _collector;
         private readonly TelemetryCollector _telemetry;
 
@@ -51,10 +52,9 @@ namespace HSMServer.Controllers
         private readonly IUpdatesQueue _updatesQueue;
 
 
-        public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector, ILogger<SensorsController> logger, ITreeValuesCache cache, TelemetryCollector telemetry)
+        public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector, ITreeValuesCache cache, TelemetryCollector telemetry)
         {
             _telemetry = telemetry;
-            _logger = logger;
 
             _updatesQueue = updatesQueue;
             _collector = dataCollector;
@@ -234,9 +234,9 @@ namespace HSMServer.Controllers
 
                 return Ok(response);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogError(e, "Failed to put data");
+                _logger.Error("Failed to put data", ex);
                 return BadRequest(values);
             }
         }
@@ -285,9 +285,9 @@ namespace HSMServer.Controllers
                 }
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogError(e, "Failed to put data");
+                _logger.Error("Failed to put data", ex);
                 return BadRequest(values);
             }
         }
@@ -317,9 +317,9 @@ namespace HSMServer.Controllers
 
                 return StatusCode(406, coreRequest.Error);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogError(e, "Failed to get history!");
+                _logger.Error("Failed to get history!", ex);
                 return BadRequest(request);
             }
         }
@@ -351,9 +351,9 @@ namespace HSMServer.Controllers
 
                 return StatusCode(406, coreRequest.Error);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogError(e, "Failed to get history!");
+                _logger.Error("Failed to get history!", ex);
                 return BadRequest(request);
             }
         }
@@ -378,11 +378,11 @@ namespace HSMServer.Controllers
 
                 return result.IsOk ? Ok() : StatusCode(406, result.Error);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
                 var message = $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}";
 
-                _logger.LogError(e, message);
+                _logger.Error(message, ex);
 
                 return BadRequest(message);
             }
@@ -422,9 +422,9 @@ namespace HSMServer.Controllers
 
                 return Ok(response);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogError(e, "Failed to update sensors!");
+                _logger.Error("Failed to update sensors!", ex);
                 return BadRequest(response);
             }
         }
@@ -451,7 +451,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to put data!");
+                _logger.Error("Failed to put data!", ex);
 
                 return BadRequest(value);
             }
@@ -488,7 +488,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception ex)
             {
-
+                _logger.Error(ex);
             }
 
             return _invalidRequestResult;

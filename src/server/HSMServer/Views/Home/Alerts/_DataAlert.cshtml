@@ -17,8 +17,12 @@
 @{
     var telegramChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v);
 
-    string GetActionChats(AlertActionBase action) =>
+    string GetActionChats(ActionViewModel action) =>
          string.Join(", ", action.Chats.Where(ch => telegramChats.ContainsKey(ch)).Select(ch => telegramChats[ch].Name));
+
+    bool isTemplate = ViewBag.IsTemplate ?? false;
+
+    ViewData["type"] = (byte)Model.Type;
 }
 
 
@@ -68,33 +72,33 @@
                 {
                     case ChatsMode.FromParent:
                     {
-                        var (parentIds, lastMode) = Model.DefaultChat.GetParentChats();
+                        var (parentIds, lastMode) = Model.DefaultChat?.GetParentChats() ?? ([], null);
 
                         string chatNames;
                         if (parentIds.Count != 0)
                             chatNames = parentIds.ToNames(telegramChats);
                         else
                             chatNames = lastMode?.GetDisplayName();
-                        
+
                         chats = $"{ChatsMode.FromParent.GetDisplayName()} ({chatNames})";
                         
                         if (action.Chats.Count !=  0)
                             chats += $", {GetActionChats(action)}";
-                        
+
                         break;
                     }
                     case ChatsMode.Custom:
-                    {
-                        if (action.Chats.Count == 0)
                         {
-                            chats = "(chats are not initialized)";
-                            color = "gray";
+                            if (action.Chats.Count == 0)
+                            {
+                                chats = "(chats are not initialized)";
+                                color = "gray";
+                            }
+                            else
+                                chats += GetActionChats(action);
+
+                            break;
                         }
-                        else
-                            chats += GetActionChats(action);
-                    
-                        break;
-                    }
                     default:
                         chats = action.ChatsMode.GetDisplayName();
                         break;
@@ -134,7 +138,8 @@
                     <span>and</span>
                 }
 
-                @Html.Raw(actions[i]);
+                @Html.Raw(actions[i])
+                ;
             }
         }
         else
@@ -150,17 +155,17 @@
 </div>
 
 <div id="alertConstructor_@Model.Id" class="dataAlertRow d-flex flex-row align-items-center @(!Model.IsModify ? "d-none" : string.Empty)">
-    <div class="card mb-2 w-100 @(Model.IsDisabled ? "disabledAlert" : string.Empty)">
+    <div class="card mb-2 w-100 @(Model.IsDisabled ? "disabledAlert" : string.Empty) @(Model.TemplateId != null ? "templatedAlert" : string.Empty)" >
         <div class="card-body py-2">
             <div class="d-flex flex-row align-items-center fullCondition">
                 @{
                     var isTtlCondition = Model.Conditions.FirstOrDefault()?.Property is AlertProperty.TimeToLive;
                 }
 
-                <div class="alert-text-block alert-add">If</div>
+                <div class="alert-text-block alert-add" style="width: 40px;">If</div>
 
                 <div name="conditionsBlock" class="d-flex flex-row flex-wrap align-items-center">
-                    @foreach (var condition in Model.Conditions) 
+                    @foreach (var condition in Model.Conditions)
                     {
                         @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionBlock.cshtml", condition)
                     }
@@ -172,8 +177,8 @@
                 }
             </div>
 
-            <div class="d-flex flex-row align-items-center alert-blocks-group fullAction @(Model.IsTtl ? "ttlAction" : string.Empty)">
-                <div class="alert-text-block alert-add">then</div>
+            <div class="d-flex flex-row align-items-top alert-blocks-group fullAction @(Model.IsTtl ? "ttlAction" : string.Empty)">
+                <div class="alert-text-block alert-add" style="width: 40px;">then</div>
 
                 <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center">
                     @foreach (var action in Model.Actions)
@@ -182,7 +187,7 @@
                     }
                 </div>
 
-                <a class="addAction"><i class="fa-solid fa-plus alert-add-button"></i></a>
+                <a class="addAction align-self-end"><i class="fa-solid fa-plus alert-add-button"></i></a>
             </div>
         </div>
     </div>
@@ -192,8 +197,11 @@
             <i class="fa-solid fa-ellipsis-vertical button-link"></i>
         </button>
         <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-            <a class="dropdown-item text-decoration-none fw-normal button-link showMessage">Show message</a>
-            <a class="dropdown-item text-decoration-none fw-normal button-link enable">@(Model.IsDisabled ? "Enable" : "Disable")</a>
+            @if(!isTemplate)
+            {
+                <a class="dropdown-item text-decoration-none fw-normal button-link showMessage">Show message</a>
+                <a class="dropdown-item text-decoration-none fw-normal button-link enable">@(Model.IsDisabled ? "Enable" : "Disable")</a>
+            }
             <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
         </div>
     </div>
@@ -201,6 +209,7 @@
     <input class="d-none" type="checkbox" asp-for="IsDisabled" value="@Model.IsDisabled">
     <input class="d-none" asp-for="Id" value="@Model.Id" />
     <input class="d-none" asp-for="EntityId" value="@Model.EntityId" />
+    <input class="d-none" asp-for="TemplateId" value="@Model.TemplateId" />
 </div>
 
 
@@ -210,7 +219,7 @@
             let element = $(this).parents("div.fullCondition:first");
 
             $.ajax({
-                url: `@Url.Action(nameof(HomeController.AddAlertCondition), ViewConstants.HomeController)?sensorId=@Model.EntityId`,
+                url: `@Url.Action(nameof(HomeController.AddAlertCondition), ViewConstants.HomeController)?type=@Model.Type`,
                 cache: false
             }).done(function (viewData) {
                 var conditionsBlock = element.find($(`div[name='conditionsBlock']`));
@@ -262,7 +271,7 @@
                 processData: false,
                 contentType: false,
                 async: true,
-                success: function (response){
+                success: function (response) {
                     if (response)
                         showToast(response, "Test message");
                 }

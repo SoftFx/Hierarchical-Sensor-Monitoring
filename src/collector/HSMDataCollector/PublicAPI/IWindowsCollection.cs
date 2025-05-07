@@ -65,6 +65,8 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddWindowsLastRestart(WindowsInfoSensorOptions options = null);
 
+        IWindowsCollection AddWindowsInstallDate(WindowsInfoSensorOptions options = null);
+
         IWindowsCollection AddWindowsVersion(WindowsInfoSensorOptions options = null);
 
         IWindowsCollection AddWindowsApplicationErrorLogs(InstantSensorOptions options = null);

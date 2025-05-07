@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
-using System.Linq;
 using System.Threading.Tasks;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
@@ -13,10 +11,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     public abstract class WindowsLogsSensorBase : SensorBase<string>
     {
-        private readonly DateTime _startTime = DateTime.UtcNow;
-        private readonly EventLogWatcher _eventLogWatcher;
-        private readonly EventLog _eventLog;
-
+        private EventLog _eventLog;
 
         protected abstract EventLogEntryType LogType { get; }
 
@@ -25,14 +20,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         protected WindowsLogsSensorBase(SensorOptions options) : base(options)
         {
-            _eventLog = new EventLog(Category, Environment.MachineName);
-
-            _eventLogWatcher = new EventLogWatcher(new EventLogQuery(Category, PathType.LogName, $"*[System[({GetCurrentLogLevel()})]]"))
-            {
-                Enabled = true,
-            };
-
-            _eventLogWatcher.EventRecordWritten += Handler;
         }
 
 
@@ -40,10 +27,12 @@ namespace HSMDataCollector.DefaultSensors.Windows
         {
             try
             {
-                foreach (EventLogEntryCollection eventLogEntry in new List<object> { _eventLog.Entries })
-                    foreach (var eventLog in eventLogEntry.Cast<EventLogEntry>())
-                        if (eventLog.TimeGenerated.ToUniversalTime() >= _startTime && eventLog.EntryType == LogType)
-                            SendValue(BuildRecordValue(eventLog.InstanceId.ToString(), eventLog.TimeGenerated, eventLog.Source, eventLog.Message));
+                _eventLog = new EventLog(Category, Environment.MachineName)
+                {
+                    EnableRaisingEvents = true,
+                };
+
+                _eventLog.EntryWritten += Handler;
             }
             catch (Exception exception)
             {
@@ -53,6 +42,17 @@ namespace HSMDataCollector.DefaultSensors.Windows
             }
 
             return base.StartAsync();
+        }
+
+        internal override ValueTask StopAsync()
+        {
+            if (_eventLog != null)
+            {
+                _eventLog.EntryWritten -= Handler;
+                _eventLog.Dispose();
+            }
+
+            return base.StopAsync();
         }
 
         private StringSensorValue BuildRecordValue(string eventId, DateTime time, string source, string message) =>
@@ -65,14 +65,15 @@ namespace HSMDataCollector.DefaultSensors.Windows
                 Comment = $"Source: {source}. Message: {message}"
             };
 
-        private void Handler(object obj, EventRecordWrittenEventArgs arg)
+        private void Handler(object obj, EntryWrittenEventArgs arg)
         {
             try
             {
-                var record = arg.EventRecord;
+                var record = arg.Entry;
 
-                if (record != null)
-                    SendValue(BuildRecordValue(record.Id.ToString(), record.TimeCreated ?? DateTime.Now, record.ProviderName, record.FormatDescription()));
+                if (record != null && record.EntryType == LogType)
+                    SendValue(BuildRecordValue(record.InstanceId.ToString(), record.TimeGenerated, record.Source, record.Message));
+
             }
             catch (Exception exception)
             {
@@ -80,17 +81,5 @@ namespace HSMDataCollector.DefaultSensors.Windows
             }
         }
 
-        private string GetCurrentLogLevel()
-        {
-            switch (LogType)
-            {
-                case EventLogEntryType.Error:
-                    return "Level=2";
-                case EventLogEntryType.Warning:
-                    return "Level=3";
-                default:
-                    return string.Empty;
-            }
-        }
     }
 }

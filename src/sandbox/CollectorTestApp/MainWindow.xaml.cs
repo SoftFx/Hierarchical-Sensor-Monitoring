@@ -21,31 +21,47 @@ namespace CollectorTestApp
     public partial class MainWindow : Window
     {
         private IDataCollector _dataCollector;
+        private const int _defaultPort = 44330;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            textAddress.Text = "https://hsm.dev.soft-fx.eu/";
-            textAccessKey.Text = "3394c79c-3c6d-4617-949a-ba8bc18b1878";
-            textPort.Text = "44333";
+            //textAddress.Text = "https://localhost/";
+            //textAccessKey.Text = "3394c79c-3c6d-4617-949a-ba8bc18b1878";
+
+            textAccessKey.Text = string.IsNullOrEmpty(Properties.Settings.Default.ProductID) ? "d5550f7b-c480-4d1a-8788-3f1e72452214" : Properties.Settings.Default.ProductID;
+            textPort.Text = string.IsNullOrEmpty(Properties.Settings.Default.Port) ? "44333" : Properties.Settings.Default.Port;
+            textAddress.Text = string.IsNullOrEmpty(Properties.Settings.Default.ServerAddress) ? "https://localhost/" : Properties.Settings.Default.ServerAddress;
             textModule.Text = "Main module";
 
-
-            //InitializeCollector();
-
-
-
+            textLog.TextChanged += (a, b) => textLog.ScrollToEnd();
             Closing += MainWindow_Closing;
         }
 
         private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
         {
+
+
             if(_dataCollector == null)
                 return;
 
             if (_dataCollector.Status == CollectorStatus.Running)
                 _dataCollector.Stop();
+        }
+
+        private void SetWaitingMode(bool waiting)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(new Action<bool>(SetWaitingMode), waiting);
+                return;
+            }
+
+            panelFog.SetValue(Panel.ZIndexProperty, waiting ? 1 : -1);
+            panelWaitingImage.SetValue(Panel.ZIndexProperty, waiting ? 2 : -1);
+            panelWaitingImage.Visibility = waiting ? Visibility.Visible : Visibility.Hidden;
+            panelFog.Visibility = waiting ? Visibility.Visible : Visibility.Hidden;
         }
 
         private int GetPortNumber()
@@ -85,8 +101,8 @@ namespace CollectorTestApp
             
             _dataCollector.Windows.AddAllDefaultSensors();
             _dataCollector.AddCustomLogger(new TextBoxLogger(paragraphLog));
+            
 
-           
             //_dataCollector.Windows.AddProcessMonitoringSensors()
             //    .AddSystemMonitoringSensors()
             //    .AddCollectorMonitoringSensors()
@@ -97,7 +113,7 @@ namespace CollectorTestApp
             //_dataCollector.Start();
         }
 
-        private const int _defaultPort = 44330;
+       
 
         private void textPort_TextChanged(object sender, TextChangedEventArgs e)
         {
@@ -126,11 +142,37 @@ namespace CollectorTestApp
             
             InitializeCollector();
 
+            SetWaitingMode(true);
+
+            _dataCollector.ToRunning += () => 
+            {
+                SetWaitingMode(false);
+            };
 
             _dataCollector.Start();
-            
+
+            try
+            {
+                SaveSettings();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Settings saving error: {ex.Message}");
+            }
 
             SetEnabled(true);
+
+           
+
+        }
+
+
+        private void SaveSettings()
+        {
+            Properties.Settings.Default.ProductID = textAccessKey.Text;
+            Properties.Settings.Default.Port = textPort.Text;
+            Properties.Settings.Default.ServerAddress = textAddress.Text;
+            Properties.Settings.Default.Save();
         }
 
         private void _dataCollector_ToStarting()
@@ -152,6 +194,13 @@ namespace CollectorTestApp
 
         private void buttonStop_Click(object sender, RoutedEventArgs e)
         {
+            SetWaitingMode(true);
+
+            _dataCollector.ToStopped += () =>
+            {
+                SetWaitingMode(false);
+            };
+
             _dataCollector?.Stop();
 
             SetEnabled(false);
@@ -168,22 +217,42 @@ namespace CollectorTestApp
 
             public void Debug(string message)
             {
+                if (!_paragraph.Dispatcher.CheckAccess())
+                {
+                    _paragraph.Dispatcher.Invoke(new Action<string>(Debug), message);
+                    return;
+                }
                 _paragraph.Inlines.Add($"[{DateTime.Now}]\tDEBUG:\t{message}{Environment.NewLine}");
             }
 
             public void Info(string message)
             {
-                _paragraph.Inlines.Add($"[{DateTime.Now}]\tINFO:\t{message}{Environment.NewLine}");
+                if (!_paragraph.Dispatcher.CheckAccess())
+                {
+                    _paragraph.Dispatcher.Invoke(new Action<string>(Info), message);
+                    return;
+                }
+                _paragraph.Inlines.Add(new Run($"[{DateTime.Now}]\tINFO:\t{message}{Environment.NewLine}") { Foreground = Brushes.RoyalBlue });
             }
 
             public void Error(string message)
             {
-                _paragraph.Inlines.Add($"[{DateTime.Now}]\tERROR:\t{message}{Environment.NewLine}");
+                if (!_paragraph.Dispatcher.CheckAccess())
+                {
+                    _paragraph.Dispatcher.Invoke(new Action<string>(Error), message);
+                    return;
+                }
+                _paragraph.Inlines.Add(new Run($"[{DateTime.Now}]\tERROR:\t{message}{Environment.NewLine}") { Foreground = Brushes.IndianRed});
             }
 
             public void Error(Exception ex)
             {
-                _paragraph.Inlines.Add($"[{DateTime.Now}]\tERROR:\t{ex}{Environment.NewLine}");
+                if (!_paragraph.Dispatcher.CheckAccess())
+                {
+                    _paragraph.Dispatcher.Invoke(new Action<Exception>(Error), ex);
+                    return;
+                }
+                _paragraph.Inlines.Add(new Run($"[{DateTime.Now}]\tERROR:\t{ex}{Environment.NewLine}") { Foreground = Brushes.IndianRed });
             }
         }
 

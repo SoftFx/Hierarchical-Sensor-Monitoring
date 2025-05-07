@@ -20,24 +20,25 @@ export class VersionPlot extends Plot<string>{
             this.customdata.push(i.tooltip);
         }
     }
-
-    getY(value: IVersionEntity) : string {
+    getY(value: IVersionEntity): string {
         let stringRepresentation = "";
 
-        tryBuild(value.major, true)
-        tryBuild(value.minor)
-        tryBuild(value.build)
-        tryBuild(value.revision)
-        tryBuild(value.majorRevision)
-        tryBuild(value.minorRevision)
-        
-        function tryBuild(value: number, q: boolean = false){
+        //VersionExtensions: version.Revision == 0 ? version.ToString(3) : version.ToString();
+
+        tryBuild(value.major, true);
+        tryBuild(value.minor);
+        tryBuild(value.build);
+
+        if (value.revision != 0)
+            tryBuild(value.revision);
+
+        function tryBuild(value: number, q: boolean = false) {
             if (value < 0)
                 stringRepresentation += '.-1';
-            else 
+            else
                 stringRepresentation += q === true ? `${value}` : `.${value}`;
         }
-        
+
         return stringRepresentation;
     }
     

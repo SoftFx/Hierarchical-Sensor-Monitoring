@@ -1,0 +1,84 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Core.Model
+@using HSMServer.Model.DataAlertTemplates
+@using HSMServer.Notifications
+
+@inject ITelegramChatsManager ChatsManager
+
+@model DataAlertTemplateTableViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+<div class="container">
+    <div class="row w-100 justify-content-center">
+        <div class="m-2">
+            <div class="d-flex justify-content-between my-2">
+                <h5>Alert Templates</h5>
+                <div class='d-flex col-md-auto'>
+                    <a href="@Html.Raw(Url.Action(nameof(AlertTemplatesController.New), ViewConstants.AlertTemplatesController))" class="btn btn-link p-0">
+                    <i class="fa-solid fa-plus"></i> Add Template
+                    </a>
+                </div>
+            </div>
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th scope="col">Name</th>
+      <th scope="col">Path Template</th>
+      <th scope="col">Affected Sensors</th>
+      <th scope="col">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+      @foreach(var item in Model.Keys)
+      {
+      <tr>
+        <td scope="row">@item.Name</td>
+        <td data-bs-toggle="tooltip" data-bs-html="true" data-bs-custom-class ="alert-template-tooltip" title="@{
+                                    foreach (var alerts in item.DataAlerts.Values)
+                                        foreach (var alert in alerts)
+                                        {
+                                                    alert.IsModify = false;
+                                                    @alert.ToString(ChatsManager);
+                                                    //@await Html.PartialAsync("~Views/Home/Alerts/_DataAlert.cshtml", alert);
+                                                        <br />
+                                        }
+                                }">
+        @item.PathTemplate</td>
+        <td data-bs-toggle="tooltip" data-bs-html="true" data-bs-custom-class ="alert-template-tooltip" title="@{
+                            foreach(var sensor in item.Sensors)
+                            {
+                                @sensor.FullPath;
+                                <br />
+                            }
+                        }">@item.Sensors.Count</td>
+        <td>
+            <div>
+                <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                    <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+                    <a class="dropdown-item text-decoration-none fw-normal button-link" href=@Url.Action(nameof(AlertTemplatesController.Edit), ViewConstants.AlertTemplatesController, new { id = @item.Id })>Edit</a>
+                    <a class="dropdown-item text-decoration-none fw-normal button-link" href=@Url.Action(nameof(AlertTemplatesController.Remove), ViewConstants.AlertTemplatesController, new { id = @item.Id })>Remove</a>
+                </div>
+            </div>
+        </td>
+      </tr>
+      }
+
+  </tbody>
+</table>
+
+        </div>
+    </div>
+</div>
+
+
+<script>
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+</script>

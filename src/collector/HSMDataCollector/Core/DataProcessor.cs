@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.DefaultSensors.Diagnostic;
+using HSMDataCollector.Exceptions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMDataCollector.SyncQueue.SpecificQueue;
@@ -21,6 +22,7 @@ namespace HSMDataCollector.Core
         private readonly FileQueueProcessor _fileQueue;
         private readonly CommandQueueProcessor _commandQueue;
         private readonly LoggerManager _logger;
+        private readonly MessageDeduplicator _messageDeduplicator;
 
         private DefaultSensorsCollection DefaultSensors => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? (DefaultSensorsCollection)SensorStorage.Windows : (DefaultSensorsCollection)SensorStorage.Unix;
 
@@ -38,6 +40,9 @@ namespace HSMDataCollector.Core
             _priorityQueue = new PriorityDataQueueProcessor(options, this, logger);
             _fileQueue     = new FileQueueProcessor(options, this, logger);
             _commandQueue  = new CommandQueueProcessor(options, this, logger);
+            _messageDeduplicator = new MessageDeduplicator((msg) => { _logger.Error(msg);
+                                                                      DefaultSensors?.CollectorErrors?.SendCollectorError(msg);
+                                                                    }, options.ExceptionDeduplicatorWindow);
         }
 
 
@@ -68,6 +73,7 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
+            _messageDeduplicator?.Dispose();
             _dataQueue?.Dispose();
             _priorityQueue?.Dispose();
             _fileQueue?.Dispose();
@@ -92,8 +98,7 @@ namespace HSMDataCollector.Core
         public void AddException(string sensorPath, Exception ex)
         {
             var msg = $"Sensor: {sensorPath}, {ex}";
-            _logger.Error(msg);
-            DefaultSensors?.CollectorErrors?.SendCollectorError(msg);
+            _messageDeduplicator.AddMessage(msg);
         }
 
         public void AddPackageInfo(string name, PackageInfo info)

@@ -4,7 +4,7 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class DefaultPolicyBase : Policy
     {
-        internal new PolicyResult PolicyResult => new(Sensor.Id, this); //policy always should generate new Result
+        internal new PolicyResult PolicyResult => new(this); //policy always should generate new Result
 
 
         internal override bool UseScheduleManagerLogic => false;

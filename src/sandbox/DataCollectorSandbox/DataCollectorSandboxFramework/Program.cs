@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -52,7 +53,6 @@ namespace DatacollectorSandbox
         static async Task Main(string[] args)
         {
 
-
             var tokenSource = new CancellationTokenSource();
 
 
@@ -61,7 +61,7 @@ namespace DatacollectorSandbox
             var collectorOptions = new CollectorOptions()
             {
                 //ServerAddress = "hsm.dev.soft-fx.eu",
-                AccessKey = "52e9b823-b50b-4c06-8640-ed79172a9fc1", //local key
+                AccessKey = "01ab0c6a-e5b2-4e63-825d-ec6c819d6ab8", //local key
                 Module = "Collector 3.4.0",
                 ComputerName = "LocalMachine",
             };
@@ -74,23 +74,32 @@ namespace DatacollectorSandbox
 
 
             _collector.Windows.SubscribeToWindowsServiceStatus(new ServiceSensorOptions() { ServiceName = "CaddyServer", IsHostService = false, SensorLocation = SensorLocation.Product,  SensorPath = $"{_collector.ComputerName}/CaddyService" });
+
+            var sensor = _collector.CreateStringSensor("Test", new InstantSensorOptions() { AggregateData = true, KeepHistory = TimeSpan.FromMinutes(1) });
+
             //_collector.Windows.SubscribeToWindowsServiceStatus("CaddyServer");
 
 
-           // bool result = _collector.Windows.UnsubscribeWindowsServiceStatus(new ServiceSensorOptions() { IsHostService = false, SensorLocation = SensorLocation.Product, SensorPath = $"{_collector.ComputerName}/CaddyService" });
+            // bool result = _collector.Windows.UnsubscribeWindowsServiceStatus(new ServiceSensorOptions() { IsHostService = false, SensorLocation = SensorLocation.Product, SensorPath = $"{_collector.ComputerName}/CaddyService" });
 
             //Console.WriteLine(result);
 
-            var sensor = _collector.CreateEnumSensor($"enum/test", new EnumSensorOptions
+            //var sensor = _collector.CreateEnumSensor($"enum/test", new EnumSensorOptions
+            //{
+            //    EnumOptions = new List<HSMSensorDataObjects.EnumOption> {
+            //        new HSMSensorDataObjects.EnumOption(1, "Stopped", " Service Stopped ", Color.FromArgb(0xFF0000)),
+            //        new HSMSensorDataObjects.EnumOption(2, "Starting", "Service starting", Color.FromArgb(0xBFFFBF)),
+            //        new HSMSensorDataObjects.EnumOption(3, "Started", "Service started", Color.FromArgb(0x00FF00)),
+            //        new HSMSensorDataObjects.EnumOption(4, "Stopping", "Service Stopping", Color.FromArgb(0x809EFF)),
+            //    },
+            //    SensorLocation = SensorLocation.Module,
+            //});
+            var sens = _collector.CreateIntSensor("test_default", new InstantSensorOptions { SensorLocation = SensorLocation.Module });
+            while (true)
             {
-                EnumOptions = new List<HSMSensorDataObjects.EnumOption> {
-                    new HSMSensorDataObjects.EnumOption(1, "Stopped", " Service Stopped ", Color.FromArgb(0xFF0000)),
-                    new HSMSensorDataObjects.EnumOption(2, "Starting", "Service starting", Color.FromArgb(0xBFFFBF)),
-                    new HSMSensorDataObjects.EnumOption(3, "Started", "Service started", Color.FromArgb(0x00FF00)),
-                    new HSMSensorDataObjects.EnumOption(4, "Stopping", "Service Stopping", Color.FromArgb(0x809EFF)),
-                },
-                SensorLocation = SensorLocation.Module,
-            }); ;
+                sens.AddValue(1);
+                Thread.Sleep(1000);
+            }
 
 
             //while (true)
@@ -118,8 +127,8 @@ namespace DatacollectorSandbox
             sens4.AddValue(1);
 
 
-            Console.ReadKey();
-            return;
+            //Console.ReadKey();
+            //return;
 
             var instantPriority = new InstantSensorOptions()
             {

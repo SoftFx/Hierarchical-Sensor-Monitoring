@@ -67,6 +67,8 @@ namespace HSMServer.Core.Model
 
         public PolicyResult PolicyResult => Policies.PolicyResult;
 
+        public PolicyResult ConfirmationResult => Policies.ConfimationResult;
+
 
         public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(HasData ? LastUpdate : CreationDate) ?? false;
 

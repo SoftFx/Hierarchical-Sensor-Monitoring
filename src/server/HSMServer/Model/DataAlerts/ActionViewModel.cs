@@ -49,8 +49,10 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public class AlertActionBase
+    public class ActionViewModel
     {
+        public static readonly string SetErrorStatus = $"set {SensorStatus.Error.ToSelectIcon()} {SensorStatus.Error.GetDisplayName()} status";
+
         public ActionType Action { get; set; }
 
 
@@ -70,12 +72,6 @@ namespace HSMServer.Model.DataAlerts
 
 
         public string DisplayComment { get; set; }
-    }
-
-
-    public class ActionViewModel : AlertActionBase
-    {
-        public static readonly string SetErrorStatus = $"set {SensorStatus.Error.ToSelectIcon()} {SensorStatus.Error.GetDisplayName()} status";
 
         private readonly Dictionary<ActionType, string> _actions = new()
         {
@@ -87,24 +83,30 @@ namespace HSMServer.Model.DataAlerts
 
         public List<SelectListItem> Actions { get; }
 
-        public NodeViewModel Node { get; }
+        public HashSet<Guid> AvailableChats { get; } = [];
 
         public bool IsMain { get; }
 
         public bool IsTtl { get; }
 
 
-        public ActionViewModel(bool isMain, bool isTtl, NodeViewModel node)
+        public ActionViewModel() { }
+
+        public ActionViewModel(bool isMain, bool isTtl)
         {
             IsMain = isMain;
             IsTtl = isTtl;
             Actions = _actions.ToSelectedItems(k => k.Value, v => v.Key.ToString());
-            Node = node;
+
 
             Action = ActionType.SendNotification;
             ScheduleStartTime = DateTime.UtcNow.Ceil(TimeSpan.FromHours(1));
         }
 
+        public ActionViewModel(bool isMain, bool isTtl, HashSet<Guid> availableChats) : this (isMain, isTtl)
+        {
+            AvailableChats = availableChats;
+        }
 
         public bool ChatIsSelected(TelegramChat chat) => Chats?.Contains(chat.Id) ?? false;
     }

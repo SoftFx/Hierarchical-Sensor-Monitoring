@@ -43,7 +43,7 @@
         </ul>
         <div class="tab-content w-100">
             <div class="tab-pane fade show active" id="general" role="tabpanel" aria-labelledby="general-tab">
-                <form method="post" asp-action="@(isAdd ? nameof(FoldersController.AddFolder) : nameof(FoldersController.EditFolder))">
+                <form method="post" asp-action="@(isAdd ? nameof(FoldersController.AddFolder) : nameof(FoldersController.EditFolder))" id="mainForm">
                     @await Html.PartialAsync("_General", Model)
                 </form>
             </div>
@@ -73,6 +73,51 @@
 
 
 <script>
+
+    var isDirty = false;
+
+
+    $(document).ready(function () {
+        $('form').each(function () {
+            $(this).find(':input').not(':button, :submit, :reset, :hidden').change(function () {
+                isDirty = true;
+            });
+        });
+
+        $(this).find('select').each(function () {
+            $(this).data('initial-value', $(this).val());
+
+            $(this).on('change', function () {
+                var currentValue = $(this).val();
+                var initialValue = $(this).data('initial-value');
+
+                if (currentValue !== initialValue) {
+                    isDirty = true;
+                }
+            });
+        });
+
+        $('form').submit(function () {
+            isDirty = false;
+        });
+
+        $('a[href="javascript:removeFolder();"]').click(function () {
+            isDirty = false;
+        });
+    });
+
+
+    window.onbeforeunload = function () {
+        if (isDirty) {
+            return "You have unsaved changes. Are you sure you want to leave this page?";
+        }
+    };
+
+
+    function setFormDirty() {
+        isDirty = true;
+    }
+
     function removeFolder() {
         showConfirmationModal(
             `Removing folder '@Model.Name'`,
@@ -83,7 +128,8 @@
                     url: `@Url.Action(nameof(FoldersController.RemoveFolder), ViewConstants.FoldersController)?FolderId=@Model.Id`,
                     cache: false,
                     async: true,
-                    success: function() {
+                    success: function () {
+                        isDirty = false;
                         window.location.href = "@Url.Action(nameof(ProductController.Index), ViewConstants.ProductController)";
                     }
                 });
@@ -91,3 +137,4 @@
         );
     }
 </script>
+

@@ -127,6 +127,7 @@ namespace HSMServer.Extensions
                 AlertProperty.Comment => new CommentOperation(),
 
                 AlertProperty.Value when condition is StringConditionViewModel => new StringOperation(),
+                AlertProperty.Value when condition is VersionConditionViewModel => new VersionOperation(),
 
                 AlertProperty.Value or AlertProperty.EmaValue or
                 AlertProperty.Min or AlertProperty.Max or AlertProperty.Mean or AlertProperty.Count or AlertProperty.FirstValue or AlertProperty.LastValue or
