@@ -38,7 +38,7 @@ namespace HSMDataCollector.Exceptions
 
         public void AddMessage(string message, TimeSpan? window = null)
         {
-            if (window == null && _deduplicationWindow == TimeSpan.Zero)
+            if (_deduplicationWindow == TimeSpan.Zero)
                 _action?.Invoke(message);
 
             var now = DateTime.UtcNow;

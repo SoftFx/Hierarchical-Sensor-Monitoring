@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Management;
+using System.Threading.Tasks;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 
@@ -8,21 +9,38 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsInstallDate : MonitoringSensorBase<TimeSpan>
     {
-        public const string WMI_OBJECT = "Win32_OperatingSystem=@";
 
-        private ManagementObject _managementObject = new ManagementObject(WMI_OBJECT);
-
-        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(TimeSpan.FromMinutes(1));//BarTimeHelper.GetTimerDueTime(PostTimePeriod);
+        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
         public WindowsInstallDate(WindowsInfoSensorOptions options) : base(options) { }
 
 
-        protected override TimeSpan GetValue()
+        protected override TimeSpan GetValue() => DateTime.UtcNow - GetWindowsInstallDate().ToUniversalTime();
+
+        internal override ValueTask<bool> StartAsync()
         {
-            _managementObject.Get();
-            var installDate = ManagementDateTimeConverter.ToDateTime(_managementObject["InstallDate"].ToString()).ToUniversalTime();
-            return DateTime.UtcNow - installDate;
+            SendValueAction();
+            return base.StartAsync();
+        }
+
+        public static DateTime GetWindowsInstallDate()
+        {
+
+            using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT InstallDate FROM Win32_OperatingSystem"))
+            using (ManagementObjectCollection result = searcher.Get())
+            {
+                foreach (ManagementObject os in result)
+                {
+                    if (os["InstallDate"] != null)
+                    {
+                        string installDateString = os["InstallDate"].ToString();
+                        return ManagementDateTimeConverter.ToDateTime(installDateString);
+                    }
+                }
+            }
+
+            throw new Exception("Install date not found");
         }
     }
 }
