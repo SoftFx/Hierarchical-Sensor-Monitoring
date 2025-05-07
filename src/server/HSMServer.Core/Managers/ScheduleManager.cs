@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using HSMCommon.Extensions;
 using HSMServer.Core.Model.Policies;
 
@@ -7,73 +9,85 @@ namespace HSMServer.Core.Managers
 {
     internal sealed class ScheduleManager : BaseTimeManager
     {
-        private readonly Dictionary<DateTime, Dictionary<Guid, ScheduleAlertMessage>> _storage = new();
-
-        private readonly object _lock = new object();
+        private readonly ConcurrentDictionary<DateTime, ConcurrentDictionary<Guid, ScheduleAlertMessage>> _storage = new();
+        private readonly object _flushLock = new object();
 
         internal void ProcessMessage(AlertMessage message)
         {
+            _logger.Info("ProcessMessage started");
 
-            _logger.Info("Send telegram: ProcessMessage enter");
-            lock (_lock)
+            var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
+            var sendFirstAlerts = new List<AlertResult>();
+            var sensorId = message.SensorId;
+
+            if (notApplyAlerts.Count > 0)
             {
-                try
-                {
-                    var sendFirstAlerts = new List<AlertResult>(1 << 2);
-                    var sensorId = message.SensorId;
-
-                    var (notApplyAlerts, applyAlerts) = message.SplitByCondition(u => u.IsScheduleAlert);
-
-                    _logger.Info($"Send telegram: ProcessMessage SendAlertMessage notApplyAlerts: {notApplyAlerts.Count}");
-                    SendAlertMessage(sensorId, notApplyAlerts);
-
-                    foreach (var alert in applyAlerts)
-                    {
-
-                        var grouppedAlerts = _storage.GetOrAdd(alert.SendTime);
-
-                        if (!grouppedAlerts.TryGetValue(sensorId, out var sensorGroup))
-                        {
-                            sensorGroup = new ScheduleAlertMessage(sensorId);
-                            grouppedAlerts.TryAdd(sensorId, sensorGroup);
-                        }
-
-                        if (sensorGroup.ShouldSendFirstMessage(alert))
-                            sendFirstAlerts.Add(alert);
-
-                        sensorGroup.AddAlert(alert);
-                    }
-
-                    _logger.Info($"Send telegram: ProcessMessage SendAlertMessage sendFirstAlerts: {sendFirstAlerts.Count}");
-                    SendAlertMessage(sensorId, sendFirstAlerts);
-                }
-                catch (Exception ex) 
-                {
-                    _logger.Error(ex);
-                }
+                _logger.Info($"Sending {notApplyAlerts.Count} immediate alerts");
+                SendAlertMessage(sensorId, notApplyAlerts);
             }
-        }
 
-
-        internal override void FlushMessages()
-        {
-            lock (_lock)
+            foreach (var alert in applyAlerts)
             {
                 try
                 {
-                    foreach (var (sendTime, branch) in _storage)
-                        if (sendTime < DateTime.UtcNow && _storage.Remove(sendTime, out _))
-                        {
-                            foreach (var (_, message) in branch)
-                                SendAlertMessage(message.FilterMessage());
+                    var timeGroup = _storage.GetOrAdd(alert.SendTime,
+                        _ => new ConcurrentDictionary<Guid, ScheduleAlertMessage>());
 
-                            branch.Clear();
-                        }
+                    var sensorGroup = timeGroup.GetOrAdd(sensorId,
+                        id => new ScheduleAlertMessage(id));
+
+                    if (sensorGroup.ShouldSendFirstMessage(alert))
+                        sendFirstAlerts.Add(alert);
+
+                    sensorGroup.AddAlert(alert);
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error(ex);
+                    _logger.Error($"Failed to process alert for {sensorId}", ex);
                 }
+            }
+
+            if (sendFirstAlerts.Count > 0)
+            {
+                _logger.Info($"Sending {sendFirstAlerts.Count} first alerts");
+                SendAlertMessage(sensorId, sendFirstAlerts);
+            }
+        }
+
+        internal override void FlushMessages()
+        {
+            if (_storage.IsEmpty)
+                return;
+
+            try
+            {
+                var currentTime = DateTime.UtcNow;
+                var messagesToSend = new List<AlertMessage>();
+
+                lock (_flushLock)
+                {
+
+                    foreach (var (sendTime, timeGroup) in _storage)
+                    {
+                        if (sendTime < currentTime && _storage.TryRemove(sendTime, out _))
+                        {
+                            foreach (var (sensorId, message) in timeGroup)
+                            {
+                                var filtered = message.FilterMessage();
+                                if (!filtered.IsEmpty)
+                                    messagesToSend.Add(filtered);
+                            }
+                        }
+                    }
+                }
+
+                Parallel.ForEach(messagesToSend,
+                    new ParallelOptions { MaxDegreeOfParallelism = 4 },
+                    SendAlertMessage);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Flush failed", ex);
             }
         }
     }

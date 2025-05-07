@@ -882,8 +882,6 @@ namespace HSMServer.Core.Cache
         }
 
 
-              
-
         private List<Guid> GetFolderChats(Guid folderId)
         {
             FolderEventArgs args = new FolderEventArgs(folderId);
@@ -901,10 +899,17 @@ namespace HSMServer.Core.Cache
             SensorUpdateView(sensor);
 
             if (!sensor.Notifications.IsEmpty)
-                SendNotification(sensor.Notifications);
+            {
+                SendNotification(sensor.Id, sensor.Notifications);
+            }
+            else
+            {
+                if (!sensor.ConfirmationResult.IsEmpty)
+                    _confirmationManager.UpdateNotifications(sensor.Id, sensor.ConfirmationResult);
+            }
         }
 
-        private void SendNotification(PolicyResult result) => _confirmationManager.RegisterNotification(result);
+        private void SendNotification(Guid sensorId, PolicyResult result) => _confirmationManager.RegisterNotification(sensorId, result);
 
         private void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
@@ -1810,7 +1815,7 @@ namespace HSMServer.Core.Cache
                     {
                         sensor.AddDbValue(value);
 
-                        SendNotification(sensor.Notifications.LeftOnlyScheduled());
+                        SendNotification(sensor.Id, sensor.Notifications.LeftOnlyScheduled());
 
                         if (!_snapshot.IsFinal && sensor.LastValue is not null)
                             _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
@@ -1906,7 +1911,7 @@ namespace HSMServer.Core.Cache
             var ttl = sensor.Policies.TimeToLive;
 
             if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
-                SendNotification(ttl.GetNotification(true));
+                SendNotification(sensor.Id, ttl.GetNotification(true));
         }
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
@@ -1926,7 +1931,7 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                SendNotification(ttl.GetNotification(timeout));
+                SendNotification(sensor.Id, ttl.GetNotification(timeout));
             }
 
             SensorUpdateView(sensor);
