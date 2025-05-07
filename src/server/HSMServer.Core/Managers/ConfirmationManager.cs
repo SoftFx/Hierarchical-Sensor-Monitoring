@@ -45,7 +45,16 @@ namespace HSMServer.Core.Confirmation
                             newAlerts.Remove(alertId);
 
                             if (alert.IsStatusIsChangeResult)
-                                _lastStatusUpdates.Add(alertId, alert);
+                            {
+                                /*
+                                 * 2025-05-07 07:24:53.1832||ERROR|HSMServer.Core.Managers.BaseTimeManager| System.ArgumentException: An item with the same key has already been added. Key: d3c9178e-36d9-4335-a1ca-a701ec0f9aa7 System.ArgumentException: An item with the same key has already been added. Key: d3c9178e-36d9-4335-a1ca-a701ec0f9aa7
+                                        at System.Collections.Generic.Dictionary`2.TryInsert(TKey key, TValue value, InsertionBehavior behavior)
+                                        at HSMServer.Core.Confirmation.ConfirmationManager.RegisterNotification(PolicyResult policyResult) in /home/runner/work/Hierarchical-Sensor-Monitoring/Hierarchical-Sensor-Monitoring/src/server/HSMServer.Core/Managers/ConfirmationManager.cs:line 48|
+                                 * */
+
+                                //_lastStatusUpdates.Add(alertId, alert);
+                                _lastStatusUpdates[alertId] = alert;
+                            }
                         }
                     }
 
