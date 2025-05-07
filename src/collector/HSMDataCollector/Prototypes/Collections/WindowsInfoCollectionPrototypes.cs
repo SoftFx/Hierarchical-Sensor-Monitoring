@@ -48,6 +48,27 @@ namespace HSMDataCollector.Prototypes
         }
     }
 
+    internal sealed class WindowsInstallDatePrototype : WindowsInfoMonitoringPrototype
+    {
+        protected override string SensorName => "Install date";
+
+
+        public WindowsInstallDatePrototype() : base()
+        {
+            Description = $"This sensor sends information about the time of the OS install date." +
+                          $" The information is read using the [**WMI**](https://learn.microsoft.com/ru-ru/windows/win32/wmisdk/wmi-start-page) class '{WindowsInstallDate.WMI_OBJECT}'.";
+
+            Type = SensorType.TimeSpanSensor;
+
+            Alerts = new List<InstantAlertTemplate>()
+            {
+                AlertsFactory.IfValue(AlertOperation.GreaterThan, TimeSpan.FromDays(365*4))
+                             .ThenSendNotification($"[$product] $sensor. Windows was installed more than $value ago")
+                             .AndSetIcon(AlertIcon.Warning).Build()
+            };
+        }
+    }
+
 
     internal sealed class WindowsLastUpdatePrototype : WindowsInfoMonitoringPrototype
     {

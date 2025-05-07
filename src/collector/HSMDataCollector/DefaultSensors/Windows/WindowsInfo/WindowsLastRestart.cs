@@ -11,8 +11,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
     {
         protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
-
-        public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options) { }
+        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(TimeSpan.FromMinutes(1));//BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
         protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastBootTime().ToUniversalTime();
