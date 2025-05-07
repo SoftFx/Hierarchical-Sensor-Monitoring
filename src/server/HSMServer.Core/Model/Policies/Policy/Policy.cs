@@ -166,7 +166,7 @@ namespace HSMServer.Core.Model.Policies
 
             Comment = State.BuildComment();
 
-            PolicyResult = new PolicyResult(Sensor.Id, this);
+            PolicyResult = new PolicyResult(this);
             SensorResult = new SensorResult(Status, Comment);
 
             return Comment;

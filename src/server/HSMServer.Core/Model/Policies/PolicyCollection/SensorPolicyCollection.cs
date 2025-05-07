@@ -19,6 +19,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal protected PolicyResult NotificationResult { get; protected set; } = PolicyResult.Ok;
 
+        internal protected PolicyResult ConfimationResult { get; protected set; } = PolicyResult.Ok;
 
         internal Action<ActionType, Policy> Uploaded;
         internal Action<BaseSensorModel, bool> SensorExpired;
@@ -40,6 +41,7 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
             NotificationResult = PolicyResult.Ok;
+            ConfimationResult = PolicyResult.Ok;
         }
 
 
@@ -65,8 +67,8 @@ namespace HSMServer.Core.Model.Policies
             _sensor = (BaseSensorModel)_model;
             _typePolicy = new CorrectTypePolicy<T>(_sensor);
 
-            NotificationResult = new(sensor.Id);
-            PolicyResult = new(sensor.Id);
+            NotificationResult = new();
+            PolicyResult = new();
 
             base.BuildDefault(sensor);
         }
@@ -145,13 +147,18 @@ namespace HSMServer.Core.Model.Policies
         protected override bool CalculateStorageResult(ValueType value, bool isLastValue, bool isReplace)
         {
             SensorResult = SensorResult.Ok;
-            PolicyResult = new(_sensor.Id);
-            NotificationResult = new(_sensor.Id);
+            PolicyResult = new();
+            NotificationResult = new();
+            ConfimationResult = new();
 
             if (!value.Status.IsOfftime() && _sensor.State != SensorState.Muted)
             {
                 foreach (var policy in _storage.Values)
-                    if (!policy.IsDisabled && policy.Validate(value))
+                {
+                    if (policy.IsDisabled)
+                        continue;
+
+                    if (policy.Validate(value))
                     {
                         PolicyResult.AddAlert(policy);
 
@@ -163,6 +170,12 @@ namespace HSMServer.Core.Model.Policies
                         else
                             NotificationResult.AddAlert(policy);
                     }
+                    else
+                    {
+                        if (policy.ConfirmationPeriod is not null)
+                            ConfimationResult.AddAlert(policy);
+                    }
+                }
             }
 
             SensorTimeout(value);
@@ -174,7 +187,9 @@ namespace HSMServer.Core.Model.Policies
         internal override void AddPolicy<T>(T policy)
         {
             if (policy is PolicyType typedPolicy)
+            {
                 _storage.TryAdd(policy.Id, typedPolicy);
+            }
         }
 
         internal override void RemovePolicy(Guid policyId, InitiatorInfo initiator = null)
