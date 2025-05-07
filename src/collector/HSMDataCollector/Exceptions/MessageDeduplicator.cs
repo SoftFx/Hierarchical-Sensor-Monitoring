@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using System.Threading;
-using System.Linq;
 using System.Collections.Generic;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Threading;
-
 
 
 namespace HSMDataCollector.Exceptions
@@ -29,14 +26,21 @@ namespace HSMDataCollector.Exceptions
             _messageCache = new Dictionary<string, (DateTime, int)>();
             _deduplicationWindow = window;
 
-            _cancellationTokenSource = new CancellationTokenSource();
-            var now = DateTime.UtcNow;
-            _task = PeriodicTask.Run(Cleanup, now.Ceil(window) - now, window, _cancellationTokenSource.Token);
+            if (window != TimeSpan.Zero)
+            {
+                _cancellationTokenSource = new CancellationTokenSource();
+                var now = DateTime.UtcNow;
+
+                _task = PeriodicTask.Run(Cleanup, now.Ceil(window) - now, window, _cancellationTokenSource.Token);
+            }
         }
 
 
         public void AddMessage(string message, TimeSpan? window = null)
         {
+            if (window == null && _deduplicationWindow == TimeSpan.Zero)
+                _action?.Invoke(message);
+
             var now = DateTime.UtcNow;
             var expiryTime = now + (window ?? _deduplicationWindow);
             lock (_lock)
@@ -64,10 +68,10 @@ namespace HSMDataCollector.Exceptions
 
         public void Dispose()
         {
-            _cancellationTokenSource.Cancel();
-            _task.Wait();
-            _task.Dispose();
-            _cancellationTokenSource.Dispose();
+            _cancellationTokenSource?.Cancel();
+            _task?.Wait();
+            _task?.Dispose();
+            _cancellationTokenSource?.Dispose();
         }
 
         private void Cleanup()
