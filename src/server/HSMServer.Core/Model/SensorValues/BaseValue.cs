@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
@@ -135,8 +136,9 @@ namespace HSMServer.Core.Model
 
         protected override bool IsEqual(BaseValue value)
         {
-            return base.IsEqual(value) && value is BaseValue<T> valueT &&
-                   ((Value is null && valueT.Value is null) || (Value?.Equals(valueT.Value) ?? false));
+            return base.IsEqual(value) &&
+                value is BaseValue<T> other &&
+                EqualityComparer<T>.Default.Equals(Value, other.Value);
         }
     }
 }
