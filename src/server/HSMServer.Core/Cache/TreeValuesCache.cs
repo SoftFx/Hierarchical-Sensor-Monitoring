@@ -741,13 +741,19 @@ namespace HSMServer.Core.Cache
             using (_lock.GetReadLock())
             {
                 if (!_sensors.TryGetValue(request.Id, out var sensor))
+                {
+                    _logger.Info($"{nameof(ClearSensorHistory)} {request.Id} failed: sensor not found");
                     return;
+                }
 
                 var from = _snapshot.Sensors[request.Id].History.From;
                 var to = request.To;
 
                 if (from > to)
+                {
+                    _logger.Info($"{nameof(ClearSensorHistory)} {request.Id} failed: {from} > {to}");
                     return;
+                }
 
                 sensor.Storage.Clear(to);
 
@@ -764,7 +770,10 @@ namespace HSMServer.Core.Cache
                         to = latestTo.ReceivingTime.AddTicks(-1);
 
                     if (from > to)
+                    {
+                        _logger.Info($"{nameof(ClearSensorHistory)} {request.Id} failed: {from} > {to}");
                         return;
+                    }
                 }
 
                 _database.ClearSensorValues(sensor.Id.ToString(), from, to);
