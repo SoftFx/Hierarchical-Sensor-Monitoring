@@ -1408,6 +1408,10 @@ namespace HSMServer.Core.Cache
 
                 _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
+                foreach (var sensor in _sensors.Values)
+                    foreach (var key in sensor.Root.AccessKeys.Keys)
+                        _sensorsByKey.TryAdd(new SensorKey(key, sensor.Path), sensor);
+
                 UpdateCacheState();
 
                 TimeoutValueAfterRestartFix();
@@ -1881,17 +1885,16 @@ namespace HSMServer.Core.Cache
             _confirmationManager.FlushMessages();
             _scheduleManager.FlushMessages();
 
-            using (_lock.GetWriteLock())
+            using (_lock.GetReadLock())
             {
                 foreach (var sensor in _sensors.Values)
                 {
-                    CheckSensorTimeout(sensor);
+                    if (CheckSensorTimeout(sensor))
+                        _logger.Info($"Sensor [{sensor.Path}]. Timeout occured: LastValue={sensor.LastValue} LastDBValue={sensor.LastDbValue} LastUpdate={sensor.LastUpdate}");
 
                     if (sensor.EndOfMuting <= DateTime.UtcNow)
                         UpdateMutedSensorState(sensor.Id, InitiatorInfo.System);
 
-                    foreach(var key in sensor.Root.AccessKeys.Keys)
-                        _sensorsByKey.TryAdd(new SensorKey(key, sensor.Path), sensor);
                 }
 
                 foreach (var key in _keys.Values)
@@ -1913,14 +1916,16 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private void CheckSensorTimeout(BaseSensorModel sensor)
+        private bool CheckSensorTimeout(BaseSensorModel sensor)
         {
-            sensor.CheckTimeout();
+            var timeout = sensor.CheckTimeout();
 
             var ttl = sensor.Policies.TimeToLive;
 
             if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
                 SendNotification(sensor.Id, ttl.GetNotification(true));
+
+            return timeout;
         }
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)

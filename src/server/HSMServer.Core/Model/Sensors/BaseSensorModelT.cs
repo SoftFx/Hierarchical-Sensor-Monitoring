@@ -28,33 +28,37 @@ namespace HSMServer.Core.Model
             {
                 Storage.AddValueBase((T)value);
                 ReceivedNewValue?.Invoke(value);
-
                 return true;
             }
 
             if (IsSingleton && !Storage.IsNewSingletonValue(value))
                 return false;
 
-            if (value is T valueT && Statistics.HasEma())
-                value = Storage.CalculateStatistics(valueT);
-
-            var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
-            var canStore = Policies.TryValidate(value, out valueT, isLastValue);
-
-            if (canStore)
+            if (value is T valueT)
             {
-                var isNewValue = true;
+                if (Statistics.HasEma())
+                    valueT = (T)Storage.CalculateStatistics(valueT);
 
-                if (AggregateValues)
-                    isNewValue &= !Storage.TryAggregateValue(valueT);
-                else
-                    Storage.AddValue(valueT);
+                bool isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
+                bool canStore = Policies.TryValidate(valueT, out var validatedValue, isLastValue);
 
-                if (isNewValue)
-                    ReceivedNewValue?.Invoke(valueT);
+                if (canStore)
+                {
+                    bool isNewValue = !AggregateValues || !Storage.TryAggregateValue(validatedValue);
+
+                    if (isNewValue)
+                    {
+                        if (!AggregateValues)
+                            Storage.AddValue(validatedValue);
+
+                        ReceivedNewValue?.Invoke(validatedValue);
+                    }
+                }
+
+                return canStore;
             }
 
-            return canStore;
+            return false;
         }
 
         internal override bool TryUpdateLastValue(BaseValue value)
