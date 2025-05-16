@@ -88,7 +88,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var invalidType in Enum.GetValues<SensorType>())
             {
                 if (invalidType == sensorType)
-                    break;
+                    continue;
 
                 Assert.False(sensor.TryAddValue(SensorValuesFactory.BuildSensorValue(invalidType)));
                 Assert.True(sensor.Status?.HasError);
