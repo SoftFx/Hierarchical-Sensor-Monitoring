@@ -139,6 +139,26 @@
     var refreshTreeTimeoutId;
     var isRefreshing = false;
 
+
+    // Save scroll position
+    window.addEventListener('beforeunload', function () {
+        const treeWrapper = document.querySelector('.tree-wrapper');
+        sessionStorage.setItem('treeScrollPosition', treeWrapper.scrollTop);
+    });
+
+    // Restore scroll
+    window.addEventListener('load', function () {
+        const savedPosition = sessionStorage.getItem('treeScrollPosition');
+        if (savedPosition) {
+            const treeWrapper = document.querySelector('.tree-wrapper');
+            // wait tree loading 100ms
+            setTimeout(() => {
+                treeWrapper.scrollTop = savedPosition;
+                sessionStorage.removeItem('treeScrollPosition'); // clear data
+            }, 100);
+        }
+    });
+
     function updateTreeTimer() {
         if (isRefreshing) return;
 
