@@ -139,7 +139,7 @@
     var refreshTreeTimeoutId;
     var isRefreshing = false;
 
-
+    
     // Save scroll position
     window.addEventListener('beforeunload', function () {
         const treeWrapper = document.querySelector('.tree-wrapper');
@@ -158,6 +158,8 @@
             }, 100);
         }
     });
+    
+
 
     function updateTreeTimer() {
         if (isRefreshing) return;
@@ -172,21 +174,25 @@
             return;
         }
 
-        isRefreshing = true;
         clearTimeout(refreshTreeTimeoutId);
 
-        treeElement.off('refresh.jstree');
-
-        treeElement.on('refresh.jstree', function () {
+        // named handler
+        function refreshHandler() {
             treeWrapper.scrollTop = scrollPosition;
             isRefreshing = false;
-        });
+            treeElement.off('refresh.jstree', refreshHandler);
+        }
+
+        isRefreshing = true;
+        treeElement.on('refresh.jstree', refreshHandler);
 
         try {
             treeElement.jstree(true).refresh(true);
         } catch (e) {
             console.error('Tree refresh failed:', e);
             isRefreshing = false;
+            treeElement.off('refresh.jstree', refreshHandler);
         }
     }
+
 </script>
