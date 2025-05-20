@@ -120,7 +120,7 @@ namespace HSMDataCollector.Options
             var sb = new StringBuilder(1024);
             foreach (var option in EnumOptions)
             {
-               sb.AppendLine($"* {option.Value} - {option.Description}");
+               sb.AppendLine($"* ({option.Key}) {option.Value} - {option.Description}");
             }
 
             sb.AppendLine();;
