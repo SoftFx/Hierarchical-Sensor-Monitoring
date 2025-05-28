@@ -195,6 +195,7 @@ namespace HSMServer.Controllers
 
             var fileName = $"{selectedNodePath.Replace('/', '_')}-alerts.json";
             var content = JsonSerializer.SerializeToUtf8Bytes(group.SelectMany(p => p.Value.Select(info => (p.Key, info)))
+                                                                   .Where(x => x.info.Policy.TemplateId == null)
                                                                    .GroupBy(g => (g.info.ProductName, g.Key))
                                                                    .Select(p => new AlertExportViewModel(p.Select(v => v.info), chats)), _serializeOptions);
 
