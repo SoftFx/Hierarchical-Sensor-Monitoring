@@ -1,4 +1,6 @@
-﻿@using HSMCommon.Extensions
+﻿
+
+@using HSMCommon.Extensions
 @using HSMServer.Controllers
 @using HSMServer.Core
 @model HSMServer.Model.TreeViewModel.SensorNodeViewModel
@@ -17,52 +19,64 @@
         if (Model.IsServiceAlive && x == HistoryPeriod.ThreeDays)
         {
             history_period = HistoryPeriod.ThreeDays;
-            return new SelectListItem {Value = x.ToString(), Text = x.GetDisplayName(), Selected = true};
+            return new SelectListItem { Value = x.ToString(), Text = x.GetDisplayName(), Selected = true };
         }
-        
-        return new SelectListItem {Value = x.ToString(), Text = x.GetDisplayName(), Selected = false};
+
+        return new SelectListItem { Value = x.ToString(), Text = x.GetDisplayName(), Selected = false };
     }).ToList();
 }
 
 <div id='historyDataPanel' class='pt-3 text-break hidden_element'>
     <div class="d-flex justify-content-between">
-        <div id="datePickerFromTo">
-            <label class="me-1">Period:</label>
-            <select asp-for="@history_period" class="me-2" asp-items="@selectedItems"></select>
-            
-            <label class="me-1" id="from_@(sensorId)_label" for="from_@sensorId">From:</label>
-            <input class="me-2" type="datetime-local" id="from_@sensorId" name="from">
+        <div id="datePickerFromTo" class="d-flex align-items-center gap-2">
+            <label class="m-0">Period:</label>
+            <select asp-for="@history_period" class="form-select" style="width: auto;" asp-items="@selectedItems"></select>
 
-            <label class="me-1" id="to_@(sensorId)_label" for="to_@sensorId">To:</label>
-            <input class="me-2" type="datetime-local" id="to_@sensorId" name="to">
+            <div class="d-flex align-items-center gap-1">
+                <label class="m-0" for="from_@sensorId">From:</label>
+                <div class="input-group date" style="width: 175px;">
+                    <input type="text" class="form-control editable-date" id="from_@sensorId" name="from">
+                    <span class="input-group-text">
+                        <i class="bi bi-calendar"></i>
+                    </span>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-1">
+                <label class="m-0" for="to_@sensorId">To:</label>
+                <div class="input-group date" style="width: 175px;">
+                    <input type="text" class="form-control editable-date" id="to_@sensorId" name="to">
+                    <span class="input-group-text">
+                        <i class="bi bi-calendar"></i>
+                    </span>
+                </div>
+            </div>
 
             @if (Model.Type.IsBar())
             {
-                <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId"
-                       title="The maximum count of bars displayed on the chart. If the actual count of bars is greater than the 'Bars count' value, then the bars are aggregated.">
-                    Bars count:
-                </label>
-                <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000"
-                       title="The maximum count of bars displayed on the chart. If the actual count of bars is greater than the 'Bars count' value, then the bars are aggregated.">
+                <div class="d-flex align-items-center gap-1">
+                    <label class="m-0" for="barsCount_@sensorId" title="The maximum count of bars displayed on the chart">
+                        Bars count:
+                    </label>
+                    <input class="form-control" style="width:70px" type="number" id="barsCount_@sensorId"
+                           name="barsCount" min="1" max="1000">
+                </div>
             }
 
             <button onclick="searchHistory('@sensorId')" type="button" class="btn btn-secondary">
-                <i type="button" class="fas fa-search"></i>
+                <i class="fas fa-search"></i>
             </button>
         </div>
 
         <div class='btn-group'>
             <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>Actions</button>
             <ul class='dropdown-menu'>
-                <li>
-                    <a class='dropdown-item' href='#' id='button_export_csv_@sensorId'>Export to CSV</a>
-                </li>
-                <li>
-                    <a class='dropdown-item' href='#' id="allColumnsButton">Show all columns</a>
-                </li>
+                <li><a class='dropdown-item' href='#' id='button_export_csv_@sensorId'>Export to CSV</a></li>
+                <li><a class='dropdown-item' href='#' id="allColumnsButton">Show all columns</a></li>
             </ul>
         </div>
     </div>
+
     <div class="mt-2">
         <div id='no_data_@sensorId' style='display: none'>
             <p>No data for the specified period</p>
@@ -101,8 +115,115 @@
     </div>
 </div>
 
+
 <script>
-    function refreshTable() {
-            $(`#link_table_@sensorId`).trigger('click');
+
+    function updateTooltip(instance) {
+        const dateValue = instance.input.value;
+
+        if (dateValue) {
+            try {
+                const [datePart, timePart] = dateValue.split(' ');
+                const [month, day, year] = datePart.split('/').map(Number);
+                const [hours, minutes] = timePart.split(':').map(Number);
+
+                const dateObj = new Date(Date.UTC(year, month - 1, day, hours, minutes));
+
+                const utcString = dateObj.toUTCString();
+
+                $(instance.element).attr('title', `${utcString}`);
+            } catch (e) {
+                $(instance.element).attr('title', 'Invalid date format');
+            }
         }
+    }
+
+    function initFlatpickr() {
+        flatpickr("#from_@sensorId", {
+            enableTime: true,
+            dateFormat: "m/d/Y H:i",
+            time_24hr: true,
+            todayHighlight: true,
+            allowInput: true,
+            clickOpens: true,
+            utc: true, 
+            onReady: function (selectedDates, dateStr, instance) {
+                updateTooltip(instance);
+                instance.element.addEventListener('change', function () {
+                    updateTooltip(instance);
+                });
+            }
+        });
+
+
+        flatpickr("#to_@sensorId", {
+            enableTime: true,
+            dateFormat: "m/d/Y H:i",
+            time_24hr: true,
+            todayHighlight: true,
+            allowInput: true,
+            clickOpens: true,
+            utc: true, 
+            onReady: function (selectedDates, dateStr, instance) {
+                updateTooltip(instance);
+                instance.element.addEventListener('change', function () {
+                    updateTooltip(instance);
+                });
+            }
+        });
+
+
+        // Fix for calendar icon click
+        $(`#from_@sensorId`).next('.input-group-text').on('click', function () {
+            $(`#from_@sensorId`).focus();
+        });
+
+        $(`#to_@sensorId`).next('.input-group-text').on('click', function () {
+            $(`#to_@sensorId`).focus();
+        });
+    }
+
+    if (document.readyState !== 'loading') {
+        initFlatpickr();
+    } else {
+        document.addEventListener('DOMContentLoaded', initFlatpickr);
+    }
+
+    function refreshTable() {
+        $(`#link_table_@sensorId`).trigger('click');
+    }
 </script>
+
+<style>
+    .form-control.editable-date {
+        background-color: white !important;
+        cursor: text !important;
+    }
+
+    #datePickerFromTo {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .input-group.date {
+        flex-wrap: nowrap;
+    }
+
+    .input-group-text {
+        background-color: #f8f9fa;
+        cursor: pointer;
+    }
+
+    /* Fix for Bootstrap Icons */
+    .bi-calendar {
+        display: inline-block;
+        width: 1em;
+        height: 1em;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4H1z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-size: contain;
+    }
+</style>
+
+
+
