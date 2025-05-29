@@ -1,26 +1,90 @@
-﻿import {GetSensortInfo} from "./metaInfo";
+﻿import { invalid } from "moment";
+import {GetSensortInfo} from "./metaInfo";
 
 window.getFromAndTo = function (encodedId) {
+
     let from = $(`#from_${encodedId}`).val();
     let to = $(`#to_${encodedId}`).val();
 
-    if (to == "") {
-        to = new Date().AddDays(1);
-        $(`#to_${encodedId}`).val(datetimeLocal(to));
+    let fromDate = parseCustomDate(from);
+    let toDate = parseCustomDate(to);
+
+    if (!toDate) {
+        toDate = new Date().AddDays(1);
+        $(`#to_${encodedId}`).val(formatDateCustom(toDate));
     }
 
-    if (from == "") {
-        from = to.AddDays(-1);
-        $(`#from_${encodedId}`).val(datetimeLocal(from));
+    if (!fromDate) {
+        fromDate = new Date().AddDays(-1);
+        $(`#from_${encodedId}`).val(formatDateCustom(fromDate));
     }
 
-    return {from, to};
+    return {
+        from: datetimeLocal(fromDate),
+        to: datetimeLocal(toDate)
+    };
 }
 
-window.setFromAndTo = function (encodedId, from, to) {
-    $(`#from_${encodedId}`).val(datetimeLocal(from));
-    $(`#to_${encodedId}`).val(datetimeLocal(to));
+window.parseCustomDate = function (dateStr) {
+
+    if (!dateStr) {
+        console.warn(`parseCustomDate is not date string: ${dateStr}`);
+        return null
+    };
+
+    const [datePart, timePart] = dateStr.split(' ');
+    const [month, day, year] = datePart.split('/');
+    const [hours, minutes] = timePart.split(':');
+
+
+    return new Date(Date.UTC(year, month - 1, day, hours, minutes));
 }
+
+
+function formatDateCustom(date) {
+
+    if (typeof date === 'number' && !isNaN(date)) {
+        date = new Date(date);
+    }
+
+    else if (!(date instanceof Date) || isInvalidDate(date)) {
+        throw new Error('Invalid date: must be Date object or timestamp');
+    }
+
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+
+    return `${month}/${day}/${year} ${hours}:${minutes}`;
+}
+
+function isInvalidDate(date) {
+    return isNaN(date.getTime());
+}
+
+
+
+window.setFromAndTo = function (encodedId, from, to)
+{
+    const fromElement = document.getElementById(`from_${encodedId}`);
+    if (fromElement) {
+        fromElement.value = formatDateCustom(from);
+        if (fromElement._flatpickr) {
+            updateTooltip(fromElement._flatpickr);
+        }
+    }
+
+    const toElement = document.getElementById(`to_${encodedId}`);
+    if (toElement) {
+        toElement.value = formatDateCustom(to);
+        if (toElement._flatpickr) {
+            updateTooltip(toElement._flatpickr);
+        }
+    }
+}
+
 
 var millisecondsInHour = 1000 * 3600;
 var millisecondsInDay = millisecondsInHour * 24;
@@ -233,8 +297,8 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
                 let from = new Date($(`#oldest_date_${encodedId}`).val());
                 
                 from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
-                $(`#from_${encodedId}`).val(datetimeLocal(from));
-                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+
+                setFromAndTo(encodedId, from, to.getTime());
 
                 reloadHistoryRequest(from, to, body);
             }
@@ -278,11 +342,16 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
                 if (sensorInfo.realType === 8)
                     time = values.at(-1).time;
 
+                if (!time || isInvalidDate(new Date(time))) {
+                    const now = new Date();
+                    now.setMonth(now.getMonth() - 1); 
+                    time = now.toISOString(); 
+                }
+
                 let from = new Date(time);
                 let to = getToDate();
 
-                $(`#from_${encodedId}`).val(datetimeLocal(from));
-                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+                setFromAndTo(encodedId, from, to.getTime());
 
                 reloadHistoryRequest(from, to, body);
             }
