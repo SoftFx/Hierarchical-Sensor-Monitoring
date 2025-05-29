@@ -119,7 +119,7 @@ else
                             <td id="lastUpdateTime_value@(i)" class="@(Model.AggregateValues ? string.Empty : "d-none") text-nowrap">@simpleValue.LastUpdateTime.ToDefaultFormat()</td>
                         }
                     }
-                        <td id="receivingTime_value@(i)" class="d-none text-nowrap" title="Open time: @barValue.ReceivingTime.ToFullDefaultFormat()">>@value.ReceivingTime.ToDefaultFormat()</td>
+                        <td id="receivingTime_value@(i)" class="d-none text-nowrap" title="Open time: @value.ReceivingTime.ToFullDefaultFormat()">>@value.ReceivingTime.ToDefaultFormat()</td>
                     @if (Model.IsBarSensor)
                     {
                         @if (value.IsTimeout)

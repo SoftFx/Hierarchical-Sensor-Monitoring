@@ -1,4 +1,5 @@
-﻿import {GetSensortInfo} from "./metaInfo";
+﻿import { invalid } from "moment";
+import {GetSensortInfo} from "./metaInfo";
 
 window.getFromAndTo = function (encodedId) {
 
@@ -25,7 +26,11 @@ window.getFromAndTo = function (encodedId) {
 }
 
 window.parseCustomDate = function (dateStr) {
-    if (!dateStr) return null;
+
+    if (!dateStr) {
+        console.warn(`parseCustomDate is not date string: ${dateStr}`);
+        return null
+    };
 
     const [datePart, timePart] = dateStr.split(' ');
     const [month, day, year] = datePart.split('/');
@@ -37,11 +42,12 @@ window.parseCustomDate = function (dateStr) {
 
 
 function formatDateCustom(date) {
+
     if (typeof date === 'number' && !isNaN(date)) {
         date = new Date(date);
     }
 
-    else if (!(date instanceof Date) || isNaN(date)) {
+    else if (!(date instanceof Date) || isInvalidDate(date)) {
         throw new Error('Invalid date: must be Date object or timestamp');
     }
 
@@ -52,6 +58,10 @@ function formatDateCustom(date) {
     const minutes = String(date.getMinutes()).padStart(2, '0');
 
     return `${month}/${day}/${year} ${hours}:${minutes}`;
+}
+
+function isInvalidDate(date) {
+    return isNaN(date.getTime());
 }
 
 
@@ -331,6 +341,12 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
                 let time = values[0].receivingTime;
                 if (sensorInfo.realType === 8)
                     time = values.at(-1).time;
+
+                if (!time || isInvalidDate(new Date(time))) {
+                    const now = new Date();
+                    now.setMonth(now.getMonth() - 1); 
+                    time = now.toISOString(); 
+                }
 
                 let from = new Date(time);
                 let to = getToDate();
