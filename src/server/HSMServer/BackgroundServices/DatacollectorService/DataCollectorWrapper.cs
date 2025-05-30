@@ -38,6 +38,10 @@ namespace HSMServer.BackgroundServices
         private readonly string _key;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
+        private DateTime? _lastUpdateDbSize = null;
+
+        internal readonly TimeSpan DbSizeUpdateInterval = TimeSpan.FromDays(1);
+
         internal DatabaseSensorsStatistics DbStatisticsSensors { get; }
 
         internal ClientStatisticsSensors WebRequestsSensors { get; }
@@ -90,7 +94,13 @@ namespace HSMServer.BackgroundServices
 
         internal void SendDbInfo()
         {
-            DbSizeSensors.SendInfo();
+            var now = DateTime.UtcNow;
+            if (_lastUpdateDbSize is null || _lastUpdateDbSize.Value - now >= DbSizeUpdateInterval)
+            {
+                DbSizeSensors.SendInfo();
+                _lastUpdateDbSize = now;
+            }
+
             DbStatisticsSensors.SendInfo();
         }
 
