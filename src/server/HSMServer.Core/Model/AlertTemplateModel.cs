@@ -82,6 +82,7 @@ namespace HSMServer.Core.Model
                 TTL = TTL?.ToEntity(),
                 Policies = Policies?.Select(x => x.ToEntity()).ToList() ?? [],
                 SensorType = SensorType,
+                FolderId = FolderId,
             };
         }
 
