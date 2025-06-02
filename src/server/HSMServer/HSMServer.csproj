@@ -37,7 +37,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
-    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.4.8" />
+    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.4.9" />
     <PackageReference Include="Markdig" Version="0.41.1" />
     <PackageReference Include="NLog.Web.AspNetCore" Version="5.4.0" />
     <PackageReference Include="SSH.NET" Version="2025.0.0" />

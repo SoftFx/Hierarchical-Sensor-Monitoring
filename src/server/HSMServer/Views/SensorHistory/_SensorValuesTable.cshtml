@@ -1,7 +1,9 @@
 ﻿@using Markdig;
 @using System.Net;
+@using Microsoft.AspNetCore.Html
 @using HSMServer.Model.History;
 @using HSMServer.Extensions;
+
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -22,6 +24,14 @@
         }
 
         return false;
+    }
+
+    IHtmlContent MarkdownToHtml(string text)
+    {
+        if (text is null)
+            return null;
+
+        return Html.Raw(Markdown.ToHtml(WebUtility.HtmlEncode(text)));
     }
 }
 
@@ -184,13 +194,13 @@ else
                     <td>
                         @if (Model.TableSettings.IsHideEnabled && TryGetShortComment(value.Comment, out var shortComment))
                         {
-                            <span>@Html.Raw(Markdown.ToHtml(WebUtility.HtmlEncode(shortComment)))</span>
+                            <span>@MarkdownToHtml(shortComment)</span>
                             <span style="cursor: pointer; color: blue; text-decoration: underline" onclick="showFullText(this)">...</span>
-                            <span style="display: none">@Html.Raw(Markdown.ToHtml(WebUtility.HtmlEncode(value.Comment)))</span>
+                            <span style="display: none">@MarkdownToHtml(value.Comment)</span>
                         }
                         else
                         {
-                            <span>@Html.Raw(Markdown.ToHtml(WebUtility.HtmlEncode(value.Comment)))</span>
+                            <span>@MarkdownToHtml(value.Comment)</span>
                         }
                     </td>
                 </tr>
