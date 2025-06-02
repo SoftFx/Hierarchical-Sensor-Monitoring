@@ -95,7 +95,7 @@ namespace HSMServer.BackgroundServices
         internal void SendDbInfo()
         {
             var now = DateTime.UtcNow;
-            if (_lastUpdateDbSize is null || _lastUpdateDbSize.Value - now >= DbSizeUpdateInterval)
+            if (_lastUpdateDbSize is null || now - _lastUpdateDbSize.Value >= DbSizeUpdateInterval)
             {
                 DbSizeSensors.SendInfo();
                 _lastUpdateDbSize = now;
