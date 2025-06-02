@@ -186,11 +186,11 @@ else
                         {
                             <span>@Html.Raw(Markdown.ToHtml(WebUtility.HtmlEncode(shortComment)))</span>
                             <span style="cursor: pointer; color: blue; text-decoration: underline" onclick="showFullText(this)">...</span>
-                            <span style="display: none" id="markdown_comment_@i">@Html.Raw(Markdown.ToHtml(WebUtility.HtmlEncode(value.Comment)))</span>
+                            <span style="display: none">@Html.Raw(Markdown.ToHtml(WebUtility.HtmlEncode(value.Comment)))</span>
                         }
                         else
                         {
-                            <span id="markdown_comment_@i">@Html.Raw(Markdown.ToHtml(WebUtility.HtmlEncode(value.Comment)))</span>
+                            <span>@Html.Raw(Markdown.ToHtml(WebUtility.HtmlEncode(value.Comment)))</span>
                         }
                     </td>
                 </tr>
@@ -222,9 +222,6 @@ else
 <script>
     $(document).ready(function () {
          hiddenColumns.init('@(Model.SensorId)');
-        //  $('[id^="markdown_comment_"]').each(function() {
-        //     replaceHtmlToMarkdownJquery($(this));
-        // });
     });
 
     if (@Model.CurrentIndex === @Model.LastIndex) {
