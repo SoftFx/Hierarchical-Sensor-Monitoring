@@ -1,4 +1,5 @@
-﻿import { invalid } from "moment";
+﻿
+import { invalid } from "moment";
 import {GetSensortInfo} from "./metaInfo";
 
 window.getFromAndTo = function (encodedId) {
@@ -32,10 +33,10 @@ window.parseCustomDate = function (dateStr) {
         return null
     };
 
+    // MM/dd/yyyy HH:mm
     const [datePart, timePart] = dateStr.split(' ');
     const [month, day, year] = datePart.split('/');
     const [hours, minutes] = timePart.split(':');
-
 
     return new Date(Date.UTC(year, month - 1, day, hours, minutes));
 }
@@ -59,6 +60,37 @@ function formatDateCustom(date) {
 
     return `${month}/${day}/${year} ${hours}:${minutes}`;
 }
+
+function datetimeLocal(datetime) {
+    const dt = new Date(datetime);
+
+    if (isNaN(dt.getTime()))
+        return (new Date()).toISOString().slice(0, 16);
+
+    return dt.toISOString().slice(0, 16);
+}
+
+window.getDateUTC = function (date) {
+
+    if (!date || !(date instanceof Date)) {
+        date = new Date();
+    }
+
+    const utcDate = new Date(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate(),
+        date.getUTCHours(),
+        date.getUTCMinutes(),
+        date.getUTCSeconds()
+    );
+
+    return utcDate;
+}
+
+
+
+
 
 function isInvalidDate(date) {
     return isNaN(date.getTime());
@@ -402,15 +434,6 @@ function getToDate() {
     now.setDate(now.getDate() + 1);
 
     return now;
-}
-
-function datetimeLocal(datetime) {
-    const dt = new Date(datetime);
-
-    if (isNaN(dt.getTime()))
-       return (new Date()).toISOString().slice(0, 16);
-
-    return dt.toISOString().slice(0, 16);
 }
 
 
