@@ -1,4 +1,5 @@
-﻿@using HSMServer.Controllers
+﻿
+@using HSMServer.Controllers
 @using HSMServer.Core.Model
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.ViewModel
@@ -88,7 +89,7 @@
             InitializeHistory();
         }
         else if (period != '@HistoryPeriod.Custom') {
-            let now = new Date();
+            let now = getDateUTC();
             let to = now.AddDays(1);
             let from;
 

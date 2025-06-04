@@ -147,11 +147,10 @@
         if (treeWrapper) {
             const scrollPosition = treeWrapper.scrollTop;
 
-            if (scrollPosition != 0) {
+            if (scrollPosition != 0) 
                 sessionStorage.setItem('treeScrollPosition', scrollPosition.toString());
-                //console.log('Scroll position saved:', scrollPosition);
-            }
         } 
+
     });
 
     // Restore scroll
@@ -159,34 +158,27 @@
         const savedPosition = sessionStorage.getItem('treeScrollPosition');
        
         if (savedPosition) {
-            //console.log('Found saved scroll position:', savedPosition);
             sessionStorage.removeItem('treeScrollPosition');
 
             const tryRestoreScroll = () => {
                 const treeWrapper = document.querySelector('.tree-wrapper');
 
-                if (treeWrapper) {
+                if (treeWrapper) 
                     treeWrapper.scrollTop = savedPosition;
-                    //console.log('Scroll position restored:', treeWrapper.scrollTop);
-                } else {
-                    //console.log('Tree wrapper not found, retrying...');
+                 else 
                     setTimeout(tryRestoreScroll, 100); 
-                }
+                
 
-                if (treeWrapper?.scrollTop != savedPosition) {
-                    //console.log('Scroll position is not set:');
-                    setTimeout(tryRestoreScroll, 100);
-                    //console.log('Timer is started:');
-                }
+                if (treeWrapper?.scrollTop != savedPosition) 
+                   setTimeout(tryRestreScroll, 100);
+                
             };
 
             setTimeout(() => {
                 tryRestoreScroll();
             }, 100);
-
-        } else {
-            console.log('No saved scroll position');
         }
+
     });
     
 
