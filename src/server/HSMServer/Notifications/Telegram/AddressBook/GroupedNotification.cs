@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model.Policies;
+using HSMServer.Extensions;
 using System;
 using System.Collections.Concurrent;
 
@@ -85,10 +86,10 @@ namespace HSMServer.Notifications.Telegram.AddressBook
             {
                 _baseState[_mainDiff] = GroupByPath ? $"{_groupedPath}" : BuildGroupedString(); ;
 
-                return _baseAlert.BuildFullComment(_baseState.BuildComment());
+                return _baseAlert.BuildFullComment(_baseState.BuildCommentEscapeMarkdownV2());
             }
 
-            return _baseAlert.BuildFullComment(_baseAlert.LastComment, _totalItems - 1); //remove main as extra
+            return _baseAlert.BuildFullComment(_baseAlert.BuildCommentEscapeMarkdownV2(), _totalItems - 1); //remove main as extra
         }
 
 

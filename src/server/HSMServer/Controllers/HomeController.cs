@@ -35,6 +35,8 @@ using HSMServer.DTOs.Sensors;
 using TimeInterval = HSMServer.Model.TimeInterval;
 using HSMServer.Core.DataLayer;
 using System.Text.Json;
+using Markdig;
+using System.Net;
 
 namespace HSMServer.Controllers
 {
@@ -713,7 +715,9 @@ namespace HSMServer.Controllers
 
             var sensorModel = _treeValuesCache.GetSensor(alert.EntityId);
 
-            return Json(alert.BuildToastMessage(sensorModel));
+            var message = alert.BuildToastMessage(sensorModel) ?? string.Empty;
+
+            return Json(MarkdownHelper.ToHtml(message));
         }
 
 

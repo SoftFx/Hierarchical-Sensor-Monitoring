@@ -25,7 +25,7 @@ namespace HSMServer.UserFilters
 
     public sealed class TreeUserFilter
     {
-        private const int DefaultInterval = 5;
+        private const int DefaultInterval = 15;
 
         private UserFilterGroupBase[] Groups =>
             new UserFilterGroupBase[] { ByStatus, ByVisibility, ByState, ByIntegrations, ByAlerts };
