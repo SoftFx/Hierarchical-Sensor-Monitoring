@@ -24,12 +24,12 @@
 }
 
 
-<div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-3 w-100" style="background-color: #F0E11C;">
+<div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-3 w-100" >
     <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add alert-and me-3">and</div>
 
     <select class="alert-block alert-select property-select me-3" asp-for="Action" asp-items="Model.Actions"></select>
 
-    <div name="sendNotificationAction" class="@isSendAction.ToVisibility() d-flex align-items-center flex-wrap" style="background-color: #F0A68C; flex-grow: 1;">
+    <div name="sendNotificationAction" class="@isSendAction.ToVisibility() d-flex align-items-center flex-wrap" style="flex-grow: 1;">
         <input type="text" class="alert-block target-input target-comment flex-grow-1" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)" style="max-width: 800px;">
 
         <div class="d-flex align-items-center flex-nowrap">
@@ -58,9 +58,6 @@
             </select>
         </div>
 
-@*         <a class="addSchedule @(hasSchedule ? "d-none" : string.Empty) flex-shrink-0">
-            <i class="fa-regular fa-calendar-plus alert-schedule-button"></i>
-        </a> *@
 
         <a class="addSchedule @(hasSchedule ? "d-none" : string.Empty) flex-shrink-0"
            data-bs-toggle="tooltip"
@@ -70,9 +67,9 @@
             <i class="fa-regular fa-calendar-plus alert-schedule-button"></i>
         </a>
 
-        <div name="schedule" class="d-flex flex-wrap align-items-center @hasSchedule.ToVisibility() ms-3" style="flex-wrap: wrap; gap: 10px; max-width: 100%; word-wrap: break-word; overflow: hidden; background-color: #F1FFFF;">
-            <a class="removeSchedule me-2" 
-            data-bs-toggle="tooltip"
+        <div name="schedule" class="d-flex flex-wrap align-items-center @hasSchedule.ToVisibility() ms-3" style="flex-wrap: wrap; gap: 10px; max-width: 100%; word-wrap: break-word; overflow: hidden;">
+            <a class="removeSchedule me-2"
+               data-bs-toggle="tooltip"
                data-bs-placement="top"
                title="Remove schedule">
                 <i class="fa-regular fa-calendar-minus alert-schedule-button"></i>
@@ -87,17 +84,31 @@
             {
 
                 <div class="d-flex align-items-center flex-nowrap">
-                <div class="alert-text-block operation-select ms-3">starting at</div>
-                <input class="alert-block target-input ms-2" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime" style="width: 190px">
+                    <div class="alert-text-block operation-select ms-3">starting at</div>
+
+                    <div class="input-group d-flex align-items-center">
+                        <input class="alert-block target-input ms-2 flatpickr-datetime"
+                               type="text"
+                               id="schedule"
+                               asp-for="ScheduleStartTime"
+                               />
+
+                        <a class="flex-shrink-0 calendar-trigger"
+                           data-bs-toggle="tooltip"
+                           data-bs-placement="top"
+                           title="Calendar">
+                            <i class="fa-regular fa-calendar-days calendar-button"></i>
+                        </a>
+                    </div>
                 </div>
 
 
                 <div class="d-flex align-items-center flex-nowrap">
-                <div class="alert-text-block operation-select ms-3">
-                    and instant send
-                    <i class='fas fa-question-circle' title='If the option is checked, the first alert message is sent immediately. And then at the end of scheduled period, the remaining alert messages will be sent, aggregated into one message.'></i>
-                </div>
-                <input class="form-check-input target-check ms-2" type="checkbox" asp-for="ScheduleInstantSend">
+                    <div class="alert-text-block operation-select ms-3">
+                        and instant send
+                        <i class='fas fa-question-circle' title='If the option is checked, the first alert message is sent immediately. And then at the end of scheduled period, the remaining alert messages will be sent, aggregated into one message.'></i>
+                    </div>
+                    <input class="form-check-input target-check ms-2" type="checkbox" asp-for="ScheduleInstantSend">
                 </div>
             }
         </div>
@@ -145,7 +156,32 @@
             autocomplete: false
         });
 
-       
+
+        if (typeof flatpickr !== "undefined") {
+
+            try {
+                $(".flatpickr-datetime").each(function () {
+                    var input = $(this)[0];
+                    var fp = flatpickr(input, {
+                        enableTime: true,
+                        dateFormat: "m/d/Y H:i",
+                        time_24hr: true,
+                        todayHighlight: true,
+                        allowInput: true,
+                        clickOpens: true,
+                        utc: true
+                    });
+
+                    $(this).next(".calendar-trigger").on("click", function () {
+                        $(".flatpickr-datetime").focus();
+                    });
+                });
+            } catch (e) {
+                console.error("Flatpickr initialization error:", e);
+            }
+        } else {
+            console.warn("Flatpickr not loaded - falling back to native input");
+        }
     });
 
     $('select[name="Action"]').off("change").on("change", function () {
@@ -202,3 +238,10 @@
         schedule.removeClass("d-flex").addClass("d-none");
     });
 </script>
+
+<style>
+    .flatpickr-datetime {
+        margin-top: 2px;
+        width: 130px;
+    }
+</style>
