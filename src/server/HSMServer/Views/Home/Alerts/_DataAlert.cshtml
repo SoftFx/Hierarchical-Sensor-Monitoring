@@ -181,16 +181,20 @@
             </div>
 
             <div class="d-flex flex-row align-items-top alert-blocks-group fullAction @(Model.IsTtl ? "ttlAction" : string.Empty)">
-                <div class="alert-text-block alert-add" style="width: 40px;">then</div>
-
-                <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center">
+                <div class="alert-text-block alert-add" style="width: 40px;">then</div> 
+               
+                <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center flex-grow-1 w-100">
+                @* <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center flex-grow-1"> *@
+                   @* <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center flex-grow-1 w-100"> *@
                     @foreach (var action in Model.Actions)
                     {
                         @await Html.PartialAsync("~/Views/Home/Alerts/_ActionBlock.cshtml", action)
                     }
                 </div>
 
-                <a class="addAction align-self-end"><i class="fa-solid fa-plus alert-add-button"></i></a>
+                <a class="addAction align-self-end ms-auto">
+                    <i class="fa-solid fa-plus alert-add-button"></i>
+                </a>
             </div>
         </div>
     </div>
