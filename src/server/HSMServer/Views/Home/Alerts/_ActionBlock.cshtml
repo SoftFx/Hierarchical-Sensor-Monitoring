@@ -111,16 +111,22 @@
                     <input class="form-check-input target-check ms-2" type="checkbox" asp-for="ScheduleInstantSend">
                 </div>
             }
+
+            <a class="deleteAction align-self-end me-auto">
+                <i class="fa-solid fa-xmark alert-delete-button"></i>
+            </a>
         </div>
     </div>
 
     <div name="showIconAction" class="@isShowAction.ToVisibility() alert-block ms-3">
         <div name="emoji" class="target-input">@Model.Icon</div>
+
+        <a class="deleteAction align-self-end me-auto">
+            <i class="fa-solid fa-xmark alert-delete-button"></i>
+        </a>
     </div>
 
-    <a class="deleteAction align-self-end ms-auto">
-        <i class="fa-solid fa-xmark alert-delete-button"></i>
-    </a>
+
 </div>
 
 <script>
@@ -153,9 +159,11 @@
         $("div[name='emoji']").emojioneArea({
             filtersPosition: "bottom",
             standalone: true,
-            autocomplete: false
+            autocomplete: false,
+            ui: {
+                hideButtons: true   
+            }
         });
-
 
         if (typeof flatpickr !== "undefined") {
 
