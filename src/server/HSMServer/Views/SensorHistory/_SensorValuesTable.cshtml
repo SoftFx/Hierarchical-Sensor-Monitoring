@@ -10,6 +10,7 @@
 @{
     var currentPage = Model.CurrentTablePage;
     var olderTime = currentPage.LastOrDefault()?.ReceivingTime;
+    string olderTimeText = olderTime.HasValue ? DateTimeExtensions.ToDefaultFormat(olderTime.Value): string.Empty;
 
     bool TryGetShortComment(string comment, out string shortComment)
     {
@@ -49,7 +50,8 @@
 }
 else
 {
-    <input id="oldest_date_@Model.SensorId" style='display: none' value="@olderTime"/>
+    @* <input id="oldest_date_@Model.SensorId" style='display: none' value="@olderTime"/> *@
+        <input id="oldest_date_@Model.SensorId" style='display: none' value="@olderTimeText"/>
     <div>
         <table class='table table-striped'>
             <thead>
