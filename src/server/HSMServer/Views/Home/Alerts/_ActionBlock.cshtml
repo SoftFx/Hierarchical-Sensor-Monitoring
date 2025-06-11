@@ -58,7 +58,6 @@
             </select>
         </div>
 
-
         <a class="addSchedule @(hasSchedule ? "d-none" : string.Empty) flex-shrink-0"
            data-bs-toggle="tooltip"
            data-bs-placement="top"
@@ -67,7 +66,12 @@
             <i class="fa-regular fa-calendar-plus alert-schedule-button"></i>
         </a>
 
-        <div name="schedule" class="d-flex flex-wrap align-items-center @hasSchedule.ToVisibility() ms-3" style="flex-wrap: wrap; gap: 10px; max-width: 100%; word-wrap: break-word; overflow: hidden;">
+
+
+
+
+
+        <div name="schedule" class="align-items-center @hasSchedule.ToVisibility() ms-3" style="flex-wrap: wrap; gap: 10px; max-width: 100%; word-wrap: break-word; overflow: hidden;">
             <a class="removeSchedule me-2"
                data-bs-toggle="tooltip"
                data-bs-placement="top"
@@ -83,15 +87,15 @@
             @if (!Model.IsTtl)
             {
 
-                <div class="d-flex align-items-center flex-nowrap">
+
+@*                 <div class="d-flex align-items-center flex-nowrap">
                     <div class="alert-text-block operation-select ms-3">starting at</div>
 
                     <div class="input-group d-flex align-items-center">
                         <input class="alert-block target-input ms-2 flatpickr-datetime"
                                type="text"
                                id="schedule"
-                               asp-for="ScheduleStartTime"
-                               />
+                               asp-for="ScheduleStartTime" />
 
                         <a class="flex-shrink-0 calendar-trigger"
                            data-bs-toggle="tooltip"
@@ -100,8 +104,12 @@
                             <i class="fa-regular fa-calendar-days calendar-button"></i>
                         </a>
                     </div>
-                </div>
+                </div> *@
 
+                <div class="d-flex align-items-center flex-nowrap">
+                    <div class="alert-text-block operation-select">starting at</div>
+                    <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
+                </div>
 
                 <div class="d-flex align-items-center flex-nowrap">
                     <div class="alert-text-block operation-select ms-3">
@@ -115,7 +123,7 @@
             <a class="deleteAction align-self-end me-auto">
                 <i class="fa-solid fa-xmark alert-delete-button"></i>
             </a>
-        </div>
+        </div> 
     </div>
 
     <div name="showIconAction" class="@isShowAction.ToVisibility() alert-block ms-3">
@@ -124,7 +132,7 @@
         <a class="deleteAction align-self-end me-auto">
             <i class="fa-solid fa-xmark alert-delete-button"></i>
         </a>
-    </div>
+    </div> 
 
 
 </div>
@@ -165,31 +173,31 @@
             }
         });
 
-        if (typeof flatpickr !== "undefined") {
+        // if (typeof flatpickr !== "undefined") {
 
-            try {
-                $(".flatpickr-datetime").each(function () {
-                    var input = $(this)[0];
-                    var fp = flatpickr(input, {
-                        enableTime: true,
-                        dateFormat: "m/d/Y H:i",
-                        time_24hr: true,
-                        todayHighlight: true,
-                        allowInput: true,
-                        clickOpens: true,
-                        utc: true
-                    });
+        //     try {
+        //         $(".flatpickr-datetime").each(function () {
+        //             var input = $(this)[0];
+        //             var fp = flatpickr(input, {
+        //                 enableTime: true,
+        //                 dateFormat: "m/d/Y H:i",
+        //                 time_24hr: true,
+        //                 todayHighlight: true,
+        //                 allowInput: true,
+        //                 clickOpens: true,
+        //                 utc: true
+        //             });
 
-                    $(this).next(".calendar-trigger").on("click", function () {
-                        $(".flatpickr-datetime").focus();
-                    });
-                });
-            } catch (e) {
-                console.error("Flatpickr initialization error:", e);
-            }
-        } else {
-            console.warn("Flatpickr not loaded - falling back to native input");
-        }
+        //             $(this).next(".calendar-trigger").on("click", function () {
+        //                 $(".flatpickr-datetime").focus();
+        //             });
+        //         });
+        //     } catch (e) {
+        //         console.error("Flatpickr initialization error:", e);
+        //     }
+        // } else {
+        //     console.warn("Flatpickr not loaded - falling back to native input");
+        // }
     });
 
     $('select[name="Action"]').off("change").on("change", function () {
