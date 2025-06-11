@@ -49,7 +49,8 @@ function formatDateCustom(date) {
     }
 
     else if (!(date instanceof Date) || isInvalidDate(date)) {
-        throw new Error('Invalid date: must be Date object or timestamp');
+        date = new Date().AddDays(-30);
+        //throw new Error('Invalid date: must be Date object or timestamp');
     }
 
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -326,9 +327,12 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
 
             if (needFillFromTo) {
                 let to = getToDate();
-                let from = new Date($(`#oldest_date_${encodedId}`).val());
+                const oldestDate = $(`#oldest_date_${encodedId}`).val();
+                let from = new Date(oldestDate);
                 
-                from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
+                //from.setMinutes(from.getMinutes() + from.getTimezoneOffset());
+
+                //const utcFrom = new Date(from.getTime() + from.getTimezoneOffset() * 60000);
 
                 setFromAndTo(encodedId, from, to.getTime());
 
@@ -429,9 +433,8 @@ function isTableHistorySelected(encodedId) {
 }
 
 function getToDate() {
-    let now = new Date();
-
-    now.setDate(now.getDate() + 1);
+    let now = new getDateUTC();
+     now.setDate(now.getDate() + 1);
 
     return now;
 }
