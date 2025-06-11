@@ -164,7 +164,7 @@
 
                 <div class="alert-text-block alert-add" style="width: 40px;">If</div>
 
-                <div name="conditionsBlock" class="d-flex flex-row flex-wrap align-items-center">
+                <div name="conditionsBlock" class="d-flex flex-row flex-wrap align-items-center flex-grow-1 w-100">
                     @foreach (var condition in Model.Conditions)
                     {
                         @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionBlock.cshtml", condition)
@@ -173,7 +173,9 @@
 
                 @if (!isTtlCondition)
                 {
-                    <a class="addCondition"><i class="fa-solid fa-plus alert-add-button"></i></a>
+                    <a class="addCondition align-self-end ms-auto">
+                        <i class="fa-solid fa-plus alert-add-button"></i>
+                    </a>
                 }
             </div>
 
@@ -181,8 +183,6 @@
                 <div class="alert-text-block alert-add" style="width: 40px;">then</div> 
                
                 <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center flex-grow-1 w-100">
-                @* <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center flex-grow-1"> *@
-                   @* <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center flex-grow-1 w-100"> *@
                     @foreach (var action in Model.Actions)
                     {
                         @await Html.PartialAsync("~/Views/Home/Alerts/_ActionBlock.cshtml", action)
