@@ -1,6 +1,8 @@
 ﻿@using System.Net
 @using HSMServer.Model.History
 @using HSMServer.Extensions
+@using Microsoft.AspNetCore.Html
+
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -9,6 +11,7 @@
 @{
     var currentPage = Model.CurrentTablePage;
     var olderTime = currentPage.LastOrDefault()?.ReceivingTime;
+    string olderTimeText = olderTime.HasValue ? DateTimeExtensions.ToDefaultFormat(olderTime.Value): string.Empty;
 
     bool TryGetShortComment(string comment, out string shortComment)
     {
@@ -48,7 +51,8 @@
 }
 else
 {
-    <input id="oldest_date_@Model.SensorId" style='display: none' value="@olderTime"/>
+    @* <input id="oldest_date_@Model.SensorId" style='display: none' value="@olderTime"/> *@
+        <input id="oldest_date_@Model.SensorId" style='display: none' value="@olderTimeText"/>
     <div>
         <table class='table table-striped'>
             <thead>
@@ -104,13 +108,13 @@ else
                 <tr>
                     @if (Model.IsBarSensor)
                     {
-                        <td class="text-nowrap">@barValue.OpenTime.ToDefaultFormat()</td>
-                        <td id="lastUpdateTime_value@(i)" class="d-none text-nowrap">@value.Time.ToDefaultFormat()</td>
-                        <td id="closeTime_value@(i)" class="d-none text-nowrap">@barValue.CloseTime.ToDefaultFormat()</td>
+                            <td class="text-nowrap" title="Open time: @barValue.OpenTime.ToFullDefaultFormat()">@barValue.OpenTime.ToDefaultFormat()</td>
+                            <td id="lastUpdateTime_value@(i)" class="d-none text-nowrap" title="Last update time: @value.Time.ToFullDefaultFormat()">@value.Time.ToDefaultFormat()</td>
+                            <td id="closeTime_value@(i)" class="d-none text-nowrap" title="Close time: @barValue.CloseTime.ToFullDefaultFormat()">@barValue.CloseTime.ToDefaultFormat()</td>
                     }
                     else
                     {
-                        <td class="text-nowrap">@value.Time.ToDefaultFormat()</td>
+                            <td class="text-nowrap" title="@value.Time.ToFullDefaultFormat()">@value.Time.ToDefaultFormat()</td>
                         if (value.IsTimeout)
                         {
                             <td id="lastUpdateTime_value@(i)" class="@(Model.AggregateValues ? string.Empty : "d-none") text-nowrap"></td>
@@ -120,7 +124,7 @@ else
                             <td id="lastUpdateTime_value@(i)" class="@(Model.AggregateValues ? string.Empty : "d-none") text-nowrap">@simpleValue.LastUpdateTime.ToDefaultFormat()</td>
                         }
                     }
-                    <td id="receivingTime_value@(i)" class="d-none text-nowrap">@value.ReceivingTime.ToDefaultFormat()</td>
+                        <td id="receivingTime_value@(i)" class="d-none text-nowrap" title="Open time: @value.ReceivingTime.ToFullDefaultFormat()">>@value.ReceivingTime.ToDefaultFormat()</td>
                     @if (Model.IsBarSensor)
                     {
                         @if (value.IsTimeout)

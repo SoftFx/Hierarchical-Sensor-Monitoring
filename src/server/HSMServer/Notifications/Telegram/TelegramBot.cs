@@ -14,6 +14,8 @@ using HSMServer.Folders;
 using HSMServer.Notifications.Telegram.AddressBook;
 using HSMServer.ServerConfiguration;
 using Telegram.Bot.Types.Enums;
+using HSMServer.Extensions;
+using HSMServer.Helpers;
 
 
 namespace HSMServer.Notifications
@@ -186,7 +188,7 @@ namespace HSMServer.Notifications
                             if (chat.MessagesAggregationTimeSec == 0)
                             {
                                 _logger.Info($"Send telegram: Telegram bot: SendMessageAsync '{alert}'");
-                                await SendMessageAsync(chat.ChatId, alert.ToString()).ConfigureAwait(false);
+                                await SendMessageAsync(chat.ChatId, alert.BuildCommentEscapeMarkdownV2()).ConfigureAwait(false);
                             }
                             else
                             {

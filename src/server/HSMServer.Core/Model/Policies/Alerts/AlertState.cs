@@ -251,7 +251,7 @@ namespace HSMServer.Core.Model.Policies
 
         private bool UseProperty(string name) => Template?.Contains(name) ?? false;
 
-        private string GetCorrectTarget() => Guid.TryParse(Target, out _) ? Sensor : Target; //skipping for guid
+        public string GetCorrectTarget() => Guid.TryParse(Target, out _) ? Sensor : Target; //skipping for guid
 
         private static string GetReadableValue<T>(BaseValue<T> value) => value switch
         {
