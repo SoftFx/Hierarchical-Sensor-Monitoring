@@ -15,6 +15,7 @@ using HSMServer.Middleware.Telemetry;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
+using HSMServer.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -55,7 +56,8 @@ public static class ApplicationServiceExtensions
                 .AddSingleton<DataCollectorWrapper>()
                 .AddSingleton<TreeViewModel>()
                 .AddSingleton<TelemetryCollector>()
-                .AddSingleton<BackupDatabaseService>();
+                .AddSingleton<BackupDatabaseService>()
+                .AddSingleton<IHtmlSanitizerService, HtmlSanitizerService>();
 
         services.AddHostedService<TreeSnapshotService>()
                 .AddHostedService<ClearDatabaseService>()

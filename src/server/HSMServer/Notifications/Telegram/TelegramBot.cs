@@ -323,7 +323,7 @@ namespace HSMServer.Notifications
                     if (retry >= SendMessageRetryCount)
                         break;
 
-                    await (_bot?.SendMessage(chat, message, cancellationToken: _tokenSource.Token) ?? Task.CompletedTask).ConfigureAwait(false);
+                    await (_bot?.SendMessage(chat, message, cancellationToken: _tokenSource.Token, parseMode: ParseMode.Html) ?? Task.CompletedTask).ConfigureAwait(false);
                     _logger.Info($"Send telegram: SendMessageAsync: message '{message}' is sent");
                     break;
                 }

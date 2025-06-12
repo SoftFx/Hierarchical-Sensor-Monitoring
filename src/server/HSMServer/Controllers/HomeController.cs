@@ -50,9 +50,9 @@ namespace HSMServer.Controllers
         private readonly IDatabaseCore _database;
 
 
-
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager, IDatabaseCore database) : base(userManager)
+                              IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager,
+                              IDatabaseCore database) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
@@ -713,7 +713,9 @@ namespace HSMServer.Controllers
 
             var sensorModel = _treeValuesCache.GetSensor(alert.EntityId);
 
-            return Json(alert.BuildToastMessage(sensorModel));
+            var message = alert.BuildToastMessage(sensorModel) ?? string.Empty;
+
+            return Json(message);
         }
 
 

@@ -21,6 +21,7 @@ using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using Org.BouncyCastle.Utilities;
+using HSMServer.Services;
 
 
 namespace HSMServer.BackgroundServices
@@ -35,6 +36,8 @@ namespace HSMServer.BackgroundServices
         private readonly ITreeValuesCache _cache;
         private readonly IUpdatesQueue _queue;
 
+        private readonly IHtmlSanitizerService _sanitizer;
+
         private readonly string _key;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -47,12 +50,13 @@ namespace HSMServer.BackgroundServices
         internal BackupSensors BackupSensors { get; }
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, IUpdatesQueue queue)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, IUpdatesQueue queue, IHtmlSanitizerService sanitizerService)
         {
             _cache = cache;
             _queue = queue;
             _key = GetSelfMonitoringKey(cache);
 
+            _sanitizer = sanitizerService;
 
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
             var loggerOptions = new LoggerOptions()
@@ -128,7 +132,7 @@ namespace HSMServer.BackgroundServices
             {
                 try
                 {
-                    var value = new StoreInfo(_key, item.Path) { BaseValue = item.Convert() };
+                    var value = new StoreInfo(_key, item.Path) { BaseValue = item.Convert(_sanitizer) };
 
                     if (value.BaseValue == null)
                         continue;

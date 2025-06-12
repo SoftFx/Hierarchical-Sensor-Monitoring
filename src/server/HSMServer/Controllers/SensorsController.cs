@@ -15,6 +15,7 @@ using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.ModelBinders;
 using HSMServer.ObsoleteUnitedSensorValue;
+using HSMServer.Services;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -48,17 +49,20 @@ namespace HSMServer.Controllers
         private readonly DataCollectorWrapper _collector;
         private readonly TelemetryCollector _telemetry;
 
+        private readonly IHtmlSanitizerService _sanitizer;
+
         private readonly ITreeValuesCache _cache;
         private readonly IUpdatesQueue _updatesQueue;
 
 
-        public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector, ITreeValuesCache cache, TelemetryCollector telemetry)
+        public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector, ITreeValuesCache cache, TelemetryCollector telemetry, IHtmlSanitizerService sanitizerService)
         {
             _telemetry = telemetry;
 
             _updatesQueue = updatesQueue;
             _collector = dataCollector;
             _cache = cache;
+            _sanitizer = sanitizerService;
         }
 
 
@@ -470,7 +474,7 @@ namespace HSMServer.Controllers
 
                     var storeInfo = new StoreInfo(info.Key.Id, value.Path)
                     {
-                        BaseValue = value.Convert(),
+                        BaseValue = value.Convert(_sanitizer),
                         Product = info.Product
                     };
 
