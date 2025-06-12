@@ -71,7 +71,7 @@
 
 
 
-        <div name="schedule" class="align-items-center @hasSchedule.ToVisibility() ms-3" style="flex-wrap: wrap; gap: 10px; max-width: 100%; word-wrap: break-word; overflow: hidden;">
+        <div name="schedule" class="schedule-container align-items-center @hasSchedule.ToVisibility() ms-3">
             <a class="removeSchedule me-2"
                data-bs-toggle="tooltip"
                data-bs-placement="top"
@@ -120,10 +120,12 @@
                 </div>
             }
 
-            <a class="deleteAction align-self-end me-auto">
-                <i class="fa-solid fa-xmark alert-delete-button"></i>
-            </a>
-        </div> 
+
+        </div>
+
+        <a class="deleteAction align-self-end me-auto">
+            <i class="fa-solid fa-xmark alert-delete-button"></i>
+        </a>
     </div>
 
     <div name="showIconAction" class="@isShowAction.ToVisibility() alert-block ms-3">
@@ -260,4 +262,13 @@
         margin-top: 2px;
         width: 130px;
     }
+
+    .schedule-container {
+        flex-wrap: wrap;
+        gap: 10px;
+        max-width: 100%;
+        word-wrap: break-word;
+        overflow: hidden;
+    }
 </style>
+
