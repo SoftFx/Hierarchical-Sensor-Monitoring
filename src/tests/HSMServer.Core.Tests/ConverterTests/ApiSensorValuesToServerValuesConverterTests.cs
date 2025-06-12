@@ -1,6 +1,7 @@
 ﻿using HSMSensorDataObjects;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Tests.Infrastructure;
+using HSMServer.Services;
 using Xunit;
 
 namespace HSMServer.Core.Tests.ConverterTests
@@ -8,11 +9,12 @@ namespace HSMServer.Core.Tests.ConverterTests
     public class ApiSensorValuesToServerValuesConverterTests : IClassFixture<EntitiesConverterFixture>
     {
         private readonly ApiSensorValuesFactory _apiSensorValuesFactory;
-
+        private readonly IHtmlSanitizerService _sanitizer;
 
         public ApiSensorValuesToServerValuesConverterTests(EntitiesConverterFixture converterFixture)
         {
             _apiSensorValuesFactory = converterFixture.ApiSensorValuesFactory;
+            _sanitizer = new HtmlSanitizerService();
         }
 
 
@@ -28,7 +30,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var apiSensorValue = _apiSensorValuesFactory.BuildSensorValue(type);
 
-            var baseValue = apiSensorValue.Convert();
+            var baseValue = apiSensorValue.Convert(_sanitizer);
 
             ApiSensorValuesTester.TestServerSensorValue(apiSensorValue, baseValue);
         }
@@ -39,7 +41,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         {
             var apiSensorValue = _apiSensorValuesFactory.BuildFileSensorValue();
 
-            var baseValue = apiSensorValue.Convert();
+            var baseValue = apiSensorValue.Convert(_sanitizer);
 
             ApiSensorValuesTester.TestServerSensorValue(apiSensorValue, baseValue);
         }

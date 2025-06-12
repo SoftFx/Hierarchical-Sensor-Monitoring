@@ -74,7 +74,7 @@
 
     @if (Model is SensorInfoViewModel sensorModel)
     {
-        <h7 id="errorInfo_@Model.EncodedId" class="my-1 tree-icon-error" is-visible=@(sensorModel.Status == SensorStatus.Error)>@sensorModel.Status: @(sensorModel.StatusComment)</h7>
+        <h7 id="errorInfo_@Model.EncodedId" class="my-1 tree-icon-error" is-visible=@(sensorModel.Status == SensorStatus.Error)>@sensorModel.Status: @Html.Raw(sensorModel.StatusComment)</h7>
     }
 
     <form id="editMetaInfo_form" method="post" asp-action="@updateAction">
