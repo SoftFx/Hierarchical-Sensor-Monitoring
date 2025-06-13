@@ -8,7 +8,7 @@
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-<select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
+<select class="alert-block alert-select operation-select me-1" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
 <input class="alert-block target-input target-value @(Model.Operation.IsTargetVisible() ? string.Empty : "d-none")"
        type="text" name="Target" value="@Model.Target" placeholder="<enter a value>" @(string.IsNullOrEmpty(Model.Pattern) ? string.Empty : $"pattern={Model.Pattern}")
            @(Model.IsTargetRequired ? "required" : string.Empty) />
