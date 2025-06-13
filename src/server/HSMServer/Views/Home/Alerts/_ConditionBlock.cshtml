@@ -14,12 +14,12 @@
 }
 
 
-<div name="alertCondition" class="d-flex flex-row align-items-center alert-blocks-group ms-3 py-1">
-    <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add me-3">and</div>
+<div name="alertCondition" class="d-flex flex-row align-items-center alert-blocks-group py-1">
+    <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add ms-3 me-2">and</div>
 
     <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems" data-type="@ViewData["type"]"></select>
 
-    <div class="flex-row align-items-center operation">
+    <div class="flex-row align-items-center operation ms-2">
         @if (condition is AlertProperty.TimeToLive or AlertProperty.ConfirmationPeriod)
         {
             @await Html.PartialAsync("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", Model.GetIntervalOperations())
