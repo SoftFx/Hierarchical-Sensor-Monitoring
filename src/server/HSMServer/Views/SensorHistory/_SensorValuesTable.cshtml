@@ -1,6 +1,7 @@
 ﻿@using System.Net
-@using HSMServer.Model.History
+@using HSMServer.Helpers
 @using HSMServer.Extensions
+@using HSMServer.Model.History
 @using Microsoft.AspNetCore.Html
 
 
@@ -187,13 +188,13 @@ else
                     <td>
                         @if (Model.TableSettings.IsHideEnabled && TryGetShortComment(value.Comment, out var shortComment))
                         {
-                            <span>@Html.Raw(shortComment)</span>
+                            <span>@Html.Raw(MarkdownHelper.ToHtml(shortComment))</span>
                             <span style="cursor: pointer; color: blue; text-decoration: underline" onclick="showFullText(this)">...</span>
-                            <span style="display: none">@Html.Raw(value.Comment)</span>
+                            <span style="display: none">@Html.Raw(MarkdownHelper.ToHtml(value.Comment))</span>
                         }
                         else
                         {
-                            <span>@Html.Raw(value.Comment)</span>
+                            <span>@Html.Raw(MarkdownHelper.ToHtml(value.Comment))</span>
                         }
                     </td>
                 </tr>

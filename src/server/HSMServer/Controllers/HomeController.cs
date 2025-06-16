@@ -35,7 +35,8 @@ using HSMServer.DTOs.Sensors;
 using TimeInterval = HSMServer.Model.TimeInterval;
 using HSMServer.Core.DataLayer;
 using System.Text.Json;
-
+using Markdig;
+using System.Net;
 
 namespace HSMServer.Controllers
 {
@@ -49,6 +50,7 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly IDatabaseCore _database;
+
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
@@ -715,7 +717,7 @@ namespace HSMServer.Controllers
 
             var message = alert.BuildToastMessage(sensorModel) ?? string.Empty;
 
-            return Json(message);
+            return Json(MarkdownHelper.ToHtml(message));
         }
 
 
