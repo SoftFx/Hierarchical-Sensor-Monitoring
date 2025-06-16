@@ -119,7 +119,7 @@
                     }
                 }
 
-                actions.Add(new HtmlString($"<span>send notification <i>{MarkdownHelper.ToHtml(action.DisplayComment, true)}</i> to </span><span style='color: {color};'>{chats}</span>{schedule}"));
+                actions.Add(new HtmlString($"<span>send notification <i>{MarkdownHelper.ToHtml(action.DisplayComment)}</i> to </span><span style='color: {color};'>{chats}</span>{schedule}"));
             }
             else if (action.Action == ActionType.ShowIcon)
             {

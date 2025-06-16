@@ -11,6 +11,7 @@ namespace HSMServer.Helpers
     {
         private static readonly char[] _specialChars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
 
+        private static HtmlSanitizer _sanitizer;
 
         private static readonly Regex MarkdownRegex = new Regex(
             @"(?<element>
@@ -27,13 +28,37 @@ namespace HSMServer.Helpers
             RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline
         );
 
+        static MarkdownHelper()
+        {
+            _sanitizer = new HtmlSanitizer();
+            _sanitizer.AllowedTags.Clear();
+            _sanitizer.AllowedTags.Add("b");
+            _sanitizer.AllowedTags.Add("strong");
+            _sanitizer.AllowedTags.Add("i");
+            _sanitizer.AllowedTags.Add("em");
+            _sanitizer.AllowedTags.Add("a");
+
+            _sanitizer.AllowedAttributes.Clear();
+            _sanitizer.AllowedAttributes.Add("href");
+            _sanitizer.AllowedAttributes.Add("target");
+
+            _sanitizer.AllowedSchemes.Clear();
+            _sanitizer.AllowedSchemes.Add("http");
+            _sanitizer.AllowedSchemes.Add("https");
+            _sanitizer.AllowedSchemes.Add("mailto");
+
+            _sanitizer.AllowDataAttributes = false;
+            _sanitizer.KeepChildNodes = true;
+
+        }
+
 
         public static IHtmlContent ToHtml(string markdown)
         {
             if (markdown is null)
                 return HtmlString.Empty;
 
-            return new HtmlString(Markdown.ToHtml(markdown));
+            return new HtmlString(_sanitizer.Sanitize(Markdown.ToHtml(markdown)));
         }
 
         public static string EscapeMarkdownV2(string text)
