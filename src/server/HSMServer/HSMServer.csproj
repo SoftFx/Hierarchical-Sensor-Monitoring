@@ -38,8 +38,8 @@
   <ItemGroup>
     <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
     <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.4.9" />
-    <PackageReference Include="HtmlSanitizer" Version="9.0.884" />
-    <PackageReference Include="Markdig" Version="0.41.1" />
+    <PackageReference Include="HtmlSanitizer" Version="9.0.886" />
+    <PackageReference Include="Markdig" Version="0.41.2" />
     <PackageReference Include="NLog.Web.AspNetCore" Version="5.4.0" />
     <PackageReference Include="SSH.NET" Version="2025.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.1" />

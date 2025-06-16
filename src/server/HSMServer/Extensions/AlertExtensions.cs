@@ -169,34 +169,5 @@ namespace HSMServer.Extensions
                                           (a.ChatsMode is ChatsMode.FromParent && a.Chats.Count == 0 && sensor.Parent.DefaultChats.GetChatsCount() == 0)));
         }
 
-
-        public static string BuildCommentEscapeMarkdownV2(this AlertState state, string template = null) => string.Format(template ?? state.Template?.Text.EscapeMarkdownV2ExceptPlaceholders() ?? string.Empty,
-                state.Product.EscapeMarkdownV2(),
-                state.Path.EscapeMarkdownV2(),
-                state.Sensor.EscapeMarkdownV2(),
-                state.Unit.EscapeMarkdownV2(),
-                state.Status.EscapeMarkdownV2(),
-                state.Time.EscapeMarkdownV2(),
-                state.Comment,
-                state.PrevStatus.EscapeMarkdownV2(),
-                state.PrevComment.EscapeMarkdownV2(),
-                state.PrevValue.EscapeMarkdownV2(),
-                state.ValueSingle.EscapeMarkdownV2(),
-                state.EmaValueSingle.EscapeMarkdownV2(),
-                state.MinValueBar.EscapeMarkdownV2(),
-                state.MaxValueBar.EscapeMarkdownV2(),
-                state.MeanValueBar.EscapeMarkdownV2(),
-                state.FirstValueBar.EscapeMarkdownV2(),
-                state.LastValueBar.EscapeMarkdownV2(),
-                state.CountBar.EscapeMarkdownV2(),
-                state.EmaMin.EscapeMarkdownV2(),
-                state.EmaMax.EscapeMarkdownV2(),
-                state.EmaMean.EscapeMarkdownV2(),
-                state.EmaCount.EscapeMarkdownV2(),
-                state.Property.EscapeMarkdownV2(),
-                state.Operation.EscapeMarkdownV2(),
-                state.GetCorrectTarget().EscapeMarkdownV2());
-
-        public static string BuildCommentEscapeMarkdownV2(this AlertResult result) => result.BuildFullComment(result.LastState.BuildCommentEscapeMarkdownV2());
     }
 }

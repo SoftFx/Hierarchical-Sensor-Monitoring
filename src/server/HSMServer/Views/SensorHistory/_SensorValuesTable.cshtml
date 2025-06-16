@@ -1,5 +1,5 @@
 ﻿@using HSMServer.Helpers
-@using Markdig;
+@using HSMServer.Helpers
 @using System.Net;
 @using Microsoft.AspNetCore.Html
 @using HSMServer.Model.History;
@@ -189,13 +189,13 @@ else
                     <td>
                         @if (Model.TableSettings.IsHideEnabled && TryGetShortComment(value.Comment, out var shortComment))
                         {
-                            <span>@MarkdownHelper.ToHtml(shortComment)</span>
+                            <span>@Html.Raw(MarkdownHelper.ToHtml(shortComment))</span>
                             <span style="cursor: pointer; color: blue; text-decoration: underline" onclick="showFullText(this)">...</span>
-                            <span style="display: none">@MarkdownHelper.ToHtml(value.Comment)</span>
+                            <span style="display: none">@Html.Raw(MarkdownHelper.ToHtml(value.Comment))</span>
                         }
                         else
                         {
-                            <span>@MarkdownHelper.ToHtml(value.Comment)</span>
+                            <span>@Html.Raw(MarkdownHelper.ToHtml(value.Comment))</span>
                         }
                     </td>
                 </tr>
