@@ -360,8 +360,10 @@ namespace HSMServer.Model.DataAlerts
             HashSet<Guid> chats = [];
             node?.TryGetChats(out chats);
 
+            string icon = DefaultIcon ?? ActionViewModel.DefaultIcon;
+
             Actions.Add(new ActionViewModel(true, IsTtl, chats) { Comment = DefaultCommentTemplate });
-            Actions.Add(new ActionViewModel(false, IsTtl, chats) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
+            Actions.Add(new ActionViewModel(false, IsTtl, chats) { Action = ActionType.ShowIcon, Icon = icon });
         }
 
         public static DataAlertViewModelBase BuildAlert(Policy policy, SensorNodeViewModel model) => policy switch

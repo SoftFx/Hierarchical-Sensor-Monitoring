@@ -87,25 +87,6 @@
             @if (!Model.IsTtl)
             {
 
-
-@*                 <div class="d-flex align-items-center flex-nowrap">
-                    <div class="alert-text-block operation-select ms-3">starting at</div>
-
-                    <div class="input-group d-flex align-items-center">
-                        <input class="alert-block target-input ms-2 flatpickr-datetime"
-                               type="text"
-                               id="schedule"
-                               asp-for="ScheduleStartTime" />
-
-                        <a class="flex-shrink-0 calendar-trigger"
-                           data-bs-toggle="tooltip"
-                           data-bs-placement="top"
-                           title="Calendar">
-                            <i class="fa-regular fa-calendar-days calendar-button"></i>
-                        </a>
-                    </div>
-                </div>  *@
-
                 <div class="d-flex align-items-center flex-nowrap">
                     <div class="alert-text-block operation-select me-2">starting at</div>
                     <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
@@ -166,39 +147,29 @@
             $(this).selectpicker('refresh')
         });
 
-        $("div[name='emoji']").emojioneArea({
-            filtersPosition: "bottom",
-            standalone: true,
-            autocomplete: false,
-            ui: {
-                hideButtons: true   
-            }
-        });
+        
 
-        // if (typeof flatpickr !== "undefined") {
 
-        //     try {
-        //         $(".flatpickr-datetime").each(function () {
-        //             var input = $(this)[0];
-        //             var fp = flatpickr(input, {
-        //                 enableTime: true,
-        //                 time_24hr: true,
-        //                 todayHighlight: true,
-        //                 allowInput: true,
-        //                 clickOpens: true,
-        //                 utc: true
-        //             });
+           $("div[name='emoji']").emojioneArea({
+                pickerPosition: "bottom",
+                standalone: true,
+                hideSource: true,
+                filtersPosition: "bottom",
+                autocomplete: false,
+                inline: false,
+                saveEmojisAs: "unicode",
+                hidePickerOnBlur: true,
+                search: false,
+                tones: false,
+                buttonTitle: "Select icon",
 
-        //             $(this).next(".calendar-trigger").on("click", function () {
-        //                 $(".flatpickr-datetime").focus();
-        //             });
-        //         });
-        //     } catch (e) {
-        //         console.error("Flatpickr initialization error:", e);
-        //     }
-        // } else {
-        //     console.warn("Flatpickr not loaded - falling back to native input");
-        // }
+                ui: {
+                    hideButtons: true   
+                }
+
+
+            });
+
     });
 
     $('select[name="Action"]').off("change").on("change", function () {
@@ -257,10 +228,7 @@
 </script>
 
 <style>
-    .flatpickr-datetime {
-        margin-top: 2px;
-        width: 130px;
-    }
+
 
     .schedule-container {
         flex-wrap: wrap;
@@ -269,5 +237,14 @@
         word-wrap: break-word;
         overflow: hidden;
     }
+
+    .emojionearea, 
+    .emojionearea.form-control {
+      background: #ffffff !important; 
+      border: none !important;        
+      box-shadow: none !important;    
+    }
+
+
 </style>
 
