@@ -15,7 +15,9 @@
     var action = Model.Action;
 
     var isSendAction = action == ActionType.SendNotification;
-    var isShowAction = action == ActionType.ShowIcon;
+    var isNotSendAction = action != ActionType.SendNotification;
+    var isShowIcon = action == ActionType.ShowIcon;
+
     var hasSchedule = Model.ScheduleRepeatMode is not null;
 
     var isSecondaryCondition = !Model.IsMain;
@@ -109,14 +111,19 @@
         </a>
     </div>
 
-    <div name="showIconAction" class="@isShowAction.ToVisibility() alert-block ms-2 mt-1">
+    <div name="showIconAction" class="@isShowIcon.ToVisibility() alert-block ms-2 mt-1">
         <div name="emoji" class="target-input">@Model.Icon</div>
+@* 
+                    <a class="deleteAction align-self-end  me-auto">
+            <i class="fa-solid fa-xmark alert-delete-button"></i>
+        </a> *@
+    </div> 
 
+    <div name="deleteIconForAll" class="@isNotSendAction.ToVisibility() mt-1">
         <a class="deleteAction align-self-end  me-auto">
             <i class="fa-solid fa-xmark alert-delete-button"></i>
         </a>
     </div> 
-
 
 </div>
 
@@ -177,6 +184,7 @@
 
         let send = actionBlock.find($(`div[name='sendNotificationAction']`));
         let show = actionBlock.find($(`div[name='showIconAction']`));
+        let divDelButton = actionBlock.find($(`div[name='deleteIconForAll']`));
 
         let commentInput = send.find($(`input[name='Comment']`));
 
@@ -186,17 +194,20 @@
 
             commentInput.attr('required', true);
             send.removeClass("d-none").addClass('d-flex');
+            divDelButton.removeClass("d-flex").addClass('d-none');
         }
         else if (action === '@ActionType.ShowIcon') {
             commentInput.attr('required', false);
             send.removeClass("d-flex").addClass('d-none');
 
             show.removeClass("d-none").addClass('d-flex');
+            divDelButton.removeClass("d-none").addClass('d-flex');
         }
         else if (action === '@ActionType.SetStatus') {
             commentInput.attr('required', false);
             send.removeClass("d-flex").addClass('d-none');
             show.removeClass("d-flex").addClass('d-none');
+            divDelButton.removeClass("d-none").addClass('d-flex');
         }
     });
 

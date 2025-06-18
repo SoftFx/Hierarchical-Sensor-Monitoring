@@ -89,8 +89,8 @@
         if (dataObject.newValuesCount != null && $(`#link_table_${id}`).hasClass("active")) {
             $("#tableHistoryRefreshButton").removeClass("d-none");
         }
-        if (dataObject.status === 'Error')
-            $(`#errorInfo_${id}`).removeClass('d-none').addClass('d-flex').innerHtml(`${dataObject.status}: ${dataObject.validationError}`);
+        if (dataObject.status === 'Error') 
+            $(`#errorInfo_${id}`).removeClass('d-none').addClass('d-flex').html(`${dataObject.status}: ${dataObject.validationError}`);
         else
             $(`#errorInfo_${id}`).removeClass('d-flex').addClass('d-none');
     }
