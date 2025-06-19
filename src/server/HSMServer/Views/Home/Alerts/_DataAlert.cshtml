@@ -164,7 +164,7 @@
                     var isTtlCondition = Model.Conditions.FirstOrDefault()?.Property is AlertProperty.TimeToLive;
                 }
 
-                <div name="conditionsBlock" class="d-flex flex-row flex-wrap align-items-center flex-grow-1 w-100">
+                <div name="conditionsBlock" class="d-flex flex-row flex-wrap align-items-center">
                     <div class="alert-text-block alert-add me-2 fixed-width40">If</div>
 
                     @foreach (var condition in Model.Conditions)
@@ -172,14 +172,17 @@
                         @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionBlock.cshtml", condition)
                     }
 
+                    @if (!isTtlCondition)
+                    {
+                        <a class="addCondition align-self-center">
+                            <i class="fa-solid fa-plus alert-add-button"></i>
+                        </a>
+                    }
+
                 </div>
 
-                @if (!isTtlCondition)
-                {
-                    <a class="addCondition align-self-end ms-auto">
-                        <i class="fa-solid fa-plus alert-add-button"></i>
-                    </a>
-                }
+
+
             </div>
 
             <div class="d-flex flex-row align-items-top alert-blocks-group fullAction @(Model.IsTtl ? "ttlAction" : string.Empty)">
@@ -197,9 +200,9 @@
                     }
                 </div>
 
-                <a class="addAction align-self-end ms-auto mb-1">
+@*                 <a class="addAction align-self-end ms-auto mb-1">
                     <i class="fa-solid fa-plus alert-add-button"></i>
-                </a>
+                </a> *@
             </div>
         </div>
     </div>
@@ -227,6 +230,9 @@
 
 <script>
     $(document).ready(function () {
+
+        updateAlertsAddButton();
+
         $("a.addCondition").off("click").on("click", function () {
             let element = $(this).parents("div.fullCondition:first");
 
@@ -235,11 +241,14 @@
                 cache: false
             }).done(function (viewData) {
                 var conditionsBlock = element.find($(`div[name='conditionsBlock']`));
-                conditionsBlock.append(viewData);
+                conditionsBlock.children().last().before(viewData);
+                //conditionsBlock.append(viewData);
             });
         });
 
-        $("a.addAction").off("click").on("click", function () {
+
+
+        $(document).off("click", "a.addAction").on("click", "a.addAction", function () {
             let element = $(this).parents("div.fullAction:first");
             let actionsBlock = element.find($(`div[name='actionsBlock']`));
             let isMainAction = actionsBlock.find($(`div[name='alertAction']`)).length == 0;
@@ -250,6 +259,7 @@
                 cache: false
             }).done(function (viewData) {
                 actionsBlock.append(viewData);
+                updateAlertsAddButton();
             });
         });
 
@@ -310,6 +320,17 @@
             }
         });
     });
+
+    window.updateAlertsAddButton = function () {
+        const allAlertActions = $("div[name='actionsBlock']").find("div[name='alertAction']");
+
+        allAlertActions.find("a.addAction").addClass("d-none");
+
+
+        if (allAlertActions.length > 0) {
+            allAlertActions.last().find("a.addAction").removeClass("d-none");
+        }
+    };
 
     function appendProperty(form, element, propertyElement, propertyName) {
         let selector = "";

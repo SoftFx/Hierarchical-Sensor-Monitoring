@@ -3,6 +3,8 @@
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Notifications
 @using HSMServer.Model.DataAlerts
+@using HSMServer.Controllers
+@using HSMServer.Constants
 
 @model ActionViewModel
 
@@ -13,6 +15,7 @@
 
 @{
     var action = Model.Action;
+      
 
     var isSendAction = action == ActionType.SendNotification;
     var isNotSendAction = action != ActionType.SendNotification;
@@ -106,9 +109,18 @@
 
         </div>
 
-        <a class="deleteAction align-self-end  me-auto">
-            <i class="fa-solid fa-xmark alert-delete-button"></i>
-        </a>
+        
+            <a class="deleteAction align-self-center pt-1">
+                <i class="fa-solid fa-xmark alert-delete-button"></i>
+            </a>
+
+
+        <div name="addActionForSend" class="align-self-center">
+             <a class="addAction">
+                  <i class="fa-solid fa-plus alert-add-button"></i>
+             </a>
+        </div> 
+
     </div>
 
     <div name="showIconAction" class="@isShowIcon.ToVisibility() alert-block ms-2 mt-1">
@@ -119,9 +131,15 @@
         </a> *@
     </div> 
 
-    <div name="deleteIconForAll" class="@isNotSendAction.ToVisibility() mt-1">
-        <a class="deleteAction align-self-end  me-auto">
+    <div name="deleteIconForAll" class="@isNotSendAction.ToVisibility()">
+        <a class="deleteAction align-self-center">
             <i class="fa-solid fa-xmark alert-delete-button"></i>
+        </a>
+    </div> 
+
+    <div name="addActionForAll" class="@isNotSendAction.ToVisibility() align-self-center">
+        <a class="addAction align-self-end">
+              <i class="fa-solid fa-plus alert-add-button"></i>
         </a>
     </div> 
 
@@ -185,8 +203,10 @@
         let send = actionBlock.find($(`div[name='sendNotificationAction']`));
         let show = actionBlock.find($(`div[name='showIconAction']`));
         let divDelButton = actionBlock.find($(`div[name='deleteIconForAll']`));
+        let divAddButton = actionBlock.find($(`div[name='addActionForAll']`));
 
         let commentInput = send.find($(`input[name='Comment']`));
+
 
         let action = $(this).val();
         if (action === '@ActionType.SendNotification') {
@@ -195,6 +215,7 @@
             commentInput.attr('required', true);
             send.removeClass("d-none").addClass('d-flex');
             divDelButton.removeClass("d-flex").addClass('d-none');
+            divAddButton.removeClass("d-flex").addClass('d-none');
         }
         else if (action === '@ActionType.ShowIcon') {
             commentInput.attr('required', false);
@@ -202,23 +223,59 @@
 
             show.removeClass("d-none").addClass('d-flex');
             divDelButton.removeClass("d-none").addClass('d-flex');
+            divAddButton.removeClass("d-none").addClass('d-flex');
         }
         else if (action === '@ActionType.SetStatus') {
             commentInput.attr('required', false);
             send.removeClass("d-flex").addClass('d-none');
             show.removeClass("d-flex").addClass('d-none');
             divDelButton.removeClass("d-none").addClass('d-flex');
+            divAddButton.removeClass("d-none").addClass('d-flex');
         }
+
+        
+
+        
     });
 
     $("a.deleteAction").off("click").on("click", function () {
         let actionsBlock = $(this).parents(`div[name='actionsBlock']`);
+        let allAlertActions = actionsBlock.find(`div[name='alertAction']`);
+    
+
+        if (allAlertActions.length <= 1) {
+            return;
+        }
+    
 
         $(this).parents("div[name='alertAction']:first").remove();
+    
 
-        let alertAction = actionsBlock.find(`div[name='alertAction']:first`);
-        alertAction.find('div.alert-and').remove();
+        allAlertActions = actionsBlock.find(`div[name='alertAction']`);
+    
+
+        if (allAlertActions.length > 0) {
+            allAlertActions.first().find('div.alert-and').remove();
+        }
+    
+        window.updateAlertsAddButton();
     });
+
+    // $("a.deleteAction").off("click").on("click", function () {
+
+
+    //     let actionsBlock = $(this).parents(`div[name='actionsBlock']`);
+
+
+    //     $(this).parents("div[name='alertAction']:first").remove();
+
+    //     //let actionsBlock = $(this).parents(`div[name='actionsBlock']`);
+    //     let alertAction = actionsBlock.find(`div[name='alertAction']:first`);
+    //     alertAction.find('div.alert-and').remove();
+
+    //     window.updateAlertsAddButton();
+    // });
+
 
     $("a.addSchedule").off("click").on("click", function () {
         let sendNotificationBlock = $(this).parents("div[name='sendNotificationAction']:first");
