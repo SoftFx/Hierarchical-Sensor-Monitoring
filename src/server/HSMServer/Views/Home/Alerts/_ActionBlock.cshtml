@@ -110,14 +110,20 @@
         </div>
 
         
-            <a class="deleteAction align-self-center pt-1">
+            <a class="deleteAction align-self-center pt-1"
+                data-bs-toggle="tooltip"
+                data-bs-placement="top"
+                title="Remove action">
                 <i class="fa-solid fa-xmark alert-delete-button"></i>
             </a>
 
 
-        <div name="addActionForSend" class="align-self-center">
-             <a class="addAction">
-                  <i class="fa-solid fa-plus alert-add-button"></i>
+        <div name="addActionForSend" class="align-self-center pt-1">
+             <a class="addAction" 
+                data-bs-toggle="tooltip"
+                data-bs-placement="top"
+                title="Add new action">
+                  <i class="fa-solid fa-plus alert-add-button" ></i>
              </a>
         </div> 
 
@@ -132,13 +138,19 @@
     </div> 
 
     <div name="deleteIconForAll" class="@isNotSendAction.ToVisibility()">
-        <a class="deleteAction align-self-center">
+        <a class="deleteAction align-self-center" 
+             data-bs-toggle="tooltip"
+             data-bs-placement="top"
+             title="Remove action">
             <i class="fa-solid fa-xmark alert-delete-button"></i>
         </a>
     </div> 
 
     <div name="addActionForAll" class="@isNotSendAction.ToVisibility() align-self-center">
-        <a class="addAction align-self-end">
+        <a class="addAction align-self-end"
+                data-bs-toggle="tooltip"
+                data-bs-placement="top"
+                title="Add new action">
               <i class="fa-solid fa-plus alert-add-button"></i>
         </a>
     </div> 
