@@ -657,7 +657,7 @@ namespace HSMServer.Controllers
             if (TryGetSelectedNode(entityId, out var entity))
                 entity.TryGetChats(out chats);
 
-            return PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, isTtl, chats));
+            return PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, isTtl, chats) { Icon = ActionViewModel.DefaultIcon });
         }
 
         public IActionResult GetOperation(byte type, AlertProperty property)
