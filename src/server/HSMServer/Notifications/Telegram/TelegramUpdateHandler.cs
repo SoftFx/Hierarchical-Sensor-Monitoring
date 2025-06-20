@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
 using HSMServer.Folders;
+using HSMServer.Helpers;
 using HSMServer.ServerConfiguration;
 using NLog;
 using System;
@@ -132,7 +133,7 @@ namespace HSMServer.Notifications
             else
                 response.Append("Your token is invalid or expired.");
 
-            return response.ToString().EscapeMarkdownV2();
+            return MarkdownHelper.EscapeMarkdownV2( response.ToString());
         }
 
         private string EntitiesInfo(ChatId chatId)
@@ -143,27 +144,27 @@ namespace HSMServer.Notifications
             if (chat is not null)
             {
                 response.Append($"*Messages delay*");
-                response.AppendLine($": {chat.MessagesAggregationTimeSec} seconds".EscapeMarkdownV2());
+                response.AppendLine(MarkdownHelper.EscapeMarkdownV2($": {chat.MessagesAggregationTimeSec} seconds"));
 
                 response.Append($"*Messages are enabled*");
-                response.AppendLine($": {chat.SendMessages}".EscapeMarkdownV2());
+                response.AppendLine(MarkdownHelper.EscapeMarkdownV2($": {chat.SendMessages}"));
 
                 response.Append($"*Connected folders*");
-                response.AppendLine($": {string.Join(", ", chat.Folders.Select(f => _folderManager[f]?.Name).OrderBy(n => n))}".EscapeMarkdownV2());
+                response.AppendLine(MarkdownHelper.EscapeMarkdownV2($": {string.Join(", ", chat.Folders.Select(f => _folderManager[f]?.Name).OrderBy(n => n))}"));
             }
             else
-                response.AppendLine("Chat is not found.".EscapeMarkdownV2());
+                response.AppendLine(MarkdownHelper.EscapeMarkdownV2("Chat is not found."));
 
             return response.ToString();
         }
 
-        private static string Help() =>
+        private static string Help() => MarkdownHelper.EscapeMarkdownV2(
             $"""
             Statuses: 
                 {Core.OffTime.ToIcon()} (OffTime) -> {Core.Ok.ToIcon()} (Ok) -> {Core.Error.ToIcon()} (Error)
-            """.EscapeMarkdownV2();
+            """);
 
-        private static string ServerStatus() => $"HSM server {ServerConfig.Version} is alive.".EscapeMarkdownV2();
+        private static string ServerStatus() => MarkdownHelper.EscapeMarkdownV2($"HSM server {ServerConfig.Version} is alive.");
 
         public Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, HandleErrorSource source, CancellationToken cancellationToken)
         {

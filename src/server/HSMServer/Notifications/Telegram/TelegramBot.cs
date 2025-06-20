@@ -188,7 +188,7 @@ namespace HSMServer.Notifications
                             if (chat.MessagesAggregationTimeSec == 0)
                             {
                                 _logger.Info($"Send telegram: Telegram bot: SendMessageAsync '{alert}'");
-                                await SendMessageAsync(chat.ChatId, alert.BuildCommentEscapeMarkdownV2()).ConfigureAwait(false);
+                                await SendMessageAsync(chat.ChatId, alert.ToString()).ConfigureAwait(false);
                             }
                             else
                             {
@@ -325,7 +325,7 @@ namespace HSMServer.Notifications
                     if (retry >= SendMessageRetryCount)
                         break;
 
-                    await (_bot?.SendMessage(chat, message, cancellationToken: _tokenSource.Token, parseMode: ParseMode.Html) ?? Task.CompletedTask).ConfigureAwait(false);
+                    await (_bot?.SendMessage(chat, MarkdownHelper.ConvertToMarkdownV2(message), cancellationToken: _tokenSource.Token, parseMode: ParseMode.MarkdownV2) ?? Task.CompletedTask).ConfigureAwait(false);
                     _logger.Info($"Send telegram: SendMessageAsync: message '{message}' is sent");
                     break;
                 }
