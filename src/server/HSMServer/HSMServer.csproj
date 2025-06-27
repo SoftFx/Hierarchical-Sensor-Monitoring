@@ -23,6 +23,8 @@
     <EnableSDKContainerSupport>true</EnableSDKContainerSupport>
     <ContainerImageTags>$(Version);latest</ContainerImageTags>
     <ContainerImageName>$(MSBuildProjectName)</ContainerImageName>
+    <AssemblyVersion>3.38.24.0</AssemblyVersion>
+    <FileVersion>3.38.24.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

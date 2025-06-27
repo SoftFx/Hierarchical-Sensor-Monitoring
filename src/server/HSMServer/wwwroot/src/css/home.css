@@ -414,6 +414,10 @@ img .tree-png-icon {
     background-color: rgba(217,83,79,.3);
 }
 
+.fixed-width40 {
+    width: 40px;
+}
+
 .alert-add-button {
     cursor: pointer;
     color: rgba(92,184,92,.5);
@@ -427,7 +431,7 @@ img .tree-png-icon {
 .alert-schedule-button {
     cursor: pointer;
     color: rgba(3, 21, 3, 0.5);
-    padding: 0px 8px;
+    /*padding: 0px 8px;*/
 }
 
 .alert-schedule-button:hover {

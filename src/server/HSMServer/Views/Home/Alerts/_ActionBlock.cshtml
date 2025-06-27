@@ -23,19 +23,19 @@
     var chats = ChatsManager.GetValues().Where(x => Model.AvailableChats.Contains(x.Id)).ToList();
 }
 
+@* <div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-3 w-100" > *@
+<div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-2 w-100">
+    <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add alert-and me-2 mt-1">and</div>
 
-<div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-3 w-100" >
-    <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add alert-and me-3">and</div>
-
-    <select class="alert-block alert-select property-select me-3" asp-for="Action" asp-items="Model.Actions"></select>
+    <select class="alert-block alert-select property-select me-2 mt-1" asp-for="Action" asp-items="Model.Actions"></select>
 
     <div name="sendNotificationAction" class="@isSendAction.ToVisibility() d-flex align-items-center flex-wrap" style="flex-grow: 1;">
-        <input type="text" class="alert-block target-input target-comment flex-grow-1" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)" style="max-width: 800px;">
+        <input type="text" class="alert-block target-input target-comment flex-grow-1 mt-1" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)" style="max-width: 800px;">
 
-        <div class="d-flex align-items-center flex-nowrap">
-            <div class="alert-text-block operation-select ms-3">to</div>
+        <div class="d-flex align-items-center flex-nowrap pt-1">
+            <div class="alert-text-block operation-select ms-2">to</div>
 
-            <select class="selectpicker ms-3" name="Chats" multiple
+            <select class="selectpicker ms-2" name="Chats" multiple
                     data-width="auto" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-container="body">
                 <option class="general-group-chat-mode" value="@ChatsMode.FromParent" selected="@(Model.ChatsMode is ChatsMode.FromParent)">@ChatsMode.FromParent.GetDisplayName()</option>
                 <option class="general-group-chat-mode" value="@ChatsMode.NotInitialized" selected="@(Model.ChatsMode is ChatsMode.NotInitialized)">@ChatsMode.NotInitialized.GetDisplayName()</option>
@@ -58,12 +58,12 @@
             </select>
         </div>
 
-        <a class="addSchedule @(hasSchedule ? "d-none" : string.Empty) flex-shrink-0"
+        <a class="addSchedule @(hasSchedule ? "d-none" : string.Empty) flex-shrink-0 pt-1"
            data-bs-toggle="tooltip"
            data-bs-placement="top"
            title="Add schedule">
 
-            <i class="fa-regular fa-calendar-plus alert-schedule-button"></i>
+            <i class="fa-regular fa-calendar-plus alert-schedule-button ms-2"></i>
         </a>
 
 
@@ -71,8 +71,8 @@
 
 
 
-        <div name="schedule" class="schedule-container align-items-center @hasSchedule.ToVisibility() ms-3">
-            <a class="removeSchedule me-2"
+        <div name="schedule" class="schedule-container align-items-center @hasSchedule.ToVisibility() ms-2 pt-1">
+            <a class="removeSchedule"
                data-bs-toggle="tooltip"
                data-bs-placement="top"
                title="Remove schedule">
@@ -104,15 +104,15 @@
                             <i class="fa-regular fa-calendar-days calendar-button"></i>
                         </a>
                     </div>
-                </div> *@
+                </div>  *@
 
                 <div class="d-flex align-items-center flex-nowrap">
-                    <div class="alert-text-block operation-select">starting at</div>
+                    <div class="alert-text-block operation-select me-2">starting at</div>
                     <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
                 </div>
 
                 <div class="d-flex align-items-center flex-nowrap">
-                    <div class="alert-text-block operation-select ms-3">
+                    <div class="alert-text-block operation-select">
                         and instant send
                         <i class='fas fa-question-circle' title='If the option is checked, the first alert message is sent immediately. And then at the end of scheduled period, the remaining alert messages will be sent, aggregated into one message.'></i>
                     </div>
@@ -123,15 +123,15 @@
 
         </div>
 
-        <a class="deleteAction align-self-end me-auto">
+        <a class="deleteAction align-self-end  me-auto">
             <i class="fa-solid fa-xmark alert-delete-button"></i>
         </a>
     </div>
 
-    <div name="showIconAction" class="@isShowAction.ToVisibility() alert-block ms-3">
+    <div name="showIconAction" class="@isShowAction.ToVisibility() alert-block ms-2 mt-1">
         <div name="emoji" class="target-input">@Model.Icon</div>
 
-        <a class="deleteAction align-self-end me-auto">
+        <a class="deleteAction align-self-end  me-auto">
             <i class="fa-solid fa-xmark alert-delete-button"></i>
         </a>
     </div> 
@@ -182,7 +182,6 @@
         //             var input = $(this)[0];
         //             var fp = flatpickr(input, {
         //                 enableTime: true,
-        //                 dateFormat: "m/d/Y H:i",
         //                 time_24hr: true,
         //                 todayHighlight: true,
         //                 allowInput: true,
