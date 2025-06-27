@@ -70,6 +70,8 @@ namespace HSMServer.Model.DataAlerts
 
         public string Icon { get; set; }
 
+        public const string DefaultIcon = "⚠";
+
 
         public string DisplayComment { get; set; }
 
