@@ -5,7 +5,7 @@
     <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>3.38.25</Version>
+    <Version>3.38.26</Version>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,8 +23,6 @@
     <EnableSDKContainerSupport>true</EnableSDKContainerSupport>
     <ContainerImageTags>$(Version);latest</ContainerImageTags>
     <ContainerImageName>$(MSBuildProjectName)</ContainerImageName>
-    <AssemblyVersion>3.38.25.0</AssemblyVersion>
-    <FileVersion>3.38.25.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

@@ -3,7 +3,9 @@ using Markdig;
 using Microsoft.AspNetCore.Html;
 using System;
 using System.Text;
+using System.Web;
 using System.Text.RegularExpressions;
+
 
 namespace HSMServer.Helpers
 {
@@ -12,6 +14,11 @@ namespace HSMServer.Helpers
         private static readonly char[] _specialChars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
 
         private static HtmlSanitizer _sanitizer;
+
+        private static readonly Regex MarkdownTagRegex = new Regex(
+            @"<markdown>(?<content>.*?)<\/markdown>",
+            RegexOptions.Singleline
+        );
 
         private static readonly Regex MarkdownRegex = new Regex(
             @"(?<element>
@@ -23,8 +30,8 @@ namespace HSMServer.Helpers
             ~~(?<strike>.+?)~~          |
             \[(?<link>.+?)\]\(.+?\)|
             !\[(?<image>.+?)\]\(.+?\)|
-            (?<escaped>\\.)
-             )",
+            (?<escaped>\\(?=[_*\[\]()~`>#+\-=|{}.!]).)
+            )",
             RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline
         );
 
@@ -52,14 +59,21 @@ namespace HSMServer.Helpers
 
         }
 
-
-        public static IHtmlContent ToHtml(string markdown)
+        public static IHtmlContent ToHtml(string input)
         {
-            if (markdown is null)
+            if (string.IsNullOrEmpty(input))
                 return HtmlString.Empty;
 
-            return new HtmlString(_sanitizer.Sanitize(Markdown.ToHtml(markdown)));
+            return new HtmlString(MarkdownTagRegex.Replace(input, match =>
+            {
+                string content = match.Groups["content"].Value;
+                string convertedContent = _sanitizer.Sanitize(Markdown.ToHtml(content));
+                return convertedContent;
+            }));
         }
+
+
+
 
         public static string EscapeMarkdownV2(string text)
         {
@@ -78,6 +92,44 @@ namespace HSMServer.Helpers
             if (string.IsNullOrEmpty(input))
                 return input;
 
+            input = HttpUtility.HtmlDecode(input);
+
+            var matches = MarkdownTagRegex.Matches(input);
+            if (matches.Count == 0)
+                return EscapeMarkdownV2(input);
+
+            var result = new StringBuilder(input.Length * 2);
+            int lastPos = 0;
+
+            foreach (Match match in matches)
+            {
+                if (match.Index > lastPos)
+                {
+                    string textBetween = input.Substring(lastPos, match.Index - lastPos);
+                    result.Append(EscapeMarkdownV2(textBetween));
+                }
+
+                string content = match.Groups["content"].Value;
+                result.Append(ConvertToMarkdownV2Internal(content));
+
+                lastPos = match.Index + match.Length;
+            }
+
+            if (lastPos < input.Length)
+            {
+                string remainingText = input.Substring(lastPos);
+                result.Append(EscapeMarkdownV2(remainingText));
+            }
+
+            return result.ToString();
+        }
+
+
+        private static string ConvertToMarkdownV2Internal(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+                return input;
+
             var result = new StringBuilder(input.Length * 2);
             int lastPos = 0;
 
@@ -90,7 +142,7 @@ namespace HSMServer.Helpers
 
                 if (match.Groups["escaped"].Success)
                 {
-                    result.Append(EscapeMarkdownV2(match.Value));
+                    result.Append(match.Value);
                 }
                 else if (match.Groups["bold"].Success || match.Groups["bold2"].Success)
                 {
