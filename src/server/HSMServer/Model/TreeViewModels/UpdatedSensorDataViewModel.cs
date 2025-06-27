@@ -1,6 +1,8 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
+using Markdig;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -64,7 +66,7 @@ namespace HSMServer.Model.TreeViewModel
             SensorType = sensor.Type;
 
             Value = sensor.ShortStringValue;
-            ValidationError = sensor.ValidationError;
+            ValidationError = MarkdownHelper.ToHtml(sensor.ValidationError).ToString();
             IsValidationErrorVisible = sensor.IsValidationErrorVisible;
 
             if (sensor.Type is SensorType.File)
@@ -81,7 +83,7 @@ namespace HSMServer.Model.TreeViewModel
             }
             else
             {
-                Comment = sensor.LastValue?.Comment;
+                Comment = MarkdownHelper.ToHtml(sensor.LastValue?.Comment).ToString();
             }
         }
 
