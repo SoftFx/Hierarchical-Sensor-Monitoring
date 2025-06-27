@@ -173,10 +173,14 @@ namespace HSMServer.Notifications
         {
             try
             {
-                //_logger.Info($"Send telegram: Telegram bot: StoreMessage enter");
+                _logger.Info($"Send telegram: Telegram bot: StoreMessage enter");
 
                 if (!CanSendNotifications || !_folderManager.TryGetValue(message.FolderId, out var _))
+                {
+                    _logger.Info($"Send telegram: Telegram bot: StoreMessage can't send: CanSendNotifications: {CanSendNotifications}");
                     return;
+                }
+
 
                 foreach (var alert in message)
                 {
@@ -203,6 +207,7 @@ namespace HSMServer.Notifications
             {
                 _logger.Error($"Send telegram: StoreMessage error: {ex}");
             }
+
         }
 
         internal async ValueTask SendMessagesAsync()
