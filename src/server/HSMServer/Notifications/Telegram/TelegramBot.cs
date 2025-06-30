@@ -29,7 +29,7 @@ namespace HSMServer.Notifications
         private const int MaxMessageLength = 1000;
         public const string BotIsNotRunningError = "Telegram Bot is not running.";
 
-        private readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
+        private readonly static NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
 
         private readonly ReceiverOptions _options = new()
         {
@@ -191,14 +191,14 @@ namespace HSMServer.Notifications
                         {
                             if (chat.MessagesAggregationTimeSec == 0)
                             {
-                                _logger.Info($"Send telegram: Telegram bot: SendMessageAsync '{alert}'");
                                 await SendMessageAsync(chat.ChatId, alert.ToString()).ConfigureAwait(false);
+                                _logger.Info($"Send telegram: Telegram bot: SendMessageAsync '{alert}'");
                             }
                             else
                             {
-                                _logger.Info($"Send telegram: Telegram bot: builder.AddMessage '{alert}'");
                                 IMessageBuilder builder = message is ScheduleAlertMessage ? chat.ScheduleMessageBuilder : chat.MessageBuilder;
                                 builder.AddMessage(alert);
+                                _logger.Info($"Send telegram: Telegram bot: builder.AddMessage '{alert}'");
                             }
                         }
                 }
@@ -331,6 +331,7 @@ namespace HSMServer.Notifications
                         break;
 
                     await (_bot?.SendMessage(chat, MarkdownHelper.ConvertToMarkdownV2(message), cancellationToken: _tokenSource.Token, parseMode: ParseMode.MarkdownV2) ?? Task.CompletedTask).ConfigureAwait(false);
+                    
                     _logger.Info($"Send telegram: SendMessageAsync: message '{message}' is sent");
                     break;
                 }

@@ -861,32 +861,41 @@ namespace HSMServer.Core.Cache
         public void SendAlertMessage(AlertMessage message)
         {
             _logger.Info($"Send telegram: SendAlertMessage enter");
+            
+            if(!message.Any())
+                return;
+
             var sensorId = message.SensorId;
 
             using (_lock.GetReadLock())
             {
-                if (_sensors.TryGetValue(sensorId, out var sensor) && sensor.CanSendNotifications)
+                if (!_sensors.TryGetValue(sensorId, out var sensor) || !sensor.CanSendNotifications)
+                    return;
+
+                var product = GetProductByName(sensor.RootProductName);
+
+                if (!product.FolderId.HasValue)
+                    return;
+
+                _logger.Info($"Send telegram: SendAlertMessage: ");
+
+                //TODO: move to Policy => GetParentChats when FolderModel will be moved into Core project
+                List<Guid> folderChats = GetFolderChats(product.FolderId.Value);
+
+                if (folderChats.Any())
                 {
-                    var product = GetProductByName(sensor.RootProductName);
-
-                    if (product.FolderId.HasValue)
+                    foreach (AlertResult alert in message)
                     {
-                        //TODO: move to Policy => GetParentChats when FolderModel will be moved into Core project
-                        List<Guid> folderChats = GetFolderChats(product.FolderId.Value);
-
-                        foreach(AlertResult alert in message)
+                        foreach (Guid folderId in folderChats)
                         {
-                            foreach (Guid folderId in folderChats)
-                            {
-                                if(!alert.Destination.Chats.Contains(folderId))
-                                    alert.Destination.Chats.Add(folderId);
-                            }
+                            if (!alert.Destination.Chats.Contains(folderId))
+                                alert.Destination.Chats.Add(folderId);
                         }
-
-                        _logger.Info($"Send telegram: NewAlertMessageEvent Invoke");
-                        NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
                     }
                 }
+
+                _logger.Info($"Send telegram: NewAlertMessageEvent Invoke");
+                NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
             }
         }
 
