@@ -173,14 +173,13 @@ namespace HSMServer.Notifications
         {
             try
             {
-                _logger.Info($"Send telegram: Telegram bot: StoreMessage enter");
+                _logger.Info($"TSend: StoreMessage enter");
 
                 if (!CanSendNotifications || !_folderManager.TryGetValue(message.FolderId, out var _))
                 {
-                    _logger.Info($"Send telegram: Telegram bot: StoreMessage can't send: CanSendNotifications: {CanSendNotifications}");
+                    _logger.Info($"TSend: StoreMessage can't send: CanSendNotifications={CanSendNotifications}");
                     return;
                 }
-
 
                 foreach (var alert in message)
                 {
@@ -189,16 +188,20 @@ namespace HSMServer.Notifications
                     foreach (var chatId in chatIds)
                         if (_chatsManager.TryGetValue(chatId, out var chat) && chat.SendMessages)
                         {
+                            var alertText = alert.ToString();
+                            var logAlert = alertText.Length > 100 ? alertText.Substring(0, 100) : alertText;
+
                             if (chat.MessagesAggregationTimeSec == 0)
                             {
-                                await SendMessageAsync(chat.ChatId, alert.ToString()).ConfigureAwait(false);
-                                _logger.Info($"Send telegram: Telegram bot: SendMessageAsync '{alert}'");
+                                await SendMessageAsync(chat.ChatId, alertText).ConfigureAwait(false);
+                                _logger.Info($"TSend: SendMessageAsync '{logAlert}'");
                             }
                             else
                             {
                                 IMessageBuilder builder = message is ScheduleAlertMessage ? chat.ScheduleMessageBuilder : chat.MessageBuilder;
                                 builder.AddMessage(alert);
-                                _logger.Info($"Send telegram: Telegram bot: builder.AddMessage '{alert}'");
+
+                                _logger.Info($"TSend: builder '{logAlert}'");
                             }
                         }
                 }
@@ -215,7 +218,7 @@ namespace HSMServer.Notifications
             if (!CanSendNotifications)
                 return;
 
-            _logger.Info($"Send telegram: Telegram bot: send chats notifications");
+            _logger.Info($"TSend: send chats notifications");
 
             try
             {
@@ -236,7 +239,7 @@ namespace HSMServer.Notifications
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error($"Error getting message: {chat.Name} - {ex}");
+                        _logger.Error($"SendMessagesAsync: error getting message: {chat.Name} - {ex}");
                     }
                 }
             }
@@ -332,7 +335,9 @@ namespace HSMServer.Notifications
 
                     await (_bot?.SendMessage(chat, MarkdownHelper.ConvertToMarkdownV2(message), cancellationToken: _tokenSource.Token, parseMode: ParseMode.MarkdownV2) ?? Task.CompletedTask).ConfigureAwait(false);
                     
-                    _logger.Info($"Send telegram: SendMessageAsync: message '{message}' is sent");
+                    var logMessage = message.Length > 100 ? message.Substring(0, 100) : message;
+
+                    _logger.Info($"TSend: SendMessageAsync: message '{logMessage}' is sent");
                     break;
                 }
                 catch (ApiRequestException ex)

@@ -860,7 +860,7 @@ namespace HSMServer.Core.Cache
 
         public void SendAlertMessage(AlertMessage message)
         {
-            _logger.Info($"Send telegram: SendAlertMessage enter");
+            _logger.Info($"TSend: SendAlertMessage enter");
             
             if(!message.Any())
                 return;
@@ -892,7 +892,7 @@ namespace HSMServer.Core.Cache
                     }
                 }
 
-                _logger.Info($"Send telegram: NewAlertMessageEvent Invoke");
+                _logger.Info($"TSend: NewAlertMessageEvent Invoke");
                 NewAlertMessageEvent?.Invoke(message.ApplyFolder(product));
             }
         }
