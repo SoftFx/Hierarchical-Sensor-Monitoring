@@ -877,8 +877,6 @@ namespace HSMServer.Core.Cache
                 if (!product.FolderId.HasValue)
                     return;
 
-                _logger.Info($"Send telegram: SendAlertMessage: ");
-
                 //TODO: move to Policy => GetParentChats when FolderModel will be moved into Core project
                 List<Guid> folderChats = GetFolderChats(product.FolderId.Value);
 
