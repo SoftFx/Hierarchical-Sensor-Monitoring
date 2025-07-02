@@ -135,6 +135,8 @@ public static class ApplicationServiceExtensions
             applicationBuilder.UseExceptionHandler("/Error");
         }
 
+        applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
+
         applicationBuilder.UseHttpsRedirection();
 
         applicationBuilder.UseStaticFiles();
@@ -146,7 +148,7 @@ public static class ApplicationServiceExtensions
 
         applicationBuilder.UseMiddleware<TelemetryMiddleware>();
         applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
-        applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
+
 
         applicationBuilder.UseSwagger();
         applicationBuilder.UseSwaggerUI(c =>
