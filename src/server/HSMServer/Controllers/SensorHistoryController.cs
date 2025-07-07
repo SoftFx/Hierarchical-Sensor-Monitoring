@@ -19,9 +19,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using HSMServer.Core.Model.Requests;
-using HSMServer.Dashboards;
-using HSMServer.Datasources;
 using HSMServer.JsonConverters;
 
 namespace HSMServer.Controllers
@@ -88,7 +85,6 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
             await StoredUser.History.Reload(_cache, model);
-
             return GetHistoryTable(SelectedTable);
         }
 
@@ -101,7 +97,8 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task<IActionResult> GetNextTablePage()
         {
-            return GetHistoryTable(await SelectedTable?.ToNextPage());
+            var result = GetHistoryTable(await SelectedTable?.ToNextPage());
+            return result;
         }
 
 
@@ -201,7 +198,16 @@ namespace HSMServer.Controllers
             string fileName = $"{sensor.FullPath.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
-            var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount, RequestOptions.IncludeTtl);
+            //doesn't match with visivle table values
+            //var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount, RequestOptions.IncludeTtl);
+
+            var values = SelectedTable?.GetAllValues();
+
+            //old implementation
+            if(values == null)
+                values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount, RequestOptions.IncludeTtl);
+
+
             var exportOptions = BuildExportOptions(encodedId, addHiddenColumns);
             var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(exportOptions));
 

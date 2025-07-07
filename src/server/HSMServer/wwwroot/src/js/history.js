@@ -256,13 +256,22 @@ function requestTable() {
     const {from, to} = getFromAndTo(encodedId);
 
     hideBarsCount(encodedId);
-    enableHistoryPeriod()
+    enableHistoryPeriod();
+
+    let action = historyAction;
+
+    let historyPeriod = window.localStorage.getItem(`historyPeriod_${encodedId}`);
+    if (historyPeriod == null || historyPeriod === 'Default') {
+         action = historyLatestAction;
+    }
+
+
     GetSensortInfo(encodedId).done(function (types) {
         if (Object.keys(types).length === 0)
             return;
 
         let body = Data(to, from, types.realType, encodedId);
-        initializeTable(encodedId, historyAction, types.realType, body);
+        initializeTable(encodedId, action, types.realType, body);
     })
 }
 
