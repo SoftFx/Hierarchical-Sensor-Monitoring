@@ -106,13 +106,14 @@ namespace HSMServer.Model.History
             Pages.Clear();
         }
 
-        public List<BaseValue> GetAllValues()
+
+
+        public async Task<List<BaseValue>> GetAllValues()
         {
-            while (TryReadNextPage().Result)
-            {}
+            while (await TryReadNextPage())
+            {  }
 
             List<BaseValue> result = new List<BaseValue>();
-
             Pages.ForEach(result.AddRange);
 
             return result;

@@ -299,13 +299,20 @@ function requestHistory(encodedId, action, rawAction, types, reqData) {
 
 function exportCsv() {
     let encodedId = this.id.substring("button_export_csv_".length);
-    const {from, to} = getFromAndTo(encodedId);
+    const { from, to } = getFromAndTo(encodedId);
+
+    let fromToSend = from;
+        
+    let historyPeriod = window.localStorage.getItem(`historyPeriod_${encodedId}`);
+    if (historyPeriod == null || historyPeriod === 'Default') {
+        fromToSend = null;
+    }
 
     GetSensortInfo(encodedId).done(function (types) {
         if (Object.keys(types).length === 0)
             return;
 
-        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType + "&addHiddenColumns=" + hiddenColumns.isVisible + "&From=" + from + "&To=" + to;
+        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType + "&addHiddenColumns=" + hiddenColumns.isVisible + "&From=" + fromToSend + "&To=" + to;
     })
 }
 
