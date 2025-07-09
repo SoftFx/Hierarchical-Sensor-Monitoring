@@ -109,6 +109,18 @@ namespace HSMServer.Model.History
         }
 
 
+
+        public async Task<List<BaseValue>> GetAllValues()
+        {
+            while (await TryReadNextPage())
+            {  }
+
+            List<BaseValue> result = new List<BaseValue>();
+            Pages.ForEach(result.AddRange);
+
+            return result;
+        }
+
         private async Task<bool> TryReadNextPage()
         {
             var hasNext = await _pagesEnumerator.MoveNextAsync();

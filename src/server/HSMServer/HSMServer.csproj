@@ -5,11 +5,11 @@
     <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>3.38.28</Version>
+    <Version>3.38.29</Version>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Copyright>Copyright © 2024</Copyright>
+    <Copyright>Copyright © 2025</Copyright>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <TypescriptCompileBlocked>true</TypescriptCompileBlocked>
   </PropertyGroup>
