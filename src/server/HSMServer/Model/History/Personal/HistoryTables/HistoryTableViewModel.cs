@@ -60,6 +60,8 @@ namespace HSMServer.Model.History
 
         public int CurrentIndex { get; private set; }
 
+        public SensorType SensorType => _model.Type;
+
 
         internal HistoryTableViewModel(BaseSensorModel model)
         {

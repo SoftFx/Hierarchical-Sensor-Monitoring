@@ -1,4 +1,5 @@
 ﻿@using System.Net
+@using HSMServer.Core.Model
 @using HSMServer.Helpers
 @using HSMServer.Extensions
 @using HSMServer.Model.History
@@ -175,7 +176,14 @@ else
                         else
                         {
                             <td id="aggregatedValuesCount_value@(i)" class="d-none">@simpleValue.AggregatedValuesCount</td>
-                            <td>@simpleValue.Value</td>
+                            @if(Model.SensorType == SensorType.String)
+                            {
+                                <td>@Html.Raw(MarkdownHelper.ToHtml(simpleValue.Value))</td>
+                            }
+                            else
+                            {
+                                <td>@simpleValue.Value</td>
+                            }
                             @if (Model.IsEma)
                             {
                                 <td>@simpleValue.EmaValue</td>
