@@ -25,6 +25,8 @@ namespace HSMServer.Core.DataLayer
 
         long TotalDbSize { get; }
 
+        int SensorValuesPageCount { get; }
+
 
         TaskResult<string> BackupEnvironment(string backupPath);
 
@@ -75,6 +77,8 @@ namespace HSMServer.Core.DataLayer
         Dictionary<Guid, byte[]> GetLatestValuesFromTo(Dictionary<Guid, (long, long)> sensors);
 
         IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
+
+        IAsyncEnumerable<byte[]> GetSensorValues(Guid sensorId, DateTime from, DateTime to);
 
         List<SensorEntity> GetAllSensors();
 

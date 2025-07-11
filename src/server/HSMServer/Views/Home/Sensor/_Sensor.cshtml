@@ -77,8 +77,10 @@
             localStorage.setItem(`historyPeriod_@sensorId`, period);
 
         if (period === '@HistoryPeriod.Custom') {
-            localStorage.setItem(`historyFrom_@sensorId`, parseCustomDate($(`#from_@sensorId`).val()));
-            localStorage.setItem(`historyTo_@sensorId`, parseCustomDate($(`#to_@sensorId`).val()));
+            // localStorage.setItem(`historyFrom_@sensorId`, parseCustomDate($(`#from_@sensorId`).val()));
+            // localStorage.setItem(`historyTo_@sensorId`, parseCustomDate($(`#to_@sensorId`).val()));
+            localStorage.setItem(`historyFrom_@sensorId`, $(`#from_@sensorId`).val());
+            localStorage.setItem(`historyTo_@sensorId`, $(`#to_@sensorId`).val());
         }
         else {
             localStorage.removeItem(`historyFrom_@sensorId`);
