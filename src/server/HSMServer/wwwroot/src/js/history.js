@@ -38,7 +38,10 @@ window.parseCustomDate = function (dateStr) {
     const [month, day, year] = datePart.split('/');
     const [hours, minutes] = timePart.split(':');
 
-    return new Date(Date.UTC(year, month - 1, day, hours, minutes));
+    var utc = Date.UTC(year, month - 1, day, hours, minutes);
+    var result = new Date(utc);
+
+    return result;
 }
 
 
@@ -176,10 +179,12 @@ window.InitializeHistory = function () {
 
         if (historyPeriod === 'Custom') {
             let historyFrom = window.localStorage.getItem(`historyFrom_${encodedId}`);
-            let from = isNaN(Date.parse(historyFrom)) ? date.AddDays(-1) : new Date(historyFrom + 'Z');
+            //let from = isNaN(Date.parse(historyFrom)) ? date.AddDays(-1) : new Date(historyFrom + 'Z');
+            let from = isNaN(Date.parse(historyFrom)) ? date.AddDays(-1) : new Date(historyFrom);
 
             let historyTo = new Date(window.localStorage.getItem(`historyTo_${encodedId}`));
-            let to = isNaN(Date.parse(historyTo)) ? date.AddDays(1) : new Date(historyTo + 'Z');
+            //let to = isNaN(Date.parse(historyTo)) ? date.AddDays(1) : new Date(historyTo + 'Z');
+            let to = isNaN(Date.parse(historyTo)) ? date.AddDays(1) : new Date(historyTo);
 
             setFromAndTo(encodedId, from, to);
             searchHistory(encodedId);

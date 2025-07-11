@@ -229,6 +229,7 @@ namespace HSMServer.Controllers
 
             var values = await SelectedTable.GetAllValues();
 
+
             //case Default 300
             if (from == DateTime.MinValue && values.Any())
             {
