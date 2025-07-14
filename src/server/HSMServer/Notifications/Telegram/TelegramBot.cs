@@ -303,9 +303,10 @@ namespace HSMServer.Notifications
 
             static bool HasNoPermissions(ChatPermissions permissions)
             {
-                return permissions is null || 
-                       ((!permissions.CanSendMessages || !permissions.CanSendMessages) &&
-                        (!permissions.CanSendOtherMessages || !permissions.CanSendOtherMessages));
+                if (permissions is null) 
+                    return true;
+
+                return !permissions.CanSendMessages && !permissions.CanSendOtherMessages;
             }
         }
 

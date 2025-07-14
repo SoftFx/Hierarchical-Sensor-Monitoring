@@ -227,11 +227,11 @@ namespace HSMServer.Model.History
 
         private string GetTableValue<T>(BaseValue<T> value) => value switch
         {
-            VersionValue version => version.Value?.RemoveTailZeroes() ?? string.Empty,
-            TimeSpanValue timespan => timespan.Value.ToReadableView(),
-            RateValue rate => Math.Round(rate.Value, 5).ToString(),
-            EnumValue v => _model.EnumOptions.TryGetValue(v.Value, out var option) ? option.Value : v.Value.ToString(),
-            _ => value.Value?.ToString(),
+        VersionValue version => version.Value?.RemoveTailZeroes() ?? string.Empty,
+        TimeSpanValue timespan => timespan.Value.ToReadableView(),
+        RateValue rate => Math.Round(rate.Value, 5).ToString(),
+        EnumValue v => v.Value != null && _model.EnumOptions.TryGetValue(v.Value, out var option) ? option.Value : v.Value.ToString(),
+        _ => value.Value?.ToString() ?? string.Empty,
         };
     }
 }

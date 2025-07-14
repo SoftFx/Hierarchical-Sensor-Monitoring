@@ -461,8 +461,7 @@ namespace HSMServer.Model.DataAlerts
                     IsAlertBlock = true,
                 };
 
-                if (policy.ConfirmationPeriod.HasValue)
-                    condition.ConfirmationPeriod.FromModel(new Core.Model.TimeIntervalModel(policy.ConfirmationPeriod.Value), PredefinedIntervals.ForRestore);
+                condition.ConfirmationPeriod.FromModel(new TimeIntervalModel(policy.ConfirmationPeriod.Value), PredefinedIntervals.ForRestore);
 
                 Conditions.Add(condition);
             }

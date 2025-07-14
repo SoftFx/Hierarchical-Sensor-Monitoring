@@ -36,19 +36,22 @@ namespace HSMServer.BackgroundServices
 
         protected virtual void RunAction(Action action)
         {
-            var methodName = action.Method.Name;
-
-            try
+            if (action != null)
             {
-                _logger.Info($"Start {methodName}");
+                var methodName = action.Method.Name;
 
-                action?.Invoke();
+                try
+                {
+                    _logger.Info($"Start {methodName}");
 
-                _logger.Info($"Stop {methodName}");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"{methodName} failed: {ex}");
+                    action.Invoke();
+
+                    _logger.Info($"Stop {methodName}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"{methodName} failed: {ex}");
+                }
             }
         }
 

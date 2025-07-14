@@ -282,7 +282,7 @@ namespace HSMServer.Controllers
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var product))
                 {
-                    if (!CurrentUser.IsManager(product.RootProduct.Id))
+                    if (!CurrentUser.IsManager(product?.RootProduct?.Id ?? Guid.Empty))
                     {
                         toastViewModel.AddRoleError(product.Name, "edit");
                         continue;
@@ -715,7 +715,7 @@ namespace HSMServer.Controllers
 
             var sensorModel = _treeValuesCache.GetSensor(alert.EntityId);
 
-            var message = alert.BuildToastMessage(sensorModel) ?? string.Empty;
+            var message = alert.BuildToastMessage(sensorModel);
 
             return Json(MarkdownHelper.ToHtml(message));
         }

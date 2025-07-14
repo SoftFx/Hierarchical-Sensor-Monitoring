@@ -65,24 +65,54 @@ namespace HSMServer.Datasources
 
         internal override object Filter(PanelRangeSettings settings)
         {
-            var currentValue = double.CreateChecked(Value);
+            try
+            {
+                double currentValue = double.CreateChecked(Value);
+                double newValue = currentValue;
+                bool valueChanged = false;
 
-            if (currentValue > settings.MaxValue)
-                Value = T.CreateChecked(settings.MaxValue);
+                if (currentValue > settings.MaxValue)
+                {
+                    newValue = settings.MaxValue;
+                    valueChanged = true;
+                }
+                else if (currentValue < settings.MinValue)
+                {
+                    newValue = settings.MinValue;
+                    valueChanged = true;
+                }
 
-            if (currentValue < settings.MinValue)
-                Value = T.CreateChecked(settings.MinValue);
+                if (valueChanged)
+                {
+                    Value = T.CreateChecked(newValue);
+                }
 
-            var sb = new StringBuilder(1 << 4);
+                var sb = new StringBuilder(64);
 
-            sb.Append(currentValue != double.CreateChecked(Value) ? $"<br>Original value: {currentValue}" : currentValue);
+                if (valueChanged)
+                {
+                    sb.Append("<br>Original value: ").Append(currentValue);
+                }
+                else
+                {
+                    sb.Append(currentValue);
+                }
 
-            if (!string.IsNullOrEmpty(Tooltip))
-                sb.Append($"<br>{Tooltip}");
+                if (!string.IsNullOrEmpty(Tooltip))
+                    sb.Append("<br>").Append(Tooltip);
 
-            Tooltip = sb.ToString();
+                Tooltip = sb.ToString();
 
-            return this;
+                return this;
+            }
+            catch (OverflowException ex)
+            {
+                throw new InvalidOperationException($"Value conversion overflow: {Value}", ex);
+            }
+            catch (FormatException ex)
+            {
+                throw new InvalidOperationException($"Invalid value format: {Value}", ex);
+            }
         }
     }
 }
