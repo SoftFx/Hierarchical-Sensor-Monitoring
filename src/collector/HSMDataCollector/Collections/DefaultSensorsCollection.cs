@@ -146,6 +146,11 @@ namespace HSMDataCollector.DefaultSensors
 
         public void Dispose()
         {
+            PackageProcessTimeSensor?.Dispose();
+            PackageDataCountSensor?.Dispose();
+            PackageSizeSensor?.Dispose();
+            QueueOverflowSensor.Dispose();
+            CollectorErrors.Dispose();
         }
     }
 }

@@ -12,8 +12,8 @@ namespace HSMDataCollector.Extensions
 
         static DataCollectorExtensions()
         {
-            var assembly = Assembly.GetExecutingAssembly()?.GetName();
-            Version = assembly.Version;
+            var assembly = Assembly.GetExecutingAssembly();
+            Version = assembly?.GetName()?.Version ?? new Version(0, 0, 0, 0);
         }
 
 
