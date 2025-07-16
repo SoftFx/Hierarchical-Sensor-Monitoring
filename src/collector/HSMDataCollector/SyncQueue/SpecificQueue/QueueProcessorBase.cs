@@ -1,13 +1,14 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
@@ -44,12 +45,22 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         {
             try
             {
-                if (_task != null)
+                if (_task is null)
+                    return;
+
+                _cancellationTokenSource?.Cancel();
+
+                try
                 {
-                    _cancellationTokenSource?.Cancel();
                     await _task.ConfigureAwait(false);
-                    _task?.Dispose();
+                }
+                finally
+                {
+                    _task.Dispose();
+                    _task = null;
+
                     _cancellationTokenSource?.Dispose();
+                    _cancellationTokenSource = null;
                 }
             }
             catch (OperationCanceledException) { }
@@ -130,10 +141,19 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             if (disposing)
             {
-                StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+                try
+                {
+                    StopAsync().GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+
+                    _logger.Error($"Error during disposal: {ex}");
+                }
             }
 
             _disposed = true;
         }
+
     }
 }

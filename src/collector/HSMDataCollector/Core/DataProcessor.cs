@@ -112,7 +112,7 @@ namespace HSMDataCollector.Core
 
         public void AddPackageSendingInfo(PackageSendingInfo info)
         {
-            if (info.ContentSize != 0)
+            if (info.ContentSize != default)
                 DefaultSensors.PackageSizeSensor?.AddValue(info);
         }
 

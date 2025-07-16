@@ -20,9 +20,9 @@ namespace HSMDataCollector.Logging
         {
             options = options?.FillConfigPath() ?? _defaultOptions;
 
-            var factory = new LogFactory(new XmlLoggingConfiguration(options.ConfigPath));
+            LogManager.Configuration = new XmlLoggingConfiguration(options.ConfigPath);
 
-            _logger = factory.GetLogger(nameof(DataCollector));
+            _logger = LogManager.GetLogger(nameof(DataCollector));
             _writeDebug = options.WriteDebug;
         }
 
