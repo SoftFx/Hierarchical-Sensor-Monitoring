@@ -101,24 +101,32 @@ function isInvalidDate(date) {
 }
 
 
-
 window.setFromAndTo = function (encodedId, from, to)
 {
     const fromElement = document.getElementById(`from_${encodedId}`);
     if (fromElement) {
-        fromElement.value = formatDateCustom(from);
-        if (fromElement._flatpickr) {
-            updateTooltip(fromElement._flatpickr);
+        const fromPicker = fromElement._flatpickr;
+        if (fromPicker) {
+            setFlatpickrValue(fromPicker, from)
         }
     }
 
     const toElement = document.getElementById(`to_${encodedId}`);
     if (toElement) {
-        toElement.value = formatDateCustom(to);
-        if (toElement._flatpickr) {
-            updateTooltip(toElement._flatpickr);
+        const toPicker = toElement._flatpickr;
+
+        //toElement.value = formatDateCustom(to);
+        if (toPicker) {
+            setFlatpickrValue(toPicker, to);
         }
     }
+}
+
+function setFlatpickrValue(picker, date) {
+    var localDate = new Date(datetimeLocal(date));
+    picker.setDate(date);
+
+    updateTooltip(picker);
 }
 
 
@@ -406,11 +414,13 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
                 }
 
                 let from = new Date(time);
+                const utcFrom = new Date(from.getTime() + from.getTimezoneOffset() * 60000);
+
                 let to = getToDate();
 
-                setFromAndTo(encodedId, from, to.getTime());
+                setFromAndTo(encodedId, utcFrom, to.getTime());
 
-                reloadHistoryRequest(from, to, body);
+                reloadHistoryRequest(utcFrom, to, body);
             }
             await displayGraph(parsedData, sensorInfo, `graph_${encodedId}`, encodedId);
         }
