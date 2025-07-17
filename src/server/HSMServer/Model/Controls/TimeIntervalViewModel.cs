@@ -184,7 +184,7 @@ namespace HSMServer.Model
             {
                 TimeInterval.Custom => model.CustomSpan.ToReadableView(),
                 TimeInterval.FromParent => GetUsedValue(model.Parent),
-                _ => model.TimeInterval.GetDisplayName()
+                _ => model?.TimeInterval.GetDisplayName()
             };
     }
 }
