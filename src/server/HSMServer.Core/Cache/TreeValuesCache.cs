@@ -977,6 +977,59 @@ namespace HSMServer.Core.Cache
                     (includeTtl || IsNotTimout(latest)))
                     from = latest.ReceivingTime;
 
+                var result = new List<BaseValue>(_database.SensorValuesPageCount);
+                var totalCount = 0;
+                var requestedCount = Math.Abs(count);
+                
+                await foreach (var byteValue in _database.GetSensorValues(sensor.Id, from, to))
+                {
+                    var convertedValue = sensor.Convert(byteValue);
+                    if(!includeTtl && convertedValue.IsTimeout)
+                        continue;
+
+                    result.Add(convertedValue);
+                    totalCount++;
+
+                    if (result.Count == _database.SensorValuesPageCount)
+                    {
+                        yield return result.ToList();
+                        result.Clear();
+                    }
+
+                    if (requestedCount == totalCount)
+                    {
+                        yield return result.ToList();
+                        yield break;
+                    }
+                }
+
+                yield return result.ToList();
+
+
+                if (sensor is FileSensorModel)
+                    _fileHistoryLocks[sensor.Id] = false;
+            }
+        }
+
+
+
+        private async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPageInternalOld(BaseSensorModel sensor, DateTime from, DateTime to, int count, RequestOptions options = default)
+        {
+            bool IsNotTimout(BaseValue value) => !value.IsTimeout;
+
+            if (sensor is FileSensorModel && _fileHistoryLocks[sensor.Id])
+                yield return new List<BaseValue>();
+            else
+            {
+                if (sensor is FileSensorModel)
+                    _fileHistoryLocks[sensor.Id] = true;
+
+                var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
+
+                if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) &&
+                    (includeTtl || IsNotTimout(latest)))
+                    from = latest.ReceivingTime;
+
                 await foreach (var page in _database.GetSensorValuesPage(sensor.Id, from, to, count))
                 {
                     var convertedValues = sensor.Convert(page);

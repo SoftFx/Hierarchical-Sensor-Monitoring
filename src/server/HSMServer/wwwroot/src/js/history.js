@@ -38,7 +38,10 @@ window.parseCustomDate = function (dateStr) {
     const [month, day, year] = datePart.split('/');
     const [hours, minutes] = timePart.split(':');
 
-    return new Date(Date.UTC(year, month - 1, day, hours, minutes));
+    var utc = Date.UTC(year, month - 1, day, hours, minutes);
+    var result = new Date(utc);
+
+    return result;
 }
 
 
@@ -98,24 +101,32 @@ function isInvalidDate(date) {
 }
 
 
-
 window.setFromAndTo = function (encodedId, from, to)
 {
     const fromElement = document.getElementById(`from_${encodedId}`);
     if (fromElement) {
-        fromElement.value = formatDateCustom(from);
-        if (fromElement._flatpickr) {
-            updateTooltip(fromElement._flatpickr);
+        const fromPicker = fromElement._flatpickr;
+        if (fromPicker) {
+            setFlatpickrValue(fromPicker, from)
         }
     }
 
     const toElement = document.getElementById(`to_${encodedId}`);
     if (toElement) {
-        toElement.value = formatDateCustom(to);
-        if (toElement._flatpickr) {
-            updateTooltip(toElement._flatpickr);
+        const toPicker = toElement._flatpickr;
+
+        //toElement.value = formatDateCustom(to);
+        if (toPicker) {
+            setFlatpickrValue(toPicker, to);
         }
     }
+}
+
+function setFlatpickrValue(picker, date) {
+    var localDate = new Date(datetimeLocal(date));
+    picker.setDate(date);
+
+    updateTooltip(picker);
 }
 
 
@@ -176,10 +187,12 @@ window.InitializeHistory = function () {
 
         if (historyPeriod === 'Custom') {
             let historyFrom = window.localStorage.getItem(`historyFrom_${encodedId}`);
-            let from = isNaN(Date.parse(historyFrom)) ? date.AddDays(-1) : new Date(historyFrom + 'Z');
+            //let from = isNaN(Date.parse(historyFrom)) ? date.AddDays(-1) : new Date(historyFrom + 'Z');
+            let from = isNaN(Date.parse(historyFrom)) ? date.AddDays(-1) : new Date(historyFrom);
 
             let historyTo = new Date(window.localStorage.getItem(`historyTo_${encodedId}`));
-            let to = isNaN(Date.parse(historyTo)) ? date.AddDays(1) : new Date(historyTo + 'Z');
+            //let to = isNaN(Date.parse(historyTo)) ? date.AddDays(1) : new Date(historyTo + 'Z');
+            let to = isNaN(Date.parse(historyTo)) ? date.AddDays(1) : new Date(historyTo);
 
             setFromAndTo(encodedId, from, to);
             searchHistory(encodedId);
@@ -401,11 +414,13 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
                 }
 
                 let from = new Date(time);
+                const utcFrom = new Date(from.getTime() + from.getTimezoneOffset() * 60000);
+
                 let to = getToDate();
 
-                setFromAndTo(encodedId, from, to.getTime());
+                setFromAndTo(encodedId, utcFrom, to.getTime());
 
-                reloadHistoryRequest(from, to, body);
+                reloadHistoryRequest(utcFrom, to, body);
             }
             await displayGraph(parsedData, sensorInfo, `graph_${encodedId}`, encodedId);
         }

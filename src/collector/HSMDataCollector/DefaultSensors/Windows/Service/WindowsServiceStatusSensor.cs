@@ -49,33 +49,48 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
 
         internal override async ValueTask StopAsync()
         {
+            Task taskToWait = null;
+            CancellationTokenSource cts = null;
+
+            lock (_locker)
+            {
+                if (_statusWatcher != null)
+                {
+                    cts = _cancellationTokenSource;
+                    _cancellationTokenSource = null;
+
+                    taskToWait = _statusWatcher;
+                    _statusWatcher = null;
+
+                    cts?.Cancel();
+                }
+            }
+
             try
             {
-                Task taskToWait = null;
-
-                lock (_locker)
+                if (taskToWait != null)
                 {
-                    if (_statusWatcher != null)
+                    try
                     {
-                        _cancellationTokenSource?.Cancel();
-                        taskToWait = _statusWatcher;
-                        _cancellationTokenSource?.Dispose();
-                        _statusWatcher = null;
+                        await taskToWait.ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        taskToWait.Dispose();
                     }
                 }
 
-                if (taskToWait != null)
-                {
-                    await taskToWait.ConfigureAwait(false);
-                    taskToWait.Dispose();
-                }
-
-                await base.StopAsync();
+                await base.StopAsync().ConfigureAwait(false);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
                 HandleException(ex);
+                throw;
+            }
+            finally
+            {
+                cts?.Dispose();
             }
         }
 
@@ -86,34 +101,42 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             {
                 if (_faultState)
                 {
-                    _service = ServiceController.GetServices().FirstOrDefault(s => s.ServiceName == _serviceName);
-                    if (_service == null)
+                    _service = ServiceController.GetServices()
+                                                .FirstOrDefault(s => string.Equals(s.ServiceName, _serviceName, StringComparison.OrdinalIgnoreCase));
+
+                    if (_service is null)
                     {
                         SendValue(-1, HSMSensorDataObjects.SensorStatus.Error, "Service not found!");
                         _lastServiceState = null;
-                        await Task.Delay(_faultStateDelay - _scanPeriod, _cancellationTokenSource.Token);
+
+                        var delay = _faultStateDelay - _scanPeriod;
+                        if (delay > TimeSpan.Zero)
+                        {
+                            await Task.Delay(delay, _cancellationTokenSource.Token);
+                        }
                         return;
                     }
 
                     _faultState = false;
                 }
-                
-                if (!_faultState)
-                {
-                    _service.Refresh();
 
-                    if (_service.Status != _lastServiceState)
-                    {
-                        SendValue((int)_service.Status);
-                        _lastServiceState = _service.Status;
-                    }
+                _service.Refresh();
+
+                if (_service.Status != _lastServiceState)
+                {
+                    SendValue((int)_service.Status);
+                    _lastServiceState = _service.Status;
                 }
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
                 HandleException(ex);
                 _faultState = true;
                 _lastServiceState = null;
+
+                _service?.Dispose();
+                _service = null;
             }
         }
 

@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Constants;
-using HSMCommon.Extensions;
 using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
@@ -13,16 +12,15 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Text;
 using System.Text.Json;
-using System.Xml.Linq;
+
 
 namespace HSMDatabase.DatabaseWorkCore
 {
     public sealed class DatabaseCore : IDatabaseCore
     {
-        private const int SensorValuesPageCount = 100;
+        public int SensorValuesPageCount => 100;
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -128,6 +126,8 @@ namespace HSMDatabase.DatabaseWorkCore
                     else
                         break;
                 }
+
+            curDb.Dispose();
 
             return result;
         }
@@ -258,6 +258,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var result = new List<byte[]>(SensorValuesPageCount);
             var totalCount = 0;
+            var requestedCount = Math.Abs(count);
 
             foreach (var database in databases)
             {
@@ -269,11 +270,10 @@ namespace HSMDatabase.DatabaseWorkCore
                     if (result.Count == SensorValuesPageCount)
                     {
                         yield return result;
-
                         result.Clear();
                     }
 
-                    if (Math.Abs(count) == totalCount)
+                    if (requestedCount == totalCount)
                     {
                         yield return result;
                         yield break;
@@ -283,6 +283,39 @@ namespace HSMDatabase.DatabaseWorkCore
 
             yield return result;
         }
+
+        public async IAsyncEnumerable<byte[]> GetSensorValues(Guid sensorId, DateTime from, DateTime to)
+        {
+            var fromTicks = from.Ticks;
+            var toTicks = to.Ticks;
+
+            var fromBytes = BuildSensorValueKey(sensorId.ToString(), fromTicks);
+            var toBytes = BuildSensorValueKey(sensorId.ToString(), toTicks);
+
+            var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
+
+            //if (count > 0)
+            //    count *= (-1);
+
+            //var currentCount = 0;
+            //var requestedCount = Math.Abs(count);
+
+
+            foreach (var database in databases)
+            {
+                foreach (byte[] bytes in database.GetValuesTo(fromBytes, toBytes))
+                {
+                    //if (requestedCount == currentCount)
+                    //    yield break;
+
+                    //currentCount++;
+
+                    yield return bytes;
+                }
+            }
+
+        }
+
 
 
         private static byte[] BuildSensorValueKey(Guid sensorId, long time) =>
