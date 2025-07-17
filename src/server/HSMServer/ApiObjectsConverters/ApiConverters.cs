@@ -57,7 +57,7 @@ namespace HSMServer.ApiObjectsConverters
                 Comment = sanitizer.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = value.Value
+                Value = sanitizer.Sanitize(value.Value)
             };
 
 
