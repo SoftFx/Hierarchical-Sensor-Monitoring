@@ -3,7 +3,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    internal abstract class FreeDiskSpaceBase : MonitoringSensorBase<double>
+    public abstract class FreeDiskSpaceBase : MonitoringSensorBase<double>
     {
         private readonly IDiskInfo _diskInfo;
 

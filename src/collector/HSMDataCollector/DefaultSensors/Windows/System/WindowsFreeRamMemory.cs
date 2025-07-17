@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsFreeRamMemory : WindowsSensorBase
+    public sealed class WindowsFreeRamMemory : WindowsSensorBase
     {
         protected override string CategoryName => "Memory";
 

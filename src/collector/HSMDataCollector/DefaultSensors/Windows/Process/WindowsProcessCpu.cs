@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsProcessCpu : WindowsSensorBase
+    public sealed class WindowsProcessCpu : WindowsSensorBase
     {
         protected override string CategoryName => "Process";
 

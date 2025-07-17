@@ -10,7 +10,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string Category => "Application";
 
 
-        public WindowsApplicationErrorLogs(InstantSensorOptions options) : base(options) { }
+        internal WindowsApplicationErrorLogs(InstantSensorOptions options) : base(options) { }
     }
 
 
@@ -21,6 +21,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string Category => "System";
 
 
-        public WindowsSystemErrorLogs(InstantSensorOptions options) : base(options) { }
+        internal WindowsSystemErrorLogs(InstantSensorOptions options) : base(options) { }
     }
 }

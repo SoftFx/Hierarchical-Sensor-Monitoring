@@ -18,7 +18,7 @@ namespace HSMDataCollector.DefaultSensors
 
         private readonly object _lock = new object();
 
-        protected virtual TimeSpan TimerDueTime => PostTimePeriod;
+        protected virtual TimeSpan TimerDueTime => TimeSpan.Zero;
 
         protected TimeSpan PostTimePeriod => _options.PostDataPeriod;
 

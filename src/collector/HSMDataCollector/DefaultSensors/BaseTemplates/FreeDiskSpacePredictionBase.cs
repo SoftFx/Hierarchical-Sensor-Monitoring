@@ -10,7 +10,7 @@ using HSMSensorDataObjects;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    internal abstract class FreeDiskSpacePredictionBase : MonitoringSensorBase<TimeSpan>
+    public abstract class FreeDiskSpacePredictionBase : MonitoringSensorBase<TimeSpan>
     {
         public const int DefaultSpaceCheckPeriodInSec = 30;
 
@@ -35,7 +35,7 @@ namespace HSMDataCollector.DefaultSensors
 
         private readonly object _locker = new object();
 
-        public FreeDiskSpacePredictionBase(DiskSensorOptions options, IDiskInfo diskInfo) : base(options)
+        internal FreeDiskSpacePredictionBase(DiskSensorOptions options, IDiskInfo diskInfo) : base(options)
         {
             _calculateSpeedDelay = TimeSpan.FromSeconds(DefaultSpaceCheckPeriodInSec);
             _calibrationRequests = options.CalibrationRequests;

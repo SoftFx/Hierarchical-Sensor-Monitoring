@@ -24,6 +24,8 @@ namespace HSMDataCollector.DefaultSensors
         private CancellationTokenSource _cancellationTokenSource;
         protected BarType _internalBar;
 
+        public override BarType Current => (BarType)_internalBar.Copy().Complete();
+
         protected sealed override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
 
 
@@ -53,33 +55,47 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override async ValueTask StopAsync()
         {
+            Task taskToWait = null;
+            CancellationTokenSource cts = null;
+
+            lock (_locker)
+            {
+                if (_collectTask != null)
+                {
+                    cts = _cancellationTokenSource;
+                    _cancellationTokenSource = null;
+
+                    taskToWait = _collectTask;
+                    _collectTask = null;
+
+                    cts?.Cancel();
+                }
+            }
+
             try
             {
-                Task taskToWait = null;
-
-                lock (_locker)
+                if (taskToWait != null)
                 {
-                    if (_collectTask != null)
+                    try
                     {
-                        _cancellationTokenSource?.Cancel();
-                        taskToWait = _collectTask;
-                        _collectTask = null;
-                        _cancellationTokenSource?.Dispose();
+                        await taskToWait.ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        taskToWait.Dispose();
                     }
                 }
 
-                if (taskToWait != null)
-                {
-                    await taskToWait.ConfigureAwait(false);
-                    taskToWait.Dispose();
-                }
-
-                await base.StopAsync();
+                await base.StopAsync().ConfigureAwait(false);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
                 HandleException(ex);
+            }
+            finally
+            {
+                cts?.Dispose();
             }
         }
 
@@ -93,7 +109,7 @@ namespace HSMDataCollector.DefaultSensors
                 if (_internalBar.Count <= 0)
                     return null;
 
-                return _internalBar.Complete().Copy() as BarType; //need copy for correct partialBar serialization
+                return _internalBar.Copy().Complete() as BarType; //need copy for correct partialBar serialization
             }
         }
 

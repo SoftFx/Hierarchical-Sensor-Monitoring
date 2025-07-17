@@ -6,15 +6,11 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows.WindowsInfo
 {
-    internal sealed class WindowsVersion : MonitoringSensorBase<Version>
+    public sealed class WindowsVersion : MonitoringSensorBase<Version>
     {
         private Version _lastVersion;
 
-
-        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
-
-
-        public WindowsVersion(WindowsInfoSensorOptions options) : base(options) { }
+        internal WindowsVersion(WindowsInfoSensorOptions options) : base(options) { }
 
 
         protected override Version GetValue()

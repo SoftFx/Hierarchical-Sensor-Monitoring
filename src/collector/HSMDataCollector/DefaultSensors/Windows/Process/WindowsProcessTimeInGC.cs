@@ -7,7 +7,7 @@ using HSMDataCollector.Options;
 namespace HSMDataCollector.DefaultSensors.Windows
 {
 #if !NET6_0_OR_GREATER
-    internal sealed class WindowsProcessTimeInGC : WindowsTimeInGCBase
+    public sealed class WindowsProcessTimeInGC : WindowsTimeInGCBase
     {
         protected override string InstanceName => ProcessInfo.CurrentProcessName;
 
@@ -15,7 +15,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         internal WindowsProcessTimeInGC(BarSensorOptions options) : base(options) { }
     }
 #else
-    internal sealed class WindowsProcessTimeInGC : DoubleBarPublicSensor
+    public sealed class WindowsProcessTimeInGC : DoubleBarPublicSensor
     {
         private ProcessEventListener _listener;
 

@@ -3,7 +3,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Unix
 {
-    internal sealed class UnixProcessMemory : CollectableBarMonitoringSensorBase<DoubleMonitoringBar, double>
+    public sealed class UnixProcessMemory : CollectableBarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
         internal UnixProcessMemory(BarSensorOptions options) : base(options) { }
 

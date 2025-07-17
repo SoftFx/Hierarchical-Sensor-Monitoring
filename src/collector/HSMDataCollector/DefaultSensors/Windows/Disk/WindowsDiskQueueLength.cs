@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal class WindowsDiskQueueLength : WindowsDiskBarSensorBase
+    public class WindowsDiskQueueLength : WindowsDiskBarSensorBase
     {
         public const string Counter = "Avg. Disk Queue Length";
 
@@ -10,6 +10,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string CounterName => Counter;
 
 
-        public WindowsDiskQueueLength(DiskBarSensorOptions options) : base(options) { }
+        internal WindowsDiskQueueLength(DiskBarSensorOptions options) : base(options) { }
     }
 }

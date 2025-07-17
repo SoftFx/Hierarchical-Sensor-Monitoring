@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using HSMDataCollector.Client;
+using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
@@ -54,6 +56,9 @@ namespace HSMDataCollector.Core
 
         [Obsolete]
         public event EventHandler ValuesQueueOverflow;
+
+
+        public IEnumerable<SensorBase> DefaultSensors => _sensorsStorage.Values;
 
 
         /// <summary>
@@ -177,6 +182,7 @@ namespace HSMDataCollector.Core
             }
 
         }
+
 
         public void Dispose()
         {
