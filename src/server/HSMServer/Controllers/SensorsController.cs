@@ -43,7 +43,7 @@ namespace HSMServer.Controllers
     {
         private const string InvalidRequest = "Public API request info not found";
 
-        private static readonly TaskResult _invalidRequestResult = new(InvalidRequest);
+        private static readonly TaskResult _invalidRequestResult = TaskResult.FromError(InvalidRequest);
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly DataCollectorWrapper _collector;
@@ -486,7 +486,7 @@ namespace HSMServer.Controllers
                         _collector.WebRequestsSensors.Total.AddReceiveData(1);
                     }
 
-                    return result ? TaskResult.Ok : new TaskResult(error);
+                    return result ? TaskResult.Ok : TaskResult.FromError(error);
                 }
 
             }
@@ -507,10 +507,10 @@ namespace HSMServer.Controllers
                 var coreRequest = apiRequest.Convert(infoRequest.Value.Key.Id);
                 var isValid = apiRequest.TryValidate(out var error) && coreRequest.TryCheckRequest(out error);
 
-                return isValid ? new TaskResult<HistoryRequestModel>(coreRequest) : TaskResult<HistoryRequestModel>.AsError(error);
+                return isValid ? TaskResult<HistoryRequestModel>.FromValue(coreRequest) : TaskResult<HistoryRequestModel>.FromError(error);
             }
 
-            return TaskResult<HistoryRequestModel>.AsError(InvalidRequest);
+            return TaskResult<HistoryRequestModel>.FromError(InvalidRequest);
         }
 
         private async Task<TaskResult> TryBuildAndApplySensorUpdateRequest(AddOrUpdateSensorRequest apiRequest)
@@ -524,7 +524,7 @@ namespace HSMServer.Controllers
                 var info = infoRequest.Value;
 
                 if (!_cache.TryGetSensorByPath(info.Product.DisplayName, relatedPath, out var sensor) && sensorType is null)
-                    return new TaskResult($"{nameof(apiRequest.SensorType)} property is required, because sensor {relatedPath} doesn't exist");
+                    return TaskResult.FromError($"{nameof(apiRequest.SensorType)} property is required, because sensor {relatedPath} doesn't exist");
 
                 var coreRequest = new SensorAddOrUpdateRequestModel(info.Key.Id, relatedPath)
                 {
@@ -532,7 +532,7 @@ namespace HSMServer.Controllers
                     Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,
                 };
 
-                return _cache.TryAddOrUpdateSensor(coreRequest, out var error) ? TaskResult.Ok : new TaskResult(error);
+                return _cache.TryAddOrUpdateSensor(coreRequest, out var error) ? TaskResult.Ok : TaskResult.FromError(error);
             }
 
             return _invalidRequestResult;
@@ -543,17 +543,17 @@ namespace HSMServer.Controllers
             var context = HttpContext;
 
             if (context.TryGetPublicApiInfo(out var info))
-                return new TaskResult<PublicApiRequestInfo>(info);
+                return TaskResult<PublicApiRequestInfo>.FromValue(info);
 
             if (TelemetryCollector.TryAddKeyToHeader(context, request.Key))
             {
                 var result = await _telemetry.TryRegisterPublicApiRequest(HttpContext);
 
                 if (result && context.TryGetPublicApiInfo(out info))
-                    return new TaskResult<PublicApiRequestInfo>(info);
+                    return TaskResult<PublicApiRequestInfo>.FromValue(info);
             }
 
-            return TaskResult<PublicApiRequestInfo>.AsError("Cannot process a access key in the body");
+            return TaskResult<PublicApiRequestInfo>.FromError("Cannot process a access key in the body");
         }
     }
 }

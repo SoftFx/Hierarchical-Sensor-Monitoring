@@ -3,6 +3,7 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System;
 
 namespace HSMServer.Controllers
 {
@@ -17,7 +18,12 @@ namespace HSMServer.Controllers
 
         public InitiatorInfo CurrentInitiator => InitiatorInfo.AsUser(CurrentUser.Name);
 
-        public User CurrentUser => HttpContext.User as User;
+        public User CurrentUser => HttpContext.User switch
+        {
+            User user => user,
+            null => throw new UnauthorizedAccessException("User is not authenticated"),
+            _ => throw new InvalidCastException($"Expected User type, got {HttpContext.User.GetType()}")
+        };
 
         public User StoredUser => _userManager[CurrentUser.Id];
 

@@ -16,7 +16,7 @@ namespace HSMServer.ApiObjectsConverters
         {
             Utf8JsonReader readerClone = reader; // readerClone is a full copy of reader, because Utf8JsonReader is ref struct
 
-            while ((readerClone.TokenType is not JsonTokenType.EndObject or JsonTokenType.EndArray) && readerClone.Read())
+            while (readerClone.TokenType != JsonTokenType.EndObject && readerClone.TokenType != JsonTokenType.EndArray && readerClone.Read())
             {
                 if (readerClone.TokenType != JsonTokenType.PropertyName)
                     continue;

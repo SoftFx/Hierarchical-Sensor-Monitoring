@@ -125,12 +125,15 @@ namespace HSMServer.Controllers
             var folders = _folders.GetUserFolders(CurrentUser);
             var model = new DataAlertTemplateViewModel(folders);
 
+            if (folders.Count == 0)
+                return Json(model);
+
             if (id.HasValue)
             {
                 var sensor = _cache.GetSensor(id.Value);
                 if (sensor != null)
                 {
-                    model.FolderId = sensor.Root.FolderId.HasValue ? sensor.Root.FolderId.Value : folders.FirstOrDefault().Id;
+                    model.FolderId = sensor.Root.FolderId ?? folders.FirstOrDefault().Id;
                     model.PathTemplate = $"*/{sensor.Path}";
                     model.Type = (byte)sensor.Type;
                     model.Name = GetTemplateName(sensor.Path, model.FolderId);
@@ -195,18 +198,15 @@ namespace HSMServer.Controllers
 
         private string GetTemplateName(string path, Guid folderId)
         {
-
             var folderName = _folders.GetUserFolders(CurrentUser).FirstOrDefault(x => x.Id == folderId)?.Name ?? string.Empty;
 
-            if (!string.IsNullOrWhiteSpace(path))
-            {
-                var result = path.Split('/');
+            if (string.IsNullOrWhiteSpace(path))
+                return string.Empty;
 
-                if (result.Length > 0)
-                    return $"{folderName}/{result[^1]}";
-            }
+            var result = path.Split('/');
 
-            return string.Empty;
+            return $"{folderName}/{result[^1]}";
+
         }
 
     }

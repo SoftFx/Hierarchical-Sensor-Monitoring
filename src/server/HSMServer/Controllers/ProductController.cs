@@ -207,12 +207,13 @@ namespace HSMServer.Controllers
             if (role.Item1 == Guid.Empty && role.Item2 == 0)
                 return;
 
-            user.ProductsRoles.Remove(role);
+            user.ProductsRoles ??= [];
 
-            if (user.ProductsRoles == null || !user.ProductsRoles.Any())
-                user.ProductsRoles = new List<(Guid, ProductRoleEnum)> { pair };
-            else
-                user.ProductsRoles.Add(pair);
+            if (user.ProductsRoles.Count > 0)
+                user.ProductsRoles.Remove(role);
+
+            user.ProductsRoles.RemoveAll(x => x.Item1 == pair.Item1);
+            user.ProductsRoles.Add(pair);
 
             _userManager.UpdateUser(user);
         }

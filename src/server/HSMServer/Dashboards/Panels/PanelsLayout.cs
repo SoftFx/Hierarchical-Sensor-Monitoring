@@ -20,20 +20,20 @@ namespace HSMServer.Dashboards
             try
             {
                 var (panels, singleModePanels) = panelsDict.OrderBy(x => x.Value.Name?.ToLower()).SplitByCondition(x => x.Value.Settings.IsSingleMode);
-                
+
                 var defaultRowsCount = panels.Count / panelsInRow;
                 var lastRowSize = panels.Count % panelsInRow;
 
                 Relayout(panels.Take(defaultRowsCount * panelsInRow).ToList(), panelsInRow, out var y);
                 Relayout(panels.TakeLast(lastRowSize).ToList(), lastRowSize, out y, defaultRowsCount); // + 1
-                
+
                 var rowsBefore = defaultRowsCount;
 
                 if (lastRowSize != 0)
                     rowsBefore++;
-                
+
                 SingleModeRelayout(singleModePanels.ToList(), Math.Min(panelsInRow  * SingleModeMultiplayer, SingleModeMaxPanels), rowsBefore);
-                
+
                 return true;
             }
             catch (Exception)
@@ -77,6 +77,11 @@ namespace HSMServer.Dashboards
 
         private static void Relayout(List<KeyValuePair<Guid, Panel>> pairs, int panelsInRow, out double y, int rowsExist = 0)
         {
+            if (panelsInRow <= 0)
+                throw new ArgumentOutOfRangeException(nameof(panelsInRow), "The number of panels in a row should be greater 0.");
+
+            ArgumentNullException.ThrowIfNull(pairs);
+
             var panelWidth = TotalWidthRow / panelsInRow;
             y = 0D;
             for (int i = 0; i < pairs.Count; ++i)

@@ -95,7 +95,7 @@ namespace HSMServer.Sftp
                 var fileName = Path.GetFileName(localFile);
                 var sftpFullName = Path.Combine(sftpPath, fileName).Replace('\\', '/');
 
-                using (var stream = new FileStream(localFile, FileMode.Open, FileAccess.Read))
+                using (var stream = new FileStream(localFile, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
                     await WrappedClientRequestAsync(() => UploadFileInternalAsync(stream, sftpFullName, canOverride, uploadCallback, cancellationToken), $"Uploading file {localFile} to {sftpFullName}");
                 }
@@ -189,11 +189,11 @@ namespace HSMServer.Sftp
 
         private void CreateAllDirectoriesInternal(string path, bool isFileName = false)
         {
+            if (path.Length == 0)
+                return;
+
             path = path.Replace('\\', '/');
             var arr = path.Split('/');
-
-            if (arr.Length == 0)
-                return;
 
             int offset = isFileName ? 2 : 1;
 

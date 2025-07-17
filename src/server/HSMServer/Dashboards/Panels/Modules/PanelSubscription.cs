@@ -93,7 +93,7 @@ namespace HSMServer.Dashboards
 
         public bool IsMatch(BaseSensorModel sensor) => IsPropertySuitable(sensor) && IsEmaPropertySuitable(sensor) && IsMatchTemplate(sensor);
 
-        public string BuildSensorLabel() => _pathTemplate.BuildStringByTempalte(Label) ?? Label;
+        public string BuildSensorLabel() => _pathTemplate.BuildStringByTempalte(Label);
 
 
         public Task StartScanning(Func<HashSet<Guid>, IEnumerable<BaseSensorModel>> getSensors)

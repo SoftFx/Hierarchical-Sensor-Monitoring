@@ -8,7 +8,7 @@ namespace HSMServer.Model.History
 {
     internal abstract class BarHistoryProcessor<T> : HistoryProcessorBase where T : struct, INumber<T>, IComparable
     {
-        private readonly List<(T, int)> _meanList = new();
+        private readonly List<(T, int)> _meanList = [];
 
 
         protected abstract T DefaultMax { get; }
@@ -28,11 +28,15 @@ namespace HSMServer.Model.History
         protected override List<BaseValue> Compress(List<BaseValue> values, TimeSpan compressionInterval)
         {
             if (values == null || values.Count == 0)
-                return new();
+                return [];
+
+            var oldestValue = values.First() as BarBaseValue<T>;
+
+            if (oldestValue is null)
+                return [];
 
             var result = new List<BaseValue>();
 
-            var oldestValue = values.First() as BarBaseValue<T>;
             DateTime nextBarTime = oldestValue.OpenTime + compressionInterval;
 
             SummaryBarItem<T> summary = new(oldestValue.OpenTime, oldestValue.CloseTime, DefaultMax, DefaultMin, oldestValue.FirstValue, oldestValue.LastValue);
@@ -60,15 +64,6 @@ namespace HSMServer.Model.History
             result.Add(Convert(summary, isCompressed));
 
             return result;
-        }
-
-        private void AddValueToList(BarBaseValue<T> value)
-        {
-            try
-            {
-                _meanList.Add((value.Mean, value.Count));
-            }
-            catch { }
         }
 
         /// <summary>
@@ -105,8 +100,8 @@ namespace HSMServer.Model.History
         private void ProcessItem(BarBaseValue<T> value, SummaryBarItem<T> summary, out bool IsCompressed)
         {
             IsCompressed = summary.Count != 0;
-            
-            AddValueToList(value);
+
+            _meanList.Add((value.Mean, value.Count));
 
             if (!IsCompressed)
                 summary.FirstValue = value.FirstValue;

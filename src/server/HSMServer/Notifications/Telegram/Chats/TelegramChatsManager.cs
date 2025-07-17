@@ -86,7 +86,7 @@ namespace HSMServer.Notifications
 
         public async Task<string> TryConnect(Message message, InvitationToken token)
         {
-            var isChatExist = _telegramChatIds.TryGetValue(message.Chat, out var chat);
+            var isChatExist = _telegramChatIds.TryGetValue(message?.Chat, out var chat);
 
             if (!isChatExist)
             {
