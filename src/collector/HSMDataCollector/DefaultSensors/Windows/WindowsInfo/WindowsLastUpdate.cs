@@ -9,18 +9,9 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsLastUpdate : MonitoringSensorBase<TimeSpan>
+    public sealed class WindowsLastUpdate : MonitoringSensorBase<TimeSpan>
     {
-        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
-
-
-        public WindowsLastUpdate(SensorOptions options) : base(options) { }
-
-        internal override ValueTask<bool> StartAsync()
-        {
-            SendValueAction();
-            return base.StartAsync();
-        }
+        internal WindowsLastUpdate(SensorOptions options) : base(options) { }
 
         private DateTime GetLastSuccessfulUpdateTime()
         {
@@ -35,7 +26,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
                 return lastUpdate ?? throw new Exception("Can't get the date of the last update of Windows"); ;
             }
         }
-
 
         protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastSuccessfulUpdateTime().ToUniversalTime();
     }

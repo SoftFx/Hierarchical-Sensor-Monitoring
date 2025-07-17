@@ -7,19 +7,11 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
+    public sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
     {
-        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
-
-        public WindowsLastRestart(SensorOptions options) : base(options) { }
+        internal WindowsLastRestart(SensorOptions options) : base(options) { }
 
         protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastBootTime().ToUniversalTime();
-
-        internal override ValueTask<bool> StartAsync()
-        {
-            SendValueAction();
-            return base.StartAsync();
-        }
 
         private DateTime GetLastBootTime()
         {

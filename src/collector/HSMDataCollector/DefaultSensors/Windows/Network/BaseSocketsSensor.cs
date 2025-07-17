@@ -6,7 +6,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
-    internal abstract class BaseSocketsSensor : MonitoringSensorBase<int?>
+    public abstract class BaseSocketsSensor : MonitoringSensorBase<int?>
     {
         private const string CategoryTcp4 = "TCPv4";
         private const string CategoryTcp6 = "TCPv6";

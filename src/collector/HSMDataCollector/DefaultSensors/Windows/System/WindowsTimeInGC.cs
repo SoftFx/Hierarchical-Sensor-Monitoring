@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsTimeInGC : WindowsTimeInGCBase
+    public sealed class WindowsTimeInGC : WindowsTimeInGCBase
     {
         protected override string InstanceName => "_Global_";
 

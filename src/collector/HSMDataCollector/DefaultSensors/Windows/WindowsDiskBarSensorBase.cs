@@ -2,7 +2,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal abstract class WindowsDiskBarSensorBase : WindowsSensorBase
+    public abstract class WindowsDiskBarSensorBase : WindowsSensorBase
     {
         public const string Category = "LogicalDisk";
 

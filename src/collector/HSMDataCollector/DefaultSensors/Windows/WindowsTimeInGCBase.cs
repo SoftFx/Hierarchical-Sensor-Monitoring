@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal abstract class WindowsTimeInGCBase : WindowsSensorBase
+    public abstract class WindowsTimeInGCBase : WindowsSensorBase
     {
         public const string Category = ".NET CLR Memory";
         public const string Counter = "% Time in GC";

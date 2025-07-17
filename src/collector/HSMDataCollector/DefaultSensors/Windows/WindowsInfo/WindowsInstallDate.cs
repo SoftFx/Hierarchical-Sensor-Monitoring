@@ -7,22 +7,14 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsInstallDate : MonitoringSensorBase<TimeSpan>
+    public sealed class WindowsInstallDate : MonitoringSensorBase<TimeSpan>
     {
 
-        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
-
-
-        public WindowsInstallDate(WindowsInfoSensorOptions options) : base(options) { }
+        internal WindowsInstallDate(WindowsInfoSensorOptions options) : base(options) { }
 
 
         protected override TimeSpan GetValue() => DateTime.UtcNow - GetWindowsInstallDate().ToUniversalTime();
 
-        internal override ValueTask<bool> StartAsync()
-        {
-            SendValueAction();
-            return base.StartAsync();
-        }
 
         public static DateTime GetWindowsInstallDate()
         {

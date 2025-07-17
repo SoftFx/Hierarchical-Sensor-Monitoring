@@ -3,7 +3,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsProcessMemory : WindowsSensorBase
+    public sealed class WindowsProcessMemory : WindowsSensorBase
     {
         protected override string CategoryName => "Process";
 
