@@ -591,7 +591,7 @@ namespace HSMServer.Core.Cache
                 sensor.TryUpdate(update, out error);
                 _database.UpdateSensor(sensor.ToEntity());
 
-                SensorUpdateView(sensor);
+                SensorUpdateViewAndNotify(sensor);
 
                 return true;
             }
