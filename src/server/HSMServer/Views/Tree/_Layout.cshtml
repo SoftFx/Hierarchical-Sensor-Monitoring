@@ -168,10 +168,13 @@
                  else 
                     setTimeout(tryRestoreScroll, 100); 
                 
-
-                if (treeWrapper?.scrollTop != savedPosition)
+                if (treeWrapper?.scrollTop != savedPosition) {
+                    console.log('Scroll position is not set:');
                     setTimeout(tryRestoreScroll, 100);
+                    console.log('Timer is started:');
+                }
                 
+
             };
 
             setTimeout(() => {
