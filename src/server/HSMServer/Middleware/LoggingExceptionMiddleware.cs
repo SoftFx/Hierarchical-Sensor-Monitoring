@@ -21,7 +21,14 @@ namespace HSMServer.Middleware
             }
             catch (Exception ex)
             {
-                _logger.Error($"Error during executing {context.Request.Method} {context.Request.Host} {context.Request.Path} {context.Request.Protocol} => {context.Response.StatusCode}", ex);
+                if (context.Response.HasStarted)
+                {
+                    _logger.Error(ex, "Exception occurred, but response was already started");
+                }
+                else
+                {
+                    _logger.Error(ex, $"Error in {context.Request.Method} {context.Request.Host} {context.Request.Path} {context.Request.Protocol} => {context.Response.StatusCode}", ex);
+                }
 
                 throw;
             }
