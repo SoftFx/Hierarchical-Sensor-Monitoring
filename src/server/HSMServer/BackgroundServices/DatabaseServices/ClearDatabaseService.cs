@@ -11,7 +11,7 @@ namespace HSMServer.BackgroundServices
         private readonly ITreeValuesCache _cache;
 
 
-        public override TimeSpan Delay { get; } = TimeSpan.FromMinutes(5);//TimeSpan.FromHours(1);
+        public override TimeSpan Delay { get; } = TimeSpan.FromMinutes(1);
 
 
         public ClearDatabaseService(ITreeValuesCache cache)
@@ -42,11 +42,11 @@ namespace HSMServer.BackgroundServices
             {
                 var id = sensor.Id;
 
-                _logger.Info("Start clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Trace("Start clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
 
                 _cache.CheckSensorHistory(id);
 
-                _logger.Info("Stop clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Trace("Stop clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
             }
         }
 
@@ -58,11 +58,11 @@ namespace HSMServer.BackgroundServices
             {
                 var id = sensor.Id;
 
-                _logger.Info("Start removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Trace("Start removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
 
                 _cache.RemoveSensor(id, InitiatorInfo.AsSystemInfo("Clean up"));
 
-                _logger.Info("Stop removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Trace("Stop removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
             }
         }
 
@@ -72,11 +72,11 @@ namespace HSMServer.BackgroundServices
             {
                 var id = product.Id;
 
-                _logger.Info("Start clear scanner: {id} {product}", id, product.DisplayName);
+                _logger.Trace("Start clear scanner: {id} {product}", id, product.DisplayName);
 
                 _cache.ClearEmptyNodes(product);
 
-                _logger.Info("Stop clear scanner: {id} {product}", id, product.DisplayName);
+                _logger.Trace("Stop clear scanner: {id} {product}", id, product.DisplayName);
             }
         }
     }
