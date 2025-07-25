@@ -189,7 +189,8 @@ namespace HSMServer.BackgroundServices
 
         public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
         {
-            throw new NotImplementedException();
+            SendDataInternal([file]);
+            return new ValueTask<PackageSendingInfo>();
         }
     }
 }
