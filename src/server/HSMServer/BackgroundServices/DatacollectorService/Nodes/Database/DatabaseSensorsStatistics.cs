@@ -58,12 +58,19 @@ namespace HSMServer.BackgroundServices
 
         internal override void SendInfo()
         {
-            if (DateTime.UtcNow < _nextStart)
-                return;
+            try
+            {
+                if (DateTime.UtcNow < _nextStart)
+                    return;
 
-            UpdateNextStart();
+                UpdateNextStart();
 
-            _ = BuildStatistics();
+                _ = BuildStatistics();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
+            }
         }
 
 
