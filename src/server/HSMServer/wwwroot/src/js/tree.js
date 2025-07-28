@@ -138,10 +138,10 @@ function initializeTreeInternal() {
     });
 
 
-    $('#jstree').on('close_node.jstree', closeNodeHandler);
-    $('#jstree').on('refresh.jstree', refreshTreeHandler);
-    $('#jstree').on('open_node.jstree', openNodeHandler);
-    $('#jstree').on('dblclick.jstree', dblClickHandler);
+    $('#jstree').off('close_node.jstree', closeNodeHandler).on('close_node.jstree', closeNodeHandler);
+    $('#jstree').off('refresh.jstree', refreshTreeHandler).on('refresh.jstree', refreshTreeHandler);
+    $('#jstree').off('open_node.jstree', openNodeHandler).on('open_node.jstree', openNodeHandler);
+    $('#jstree').off('dblclick.jstree', dblClickHandler).on('dblclick.jstree', dblClickHandler);
 
 
 

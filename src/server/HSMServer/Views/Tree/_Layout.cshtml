@@ -244,7 +244,8 @@
 
             window.removeEventListener('beforeunload', scrollHandlers.saveTreeScroll);
             window.removeEventListener('DOMContentLoaded', scrollHandlers.restoreTreeScroll);
-                      
+            
+            $tree.off('.jstree');
 
             const instance = $tree.jstree(true);
             if (instance) {
