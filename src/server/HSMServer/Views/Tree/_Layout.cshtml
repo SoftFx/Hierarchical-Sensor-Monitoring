@@ -110,7 +110,7 @@
     const destroyTreeEvery = 20;
 
     const scrollHandlers = {
-        beforeunload: () => {
+        saveTreeScroll: () => {
             const treeWrapper = document.querySelector('.tree-wrapper');
             
 
@@ -123,7 +123,7 @@
             }
         },
 
-        DOMContentLoaded: () => {
+            restoreTreeScroll: () => {
             const savedPosition = sessionStorage.getItem('treeScrollPosition');
             //console.log("DOMContentLoaded: Scroll position: '" + savedPosition);
             
@@ -155,8 +155,8 @@
         }
     };
 
-    window.addEventListener('beforeunload', scrollHandlers.beforeunload);
-    window.addEventListener('DOMContentLoaded', scrollHandlers.DOMContentLoaded);
+    window.addEventListener('beforeunload', scrollHandlers.saveTreeScroll);
+    window.addEventListener('DOMContentLoaded', scrollHandlers.restoreTreeScroll);
 
     initializeTree();
 
@@ -213,15 +213,17 @@
 
             if (refreshCount <= 0) {
 
-                scrollHandlers.beforeunload();
+                scrollHandlers.saveTreeScroll();
 
                 refreshCount = destroyTreeEvery;
                 await destroyTree($tree); 
 
-                initializeTree();        
+                initializeTree();
+                
+                clearTimeout(refreshTreeTimeoutId);
                 refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
 
-                scrollHandlers.DOMContentLoaded();
+                scrollHandlers.restoreTreeScroll();
 
                 //console.log("tree is created. Scroll is restored");
             } else {
@@ -238,13 +240,18 @@
 
     function destroyTree($tree) {
         return new Promise((resolve) => {
+            clearTimeout(refreshTreeTimeoutId);
+
+            window.removeEventListener('beforeunload', scrollHandlers.saveTreeScroll);
+            window.removeEventListener('DOMContentLoaded', scrollHandlers.restoreTreeScroll);
+                      
 
             const instance = $tree.jstree(true);
             if (instance) {
                 instance.destroy();
                 $.cleanData($tree.find('*').addBack().get()); 
             }
-            $tree.empty();
+            //$tree.empty();
             resolve();
 
             //console.log("Tree is destroyed");
