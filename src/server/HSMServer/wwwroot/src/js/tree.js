@@ -15,8 +15,95 @@ var emptySearch = false;
 var prevState = undefined;
 
 window.initializeTree = function () {
-    initDropzone()
+    initializeTreeInternal();
+}
+
+function closeNodeHandler(e, data) {
+    if (collapseButton.isTriggered)
+        return;
+
+    $.ajax({
+        type: 'put',
+        url: closeNode,
+        cache: false,
+        contentType: 'application/json',
+        data: JSON.stringify({
+            nodeIds: [data.node.id],
+            isSearch: $('#search_input').val() !== ''
+        })
+    }).done(function () {
+        $('#jstree').jstree('close_all', data.node.id)
+    })
+}
+
+function refreshTreeHandler(e, data) {
     
+    refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
+    
+    if (window.hasOwnProperty('updateSelectedNodeDataTimeoutId')) {
+        updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+    }
+
+    if (searchClientRefresh) {
+        $(this).jstree(true).get_json('#', { flat: true }).forEach((node) => {
+            if (node.state.loaded === true)
+                $(this).jstree('open_node', node.id);
+        })
+
+        $(this).show();
+        $('#jstreeSpinner').addClass('d-none');
+        searchClientRefresh = false;
+    }
+
+    if (jQuery.isEmptyObject(prevState) && prevState !== undefined) {
+        let jstreeState = JSON.parse(localStorage.getItem('jstree'));
+        jstreeState.state.core.open.forEach((node) => {
+            $(this).jstree('open_node', node);
+        })
+
+        jstreeState.state.core.selected.forEach((node) => {
+            $(this).jstree('open_node', node);
+            $(this).jstree('select_node', node);
+        })
+
+        prevState = undefined;
+    }
+
+    if (emptySearch !== undefined && emptySearch === true) {
+        let selectedIds = $('#jstree').jstree('get_selected');
+        if (selectedIds.length > 0)
+            $(`#${selectedIds[0]}`)[0].scrollIntoView();
+
+        emptySearch = false;
+        searchServerRefresh = false;
+    }
+
+    const treeWrapper = document.querySelector('.tree-wrapper');
+    const savedPosition = treeWrapper.dataset.scrollPosition || 0;
+    treeWrapper.scrollTop = savedPosition;
+    
+
+    isRefreshing = false;
+    //console.log("Tree is refreshed");
+}
+
+function dblClickHandler(event) {
+
+    if (!$("#nav_link_Home").hasClass("active")) {
+        let node = $(event.target).closest("li");
+        redirectToHome(node.attr('id'));
+    }
+
+}
+
+function openNodeHandler(e, data) {
+    collapseButton.reset();
+}
+
+function initializeTreeInternal() {
+
+    initDropzone()
+
     if (window.localStorage.jstree) {
         let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
         if (initOpened > 1)
@@ -46,74 +133,18 @@ window.initializeTree = function () {
         },
         "contextmenu": {
             "items": buildContextMenu
-        },
-        "plugins": ["state", "contextmenu", "themes", "wholerow"],
-    }).on('close_node.jstree', function (e, data) {
-        if (collapseButton.isTriggered)
-            return;
-
-        $.ajax({
-            type: 'put',
-            url: closeNode,
-            cache: false,
-            contentType: 'application/json',
-            data: JSON.stringify({
-                nodeIds: [data.node.id],
-                isSearch: $('#search_input').val() !== ''
-            })
-        }).done(function (){
-            $('#jstree').jstree('close_all', data.node.id)
-        })
-    }).on('refresh.jstree', function (e, data) {
-        refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
-
-        if (window.hasOwnProperty('updateSelectedNodeDataTimeoutId')) {
-            updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
         }
-
-        if (searchClientRefresh) {
-            $(this).jstree(true).get_json('#', { flat: true }).forEach((node) => {
-                if (node.state.loaded === true)
-                    $(this).jstree('open_node', node.id);
-            })
-
-            $(this).show();
-            $('#jstreeSpinner').addClass('d-none');
-            searchClientRefresh = false;
-        }
-
-        if (jQuery.isEmptyObject(prevState) && prevState !== undefined) {
-            let jstreeState = JSON.parse(localStorage.getItem('jstree'));
-            jstreeState.state.core.open.forEach((node) => {
-                $(this).jstree('open_node', node);
-            })
-
-            jstreeState.state.core.selected.forEach((node) => {
-                $(this).jstree('open_node', node);
-                $(this).jstree('select_node', node);
-            })
-            
-            prevState = undefined;
-        }
-
-        if (emptySearch !== undefined && emptySearch === true)
-        {
-            let selectedIds = $('#jstree').jstree('get_selected');
-            if (selectedIds.length > 0)
-                $(`#${selectedIds[0]}`)[0].scrollIntoView();
-
-            emptySearch = false;
-            searchServerRefresh = false;
-        }
-    }).on('open_node.jstree', function (e, data) {
-        collapseButton.reset();
-    }).on('dblclick.jstree', function (event) {
-        if (!$("#nav_link_Home").hasClass("active")) {
-            let node = $(event.target).closest("li");
-            redirectToHome(node.attr('id'));
-        }
+        , "plugins": ["state", "contextmenu", "themes", "wholerow"]
     });
-    
+
+
+    $('#jstree').off('close_node.jstree', closeNodeHandler).on('close_node.jstree', closeNodeHandler);
+    $('#jstree').off('refresh.jstree', refreshTreeHandler).on('refresh.jstree', refreshTreeHandler);
+    $('#jstree').off('open_node.jstree', openNodeHandler).on('open_node.jstree', openNodeHandler);
+    $('#jstree').off('dblclick.jstree', dblClickHandler).on('dblclick.jstree', dblClickHandler);
+
+
+
     $("#search_tree").on('click', function () {
         search($('#search_input').val());
     });
@@ -126,13 +157,12 @@ window.initializeTree = function () {
         let value = $(this).val();
         if (value === '') {
             $('#searchForm .fa-w').hide();
-            emptySearch  = true;
-            if (!jQuery.isEmptyObject(prevState))
-            {
+            emptySearch = true;
+            if (!jQuery.isEmptyObject(prevState)) {
                 applySelectedNodeToPreviousTreeState();
                 $('#jstree').jstree(true).refresh(true, true);
             }
-            else 
+            else
                 $('#jstree').jstree(true).refresh(true);
         }
         else {
@@ -140,7 +170,7 @@ window.initializeTree = function () {
                 $('#searchForm .fa-w').show();
             else
                 $('#searchForm .fa-w').hide();
-            
+
             clearTimeout(refreshTreeTimeoutId);
             refreshTreeTimeoutId = setTimeout(() => search(value), searchInterval);
         }
@@ -158,18 +188,17 @@ window.initializeTree = function () {
 
         if (jQuery.isEmptyObject(prevState))
             prevState = $('#jstree').jstree('get_state')
-        
+
         searchClientRefresh = true;
-        
+
         $('#jstree').hide().jstree(true).refresh(true);
 
         searchServerRefresh = true;
 
         $('#jstreeSpinner').removeClass('d-none')
     }
-    
-    function applySelectedNodeToPreviousTreeState()
-    {
+
+    function applySelectedNodeToPreviousTreeState() {
         let jstreeState = JSON.parse(localStorage.getItem('jstree'));
         prevState.core.selected = jstreeState.state.core.selected;
         let currenotSelectedNode = $('#jstree').jstree('get_node', prevState.core.selected[0]);
@@ -184,7 +213,13 @@ window.initializeTree = function () {
         localStorage.setItem('jstree', JSON.stringify(jstreeState));
         prevState = {};
     }
+
+
 }
+
+
+
+
 
 window.loadEditSensorStatusModal = function (id) {
     $.ajax({

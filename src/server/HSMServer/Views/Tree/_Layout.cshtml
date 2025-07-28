@@ -103,7 +103,61 @@
 </div>
 
 
+
+
 <script>
+
+    const destroyTreeEvery = 20;
+
+    const scrollHandlers = {
+        saveTreeScroll: () => {
+            const treeWrapper = document.querySelector('.tree-wrapper');
+            
+
+            if (treeWrapper) {
+                const scrollPosition = treeWrapper.scrollTop;
+                console.log("beforeunload: Scroll position: '" + scrollPosition);
+
+                if (scrollPosition != 0)
+                    sessionStorage.setItem('treeScrollPosition', scrollPosition.toString());
+            }
+        },
+
+            restoreTreeScroll: () => {
+            const savedPosition = sessionStorage.getItem('treeScrollPosition');
+            //console.log("DOMContentLoaded: Scroll position: '" + savedPosition);
+            
+            if (savedPosition) {
+                sessionStorage.removeItem('treeScrollPosition');
+
+                const tryRestoreScroll = () => {
+                    const treeWrapper = document.querySelector('.tree-wrapper');
+
+                    if (treeWrapper) {
+                        
+                        treeWrapper.scrollTop = savedPosition;
+                        //console.log("Scroll position: '" + savedPosition + "' is set. Tree scroll: " + treeWrapper.scrollTop);
+                    }
+                    else
+                        setTimeout(tryRestoreScroll, 100);
+
+                    if (treeWrapper?.scrollTop != savedPosition) {
+                        //console.log('Scroll position is not set:');
+                        setTimeout(tryRestoreScroll, 100);
+                        //console.log('Timer is started:');
+                    }
+
+
+                };
+
+                setTimeout(() => { tryRestoreScroll(); }, 100);
+            }
+        }
+    };
+
+    window.addEventListener('beforeunload', scrollHandlers.saveTreeScroll);
+    window.addEventListener('DOMContentLoaded', scrollHandlers.restoreTreeScroll);
+
     initializeTree();
 
 
@@ -135,89 +189,74 @@
     $("#mainSpinner").css("display", "none");
     $('#mainContainer').removeClass('hidden_element');
 
-
     var refreshTreeTimeoutId;
     var isRefreshing = false;
 
-
-    // Save scroll position
-    window.addEventListener('beforeunload', () => {
-        const treeWrapper = document.querySelector('.tree-wrapper');
-        
-        if (treeWrapper) {
-            const scrollPosition = treeWrapper.scrollTop;
-
-            if (scrollPosition != 0) 
-                sessionStorage.setItem('treeScrollPosition', scrollPosition.toString());
-        } 
-
-    });
-
-    // Restore scroll
-    window.addEventListener('DOMContentLoaded', () => {
-        const savedPosition = sessionStorage.getItem('treeScrollPosition');
-       
-        if (savedPosition) {
-            sessionStorage.removeItem('treeScrollPosition');
-
-            const tryRestoreScroll = () => {
-                const treeWrapper = document.querySelector('.tree-wrapper');
-
-                if (treeWrapper) 
-                    treeWrapper.scrollTop = savedPosition;
-                 else 
-                    setTimeout(tryRestoreScroll, 100); 
-                
-                if (treeWrapper?.scrollTop != savedPosition) {
-                    console.log('Scroll position is not set:');
-                    setTimeout(tryRestoreScroll, 100);
-                    console.log('Timer is started:');
-                }
-                
-
-            };
-
-            setTimeout(() => {
-                tryRestoreScroll();
-            }, 100);
-        }
-
-    });
     
 
+    var refreshCount = destroyTreeEvery;
+    let treeUpdateInProgress = false;
 
-    function updateTreeTimer() {
-        if (isRefreshing) return;
 
-        const treeElement = $('#jstree');
+    async function updateTreeTimer() {
+        if (treeUpdateInProgress) return;
+        treeUpdateInProgress = true;
+
+        const $tree = $('#jstree');
         const treeWrapper = document.querySelector('.tree-wrapper');
-        const scrollPosition = treeWrapper.scrollTop;
-
-        if (!treeElement.hasClass('jstree')) {
-            console.warn('Tree not initialized yet');
-            setTimeout(updateTreeTimer, 500);
-            return;
-        }
-
-        clearTimeout(refreshTreeTimeoutId);
-
-        // named handler
-        function refreshHandler() {
-            treeWrapper.scrollTop = scrollPosition;
-            isRefreshing = false;
-            treeElement.off('refresh.jstree', refreshHandler);
-        }
-
-        isRefreshing = true;
-        treeElement.on('refresh.jstree', refreshHandler);
+        treeWrapper.dataset.scrollPosition = treeWrapper.scrollTop;
 
         try {
-            treeElement.jstree(true).refresh(true);
+
+            refreshCount = refreshCount - 1;
+            //console.log("tree refresh is called. refreshCount = ", refreshCount)
+
+            if (refreshCount <= 0) {
+
+                scrollHandlers.saveTreeScroll();
+
+                refreshCount = destroyTreeEvery;
+                await destroyTree($tree); 
+
+                initializeTree();
+                
+                clearTimeout(refreshTreeTimeoutId);
+                refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
+
+                scrollHandlers.restoreTreeScroll();
+
+                //console.log("tree is created. Scroll is restored");
+            } else {
+                $tree.jstree(true)?.refresh(true);
+                //console.log("tree is refreshed");
+            }
+
         } catch (e) {
-            console.error('Tree refresh failed:', e);
-            isRefreshing = false;
-            treeElement.off('refresh.jstree', refreshHandler);
+            console.error('Tree update failed:', e);
+        } finally {
+            treeUpdateInProgress = false;
         }
     }
 
-</script>
+    function destroyTree($tree) {
+        return new Promise((resolve) => {
+            clearTimeout(refreshTreeTimeoutId);
+
+            window.removeEventListener('beforeunload', scrollHandlers.saveTreeScroll);
+            window.removeEventListener('DOMContentLoaded', scrollHandlers.restoreTreeScroll);
+            
+            $tree.off('.jstree');
+
+            const instance = $tree.jstree(true);
+            if (instance) {
+                instance.destroy();
+                $.cleanData($tree.find('*').addBack().get()); 
+            }
+            //$tree.empty();
+            resolve();
+
+            //console.log("Tree is destroyed");
+        });
+    }
+
+</script> 
