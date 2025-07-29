@@ -208,7 +208,8 @@
 
         try {
 
-            refreshCount = refreshCount - 1;
+            //Do not delete the tree, because the page of the selected sensor stops updating TAM-1972
+            //refreshCount = refreshCount - 1;
             //console.log("tree refresh is called. refreshCount = ", refreshCount)
 
             if (refreshCount <= 0) {
