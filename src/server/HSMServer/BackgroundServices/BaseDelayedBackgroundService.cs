@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using HSMCommon.Extensions;
-using HSMServer.Threading;
+using HSMServer.Core.Threading;
 
 
 namespace HSMServer.BackgroundServices

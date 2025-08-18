@@ -1,30 +1,43 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
+
 using System.Threading.Tasks;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace HSMServer.Core.Tests.UpdatesQueueTests
 {
     public class UpdatesQueueTests
     {
-        private const int DelayTime = 100;
+        private const int DelayTime = 1000;
+
+        private List<StoreInfo> _receivedInfos;
+
+        private readonly ITestOutputHelper _output;
+
+        public UpdatesQueueTests(ITestOutputHelper output)
+        {
+            _output = output;
+        }
 
         [Fact]
         [Trait("Category", "Add Item(s)")]
         public async Task AddItemTest()
         {
             StoreInfo receivedInfo = default;
-            void GetItem(IEnumerable<StoreInfo> items)
+            void GetItem(BaseRequestModel item)
             {
-                receivedInfo = items.FirstOrDefault();
+                receivedInfo = item as StoreInfo;
             }
 
             StoreInfo storeInfo = BuildStoreInfo(0);
             var updatesQueue = new UpdatesQueue();
-            updatesQueue.AddItem(storeInfo);
-            updatesQueue.ItemsAdded += GetItem;
+            await updatesQueue.AddItemAsync(storeInfo);
+            updatesQueue.ItemAdded += GetItem;
 
             await Task.Delay(DelayTime);
             Assert.Equal(storeInfo, receivedInfo);
@@ -35,15 +48,15 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         public async Task AddEmptyItemTest()
         {
             StoreInfo receivedInfo = default;
-            void GetItem(IEnumerable<StoreInfo> items)
+            void GetItem(BaseRequestModel item)
             {
-                receivedInfo = items.FirstOrDefault();
+                receivedInfo = item as StoreInfo;
             }
 
             StoreInfo storeInfo = new("", "/");
             var updatesQueue = new UpdatesQueue();
-            updatesQueue.AddItem(storeInfo);
-            updatesQueue.ItemsAdded += GetItem;
+            await updatesQueue.AddItemAsync(storeInfo);
+            updatesQueue.ItemAdded += GetItem;
 
             await Task.Delay(DelayTime);
             Assert.Equal(storeInfo, receivedInfo);
@@ -56,23 +69,27 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         [Trait("Category", "Add Item(s)")]
         public async Task AddItemsTest(int count)
         {
-            List<StoreInfo> receivedInfo = new(count);
-            void GetItem(IEnumerable<StoreInfo> items)
-            {
-                receivedInfo.AddRange(items);
-            }
+            _receivedInfos = new(count);
+            
 
             List<StoreInfo> items = AddItemsToList(count);
 
             var updatesQueue = new UpdatesQueue();
-            updatesQueue.AddItems(items);
-            updatesQueue.ItemsAdded += GetItem;
+            updatesQueue.ItemAdded += GetItem;
+            await updatesQueue.AddItemsAsync(items);
+
+
 
             await Task.Delay(DelayTime);
-            Assert.Equal(items.Count, receivedInfo.Count);
+
+            updatesQueue.ItemAdded -= GetItem;
+            updatesQueue.Dispose();
+
+            Assert.Equal(items.Count, _receivedInfos.Count);
             for (int i = 0; i < items.Count; i++)
-               Assert.Equal(items[i], receivedInfo[i]);
+               Assert.Equal(items[i], _receivedInfos[i]);
         }
+
 
         [Theory]
         [InlineData(5)]
@@ -82,9 +99,9 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         public async Task AddEmptyItemsTest(int count)
         {
             List<StoreInfo> receivedInfo = new(count);
-            void GetItem(IEnumerable<StoreInfo> storeInfo)
+            void GetItem(BaseRequestModel storeInfo)
             {
-                receivedInfo.AddRange(storeInfo);
+                receivedInfo.Add(storeInfo as StoreInfo);
             }
 
             List<StoreInfo> items = new(count);
@@ -95,13 +112,20 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
             }
 
             var updatesQueue = new UpdatesQueue();
-            updatesQueue.AddItems(items);
-            updatesQueue.ItemsAdded += GetItem;
+            await updatesQueue.AddItemsAsync(items);
+            updatesQueue.ItemAdded += GetItem;
 
             await Task.Delay(DelayTime);
             Assert.Equal(items.Count, receivedInfo.Count);
             for (int i = 0; i < items.Count; i++)
                 Assert.Equal(items[i], receivedInfo[i]);
+
+        }
+
+
+        private void GetItem(BaseRequestModel item)
+        {
+            _receivedInfos.Add(item as StoreInfo);
         }
 
         private static List<StoreInfo> AddItemsToList(int count)

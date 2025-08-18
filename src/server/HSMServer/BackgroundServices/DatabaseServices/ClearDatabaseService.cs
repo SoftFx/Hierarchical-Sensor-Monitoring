@@ -60,7 +60,7 @@ namespace HSMServer.BackgroundServices
 
                 _logger.Trace("Start removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
 
-                _cache.RemoveSensor(id, InitiatorInfo.AsSystemInfo("Clean up"));
+                _cache.RemoveSensorAsync(id, InitiatorInfo.AsSystemInfo("Clean up"));
 
                 _logger.Trace("Stop removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
             }

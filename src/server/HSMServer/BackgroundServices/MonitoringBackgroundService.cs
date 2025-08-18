@@ -20,7 +20,7 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ServiceActionAsync()
         {
-            _cache.UpdateCacheState();
+           // _cache.UpdateCacheState();
 
             return Task.CompletedTask;
         }

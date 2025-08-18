@@ -20,8 +20,8 @@ using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
-using Org.BouncyCastle.Utilities;
 using HSMServer.Services;
+using HSMServer.Core.Model;
 
 
 namespace HSMServer.BackgroundServices
@@ -35,6 +35,8 @@ namespace HSMServer.BackgroundServices
 
         private readonly ITreeValuesCache _cache;
         private readonly IUpdatesQueue _queue;
+
+        private readonly ProductModel _productModel;
 
         private readonly IHtmlSanitizerService _sanitizer;
 
@@ -59,6 +61,8 @@ namespace HSMServer.BackgroundServices
             _cache = cache;
             _queue = queue;
             _key = GetSelfMonitoringKey(cache);
+
+            _productModel = _cache.GetProductByName(SelfMonitoringProductName);
 
             _sanitizer = sanitizerService;
 
@@ -124,30 +128,34 @@ namespace HSMServer.BackgroundServices
             return ValueTask.FromResult(ConnectionResult.Ok);
         }
 
-        public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+        public async  ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
         {
-            SendDataInternal(items);
-            return ValueTask.FromResult(new PackageSendingInfo());
+            await SendDataInternalAsync(items);
+            return new PackageSendingInfo();
         }
 
-        public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+        public async ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
         {
-            SendDataInternal(items);
-            return ValueTask.FromResult(new PackageSendingInfo());
+            await SendDataInternalAsync(items);
+            return new PackageSendingInfo();
         }
 
-        private void SendDataInternal(IEnumerable<SensorValueBase> items)
+        private async ValueTask SendDataInternalAsync(IEnumerable<SensorValueBase> items)
         {
             foreach (var item in items)
             {
                 try
                 {
-                    var value = new StoreInfo(_key, item.Path) { BaseValue = item.Convert(_sanitizer) };
+                    var value = new StoreInfo(_key, item.Path) 
+                    { 
+                        Product = _productModel,
+                        BaseValue = item.Convert(_sanitizer)
+                    };
 
                     if (value.BaseValue == null)
                         continue;
 
-                    _queue.AddItem(value);
+                    await _queue.AddItemAsync(value);
                 }
                 catch (Exception ex)
                 {
@@ -156,7 +164,7 @@ namespace HSMServer.BackgroundServices
             }
         }
 
-        public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
+        public async ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
         {
             foreach (var command in commands)
             {
@@ -177,20 +185,17 @@ namespace HSMServer.BackgroundServices
                         Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,
                     };
 
-                    if (!_cache.TryAddOrUpdateSensor(coreRequest, out var error))
-                    {
-                        _logger.Error(error);
-                    }
+                    await _queue.AddItemAsync(coreRequest, token);
                 }
             }
 
-            return ValueTask.FromResult(new PackageSendingInfo());
+            return new PackageSendingInfo();
         }
 
-        public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
+        public async ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
         {
-            SendDataInternal([file]);
-            return new ValueTask<PackageSendingInfo>();
+            await SendDataInternalAsync([file]);
+            return new PackageSendingInfo();
         }
     }
 }
