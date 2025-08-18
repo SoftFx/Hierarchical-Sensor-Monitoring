@@ -209,7 +209,7 @@
         try {
 
             //Do not delete the tree, because the page of the selected sensor stops updating TAM-1972
-            //refreshCount = refreshCount - 1;
+            refreshCount = refreshCount - 1;
             //console.log("tree refresh is called. refreshCount = ", refreshCount)
 
             if (refreshCount <= 0) {
@@ -226,7 +226,7 @@
 
                 scrollHandlers.restoreTreeScroll();
 
-                //console.log("tree is created. Scroll is restored");
+                console.log("tree is re-created. Scroll is restored");
             } else {
                 $tree.jstree(true)?.refresh(true);
                 //console.log("tree is refreshed");
@@ -254,9 +254,11 @@
                 $.cleanData($tree.find('*').addBack().get()); 
             }
             //$tree.empty();
-            resolve();
 
             //console.log("Tree is destroyed");
+            resolve();
+
+            
         });
     }
 
