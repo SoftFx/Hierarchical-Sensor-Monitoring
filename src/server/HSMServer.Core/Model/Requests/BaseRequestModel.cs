@@ -24,7 +24,14 @@ namespace HSMServer.Core.Model.Requests
         public string SensorName => PathParts[^1];
 
 
-        public BaseRequestModel(Guid key, string path) : this(key.ToString(), path) { }
+        public BaseRequestModel(Guid key, string path)
+        {
+            Key = key;
+
+            PathParts = GetPathParts(path);
+
+            Path = string.Join(CommonConstants.SensorPathSeparator, PathParts);
+        }
 
         public BaseRequestModel(string key, string path)
         {

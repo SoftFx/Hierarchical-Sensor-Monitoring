@@ -5,6 +5,8 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Model.Requests;
+using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.DataAlerts;
@@ -18,6 +20,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
 {
@@ -40,6 +43,7 @@ namespace HSMServer.Controllers
         private readonly ITreeValuesCache _cache;
         private readonly IFolderManager _folders;
         private readonly TreeViewModel _tree;
+        private readonly IUpdatesQueue _queue;
 
 
         static AlertsController()
@@ -50,12 +54,13 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertsController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache, IUserManager users) : base(users)
+        public AlertsController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache, IUserManager users, IUpdatesQueue queue) : base(users)
         {
             _telegram = telegram;
             _folders = folders;
             _cache = cache;
             _tree = tree;
+            _queue = queue;
         }
 
 
@@ -86,7 +91,7 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public string ImportAlerts([FromBody] AlertImportViewModel model)
+        public async ValueTask<string> ImportAlerts([FromBody] AlertImportViewModel model)
         {
             var toast = new ImportAlertsToastViewModel();
             var targetId = _tree.Nodes.TryGetValue(model.NodeId, out var target) ? target.Id : Guid.Empty;
@@ -108,7 +113,7 @@ namespace HSMServer.Controllers
                     }
                 }
 
-                SendAlertUpdates(newAlerts, toast);
+                await SendAlertUpdatesAsync(newAlerts, toast);
             }
             catch (Exception ex)
             {
@@ -142,19 +147,28 @@ namespace HSMServer.Controllers
             }
         }
 
-        private void SendAlertUpdates(CDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
+        private async ValueTask SendAlertUpdatesAsync(CDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
         {
             foreach (var (sensorId, alertUpdates) in newAlerts)
             {
-                var update = new SensorUpdate()
+                var request = new SensorAddOrUpdateRequestModel(sensorId, string.Empty)
                 {
-                    Id = sensorId,
-                    Policies = alertUpdates,
-                    Initiator = CurrentInitiator,
+                    Update = new SensorUpdate()
+                    {
+                        Id = sensorId,
+                        Policies = alertUpdates,
+                        Initiator = CurrentInitiator,
+                    }
                 };
 
-                if (!_cache.TryUpdateSensor(update, out var error))
-                    toast.AddError(error, _tree.Sensors[sensorId].Name);
+                try
+                {
+                    await _queue.AddItemAsync(request);
+                }
+                catch (Exception ex)
+                {
+                    toast.AddError(ex.Message, _tree.Sensors[sensorId].Name);
+                }
             }
         }
 

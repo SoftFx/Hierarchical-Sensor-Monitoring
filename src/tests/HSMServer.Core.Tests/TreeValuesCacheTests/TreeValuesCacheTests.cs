@@ -343,7 +343,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _valuesCache.ChangeSensorEvent += RemoveSensorEventHandler;
 
             foreach (var sensor in allSensors)
-                _valuesCache.RemoveSensor(sensor.Id);
+                await _valuesCache.RemoveSensorAsync(sensor.Id);
 
             _valuesCache.ChangeSensorEvent -= RemoveSensorEventHandler;
 

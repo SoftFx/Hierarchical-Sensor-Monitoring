@@ -1,12 +1,14 @@
-﻿using HSMSensorDataObjects.HistoryRequests;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
-using System;
-using System.Collections.Generic;
+
 
 namespace HSMServer.Core.Cache
 {
@@ -61,12 +63,12 @@ namespace HSMServer.Core.Cache
         void SetLastKeyUsage(Guid key, string ip);
 
 
-        bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);
-        bool TryUpdateSensor(SensorUpdate updatedSensor, out string error);
+        ///bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);
+        //bool TryUpdateSensor(SensorUpdate updatedSensor, out string error);
         bool TryGetSensorByPath(string product, string path, out BaseSensorModel sensor);
-        void UpdateSensorValue(UpdateSensorValueRequestModel request);
-        void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null);
-        void UpdateMutedSensorState(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
+        //void UpdateSensorValue(UpdateSensorValueRequestModel request);
+        Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null);
+        Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
         void ClearSensorHistory(ClearHistoryRequest request);
         void CheckSensorHistory(Guid sensorId);
         void ClearNodeHistory(ClearHistoryRequest request);
@@ -81,7 +83,7 @@ namespace HSMServer.Core.Cache
         SensorHistoryInfo GetSensorHistoryInfo(Guid sensorId);
         NodeHistoryInfo GetNodeHistoryInfo(Guid nodeId);
 
-        void UpdateCacheState();
+        //void UpdateCacheState();
 
         void ClearEmptyNodes(ProductModel product);
 

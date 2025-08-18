@@ -3,7 +3,7 @@ using System;
 
 namespace HSMServer.Core.Model.Requests;
 
-public sealed record UpdateSensorValueRequestModel
+public sealed class UpdateSensorValueRequestModel : BaseRequestModel
 {
     public required Guid Id { get; init; }
 
@@ -24,6 +24,10 @@ public sealed record UpdateSensorValueRequestModel
 
     public string Environment => ChangeLast ? "Change last value" : "Added new value";
 
+
+    public UpdateSensorValueRequestModel(Guid key, string path) : base(key, path)
+    {
+    }
 
     public (string oldValue, string newValue) GetValues(BaseValue oldValue, BaseValue newValue) => oldValue is not FileValue ? (oldValue?.RawValue?.ToString(), newValue.RawValue?.ToString()) : (null, null);
 

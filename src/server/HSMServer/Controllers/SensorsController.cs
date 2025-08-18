@@ -257,7 +257,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         [SendDataKeyPermissionFilter]
-        public ActionResult<List<UnitedSensorValue>> Post([FromBody] List<UnitedSensorValue> values)
+        public async Task<ActionResult<List<UnitedSensorValue>>> Post([FromBody] List<UnitedSensorValue> values)
         {
             if (values == null || values.Count == 0)
                 return BadRequest();
@@ -284,8 +284,10 @@ namespace HSMServer.Controllers
                         BaseValue = convertedValue
                     };
 
-                    if (!TryAddToQueue(storeInfo, out var message))
-                        result[storeInfo.Path] = message;
+                    var res = await AddToQueueAsync(storeInfo);
+
+                    if (!res.IsOk)
+                        result[storeInfo.Path] = res.Error;
                 }
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }
@@ -434,15 +436,17 @@ namespace HSMServer.Controllers
         }
 
 
-        private bool TryAddToQueue(StoreInfo storeInfo, out string message)
+        private async ValueTask<TaskResult> AddToQueueAsync(StoreInfo storeInfo)
         {
-            if (storeInfo.TryCheckRequest(out message) && _cache.TryCheckKeyWritePermissions(storeInfo, out message))
-            {
-                _updatesQueue.AddItem(storeInfo);
-                return true;
-            }
+            if (!storeInfo.TryCheckRequest(out var message))
+                return TaskResult.FromError(message);
 
-            return false;
+            if (!_cache.TryCheckKeyWritePermissions(storeInfo, out message))
+                return TaskResult.FromError(message);
+            
+            await _updatesQueue.AddItemAsync(storeInfo);
+
+            return TaskResult.Ok;
         }
 
         private async Task<ActionResult<T>> GetAddDataResult<T>(T value) where T : SensorValueBase
@@ -478,15 +482,15 @@ namespace HSMServer.Controllers
                         Product = info.Product
                     };
 
-                    var result = TryAddToQueue(storeInfo, out var error);
+                    var result = await AddToQueueAsync(storeInfo);
 
-                    if (result)
+                    if (result.IsOk)
                     {
                         _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(1);
                         _collector.WebRequestsSensors.Total.AddReceiveData(1);
                     }
 
-                    return result ? TaskResult.Ok : TaskResult.FromError(error);
+                    return result;
                 }
 
             }
@@ -532,7 +536,9 @@ namespace HSMServer.Controllers
                     Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,
                 };
 
-                return _cache.TryAddOrUpdateSensor(coreRequest, out var error) ? TaskResult.Ok : TaskResult.FromError(error);
+                await _updatesQueue.AddItemAsync(coreRequest);
+
+                return TaskResult.Ok;
             }
 
             return _invalidRequestResult;
