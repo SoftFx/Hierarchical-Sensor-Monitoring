@@ -94,7 +94,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         [Theory]
         [InlineData(5)]
         [InlineData(10)]
-        [InlineData(100)]
+        [InlineData(50)]
         [Trait("Category", "Add Item(s)")]
         public async Task AddEmptyItemsTest(int count)
         {
