@@ -16,6 +16,7 @@ var prevState = undefined;
 
 window.initializeTree = function () {
     initializeTreeInternal();
+    initializeTreeNode();
 }
 
 function closeNodeHandler(e, data) {
@@ -214,7 +215,7 @@ function initializeTreeInternal() {
         prevState = {};
     }
 
-
+    //console.log('initializeTreeInternal is done');
 }
 
 

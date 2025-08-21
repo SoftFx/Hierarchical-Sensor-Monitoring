@@ -54,7 +54,7 @@
 
 <script>
     initialize();
-    initializeTreeNode();
+    //initializeTreeNode();
 
 
     var interval = $("#treeInterval").val() * 1000;
@@ -166,6 +166,9 @@
         clearTimeout(updateSelectedNodeDataTimeoutId);
 
         var selectedNodeId = currentSelectedNodeId;
+
+        //console.log('updateSelectedNodeData selectedNodeId=', selectedNodeId);
+
         if (selectedNodeId != "")
             $.ajax({
                 type: 'POST',

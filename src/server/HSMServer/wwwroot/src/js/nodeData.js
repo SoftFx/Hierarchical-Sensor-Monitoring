@@ -6,20 +6,46 @@ export const formObserver = new MutationObserverService();
 window.currentSelectedNodeId = "";
 
 
+//window.initializeTreeNode = function () {
+//    $('#jstree').on('activate_node.jstree', function (e, data) {
+//        if (data.node.id != undefined) {
+//            selectNodeAjax(data.node.id);
+//        }
+//    }).on("state_ready.jstree", function () {
+//        let selected = $(this).jstree('get_selected')[0];
+
+//        let id = window.location.pathname.slice("/Home/".length)
+//        if (id !== '' && id !== undefined)
+//            selected = id;
+
+//        selectNodeAjax(selected);
+//    });
+//}
+
+
+function handleActivateNode(e, data) {
+    if (data.node.id != undefined) {
+        selectNodeAjax(data.node.id);
+    }
+}
+
+function handleStateReady() {
+    let selected = $(this).jstree('get_selected')[0];
+    let id = window.location.pathname.slice("/Home/".length);
+
+    if (id !== '' && id !== undefined) {
+        selected = id;
+    }
+
+    selectNodeAjax(selected);
+}
+
 window.initializeTreeNode = function () {
-    $('#jstree').on('activate_node.jstree', function (e, data) {
-        if (data.node.id != undefined) {
-            selectNodeAjax(data.node.id);
-        }
-    }).on("state_ready.jstree", function () {
-        let selected = $(this).jstree('get_selected')[0];
 
-        let id = window.location.pathname.slice("/Home/".length)
-        if (id !== '' && id !== undefined)
-            selected = id;
+    $('#jstree').off('activate_node.jstree', handleActivateNode).on('activate_node.jstree', handleActivateNode);
+    $('#jstree').off('state_ready.jstree', handleStateReady).on('state_ready.jstree', handleStateReady);
 
-        selectNodeAjax(selected);
-    });
+    //console.log('initializeTreeNode is done');
 }
 
 window.activateNode = function (currentNodeId, nodeIdToActivate) {
@@ -119,6 +145,7 @@ function saveMetaData(selectedId) {
 }
 
 function initSelectedNode(selectedId) {
+    console.log('initSelectedNode selectedId=', selectedId);
     currentSelectedNodeId = selectedId;
 
     // Show spinner only if selected tree node contains 20 children (nodes/sensors) or it is sensor (doesn't have children)
