@@ -11,6 +11,7 @@ using System.Linq;
 using System.Reflection;
 using HSMServer.Extensions;
 using Xunit;
+using HSMServer.Core.Model.Requests;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -208,7 +209,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Settings.TTL.Value, actual.Settings.TTL.Value);
         }
 
-        internal static void TestSensorModel(StoreInfo expected, BaseSensorModel actual, ProductModel parentProduct = null)
+        internal static void TestSensorModel(AddSensorValueRequest expected, BaseSensorModel actual, ProductModel parentProduct = null)
         {
             Assert.NotNull(actual);
             Assert.False(string.IsNullOrEmpty(actual.Id.ToString()));

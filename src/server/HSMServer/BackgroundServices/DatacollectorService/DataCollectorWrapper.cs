@@ -22,6 +22,7 @@ using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using HSMServer.Services;
 using HSMServer.Core.Model;
+using AspNetCoreGeneratedDocument;
 
 
 namespace HSMServer.BackgroundServices
@@ -34,13 +35,12 @@ namespace HSMServer.BackgroundServices
         private readonly IDataCollector _collector;
 
         private readonly ITreeValuesCache _cache;
-        private readonly IUpdatesQueue _queue;
 
         private readonly ProductModel _productModel;
 
         private readonly IHtmlSanitizerService _sanitizer;
 
-        private readonly string _key;
+        private readonly Guid _key;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         private DateTime? _lastUpdateDbSize = null;
@@ -56,10 +56,9 @@ namespace HSMServer.BackgroundServices
         internal BackupSensors BackupSensors { get; }
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, IUpdatesQueue queue, IHtmlSanitizerService sanitizerService)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, IHtmlSanitizerService sanitizerService)
         {
             _cache = cache;
-            _queue = queue;
             _key = GetSelfMonitoringKey(cache);
 
             _productModel = _cache.GetProductByName(SelfMonitoringProductName);
@@ -74,7 +73,7 @@ namespace HSMServer.BackgroundServices
 
             var options = new CollectorOptions
             {
-                AccessKey = _key,
+                AccessKey = _key.ToString(),
                 ClientName = SelfCollectorName,
                 DataSender = this,
                 PackageCollectPeriod = TimeSpan.FromSeconds(1)
@@ -113,14 +112,14 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        private static string GetSelfMonitoringKey(ITreeValuesCache cache)
+        private static Guid GetSelfMonitoringKey(ITreeValuesCache cache)
         {
             var selfMonitoring = cache.GetProductByName(SelfMonitoringProductName);
             selfMonitoring ??= cache.AddProduct(SelfMonitoringProductName, Guid.Empty);
 
             var key = selfMonitoring.AccessKeys.FirstOrDefault(k => k.Value.DisplayName == CommonConstants.DefaultAccessKey).Key;
 
-            return key.ToString();
+            return key;
         }
 
         public ValueTask<ConnectionResult> TestConnectionAsync()
@@ -146,16 +145,7 @@ namespace HSMServer.BackgroundServices
             {
                 try
                 {
-                    var value = new StoreInfo(_key, item.Path) 
-                    { 
-                        Product = _productModel,
-                        BaseValue = item.Convert(_sanitizer)
-                    };
-
-                    if (value.BaseValue == null)
-                        continue;
-
-                    await _queue.AddItemAsync(value);
+                    await _cache.AddSensorValueAsync(_key, _productModel.DisplayName, item.Path, item.Convert(_sanitizer));
                 }
                 catch (Exception ex)
                 {
@@ -179,13 +169,13 @@ namespace HSMServer.BackgroundServices
                         continue;
                     }
 
-                    var coreRequest = new SensorAddOrUpdateRequestModel(_key, relatedPath)
+                    var coreRequest = new SensorAddOrUpdateRequest(_productModel.DisplayName, relatedPath)
                     {
                         Update = apiRequest.Convert(sensor?.Id ?? Guid.Empty, SelfCollectorName),
                         Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,
                     };
 
-                    await _queue.AddItemAsync(coreRequest, token);
+                    await _cache.AddOrUpdateSensorAsync(coreRequest, token);
                 }
             }
 

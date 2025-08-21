@@ -1,7 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
+using HSMCommon.TaskResult;
 using HSMSensorDataObjects.HistoryRequests;
+using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
@@ -43,9 +47,9 @@ namespace HSMServer.Core.Cache
         List<ProductModel> GetProducts();
         List<ProductModel> GetAllNodes();
 
-        bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
-        bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
-        bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message);
+        //bool TryCheckKeyWritePermissions(BaseUpdateRequest request, out string message);
+        //bool TryCheckKeyReadPermissions(BaseUpdateRequest request, out string message);
+        //bool TryCheckSensorUpdateKeyPermission(BaseUpdateRequest request, out Guid sensorId, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         AccessKeyModel RemoveAccessKey(Guid id);
@@ -63,10 +67,15 @@ namespace HSMServer.Core.Cache
         void SetLastKeyUsage(Guid key, string ip);
 
 
-        ///bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);
-        //bool TryUpdateSensor(SensorUpdate updatedSensor, out string error);
+        Task<TaskResult> AddSensorValueAsync(Guid accessKey, string productName, string path, BaseValue value);
+
+        Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default);
+        //Task<TaskResult> UpdateSensor(SensorUpdate updatedSensor, out string error);
+
+        Task<TaskResult> UpdateSensorAsync(SensorUpdate updatedSensor);
+
         bool TryGetSensorByPath(string product, string path, out BaseSensorModel sensor);
-        //void UpdateSensorValue(UpdateSensorValueRequestModel request);
+        Task<TaskResult> UpdateSensorValueAsync(UpdateSensorValueRequestModel request, CancellationToken token = default);
         Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null);
         Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
         void ClearSensorHistory(ClearHistoryRequest request);

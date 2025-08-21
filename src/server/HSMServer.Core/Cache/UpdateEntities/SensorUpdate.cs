@@ -2,9 +2,12 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Threading.Tasks;
+using HSMCommon.TaskResult;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TableOfChanges;
 using SensorStatus = HSMServer.Core.Model.SensorStatus;
 
@@ -14,7 +17,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
     /// <summary>
     /// If properties are null - there's no updates for that properties
     /// </summary>
-    public record SensorUpdate : BaseNodeUpdate
+    public record SensorUpdate : BaseNodeUpdate, IUpdateRequest
     {
         public List<PolicyUpdate> Policies { get; init; }
 
@@ -41,6 +44,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public DefaultAlertsOptions DefaultAlertsOptions { get; init; }
 
         public List<EnumOption> EnumOptions { get; init; }
+
+        public TaskCompletionSource<TaskResult> TaskCompletionSource { get; set; }
 
         [SetsRequiredMembers]
         public SensorUpdate() : base() { }

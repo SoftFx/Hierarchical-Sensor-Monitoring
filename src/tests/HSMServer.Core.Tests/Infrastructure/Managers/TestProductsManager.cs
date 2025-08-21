@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model;
 using System;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -18,6 +19,9 @@ namespace HSMServer.Core.Tests.Infrastructure
                 CreationDate = DateTime.UtcNow.Ticks,
                 State = 1 << 30,
             };
+
+
+        internal static ProductModel TestProductModel = new ProductModel(TestProduct);
 
         internal static AccessKeyEntity TestProductKey { get; } =
             EntitiesFactory.BuildAccessKeyEntity(productId: TestProduct.Id);

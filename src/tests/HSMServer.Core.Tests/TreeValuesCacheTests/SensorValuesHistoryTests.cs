@@ -10,6 +10,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using HSMServer.Extensions;
 using Xunit;
+using System.Threading;
+using HSMServer.Core.Model.Requests;
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
@@ -34,7 +36,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             const int sensorValuesCount = 1000;
             const int historyValuesCount = 101;
 
-            var sensors = AddAndGetSensorsWithAllSensorValues(sensorsCount, sensorValuesCount, type);
+            var sensors = await AddAndGetSensorsWithAllSensorValues(sensorsCount, sensorValuesCount, type);
 
             foreach (var (sensor, sensorValues) in sensors)
             {
@@ -67,7 +69,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             const int sensorValuesCount = 5000;
 
-            var sensors = AddAndGetSensorsWithAllSensorValues(sensorsCount, sensorValuesCount, type);
+            var sensors = await AddAndGetSensorsWithAllSensorValues(sensorsCount, sensorValuesCount, type);
 
             var from = DateTime.UtcNow.AddMilliseconds(-100);
             var to = DateTime.UtcNow.AddMilliseconds(-50);
@@ -99,7 +101,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             const int sensorValuesCount = 1000;
 
-            var sensors = AddAndGetSensorsWithAllSensorValues(sensorsCount, sensorValuesCount, type);
+            var sensors = await AddAndGetSensorsWithAllSensorValues(sensorsCount, sensorValuesCount, type);
+
+            await Task.Delay(100);
 
             var from = DateTime.MinValue;
             var to = DateTime.MaxValue;
@@ -121,7 +125,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        private Dictionary<SensorModelInfo, List<BaseValue>> AddAndGetSensorsWithAllSensorValues(int sensorsCount, int sensorValuesCount, SensorType type)
+        private async Task<Dictionary<SensorModelInfo, List<BaseValue>>> AddAndGetSensorsWithAllSensorValues(int sensorsCount, int sensorValuesCount, SensorType type)
         {
             var sensors = BuildSensorModelInfos(sensorsCount, type);
 
@@ -129,25 +133,25 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorInfo in sensors)
                 map.Add(sensorInfo, new List<BaseValue>());
 
+            var product = _valuesCache.GetProductByName(TestProductsManager.TestProductModel.DisplayName);
+
+            var key = product.AccessKeys.Values.FirstOrDefault(x => x.State == KeyState.Active);
+
             for (int i = 0; i < sensorValuesCount; ++i)
             {
                 var sensorInfo = sensors[RandomGenerator.GetRandomInt(min: 0, max: sensorsCount)];
-                var storeInfo = new StoreInfo(TestProductsManager.TestProductKey.Id, sensorInfo.Path)
-                {
-                    BaseValue = SensorValuesFactory.BuildSensorValue(sensorInfo.Type),
-                };
+                var storeInfo = new AddSensorValueRequest(TestProductsManager.TestProductModel.DisplayName, sensorInfo.Path, SensorValuesFactory.BuildSensorValue(sensorInfo.Type));
 
-                void ChangeSensorHandler(BaseSensorModel sensorModel, ActionType type)
-                {
-                    if (type == ActionType.Add)
-                        sensorInfo.Id = sensorModel.Id;
-                }
 
-                _valuesCache.ChangeSensorEvent += ChangeSensorHandler;
-                _valuesCache.AddNewSensorValue(storeInfo);
-                _valuesCache.ChangeSensorEvent -= ChangeSensorHandler;
-
+                await _valuesCache.AddSensorValueAsync(key.Id, storeInfo.ProductName, storeInfo.Path, storeInfo.BaseValue);
                 map[sensorInfo].Add(storeInfo.BaseValue);
+            }
+
+            var sens = _valuesCache.GetSensors();
+            foreach (var sensor in map.Keys)
+            {
+                var result = sens.FirstOrDefault(x => x.Path == sensor.Path);
+                sensor.Id = result.Id;
             }
 
             return map;

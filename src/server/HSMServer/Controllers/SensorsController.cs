@@ -52,14 +52,12 @@ namespace HSMServer.Controllers
         private readonly IHtmlSanitizerService _sanitizer;
 
         private readonly ITreeValuesCache _cache;
-        private readonly IUpdatesQueue _updatesQueue;
 
 
-        public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector, ITreeValuesCache cache, TelemetryCollector telemetry, IHtmlSanitizerService sanitizerService)
+        public SensorsController(DataCollectorWrapper dataCollector, ITreeValuesCache cache, TelemetryCollector telemetry, IHtmlSanitizerService sanitizerService)
         {
             _telemetry = telemetry;
 
-            _updatesQueue = updatesQueue;
             _collector = dataCollector;
             _cache = cache;
             _sanitizer = sanitizerService;
@@ -245,58 +243,6 @@ namespace HSMServer.Controllers
             }
         }
 
-        /// <summary>
-        /// Obsolete method. Will be removed.
-        /// Accepts data in UnitedSensorValue format. Converts data to a typed format and saves it to the database.
-        /// </summary>
-        /// <param name="values"></param>
-        /// <returns></returns>
-        [HttpPost("listNew")]
-        [Consumes(MediaTypeNames.Application.Json)]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [SendDataKeyPermissionFilter]
-        public async Task<ActionResult<List<UnitedSensorValue>>> Post([FromBody] List<UnitedSensorValue> values)
-        {
-            if (values == null || values.Count == 0)
-                return BadRequest();
-
-            try
-            {
-                _collector.WebRequestsSensors.Total.AddReceiveData(values.Count);
-
-                var result = new Dictionary<string, string>(values.Count);
-                foreach (var value in values)
-                {
-                    BaseValue convertedValue = value.Type switch
-                    {
-                        SensorType.BooleanSensor => value.ConvertToBool(),
-                        SensorType.DoubleSensor => value.ConvertToDouble(),
-                        SensorType.IntSensor => value.ConvertToInt(),
-                        SensorType.StringSensor => value.ConvertToString(),
-                        SensorType.IntegerBarSensor => value.ConvertToIntBar(),
-                        SensorType.DoubleBarSensor => value.ConvertToDoubleBar(),
-                        _ => null
-                    };
-                    var storeInfo = new StoreInfo(value.Key, value.Path)
-                    {
-                        BaseValue = convertedValue
-                    };
-
-                    var res = await AddToQueueAsync(storeInfo);
-
-                    if (!res.IsOk)
-                        result[storeInfo.Path] = res.Error;
-                }
-                return result.Count == 0 ? Ok(values) : StatusCode(406, result);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("Failed to put data", ex);
-                return BadRequest(values);
-            }
-        }
 
         /// <summary>
         /// Get history [from, to] or [from - count] for some sensor
@@ -436,19 +382,6 @@ namespace HSMServer.Controllers
         }
 
 
-        private async ValueTask<TaskResult> AddToQueueAsync(StoreInfo storeInfo)
-        {
-            if (!storeInfo.TryCheckRequest(out var message))
-                return TaskResult.FromError(message);
-
-            if (!_cache.TryCheckKeyWritePermissions(storeInfo, out message))
-                return TaskResult.FromError(message);
-            
-            await _updatesQueue.AddItemAsync(storeInfo);
-
-            return TaskResult.Ok;
-        }
-
         private async Task<ActionResult<T>> GetAddDataResult<T>(T value) where T : SensorValueBase
         {
             try
@@ -476,13 +409,8 @@ namespace HSMServer.Controllers
                 {
                     var info = infoRequest.Value;
 
-                    var storeInfo = new StoreInfo(info.Key.Id, value.Path)
-                    {
-                        BaseValue = value.Convert(_sanitizer),
-                        Product = info.Product
-                    };
 
-                    var result = await AddToQueueAsync(storeInfo);
+                    var result = await _cache.AddSensorValueAsync(info.Key.Id, info.Product.DisplayName, value.Path, value.Convert(_sanitizer));
 
                     if (result.IsOk)
                     {
@@ -530,15 +458,13 @@ namespace HSMServer.Controllers
                 if (!_cache.TryGetSensorByPath(info.Product.DisplayName, relatedPath, out var sensor) && sensorType is null)
                     return TaskResult.FromError($"{nameof(apiRequest.SensorType)} property is required, because sensor {relatedPath} doesn't exist");
 
-                var coreRequest = new SensorAddOrUpdateRequestModel(info.Key.Id, relatedPath)
+                var coreRequest = new SensorAddOrUpdateRequest(info.Product.DisplayName, relatedPath)
                 {
                     Update = apiRequest.Convert(sensor?.Id ?? Guid.Empty, info.Key.DisplayName),
                     Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,
                 };
 
-                await _updatesQueue.AddItemAsync(coreRequest);
-
-                return TaskResult.Ok;
+                return await _cache.AddOrUpdateSensorAsync(coreRequest);
             }
 
             return _invalidRequestResult;

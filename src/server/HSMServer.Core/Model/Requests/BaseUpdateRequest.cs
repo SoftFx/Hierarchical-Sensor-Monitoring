@@ -1,44 +1,29 @@
-﻿using HSMCommon.Constants;
-using System;
+﻿using System;
 using System.Linq;
+using HSMCommon.Constants;
+using HSMServer.Core.SensorsUpdatesQueue;
+
 
 namespace HSMServer.Core.Model.Requests
 {
-    public abstract class BaseRequestModel
+    public abstract class BaseUpdateRequest : IUpdateRequest
     {
         private const string ErrorTooLongPath = "Path for the sensor is too long.";
         private const string ErrorInvalidPath = "Path has an invalid format.";
         private const string ErrorPathKey = "Path or key is empty.";
         private const int MaxPathLength = 10;
 
-        private readonly bool _failKey;
-
-
         public string[] PathParts { get; }
 
         public string Path { get; }
 
-        public Guid Key { get; }
-
-
         public string SensorName => PathParts[^1];
 
+        public string ProductName { get; }
 
-        public BaseRequestModel(Guid key, string path)
+        public BaseUpdateRequest(string productName, string path)
         {
-            Key = key;
-
-            PathParts = GetPathParts(path);
-
-            Path = string.Join(CommonConstants.SensorPathSeparator, PathParts);
-        }
-
-        public BaseRequestModel(string key, string path)
-        {
-            _failKey = !Guid.TryParse(key, out var guid);
-
-            if (!_failKey)
-                Key = guid;
+            ProductName = productName;
 
             PathParts = GetPathParts(path);
 
@@ -48,7 +33,7 @@ namespace HSMServer.Core.Model.Requests
 
         public bool TryCheckRequest(out string message)
         {
-            if (_failKey || string.IsNullOrEmpty(Path))
+            if (string.IsNullOrEmpty(ProductName) || string.IsNullOrEmpty(Path))
             {
                 message = ErrorPathKey;
                 return false;

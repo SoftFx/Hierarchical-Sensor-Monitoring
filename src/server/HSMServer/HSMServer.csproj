@@ -36,15 +36,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
+    <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.1" />
     <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.4.10" />
     <PackageReference Include="HtmlSanitizer" Version="9.0.886" />
-    <PackageReference Include="Markdig" Version="0.41.2" />
-    <PackageReference Include="NLog.Web.AspNetCore" Version="5.4.0" />
+    <PackageReference Include="Markdig" Version="0.41.3" />
+    <PackageReference Include="NLog.Web.AspNetCore" Version="6.0.3" />
     <PackageReference Include="SSH.NET" Version="2025.0.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.1" />
-    <PackageReference Include="System.Linq.Async" Version="6.0.1" />
-    <PackageReference Include="Telegram.Bot" Version="22.5.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
+    <PackageReference Include="System.Linq.Async" Version="6.0.3" />
+    <PackageReference Include="Telegram.Bot" Version="22.6.2" />
   </ItemGroup>
 
   <ItemGroup>

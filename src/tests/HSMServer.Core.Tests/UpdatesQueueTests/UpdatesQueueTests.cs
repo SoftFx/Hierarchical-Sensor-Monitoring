@@ -1,21 +1,17 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.Requests;
-using HSMServer.Core.SensorsUpdatesQueue;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
+using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
+using HSMServer.Core.SensorsUpdatesQueue;
 
 namespace HSMServer.Core.Tests.UpdatesQueueTests
 {
     public class UpdatesQueueTests
     {
-        private const int DelayTime = 1000;
 
-        private List<StoreInfo> _receivedInfos;
+        private List<IUpdateRequest> _receivedInfos;
 
         private readonly ITestOutputHelper _output;
 
@@ -28,18 +24,20 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         [Trait("Category", "Add Item(s)")]
         public async Task AddItemTest()
         {
-            StoreInfo receivedInfo = default;
-            void GetItem(BaseRequestModel item)
+            AddSensorValueRequest receivedInfo = default;
+            void GetItem(IUpdateRequest item)
             {
-                receivedInfo = item as StoreInfo;
+                receivedInfo = item as AddSensorValueRequest;
             }
 
-            StoreInfo storeInfo = BuildStoreInfo(0);
-            var updatesQueue = new UpdatesQueue();
-            await updatesQueue.AddItemAsync(storeInfo);
+            AddSensorValueRequest storeInfo = BuildStoreInfo(0);
+            using var updatesQueue = new UpdatesQueue();
             updatesQueue.ItemAdded += GetItem;
 
-            await Task.Delay(DelayTime);
+            await updatesQueue.ProcessRequestAsync(storeInfo);
+
+            updatesQueue.ItemAdded -= GetItem;
+
             Assert.Equal(storeInfo, receivedInfo);
         }
 
@@ -47,18 +45,22 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         [Trait("Category", "Add Item(s)")]
         public async Task AddEmptyItemTest()
         {
-            StoreInfo receivedInfo = default;
-            void GetItem(BaseRequestModel item)
+            AddSensorValueRequest receivedInfo = default;
+            void GetItem(IUpdateRequest item)
             {
-                receivedInfo = item as StoreInfo;
+                receivedInfo = item as AddSensorValueRequest;
             }
 
-            StoreInfo storeInfo = new("", "/");
-            var updatesQueue = new UpdatesQueue();
-            await updatesQueue.AddItemAsync(storeInfo);
+            AddSensorValueRequest storeInfo = BuildStoreInfo(10);
+            using var updatesQueue = new UpdatesQueue();
             updatesQueue.ItemAdded += GetItem;
 
-            await Task.Delay(DelayTime);
+            await updatesQueue.ProcessRequestAsync(storeInfo);
+
+
+            updatesQueue.ItemAdded -= GetItem;
+
+
             Assert.Equal(storeInfo, receivedInfo);
         }
 
@@ -70,20 +72,16 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         public async Task AddItemsTest(int count)
         {
             _receivedInfos = new(count);
-            
 
-            List<StoreInfo> items = AddItemsToList(count);
+            List<AddSensorValueRequest> items = AddItemsToList(count);
 
-            var updatesQueue = new UpdatesQueue();
+            using var updatesQueue = new UpdatesQueue();
             updatesQueue.ItemAdded += GetItem;
-            await updatesQueue.AddItemsAsync(items);
 
-
-
-            await Task.Delay(DelayTime);
+            foreach (var item in items)
+                await updatesQueue.ProcessRequestAsync(item);
 
             updatesQueue.ItemAdded -= GetItem;
-            updatesQueue.Dispose();
 
             Assert.Equal(items.Count, _receivedInfos.Count);
             for (int i = 0; i < items.Count; i++)
@@ -98,24 +96,27 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         [Trait("Category", "Add Item(s)")]
         public async Task AddEmptyItemsTest(int count)
         {
-            List<StoreInfo> receivedInfo = new(count);
-            void GetItem(BaseRequestModel storeInfo)
+            List<AddSensorValueRequest> receivedInfo = new(count);
+            void GetItem(IUpdateRequest storeInfo)
             {
-                receivedInfo.Add(storeInfo as StoreInfo);
+                receivedInfo.Add(storeInfo as AddSensorValueRequest);
             }
 
-            List<StoreInfo> items = new(count);
+            List<AddSensorValueRequest> items = new(count);
             for (int i = 0; i < count; i++)
             {
-                StoreInfo storeInfo = new("", "/");
+                AddSensorValueRequest storeInfo = BuildStoreInfo(1);
                 items.Add(storeInfo);
             }
 
-            var updatesQueue = new UpdatesQueue();
-            await updatesQueue.AddItemsAsync(items);
+            using var updatesQueue = new UpdatesQueue();
             updatesQueue.ItemAdded += GetItem;
 
-            await Task.Delay(DelayTime);
+            foreach (var item in items)
+                await updatesQueue.ProcessRequestAsync(item);
+
+            updatesQueue.ItemAdded -= GetItem;
+
             Assert.Equal(items.Count, receivedInfo.Count);
             for (int i = 0; i < items.Count; i++)
                 Assert.Equal(items[i], receivedInfo[i]);
@@ -123,27 +124,27 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         }
 
 
-        private void GetItem(BaseRequestModel item)
+        private void GetItem(IUpdateRequest item)
         {
-            _receivedInfos.Add(item as StoreInfo);
+            _receivedInfos.Add(item as AddSensorValueRequest);
         }
 
-        private static List<StoreInfo> AddItemsToList(int count)
+        private static List<AddSensorValueRequest> AddItemsToList(int count)
         {
-            List<StoreInfo> items = new(count);
+            List<AddSensorValueRequest> items = new(count);
 
             for (int i = 0; i < count; i++)
             {
-                StoreInfo storeInfo = BuildStoreInfo(i);
+                AddSensorValueRequest storeInfo = BuildStoreInfo(i);
                 items.Add(storeInfo);
             }
 
             return items;
         }
 
-        private static StoreInfo BuildStoreInfo(int value)
+        private static AddSensorValueRequest BuildStoreInfo(int value)
         {
-            return new("", "/") { BaseValue = new IntegerValue() { Value = value } };
+            return new("", "/", new IntegerValue() { Value = value });
         }
     }
 }

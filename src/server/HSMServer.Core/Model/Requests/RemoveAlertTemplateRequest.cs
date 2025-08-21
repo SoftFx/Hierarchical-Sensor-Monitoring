@@ -1,15 +1,19 @@
 ﻿using System;
+using HSMServer.Core.SensorsUpdatesQueue;
 
 
 namespace HSMServer.Core.Model.Requests
 {
-    internal class RemoveAlertTemplateRequest : BaseRequestModel
+    internal class RemoveAlertTemplateRequest : IUpdateRequest
     {
-
         public Guid SensorId { get; init; }
 
-        public RemoveAlertTemplateRequest(Guid key, string path) : base(key, path)
+        public Guid TemplateId { get; init; }
+
+        public RemoveAlertTemplateRequest(Guid sensorId, Guid templateId)
         {
+            SensorId = sensorId;
+            TemplateId = templateId;
         }
     }
 }
