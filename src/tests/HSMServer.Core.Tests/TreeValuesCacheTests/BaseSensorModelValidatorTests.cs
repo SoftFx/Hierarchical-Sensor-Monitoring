@@ -1,5 +1,6 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
@@ -199,9 +200,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "EmptyPathOrKey")]
-        public void EmptyPathOrKeyValidationTest()
+        public void EmptyProductNameValidationTest()
         {
-            var info = new StoreInfo(string.Empty, string.Empty);
+            var info = new AddSensorValueRequest(string.Empty, "sensor", new StringValue());
+
+            Assert.False(info.TryCheckRequest(out var message));
+            Assert.Equal(ErrorPathKey, message);
+        }
+
+        [Fact]
+        [Trait("Category", "EmptyPathOrKey")]
+        public void EmptyPathValidationTest()
+        {
+            var info = new AddSensorValueRequest("product", string.Empty, new StringValue());
 
             Assert.False(info.TryCheckRequest(out var message));
             Assert.Equal(ErrorPathKey, message);
@@ -211,7 +222,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "TooLongPath")]
         public void TooLongPathValidationTest()
         {
-            var info = new StoreInfo(Guid.NewGuid().ToString(), InvalidTooLongPath);
+            var info = new AddSensorValueRequest(TestProductsManager.ProductName, InvalidTooLongPath, new StringValue());
 
             Assert.False(info.TryCheckRequest(out var message));
             Assert.Equal(ErrorTooLongPath, message);
@@ -241,9 +252,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "InvalidKey")]
         public void InvalidKeyValidationTest()
         {
-            var info = new StoreInfo(Guid.NewGuid().ToString(), ValidPath);
+            var info = new AddSensorValueRequest(TestProductsManager.ProductName, ValidPath, new StringValue()) { Key = Guid.NewGuid() };
 
-            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info, out var message));
+            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info.Key, info.PathParts, out var message));
             Assert.True(message.Contains("not found"));
         }
 
@@ -262,7 +273,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "TrimPath")]
         public void TrimPathTest(string path, string result)
         {
-            var info = new StoreInfo(Guid.NewGuid().ToString(), path);
+            var info = new AddSensorValueRequest(TestProductsManager.ProductName, path, new StringValue());
 
             Assert.Equal(info.Path, result);
         }
@@ -278,9 +289,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _valuesCache.AddAccessKey(accessKey);
 
-            var info = new StoreInfo(accessKey.Id.ToString(), ValidPath);
+            var info = new AddSensorValueRequest(TestProductsManager.ProductName, ValidPath, new StringValue()) { Key = accessKey.Id };
 
-            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info, out var message));
+            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info.Key, info.PathParts, out var message));
             Assert.Equal(ErrorHaventRule, message);
         }
 

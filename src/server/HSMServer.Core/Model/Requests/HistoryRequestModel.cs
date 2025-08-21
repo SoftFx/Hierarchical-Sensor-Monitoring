@@ -3,7 +3,7 @@ using System;
 
 namespace HSMServer.Core.Model.Requests
 {
-    public class HistoryRequestModel : BaseRequestModel
+    public class HistoryRequestModel : BaseUpdateRequest
     {
         public DateTime From { get; set; }
 
@@ -13,10 +13,13 @@ namespace HSMServer.Core.Model.Requests
 
         public RequestOptions Options { get; set; }
 
+        public Guid Key { get; set; }
 
-        public HistoryRequestModel(string key, string path) : base(key, path) { }
-        
-        public HistoryRequestModel(Guid key, string path) : base(key, path) { }
+        public HistoryRequestModel(Guid key, string path) : base (string.Empty, path)
+        {
+            Key = key;
+        }
+
     }
 
 

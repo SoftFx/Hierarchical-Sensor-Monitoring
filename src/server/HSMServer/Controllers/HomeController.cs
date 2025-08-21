@@ -49,12 +49,11 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly IDatabaseCore _database;
-        private readonly IUpdatesQueue _queue;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
                               IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager, 
-                              IDatabaseCore database, IUpdatesQueue queue) : base(userManager)
+                              IDatabaseCore database) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
@@ -62,7 +61,6 @@ namespace HSMServer.Controllers
             _journalService = journalService;
             _telegramChatsManager = telegramChatsManager;
             _database = database;
-            _queue = queue;
         }
 
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -316,18 +314,15 @@ namespace HSMServer.Controllers
                         continue;
                     }
 
-                    var update = new SensorAddOrUpdateRequestModel(sensor.Id, string.Empty)
+                    var update = new SensorUpdate
                     {
-                        Update = new SensorUpdate
-                        {
-                            Id = sensor.Id,
-                            TTL = model.ExpectedUpdateInterval?.ToModel(),
-                            Initiator = CurrentInitiator
-                        }
+                        Id = sensor.Id,
+                        TTL = model.ExpectedUpdateInterval?.ToModel(),
+                        Initiator = CurrentInitiator
                     };
 
                     toastViewModel.AddItem(sensor);
-                    await _queue.AddItemAsync(update);
+                    await _treeValuesCache.UpdateSensorAsync(update);
                 }
             }
 
@@ -390,17 +385,14 @@ namespace HSMServer.Controllers
         {
             foreach (var sensorId in GetNodeSensors(SensorPathHelper.DecodeGuid(selectedNode)))
             {
-                var update = new SensorAddOrUpdateRequestModel(sensorId, string.Empty)
+                var update = new SensorUpdate()
                 {
-                    Update = new SensorUpdate()
-                    {
-                        Id = sensorId,
-                        Integration = integration,
-                        Initiator = CurrentInitiator
-                    }
+                    Id = sensorId,
+                    Integration = integration,
+                    Initiator = CurrentInitiator
                 };
 
-                await _queue.AddItemAsync(update);
+                await _treeValuesCache.UpdateSensorAsync(update);
             }
         }
 
@@ -623,25 +615,23 @@ namespace HSMServer.Controllers
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
                 ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
 
-            var update = new SensorAddOrUpdateRequestModel(sensor.Id, sensor.FullPath)
+
+            var update = new SensorUpdate
             {
-                Update = new SensorUpdate
-                {
-                    Id = sensor.Id,
-                    Description = newModel.Description ?? string.Empty,
-                    TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? TimeIntervalModel.None,
-                    TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
-                    KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
-                    SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
-                    Policies = policyUpdates,
-                    SelectedUnit = newModel.SelectedUnit,
-                    AggregateValues = newModel.AggregateValues,
-                    Statistics = newModel.GetOptions(),
-                    Initiator = CurrentInitiator
-                }
+                Id = sensor.Id,
+                Description = newModel.Description ?? string.Empty,
+                TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? TimeIntervalModel.None,
+                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
+                KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
+                SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
+                Policies = policyUpdates,
+                SelectedUnit = newModel.SelectedUnit,
+                AggregateValues = newModel.AggregateValues,
+                Statistics = newModel.GetOptions(),
+                Initiator = CurrentInitiator
             };
 
-            await _queue.AddItemAsync(update);
+            await _treeValuesCache.UpdateSensorAsync(update);
 
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
@@ -771,7 +761,7 @@ namespace HSMServer.Controllers
                 Initiator = CurrentInitiator,
             };
 
-            await _queue.AddItemAsync(updateRequest);
+            await _treeValuesCache.UpdateSensorValueAsync(updateRequest);
 
 
             return Ok();
@@ -789,18 +779,16 @@ namespace HSMServer.Controllers
                 tableSettingsUpdateDto.MaxCommentHideSize < 0)
                 return BadRequest("Can't use negative numbers");
 
-            var update = new SensorAddOrUpdateRequestModel(sensorId, sensor.Path)
+
+            var update = new SensorUpdate
             {
-               Update = new SensorUpdate
-                {
-                    Id = sensor.Id,
-                    IsHideEnabled = tableSettingsUpdateDto.IsHideEnabled,
-                    MaxCommentHideSize = tableSettingsUpdateDto.MaxCommentHideSize,
-                    Initiator = CurrentInitiator
-                }
+                Id = sensor.Id,
+                IsHideEnabled = tableSettingsUpdateDto.IsHideEnabled,
+                MaxCommentHideSize = tableSettingsUpdateDto.MaxCommentHideSize,
+                Initiator = CurrentInitiator
             };
 
-            await _queue.AddItemAsync(update);
+            await _treeValuesCache.UpdateSensorAsync(update);
 
             return Ok("Successfully updated");
         }

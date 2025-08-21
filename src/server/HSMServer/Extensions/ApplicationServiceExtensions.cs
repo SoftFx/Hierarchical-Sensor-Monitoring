@@ -43,7 +43,6 @@ public static class ApplicationServiceExtensions
 
         services.AddSingleton<IDatabaseCore, DatabaseCore>()
                 .AddSingleton<ITreeStateSnapshot, TreeStateSnapshot>()
-                .AddSingleton<IUpdatesQueue, UpdatesQueue>()
                 .AddSingleton<ITreeValuesCache, TreeValuesCache>()
                 .AddSingleton<IJournalService, JournalService>();
 

@@ -43,7 +43,6 @@ namespace HSMServer.Controllers
         private readonly ITreeValuesCache _cache;
         private readonly IFolderManager _folders;
         private readonly TreeViewModel _tree;
-        private readonly IUpdatesQueue _queue;
 
 
         static AlertsController()
@@ -54,13 +53,12 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertsController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache, IUserManager users, IUpdatesQueue queue) : base(users)
+        public AlertsController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache, IUserManager users) : base(users)
         {
             _telegram = telegram;
             _folders = folders;
             _cache = cache;
             _tree = tree;
-            _queue = queue;
         }
 
 
@@ -151,19 +149,19 @@ namespace HSMServer.Controllers
         {
             foreach (var (sensorId, alertUpdates) in newAlerts)
             {
-                var request = new SensorAddOrUpdateRequestModel(sensorId, string.Empty)
+
+                var update = new SensorUpdate()
                 {
-                    Update = new SensorUpdate()
-                    {
-                        Id = sensorId,
-                        Policies = alertUpdates,
-                        Initiator = CurrentInitiator,
-                    }
+                    Id = sensorId,
+                    Policies = alertUpdates,
+                    Initiator = CurrentInitiator,
                 };
 
                 try
                 {
-                    await _queue.AddItemAsync(request);
+                    var result = await _cache.UpdateSensorAsync(update);
+                    if (!result.IsOk)
+                        toast.AddError(result.Error, _tree.Sensors[sensorId].Name);
                 }
                 catch (Exception ex)
                 {

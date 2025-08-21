@@ -1,4 +1,6 @@
-﻿namespace HSMServer.Core.Model.Requests
+﻿using System;
+
+namespace HSMServer.Core.Model.Requests
 {
     public sealed class FileHistoryRequestModel : HistoryRequestModel
     {
@@ -7,6 +9,6 @@
         public bool IsArchive { get; set; }
 
 
-        public FileHistoryRequestModel(string key, string path) : base(key, path) { }
+        public FileHistoryRequestModel(Guid key, string path) : base(key, path) { }
     }
 }
