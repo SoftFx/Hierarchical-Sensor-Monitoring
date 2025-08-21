@@ -8,7 +8,6 @@ using Microsoft.Extensions.Options;
 using NLog;
 using HSMCommon.Constants;
 using HSMDataCollector.Core;
-using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
@@ -17,12 +16,11 @@ using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using HSMServer.Services;
 using HSMServer.Core.Model;
-using AspNetCoreGeneratedDocument;
+
 
 
 namespace HSMServer.BackgroundServices
@@ -41,7 +39,7 @@ namespace HSMServer.BackgroundServices
         private readonly IHtmlSanitizerService _sanitizer;
 
         private readonly Guid _key;
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly Logger _logger;
 
         private DateTime? _lastUpdateDbSize = null;
 
@@ -58,6 +56,8 @@ namespace HSMServer.BackgroundServices
 
         public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, IHtmlSanitizerService sanitizerService)
         {
+            _logger = LogManager.GetLogger(GetType().Name);
+
             _cache = cache;
             _key = GetSelfMonitoringKey(cache);
 
@@ -66,10 +66,6 @@ namespace HSMServer.BackgroundServices
             _sanitizer = sanitizerService;
 
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
-            var loggerOptions = new LoggerOptions()
-            {
-                WriteDebug = false,
-            };
 
             var options = new CollectorOptions
             {
@@ -79,7 +75,8 @@ namespace HSMServer.BackgroundServices
                 PackageCollectPeriod = TimeSpan.FromSeconds(1)
             };
 
-            _collector = new DataCollector(options).AddNLog(loggerOptions);
+
+            _collector = new DataCollector(options).AddCustomLogger(new DataCollectorLoggerWrapper(_logger));
 
             if (OperatingSystem.IsWindows())
                 _collector.Windows.AddAllDefaultSensors(productVersion);

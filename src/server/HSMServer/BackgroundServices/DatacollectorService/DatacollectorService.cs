@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundServices
 {
-    public class DatacollectorService : BaseDelayedBackgroundService
+    public class DataCollectorService : BaseDelayedBackgroundService
     {
         private readonly DataCollectorWrapper _collector;
 
@@ -16,7 +16,7 @@ namespace HSMServer.BackgroundServices
         public override TimeSpan Delay { get; } = TimeSpan.FromMinutes(5);
 
 
-        public DatacollectorService(DataCollectorWrapper collector, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+        public DataCollectorService(DataCollectorWrapper collector, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor)
         {
             _collector = collector;
 

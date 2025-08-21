@@ -29,7 +29,7 @@ namespace HSMServer.Notifications
         private const int MaxMessageLength = 1000;
         public const string BotIsNotRunningError = "Telegram Bot is not running.";
 
-        private readonly static NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
+        private readonly static NLog.Logger _logger = NLog.LogManager.GetLogger(nameof(TelegramBot));
 
         private readonly ReceiverOptions _options = new()
         {
