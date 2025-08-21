@@ -62,7 +62,7 @@ namespace HSMServer.Core.Cache
 
         private readonly object _alertTemplatesLock = new();
 
-        private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
+        private readonly Logger _logger = LogManager.GetLogger(nameof(TreeValuesCache));
 
         private readonly ConfirmationManager _confirmationManager = new();
         private readonly ScheduleManager _scheduleManager = new();
@@ -791,7 +791,7 @@ namespace HSMServer.Core.Cache
 
             var sensorId = message.SensorId;
 
-            if (!_sensorsById.TryGetValue(sensorId, out var path) || _sensorsByPath.TryGetValue(path, out var sensor) || !sensor.CanSendNotifications)
+            if (!TryGetSensorById(sensorId, out var sensor) || !sensor.CanSendNotifications)
                 return;
 
             var product = GetProductByName(sensor.RootProductName);

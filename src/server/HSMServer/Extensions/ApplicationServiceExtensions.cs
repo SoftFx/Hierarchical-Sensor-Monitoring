@@ -61,7 +61,7 @@ public static class ApplicationServiceExtensions
         services.AddHostedService<TreeSnapshotService>()
                 .AddHostedService<ClearDatabaseService>()
 //                .AddHostedService<MonitoringBackgroundService>()
-                .AddHostedService<DatacollectorService>()
+                .AddHostedService<DataCollectorService>()
                 .AddHostedService<NotificationsBackgroundService>()
                 .AddHostedService(provider => provider.GetService<BackupDatabaseService>());
 
