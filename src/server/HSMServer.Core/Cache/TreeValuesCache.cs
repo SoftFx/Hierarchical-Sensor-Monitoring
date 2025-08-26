@@ -1337,7 +1337,7 @@ namespace HSMServer.Core.Cache
             if (!TryCheckKeyWritePermissions(request.Key, request.PathParts, out message))
                 return TaskResult.FromError(message);
 
-            await _updatesQueue.ProcessRequestAsync(request).ConfigureAwait(false);
+            await _updatesQueue.ProcessRequestAsync(request, token).ConfigureAwait(false);
 
             return TaskResult.Ok;
         }
@@ -1986,14 +1986,23 @@ namespace HSMServer.Core.Cache
 
         private void CheckSensorsTimeout()
         {
-            foreach (var sensor in _sensorsByPath.Values)
-            {
-                var timeout = sensor.CheckTimeout();
-                var ttl = sensor.Policies.TimeToLive;
+            var batchSize = 2000;
+            var sensors = _sensorsByPath.Values.ToArray();
 
-                if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
-                    SendNotification(sensor.Id, ttl.GetNotification(true));
-            }
+            var sensorBatches = sensors.Chunk(batchSize);
+
+            Parallel.ForEach(sensorBatches, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, 
+                batch =>
+                {
+                    foreach (var sensor in batch)
+                    {
+                        var timeout = sensor.CheckTimeout();
+                        var ttl = sensor.Policies.TimeToLive;
+
+                        if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
+                            SendNotification(sensor.Id, ttl.GetNotification(true));
+                    }
+                });
         }
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
