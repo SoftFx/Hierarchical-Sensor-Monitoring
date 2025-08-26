@@ -1375,8 +1375,8 @@ namespace HSMServer.Core.Cache
                 case UpdateSensorValueRequestModel request:
                     UpdateSensorValue(request);
                     break;
-                case ExpireSensorsRequest:
-                    CheckSensorsTimeout();
+                case ExpireSensorsRequest request:
+                    CheckSensorsTimeout(request);
                     break;
                 case RemoveSensorRequest request:
                     RemoveSensor(request);
@@ -1399,7 +1399,11 @@ namespace HSMServer.Core.Cache
             }
 
             _stopwatch.Stop();
-            RequestProcessed?.Invoke(_updatesQueue.QueueSize, (int)_stopwatch.ElapsedMilliseconds);
+            int time = (int)_stopwatch.ElapsedMilliseconds;
+            RequestProcessed?.Invoke(_updatesQueue.QueueSize, time);
+
+            if (time > 300)
+                _logger.Warn($"Longtime processing request occurred: {time} ms, {item}");
         }
 
         private void AddNewSensorValues(AddSensorValuesRequest request)
@@ -1960,7 +1964,13 @@ namespace HSMServer.Core.Cache
             _confirmationManager.FlushMessages();
             _scheduleManager.FlushMessages();
 
-            await _updatesQueue.ProcessRequestAsync(new ExpireSensorsRequest()).ConfigureAwait(false);
+            var batchSize = 1000;
+            var sensors = _sensorsByPath.Values.ToArray();
+
+            var sensorBatches = sensors.Chunk(batchSize);
+
+            foreach (var batch in sensorBatches)
+                await _updatesQueue.ProcessRequestAsync(new ExpireSensorsRequest(batch)).ConfigureAwait(false);
 
             foreach (var sensor in _sensorsByPath.Values)
             {
@@ -1984,25 +1994,16 @@ namespace HSMServer.Core.Cache
         }
 
 
-        private void CheckSensorsTimeout()
+        private void CheckSensorsTimeout(ExpireSensorsRequest request)
         {
-            var batchSize = 2000;
-            var sensors = _sensorsByPath.Values.ToArray();
+            foreach (var sensor in request.Sensors)
+            {
+                var timeout = sensor.CheckTimeout();
+                var ttl = sensor.Policies.TimeToLive;
 
-            var sensorBatches = sensors.Chunk(batchSize);
-
-            Parallel.ForEach(sensorBatches, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, 
-                batch =>
-                {
-                    foreach (var sensor in batch)
-                    {
-                        var timeout = sensor.CheckTimeout();
-                        var ttl = sensor.Policies.TimeToLive;
-
-                        if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
-                            SendNotification(sensor.Id, ttl.GetNotification(true));
-                    }
-                });
+                if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
+                    SendNotification(sensor.Id, ttl.GetNotification(true));
+            }
         }
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
