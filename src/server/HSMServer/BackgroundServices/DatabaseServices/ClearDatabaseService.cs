@@ -26,17 +26,15 @@ namespace HSMServer.BackgroundServices
         //    return base.ExecuteAsync(token);
         //}
 
-        protected override Task ServiceActionAsync()
+        protected override async Task ServiceActionAsync()
         {
-            RunAction(RunClearHistory);
-            RunAction(RunSensorsSelfDestroy);
-            RunAction(RunProductsSelfDestroy);
-
-            return Task.CompletedTask;
+            await RunActionAsync(RunClearHistory);
+            await RunActionAsync(RunSensorsSelfDestroy);
+            await RunActionAsync(RunProductsSelfDestroy);
         }
 
 
-        private void RunClearHistory()
+        private async Task RunClearHistory()
         {
             foreach (var sensor in _cache.GetSensors())
             {
@@ -44,13 +42,13 @@ namespace HSMServer.BackgroundServices
 
                 _logger.Trace("Start clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
 
-                _cache.CheckSensorHistory(id);
+                await _cache.CheckSensorHistoryAsync(id);
 
                 _logger.Trace("Stop clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
             }
         }
 
-        private void RunSensorsSelfDestroy()
+        private async Task RunSensorsSelfDestroy()
         {
             var sensors = _cache.GetSensors().Where(s => s.ShouldDestroy).ToList();
 
@@ -60,13 +58,13 @@ namespace HSMServer.BackgroundServices
 
                 _logger.Trace("Start removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
 
-                _cache.RemoveSensorAsync(id, InitiatorInfo.AsSystemInfo("Clean up"));
+                await _cache.RemoveSensorAsync(id, InitiatorInfo.AsSystemInfo("Clean up"));
 
                 _logger.Trace("Stop removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
             }
         }
 
-        private void RunProductsSelfDestroy()
+        private async Task RunProductsSelfDestroy()
         {
             foreach (var product in _cache.GetProducts())
             {
@@ -74,7 +72,7 @@ namespace HSMServer.BackgroundServices
 
                 _logger.Trace("Start clear scanner: {id} {product}", id, product.DisplayName);
 
-                _cache.ClearEmptyNodes(product);
+                await _cache.ClearEmptyNodesAsync(product);
 
                 _logger.Trace("Stop clear scanner: {id} {product}", id, product.DisplayName);
             }

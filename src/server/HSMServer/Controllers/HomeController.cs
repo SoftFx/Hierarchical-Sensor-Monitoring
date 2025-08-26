@@ -201,7 +201,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public ActionResult RemoveNode([FromBody] string[] ids)
+        public async Task<ActionResult> RemoveNode([FromBody] string[] ids)
         {
             var model = new MultiActionsToastViewModel();
 
@@ -221,7 +221,7 @@ namespace HSMServer.Controllers
                         continue;
                     }
 
-                    _treeValuesCache.RemoveProduct(node.Id, InitiatorInfo.AsUser(CurrentUser.Name));
+                    await _treeValuesCache.RemoveProductAsync(node.Id, InitiatorInfo.AsUser(CurrentUser.Name));
                     model.AddItem(node);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
@@ -232,7 +232,7 @@ namespace HSMServer.Controllers
                         continue;
                     }
 
-                    _treeValuesCache.RemoveSensorAsync(sensor.Id, CurrentInitiator);
+                    await _treeValuesCache.RemoveSensorAsync(sensor.Id, CurrentInitiator);
                     model.AddItem(sensor);
                 }
             }
@@ -330,16 +330,16 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void ClearHistoryNode([FromQuery] string selectedId)
+        public async ValueTask ClearHistoryNode([FromQuery] string selectedId)
         {
             ClearHistoryRequest GetRequest(Guid id) => new(id, CurrentInitiator);
 
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                _treeValuesCache.ClearNodeHistory(GetRequest(node.Id));
+                await _treeValuesCache.ClearNodeHistoryAsync(GetRequest(node.Id));
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.ClearSensorHistory(GetRequest(sensor.Id));
+                await _treeValuesCache.ClearSensorHistoryAsync(GetRequest(sensor.Id));
         }
 
         [HttpPost]

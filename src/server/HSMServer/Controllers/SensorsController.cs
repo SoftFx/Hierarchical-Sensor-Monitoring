@@ -1,4 +1,5 @@
-﻿using HSMCommon.Extensions;
+﻿using AngleSharp.Io;
+using HSMCommon.Extensions;
 using HSMCommon.TaskResult;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.HistoryRequests;
@@ -29,6 +30,7 @@ using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Telegram.Bot.Types;
 using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Controllers
@@ -224,17 +226,24 @@ namespace HSMServer.Controllers
         {
             try
             {
-                var response = new Dictionary<string, string>(values.Count);
+                if (values.Count == 0)
+                    return BadRequest(values);
 
-                foreach (var value in values.OrderBy(u => u.Time))
+                var infoRequest = await IsValidPublicApiRequest(values.FirstOrDefault());
+
+                if (infoRequest.IsOk)
                 {
-                    var result = await TryBuildAndAddData(value);
+                    var info = infoRequest.Value;
 
-                    if (!result.IsOk)
-                        response[value.Path] = result.Error;
+                    var response = await _cache.AddSensorValuesAsync(values.Select(item => new AddSensorValueRequest(info.Product.DisplayName, item.Path, item.Convert(_sanitizer)) { Key = info.Key.Id }));
+
+                    _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(values.Count);
+                    _collector.WebRequestsSensors.Total.AddReceiveData(values.Count);
+
+                    return Ok(response);
                 }
 
-                return Ok(response);
+                return BadRequest(values);
             }
             catch (Exception ex)
             {
@@ -408,7 +417,6 @@ namespace HSMServer.Controllers
                 if (infoRequest.IsOk)
                 {
                     var info = infoRequest.Value;
-
 
                     var result = await _cache.AddSensorValueAsync(info.Key.Id, info.Product.DisplayName, value.Path, value.Convert(_sanitizer));
 

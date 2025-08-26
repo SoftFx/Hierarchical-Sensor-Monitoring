@@ -3,7 +3,7 @@
 
 namespace HSMServer.Core.Model.Requests
 {
-    public sealed class AddSensorValueRequest : BaseUpdateRequest
+    public sealed record AddSensorValueRequest : BaseUpdateRequest
     {
         public BaseValue BaseValue { get; init; }
 

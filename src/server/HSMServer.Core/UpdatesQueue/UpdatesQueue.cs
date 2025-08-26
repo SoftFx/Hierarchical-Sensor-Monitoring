@@ -23,6 +23,8 @@ namespace HSMServer.Core.SensorsUpdatesQueue
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _processingTask;
 
+        public int QueueSize => _channel.Reader.Count;
+
         public event Action<IUpdateRequest> ItemAdded;
 
         public UpdatesQueue()

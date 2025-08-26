@@ -1,9 +1,10 @@
 ﻿using HSMSensorDataObjects.HistoryRequests;
 using System;
 
+
 namespace HSMServer.Core.Model.Requests
 {
-    public class HistoryRequestModel : BaseUpdateRequest
+    public record HistoryRequestModel : BaseUpdateRequest
     {
         public DateTime From { get; set; }
 

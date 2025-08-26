@@ -14,6 +14,7 @@ using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
+using System.Threading.Tasks;
 
 
 
@@ -155,7 +156,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult AlertTemplate(DataAlertTemplateViewModel data)
+        public async ValueTask<IActionResult> AlertTemplate(DataAlertTemplateViewModel data)
         {
             if (_cache.GetAlertTemplateModels().Any(x => x.Name == data.Name && x.Id != data.Id))
                 ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
@@ -163,7 +164,7 @@ namespace HSMServer.Controllers
             if (ModelState.IsValid)
             {
                 var model = data.ToModel();
-                _cache.AddAlertTemplate(model);
+                await _cache.AddAlertTemplateAsync(model);
                 return Ok();
             }
 
@@ -173,9 +174,9 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult Remove(Guid id)
+        public async ValueTask<IActionResult> Remove(Guid id)
         {
-            _cache.RemoveAlertTemplate(id);
+            await _cache.RemoveAlertTemplateAsync(id);
 
             return RedirectToAction("Index");
         }

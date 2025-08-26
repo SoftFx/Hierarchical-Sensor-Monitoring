@@ -1,12 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Options;
-using NLog;
-using HSMCommon.Constants;
+﻿using HSMCommon.Constants;
 using HSMDataCollector.Core;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
@@ -15,11 +7,20 @@ using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using HSMServer.Services;
-using HSMServer.Core.Model;
+using LevelDB;
+using Microsoft.Extensions.Options;
+using NLog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 
 
 
@@ -53,13 +54,15 @@ namespace HSMServer.BackgroundServices
 
         internal BackupSensors BackupSensors { get; }
 
+        internal TreeValueChacheStatistics TreeValueCacheStatistics { get; } 
+
 
         public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, IHtmlSanitizerService sanitizerService)
         {
             _logger = LogManager.GetLogger(GetType().Name);
 
             _cache = cache;
-            _key = GetSelfMonitoringKey(cache);
+            _key = GetSelfMonitoringKeyAsync(cache);
 
             _productModel = _cache.GetProductByName(SelfMonitoringProductName);
 
@@ -87,16 +90,28 @@ namespace HSMServer.BackgroundServices
             DbSizeSensors = new DatabaseSensorsSize(_collector, db, config);
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
             BackupSensors = new BackupSensors(_collector);
+            TreeValueCacheStatistics = new TreeValueChacheStatistics(_collector);
+
+            _cache.RequestProcessed += OnRequestProcessed;
         }
 
-        public void Dispose() => _collector?.Dispose();
+        private void OnRequestProcessed(int queueSize, int milliseconds)
+        {
+            TreeValueCacheStatistics.AddRequestProcessed(queueSize, milliseconds);
+        }
+
+        public void Dispose()
+        {
+            _cache.RequestProcessed -= OnRequestProcessed;
+            _collector?.Dispose();
+        }
 
         internal Task Start() => _collector.Start();
 
         internal Task Stop() => _collector.Stop();
 
 
-        internal void SendDbInfo()
+        internal void UpdateStatictics()
         {
             var now = DateTime.UtcNow;
             if (_lastUpdateDbSize is null || now - _lastUpdateDbSize.Value >= DbSizeUpdateInterval)
@@ -106,13 +121,15 @@ namespace HSMServer.BackgroundServices
             }
 
             DbStatisticsSensors.SendInfo();
+
+            TreeValueCacheStatistics.UpdateSensorsCount(_cache.SensorsCount);
         }
 
 
-        private static Guid GetSelfMonitoringKey(ITreeValuesCache cache)
+        private static Guid GetSelfMonitoringKeyAsync(ITreeValuesCache cache)
         {
             var selfMonitoring = cache.GetProductByName(SelfMonitoringProductName);
-            selfMonitoring ??= cache.AddProduct(SelfMonitoringProductName, Guid.Empty);
+            selfMonitoring ??= cache.AddProductAsync(SelfMonitoringProductName, Guid.Empty).Result;
 
             var key = selfMonitoring.AccessKeys.FirstOrDefault(k => k.Value.DisplayName == CommonConstants.DefaultAccessKey).Key;
 
@@ -138,16 +155,13 @@ namespace HSMServer.BackgroundServices
 
         private async ValueTask SendDataInternalAsync(IEnumerable<SensorValueBase> items)
         {
-            foreach (var item in items)
+            try
             {
-                try
-                {
-                    await _cache.AddSensorValueAsync(_key, _productModel.DisplayName, item.Path, item.Convert(_sanitizer));
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex);
-                }
+                await _cache.AddSensorValuesAsync(items.Select(item => new AddSensorValueRequest(_productModel.DisplayName, item.Path, item.Convert(_sanitizer)) { Key = _key }));
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
             }
         }
 
