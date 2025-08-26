@@ -44,7 +44,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization")]
         public async void ProductsInitializationTest()
         {
-            await Task.Delay(1000);
+            //await Task.Delay(1000);
 
             var expectedProducts = _databaseCoreManager.DatabaseCore.GetAllProducts();
             var actualProducts = _valuesCache.GetAllNodes();
@@ -56,7 +56,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "Initialization")]
         public async Task SensorsInitializationTest()
         {
-            await Task.Delay(1000);
+            //await Task.Delay(1000);
 
             var expectedSensors = _databaseCoreManager.DatabaseCore.GetAllSensors();
             var actualSensors = _valuesCache.GetSensors();
@@ -72,7 +72,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [InlineData(100)]
         [InlineData(1000)]
         [Trait("Category", "Add product(s)")]
-        public async void AddProductsTest(int count)
+        public async Task AddProductsTest(int count)
         {
             int addedProductsCount = 0;
             int updatedProductsCount = 0;
@@ -87,8 +87,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             }
 
 
-            await Task.Delay(100);
-
             var productNames = new List<string>(count);
             var addedProducts = new List<ProductModel>(count);
 
@@ -99,12 +97,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var productName = RandomGenerator.GetRandomString();
                 productNames.Add(productName);
 
-                addedProducts.Add(_valuesCache.AddProduct(productName, Guid.Empty));
+                addedProducts.Add(await _valuesCache.AddProductAsync(productName, Guid.Empty));
             }
 
             _valuesCache.ChangeProductEvent -= AddProductEventHandle;
 
-            await Task.Delay(100);
+
 
             Assert.Equal(addedProductsCount, count);
             Assert.Equal(updatedProductsCount, count);
@@ -127,18 +125,18 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [InlineData(10)]
         [InlineData(100)]
         [Trait("Category", "Remove product(s)")]
-        public async void RemoveProductsTest(int count)
+        public async Task RemoveProductsTest(int count)
         {
-            await Task.Delay(100);
+            //await Task.Delay(100);
 
             var addedProducts = new List<Guid>(count);
             for (int i = 0; i < count; ++i)
-                addedProducts.Add(_valuesCache.AddProduct(RandomGenerator.GetRandomString(), Guid.Empty).Id);
+                addedProducts.Add((await _valuesCache.AddProductAsync(RandomGenerator.GetRandomString(), Guid.Empty)).Id);
 
-            await Task.Delay(100);
+            //await Task.Delay(100);
 
             foreach (var productId in addedProducts)
-                _valuesCache.RemoveProduct(productId);
+                await _valuesCache.RemoveProductAsync(productId);
 
             for (int i = 0; i < count; ++i)
                 TestRemovedProduct(addedProducts[i],
@@ -180,9 +178,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _valuesCache.ChangeProductEvent += RemoveProductEventHandler;
             _valuesCache.ChangeSensorEvent += RemoveSensorEventHandler;
 
-            _valuesCache.RemoveProduct(product.Id);
-
-            await Task.Delay(100);
+            await _valuesCache.RemoveProductAsync(product.Id);
 
             _valuesCache.ChangeProductEvent -= RemoveProductEventHandler;
             _valuesCache.ChangeSensorEvent -= RemoveSensorEventHandler;
@@ -377,7 +373,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _valuesCache.ChangeSensorEvent += UpdateSensorEventHandler;
 
-            _valuesCache.ClearNodeHistory(new(product.Id));
+            await _valuesCache.ClearNodeHistoryAsync(new(product.Id));
 
             _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
 
@@ -392,7 +388,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var sensor = GetSensorByNameFromCache("sensor0");
 
-            _valuesCache.ClearSensorHistory(new(sensor.Id));
+            await _valuesCache.ClearSensorHistoryAsync(new(sensor.Id));
 
             await TestClearedSensor(sensor.Id);
             ModelsTester.TestSensorDataWithoutClearedData(sensor, GetSensorByIdFromCache(sensor.Id));

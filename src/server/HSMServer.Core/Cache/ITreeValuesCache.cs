@@ -29,17 +29,20 @@ namespace HSMServer.Core.Cache
         event Action<ProductModel, ActionType> ChangeProductEvent;
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
+        event Action<int, int> RequestProcessed;
 
         event Action<AlertMessage> NewAlertMessageEvent;
         event Action<FolderEventArgs> FillFolderChats;
+
+        int SensorsCount { get; }
 
         List<BaseSensorModel> GetSensors();
         List<BaseSensorModel> GetSensors(string wildcard, SensorType? type, Guid? folderId);
         List<AccessKeyModel> GetAccessKeys();
 
-        ProductModel AddProduct(string productName, Guid authorId);
+        Task<ProductModel> AddProductAsync(string productName, Guid authorId, CancellationToken token = default);
         void UpdateProduct(ProductUpdate product);
-        void RemoveProduct(Guid id, InitiatorInfo initiator = null);
+        Task RemoveProductAsync(Guid id, InitiatorInfo initiator = null, CancellationToken token = default);
         ProductModel GetProduct(Guid id);
         ProductModel GetProductByName(string name);
         bool TryGetProductByName(string name, out ProductModel product);
@@ -67,7 +70,8 @@ namespace HSMServer.Core.Cache
         void SetLastKeyUsage(Guid key, string ip);
 
 
-        Task<TaskResult> AddSensorValueAsync(Guid accessKey, string productName, string path, BaseValue value);
+        Task<TaskResult> AddSensorValueAsync(Guid accessKey, string productName, string path, BaseValue value, CancellationToken token = default);
+        Task<Dictionary<string, string>> AddSensorValuesAsync(IEnumerable<AddSensorValueRequest> requests, CancellationToken token = default);
 
         Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default);
         //Task<TaskResult> UpdateSensor(SensorUpdate updatedSensor, out string error);
@@ -78,9 +82,9 @@ namespace HSMServer.Core.Cache
         Task<TaskResult> UpdateSensorValueAsync(UpdateSensorValueRequestModel request, CancellationToken token = default);
         Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null);
         Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
-        void ClearSensorHistory(ClearHistoryRequest request);
-        void CheckSensorHistory(Guid sensorId);
-        void ClearNodeHistory(ClearHistoryRequest request);
+        Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
+        Task CheckSensorHistoryAsync(Guid sensorId, CancellationToken token = default);
+        Task ClearNodeHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
 
         BaseSensorModel GetSensor(Guid sensorId);
         IEnumerable<BaseSensorModel> GetSensorsByFolder(HashSet<Guid> folderIds = null);
@@ -94,7 +98,7 @@ namespace HSMServer.Core.Cache
 
         //void UpdateCacheState();
 
-        void ClearEmptyNodes(ProductModel product);
+        Task ClearEmptyNodesAsync(ProductModel product, CancellationToken token = default);
 
         void SaveLastStateToDb();
 
@@ -102,10 +106,10 @@ namespace HSMServer.Core.Cache
 
         List<AlertTemplateModel> GetAlertTemplateModels();
 
-        void AddAlertTemplate(AlertTemplateModel model);
+        Task AddAlertTemplateAsync(AlertTemplateModel model, CancellationToken tocken = default);
 
         AlertTemplateModel GetAlertTemplate(Guid id);
 
-        void RemoveAlertTemplate(Guid id);
+        Task RemoveAlertTemplateAsync(Guid id, CancellationToken token = default);
     }
 }

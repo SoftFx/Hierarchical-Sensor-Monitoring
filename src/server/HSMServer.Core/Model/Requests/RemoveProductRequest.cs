@@ -5,19 +5,17 @@ using System;
 
 namespace HSMServer.Core.Model.Requests
 {
-    internal sealed record RemoveSensorRequest : IUpdateRequest
+    internal sealed record RemoveProductRequest : IUpdateRequest
     {
         public Guid Id { get; init; }
 
         public InitiatorInfo InitiatorInfo { get; init; }
 
-        public Guid? ParentId { get; init; }
 
-        public RemoveSensorRequest(Guid sensorId, InitiatorInfo initiatorInfo = null, Guid? parentId = null)
+        public RemoveProductRequest(Guid id, InitiatorInfo initiatorInfo)
         {
-            Id = sensorId;
+            Id = id;
             InitiatorInfo = initiatorInfo;
-            ParentId = parentId;
         }
     }
 }

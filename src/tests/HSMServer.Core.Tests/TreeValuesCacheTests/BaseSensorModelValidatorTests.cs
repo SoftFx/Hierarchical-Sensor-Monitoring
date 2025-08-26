@@ -7,6 +7,7 @@ using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
 using System;
+using System.Threading.Tasks;
 using Xunit;
 using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
 
@@ -282,9 +283,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [InlineData(KeyPermissions.CanAddNodes)]
         [InlineData(KeyPermissions.CanAddSensors)]
         [Trait("Category", "SmallRules")]
-        public void SmallRulesValidationTest(KeyPermissions permission)
+        public async Task SmallRulesValidationTest(KeyPermissions permission)
         {
-            var product = _valuesCache.AddProduct(TestProductsManager.ProductName, Guid.Empty);
+            var product = await _valuesCache.AddProductAsync(TestProductsManager.ProductName, Guid.Empty);
             var accessKey = new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: product.Id.ToString(), permissions: permission));
 
             _valuesCache.AddAccessKey(accessKey);

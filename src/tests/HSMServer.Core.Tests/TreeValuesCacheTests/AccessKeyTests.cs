@@ -34,7 +34,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _valuesCache.ChangeProductEvent += EventHandler;
             _valuesCache.ChangeAccessKeyEvent += EventHandler;
 
-            _product = _valuesCache.AddProduct(RandomGenerator.GetRandomString(), Guid.Empty);
+            _product = _valuesCache.AddProductAsync(RandomGenerator.GetRandomString(), Guid.Empty).Result;
         }
 
 

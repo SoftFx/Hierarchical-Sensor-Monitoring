@@ -1,102 +1,105 @@
-﻿using HSMServer.Core.SensorsUpdatesQueue;
+﻿using System;
+using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TableOfChanges;
-using System;
 
-namespace HSMServer.Core.Model.Requests;
 
-public sealed class UpdateSensorValueRequestModel : IUpdateRequest
+namespace HSMServer.Core.Model.Requests
 {
-    public required Guid Id { get; init; }
 
-
-    public InitiatorInfo Initiator { get; init; } = InitiatorInfo.System;
-
-    public SensorStatus Status { get; init; }
-
-
-    public string Comment { get; init; }
-
-    public string Value { get; init; }
-
-    public bool ChangeLast { get; init; }
-
-
-    public string PropertyName => ChangeLast ? "Last value" : "Value";
-
-    public string Environment => ChangeLast ? "Change last value" : "Added new value";
-
-
-    public UpdateSensorValueRequestModel(Guid key, string path) { }
-
-    public (string oldValue, string newValue) GetValues(BaseValue oldValue, BaseValue newValue) => oldValue is not FileValue ? (oldValue?.RawValue?.ToString(), newValue.RawValue?.ToString()) : (null, null);
-
-    public string BuildComment(SensorStatus? status = null, string comment = null, string value = null)
+    public sealed class UpdateSensorValueRequestModel : IUpdateRequest
     {
-        var response = $"Status - {status ?? Status}; Comment - '{comment ?? Comment}';";
+        public required Guid Id { get; init; }
 
-        if (!string.IsNullOrEmpty(value) || !string.IsNullOrEmpty(Value))
-            response += $"Value - '{value ?? Value}'";
 
-        return response;
-    }
+        public InitiatorInfo Initiator { get; init; } = InitiatorInfo.System;
 
-    public BaseValue BuildNewValue(BaseSensorModel sensor)
-    {
-        var value = sensor.Storage.GetEmptyValue();
-        var oldValue = sensor.LastValue;
+        public SensorStatus Status { get; init; }
 
-        if (value is FileValue && oldValue is FileValue oldFileValue)
-            value = ChangeLast ? oldFileValue : oldFileValue with
+
+        public string Comment { get; init; }
+
+        public string Value { get; init; }
+
+        public bool ChangeLast { get; init; }
+
+
+        public string PropertyName => ChangeLast ? "Last value" : "Value";
+
+        public string Environment => ChangeLast ? "Change last value" : "Added new value";
+
+
+        public UpdateSensorValueRequestModel(Guid key, string path) { }
+
+        public (string oldValue, string newValue) GetValues(BaseValue oldValue, BaseValue newValue) => oldValue is not FileValue ? (oldValue?.RawValue?.ToString(), newValue.RawValue?.ToString()) : (null, null);
+
+        public string BuildComment(SensorStatus? status = null, string comment = null, string value = null)
+        {
+            var response = $"Status - {status ?? Status}; Comment - '{comment ?? Comment}';";
+
+            if (!string.IsNullOrEmpty(value) || !string.IsNullOrEmpty(Value))
+                response += $"Value - '{value ?? Value}'";
+
+            return response;
+        }
+
+        public BaseValue BuildNewValue(BaseSensorModel sensor)
+        {
+            var value = sensor.Storage.GetEmptyValue();
+            var oldValue = sensor.LastValue;
+
+            if (value is FileValue && oldValue is FileValue oldFileValue)
+                value = ChangeLast ? oldFileValue : oldFileValue with
+                {
+                    Value = Array.Empty<byte>(),
+                    OriginalSize = 0L
+                };
+
+            value = value with
             {
-                Value = Array.Empty<byte>(),
-                OriginalSize = 0L
+                Status = Status,
+                Comment = Comment,
             };
 
-        value = value with
+            var configuredValue = ChangeLast ? SetLastValueTime(value, oldValue) : SetUtcNowTime(value);
+
+            configuredValue = configuredValue is BarBaseValue ? configuredValue.TrySetValue(ChangeLast ? oldValue : null) : configuredValue.TrySetValue(Value);
+
+            return configuredValue;
+        }
+
+
+        private static BaseValue SetLastValueTime(BaseValue value, BaseValue oldValue)
         {
-            Status = Status,
-            Comment = Comment,
-        };
+            if (oldValue is BarBaseValue barValue && value is BarBaseValue barBaseValue)
+                value = barBaseValue with
+                {
+                    CloseTime = barValue.CloseTime,
+                    OpenTime = barValue.OpenTime,
+                };
 
-        var configuredValue = ChangeLast ? SetLastValueTime(value, oldValue) : SetUtcNowTime(value);
-
-        configuredValue = configuredValue is BarBaseValue ? configuredValue.TrySetValue(ChangeLast ? oldValue : null) : configuredValue.TrySetValue(Value);
-
-        return configuredValue;
-    }
-
-
-    private static BaseValue SetLastValueTime(BaseValue value, BaseValue oldValue)
-    {
-        if (oldValue is BarBaseValue barValue && value is BarBaseValue barBaseValue)
-            value = barBaseValue with
+            return value with
             {
-                CloseTime = barValue.CloseTime,
-                OpenTime = barValue.OpenTime,
+                ReceivingTime = oldValue.ReceivingTime,
+                Time = oldValue.Time
             };
+        }
 
-        return value with
+        private static BaseValue SetUtcNowTime(BaseValue value)
         {
-            ReceivingTime = oldValue.ReceivingTime,
-            Time = oldValue.Time
-        };
-    }
+            var time = DateTime.UtcNow;
 
-    private static BaseValue SetUtcNowTime(BaseValue value)
-    {
-        var time = DateTime.UtcNow;
+            if (value is BarBaseValue barValue)
+                value = barValue with
+                {
+                    CloseTime = time,
+                    OpenTime = time,
+                };
 
-        if (value is BarBaseValue barValue)
-            value = barValue with
+            return value with
             {
-                CloseTime = time,
-                OpenTime = time,
+                Time = time,
+                ReceivingTime = time
             };
-
-        return value with
-        {
-            Time = time,
-            ReceivingTime = time
-        };
+        }
     }
 }

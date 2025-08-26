@@ -26,7 +26,7 @@ namespace HSMServer.BackgroundServices
 
 
         public override Task StopAsync(CancellationToken token) =>
-            RunAction(_collector.Stop, "Stop self collector").ContinueWith(_ => base.StopAsync(token)).Unwrap();
+            RunActionAsync(_collector.Stop, "Stop self collector").ContinueWith(_ => base.StopAsync(token)).Unwrap();
 
 
         protected override async Task ExecuteAsync(CancellationToken token)
@@ -34,7 +34,7 @@ namespace HSMServer.BackgroundServices
             await Task.Delay(TimeSpan.FromSeconds(30), token);
 
             if (_isMonitoringEnabled)
-                await RunAction(_collector.Start, "Start self collector");
+                await RunActionAsync(_collector.Start, "Start self collector");
 
             await base.ExecuteAsync(token);
         }
@@ -42,7 +42,7 @@ namespace HSMServer.BackgroundServices
         protected override Task ServiceActionAsync()
         {
             if (_isMonitoringEnabled)
-                _collector.SendDbInfo();
+                _collector.UpdateStatictics();
 
             return Task.CompletedTask;
         }
@@ -54,9 +54,9 @@ namespace HSMServer.BackgroundServices
                 _isMonitoringEnabled = options.IsMonitoringEnabled;
 
                 if (_isMonitoringEnabled)
-                    _ = RunAction(_collector.Start, "Start self collector");
+                    _ = RunActionAsync(_collector.Start, "Start self collector");
                 else
-                    _ = RunAction(_collector.Stop, "Stop self collector");
+                    _ = RunActionAsync(_collector.Stop, "Stop self collector");
             }
         }
     }

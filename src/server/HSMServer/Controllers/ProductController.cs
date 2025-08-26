@@ -114,12 +114,11 @@ namespace HSMServer.Controllers
         public IActionResult CreateProduct(AddProductViewModel product)
         {
             if (ModelState.IsValid)
-                _treeValuesCache.AddProduct(product.Name, CurrentUser.Id);
+                _treeValuesCache.AddProductAsync(product.Name, CurrentUser.Id);
 
             return PartialView("_AddProduct", product);
         }
 
-        public void RemoveProduct(Guid product) => _treeValuesCache.RemoveProduct(product);
 
         public async Task MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
         {

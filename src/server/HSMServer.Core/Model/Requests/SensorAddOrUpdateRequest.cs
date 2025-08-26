@@ -3,7 +3,7 @@ using System;
 
 namespace HSMServer.Core.Model.Requests
 {
-    public sealed class SensorAddOrUpdateRequest : BaseUpdateRequest
+    public sealed record SensorAddOrUpdateRequest : BaseUpdateRequest
     {
         public SensorUpdate Update { get; init; }
 

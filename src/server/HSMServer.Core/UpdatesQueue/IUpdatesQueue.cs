@@ -10,6 +10,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
     {
         event Action<IUpdateRequest> ItemAdded;
 
+        int QueueSize { get; }
 
         Task<TaskResult> ProcessRequestAsync(IUpdateRequest storeInfo, CancellationToken token = default);
 

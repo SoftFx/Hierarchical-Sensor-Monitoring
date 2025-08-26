@@ -1,8 +1,9 @@
 ﻿using System;
 
+
 namespace HSMServer.Core.Model.Requests
 {
-    public sealed class FileHistoryRequestModel : HistoryRequestModel
+    public sealed record FileHistoryRequestModel : HistoryRequestModel
     {
         public string Format { get; set; }
 

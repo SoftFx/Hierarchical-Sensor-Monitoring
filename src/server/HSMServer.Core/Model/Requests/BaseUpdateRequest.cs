@@ -6,7 +6,7 @@ using HSMServer.Core.SensorsUpdatesQueue;
 
 namespace HSMServer.Core.Model.Requests
 {
-    public abstract class BaseUpdateRequest : IUpdateRequest
+    public abstract record BaseUpdateRequest : IUpdateRequest
     {
         private const string ErrorTooLongPath = "Path for the sensor is too long.";
         private const string ErrorInvalidPath = "Path has an invalid format.";

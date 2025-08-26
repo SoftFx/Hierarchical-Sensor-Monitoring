@@ -29,9 +29,7 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ExecuteAsync(CancellationToken token)
         {
-            PeriodicTask.Run(ServiceActionAsync, DateTime.UtcNow.Ceil(Delay) - DateTime.UtcNow, Delay, token);
-
-            return Task.CompletedTask;
+            return PeriodicTask.Run(ServiceActionAsync, DateTime.UtcNow.Ceil(Delay) - DateTime.UtcNow, Delay, token);
         }
 
         protected virtual void RunAction(Action action)
@@ -55,7 +53,7 @@ namespace HSMServer.BackgroundServices
             }
         }
 
-        protected virtual async Task RunAction(Func<Task> action, string methodName = null)
+        protected virtual async Task RunActionAsync(Func<Task> action, string methodName = null)
         {
             methodName ??= action.Method.Name;
 
