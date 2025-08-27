@@ -107,16 +107,14 @@
 
 <script>
 
-    const destroyTreeEvery = 20;
-
-    const scrollHandlers = {
+       const scrollHandlers = {
         saveTreeScroll: () => {
             const treeWrapper = document.querySelector('.tree-wrapper');
             
 
             if (treeWrapper) {
                 const scrollPosition = treeWrapper.scrollTop;
-                console.log("beforeunload: Scroll position: '" + scrollPosition);
+                //console.log("beforeunload: Scroll position: '" + scrollPosition);
 
                 if (scrollPosition != 0)
                     sessionStorage.setItem('treeScrollPosition', scrollPosition.toString());
@@ -165,8 +163,11 @@
         container: document.getElementById('accessKeys_modal')
     });
 
-    var interval = $("#treeInterval").val() * 1000;
-    setTimeout(updateTreeTimer, interval);
+    // var interval = $("#treeInterval").val() * 1000;
+    // setTimeout(updateTreeTimer, interval);
+
+    setTimeout(updateTreeTimer, window.treeInterval);
+    //console.log("_Layout: window.treeInterval = " + window.treeInterval);
 
 
     $(document).ready(() => {
@@ -192,14 +193,27 @@
     var refreshTreeTimeoutId;
     var isRefreshing = false;
 
-    
-
-    var refreshCount = destroyTreeEvery;
     let treeUpdateInProgress = false;
 
 
     async function updateTreeTimer() {
-        if (treeUpdateInProgress) return;
+
+        if (treeUpdateInProgress)
+        {
+            //console.log( 'updateTreeTimer: is in progress. Skipped.');
+            return;
+        }
+
+        // console.log(new Date().toLocaleTimeString(
+        //     'ru-RU', 
+        //     { 
+        //         hour: '2-digit', 
+        //         minute: '2-digit', 
+        //         second: '2-digit', 
+        //         fractionalSecondDigits: 3 
+        //     }) 
+        //     + ' updateTreeTimer: refresh tree...');
+        
         treeUpdateInProgress = true;
 
         const $tree = $('#jstree');
@@ -207,59 +221,13 @@
         treeWrapper.dataset.scrollPosition = treeWrapper.scrollTop;
 
         try {
-
-            //Do not delete the tree, because the page of the selected sensor stops updating TAM-1972
-            refreshCount = refreshCount - 1;
-            //console.log("tree refresh is called. refreshCount = ", refreshCount)
-
-            if (refreshCount <= 0) {
-
-                scrollHandlers.saveTreeScroll();
-
-                refreshCount = destroyTreeEvery;
-                await destroyTree($tree); 
-
-                initializeTree();
-                
-                clearTimeout(refreshTreeTimeoutId);
-                refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
-
-                scrollHandlers.restoreTreeScroll();
-
-                console.log("tree is re-created. Scroll is restored");
-            } else {
-                $tree.jstree(true)?.refresh(true);
-                //console.log("tree is refreshed");
-            }
+            $tree.jstree(true)?.refresh(true);
 
         } catch (e) {
             console.error('Tree update failed:', e);
         } finally {
             treeUpdateInProgress = false;
         }
-    }
-
-    function destroyTree($tree) {
-        return new Promise((resolve) => {
-            clearTimeout(refreshTreeTimeoutId);
-
-            window.removeEventListener('beforeunload', scrollHandlers.saveTreeScroll);
-            window.removeEventListener('DOMContentLoaded', scrollHandlers.restoreTreeScroll);
-            
-            $tree.off('.jstree');
-
-            const instance = $tree.jstree(true);
-            if (instance) {
-                instance.destroy();
-                $.cleanData($tree.find('*').addBack().get()); 
-            }
-            //$tree.empty();
-
-            //console.log("Tree is destroyed");
-            resolve();
-
-            
-        });
     }
 
 </script> 
