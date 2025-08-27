@@ -1,4 +1,4 @@
-import { initDropzone} from "./dashboard";
+import { initDropzone } from "./dashboard";
 
 window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
 
@@ -14,10 +14,71 @@ var searchServerRefresh = false;
 var emptySearch = false;
 var prevState = undefined;
 
+let lastActivity = Date.now();
+let isCheckingActive = false;
+let wasNotified = false;
+let currentTreeInterval;
+
+const inactiveThreshold = 30000; //30sec
+const inactiveUpdatePeriod = 3; //3min
+
 window.initializeTree = function () {
     initializeTreeInternal();
     initializeTreeNode();
+
+    document.removeEventListener('mousemove', updateActivity);
+    document.removeEventListener('keypress', updateActivity);
+    document.removeEventListener('click', updateActivity);
+    document.removeEventListener('scroll', updateActivity);
+
+    document.addEventListener('mousemove', updateActivity);
+    document.addEventListener('keypress', updateActivity);
+    document.addEventListener('click', updateActivity);
+    document.addEventListener('scroll', updateActivity);
+
+    //5 sec
+    setInterval(checkInactivity, 5000);
 }
+
+
+
+
+
+
+function checkInactivity() {
+
+    if (isCheckingActive) {
+        console.log('Inactivity check is already in progress. Skipped.');
+        return;
+    }
+
+    isCheckingActive = true;
+
+    try {
+        const inactiveTime = Date.now() - lastActivity;
+
+        if (inactiveTime > inactiveThreshold && !wasNotified) {
+            //console.log('User is not active about ' + inactiveThreshold/1000 + ' sec');
+            changeTreeActivity(Status.NOTACTIVE);
+            wasNotified = true; 
+        } else if (inactiveTime <= inactiveThreshold) {
+            wasNotified = false; 
+        }
+    } catch (error) {
+        console.error('Error in inactivity check:', error);
+    } finally {
+        isCheckingActive = false;
+    }
+}
+
+
+function updateActivity() {
+
+    //turn on updates
+    changeTreeActivity(Status.ACTIVE);
+    lastActivity = Date.now();
+}
+
 
 function closeNodeHandler(e, data) {
     if (collapseButton.isTriggered)
@@ -38,11 +99,15 @@ function closeNodeHandler(e, data) {
 }
 
 function refreshTreeHandler(e, data) {
-    
-    refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
-    
+
+    clearTimeout(refreshTreeTimeoutId);
+
+    //console.log("tree: window.treeInterval = " + window.treeInterval);
+
+    refreshTreeTimeoutId = setTimeout(updateTreeTimer, currentTreeInterval);
+
     if (window.hasOwnProperty('updateSelectedNodeDataTimeoutId')) {
-        updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+        updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, window.treeInterval);
     }
 
     if (searchClientRefresh) {
@@ -82,10 +147,9 @@ function refreshTreeHandler(e, data) {
     const treeWrapper = document.querySelector('.tree-wrapper');
     const savedPosition = treeWrapper.dataset.scrollPosition || 0;
     treeWrapper.scrollTop = savedPosition;
-    
+
 
     isRefreshing = false;
-    //console.log("Tree is refreshed");
 }
 
 function dblClickHandler(event) {
@@ -104,6 +168,8 @@ function openNodeHandler(e, data) {
 function initializeTreeInternal() {
 
     initDropzone()
+
+    currentTreeInterval = window.treeInterval;
 
     if (window.localStorage.jstree) {
         let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
@@ -215,7 +281,6 @@ function initializeTreeInternal() {
         prevState = {};
     }
 
-    //console.log('initializeTreeInternal is done');
 }
 
 
@@ -263,11 +328,11 @@ function buildContextMenu(node) {
                     }
                 }
                 else {
-                        contextMenu["UnmuteNode"] = {
-                            "label": `Unmute items`,
-                            separator_after: true,
-                            "action": _ => unmuteRequest([].concat(selectedNodes))
-                        }
+                    contextMenu["UnmuteNode"] = {
+                        "label": `Unmute items`,
+                        separator_after: true,
+                        "action": _ => unmuteRequest([].concat(selectedNodes))
+                    }
                 }
             }
         }
@@ -437,12 +502,12 @@ function buildContextMenu(node) {
                                     data: JSON.stringify([node.id]),
                                     contentType: "application/json"
                                 })
-                                .done(() => {
-                                    $('#nodeDataPanel').addClass('d-none');
+                                    .done(() => {
+                                        $('#nodeDataPanel').addClass('d-none');
 
-                                    updateTreeTimer();
-                                    showToast(`${type} has been removed`);
-                                });
+                                        updateTreeTimer();
+                                        showToast(`${type} has been removed`);
+                                    });
                             }
                         );
                     })
@@ -564,7 +629,7 @@ function isFolder(node) {
     return node.icon.includes("fa-folder");
 }
 
-function unmuteRequest(selectedNodes){
+function unmuteRequest(selectedNodes) {
     return $.ajax({
         url: `${unmuteAction}`,
         type: 'POST',
@@ -620,3 +685,50 @@ function getCurrentElementType(node) {
 function getKeyByValue(type) {
     return Object.keys(NodeType).find(key => NodeType[key] === type).toLowerCase();
 }
+
+let _lastStatus;
+
+window.changeTreeActivity = function (activityStatus) {
+
+    if (_lastStatus == activityStatus)
+        return;
+
+    //do not replase INVISIBLE by NOTACTIVE
+    if (_lastStatus == Status.INVISIBLE && activityStatus == Status.NOTACTIVE)
+        return;
+
+    _lastStatus = activityStatus;
+    //console.log('changeTreeActivity: ' + activityStatus);
+
+    if (refreshTreeTimeoutId) {
+        clearTimeout(refreshTreeTimeoutId);
+    }
+
+    // stop updating
+    if (activityStatus === Status.INVISIBLE) {
+        console.log('changeTreeActivity: case Status.INVISIBLE');
+        return;
+    }
+
+
+        //work interval
+    if (activityStatus === Status.ACTIVE) {
+        console.log('changeTreeActivity: case Status.ACTIVE');
+        currentTreeInterval = window.treeInterval;
+        updateTreeTimer();
+        return;
+    }
+
+
+    //N minutes
+    if (activityStatus === Status.NOTACTIVE) {
+        console.log('changeTreeActivity: case Status.NOTACTIVE');
+        currentTreeInterval = inactiveUpdatePeriod * 60 * 1000; //update tree every 3min
+        refreshTreeTimeoutId = setTimeout(updateTreeTimer, currentTreeInterval);
+        return;
+    }
+}
+
+
+
+
