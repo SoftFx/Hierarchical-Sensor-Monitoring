@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace HSMServer.Folders
@@ -45,9 +46,10 @@ namespace HSMServer.Folders
         public event Func<Guid, string> GetChatName;
 
 
-        public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService)
+        public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService, ILogger<FolderManager> logger)
         {
             _databaseCore = databaseCore;
+            _logger = logger;
 
             _cache = cache;
             _cache.ChangeProductEvent += ChangeProductHandler;
@@ -147,9 +149,20 @@ namespace HSMServer.Folders
 
             string logFolder = folder?.Name ?? update.Id.ToString();
 
-            if (result) 
-                _logger.LogInformation($"Folder '{logFolder}' is updated");
-            else 
+
+
+            if (result)
+            {
+                StringBuilder sb = new StringBuilder($"Folder '{logFolder}':");
+                if (addedTelegramChats.Any())
+                    sb.Append($" {addedTelegramChats.Count} chat(s) added");
+
+                if (removedTelegramChats.Any())
+                    sb.Append($" {removedTelegramChats.Count} chat(s) removed");
+
+                _logger.LogInformation(sb.ToString());
+            }
+            else
                 _logger.LogWarning($"Folder '{logFolder}' update is unsuccess");
 
             return result;
@@ -225,7 +238,7 @@ namespace HSMServer.Folders
                 await TryUpdate(update);
             }
 
-            _logger.LogInformation($"User '{userName}' add chat '{chatId}' to '{folder?.Name ?? folderId.ToString()}'");
+            _logger.LogInformation($"Chat '{chatId}' is added to '{folder?.Name ?? folderId.ToString()}' by user '{userName}'");
 
             return folder?.Name;
         }
@@ -233,6 +246,7 @@ namespace HSMServer.Folders
         public void RemoveChatHandler(TelegramChat chat, InitiatorInfo initiator)
         {
             foreach (var (folderId, folder) in this)
+            {
                 if (folder.TelegramChats.Contains(chat.Id))
                 {
                     var chats = new HashSet<Guid>(folder.TelegramChats);
@@ -247,6 +261,9 @@ namespace HSMServer.Folders
 
                     _ = TryUpdate(update);
                 }
+            }
+
+            _logger.LogInformation($"Chat '{chat.Name}' is removed from all folders by '{initiator}'");
         }
 
         public List<FolderModel> GetUserFolders(User user)
@@ -264,23 +281,31 @@ namespace HSMServer.Folders
 
         public async Task MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId, InitiatorInfo initiator)
         {
-            if (TryGetValueById(fromFolderId, out var fromFolder))
+            if (fromFolderId.HasValue)
             {
-                if (TryGetValueById(toFolderId, out var toFolder))
+                if (TryGetValueById(fromFolderId, out var fromFolder))
                 {
                     fromFolder.Products.Remove(product.Id);
                     await RemoveProductFromFolder(product.Id, fromFolderId.Value, initiator);
 
+                    _logger.LogInformation($"MoveProduct: Product '{product.Name}' is removed from folder '{fromFolder.Name}' by '{initiator}'");
+                }
+                else
+                    _logger.LogWarning($"MoveProduct: folder from '{fromFolderId}' not found.");
+            }
+
+            if (toFolderId.HasValue)
+            {
+                if (TryGetValueById(toFolderId, out var toFolder))
+                {
                     toFolder.Products.Add(product.Id, product);
                     await AddProductToFolder(product.Id, toFolderId.Value, initiator);
 
-                    _logger.LogInformation($"MoveProduct: Product '{product.Name}' is moved from folder '{fromFolder.Name}' to '{toFolder.Name}'");
+                    _logger.LogInformation($"MoveProduct: Product '{product.Name}' is moved to '{toFolder.Name}' by '{initiator}'");
                 }
                 else
-                    _logger.LogWarning($"MoveProduct: folder to '{toFolderId}' not found. Movement interrupted");
+                    _logger.LogWarning($"MoveProduct: folder to '{toFolderId}' not found.");
             }
-            else
-                _logger.LogWarning($"MoveProduct: folder from '{fromFolderId}' not found. Movement interrupted");
         }
 
         public async Task AddProductToFolder(Guid productId, Guid folderId, InitiatorInfo initiator)
@@ -296,7 +321,7 @@ namespace HSMServer.Folders
                             await _userManager.UpdateUser(user);
                         }
 
-                    _logger.LogInformation($"AddProductToFolder: Product '{productId}' is added to folder '{folder.Name}'");
+                    _logger.LogInformation($"AddProductToFolder: Product '{productId}' is added to folder '{folder.Name}' by '{initiator}'");
                 }
                 else
                     _logger.LogWarning($"AddProductToFolder: TryUpdateProductInFolder is unsuccess.");
@@ -315,7 +340,7 @@ namespace HSMServer.Folders
                         if (user.ProductsRoles.Remove((productId, role)))
                             await _userManager.UpdateUser(user);
 
-                    _logger.LogInformation($"RemoveProductFromFolder: Product '{productId}' is removed from folder '{folder.Name}'");
+                    _logger.LogInformation($"RemoveProductFromFolder: Product '{productId}' is removed from folder '{folder.Name}' by '{initiator}'");
                 }
                 else
                     _logger.LogWarning($"RemoveProductFromFolder: TryUpdateProductInFolder is unsuccess.");
@@ -337,38 +362,31 @@ namespace HSMServer.Folders
 
         private bool TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator, ActionType action = ActionType.Update)
         {
-            if (_cache.TryGetProduct(productId, out var product))
+            if (!_cache.TryGetProduct(productId, out var product))
+                return false;
+
+            var defaultChats = product.Settings.DefaultChats.Value;
+
+            var savedHistory = product.Settings.KeepHistory.Value;
+            var selfDestroy = product.Settings.SelfDestroy.Value;
+            var ttl = product.Settings.TTL.Value;
+
+            var update = new ProductUpdate()
             {
-                var defaultChats = product.Settings.DefaultChats.Value;
+                Id = productId,
+                FolderId = action is ActionType.Delete ? Guid.Empty : folder.Id,
 
-                var savedHistory = product.Settings.KeepHistory.Value;
-                var selfDestroy = product.Settings.SelfDestroy.Value;
-                var ttl = product.Settings.TTL.Value;
+                DefaultChats = GetCorePolicy(defaultChats, folder, action),
+                KeepHistory = GetCoreUpdate(savedHistory, folder.KeepHistory, action),
+                SelfDestroy = GetCoreUpdate(selfDestroy, folder.SelfDestroy, action),
+                TTL = GetCoreUpdate(ttl, folder.TTL, action),
 
-                var update = new ProductUpdate()
-                {
-                    Id = productId,
-                    FolderId = action is ActionType.Delete ? Guid.Empty : folder.Id,
+                Initiator = initiator,
+            };
 
-                    DefaultChats = GetCorePolicy(defaultChats, folder, action),
-                    KeepHistory = GetCoreUpdate(savedHistory, folder.KeepHistory, action),
-                    SelfDestroy = GetCoreUpdate(selfDestroy, folder.SelfDestroy, action),
-                    TTL = GetCoreUpdate(ttl, folder.TTL, action),
+            _cache.UpdateProduct(update);
 
-                    Initiator = initiator,
-                };
-
-                _cache.UpdateProduct(update);
-
-                _logger.LogInformation($"TryUpdateProductInFolder: product '{product.DisplayName}' is updated.");
-
-                return true;
-            }
-            else
-                _logger.LogWarning($"TryUpdateProductInFolder: product '{productId}' not found.");
-
-
-            return false;
+            return true;
         }
 
 
