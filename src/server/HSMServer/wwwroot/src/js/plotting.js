@@ -300,12 +300,16 @@ async function addEnumPlot(graphId, graphName, id, isStatusService, path) {
     if (plots.map((x) => x.name).includes(currentName) && plots.length !== 1) {
         let indexToDelete = undefined;
         
-        let newShapes = [];
-        (graph.layout.shapes ?? []).reduce((_, currentValue) => { 
-            if (currentValue.name !== currentName) {
-                newShapes.push(currentValue)
-            }
-        })
+        //let newShapes = [];
+        //(graph.layout.shapes ?? []).reduce((_, currentValue) => { 
+        //    if (currentValue.name !== currentName) {
+        //        newShapes.push(currentValue)
+        //    }
+        //})
+
+        let newShapes = (graph.layout.shapes ?? []).filter(shape =>
+            shape.name !== currentName
+        );
         
         for (let i = 0; i < plots.length; i++)
             if (plots[i].name === currentName) {
