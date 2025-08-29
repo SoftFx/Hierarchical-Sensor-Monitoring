@@ -53,13 +53,49 @@
 
 
 <script>
+
+    const Status = {
+        ACTIVE: 'active',
+        INVISIBLE: 'pageInvisible',
+        NOTACTIVE: 'notActive'
+    };
+
     initialize();
-    initializeTreeNode();
 
 
-    var interval = $("#treeInterval").val() * 1000;
-    setTimeout(updateSelectedNodeData, interval);
+    //console.log('addEventListener document.addEventListener=' + document.addEventListener);
+    //console.log('addEventListener document.hidden=' + document.hidden);
+    //hide page browser event for stop updating tree
+    if (document.addEventListener && document.hidden !== undefined) {
 
+        //console.log('addEventListener(visibilitychange');
+        document.addEventListener('visibilitychange', function () {
+
+            
+
+            if (document.hidden) {
+                //console.log('changeTreeActivity(Status.INVISIBLE)');
+                changeTreeActivity(Status.INVISIBLE);
+            } else {
+                //console.log('changeTreeActivity(Status.ACTIVE)');
+                changeTreeActivity(Status.ACTIVE);
+            }
+        });
+    }
+    //console.log('addEventListener ended.');
+
+    // var interval = $("#treeInterval").val() * 1000;
+    // setTimeout(updateSelectedNodeData, interval);
+
+    window.treeWorkInterval = $("#treeInterval").val() * 1000;
+    window.treeInterval = treeWorkInterval;
+    window.treeStatus = Status.ACTIVE;
+
+    setTimeout(updateSelectedNodeData, treeInterval);
+
+
+
+    //console.log("Index: window.treeInterval = " + window.treeInterval);
 
     function updateGridCell(dataObject) {
         var id = dataObject.id;
@@ -163,9 +199,13 @@
 
     var updateSelectedNodeDataTimeoutId;
     function updateSelectedNodeData() {
+
         clearTimeout(updateSelectedNodeDataTimeoutId);
 
         var selectedNodeId = currentSelectedNodeId;
+
+        //console.log('updateSelectedNodeData selectedNodeId=', selectedNodeId);
+
         if (selectedNodeId != "")
             $.ajax({
                 type: 'POST',
