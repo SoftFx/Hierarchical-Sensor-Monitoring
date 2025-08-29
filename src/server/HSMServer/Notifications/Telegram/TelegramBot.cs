@@ -69,7 +69,7 @@ namespace HSMServer.Notifications
 
         public async ValueTask DisposeAsync()
         {
-            await StopBotAsync().ConfigureAwait(false);
+            await StopBotAsync();
         }
 
         internal async Task<(string link, string error)> TryGetChatLink(long chatId)
@@ -96,14 +96,14 @@ namespace HSMServer.Notifications
             //if (IsBotRunning)
             //    _bot.SendMessage(chatId, message, cancellationToken: _tokenSource.Token);
 
-            SendMessageAsync(chatId, message).ConfigureAwait(false);
+            SendMessageAsync(chatId, message);
         }
 
         internal async Task<string> StartBotAsync()
         {
             if (IsBotRunning)
             {
-                var message = await StopBotAsync().ConfigureAwait(false);
+                var message = await StopBotAsync();
                 if (!string.IsNullOrEmpty(message))
                     return message;
             }
@@ -125,7 +125,7 @@ namespace HSMServer.Notifications
 
             try
             {
-                await _bot.GetMe(_tokenSource.Token).ConfigureAwait(false);
+                await _bot.GetMe(_tokenSource.Token);
             }
             catch (Exception exc)
             {
@@ -137,9 +137,9 @@ namespace HSMServer.Notifications
                 return $"An error ({exc.Message}) has been occurred while starting the Bot. Please check Bot configurations. The current state of the Bot is stopped.";
             }
 
-            await _bot.SetMyCommands(TelegramBotCommands.Commands, cancellationToken: _tokenSource.Token).ConfigureAwait(false);
+            await _bot.SetMyCommands(TelegramBotCommands.Commands, cancellationToken: _tokenSource.Token);
 
-            await ChatNamesSynchronization().ConfigureAwait(false);
+            await ChatNamesSynchronization();
 
             _bot.StartReceiving(_updateHandler, _options, _tokenSource.Token);
 
@@ -157,8 +157,8 @@ namespace HSMServer.Notifications
             {
                 try
                 {
-                    await bot.DeleteWebhook().ConfigureAwait(false);
-                    await bot.Close().ConfigureAwait(false);
+                    await bot.DeleteWebhook();
+                    await bot.Close();
                 }
                 catch (Exception ex)
                 {
@@ -193,7 +193,7 @@ namespace HSMServer.Notifications
 
                             if (chat.MessagesAggregationTimeSec == 0)
                             {
-                                await SendMessageAsync(chat.ChatId, alertText).ConfigureAwait(false);
+                                await SendMessageAsync(chat.ChatId, alertText);
                                 _logger.Info($"TSend: SendMessageAsync '{logAlert}'");
                             }
                             else
@@ -233,7 +233,7 @@ namespace HSMServer.Notifications
                                 if (_tokenSource.IsCancellationRequested)
                                     break;
 
-                                await SendMessageAsync(chat.ChatId, notification).ConfigureAwait(false);
+                                await SendMessageAsync(chat.ChatId, notification);
                             }
                         }
                     }
@@ -278,7 +278,7 @@ namespace HSMServer.Notifications
                                 Description = chatDescription,
                             };
 
-                            await _chatsManager.TryUpdate(update).ConfigureAwait(false);
+                            await _chatsManager.TryUpdate(update);
                         }
                     }
                     catch (Exception ex)
@@ -334,7 +334,7 @@ namespace HSMServer.Notifications
                     if (retry >= SendMessageRetryCount)
                         break;
 
-                    await (_bot?.SendMessage(chat, MarkdownHelper.ConvertToMarkdownV2(message), cancellationToken: _tokenSource.Token, parseMode: ParseMode.MarkdownV2) ?? Task.CompletedTask).ConfigureAwait(false);
+                    await (_bot?.SendMessage(chat, MarkdownHelper.ConvertToMarkdownV2(message), cancellationToken: _tokenSource.Token, parseMode: ParseMode.MarkdownV2) ?? Task.CompletedTask);
                     
                     var logMessage = message.Length > 100 ? message.Substring(0, 100) : message;
 
@@ -354,7 +354,7 @@ namespace HSMServer.Notifications
                 {
                     _logger.Error($"Send telegram: An error ({ex.Message}) has been occurred while sending message #{retry} [{chat.Identifier}] {message}");
 
-                    await Task.Delay(SendMessageRetryTimeout * retry, _tokenSource.Token).ConfigureAwait(false);
+                    await Task.Delay(SendMessageRetryTimeout * retry, _tokenSource.Token);
                     retry++;
                 }
             }

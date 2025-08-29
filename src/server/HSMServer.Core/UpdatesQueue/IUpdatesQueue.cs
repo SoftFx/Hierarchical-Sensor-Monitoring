@@ -6,9 +6,9 @@ using HSMCommon.TaskResult;
 
 namespace HSMServer.Core.SensorsUpdatesQueue
 {
-    public interface IUpdatesQueue : IDisposable
+    public interface IUpdatesQueue : IAsyncDisposable
     {
-        event Action<IUpdateRequest> ItemAdded;
+        string Name { get; }
 
         int QueueSize { get; }
 

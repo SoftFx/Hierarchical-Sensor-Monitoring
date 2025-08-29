@@ -1,11 +1,12 @@
-﻿using HSMServer.Core.SensorsUpdatesQueue;
+﻿using System;
+using HSMServer.Core.SensorsUpdatesQueue;
 
 
 namespace HSMServer.Core.Model.Requests
 {
-    internal record ExpireSensorsRequest(BaseSensorModel[] Sensors) : IUpdateRequest
+    internal record ExpireSensorsRequest(Guid ProductId) : IUpdateRequest
     {
-        public BaseSensorModel[] Sensors { get; } = Sensors;
+        public Guid ProductId { get; } = ProductId;
 
     }
 }

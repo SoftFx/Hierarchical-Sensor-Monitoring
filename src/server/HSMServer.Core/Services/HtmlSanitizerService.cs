@@ -1,17 +1,12 @@
 ﻿using Ganss.Xss;
 
-namespace HSMServer.Services
+namespace HSMServer.Core.Services
 {
-    public interface IHtmlSanitizerService
+    public static class HtmlSanitizerService
     {
-        string Sanitize(string dirtyHtml);
-    }
+        private static readonly HtmlSanitizer _sanitizer;
 
-    public class HtmlSanitizerService : IHtmlSanitizerService
-    {
-        private readonly HtmlSanitizer _sanitizer;
-
-        public HtmlSanitizerService()
+        static HtmlSanitizerService()
         {
             _sanitizer = new HtmlSanitizer();
 
@@ -26,7 +21,7 @@ namespace HSMServer.Services
             _sanitizer.KeepChildNodes = true;
         }
 
-        public string Sanitize(string dirtyHtml)
+        public static string Sanitize(string dirtyHtml)
         {
             if (dirtyHtml is null)
                 return dirtyHtml;

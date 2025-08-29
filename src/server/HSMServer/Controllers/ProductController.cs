@@ -152,10 +152,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult EditProduct(ProductGeneralInfoViewModel viewModel)
+        public async ValueTask<IActionResult> EditProduct(ProductGeneralInfoViewModel viewModel)
         {
             if (_treeViewModel.Nodes.TryGetValue(viewModel.Id, out var product) && ModelState.IsValid)
-                _treeValuesCache.UpdateProduct(viewModel.ToUpdate(product, _telegramChatsManager, _folderManager, CurrentInitiator));
+                await _treeValuesCache.UpdateProductAsync(viewModel.ToUpdate(product, _telegramChatsManager, _folderManager, CurrentInitiator));
             else
                 viewModel.DefaultChats = new(product);
 

@@ -92,7 +92,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 if (invalidType == sensorType)
                     continue;
 
-                Assert.False(sensor.TryAddValue(SensorValuesFactory.BuildSensorValue(invalidType)));
+                Assert.False(sensor.TryAddValue(SensorValuesFactory.BuildValue(invalidType)));
                 Assert.True(sensor.Status?.HasError);
                 Assert.Equal(SensorStatus.Error, sensor.Status?.Status);
                 Assert.True(sensor.Status?.Message.EndsWith(errorMessage));
@@ -108,7 +108,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorType in Enum.GetValues<SensorType>()[..^1])
             {
                 var sensor = BuildSensorModel(sensorType);
-                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with { Status = status };
+                var baseValue = SensorValuesFactory.BuildValue(sensorType) with { Status = status };
                 var expectedMessage = string.IsNullOrEmpty(baseValue.Comment)
                     ? string.Format(SensorValueStatusInvalid, status)
                     : baseValue.Comment;
@@ -137,7 +137,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var sensor = BuildSensorModel(sensorType);
                 sensor.Settings.TTL.TrySetValue(new TimeIntervalModel(ticks));
 
-                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
+                var baseValue = SensorValuesFactory.BuildValue(sensorType) with
                 { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
 
                 Assert.True(sensor.TryAddValue(baseValue));
@@ -183,7 +183,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var sensor = BuildSensorModel(sensorType);
                 sensor.Settings.TTL.TrySetValue(new TimeIntervalModel(TestTicks));
 
-                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
+                var baseValue = SensorValuesFactory.BuildValue(sensorType) with
                 {
                     ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - TestTicks),
                     Status = status

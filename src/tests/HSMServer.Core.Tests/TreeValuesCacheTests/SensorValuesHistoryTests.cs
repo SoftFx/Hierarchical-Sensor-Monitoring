@@ -12,6 +12,7 @@ using HSMServer.Extensions;
 using Xunit;
 using System.Threading;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.ApiObjectsConverters;
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
@@ -45,13 +46,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var expectedValues = type is SensorType.IntegerBar or SensorType.DoubleBar
                     ? sensorValues.Skip(1).Take(historyValuesCount).ToList() // skip last value because GetSensorValuesPage returns values only from db (not from cache)
                     : sensorValues.Take(historyValuesCount).ToList();
+
                 var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, -historyValuesCount).Flatten();
 
                 Assert.True(historyValuesCount >= actualValues.Count);
                 Assert.Equal(expectedValues.Count, actualValues.Count);
 
                 for (int i = 0; i < expectedValues.Count; ++i)
-                    ModelsTester.AssertModels(expectedValues[i], actualValues[i]);
+                    ModelsTester.AssertModels(expectedValues[i], actualValues[i], ["ReceivingTime","LastUpdateTime"]);
             }
         }
 
@@ -78,12 +80,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             {
                 sensorValues.Reverse();
 
-                var expectedValues = sensorValues.Where(s => s.ReceivingTime >= from && s.ReceivingTime <= to).ToList();
+                var expectedValues = sensorValues.Where(s => s.Time >= from && s.Time <= to).ToList();
                 var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, from, to, MaxHistoryCount).Flatten();
 
                 Assert.Equal(expectedValues.Count, actualValues.Count);
                 for (int i = 0; i < expectedValues.Count; ++i)
-                    ModelsTester.AssertModels(expectedValues[i], actualValues[i]);
+                    ModelsTester.AssertModels(expectedValues[i], actualValues[i], ["ReceivingTime", "LastUpdateTime"]);
             }
         }
 
@@ -120,7 +122,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
                 Assert.Equal(expectedValues.Count, actualValues.Count);
                 for (int i = 0; i < expectedValues.Count; ++i)
-                    ModelsTester.AssertModels(expectedValues[i], actualValues[i]);
+                    ModelsTester.AssertModels(expectedValues[i], actualValues[i], ["ReceivingTime", "LastUpdateTime"]);
             }
         }
 
@@ -140,11 +142,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             for (int i = 0; i < sensorValuesCount; ++i)
             {
                 var sensorInfo = sensors[RandomGenerator.GetRandomInt(min: 0, max: sensorsCount)];
-                var storeInfo = new AddSensorValueRequest(TestProductsManager.TestProductModel.DisplayName, sensorInfo.Path, SensorValuesFactory.BuildSensorValue(sensorInfo.Type));
+                var value = SensorValuesFactory.BuildSensorValue(sensorInfo.Type, sensorInfo.Path);
 
 
-                await _valuesCache.AddSensorValueAsync(key.Id, storeInfo.ProductName, storeInfo.Path, storeInfo.BaseValue);
-                map[sensorInfo].Add(storeInfo.BaseValue);
+                await _valuesCache.AddSensorValueAsync(key.Id, TestProductsManager.ProductName,  value);
+                map[sensorInfo].Add(value.Convert());
             }
 
             var sens = _valuesCache.GetSensors();
@@ -182,7 +184,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
 
-        private sealed class SensorModelInfo
+        public sealed class SensorModelInfo
         {
             public string Path { get; init; }
 

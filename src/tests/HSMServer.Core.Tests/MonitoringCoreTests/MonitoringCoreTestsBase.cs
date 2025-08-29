@@ -21,7 +21,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         protected readonly DatabaseCoreManager _databaseCoreManager;
 
 
-        protected readonly IUpdatesQueue _updatesQueue;
         protected readonly TreeValuesCache _valuesCache;
         protected readonly IUserManager _userManager;
         protected readonly JournalService _journalService;
@@ -43,7 +42,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             snaphot.Setup(a => a.Sensors).Returns(new StateCollection<LastSensorState, SensorStateEntity>());
             snaphot.Setup(a => a.Keys).Returns(new StateCollection<LastKeyState, LastKeyStateEntity>());
 
-            _updatesQueue = new UpdatesQueue();
             _journalService = new JournalService(_databaseCoreManager.DatabaseCore);
             _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, snaphot.Object, _journalService, System.TimeSpan.FromDays(1));
 

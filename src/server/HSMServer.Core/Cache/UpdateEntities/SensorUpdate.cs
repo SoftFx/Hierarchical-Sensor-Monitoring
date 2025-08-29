@@ -45,8 +45,6 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public List<EnumOption> EnumOptions { get; init; }
 
-        public TaskCompletionSource<TaskResult> TaskCompletionSource { get; set; }
-
         [SetsRequiredMembers]
         public SensorUpdate() : base() { }
     }

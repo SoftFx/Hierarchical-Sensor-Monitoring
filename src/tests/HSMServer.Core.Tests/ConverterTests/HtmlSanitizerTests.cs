@@ -1,12 +1,11 @@
-﻿using HSMServer.Helpers;
-using HSMServer.Services;
-using Xunit;
+﻿using Xunit;
+using HSMServer.Core.Services;
+
 
 namespace HSMServer.Core.Tests.ConverterTests
 {
     public class HtmlSanitizerTests
     {
-        private HtmlSanitizerService _sanitizer = new HtmlSanitizerService();
 
         [Theory]
         [InlineData("<","&lt;")]
@@ -15,7 +14,7 @@ namespace HSMServer.Core.Tests.ConverterTests
         public void HtmlSanitizerTest(string input, string expected)
         {
 
-            var result = _sanitizer.Sanitize(input);
+            var result = HtmlSanitizerService.Sanitize(input);
             Assert.Equal(expected, result);
         }
 

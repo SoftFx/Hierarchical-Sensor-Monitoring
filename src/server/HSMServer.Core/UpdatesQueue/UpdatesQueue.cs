@@ -4,19 +4,21 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using HSMCommon.TaskResult;
+using HSMServer.Core.Cache;
 using NLog;
 
 namespace HSMServer.Core.SensorsUpdatesQueue
 {
     public sealed class UpdatesQueue : IUpdatesQueue
     {
-        private const int MaxQueueSize = 10_000;
+        private const int MaxQueueSize = 1_000;
         private readonly BoundedChannelOptions _channelOptions = new(MaxQueueSize)
         {
             SingleWriter = false,
             SingleReader = true,
             FullMode = BoundedChannelFullMode.Wait
         };
+
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly Channel<StoreItem> _channel;
@@ -25,10 +27,14 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 
         public int QueueSize => _channel.Reader.Count;
 
-        public event Action<IUpdateRequest> ItemAdded;
+        public string Name { get; }
 
-        public UpdatesQueue()
+        private readonly Action<IUpdatesQueue, IUpdateRequest> _action;
+
+        public UpdatesQueue(string name, Action<IUpdatesQueue, IUpdateRequest> action)
         {
+            Name = name;
+            _action = action;
             _channel = Channel.CreateBounded<StoreItem>(_channelOptions);
             _processingTask = ProcessQueueAsync(_cts.Token);
         }
@@ -37,13 +43,13 @@ namespace HSMServer.Core.SensorsUpdatesQueue
         {
             try
             {
-                await foreach (var item in _channel.Reader.ReadAllAsync(token).ConfigureAwait(false))
+                await foreach (var item in _channel.Reader.ReadAllAsync(token))
                 {
                     token.ThrowIfCancellationRequested();
 
                     try
                     {
-                        ItemAdded?.Invoke(item.UpdateRequest);
+                        _action?.Invoke(this, item.UpdateRequest);
                         if (item.IsAwaitable && !item.TaskCompletionSource.Task.IsCompleted)
                             item.TaskCompletionSource.TrySetResult(TaskResult.Ok);
                     }
@@ -60,7 +66,7 @@ namespace HSMServer.Core.SensorsUpdatesQueue
             catch (ChannelClosedException) { }
             catch (Exception ex) 
             {
-                _logger.Error(ex, "Queue processing error");
+                _logger.Error(ex, "Execution error");
             }
         }
 
@@ -69,12 +75,13 @@ namespace HSMServer.Core.SensorsUpdatesQueue
             try
             {
                 var storeItem = new StoreItem(item, true);
-                await _channel.Writer.WriteAsync(storeItem, token).ConfigureAwait(false);
+                await _channel.Writer.WriteAsync(storeItem, token);
 
-                return await storeItem.TaskCompletionSource.Task.WaitAsync(token).ConfigureAwait(false);
+                return await storeItem.TaskCompletionSource.Task.WaitAsync(token);
             }
             catch (Exception ex)
             {
+                _logger.Error(ex, "Adding error");
                 return TaskResult.FromError(ex.Message);
             }
         }
@@ -82,7 +89,14 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 
         public async Task AddItemAsync(IUpdateRequest item, CancellationToken token = default)
         {
-             await _channel.Writer.WriteAsync(new StoreItem(item, false), token).ConfigureAwait(false);
+            try
+            {
+                await _channel.Writer.WriteAsync(new StoreItem(item, false), token);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Adding error");
+            }
         }
 
         public async Task AddItemsAsync(IEnumerable<IUpdateRequest> items, CancellationToken token = default)
@@ -93,14 +107,13 @@ namespace HSMServer.Core.SensorsUpdatesQueue
             }
         }
 
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
             _channel.Writer.Complete();
             _cts.Cancel();
-            _processingTask.Wait(TimeSpan.FromSeconds(1));
-            _processingTask.Dispose();
+            await _processingTask?.WaitAsync(TimeSpan.FromSeconds(5));
+
             _cts.Dispose();
-            GC.SuppressFinalize(this);
         }
 
     }

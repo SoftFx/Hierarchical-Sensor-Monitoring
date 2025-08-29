@@ -4,6 +4,7 @@ using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace HSMServer.Core.Model
 {
@@ -93,14 +94,28 @@ namespace HSMServer.Core.Model
         {
             var result = false;
 
-            foreach (var (_, sensor) in Sensors)
+            foreach (var sensor in GetAllSensors())
                 result |= sensor.CheckTimeout();
-
-            foreach (var (_, subProduct) in SubProducts)
-                result |= subProduct.CheckTimeout();
 
             return result;
         }
+
+        public IEnumerable<BaseSensorModel> GetAllSensors()
+        {
+            foreach (var sensor in Sensors.Values)
+            {
+                yield return sensor;
+            }
+
+            foreach (var subProduct in SubProducts.Values)
+            {
+                foreach (var sensor in subProduct.GetAllSensors())
+                {
+                    yield return sensor;
+                }
+            }
+        }
+
 
         internal ProductEntity ToEntity() => new()
         {
