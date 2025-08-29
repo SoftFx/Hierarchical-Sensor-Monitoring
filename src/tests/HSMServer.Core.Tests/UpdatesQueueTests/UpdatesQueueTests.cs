@@ -31,7 +31,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
             }
 
             AddSensorValueRequest storeInfo = BuildStoreInfo(0);
-            using var updatesQueue = new UpdatesQueue("Name", GetItem);
+            await using var updatesQueue = new UpdatesQueue("Name", GetItem);
 
 
             await updatesQueue.ProcessRequestAsync(storeInfo);
@@ -50,7 +50,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
             }
 
             AddSensorValueRequest storeInfo = BuildStoreInfo(10);
-            using var updatesQueue = new UpdatesQueue("Name", GetItem);
+            await using var updatesQueue = new UpdatesQueue("Name", GetItem);
 
             await updatesQueue.ProcessRequestAsync(storeInfo);
 
@@ -68,7 +68,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
 
             List<AddSensorValueRequest> items = AddItemsToList(count);
 
-            using var updatesQueue = new UpdatesQueue("Name", GetItem);
+            await using var updatesQueue = new UpdatesQueue("Name", GetItem);
 
             foreach (var item in items)
                 await updatesQueue.ProcessRequestAsync(item);
@@ -99,7 +99,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
                 items.Add(storeInfo);
             }
 
-            using var updatesQueue = new UpdatesQueue("Name", GetItem);
+            await using var updatesQueue = new UpdatesQueue("Name", GetItem);
 
             foreach (var item in items)
                 await updatesQueue.ProcessRequestAsync(item);
