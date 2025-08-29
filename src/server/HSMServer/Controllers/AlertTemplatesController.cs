@@ -127,7 +127,7 @@ namespace HSMServer.Controllers
             var model = new DataAlertTemplateViewModel(folders);
 
             if (folders.Count == 0)
-                return Json(model);
+                return Json("User does not belong to any folders");
 
             if (id.HasValue)
             {

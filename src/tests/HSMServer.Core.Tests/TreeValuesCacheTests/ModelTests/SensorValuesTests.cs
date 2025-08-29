@@ -20,7 +20,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         [Trait("Category", "Sensor value's ShortInfo")]
         public void SensorValue_ShortInfo_Test(SensorType type)
         {
-            var value = SensorValuesFactory.BuildSensorValue(type);
+            var value = SensorValuesFactory.BuildValue(type);
 
             TestSensorValueShortInfo(value);
         }

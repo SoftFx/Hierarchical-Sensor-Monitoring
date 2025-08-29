@@ -36,7 +36,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             var sensorEntity = EntitiesFactory.BuildSensorEntity(type: (byte)type);
             var sensor = SensorModelFactory.Build(sensorEntity);
 
-            var sensorValue = SensorValuesFactory.BuildSensorValue(type);
+            var sensorValue = SensorValuesFactory.BuildValue(type);
 
             sensor.TryAddValue(sensorValue);
 

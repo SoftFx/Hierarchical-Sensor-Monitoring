@@ -1,18 +1,10 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using NLog;
-using HSMCommon.Collections;
+﻿using HSMCommon.Collections;
 using HSMCommon.Extensions;
 using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects.HistoryRequests;
+using HSMSensorDataObjects.SensorValueRequests;
+using HSMServer.Core.ApiObjectsConverters;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Confirmation;
 using HSMServer.Core.DataLayer;
@@ -28,6 +20,15 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Threading;
 using HSMServer.Core.TreeStateSnapshot;
 using HSMServer.PathTemplates;
+using NLog;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 using SensorType = HSMServer.Core.Model.SensorType;
 
 
@@ -51,7 +52,7 @@ namespace HSMServer.Core.Cache
     }
 
 
-    public sealed class TreeValuesCache : ITreeValuesCache, IDisposable
+    public sealed class TreeValuesCache : ITreeValuesCache, IAsyncDisposable
     {
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
@@ -70,6 +71,7 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree = new();
         private readonly ConcurrentDictionary<Guid, AlertTemplateModel> _alertTemplates = new();
+        private readonly ConcurrentDictionary<string, ProductModel> _productsByName = new(StringComparer.Ordinal);
 
         private readonly CDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
@@ -84,7 +86,7 @@ namespace HSMServer.Core.Cache
         private readonly Stopwatch _stopwatch = new Stopwatch();
 
         private readonly ITreeStateSnapshot _snapshot;
-        private readonly IUpdatesQueue _updatesQueue;
+        private readonly ConcurrentDictionary<string, IUpdatesQueue> _queues = new(StringComparer.Ordinal);
         private readonly IJournalService _journalService;
         private readonly IDatabaseCore _database;
 
@@ -92,7 +94,7 @@ namespace HSMServer.Core.Cache
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
 
-        public event Action<int, int> RequestProcessed;
+        public event Action<string, int, int> RequestProcessed;
 
         public event Action<AlertMessage> NewAlertMessageEvent;
         public event Action<FolderEventArgs> FillFolderChats;
@@ -107,12 +109,10 @@ namespace HSMServer.Core.Cache
             _database = database;
             _snapshot = snapshot;
 
-            _updatesQueue = new UpdatesQueue();
             _journalService = journalService;
 
             Initialize();
 
-            _updatesQueue.ItemAdded += QueueUpdateHandle;
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent += SendAlertMessage;
 
@@ -130,23 +130,30 @@ namespace HSMServer.Core.Cache
                     SaveSensorValueToDb(barModel.LocalLastValue, sensor.Id);
         }
 
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
             _cts?.Cancel();
 
-            _updateTask?.Wait(TimeSpan.FromSeconds(5));
-            _updateTask?.Dispose();
-            _cts?.Dispose();
+            if (_updateTask != null)
+            {
+                try
+                {
+                    await _updateTask.WaitAsync(TimeSpan.FromSeconds(5));
+                }
+                catch (TimeoutException)
+                {
+                    _logger.Warn("Update task timeout during disposal");
+                }
+            }
 
-            _migrator.ApplyProductMigration -= UpdateProduct;
-            _migrator.ApplySensorMigration -= TryUpdateSensor;
+            foreach (var queue in _queues.Values)
+                await queue.DisposeAsync();
+
+            _cts?.Dispose();
 
             _confirmationManager.NewMessageEvent -= _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent -= SendAlertMessage;
 
-            _updatesQueue.ItemAdded -= QueueUpdateHandle;
-
-            _updatesQueue.Dispose();
             _database.Dispose();
         }
 
@@ -163,10 +170,10 @@ namespace HSMServer.Core.Cache
 
         public List<BaseSensorModel> GetSensors(string wildcard, SensorType? sensorType = null, Guid? folderId = null)
         {
-            return GetSensorsInternal(wildcard, sensorType, folderId).ToList();
+            return [.. GetSensorsByWildcard(wildcard, sensorType, folderId)];
         }
 
-        private IEnumerable<BaseSensorModel> GetSensorsInternal(string wildcard, SensorType? sensorType = null, Guid? folderId = null)
+        private IEnumerable<BaseSensorModel> GetSensorsByWildcard(string wildcard, SensorType? sensorType = null, Guid? folderId = null, Guid? productId = null)
         {
             PathTemplateConverter converter = new PathTemplateConverter();
             if (!converter.ApplyNewTemplate(wildcard, out string errors))
@@ -178,7 +185,10 @@ namespace HSMServer.Core.Cache
                 result = result.Where(x => x.Root.FolderId == folderId);
 
             if (sensorType.HasValue)
-                result = result.Where(x => x.Type == sensorType);
+                result = result.Where(x => x.Type == sensorType.Value);
+
+            if (productId.HasValue)
+                result = result.Where(x => x.Root.Id == productId.Value);
 
             return result;
         }
@@ -191,7 +201,7 @@ namespace HSMServer.Core.Cache
         public async Task<ProductModel> AddProductAsync(string productName, Guid authorId, CancellationToken token = default)
         {
             var request = new AddProductRequest(productName, authorId);
-            await _updatesQueue.ProcessRequestAsync(request, token).ConfigureAwait(false);
+            await GetUpdatesQueue(productName).ProcessRequestAsync(request, token);
             return request.ProductModel;
         }
 
@@ -219,7 +229,21 @@ namespace HSMServer.Core.Cache
             return false;
         }
 
-        public void UpdateProduct(ProductUpdate update)
+        public async Task UpdateProductAsync(ProductUpdate request, CancellationToken token)
+        {
+            var product = GetProduct(request.Id);
+
+            if (product == null)
+                return;
+
+            if (!product.IsRoot)
+                product = product.Root;
+
+            await GetUpdatesQueue(product.DisplayName).ProcessRequestAsync(request, token);
+        }
+
+
+        private void UpdateProduct(ProductUpdate update)
         {
             if (!_tree.TryGetValue(update.Id, out ProductModel product))
                 return;
@@ -232,7 +256,15 @@ namespace HSMServer.Core.Cache
 
         public async Task RemoveProductAsync(Guid productId, InitiatorInfo initiator = null, CancellationToken token = default)
         {
-            await _updatesQueue.ProcessRequestAsync(new RemoveProductRequest(productId, initiator), token);
+            var product = GetProduct(productId);
+            if (product != null)
+            {
+                if (!product.IsRoot)
+                    product = product.Root;
+
+                await GetUpdatesQueue(product.DisplayName).ProcessRequestAsync(new RemoveProductRequest(productId, initiator), token);
+                _queues.TryRemove(product.DisplayName, out var queue);
+            }
         }
 
         private void RemoveProduct(RemoveProductRequest request)
@@ -264,6 +296,11 @@ namespace HSMServer.Core.Cache
             {
                 if (TryGetProduct(request.Id, out var product))
                 {
+                    if (product.IsRoot)
+                    {
+                        _productsByName.TryRemove(product.DisplayName, out _);
+                    }
+
                     RemoveProduct(request.Id, request.InitiatorInfo);
 
                     if (!product.IsRoot)
@@ -284,14 +321,13 @@ namespace HSMServer.Core.Cache
         /// <returns>product (without parent) with name = name</returns>
         public ProductModel GetProductByName(string name)
         {
-            return _tree.FirstOrDefault(p => p.Value.IsRoot && p.Value.DisplayName == name).Value;
+            _productsByName.TryGetValue(name, out var product);
+            return product;
         }
 
         public bool TryGetProductByName(string name, out ProductModel product)
         {
-            product = GetProductByName(name);
-
-            return product is not null;
+            return _productsByName.TryGetValue(name, out product);
         }
 
         public bool TryGetProductNameById(Guid id, out string name)
@@ -309,7 +345,7 @@ namespace HSMServer.Core.Cache
         /// <returns>list of root products (without parent)</returns>
         public List<ProductModel> GetProducts()
         {
-            return [.. _tree.Values.Where(p => p.IsRoot)];
+            return [.. _productsByName.Values];
         }
 
 
@@ -509,7 +545,7 @@ namespace HSMServer.Core.Cache
 
         public Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default)
         {
-            return _updatesQueue.ProcessRequestAsync(request, token);
+            return GetUpdatesQueue(request.ProductName).ProcessRequestAsync(request, token);
         }
 
         private bool TryAddOrUpdateSensor(SensorAddOrUpdateRequest request, out string error)
@@ -527,30 +563,28 @@ namespace HSMServer.Core.Cache
 
                 update = update with { Id = sensor.Id };
 
-                return TryUpdateSensorInternal(update, out error);
+                return TryUpdateSensor(update, out error);
             }
             else
             {
-                return TryUpdateSensorInternal(update, out error);
+                return TryUpdateSensor(update, out error);
             }
         }
 
         public async Task<TaskResult> UpdateSensorAsync(SensorUpdate update)
         {
-            return await _updatesQueue.ProcessRequestAsync(update).ConfigureAwait(false);
+            if (!TryGetSensorById(update.Id, out var sensor))
+                return TaskResult.FromError($"Sensor {update.Id} was not found");
+
+            return await GetUpdatesQueue(sensor.RootProductName).ProcessRequestAsync(update);
         }
 
 
         private bool TryUpdateSensor(SensorUpdate update, out string error)
         {
-            return TryUpdateSensorInternal(update, out error);
-        }
-
-        private bool TryUpdateSensorInternal(SensorUpdate update, out string error)
-        {
             try
             {
-                if (!_sensorsById.TryGetValue(update.Id, out var path) || !_sensorsByPath.TryGetValue(path, out var sensor))
+                if (!TryGetSensorById(update.Id, out var sensor))
                 {
                     error = $"Sensor doesn't exist {update.Id}";
                     return false;
@@ -570,9 +604,12 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public Task<TaskResult> UpdateSensorValueAsync(UpdateSensorValueRequestModel request, CancellationToken token = default)
+        public async Task<TaskResult> UpdateSensorValueAsync(UpdateSensorValueRequestModel request, CancellationToken token = default)
         {
-            return _updatesQueue.ProcessRequestAsync(request, token);
+            if (!TryGetSensorById(request.Id, out var sensor))
+                return TaskResult.FromError($"Sensor {sensor.Id} was not found"); 
+
+            return await GetUpdatesQueue(sensor.RootProductName).ProcessRequestAsync(request, token);
         }
 
         private void UpdateSensorValue(UpdateSensorValueRequestModel request)
@@ -622,13 +659,16 @@ namespace HSMServer.Core.Cache
 
         public async Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null)
         {
+            if (!TryGetSensorById(sensorId, out var sensor))
+                return;
+
             var request = new RemoveSensorRequest(sensorId)
             {
                 InitiatorInfo = initiator,
                 ParentId = parentId
             };
 
-            await _updatesQueue.ProcessRequestAsync(request).ConfigureAwait(false);
+            await GetUpdatesQueue(sensor.RootProductName).ProcessRequestAsync(request);
         }
 
         private void RemoveSensor(RemoveSensorRequest request)
@@ -685,7 +725,7 @@ namespace HSMServer.Core.Cache
                     Initiator = initiator
                 };
 
-                await _updatesQueue.ProcessRequestAsync(update);
+                await GetUpdatesQueue(sensor.RootProductName).ProcessRequestAsync(update);
             }
         }
 
@@ -703,14 +743,17 @@ namespace HSMServer.Core.Cache
 
         public async Task CheckSensorHistoryAsync(Guid sensorId, CancellationToken token = default)
         {
-            await _updatesQueue.ProcessRequestAsync(new CheckSensorHistoryRequest(sensorId), token);
+            if (!TryGetSensorById(sensorId, out var sensor))
+                return;
+
+            await GetUpdatesQueue(sensor.RootProductName).ProcessRequestAsync(new CheckSensorHistoryRequest(sensorId), token);
         }
 
         private void CheckSensorHistory(CheckSensorHistoryRequest request)
         {
             var sensorId = request.SensorId;
 
-            if(!TryGetSensor(sensorId, out var sensor))
+            if(!TryGetSensorById(sensorId, out var sensor))
                 return;
 
             var from = _snapshot.Sensors[sensorId].History.From;
@@ -722,7 +765,10 @@ namespace HSMServer.Core.Cache
 
         public async Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default)
         {
-            await _updatesQueue.ProcessRequestAsync(request, token);
+            if (!TryGetSensorById(request.Id, out var sensor))
+                return;
+
+            await GetUpdatesQueue(sensor.RootProductName).ProcessRequestAsync(request, token);
         }
 
         private void ClearSensorHistory(ClearHistoryRequest request)
@@ -788,17 +834,10 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId)
         {
-            if(!_sensorsById.TryGetValue(sensorId, out var path) || !_sensorsByPath.TryGetValue(path, out var sensor))
+            if(!TryGetSensorById(sensorId, out var sensor))
                 return null;
 
             return sensor;
-        }
-
-        private bool TryGetSensor(Guid sensorId, out BaseSensorModel sensor)
-        {
-            sensor = null;
-            return _sensorsById.TryGetValue(sensorId, out var path) &&
-                   _sensorsByPath.TryGetValue(path, out sensor);
         }
 
 
@@ -835,7 +874,7 @@ namespace HSMServer.Core.Cache
 
             var product = GetProductByName(sensor.RootProductName);
 
-            if (!product.FolderId.HasValue)
+            if (product == null || !product.FolderId.HasValue)
                 return;
 
             //TODO: move to Policy => GetParentChats when FolderModel will be moved into Core project
@@ -847,8 +886,7 @@ namespace HSMServer.Core.Cache
                 {
                     foreach (Guid folderId in folderChats)
                     {
-                        if (!alert.Destination.Chats.Contains(folderId))
-                            alert.Destination.Chats.Add(folderId);
+                        alert.Destination.Chats.Add(folderId);
                     }
                 }
             }
@@ -1110,7 +1148,22 @@ namespace HSMServer.Core.Cache
 
         public async Task AddAlertTemplateAsync(AlertTemplateModel alertTemplateModel, CancellationToken token = default)
         {
-            await _updatesQueue.ProcessRequestAsync(new AddAlertTemplateRequest(alertTemplateModel), token);
+            var products = GetProducts().Where(x => x.FolderId == alertTemplateModel.FolderId).ToList();
+
+            var first = products.FirstOrDefault();
+
+            await Parallel.ForEachAsync(products, new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Environment.ProcessorCount,
+                CancellationToken = token
+            }, async (product, ct) =>
+            {
+                var isPrimary = product == first;
+                var request = new AddAlertTemplateRequest(alertTemplateModel, product.Id, isPrimary);
+
+                await GetUpdatesQueue(product.DisplayName)
+                    .ProcessRequestAsync(request, ct);
+            });
         }
 
         private void AddAlertTemplate(AddAlertTemplateRequest request)
@@ -1120,14 +1173,17 @@ namespace HSMServer.Core.Cache
             try
             {
                 if (_alertTemplates.ContainsKey(alertTemplateModel.Id))
-                    RemoveAlertTemplate(new RemoveAlertTemplateRequest(alertTemplateModel.Id));
+                    RemoveAlertTemplate(new RemoveAlertTemplateRequest(alertTemplateModel.Id, request.ProductId, request.IsPrimary));
 
-                _alertTemplates.GetOrAdd(alertTemplateModel.Id, () => alertTemplateModel);
 
-                foreach (var sensor in GetSensorsInternal(alertTemplateModel.Path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId))
+                foreach (var sensor in GetSensorsByWildcard(alertTemplateModel.Path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId, request.ProductId).ToList())
                     AddAlertFromTemplate(sensor, alertTemplateModel);
 
-                _database.AddAlertTemplate(alertTemplateModel.ToEntity());
+                if (request.IsPrimary)
+                {
+                    _alertTemplates.GetOrAdd(alertTemplateModel.Id, () => alertTemplateModel);
+                    _database.AddAlertTemplate(alertTemplateModel.ToEntity());
+                }
 
             }
             catch (Exception ex)
@@ -1144,35 +1200,59 @@ namespace HSMServer.Core.Cache
 
         public async Task RemoveAlertTemplateAsync(Guid id, CancellationToken token = default)
         {
-            await _updatesQueue.ProcessRequestAsync(new RemoveAlertTemplateRequest(id), token);
+            var templateModel = GetAlertTemplate(id);
+
+            if (templateModel == null)
+                return;
+
+            var products = GetProducts().Where(x => x.FolderId == templateModel.FolderId);
+
+
+            var first = products.FirstOrDefault();
+
+            await Parallel.ForEachAsync(products, new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Environment.ProcessorCount,
+                CancellationToken = token
+            }, async (product, ct) =>
+            {
+                var isPrimary = product == first;
+                var request = new RemoveAlertTemplateRequest(id, product.Id, isPrimary);
+
+                await GetUpdatesQueue(product.DisplayName)
+                    .ProcessRequestAsync(request, ct);
+            });
         }
 
 
         private void RemoveAlertTemplate(RemoveAlertTemplateRequest request)
         {
-            foreach (var sensor in _sensorsByPath.Values)
-                if (sensor.Policies.TimeToLive.TemplateId == request.Id || sensor.Policies.Any(x => x.TemplateId == request.Id))
-                    RemoveAlertTemplateFromSensor(sensor.Id, request.Id);
+            var product = GetProduct(request.ProductId);
 
-            _alertTemplates.TryRemove(request.Id, out _);
-            _database.RemoveAlertTemplate(request.Id);
-        }
-
-
-        private void RemoveAlertTemplateFromSensor(Guid sensorId, Guid templateId)
-        {
-            if (!TryGetSensorById(sensorId, out var sensor))
+            if (product == null)
                 return;
 
-            foreach (var policy in sensor.Policies.Where(x => x.TemplateId == templateId))
-                sensor.Policies.RemovePolicy(policy.Id, InitiatorInfo.AlertTemplate);
+            foreach (var sensor in product.GetAllSensors())
+                if (sensor.Policies.TimeToLive.TemplateId == request.Id || sensor.Policies.Any(x => x.TemplateId == request.Id))
+                {
+                    foreach (var policy in sensor.Policies.Where(x => x.TemplateId == request.Id))
+                        sensor.Policies.RemovePolicy(policy.Id, InitiatorInfo.AlertTemplate);
 
-            if (sensor.Policies.TimeToLive.TemplateId == templateId)
-                sensor.Policies.UpdateTTL(new PolicyUpdate() { Initiator = InitiatorInfo.AlertTemplate });
+                    if (sensor.Policies.TimeToLive.TemplateId == request.Id)
+                        sensor.Policies.UpdateTTL(new PolicyUpdate() { Initiator = InitiatorInfo.AlertTemplate });
 
-            sensor.Revalidate();
+                    _database.UpdateSensor(sensor.ToEntity());
 
-            SensorUpdateView(sensor);
+                    sensor.Revalidate();
+
+                    SensorUpdateView(sensor);
+                }
+
+            if (request.IsPrimary)
+            {
+                _alertTemplates.TryRemove(request.Id, out _);
+                _database.RemoveAlertTemplate(request.Id);
+            }
         }
 
         private void RemoveChatsFromPolicies(ProductModel product, HashSet<Guid> chats, InitiatorInfo initiator)
@@ -1324,9 +1404,9 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public async Task<TaskResult> AddSensorValueAsync(Guid key, string productName,  string path, BaseValue value, CancellationToken token = default)
+        public async Task<TaskResult> AddSensorValueAsync(Guid key, string productName, SensorValueBase value, CancellationToken token = default)
         {
-            var request = new AddSensorValueRequest(productName, path, value)
+            var request = new AddSensorValueRequest(productName, value.Path, value.Convert())
             {
                 Key = key
             };
@@ -1337,30 +1417,29 @@ namespace HSMServer.Core.Cache
             if (!TryCheckKeyWritePermissions(request.Key, request.PathParts, out message))
                 return TaskResult.FromError(message);
 
-            await _updatesQueue.ProcessRequestAsync(request, token).ConfigureAwait(false);
+            await GetUpdatesQueue(productName).ProcessRequestAsync(request, token);
 
             return TaskResult.Ok;
         }
 
 
-        public async Task<Dictionary<string, string>> AddSensorValuesAsync(IEnumerable<AddSensorValueRequest> requests, CancellationToken token = default)
+        public async Task<Dictionary<string, string>> AddSensorValuesAsync(Guid key, string productName, IEnumerable<HSMSensorDataObjects.SensorValueRequests.SensorValueBase> values, CancellationToken token = default)
         {
-            var request = new AddSensorValuesRequest(requests);
+            var request = new AddSensorValuesRequest(key, productName, values);
 
-            await _updatesQueue.ProcessRequestAsync(request, token).ConfigureAwait(false);
+            await GetUpdatesQueue(productName).ProcessRequestAsync(request, token);
 
             return request.Response;
-
         }
 
 
-        private void QueueUpdateHandle(IUpdateRequest item)
+        private void ProcessRequest(IUpdatesQueue queue, IUpdateRequest item)
         {
             _stopwatch.Restart();
 
             switch (item)
             {
-                case AddSensorValueRequest storeInfo when !TryAddNewSensorValue(storeInfo, out var error):
+                case AddSensorValueRequest request when !TryAddNewSensorValue(request, out var error):
                     _logger.Error(error);
                     break;
                 case AddSensorValuesRequest request:
@@ -1369,7 +1448,7 @@ namespace HSMServer.Core.Cache
                 case SensorAddOrUpdateRequest command when !TryAddOrUpdateSensor(command, out var error):
                     _logger.Error(error);
                     break;
-                case SensorUpdate update when !TryUpdateSensorInternal(update, out var error):
+                case SensorUpdate update when !TryUpdateSensor(update, out var error):
                     _logger.Error(error);
                     break;
                 case UpdateSensorValueRequestModel request:
@@ -1393,6 +1472,9 @@ namespace HSMServer.Core.Cache
                 case AddProductRequest request:
                     AddProduct(request.ProductModel);
                     break;
+                case ProductUpdate request:
+                    UpdateProduct(request);
+                    break;
                 case RemoveProductRequest request:
                     RemoveProduct(request);
                     break;
@@ -1400,7 +1482,7 @@ namespace HSMServer.Core.Cache
 
             _stopwatch.Stop();
             int time = (int)_stopwatch.ElapsedMilliseconds;
-            RequestProcessed?.Invoke(_updatesQueue.QueueSize, time);
+            RequestProcessed?.Invoke(queue.Name, queue.QueueSize, time);
 
             if (time > 300)
                 _logger.Warn($"Longtime processing request occurred: {time} ms, {item}");
@@ -1408,8 +1490,9 @@ namespace HSMServer.Core.Cache
 
         private void AddNewSensorValues(AddSensorValuesRequest request)
         {
-            foreach (var addRequest in request.Requests)
+            foreach (var value in request.Values)
             {
+                var addRequest = new AddSensorValueRequest(request.ProductName, value.Path, value.Convert()) { Key = request.Key};
 
                 if (!addRequest.TryCheckRequest(out var message))
                 {
@@ -1576,7 +1659,7 @@ namespace HSMServer.Core.Cache
                 _tree.TryAdd(product.Id, product);
             }
 
-            _logger.Info($"{nameof(productEntities)} applied");
+            _logger.Info($"{nameof(productEntities)} applied [{_tree.Count}]");
 
             _logger.Info("Links between products are building");
 
@@ -1591,6 +1674,11 @@ namespace HSMServer.Core.Cache
                 }
 
             _logger.Info("Links between products are built");
+
+            foreach (var product in _tree.Values.Where(x => x.IsRoot))
+                _productsByName.TryAdd(product.DisplayName, product);
+
+            _logger.Info($"Produts cache by name initialized [{_productsByName.Count}]");
         }
 
         private void ApplySensors(List<SensorEntity> sensorEntities, Dictionary<string, PolicyEntity> policies)
@@ -1711,6 +1799,8 @@ namespace HSMServer.Core.Cache
                     };
 
                     product.Update(update);
+
+                    _productsByName.TryAdd(product.DisplayName, product);
                 }
 
                 AddBaseNodeSubscription(product);
@@ -1901,7 +1991,7 @@ namespace HSMServer.Core.Cache
             {
                 foreach (var (sensorId, value) in lasts)
                 {
-                    if (value is not null && _sensorsById.TryGetValue(sensorId, out var path) && _sensorsByPath.TryGetValue(path, out var sensor))
+                    if (value is not null && TryGetSensorById(sensorId, out var sensor))
                     {
                         sensor.AddDbValue(value);
 
@@ -1964,18 +2054,22 @@ namespace HSMServer.Core.Cache
             _confirmationManager.FlushMessages();
             _scheduleManager.FlushMessages();
 
-            var batchSize = 1000;
-            var sensors = _sensorsByPath.Values.ToArray();
+            await Parallel.ForEachAsync(GetProducts(), new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Environment.ProcessorCount,
+            }, async (product, ct) =>
+            {
+                var request = new ExpireSensorsRequest(product.Id);
 
-            var sensorBatches = sensors.Chunk(batchSize);
+                await GetUpdatesQueue(product.DisplayName)
+                    .ProcessRequestAsync(request, ct);
+            });
 
-            foreach (var batch in sensorBatches)
-                await _updatesQueue.ProcessRequestAsync(new ExpireSensorsRequest(batch)).ConfigureAwait(false);
 
             foreach (var sensor in _sensorsByPath.Values)
             {
                 if (sensor.EndOfMuting <= DateTime.UtcNow)
-                    await UpdateMutedSensorStateAsync(sensor.Id, InitiatorInfo.System).ConfigureAwait(false);
+                    await UpdateMutedSensorStateAsync(sensor.Id, InitiatorInfo.System);
             }
 
             foreach (var key in _keys.Values)
@@ -1986,17 +2080,22 @@ namespace HSMServer.Core.Cache
         public async Task ClearEmptyNodesAsync(ProductModel product, CancellationToken token = default)
         {
             foreach (var (_, node) in product.SubProducts)
-                await ClearEmptyNodesAsync(node, token).ConfigureAwait(false);
+                await ClearEmptyNodesAsync(node, token);
 
             if (!product.IsRoot && product.IsEmpty &&
                 product.Settings.SelfDestroy.Value.GetShiftedTime(product.CreationDate) < DateTime.UtcNow)
-                await RemoveProductAsync(product.Id, InitiatorInfo.AsSystemForce("Old empty node"), token).ConfigureAwait(false);
+                await RemoveProductAsync(product.Id, InitiatorInfo.AsSystemForce("Old empty node"), token);
         }
 
 
         private void CheckSensorsTimeout(ExpireSensorsRequest request)
         {
-            foreach (var sensor in request.Sensors)
+            var product = GetProduct(request.ProductId);
+
+            if (product == null)
+                return;
+
+            foreach (var sensor in product.GetAllSensors())
             {
                 var timeout = sensor.CheckTimeout();
                 var ttl = sensor.Policies.TimeToLive;
@@ -2030,9 +2129,11 @@ namespace HSMServer.Core.Cache
             SensorUpdateView(sensor);
         }
 
-        private static string WildCardToRegular(string value)
+
+        private IUpdatesQueue GetUpdatesQueue(string productName)
         {
-            return "^" + Regex.Escape(value).Replace("\\?", ".").Replace("\\*", ".*") + "$";
+            return _queues.GetOrAdd(productName, () => new UpdatesQueue(productName, ProcessRequest));
         }
+
     }
 }

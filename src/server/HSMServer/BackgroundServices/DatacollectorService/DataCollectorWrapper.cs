@@ -1,4 +1,11 @@
-﻿using HSMCommon.Constants;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using NLog;
+using HSMCommon.Constants;
 using HSMDataCollector.Core;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
@@ -11,17 +18,8 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
-using HSMServer.Services;
-using LevelDB;
 using Microsoft.Extensions.Options;
-using NLog;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
-
+using HSMServer.Core.ApiObjectsConverters;
 
 
 namespace HSMServer.BackgroundServices
@@ -37,7 +35,6 @@ namespace HSMServer.BackgroundServices
 
         private readonly ProductModel _productModel;
 
-        private readonly IHtmlSanitizerService _sanitizer;
 
         private readonly Guid _key;
         private readonly Logger _logger;
@@ -57,7 +54,7 @@ namespace HSMServer.BackgroundServices
         internal TreeValueChacheStatistics TreeValueCacheStatistics { get; } 
 
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, IHtmlSanitizerService sanitizerService)
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor)
         {
             _logger = LogManager.GetLogger(GetType().Name);
 
@@ -66,8 +63,6 @@ namespace HSMServer.BackgroundServices
 
             _productModel = _cache.GetProductByName(SelfMonitoringProductName);
 
-            _sanitizer = sanitizerService;
-
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
 
             var options = new CollectorOptions
@@ -75,7 +70,7 @@ namespace HSMServer.BackgroundServices
                 AccessKey = _key.ToString(),
                 ClientName = SelfCollectorName,
                 DataSender = this,
-                PackageCollectPeriod = TimeSpan.FromSeconds(1)
+                PackageCollectPeriod = TimeSpan.FromSeconds(5)
             };
 
 
@@ -95,9 +90,9 @@ namespace HSMServer.BackgroundServices
             _cache.RequestProcessed += OnRequestProcessed;
         }
 
-        private void OnRequestProcessed(int queueSize, int milliseconds)
+        private void OnRequestProcessed(string name, int queueSize, int milliseconds)
         {
-            TreeValueCacheStatistics.AddRequestProcessed(queueSize, milliseconds);
+            TreeValueCacheStatistics.AddRequestProcessed(name, queueSize, milliseconds);
         }
 
         public void Dispose()
@@ -157,7 +152,7 @@ namespace HSMServer.BackgroundServices
         {
             try
             {
-                await _cache.AddSensorValuesAsync(items.Select(item => new AddSensorValueRequest(_productModel.DisplayName, item.Path, item.Convert(_sanitizer)) { Key = _key }));
+                await _cache.AddSensorValuesAsync(_key, _productModel.DisplayName, items);
             }
             catch (Exception ex)
             {

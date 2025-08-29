@@ -135,7 +135,7 @@ namespace HSMServer.Folders
 
                 if (update.DefaultChats != null || update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                     foreach (var productId in folder.Products.Keys)
-                        TryUpdateProductInFolder(productId, folder, update.Initiator);
+                        await TryUpdateProductInFolder(productId, folder, update.Initiator);
             }
 
             return result;
@@ -186,7 +186,7 @@ namespace HSMServer.Folders
                         folder.UserRoles.Add(user, role);
             }
 
-            ResetServerPolicyForFolderProducts();
+            await ResetServerPolicyForFolderProducts();
         }
 
 
@@ -256,7 +256,7 @@ namespace HSMServer.Folders
 
         public async Task AddProductToFolder(Guid productId, Guid folderId, InitiatorInfo initiator)
         {
-            if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, folder, initiator))
+            if (TryGetValue(folderId, out var folder) && await TryUpdateProductInFolder(productId, folder, initiator))
             {
                 foreach (var (user, role) in folder.UserRoles)
                     if (!user.IsUserProduct(productId))
@@ -269,7 +269,7 @@ namespace HSMServer.Folders
 
         public async Task RemoveProductFromFolder(Guid productId, Guid folderId, InitiatorInfo initiator)
         {
-            if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, folder, initiator, ActionType.Delete))
+            if (TryGetValue(folderId, out var folder) && await TryUpdateProductInFolder(productId, folder, initiator, ActionType.Delete))
             {
                 foreach (var (user, role) in folder.UserRoles)
                     if (user.ProductsRoles.Remove((productId, role)))
@@ -288,7 +288,7 @@ namespace HSMServer.Folders
             return chats;
         }
 
-        private bool TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator, ActionType action = ActionType.Update)
+        private async Task<bool> TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator, ActionType action = ActionType.Update)
         {
             if (_cache.TryGetProduct(productId, out var product))
             {
@@ -311,7 +311,7 @@ namespace HSMServer.Folders
                     Initiator = initiator,
                 };
 
-                _cache.UpdateProduct(update);
+                await _cache.UpdateProductAsync(update);
 
                 return true;
             }
@@ -363,7 +363,7 @@ namespace HSMServer.Folders
             return null;
         }
 
-        private void ResetServerPolicyForFolderProducts()
+        private async Task ResetServerPolicyForFolderProducts()
         {
             static TimeIntervalModel IsFromFolder<T>(SettingPropertyBase<T> property, TimeIntervalViewModel interval)
                 where T : TimeIntervalModel, new()
@@ -383,7 +383,7 @@ namespace HSMServer.Folders
                     };
 
                     if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
-                        _cache.UpdateProduct(update);
+                        await _cache.UpdateProductAsync(update);
                 }
         }
 

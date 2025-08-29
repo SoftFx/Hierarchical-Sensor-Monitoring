@@ -1,4 +1,12 @@
-﻿using AngleSharp.Io;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Mime;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using NLog;
+using AngleSharp.Io;
 using HSMCommon.Extensions;
 using HSMCommon.TaskResult;
 using HSMSensorDataObjects;
@@ -8,30 +16,18 @@ using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
 using HSMServer.ModelBinders;
 using HSMServer.ObsoleteUnitedSensorValue;
-using HSMServer.Services;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using NLog;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Mime;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
-using Telegram.Bot.Types;
-using SensorType = HSMSensorDataObjects.SensorType;
+using HSMServer.Core.ApiObjectsConverters;
+
 
 namespace HSMServer.Controllers
 {
@@ -51,18 +47,15 @@ namespace HSMServer.Controllers
         private readonly DataCollectorWrapper _collector;
         private readonly TelemetryCollector _telemetry;
 
-        private readonly IHtmlSanitizerService _sanitizer;
-
         private readonly ITreeValuesCache _cache;
 
 
-        public SensorsController(DataCollectorWrapper dataCollector, ITreeValuesCache cache, TelemetryCollector telemetry, IHtmlSanitizerService sanitizerService)
+        public SensorsController(DataCollectorWrapper dataCollector, ITreeValuesCache cache, TelemetryCollector telemetry)
         {
             _telemetry = telemetry;
 
             _collector = dataCollector;
             _cache = cache;
-            _sanitizer = sanitizerService;
         }
 
 
@@ -235,7 +228,7 @@ namespace HSMServer.Controllers
                 {
                     var info = infoRequest.Value;
 
-                    var response = await _cache.AddSensorValuesAsync(values.Select(item => new AddSensorValueRequest(info.Product.DisplayName, item.Path, item.Convert(_sanitizer)) { Key = info.Key.Id }));
+                    var response = await _cache.AddSensorValuesAsync(info.Key.Id, info.Product.DisplayName, values);
 
                     _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(values.Count);
                     _collector.WebRequestsSensors.Total.AddReceiveData(values.Count);
@@ -418,7 +411,7 @@ namespace HSMServer.Controllers
                 {
                     var info = infoRequest.Value;
 
-                    var result = await _cache.AddSensorValueAsync(info.Key.Id, info.Product.DisplayName, value.Path, value.Convert(_sanitizer));
+                    var result = await _cache.AddSensorValueAsync(info.Key.Id, info.Product.DisplayName, value);
 
                     if (result.IsOk)
                     {

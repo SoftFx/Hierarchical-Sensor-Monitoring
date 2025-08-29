@@ -303,7 +303,7 @@ namespace HSMServer.Controllers
                     else
                     {
                         toastViewModel.AddItem(product);
-                        _treeValuesCache.UpdateProduct(update);
+                        await _treeValuesCache.UpdateProductAsync(update);
                     }
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
@@ -748,11 +748,10 @@ namespace HSMServer.Controllers
                 return BadRequest(ModelState);
             }
 
-            var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             var comment = modal.Comment;
             var updateRequest = new UpdateSensorValueRequestModel (modal.SensorId, modal.Path)
             {
-                Id = sensor.Id,
+                Id = modal.SensorId,
                 Status = modal.NewStatus.ToCore(),
                 Comment = comment,
                 Value = modal.NewValue,
@@ -805,7 +804,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateProductInfo(ProductInfoViewModel newModel)
+        public async Task<IActionResult> UpdateProductInfo(ProductInfoViewModel newModel)
         {
             if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var product))
                 return _emptyResult;
@@ -828,7 +827,7 @@ namespace HSMServer.Controllers
                 Initiator = CurrentInitiator
             };
 
-            _treeValuesCache.UpdateProduct(update);
+            await _treeValuesCache.UpdateProductAsync(update);
 
             return PartialView("_MetaInfo", new ProductInfoViewModel(product.RecalculateCharacteristics()));
         }

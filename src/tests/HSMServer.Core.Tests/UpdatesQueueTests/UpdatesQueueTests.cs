@@ -25,18 +25,16 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         public async Task AddItemTest()
         {
             AddSensorValueRequest receivedInfo = default;
-            void GetItem(IUpdateRequest item)
+            void GetItem(IUpdatesQueue queue, IUpdateRequest item)
             {
                 receivedInfo = item as AddSensorValueRequest;
             }
 
             AddSensorValueRequest storeInfo = BuildStoreInfo(0);
-            using var updatesQueue = new UpdatesQueue();
-            updatesQueue.ItemAdded += GetItem;
+            await using var updatesQueue = new UpdatesQueue("Name", GetItem);
+
 
             await updatesQueue.ProcessRequestAsync(storeInfo);
-
-            updatesQueue.ItemAdded -= GetItem;
 
             Assert.Equal(storeInfo, receivedInfo);
         }
@@ -46,20 +44,15 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         public async Task AddEmptyItemTest()
         {
             AddSensorValueRequest receivedInfo = default;
-            void GetItem(IUpdateRequest item)
+            void GetItem(IUpdatesQueue queue, IUpdateRequest item)
             {
                 receivedInfo = item as AddSensorValueRequest;
             }
 
             AddSensorValueRequest storeInfo = BuildStoreInfo(10);
-            using var updatesQueue = new UpdatesQueue();
-            updatesQueue.ItemAdded += GetItem;
+            await using var updatesQueue = new UpdatesQueue("Name", GetItem);
 
             await updatesQueue.ProcessRequestAsync(storeInfo);
-
-
-            updatesQueue.ItemAdded -= GetItem;
-
 
             Assert.Equal(storeInfo, receivedInfo);
         }
@@ -75,13 +68,10 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
 
             List<AddSensorValueRequest> items = AddItemsToList(count);
 
-            using var updatesQueue = new UpdatesQueue();
-            updatesQueue.ItemAdded += GetItem;
+            await using var updatesQueue = new UpdatesQueue("Name", GetItem);
 
             foreach (var item in items)
                 await updatesQueue.ProcessRequestAsync(item);
-
-            updatesQueue.ItemAdded -= GetItem;
 
             Assert.Equal(items.Count, _receivedInfos.Count);
             for (int i = 0; i < items.Count; i++)
@@ -97,7 +87,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         public async Task AddEmptyItemsTest(int count)
         {
             List<AddSensorValueRequest> receivedInfo = new(count);
-            void GetItem(IUpdateRequest storeInfo)
+            void GetItem(IUpdatesQueue queue, IUpdateRequest storeInfo)
             {
                 receivedInfo.Add(storeInfo as AddSensorValueRequest);
             }
@@ -109,13 +99,11 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
                 items.Add(storeInfo);
             }
 
-            using var updatesQueue = new UpdatesQueue();
-            updatesQueue.ItemAdded += GetItem;
+            await using var updatesQueue = new UpdatesQueue("Name", GetItem);
 
             foreach (var item in items)
                 await updatesQueue.ProcessRequestAsync(item);
 
-            updatesQueue.ItemAdded -= GetItem;
 
             Assert.Equal(items.Count, receivedInfo.Count);
             for (int i = 0; i < items.Count; i++)
@@ -124,7 +112,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
         }
 
 
-        private void GetItem(IUpdateRequest item)
+        private void GetItem(IUpdatesQueue queue, IUpdateRequest item)
         {
             _receivedInfos.Add(item as AddSensorValueRequest);
         }

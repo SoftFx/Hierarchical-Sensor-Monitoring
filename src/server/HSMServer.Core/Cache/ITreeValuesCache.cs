@@ -29,19 +29,20 @@ namespace HSMServer.Core.Cache
         event Action<ProductModel, ActionType> ChangeProductEvent;
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
-        event Action<int, int> RequestProcessed;
+        event Action<string, int, int> RequestProcessed;
 
         event Action<AlertMessage> NewAlertMessageEvent;
         event Action<FolderEventArgs> FillFolderChats;
 
         int SensorsCount { get; }
 
+
         List<BaseSensorModel> GetSensors();
         List<BaseSensorModel> GetSensors(string wildcard, SensorType? type, Guid? folderId);
         List<AccessKeyModel> GetAccessKeys();
 
         Task<ProductModel> AddProductAsync(string productName, Guid authorId, CancellationToken token = default);
-        void UpdateProduct(ProductUpdate product);
+        Task UpdateProductAsync(ProductUpdate product, CancellationToken token = default);
         Task RemoveProductAsync(Guid id, InitiatorInfo initiator = null, CancellationToken token = default);
         ProductModel GetProduct(Guid id);
         ProductModel GetProductByName(string name);
@@ -70,8 +71,8 @@ namespace HSMServer.Core.Cache
         void SetLastKeyUsage(Guid key, string ip);
 
 
-        Task<TaskResult> AddSensorValueAsync(Guid accessKey, string productName, string path, BaseValue value, CancellationToken token = default);
-        Task<Dictionary<string, string>> AddSensorValuesAsync(IEnumerable<AddSensorValueRequest> requests, CancellationToken token = default);
+        Task<TaskResult> AddSensorValueAsync(Guid accessKey, string productName, SensorValueBase value, CancellationToken token = default);
+        Task<Dictionary<string, string>> AddSensorValuesAsync(Guid key, string productName, IEnumerable<SensorValueBase> values, CancellationToken token = default);
 
         Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default);
         //Task<TaskResult> UpdateSensor(SensorUpdate updatedSensor, out string error);

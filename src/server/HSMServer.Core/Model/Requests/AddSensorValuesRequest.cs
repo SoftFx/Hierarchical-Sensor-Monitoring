@@ -1,19 +1,26 @@
-﻿using HSMServer.Core.SensorsUpdatesQueue;
+﻿using System;
 using System.Collections.Generic;
+using HSMSensorDataObjects.SensorValueRequests;
+using HSMServer.Core.SensorsUpdatesQueue;
 
 
 namespace HSMServer.Core.Model.Requests
 {
     public sealed record AddSensorValuesRequest : IUpdateRequest
     {
-        public IEnumerable<AddSensorValueRequest> Requests { get; init; }
+        public IEnumerable<SensorValueBase> Values { get; init; }
 
         public Dictionary<string, string> Response { get; init; }
 
+        public Guid Key { get; init; }
 
-        public AddSensorValuesRequest(IEnumerable<AddSensorValueRequest> requests)
+        public string ProductName { get; init; }
+
+        public AddSensorValuesRequest(Guid key, string productName, IEnumerable<SensorValueBase> values)
         {
-            Requests = requests;
+            Key = key;
+            ProductName = productName;
+            Values = values;
             Response = new Dictionary<string, string>();
         }
     }
