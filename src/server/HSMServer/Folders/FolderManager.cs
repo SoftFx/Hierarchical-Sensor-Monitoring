@@ -300,43 +300,47 @@ namespace HSMServer.Folders
 
         public async Task AddProductToFolder(Guid productId, Guid folderId, InitiatorInfo initiator)
         {
-            if (TryGetValue(folderId, out var folder))
+            if (!TryGetValue(folderId, out var folder))
             {
-                if (await TryUpdateProductInFolder(productId, folder, initiator))
-                {
-                    foreach (var (user, role) in folder.UserRoles)
-                        if (!user.IsUserProduct(productId))
-                        {
-                            user.ProductsRoles.Add((productId, role));
-                            await _userManager.UpdateUser(user);
-                        }
+                _logger.Warn($"AddProductToFolder: folder to '{folderId}' not found.");
+                return;
+            }
 
-                    _logger.Info($"AddProductToFolder: Product '{productId}' is added to folder '{folder.Name}' by '{initiator}'");
-                }
-                else
-                    _logger.Warn($"AddProductToFolder: TryUpdateProductInFolder is unsuccess.");
+            if (await TryUpdateProductInFolder(productId, folder, initiator))
+            {
+                foreach (var (user, role) in folder.UserRoles)
+                    if (!user.IsUserProduct(productId))
+                    {
+                        user.ProductsRoles.Add((productId, role));
+                        await _userManager.UpdateUser(user);
+                    }
+
+                _logger.Info($"AddProductToFolder: Product '{productId}' is added to folder '{folder.Name}' by '{initiator}'");
             }
             else
-                _logger.Warn($"AddProductToFolder: folder to '{folderId}' not found.");
+                _logger.Warn($"AddProductToFolder: TryUpdateProductInFolder is unsuccess.");
+
         }
 
         public async Task RemoveProductFromFolder(Guid productId, Guid folderId, InitiatorInfo initiator)
         {
-            if (TryGetValue(folderId, out var folder))
+            if (!TryGetValue(folderId, out var folder))
             {
-                if (await TryUpdateProductInFolder(productId, folder, initiator, ActionType.Delete))
-                {
-                    foreach (var (user, role) in folder.UserRoles)
-                        if (user.ProductsRoles.Remove((productId, role)))
-                            await _userManager.UpdateUser(user);
+                _logger.Warn($"RemoveProductFromFolder: folder to '{folderId}' not found.");
+                return;
+            }
 
-                    _logger.Info($"RemoveProductFromFolder: Product '{productId}' is removed from folder '{folder.Name}' by '{initiator}'");
-                }
-                else
-                    _logger.Warn($"RemoveProductFromFolder: TryUpdateProductInFolder is unsuccess.");
+            if (await TryUpdateProductInFolder(productId, folder, initiator, ActionType.Delete))
+            {
+                foreach (var (user, role) in folder.UserRoles)
+                    if (user.ProductsRoles.Remove((productId, role)))
+                        await _userManager.UpdateUser(user);
+
+                _logger.Info($"RemoveProductFromFolder: Product '{productId}' is removed from folder '{folder.Name}' by '{initiator}'");
             }
             else
-                _logger.Warn($"RemoveProductFromFolder: folder to '{folderId}' not found.");
+                _logger.Warn($"RemoveProductFromFolder: TryUpdateProductInFolder is unsuccess.");
+
         }
 
         public Dictionary<string, string> GetFolderDefaultChats(Guid folderId)
