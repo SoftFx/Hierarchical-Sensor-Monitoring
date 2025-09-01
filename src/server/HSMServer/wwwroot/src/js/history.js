@@ -29,7 +29,6 @@ window.getFromAndTo = function (encodedId) {
 window.parseCustomDate = function (dateStr) {
 
     if (!dateStr) {
-        console.warn(`parseCustomDate is not date string: ${dateStr}`);
         return null
     };
 
