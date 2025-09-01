@@ -13,7 +13,7 @@ using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
-using Microsoft.Extensions.Logging;
+using NLog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,7 +28,8 @@ namespace HSMServer.Folders
         private readonly IUserManager _userManager;
         private readonly IDatabaseCore _databaseCore;
         private readonly IJournalService _journalService;
-        private readonly ILogger<FolderManager> _logger;
+        
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
 
@@ -46,10 +47,9 @@ namespace HSMServer.Folders
         public event Func<Guid, string> GetChatName;
 
 
-        public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService, ILogger<FolderManager> logger)
+        public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService)
         {
             _databaseCore = databaseCore;
-            _logger = logger;
 
             _cache = cache;
             _cache.ChangeProductEvent += ChangeProductHandler;
@@ -70,7 +70,7 @@ namespace HSMServer.Folders
             catch(Exception ex) 
             {
                 e.Error = ex.Message;
-                _logger.LogError($"FillFolderChats error: {ex}");
+                _logger.Error($"FillFolderChats error: {ex}");
             }
         }
 
@@ -78,7 +78,7 @@ namespace HSMServer.Folders
         {
             if (!TryGetValue(folderId, out FolderModel folder))
             {
-                _logger.LogError($"FillFolderChats: Folder '{folderId}' not found");
+                _logger.Error($"FillFolderChats: Folder '{folderId}' not found");
                 throw new ApplicationException($"Folder '{folderId}' not found");
             }
 
@@ -156,10 +156,10 @@ namespace HSMServer.Folders
                 if (removedTelegramChats.Any())
                     sb.Append($" {removedTelegramChats.Count} chat(s) removed");
 
-                _logger.LogInformation(sb.ToString());
+                _logger.Info(sb.ToString());
             }
             else
-                _logger.LogWarning($"Folder '{logFolder}' update is unsuccess");
+                _logger.Warn($"Folder '{logFolder}' update is unsuccess");
 
             return result;
         }
@@ -186,9 +186,9 @@ namespace HSMServer.Folders
             string logFolder = folder?.Name ?? remove.Id.ToString();
 
             if (result)
-                _logger.LogInformation($"Folder '{logFolder}' is removed");
+                _logger.Info($"Folder '{logFolder}' is removed");
             else
-                _logger.LogWarning($"Folder '{logFolder}' remove is unsuccess");
+                _logger.Warn($"Folder '{logFolder}' remove is unsuccess");
 
             return result;
         }
@@ -234,7 +234,7 @@ namespace HSMServer.Folders
                 await TryUpdate(update);
             }
 
-            _logger.LogInformation($"Chat '{chatId}' is added to '{folder?.Name ?? folderId.ToString()}' by user '{userName}'");
+            _logger.Info($"Chat '{chatId}' is added to '{folder?.Name ?? folderId.ToString()}' by user '{userName}'");
 
             return folder?.Name;
         }
@@ -259,7 +259,7 @@ namespace HSMServer.Folders
                 }
             }
 
-            _logger.LogInformation($"Chat '{chat.Name}' is removed from all folders by '{initiator}'");
+            _logger.Info($"Chat '{chat.Name}' is removed from all folders by '{initiator}'");
         }
 
         public List<FolderModel> GetUserFolders(User user)
@@ -282,20 +282,20 @@ namespace HSMServer.Folders
                 fromFolder.Products.Remove(product.Id);
                 await RemoveProductFromFolder(product.Id, fromFolderId.Value, initiator);
 
-                _logger.LogInformation($"MoveProduct: Product '{product.Name}' is removed from folder '{fromFolder.Name}' by '{initiator}'");
+                _logger.Info($"MoveProduct: Product '{product.Name}' is removed from folder '{fromFolder.Name}' by '{initiator}'");
             }
             else
-                _logger.LogWarning($"MoveProduct: folder from '{fromFolderId}' not found.");
+                _logger.Warn($"MoveProduct: folder from '{fromFolderId}' not found.");
 
             if (TryGetValueById(toFolderId, out var toFolder))
             {
                 toFolder.Products.Add(product.Id, product);
                 await AddProductToFolder(product.Id, toFolderId.Value, initiator);
 
-                _logger.LogInformation($"MoveProduct: Product '{product.Name}' is moved to '{toFolder.Name}' by '{initiator}'");
+                _logger.Info($"MoveProduct: Product '{product.Name}' is moved to '{toFolder.Name}' by '{initiator}'");
             }
             else
-                _logger.LogWarning($"MoveProduct: folder to '{toFolderId}' not found.");
+                _logger.Warn($"MoveProduct: folder to '{toFolderId}' not found.");
         }
 
         public async Task AddProductToFolder(Guid productId, Guid folderId, InitiatorInfo initiator)
@@ -311,13 +311,13 @@ namespace HSMServer.Folders
                             await _userManager.UpdateUser(user);
                         }
 
-                    _logger.LogInformation($"AddProductToFolder: Product '{productId}' is added to folder '{folder.Name}' by '{initiator}'");
+                    _logger.Info($"AddProductToFolder: Product '{productId}' is added to folder '{folder.Name}' by '{initiator}'");
                 }
                 else
-                    _logger.LogWarning($"AddProductToFolder: TryUpdateProductInFolder is unsuccess.");
+                    _logger.Warn($"AddProductToFolder: TryUpdateProductInFolder is unsuccess.");
             }
             else
-                _logger.LogWarning($"AddProductToFolder: folder to '{folderId}' not found.");
+                _logger.Warn($"AddProductToFolder: folder to '{folderId}' not found.");
         }
 
         public async Task RemoveProductFromFolder(Guid productId, Guid folderId, InitiatorInfo initiator)
@@ -330,13 +330,13 @@ namespace HSMServer.Folders
                         if (user.ProductsRoles.Remove((productId, role)))
                             await _userManager.UpdateUser(user);
 
-                    _logger.LogInformation($"RemoveProductFromFolder: Product '{productId}' is removed from folder '{folder.Name}' by '{initiator}'");
+                    _logger.Info($"RemoveProductFromFolder: Product '{productId}' is removed from folder '{folder.Name}' by '{initiator}'");
                 }
                 else
-                    _logger.LogWarning($"RemoveProductFromFolder: TryUpdateProductInFolder is unsuccess.");
+                    _logger.Warn($"RemoveProductFromFolder: TryUpdateProductInFolder is unsuccess.");
             }
             else
-                _logger.LogWarning($"RemoveProductFromFolder: folder to '{folderId}' not found.");
+                _logger.Warn($"RemoveProductFromFolder: folder to '{folderId}' not found.");
         }
 
         public Dictionary<string, string> GetFolderDefaultChats(Guid folderId)
