@@ -111,20 +111,23 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult CreateProduct(AddProductViewModel product)
+        public async ValueTask<IActionResult> CreateProduct(AddProductViewModel product)
         {
             if (ModelState.IsValid)
-                _treeValuesCache.AddProductAsync(product.Name, CurrentUser.Id);
+                await _treeValuesCache.AddProductAsync(product.Name, CurrentUser.Id);
 
             return PartialView("_AddProduct", product);
         }
 
 
-        public async Task MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
+        public async ValueTask MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
         {
             if (_treeViewModel.Nodes.TryGetValue(productId, out var product))
                 await _folderManager.MoveProduct(product, fromFolderId, toFolderId, CurrentInitiator);
         }
+
+
+        public async ValueTask RemoveProduct(Guid product) => await _treeValuesCache.RemoveProductAsync(product);
 
         #endregion
 
