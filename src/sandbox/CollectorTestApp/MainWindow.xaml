@@ -65,7 +65,13 @@
                     <TextBox Grid.Column="1" Grid.Row="7" Margin="0,5,0,5" TextWrapping="Wrap" Name="textToSend">Any text</TextBox>
 
                 </DockPanel>
-            </StackPanel>
+
+                    <DockPanel Grid.Column="1" Grid.Row="8" Margin="5,0,0,0">
+                        <Button Name="buttonStopRate" Width="80" DockPanel.Dock="Right" IsEnabled="False" Padding="5,0" Margin="4,5,5,5" Click="buttonStopRate_Click">Stop</Button>
+                        <Button Name="buttonStartRate"  Padding="5,0" Margin="4,5,5,5"  Click="buttonStartRate_Click">Start send rate</Button>
+                        
+                    </DockPanel>
+                </StackPanel>
         </GroupBox>
 
         <!--<TextBlock Grid.Column="0" Grid.Row="6" Margin="10,5,10,5">Send text:</TextBlock>

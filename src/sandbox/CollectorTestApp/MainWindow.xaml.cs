@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
@@ -258,6 +259,11 @@ namespace CollectorTestApp
 
 
         private IInstantValueSensor<string> _textSensor;
+        private IMonitoringRateSensor _rateSensor;
+        private IMonitoringRateSensor _rateM1Sensor;
+        private IMonitoringRateSensor _rateM5Sensor;
+        private DispatcherTimer _timer;
+        private Random _random;
 
         private void buttonSendText_Click(object sender, RoutedEventArgs e)
         {
@@ -266,6 +272,49 @@ namespace CollectorTestApp
 
             _textSensor.AddValue(textToSend.Text);
         }
+
+        private void buttonStartRate_Click(object sender, RoutedEventArgs e)
+        {
+            if (_timer != null)
+                return;
+
+
+            _random = new Random();
+            _rateSensor = _dataCollector.CreateRateSensor("PerSecTest");
+
+            _rateM1Sensor = _dataCollector.CreateM1RateSensor("PerSecM1Test");
+            _rateM5Sensor = _dataCollector.CreateM5RateSensor("PerSecM5Test");
+
+            _timer = new DispatcherTimer();
+            _timer.Interval = TimeSpan.FromSeconds(1);
+            _timer.Tick += (s, e) =>
+            {
+                var value = _random.NextDouble() * 5;
+
+                _rateSensor.AddValue(value);
+                _rateM1Sensor.AddValue(value);
+                _rateM5Sensor.AddValue(value);
+
+                buttonStartRate.Content = value.ToString();
+            };
+            _timer.Start();
+
+            buttonStartRate.IsEnabled = false;
+            buttonStopRate.IsEnabled = true;
+        }
+
+        private void buttonStopRate_Click(object sender, RoutedEventArgs e)
+        {
+            _timer?.Stop();
+            _timer = null;
+
+            buttonStartRate.IsEnabled = true;
+            buttonStartRate.Content = "Start send rate";
+            buttonStopRate.IsEnabled = false;
+            
+        }
+
+
     }
 
 
