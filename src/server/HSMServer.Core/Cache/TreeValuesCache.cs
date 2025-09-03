@@ -1624,6 +1624,8 @@ namespace HSMServer.Core.Cache
             var sensorEntities = _database.GetAllSensors();
             _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} requested");
 
+            var a = sensorEntities.Where(s => s.DisplayUnit == 1);
+
             return sensorEntities;
         }
 

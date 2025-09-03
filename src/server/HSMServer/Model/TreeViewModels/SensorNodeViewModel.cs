@@ -3,7 +3,6 @@ using System.Linq;
 using System.Collections.Generic;
 using HSMServer.Core;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Sensors;
 using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
@@ -60,6 +59,8 @@ namespace HSMServer.Model.TreeViewModel
         public bool IsServiceAlive => Name == ServiceAliveName;
         public bool IsServiceStatus => Name == ServiceStatusName;
 
+        public int? DisplayUnit { get; private set; }
+
 
         public DateTime CreationTime { get; private set; }
 
@@ -68,6 +69,7 @@ namespace HSMServer.Model.TreeViewModel
         public SensorNodeViewModel(BaseSensorModel model) : base(model) 
         {
             EnumOptions = model.EnumOptions;
+            DisplayUnit = model.DisplayUnit;
         }
 
 
@@ -86,6 +88,7 @@ namespace HSMServer.Model.TreeViewModel
             AggregateValues = model.AggregateValues;
             CreationTime = model.CreationDate;
             EnumOptions = model.EnumOptions;
+            DisplayUnit = model.DisplayUnit;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);

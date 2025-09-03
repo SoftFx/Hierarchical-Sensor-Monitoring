@@ -18,6 +18,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public int? OriginalUnit { get; init; }
 
+        public int? DisplayUnit { get; init; }
+
         public bool IsSingleton { get; init; }
 
         public long EndOfMuting { get; init; }
