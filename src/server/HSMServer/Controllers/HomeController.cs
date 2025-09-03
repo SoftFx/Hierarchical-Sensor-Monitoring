@@ -628,7 +628,8 @@ namespace HSMServer.Controllers
                 SelectedUnit = newModel.SelectedUnit,
                 AggregateValues = newModel.AggregateValues,
                 Statistics = newModel.GetOptions(),
-                Initiator = CurrentInitiator
+                Initiator = CurrentInitiator,
+                DisplayUnit = newModel.DisplayUnit
             };
 
             await _treeValuesCache.UpdateSensorAsync(update);

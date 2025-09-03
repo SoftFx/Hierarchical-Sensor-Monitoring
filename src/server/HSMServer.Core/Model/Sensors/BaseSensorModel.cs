@@ -47,6 +47,8 @@ namespace HSMServer.Core.Model
 
         public Unit? OriginalUnit { get; private set; }
 
+        public int? DisplayUnit { get; private set; }
+
         public SensorState State { get; private set; }
 
         public TableSettingsModel TableSettings { get; private set; } = new();
@@ -150,6 +152,7 @@ namespace HSMServer.Core.Model
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
             IsSingleton = UpdateProperty(IsSingleton, update.IsSingleton ?? IsSingleton, update.Initiator, "Singleton");
             AggregateValues = UpdateProperty(AggregateValues, update.AggregateValues ?? AggregateValues, update.Initiator, "Aggregate values");
+            DisplayUnit = update.DisplayUnit;
 
             State = UpdateProperty(State, update.State ?? State, update.Initiator, forced: true, update: update, oldModel: this);
             EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting", true);
@@ -197,6 +200,7 @@ namespace HSMServer.Core.Model
             IsSingleton = IsSingleton,
             Integration = (int)Integration,
             OriginalUnit = (int?)OriginalUnit,
+            DisplayUnit = DisplayUnit,
             AggregateValues = AggregateValues,
             Policies = Policies.Select(u => u.Id.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
