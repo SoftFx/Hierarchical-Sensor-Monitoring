@@ -17,6 +17,7 @@ var prevState = undefined;
 let lastActivity = Date.now();
 let isCheckingActive = false;
 let wasNotified = false;
+let isRefreshing = false;
 let currentTreeInterval;
 
 const inactiveThreshold = 30000; //30sec
@@ -98,58 +99,77 @@ function closeNodeHandler(e, data) {
     })
 }
 
+
+
 function refreshTreeHandler(e, data) {
 
-    clearTimeout(refreshTreeTimeoutId);
-
-    //console.log("tree: window.treeInterval = " + window.treeInterval);
-
-    refreshTreeTimeoutId = setTimeout(updateTreeTimer, currentTreeInterval);
-
-    if (window.hasOwnProperty('updateSelectedNodeDataTimeoutId')) {
-        updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, window.treeInterval);
+    if (isRefreshing) {
+        console.log('refreshTreeHandler: Refresh already in progress, skipping');
+        return;
     }
 
-    if (searchClientRefresh) {
-        $(this).jstree(true).get_json('#', { flat: true }).forEach((node) => {
-            if (node.state.loaded === true)
-                $(this).jstree('open_node', node.id);
-        })
+    isRefreshing = true;
 
-        $(this).show();
-        $('#jstreeSpinner').addClass('d-none');
-        searchClientRefresh = false;
+    try {
+
+        clearTimeout(refreshTreeTimeoutId);
+
+        //console.log("+++++++++++++++++++++++++++++++++++++++refreshTreeHandler start +++++++++++++++++++++++++++++++++++++++++++++");
+
+        refreshTreeTimeoutId = setTimeout(updateTreeTimer, currentTreeInterval);
+
+        if (window.hasOwnProperty('updateSelectedNodeDataTimeoutId')) {
+            updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, window.treeInterval);
+        }
+
+        if (searchClientRefresh) {
+            $(this).jstree(true).get_json('#', { flat: true }).forEach((node) => {
+                if (node.state.loaded === true)
+                    $(this).jstree('open_node', node.id);
+            })
+
+            $(this).show();
+            $('#jstreeSpinner').addClass('d-none');
+            searchClientRefresh = false;
+        }
+
+        if (jQuery.isEmptyObject(prevState) && prevState !== undefined) {
+
+            //console.log("refreshTreeHandler: apply prevState");
+
+            let jstreeState = JSON.parse(localStorage.getItem('jstree'));
+            jstreeState.state.core.open.forEach((node) => {
+                $(this).jstree('open_node', node);
+            })
+
+            jstreeState.state.core.selected.forEach((node) => {
+                $(this).jstree('open_node', node);
+                $(this).jstree('select_node', node);
+            })
+
+            prevState = undefined;
+        }
+        //else
+        //    console.warn("refreshTreeHandler: not prevState");
+
+        if (emptySearch !== undefined && emptySearch === true) {
+            let selectedIds = $('#jstree').jstree('get_selected');
+            if (selectedIds.length > 0)
+                $(`#${selectedIds[0]}`)[0].scrollIntoView();
+
+            emptySearch = false;
+            searchServerRefresh = false;
+        }
+
+        const treeWrapper = document.querySelector('.tree-wrapper');
+        const savedPosition = treeWrapper.dataset.scrollPosition || 0;
+        treeWrapper.scrollTop = savedPosition;
+    }
+    finally {
+        isRefreshing = false;
     }
 
-    if (jQuery.isEmptyObject(prevState) && prevState !== undefined) {
-        let jstreeState = JSON.parse(localStorage.getItem('jstree'));
-        jstreeState.state.core.open.forEach((node) => {
-            $(this).jstree('open_node', node);
-        })
-
-        jstreeState.state.core.selected.forEach((node) => {
-            $(this).jstree('open_node', node);
-            $(this).jstree('select_node', node);
-        })
-
-        prevState = undefined;
-    }
-
-    if (emptySearch !== undefined && emptySearch === true) {
-        let selectedIds = $('#jstree').jstree('get_selected');
-        if (selectedIds.length > 0)
-            $(`#${selectedIds[0]}`)[0].scrollIntoView();
-
-        emptySearch = false;
-        searchServerRefresh = false;
-    }
-
-    const treeWrapper = document.querySelector('.tree-wrapper');
-    const savedPosition = treeWrapper.dataset.scrollPosition || 0;
-    treeWrapper.scrollTop = savedPosition;
-
-
-    isRefreshing = false;
+    //console.log("====================================refreshTreeHandler end ================================================");
 }
 
 function dblClickHandler(event) {
@@ -171,11 +191,11 @@ function initializeTreeInternal() {
 
     currentTreeInterval = window.treeInterval;
 
-    if (window.localStorage.jstree) {
-        let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
-        if (initOpened > 1)
-            isRefreshing = true;
-    }
+    //if (window.localStorage.jstree) {
+    //    let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
+    //    if (initOpened > 1)
+    //        isRefreshing = true;
+    //}
 
     $('#jstree').jstree({
         "core": {
