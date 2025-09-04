@@ -10,6 +10,6 @@ namespace HSMServer.Core.Model.Requests
         public bool IsArchive { get; set; }
 
 
-        public FileHistoryRequestModel(Guid key, string path) : base(key, path) { }
+        public FileHistoryRequestModel(Guid key, Guid productId, string path) : base(key, productId,  path) { }
     }
 }

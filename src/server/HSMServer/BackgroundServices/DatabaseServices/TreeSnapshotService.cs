@@ -33,10 +33,10 @@ namespace HSMServer.BackgroundServices
             return base.StartAsync(token);
         }
 
-        protected override Task ServiceActionAsync() => SaveState(false);
+        protected override Task ServiceActionAsync() => SaveStateAsync(false);
 
 
-        private async Task SaveState(bool isFinal)
+        private async Task SaveStateAsync(bool isFinal)
         {
             _logger.Info($"Start state flushing");
 
@@ -45,11 +45,11 @@ namespace HSMServer.BackgroundServices
             _logger.Info($"Stop state flushing");
         }
 
-        private Task StopHandler()
+        private async Task StopHandler()
         {
-            _cache.SaveLastStateToDb();
+            await _cache.SaveLastStateToDbAsync();
 
-            return SaveState(true);
+            await SaveStateAsync(true);
         }
     }
 }

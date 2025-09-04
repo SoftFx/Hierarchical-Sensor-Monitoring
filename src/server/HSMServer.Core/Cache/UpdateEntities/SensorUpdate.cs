@@ -34,6 +34,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public Unit? SelectedUnit { get; init; }
 
+
         public RateDisplayUnit? DisplayUnit { get; set; }
 
         public bool? IsSingleton { get; init; }

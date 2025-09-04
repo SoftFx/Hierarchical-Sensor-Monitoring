@@ -444,7 +444,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _valuesCache.ChangeProductEvent += ChangeProductEventHandler;
             _valuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
 
-            await _valuesCache.AddSensorValueAsync(accessKey, TestProductsManager.ProductName, storeInfo);
+            await _valuesCache.AddSensorValueAsync(accessKey, TestProductsManager.ProductId, storeInfo);
             await Task.Delay(100);
 
             _valuesCache.ChangeProductEvent -= ChangeProductEventHandler;
@@ -512,13 +512,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var product = _valuesCache.GetProduct(productId);
 
             var storeInfo = SensorValuesFactory.BuildSensorValue(type, sensorName);
-            await _valuesCache.AddSensorValueAsync(accessKey, TestProductsManager.ProductName, storeInfo);
+            await _valuesCache.AddSensorValueAsync(accessKey, TestProductsManager.ProductId, storeInfo);
             var sensorWithFirstValue = GetClonedSensorModel(GetSensorByNameFromCache(sensorName));
 
             _valuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
 
             storeInfo = SensorValuesFactory.BuildSensorValue(type, sensorName);
-            await _valuesCache.AddSensorValueAsync(accessKey, TestProductsManager.ProductName, storeInfo);
+            await _valuesCache.AddSensorValueAsync(accessKey, TestProductsManager.ProductId, storeInfo);
 
             _valuesCache.ChangeSensorEvent -= ChangeSensorEventHandler;
 
@@ -680,7 +680,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         private static AddSensorValueRequest BuildSensorStoreInfo(Guid key, string path, SensorType type, ProductModel product) =>
-            new(product.DisplayName, path, SensorValuesFactory.BuildValue(type))
+            new(product.Id, path, SensorValuesFactory.BuildValue(type))
             {
                 Key = key
             };

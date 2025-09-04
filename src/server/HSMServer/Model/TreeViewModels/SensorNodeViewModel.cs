@@ -61,7 +61,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public RateDisplayUnit? DisplayUnit { get; private set; }
 
-
         public DateTime CreationTime { get; private set; }
 
         public Dictionary<int, EnumOptionModel> EnumOptions { get; private set; }

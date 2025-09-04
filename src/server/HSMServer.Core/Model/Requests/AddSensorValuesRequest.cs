@@ -14,12 +14,12 @@ namespace HSMServer.Core.Model.Requests
 
         public Guid Key { get; init; }
 
-        public string ProductName { get; init; }
+        public Guid ProductId { get; init; }
 
-        public AddSensorValuesRequest(Guid key, string productName, IEnumerable<SensorValueBase> values)
+        public AddSensorValuesRequest(Guid key, Guid productId, IEnumerable<SensorValueBase> values)
         {
             Key = key;
-            ProductName = productName;
+            ProductId = productId;
             Values = values;
             Response = new Dictionary<string, string>();
         }

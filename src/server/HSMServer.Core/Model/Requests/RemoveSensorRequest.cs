@@ -1,23 +1,11 @@
-﻿using HSMServer.Core.SensorsUpdatesQueue;
+﻿using System;
+using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TableOfChanges;
-using System;
 
 
 namespace HSMServer.Core.Model.Requests
 {
-    internal sealed record RemoveSensorRequest : IUpdateRequest
+    internal sealed record RemoveSensorRequest(Guid SensorId, InitiatorInfo InitiatoInfo = null, Guid? ParentId = null) : IUpdateRequest
     {
-        public Guid Id { get; init; }
-
-        public InitiatorInfo InitiatorInfo { get; init; }
-
-        public Guid? ParentId { get; init; }
-
-        public RemoveSensorRequest(Guid sensorId, InitiatorInfo initiatorInfo = null, Guid? parentId = null)
-        {
-            Id = sensorId;
-            InitiatorInfo = initiatorInfo;
-            ParentId = parentId;
-        }
     }
 }

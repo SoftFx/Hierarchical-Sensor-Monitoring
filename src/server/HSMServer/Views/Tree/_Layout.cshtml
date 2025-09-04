@@ -191,8 +191,6 @@
     $('#mainContainer').removeClass('hidden_element');
 
     var refreshTreeTimeoutId;
-    var isRefreshing = false;
-
     let treeUpdateInProgress = false;
 
 
@@ -200,7 +198,7 @@
 
         if (treeUpdateInProgress)
         {
-            //console.log( 'updateTreeTimer: is in progress. Skipped.');
+            console.log( 'updateTreeTimer: is in progress. Skipped.');
             return;
         }
 

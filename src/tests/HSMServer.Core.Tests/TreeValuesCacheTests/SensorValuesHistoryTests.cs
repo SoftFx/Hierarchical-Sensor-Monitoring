@@ -145,7 +145,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var value = SensorValuesFactory.BuildSensorValue(sensorInfo.Type, sensorInfo.Path);
 
 
-                await _valuesCache.AddSensorValueAsync(key.Id, TestProductsManager.ProductName,  value);
+                await _valuesCache.AddSensorValueAsync(key.Id, TestProductsManager.ProductId,  value);
                 map[sensorInfo].Add(value.Convert());
             }
 

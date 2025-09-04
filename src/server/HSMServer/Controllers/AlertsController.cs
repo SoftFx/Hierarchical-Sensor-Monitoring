@@ -127,20 +127,20 @@ namespace HSMServer.Controllers
             if (_tree.Nodes.TryGetValue(nodeId, out var targetNode))
             {
                 var availableChats = targetNode.GetAvailableChats(_telegram).ToDictionary(k => k.Value, v => v.Key);
-                var productName = targetNode.RootProduct.Name;
+                var productId = targetNode.RootProduct.Id;
 
                 foreach (var sensorPath in importGroup.Sensors)
                 {
                     var fullSensorPath = $"{targetNode.Path}/{sensorPath}";
 
-                    if (_cache.TryGetSensorByPath(productName, fullSensorPath, out var sensor))
+                    if (_cache.TryGetSensorByPath(productId, fullSensorPath, out var sensor))
                     {
                         var newAlert = importGroup.ToUpdate(sensor.Id, availableChats);
 
                         newAlerts[sensor.Id].Add(newAlert);
                     }
                     else
-                        toast.AddError("Sensor by path not found", $"{productName}{fullSensorPath}");
+                        toast.AddError("Sensor by path not found", $"{productId}{fullSensorPath}");
                 }
             }
         }

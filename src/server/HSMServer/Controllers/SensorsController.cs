@@ -228,7 +228,7 @@ namespace HSMServer.Controllers
                 {
                     var info = infoRequest.Value;
 
-                    var response = await _cache.AddSensorValuesAsync(info.Key.Id, info.Product.DisplayName, values);
+                    var response = await _cache.AddSensorValuesAsync(info.Key.Id, info.Product.Id, values);
 
                     _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(values.Count);
                     _collector.WebRequestsSensors.Total.AddReceiveData(values.Count);
@@ -411,7 +411,7 @@ namespace HSMServer.Controllers
                 {
                     var info = infoRequest.Value;
 
-                    var result = await _cache.AddSensorValueAsync(info.Key.Id, info.Product.DisplayName, value);
+                    var result = await _cache.AddSensorValueAsync(info.Key.Id, info.Product.Id, value);
 
                     if (result.IsOk)
                     {
@@ -437,7 +437,7 @@ namespace HSMServer.Controllers
 
             if (infoRequest.IsOk)
             {
-                var coreRequest = apiRequest.Convert(infoRequest.Value.Key.Id);
+                var coreRequest = apiRequest.Convert(infoRequest.Value.Key.Id, infoRequest.Value.Product.Id);
                 var isValid = apiRequest.TryValidate(out var error) && coreRequest.TryCheckRequest(out error);
 
                 return isValid ? TaskResult<HistoryRequestModel>.FromValue(coreRequest) : TaskResult<HistoryRequestModel>.FromError(error);
@@ -456,10 +456,10 @@ namespace HSMServer.Controllers
                 var sensorType = apiRequest.SensorType;
                 var info = infoRequest.Value;
 
-                if (!_cache.TryGetSensorByPath(info.Product.DisplayName, relatedPath, out var sensor) && sensorType is null)
+                if (!_cache.TryGetSensorByPath(info.Product.Id, relatedPath, out var sensor) && sensorType is null)
                     return TaskResult.FromError($"{nameof(apiRequest.SensorType)} property is required, because sensor {relatedPath} doesn't exist");
 
-                var coreRequest = new SensorAddOrUpdateRequest(info.Product.DisplayName, relatedPath)
+                var coreRequest = new SensorAddOrUpdateRequest(info.Product.Id, relatedPath)
                 {
                     Update = apiRequest.Convert(sensor?.Id ?? Guid.Empty, info.Key.DisplayName),
                     Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,
