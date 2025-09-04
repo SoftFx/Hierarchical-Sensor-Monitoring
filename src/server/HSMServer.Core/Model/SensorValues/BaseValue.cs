@@ -1,7 +1,9 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Text.Json.Serialization;
+using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Core.Model
 {
@@ -26,6 +28,26 @@ namespace HSMServer.Core.Model
         Version,
         Rate,
         Enum,
+    }
+
+
+    /// <summary>
+    /// Display units for Rate sensors
+    /// </summary>
+    public enum RateDisplayUnit
+    {
+        [Display(Name = "per sec")]
+        PerSecond = 0,
+        [Display(Name = "per min")]
+        PerMinute = 1,
+        [Display(Name = "per hour")]
+        PerHour = 2,
+        [Display(Name = "per day")]
+        PerDay = 3,
+        [Display(Name = "per week")]
+        PerWeek = 4,
+        [Display(Name = "per month")]
+        PerMonth = 5
     }
 
 

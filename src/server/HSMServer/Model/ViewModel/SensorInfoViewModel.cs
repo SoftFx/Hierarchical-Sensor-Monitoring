@@ -25,7 +25,8 @@ namespace HSMServer.Model.ViewModel
 
         public Unit? SelectedUnit { get; set; }
 
-        public int? DisplayUnit { get; set; }
+        public RateDisplayUnit? DisplayUnit { get; set; }
+
 
         public bool AggregateValues { get; set; }
 
@@ -45,6 +46,8 @@ namespace HSMServer.Model.ViewModel
             SelectedUnit = sensor.SelectedUnit;
             AvailableUnits = sensor.AvailableUnits;
             AggregateValues = sensor.AggregateValues;
+
+            DisplayUnit = sensor.DisplayUnit;
         }
 
 
@@ -57,5 +60,6 @@ namespace HSMServer.Model.ViewModel
 
             return options;
         }
+
     }
 }
