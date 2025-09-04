@@ -59,7 +59,7 @@ namespace HSMServer.Model.TreeViewModel
         public bool IsServiceAlive => Name == ServiceAliveName;
         public bool IsServiceStatus => Name == ServiceStatusName;
 
-        public int? DisplayUnit { get; private set; }
+        public RateDisplayUnit? DisplayUnit { get; private set; }
 
 
         public DateTime CreationTime { get; private set; }

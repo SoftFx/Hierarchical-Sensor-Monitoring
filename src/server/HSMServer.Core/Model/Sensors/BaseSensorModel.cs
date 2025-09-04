@@ -47,7 +47,7 @@ namespace HSMServer.Core.Model
 
         public Unit? OriginalUnit { get; private set; }
 
-        public int? DisplayUnit { get; private set; }
+        public RateDisplayUnit? DisplayUnit { get; private set; }
 
         public SensorState State { get; private set; }
 
@@ -110,6 +110,8 @@ namespace HSMServer.Core.Model
             AggregateValues = entity.AggregateValues;
             IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
+            DisplayUnit = (RateDisplayUnit)entity.DisplayUnit;
+
             if (entity.EnumOptions != null)
             {
                 foreach (var option in entity.EnumOptions)
@@ -200,7 +202,7 @@ namespace HSMServer.Core.Model
             IsSingleton = IsSingleton,
             Integration = (int)Integration,
             OriginalUnit = (int?)OriginalUnit,
-            DisplayUnit = DisplayUnit,
+            DisplayUnit = (int?)DisplayUnit,
             AggregateValues = AggregateValues,
             Policies = Policies.Select(u => u.Id.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
