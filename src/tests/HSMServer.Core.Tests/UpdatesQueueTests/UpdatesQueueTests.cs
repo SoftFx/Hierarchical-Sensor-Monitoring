@@ -1,10 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
+
 
 namespace HSMServer.Core.Tests.UpdatesQueueTests
 {
@@ -132,7 +134,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
 
         private static AddSensorValueRequest BuildStoreInfo(int value)
         {
-            return new("", "/", new IntegerValue() { Value = value });
+            return new(Guid.NewGuid(), "/", new IntegerValue() { Value = value });
         }
     }
 }
