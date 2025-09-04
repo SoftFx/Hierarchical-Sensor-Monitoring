@@ -152,7 +152,7 @@ namespace HSMServer.BackgroundServices
         {
             try
             {
-                await _cache.AddSensorValuesAsync(_key, _productModel.DisplayName, items);
+                await _cache.AddSensorValuesAsync(_key, _productModel.Id, items);
             }
             catch (Exception ex)
             {
@@ -169,13 +169,13 @@ namespace HSMServer.BackgroundServices
                     var relatedPath = apiRequest.Path;
                     var sensorType = apiRequest.SensorType;
 
-                    if (!_cache.TryGetSensorByPath(SelfMonitoringProductName, relatedPath, out var sensor) && sensorType is null)
+                    if (!_cache.TryGetSensorByPath(_productModel.Id, relatedPath, out var sensor) && sensorType is null)
                     {
                         _logger.Error($"{nameof(apiRequest.SensorType)} property is required, because sensor {relatedPath} doesn't exist");
                         continue;
                     }
 
-                    var coreRequest = new SensorAddOrUpdateRequest(_productModel.DisplayName, relatedPath)
+                    var coreRequest = new SensorAddOrUpdateRequest(_productModel.Id, relatedPath)
                     {
                         Update = apiRequest.Convert(sensor?.Id ?? Guid.Empty, SelfCollectorName),
                         Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,

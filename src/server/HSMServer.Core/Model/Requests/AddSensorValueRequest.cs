@@ -9,7 +9,7 @@ namespace HSMServer.Core.Model.Requests
 
         public Guid Key { get; init; }
 
-        public AddSensorValueRequest(string productName, string path, BaseValue value) : base (productName, path)
+        public AddSensorValueRequest(Guid productId, string path, BaseValue value) : base (productId, path)
         {
             BaseValue = value;
         }

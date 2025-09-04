@@ -10,7 +10,7 @@ namespace HSMServer.Core.Model.Requests
         public SensorType Type { get; init; }
 
 
-        public SensorAddOrUpdateRequest(string productName, string path) : base(productName, path)
+        public SensorAddOrUpdateRequest(Guid productId, string path) : base(productId, path)
         {
         }
     }

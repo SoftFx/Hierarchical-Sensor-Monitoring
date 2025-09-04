@@ -16,7 +16,7 @@ namespace HSMServer.Core.Model.Requests
 
         public Guid Key { get; set; }
 
-        public HistoryRequestModel(Guid key, string path) : base (string.Empty, path)
+        public HistoryRequestModel(Guid key, Guid productId,  string path) : base (productId, path)
         {
             Key = key;
         }
