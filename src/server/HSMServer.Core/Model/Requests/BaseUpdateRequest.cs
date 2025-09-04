@@ -19,11 +19,11 @@ namespace HSMServer.Core.Model.Requests
 
         public string SensorName => PathParts[^1];
 
-        public string ProductName { get; }
+        public Guid ProductId { get; }
 
-        public BaseUpdateRequest(string productName, string path)
+        public BaseUpdateRequest(Guid productId, string path)
         {
-            ProductName = productName;
+            ProductId = productId;
 
             PathParts = GetPathParts(path);
 
@@ -33,7 +33,7 @@ namespace HSMServer.Core.Model.Requests
 
         public bool TryCheckRequest(out string message)
         {
-            if (string.IsNullOrEmpty(ProductName) || string.IsNullOrEmpty(Path))
+            if (ProductId == Guid.Empty || string.IsNullOrEmpty(Path))
             {
                 message = ErrorPathKey;
                 return false;
