@@ -22,6 +22,8 @@ let currentTreeInterval;
 
 const inactiveThreshold = 30000; //30sec
 const inactiveUpdatePeriod = 3; //3min
+const invisibleUpdatePeriod = 10; //3min
+
 
 window.initializeTree = function () {
     initializeTreeInternal();
@@ -720,33 +722,42 @@ window.changeTreeActivity = function (activityStatus) {
     _lastStatus = activityStatus;
     //console.log('changeTreeActivity: ' + activityStatus);
 
-    if (refreshTreeTimeoutId) {
-        clearTimeout(refreshTreeTimeoutId);
+    if (window.refreshTreeTimeoutId) {
+        clearTimeout(window.refreshTreeTimeoutId);
     }
 
-    // stop updating
+    // N minutes
     if (activityStatus === Status.INVISIBLE) {
-        console.log('changeTreeActivity: case Status.INVISIBLE');
+        console.log(getLogTime() + ' - changeTreeActivity: Status.INVISIBLE: update every ' + invisibleUpdatePeriod + ' min');
+        currentTreeInterval = invisibleUpdatePeriod * 60 * 1000; //update tree every 3min
+        window.refreshTreeTimeoutId = setTimeout(window.updateTreeTimer, currentTreeInterval);
         return;
     }
 
 
         //work interval
     if (activityStatus === Status.ACTIVE) {
-        console.log('changeTreeActivity: case Status.ACTIVE');
+        console.log(getLogTime() + ' - changeTreeActivity: Status.ACTIVE: Status.ACTIVE: update every ' + window.treeInterval/1000 + ' sec');
         currentTreeInterval = window.treeInterval;
-        updateTreeTimer();
+        window.updateTreeTimer();
         return;
     }
 
 
     //N minutes
     if (activityStatus === Status.NOTACTIVE) {
-        console.log('changeTreeActivity: case Status.NOTACTIVE');
+        console.log(getLogTime()  + ' - changeTreeActivity: Status.NOTACTIVE: update every ' + inactiveUpdatePeriod + ' min');
         currentTreeInterval = inactiveUpdatePeriod * 60 * 1000; //update tree every 3min
-        refreshTreeTimeoutId = setTimeout(updateTreeTimer, currentTreeInterval);
+        window.refreshTreeTimeoutId = setTimeout(window.updateTreeTimer, currentTreeInterval);
         return;
     }
+}
+
+function getLogTime() {
+    const now = new Date();
+    const timePart = now.toTimeString().split(' ')[0];
+    const milliseconds = now.getMilliseconds().toString().padStart(3, '0');
+    return `${timePart}.${milliseconds}`;
 }
 
 
