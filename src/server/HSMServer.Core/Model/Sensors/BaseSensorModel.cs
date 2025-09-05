@@ -110,7 +110,7 @@ namespace HSMServer.Core.Model
             AggregateValues = entity.AggregateValues;
             IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
-            DisplayUnit = (RateDisplayUnit)entity.DisplayUnit;
+            DisplayUnit = entity.DisplayUnit.HasValue ? (RateDisplayUnit)entity.DisplayUnit : null;
 
             if (entity.EnumOptions != null)
             {
