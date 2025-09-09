@@ -390,7 +390,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         if (parsedData.error === true)
             $('#points_limit').show();
         else
-            $('#points_limit').hide()
+            $('#points_limit').hide();
 
         let values = parsedData.values;
         if (values.length === 0) {
@@ -421,7 +421,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
 
                 reloadHistoryRequest(utcFrom, to, body);
             }
-            await displayGraph(parsedData, sensorInfo, `graph_${encodedId}`, encodedId);
+            await window.displayGraph(parsedData, sensorInfo, `graph_${encodedId}`, encodedId);
         }
 
         $("#sensorHistorySpinner").addClass("d-none");

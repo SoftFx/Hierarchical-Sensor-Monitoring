@@ -1,15 +1,16 @@
 @using HSMCommon.Extensions
 @using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Core.Model
 @using HSMServer.Extensions
 @using HSMServer.Helpers
 @using HSMServer.Model.Authentication
-@using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.ViewModel
 @using HSMServer.Model.Folders.ViewModels
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @using HSMServer.Model.DataAlerts
 @using HSMServer.TagHelpers
+@using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus
 
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
 
@@ -56,7 +57,36 @@
             }
 
             <h5 id="nodeHeader" class="d-flex my-1">@Html.Raw(Model.Header)</h5>
+            
+            
 
+            @*             @if (Model is SensorInfoViewModel sensor  )
+            {
+                if (sensor.DisplayUnit.HasValue && hasUserRights)
+                {
+                    <div class="ms-1 my-1">
+                        <select id="displayUnitSelect_@Model.EncodedId" class="form-select form-select-sm"
+                                onchange="updateDisplayUnit('@Model.EncodedId')"
+                                style="width: auto; display: inline-block;">
+                            @foreach (RateDisplayUnit unit in Enum.GetValues(typeof(RateDisplayUnit)))
+                            {
+                                <option value="@unit" selected="@(unit == sensor.DisplayUnit.Value)">
+                                    @unit.GetDisplayName()
+                                </option>
+                            }
+                        </select>
+                    </div>
+                }
+                else if (sensor.DisplayUnit.HasValue)
+                {
+                    <h5 class="ms-1 my-1">(@sensor.DisplayUnit.Value.GetDisplayName())</h5>
+                }
+                else if(sensor.SelectedUnit.HasValue)
+                {
+                    <h5 class="ms-1 my-1">(@sensor.SelectedUnit.GetDisplayName())</h5>
+                }
+            } *@
+            
             @if (Model is SensorInfoViewModel sensor && sensor.SelectedUnit.HasValue)
             {
                 <h5 class="ms-1 my-1">(@sensor.SelectedUnit.GetDisplayName())</h5>
@@ -125,26 +155,28 @@
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_span_description');
 
-        $('#editButtonMetaInfo').on('click', function (){
-            let icon = getAdvancedInfoButtonIcon();
-            if (!isAdvancedInfoVisible(icon)) {
-                $('#meta_info_collapse').click();
-                showAdvancedInfo(icon);
-            }
+        $('#editButtonMetaInfo').on('click',
+            function() {
+                let icon = getAdvancedInfoButtonIcon();
+                if (!isAdvancedInfoVisible(icon)) {
+                    $('#meta_info_collapse').click();
+                    showAdvancedInfo(icon);
+                }
 
-            editInfoButtonClick();
+                editInfoButtonClick();
 
-            $('#editButtonMetaInfo').addClass('d-none');
-        });
-        
-        $('#revertInfo').on('click', function (){
-            revertInfoButtonClick("@Url.Action(getAction, ViewConstants.HomeController)");
-           
-            $('#metainfo_separator').addClass('d-none');
-        });
+                $('#editButtonMetaInfo').addClass('d-none');
+            });
+
+        $('#revertInfo').on('click',
+            function() {
+                revertInfoButtonClick("@Url.Action(getAction, ViewConstants.HomeController)");
+
+                $('#metainfo_separator').addClass('d-none');
+            });
 
         addObserve('editMetaInfo_form');
-    })
+    });
 
     $(document).on("submit", "#editMetaInfo_form", function (event) {
         event.preventDefault();
@@ -168,7 +200,9 @@
                 displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
 
                 if ($(".field-validation-error").length !== 0)
-                    editInfoButtonClick()
+                    editInfoButtonClick();
+
+                window.InitializeHistory();
             }
         });
     });
@@ -179,6 +213,12 @@
 
             setFormDataAlerts(formData, type, $(this));
         });
+
+        // DisplayUnit
+        var displayUnitSelect = $('#displayUnitSelect_@Model.EncodedId');
+        if (displayUnitSelect.length > 0) {
+            formData.append('DisplayUnit', displayUnitSelect.val());
+        }
     }
 
     function setFormDataAlerts(formData, type, alertsList) {
@@ -317,4 +357,24 @@
         $('#headline_metainfo').addClass('d-none');
         $('#markdown_span_description').removeClass('ms-3');
     }
+    /*
+    // function updateDisplayUnit(encodedId) {
+    //     var displayUnit = $('#displayUnitSelect_' + encodedId).val();
+    
+    //     $.ajax({
+    //         url: '@Url//.Action(nameof(HomeController.UpdateSensorDisplayUnit), "Home")',
+    //         type: 'POST',
+    //         data: {
+    //             encodedId: encodedId,
+    //             displayUnit: displayUnit
+    //         },
+    //         success: function(response) {
+    //             showToast('Display unit updated successfully', 'success');
+    //         },
+    //         error: function() {
+    //             showToast('Error updating display unit', 'error');
+    //         }
+    //     });
+    // }
+    */
 </script>

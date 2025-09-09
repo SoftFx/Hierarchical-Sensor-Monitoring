@@ -39,6 +39,9 @@ window.editInfoButtonClick = function () {
     $('#labelSelfDestroy').addClass('d-none');
     $('#labelDefaultChat').addClass('d-none');
     $('[id^="alertLabel_"]').addClass('d-none');
+
+    $('[id^="displayUnitText_"]').addClass('d-none');
+    $('[id^="displayUnitSelect_"]').removeClass('d-none');
 }
 
 window.revertInfoButtonClick = function (action) {
