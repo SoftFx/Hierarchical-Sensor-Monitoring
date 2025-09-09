@@ -637,6 +637,55 @@ namespace HSMServer.Controllers
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
+        /*
+        [HttpPost]
+        public IActionResult UpdateSensorDisplayUnit(string encodedId, RateDisplayUnit displayUnit)
+        {
+            try
+            {
+                var sensorId = SensorPathHelper.DecodeGuid(encodedId);
+                
+                if (!_treeViewModel.Sensors.TryGetValue(sensorId, out SensorNodeViewModel sensor))
+                    return _emptyResult;
+
+                if (!ModelState.IsValid)
+                    return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
+
+                var availableChats = sensor.GetAvailableChats(_telegramChatsManager);
+
+                var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+                var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
+                    ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
+
+
+                var update = new SensorUpdate
+                {
+                    Id = sensor.Id,
+                    Description = newModel.Description ?? string.Empty,
+                    TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? TimeIntervalModel.None,
+                    TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
+                    KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
+                    SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
+                    Policies = policyUpdates,
+                    SelectedUnit = newModel.SelectedUnit,
+                    AggregateValues = newModel.AggregateValues,
+                    Statistics = newModel.GetOptions(),
+                    Initiator = CurrentInitiator,
+                    DisplayUnit = newModel.DisplayUnit
+                };
+
+                await _treeValuesCache.UpdateSensorAsync(update);
+
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating display unit");
+                return StatusCode(500);
+            }
+        }
+        */
 
         public IActionResult AddDataPolicy(byte type, Guid entityId)
         {

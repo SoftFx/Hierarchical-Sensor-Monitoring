@@ -1,5 +1,4 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMSensorDataObjects;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
@@ -110,7 +109,17 @@ namespace HSMServer.Core.Model
             AggregateValues = entity.AggregateValues;
             IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
-            DisplayUnit = entity.DisplayUnit.HasValue ? (RateDisplayUnit)entity.DisplayUnit : null;
+
+ 
+
+            if (entity.DisplayUnit.HasValue)
+                DisplayUnit = (RateDisplayUnit)entity.DisplayUnit;
+            else if (OriginalUnit == Unit.ValueInSecond)
+            {
+                //default value
+                DisplayUnit = RateDisplayUnit.PerSecond;
+            }
+
 
             if (entity.EnumOptions != null)
             {
@@ -212,5 +221,12 @@ namespace HSMServer.Core.Model
             EnumOptions = EnumOptions?.ToDictionary(k => k.Key, v => v.Value.ToEntity()),
             TableSettings = TableSettings.ToEntity()
         };
+
+        public virtual int GetRateDisplayK()
+        {
+            return 1;
+        }
+
+
     }
 }

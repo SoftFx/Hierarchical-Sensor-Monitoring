@@ -82,17 +82,39 @@
     </div>
 }
 
+
+
+
 @if ((Model.SensorType is SensorType.Rate) && (Model.DisplayUnit is not null))
 {
-    <div class="d-flex justify-content-start">
+    <div class="d-flex justify-content-start align-items-center">
         <div class="d-flex ms-3 text-nowrap">
             <span style="min-width: 9rem">Display Unit:</span>
         </div>
-        <div class="d-flex w-100">
-            <span>@Model.DisplayUnit.GetDisplayName()</span>
+        <div class="d-flex w-100 align-items-center">
+            <!-- text (default) -->
+            <span id="displayUnitText_@Model.EncodedId" class="display-unit-text">
+                @Model.DisplayUnit.Value.GetDisplayName()
+            </span>
+
+            <!-- Dropdown -->
+            <select class="form-select form-select-sm d-none" style="width: auto;"
+                    id="displayUnitSelect_@Model.EncodedId">
+                @foreach (var unit in Enum.GetValues(typeof(RateDisplayUnit)))
+                {
+                    <option value="@unit" selected="@(unit.Equals(Model.DisplayUnit))">
+                        @(((RateDisplayUnit)unit).GetDisplayName())
+                    </option>
+                }
+            </select>
+
+            <span id="displayUnitSaveStatus_@Model.EncodedId" class="ms-2" style="display: none;">
+                <i class="fas fa-check text-success"></i>
+            </span>
         </div>
     </div>
 }
+
 
 
 @if (Model.SensorType is not (SensorType.IntegerBar or SensorType.DoubleBar or SensorType.File))
