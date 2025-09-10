@@ -239,7 +239,7 @@ namespace HSMServer.Model.History
 
         private string GetRateTableValue(RateValue rate)
         {
-            return Math.Round(_model.GetRateDisplayK() * rate.Value, 5).ToString(CultureInfo.InvariantCulture);
+            return Math.Round(_model.GetDisplayCoeff() * rate.Value, 5).ToString(CultureInfo.InvariantCulture);
         }
     }
 }

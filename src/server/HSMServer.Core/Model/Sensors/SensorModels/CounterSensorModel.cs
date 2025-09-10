@@ -18,7 +18,7 @@ namespace HSMServer.Core.Model
 
         public RateSensorModel(SensorEntity entity) : base(entity) { }
 
-        public override int GetRateDisplayK()
+        protected override int GetDisplayCoeff()
         {
             if (!DisplayUnit.HasValue)
                 return 1;
@@ -43,7 +43,7 @@ namespace HSMServer.Core.Model
             {
                 return typedValue with
                 {
-                    Value = typedValue.Value * GetRateDisplayK()
+                    Value = typedValue.Value * GetDisplayCoeff()
                 };
             }
 

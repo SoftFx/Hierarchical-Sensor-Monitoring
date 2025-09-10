@@ -222,7 +222,7 @@ namespace HSMServer.Core.Model
             TableSettings = TableSettings.ToEntity()
         };
 
-        public virtual int GetRateDisplayK()
+        protected virtual int GetDisplayCoeff()
         {
             return 1;
         }
