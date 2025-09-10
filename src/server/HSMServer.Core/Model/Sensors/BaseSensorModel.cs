@@ -227,6 +227,7 @@ namespace HSMServer.Core.Model
             return 1;
         }
 
+        public virtual BaseValue ToDisplayValue(BaseValue value) => value;
 
     }
 }

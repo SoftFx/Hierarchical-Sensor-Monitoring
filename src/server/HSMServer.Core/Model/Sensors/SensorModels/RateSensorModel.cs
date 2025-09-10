@@ -1,6 +1,5 @@
 ﻿using System;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Extensions;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Storages.ValueStorages;
 
@@ -35,11 +34,9 @@ namespace HSMServer.Core.Model.Sensors.SensorModels
             };
         }
 
-        internal override BaseValue Convert(byte[] bytes)
+        public override BaseValue ToDisplayValue(BaseValue value)
         {
-            var rateValue = bytes.ToValue<RateValue>();
-
-            if (rateValue is BaseValue<double> typedValue)
+            if (value is BaseValue<double> typedValue)
             {
                 return typedValue with
                 {
@@ -47,7 +44,23 @@ namespace HSMServer.Core.Model.Sensors.SensorModels
                 };
             }
 
-            return rateValue; 
+            throw new ApplicationException(
+                $"'{value.GetType()}' is not RateSensorModel value: (BaseValue<double> needed)");
         }
+
+        //internal override BaseValue Convert(byte[] bytes)
+        //{
+        //    var rateValue = bytes.ToValue<RateValue>();
+
+        //    if (rateValue is BaseValue<double> typedValue)
+        //    {
+        //        return typedValue with
+        //        {
+        //            Value = typedValue.Value * GetDisplayCoeff()
+        //        };
+        //    }
+
+        //    return rateValue; 
+        //}
     }
 }
