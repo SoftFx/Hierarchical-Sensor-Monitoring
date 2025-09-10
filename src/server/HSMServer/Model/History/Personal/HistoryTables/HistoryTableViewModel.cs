@@ -232,14 +232,10 @@ namespace HSMServer.Model.History
         {
             VersionValue version => version.Value?.RemoveTailZeroes() ?? string.Empty,
             TimeSpanValue timespan => timespan.Value.ToReadableView(),
-            RateValue rate => GetRateTableValue(rate), // Math.Round(rate.Value, 5).ToString(),
+            RateValue rate => Math.Round(rate.Value, 5).ToString(CultureInfo.InvariantCulture),
             EnumValue v => v.Value != null && _model.EnumOptions.TryGetValue(v.Value, out var option) ? option.Value : v.Value.ToString(),
             _ => value.Value?.ToString() ?? string.Empty,
         };
 
-        private string GetRateTableValue(RateValue rate)
-        {
-            return Math.Round(_model.GetDisplayCoeff() * rate.Value, 5).ToString(CultureInfo.InvariantCulture);
-        }
     }
 }

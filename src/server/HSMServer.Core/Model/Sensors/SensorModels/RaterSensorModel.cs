@@ -1,10 +1,10 @@
 ﻿using System;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Storages.ValueStorages;
-using HSMServer.Core.Extensions;
 
-namespace HSMServer.Core.Model
+namespace HSMServer.Core.Model.Sensors.SensorModels
 {
     internal sealed class RateSensorModel : BaseSensorModel<RateValue>
     {

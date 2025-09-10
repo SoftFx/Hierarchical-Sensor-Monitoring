@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using System;
+using HSMServer.Core.Model.Sensors.SensorModels;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
