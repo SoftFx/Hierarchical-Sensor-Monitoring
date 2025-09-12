@@ -191,6 +191,7 @@ namespace HSMServer.Core.Model
             return string.IsNullOrEmpty(error);
         }
 
+
         internal void ResetSensor()
         {
             Policies.Reset();
