@@ -1,4 +1,4 @@
-﻿export function GetSensortInfo(id){
+﻿export function GetSensortInfo(id) {
     return $.ajax({
         type: "GET",
         url: getSensorPlotInfo + `?id=${id}`,
@@ -42,6 +42,15 @@ window.editInfoButtonClick = function () {
 
     $('[id^="displayUnitText_"]').addClass('d-none');
     $('[id^="displayUnitSelect_"]').removeClass('d-none');
+
+    var encodedId = $('#metaInfo_encodedId').val();
+
+    $('#displayUnitDropdown_' + encodedId).addClass('d-none');
+    $('#displayUnitDisplay_' + encodedId).addClass('d-none');
+
+    $('.display-unit-container').off('mouseenter mouseleave');
+
+    $('#meta_info_' + encodedId).addClass('meta-info-edit-mode');
 }
 
 window.revertInfoButtonClick = function (action) {
@@ -57,11 +66,23 @@ window.revertInfoButtonClick = function (action) {
     }).done(function (data) {
         displayMetaInfo(id, data);
     });
+
+
+    var encodedId = $('#metaInfo_encodedId').val();
+    $('[id^="displayUnitText_"]').removeClass('d-none');
+    $('[id^="displayUnitSelect_"]').addClass('d-none');
+
+    window.setupDisplayUnitHover();
+
+    $('#displayUnitDropdown_' + encodedId).addClass('d-none');
+    $('#displayUnitDisplay_' + encodedId).removeClass('d-none');
+
+    $('#meta_info_' + encodedId).removeClass('meta-info-edit-mode');
 }
 
 window.displayMetaInfo = function (id, viewData) {
     $(`#meta_info_${id}`).html(viewData);
-   
+
     let metaInfo = $('#metaInfoCollapse');
 
     metaInfo.addClass('no-transition');
@@ -69,4 +90,8 @@ window.displayMetaInfo = function (id, viewData) {
     metaInfo.removeClass('no-transition');
 
     $('#metainfo_separator').addClass('d-none');
+
+    setTimeout(window.setupDisplayUnitHover, 100);
+
+    $('#meta_info_' + id).removeClass('meta-info-edit-mode');
 }

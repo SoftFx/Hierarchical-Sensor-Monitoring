@@ -232,14 +232,18 @@ namespace HSMServer.Model.History
         {
             VersionValue version => version.Value?.RemoveTailZeroes() ?? string.Empty,
             TimeSpanValue timespan => timespan.Value.ToReadableView(),
-            RateValue rate => GetRateTableValue(rate), // Math.Round(rate.Value, 5).ToString(),
+            RateValue rate => GetRateTableValue(rate, _model), // Math.Round(rate.Value, 5).ToString(),
             EnumValue v => v.Value != null && _model.EnumOptions.TryGetValue(v.Value, out var option) ? option.Value : v.Value.ToString(),
             _ => value.Value?.ToString() ?? string.Empty,
         };
 
-        private string GetRateTableValue(RateValue rate)
+        private static string GetRateTableValue(RateValue rate, BaseSensorModel sensor )
         {
-            return Math.Round(_model.GetRateDisplayK() * rate.Value, 5).ToString(CultureInfo.InvariantCulture);
+            var displayValue = ((BaseValue<double>)sensor.ToDisplayValue(rate)).Value;
+            if(Math.Abs(displayValue - rate.Value) > double.Epsilon)
+                return $"{Math.Round(displayValue, 5).ToString(CultureInfo.InvariantCulture)} / ({Math.Round(rate.Value, 5).ToString(CultureInfo.InvariantCulture)})";
+
+            return Math.Round(rate.Value, 5).ToString(CultureInfo.InvariantCulture);
         }
     }
 }

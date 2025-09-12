@@ -65,8 +65,13 @@ namespace HSMServer.Model.TreeViewModel
 
         public Dictionary<int, EnumOptionModel> EnumOptions { get; private set; }
 
+        private BaseSensorModel _model;
+
+        public BaseValue ToDisplayValue(BaseValue value) => _model.ToDisplayValue(value);
+
         public SensorNodeViewModel(BaseSensorModel model) : base(model) 
         {
+            _model = model;
             EnumOptions = model.EnumOptions;
             DisplayUnit = model.DisplayUnit;
         }
@@ -76,6 +81,7 @@ namespace HSMServer.Model.TreeViewModel
         {
             base.Update(model);
 
+            _model = model;
             Type = model.Type;
             State = model.State;
             IsEma = model.Statistics.HasEma();

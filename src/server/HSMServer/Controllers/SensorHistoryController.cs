@@ -135,7 +135,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<JsonResult> ChartHistory([FromBody] GetSensorHistoryRequest model)
         {
-            if (model == null || !TryGetSensor(model.EncodedId, out var sensor))
+            if (model == null || !TryGetSensor(model.EncodedId, out SensorNodeViewModel sensor))
                 return _emptyJsonResult;
             
             var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
@@ -152,8 +152,10 @@ namespace HSMServer.Controllers
                 var cacheSensor = _cache.GetSensor(sensor.Id);
                 versionProcessor.AttachSensor(cacheSensor);
             }
-            
-            return processor.GetResultFromValues(sensor, values, model.BarsCount);
+
+            List<BaseValue> displayValues = values.Select(v => sensor.ToDisplayValue(v)).ToList();
+
+            return processor.GetResultFromValues(sensor, displayValues, model.BarsCount);
         }
 
         [HttpPost]

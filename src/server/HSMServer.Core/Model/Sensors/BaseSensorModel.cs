@@ -191,6 +191,7 @@ namespace HSMServer.Core.Model
             return string.IsNullOrEmpty(error);
         }
 
+
         internal void ResetSensor()
         {
             Policies.Reset();
@@ -222,11 +223,12 @@ namespace HSMServer.Core.Model
             TableSettings = TableSettings.ToEntity()
         };
 
-        public virtual int GetRateDisplayK()
+        protected virtual int GetDisplayCoeff()
         {
             return 1;
         }
 
+        public virtual BaseValue ToDisplayValue(BaseValue value) => value;
 
     }
 }

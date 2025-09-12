@@ -2,9 +2,8 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Storages.ValueStorages;
-using HSMServer.Core.Extensions;
 
-namespace HSMServer.Core.Model
+namespace HSMServer.Core.Model.Sensors.SensorModels
 {
     internal sealed class RateSensorModel : BaseSensorModel<RateValue>
     {
@@ -18,7 +17,7 @@ namespace HSMServer.Core.Model
 
         public RateSensorModel(SensorEntity entity) : base(entity) { }
 
-        public override int GetRateDisplayK()
+        protected override int GetDisplayCoeff()
         {
             if (!DisplayUnit.HasValue)
                 return 1;
@@ -35,19 +34,33 @@ namespace HSMServer.Core.Model
             };
         }
 
-        internal override BaseValue Convert(byte[] bytes)
+        public override BaseValue ToDisplayValue(BaseValue value)
         {
-            var rateValue = bytes.ToValue<RateValue>();
-
-            if (rateValue is BaseValue<double> typedValue)
+            if (value is BaseValue<double> typedValue)
             {
                 return typedValue with
                 {
-                    Value = typedValue.Value * GetRateDisplayK()
+                    Value = typedValue.Value * GetDisplayCoeff()
                 };
             }
 
-            return rateValue; 
+            throw new ApplicationException(
+                $"'{value.GetType()}' is not RateSensorModel value: (BaseValue<double> needed)");
         }
+
+        //internal override BaseValue Convert(byte[] bytes)
+        //{
+        //    var rateValue = bytes.ToValue<RateValue>();
+
+        //    if (rateValue is BaseValue<double> typedValue)
+        //    {
+        //        return typedValue with
+        //        {
+        //            Value = typedValue.Value * GetDisplayCoeff()
+        //        };
+        //    }
+
+        //    return rateValue; 
+        //}
     }
 }
