@@ -15,7 +15,16 @@ namespace HSMServer.Core.Model.Sensors.SensorModels
         public override SensorType Type { get; } = SensorType.Rate;
 
 
-        public RateSensorModel(SensorEntity entity) : base(entity) { }
+        public RateSensorModel(SensorEntity entity) : base(entity)
+        {
+            if (entity.DisplayUnit.HasValue)
+                DisplayUnit = (RateDisplayUnit)entity.DisplayUnit;
+            else if (OriginalUnit == Unit.ValueInSecond)
+            {
+                //default value
+                DisplayUnit = RateDisplayUnit.PerSecond;
+            }
+        }
 
         protected override int GetDisplayCoeff()
         {
