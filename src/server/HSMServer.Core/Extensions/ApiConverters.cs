@@ -304,6 +304,9 @@ namespace HSMServer.Core.ApiObjectsConverters
                 DefaultAlertsOptions = (Core.Model.DefaultAlertsOptions)request.DefaultAlertsOptions,
                 Initiator = initiator,
                 EnumOptions = request.EnumOptions,
+
+                //TODO: implement DisplayUnit in Data collector
+                DisplayUnit = null
             };
         }
 

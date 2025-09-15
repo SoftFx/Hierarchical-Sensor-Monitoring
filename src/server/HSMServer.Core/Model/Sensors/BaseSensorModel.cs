@@ -46,7 +46,7 @@ namespace HSMServer.Core.Model
 
         public Unit? OriginalUnit { get; private set; }
 
-        public RateDisplayUnit? DisplayUnit { get; private set; }
+        public RateDisplayUnit? DisplayUnit { get; protected set; }
 
         public SensorState State { get; private set; }
 
@@ -109,18 +109,7 @@ namespace HSMServer.Core.Model
             AggregateValues = entity.AggregateValues;
             IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
-
- 
-
-            if (entity.DisplayUnit.HasValue)
-                DisplayUnit = (RateDisplayUnit)entity.DisplayUnit;
-            else if (OriginalUnit == Unit.ValueInSecond)
-            {
-                //default value
-                DisplayUnit = RateDisplayUnit.PerSecond;
-            }
-
-
+            
             if (entity.EnumOptions != null)
             {
                 foreach (var option in entity.EnumOptions)
@@ -163,7 +152,7 @@ namespace HSMServer.Core.Model
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
             IsSingleton = UpdateProperty(IsSingleton, update.IsSingleton ?? IsSingleton, update.Initiator, "Singleton");
             AggregateValues = UpdateProperty(AggregateValues, update.AggregateValues ?? AggregateValues, update.Initiator, "Aggregate values");
-            DisplayUnit = update.DisplayUnit;
+            DisplayUnit = UpdateProperty(DisplayUnit, update.DisplayUnit ?? DisplayUnit, update.Initiator);
 
             State = UpdateProperty(State, update.State ?? State, update.Initiator, forced: true, update: update, oldModel: this);
             EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting", true);
