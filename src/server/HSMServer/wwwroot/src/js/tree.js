@@ -189,7 +189,7 @@ function openNodeHandler(e, data) {
 
 function initializeTreeInternal() {
 
-    initDropzone()
+    initDropzone();
 
     currentTreeInterval = window.treeInterval;
 
@@ -198,6 +198,7 @@ function initializeTreeInternal() {
     //    if (initOpened > 1)
     //        isRefreshing = true;
     //}
+
 
     $('#jstree').jstree({
         "core": {
@@ -224,6 +225,29 @@ function initializeTreeInternal() {
             "items": buildContextMenu
         }
         , "plugins": ["state", "contextmenu", "themes", "wholerow"]
+    })
+    .on('ready.jstree', function (e, data) {
+        setTimeout(function () {
+            const instance = $('#jstree').jstree(true);
+
+            if (instance) {
+                const savedState = localStorage.getItem('jstree');
+                if (savedState) {
+                    try {
+                        const stateObj = JSON.parse(savedState);
+                        instance.set_state(stateObj);
+
+                        if (stateObj.state && stateObj.state.core && stateObj.state.core.selected) {
+                            stateObj.state.core.selected.forEach(function (nodeId) {
+                                instance.select_node(nodeId, false);
+                            });
+                        }
+                    } catch (e) {
+                        console.error('Error restoring tree state:', e);
+                    }
+                }
+            }
+        }, 300);
     });
 
 
