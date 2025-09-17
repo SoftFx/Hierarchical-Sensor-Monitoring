@@ -3,7 +3,6 @@
 @using HSMServer.Extensions
 @using HSMServer.Helpers
 @using HSMServer.Model.Authentication
-@using HSMServer.Model
 @using HSMServer.ServerConfiguration;
 @using HSMServer.Dashboards
 
@@ -182,7 +181,7 @@
         <footer class="border-top footer text-muted content">
             <div class="d-flex justify-content-between align-items-center mx-3 my-2">
                 <div>
-                    &copy; @DateTime.Now.Year - Soft-FX Current version: @ServerConfig.Version
+                    &copy; @DateTime.UtcNow.Year - Soft-FX Current version: @ServerConfig.Version
                 </div>
                 <div>
                     <div id="updateTime"></div>
