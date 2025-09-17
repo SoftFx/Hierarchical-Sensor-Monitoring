@@ -104,7 +104,7 @@ namespace HSMServer.BackgroundServices
 
         }
 
-        private void OnRequestProcessed(string name, int queueSize, int milliseconds) =>TreeValueCacheStatistics.AddRequestProcessed(name, queueSize, milliseconds);
+        private void OnRequestProcessed(string name, int queueSize, int milliseconds) => TreeValueCacheStatistics.AddRequestProcessed(name, queueSize, milliseconds);
 
         private void OnMessageSended(string message) => TelegramBotStatistics.RegisterNotification(message);
 
