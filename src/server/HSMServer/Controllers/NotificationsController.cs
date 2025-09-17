@@ -89,11 +89,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public void SendTestTelegramMessage(long chatId)
+        public async ValueTask SendTestTelegramMessage(long chatId)
         {
             var testMessage = $"Test message for {CurrentUser.Name}.";
 
-            _telegramBot.SendTestMessage(chatId, testMessage);
+            await _telegramBot.SendTestMessageAsync(chatId, testMessage);
         }
 
 

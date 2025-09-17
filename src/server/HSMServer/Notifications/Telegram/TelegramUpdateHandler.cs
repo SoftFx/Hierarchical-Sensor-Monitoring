@@ -25,8 +25,8 @@ namespace HSMServer.Notifications
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly ITelegramChatsManager _chatsManager;
         private readonly IFolderManager _folderManager;
-        private readonly ITreeValuesCache _cache;
         private readonly TelegramConfig _config;
+        private readonly TelegramBot _bot;
 
         private string BotName
         {
@@ -39,12 +39,12 @@ namespace HSMServer.Notifications
         }
 
 
-    internal TelegramUpdateHandler(ITelegramChatsManager chatsManager, ITreeValuesCache cache, IFolderManager folderManager, TelegramConfig config)
+    internal TelegramUpdateHandler(TelegramBot bot, ITelegramChatsManager chatsManager, IFolderManager folderManager, TelegramConfig config)
         {
             _folderManager = folderManager;
             _chatsManager = chatsManager;
             _config = config;
-            _cache = cache;
+            _bot = bot;
         }
 
 
@@ -98,14 +98,6 @@ namespace HSMServer.Notifications
             {
                 _logger.Error($"Invalid message has been received: {update?.Type} - {update?.Message}. Exception: {ex}");
             }
-        }
-
-
-        public Task HandlePollingErrorAsync(ITelegramBotClient _, Exception ex, CancellationToken token)
-        {
-            _logger.Error($"There is some error in telegram bot: {ex}");
-
-            return Task.CompletedTask;
         }
 
 
@@ -168,7 +160,9 @@ namespace HSMServer.Notifications
 
         public Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, HandleErrorSource source, CancellationToken cancellationToken)
         {
-            _logger.Error($"Telegram bot '{botClient.BotId}' (source: '{source}') error: {exception}");
+            var message = $"Telegram bot '{botClient.BotId}' (source: '{source}') error: {exception}";
+            _logger.Error(message);
+            _bot.OnErrorHandled(message);
             return Task.CompletedTask;
         }
     }
