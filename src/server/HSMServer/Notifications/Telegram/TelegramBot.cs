@@ -2,7 +2,6 @@
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using HSMServer.ConcurrentStorage;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
@@ -10,11 +9,11 @@ using Telegram.Bot.Exceptions;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Managers;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.ConcurrentStorage;
 using HSMServer.Folders;
 using HSMServer.Notifications.Telegram.AddressBook;
 using HSMServer.ServerConfiguration;
 using Telegram.Bot.Types.Enums;
-using HSMServer.Extensions;
 using HSMServer.Helpers;
 
 
@@ -53,6 +52,8 @@ namespace HSMServer.Notifications
 
         public bool IsBotRunning => _bot is not null;
 
+        public event Action<string> ErrorHandled;
+        public event Action<string> MessageSended;
 
         internal TelegramBot(ITelegramChatsManager chatsManager, IFolderManager folderManager, ITreeValuesCache cache, TelegramConfig config)
         {
@@ -64,7 +65,7 @@ namespace HSMServer.Notifications
 
             _cache.NewAlertMessageEvent += StoreMessage;
 
-            _updateHandler = new(_chatsManager, _cache, _folderManager, config);
+            _updateHandler = new(this, _chatsManager, _folderManager, config);
         }
 
         public async ValueTask DisposeAsync()
@@ -91,12 +92,12 @@ namespace HSMServer.Notifications
             return (null, BotIsNotRunningError);
         }
 
-        internal void SendTestMessage(ChatId chatId, string message)
+        internal async ValueTask SendTestMessageAsync(ChatId chatId, string message)
         {
             //if (IsBotRunning)
             //    _bot.SendMessage(chatId, message, cancellationToken: _tokenSource.Token);
 
-            SendMessageAsync(chatId, message);
+            await SendMessageAsync(chatId, message);
         }
 
         internal async Task<string> StartBotAsync()
@@ -313,7 +314,7 @@ namespace HSMServer.Notifications
         //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
         //    _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
 
-        private async ValueTask SendMessageAsync(ChatId chat, string message)
+        private async ValueTask SendMessageAsync(ChatId chatId, string message)
         {
             if (string.IsNullOrEmpty(message))
                 return;
@@ -334,16 +335,20 @@ namespace HSMServer.Notifications
                     if (retry >= SendMessageRetryCount)
                         break;
 
-                    await (_bot?.SendMessage(chat, MarkdownHelper.ConvertToMarkdownV2(message), cancellationToken: _tokenSource.Token, parseMode: ParseMode.MarkdownV2) ?? Task.CompletedTask);
-                    
+                    await (_bot?.SendMessage(chatId, MarkdownHelper.ConvertToMarkdownV2(message), cancellationToken: _tokenSource.Token, parseMode: ParseMode.MarkdownV2) ?? Task.CompletedTask);
+
                     var logMessage = message.Length > 100 ? message.Substring(0, 100) : message;
+
+                    var chat = _chatsManager.GetChatByChatId(chatId);
+
+                    MessageSended?.Invoke($"{chat.Name}:{message}");
 
                     _logger.Info($"TSend: SendMessageAsync: message '{logMessage}' is sent");
                     break;
                 }
                 catch (ApiRequestException ex)
                 {
-                    _logger.Error($"Send telegram: An error ({ex.Message}) has been occurred while sending message #{retry} [{chat.Identifier}] {message}");
+                    _logger.Error($"Send telegram: An error ({ex.Message}) has been occurred while sending message #{retry} [{chatId.Identifier}] {message}");
                     break;
                 }
                 catch (OperationCanceledException)
@@ -352,13 +357,18 @@ namespace HSMServer.Notifications
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"Send telegram: An error ({ex.Message}) has been occurred while sending message #{retry} [{chat.Identifier}] {message}");
+                    _logger.Error($"Send telegram: An error ({ex.Message}) has been occurred while sending message #{retry} [{chatId.Identifier}] {message}");
 
                     await Task.Delay(SendMessageRetryTimeout * retry, _tokenSource.Token);
                     retry++;
                 }
             }
 
+        }
+
+        internal void OnErrorHandled(string message)
+        {
+            ErrorHandled?.Invoke(message);
         }
     }
 }
