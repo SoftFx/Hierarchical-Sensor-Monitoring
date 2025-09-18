@@ -20,6 +20,8 @@ using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using Microsoft.Extensions.Options;
 using HSMServer.Core.ApiObjectsConverters;
+using HSMServer.Core.Managers;
+using HSMServer.Notifications;
 
 
 namespace HSMServer.BackgroundServices
@@ -35,6 +37,7 @@ namespace HSMServer.BackgroundServices
 
         private readonly ProductModel _productModel;
 
+        private readonly NotificationsCenter _notificationsCenter;
 
         private readonly Guid _key;
         private readonly Logger _logger;
@@ -53,8 +56,10 @@ namespace HSMServer.BackgroundServices
 
         internal TreeValueChacheStatistics TreeValueCacheStatistics { get; } 
 
+        internal TelegramBotStatistics TelegramBotStatistics { get; }
 
-        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor)
+
+        public DataCollectorWrapper(ITreeValuesCache cache, IDatabaseCore db, IServerConfig config, IOptionsMonitor<MonitoringOptions> optionsMonitor, NotificationsCenter notificationCenter)
         {
             _logger = LogManager.GetLogger(GetType().Name);
 
@@ -62,6 +67,8 @@ namespace HSMServer.BackgroundServices
             _key = GetSelfMonitoringKeyAsync(cache);
 
             _productModel = _cache.GetProductByName(SelfMonitoringProductName);
+
+            _notificationsCenter = notificationCenter;
 
             var productVersion = Assembly.GetEntryAssembly()?.GetName().GetVersion();
 
@@ -86,18 +93,29 @@ namespace HSMServer.BackgroundServices
             WebRequestsSensors = new ClientStatisticsSensors(_collector);
             BackupSensors = new BackupSensors(_collector);
             TreeValueCacheStatistics = new TreeValueChacheStatistics(_collector);
+            TelegramBotStatistics = new TelegramBotStatistics(_collector);
 
             _cache.RequestProcessed += OnRequestProcessed;
+
+
+            _notificationsCenter.TelegramBot.MessageSended += OnMessageSended;
+            _notificationsCenter.TelegramBot.ErrorHandled += OnErrorHandled;
+
+
         }
 
-        private void OnRequestProcessed(string name, int queueSize, int milliseconds)
-        {
-            TreeValueCacheStatistics.AddRequestProcessed(name, queueSize, milliseconds);
-        }
+        private void OnRequestProcessed(string name, int queueSize, int milliseconds) => TreeValueCacheStatistics.AddRequestProcessed(name, queueSize, milliseconds);
+
+        private void OnMessageSended(string message) => TelegramBotStatistics.RegisterNotification(message);
+
+        private void OnErrorHandled(string message) => TelegramBotStatistics.RegisterError(message);
+
 
         public void Dispose()
         {
             _cache.RequestProcessed -= OnRequestProcessed;
+            _notificationsCenter.TelegramBot.MessageSended -= OnMessageSended;
+            _notificationsCenter.TelegramBot.ErrorHandled -= OnErrorHandled;
             _collector?.Dispose();
         }
 
