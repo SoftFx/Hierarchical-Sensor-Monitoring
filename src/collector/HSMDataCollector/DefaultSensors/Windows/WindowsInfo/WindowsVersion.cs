@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Text;
-using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.DefaultSensors.Windows.WindowsInfo
 {
-    public sealed class WindowsVersion : MonitoringSensorBase<Version>
+    public sealed class WindowsVersion : MonitoringSensorBase<Version, NoDisplayUnit>
     {
         private Version _lastVersion;
 

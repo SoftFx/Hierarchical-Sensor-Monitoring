@@ -4,11 +4,12 @@ using System.Threading.Tasks;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMDataCollector.Threading;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class BarMonitoringSensorBase<BarType, T> : MonitoringSensorBase<BarType>
+    public abstract class BarMonitoringSensorBase<BarType, T> : MonitoringSensorBase<BarType, NoDisplayUnit>
         where BarType : MonitoringBarBase<T>, new()
         where T : struct
     {
@@ -39,7 +40,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override ValueTask<bool> InitAsync()
+        public override ValueTask<bool> InitAsync()
         {
             lock (_locker)
             {
@@ -53,7 +54,7 @@ namespace HSMDataCollector.DefaultSensors
             return base.InitAsync();
         }
 
-        internal override async ValueTask StopAsync()
+        public override async ValueTask StopAsync()
         {
             Task taskToWait = null;
             CancellationTokenSource cts = null;

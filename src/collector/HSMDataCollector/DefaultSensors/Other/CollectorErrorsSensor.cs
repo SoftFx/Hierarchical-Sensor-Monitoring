@@ -1,10 +1,11 @@
 ﻿using HSMDataCollector.Options;
+using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMDataCollector.DefaultSensors.Other
 {
-    internal class CollectorErrorsSensor : SensorBase<string>
+    internal class CollectorErrorsSensor : SensorBase<string, NoDisplayUnit>
     {
-        public CollectorErrorsSensor(SensorOptions options) : base(options) { }
+        public CollectorErrorsSensor(InstantSensorOptions options) : base(options) { }
 
 
         public void SendCollectorError(string error) => SendValue(error);

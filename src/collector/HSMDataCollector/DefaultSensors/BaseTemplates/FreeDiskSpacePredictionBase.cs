@@ -6,11 +6,12 @@ using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMDataCollector.Threading;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class FreeDiskSpacePredictionBase : MonitoringSensorBase<TimeSpan>
+    public abstract class FreeDiskSpacePredictionBase : MonitoringSensorBase<TimeSpan, NoDisplayUnit>
     {
         public const int DefaultSpaceCheckPeriodInSec = 30;
 
@@ -43,7 +44,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override ValueTask<bool> StartAsync()
+        public override ValueTask<bool> StartAsync()
         {
             lock (_locker)
             {
@@ -64,7 +65,7 @@ namespace HSMDataCollector.DefaultSensors
             return base.StartAsync();
         }
 
-        internal override async ValueTask StopAsync()
+        public override async ValueTask StopAsync()
         {
             try
             {

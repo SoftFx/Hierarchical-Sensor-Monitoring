@@ -2,24 +2,25 @@
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.Sensors
 {
-    internal sealed class LastValueSensorInstant<T> : SensorInstant<T>, ILastValueSensor<T>
+    internal sealed class LastValueSensorInstant<T> : SensorInstant<T, NoDisplayUnit>, ILastValueSensor<T>
     {
         private SensorStatus _lastStatus;
         private string _lastComment;
         private T _lastValue;
 
 
-        public LastValueSensorInstant(SensorOptions options, T customDefault) : base(options)
+        public LastValueSensorInstant(InstantSensorOptions options, T customDefault) : base(options)
         {
             _lastValue = customDefault;
         }
 
 
-        internal override ValueTask StopAsync()
+        public override ValueTask StopAsync()
         {
             SendValue(_lastValue, _lastStatus, _lastComment);
             return base.StopAsync();

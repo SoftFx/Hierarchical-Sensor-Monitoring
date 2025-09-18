@@ -1,9 +1,10 @@
 ﻿using HSMDataCollector.DefaultSensors.SystemInfo;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class FreeDiskSpaceBase : MonitoringSensorBase<double>
+    public abstract class FreeDiskSpaceBase : MonitoringSensorBase<double, NoDisplayUnit>
     {
         private readonly IDiskInfo _diskInfo;
 

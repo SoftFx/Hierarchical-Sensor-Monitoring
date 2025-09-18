@@ -121,7 +121,7 @@ namespace HSMDataCollector.DefaultSensors
 
 
 
-        protected DefaultSensorsCollection Register(SensorBase sensor)
+        protected DefaultSensorsCollection Register(ISensor sensor)
         {
             if (!IsCorrectOs)
                 throw _notSupportedException;
@@ -136,7 +136,7 @@ namespace HSMDataCollector.DefaultSensors
             if (!IsCorrectOs)
                 throw _notSupportedException;
 
-            var result = _storage.TryRemove(sensorName, out SensorBase sensor);
+            var result = _storage.TryRemove(sensorName, out ISensor sensor);
 
             if (result)
                 sensor.Dispose();

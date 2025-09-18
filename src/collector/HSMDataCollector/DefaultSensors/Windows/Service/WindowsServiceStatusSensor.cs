@@ -5,11 +5,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Options;
 using HSMDataCollector.Threading;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.DefaultSensors.Windows.Service
 {
-    internal sealed class WindowsServiceStatusSensor : SensorBase<int>
+    internal sealed class WindowsServiceStatusSensor : SensorBase<int, NoDisplayUnit>
     {
         private readonly TimeSpan _scanPeriod = TimeSpan.FromSeconds(5);
         private readonly TimeSpan _faultStateDelay = TimeSpan.FromHours(1);
@@ -32,7 +33,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         }
 
 
-        internal override ValueTask<bool> StartAsync()
+        public override ValueTask<bool> StartAsync()
         {
             lock (_locker)
             {
@@ -47,7 +48,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         }
 
 
-        internal override async ValueTask StopAsync()
+        public override async ValueTask StopAsync()
         {
             Task taskToWait = null;
             CancellationTokenSource cts = null;

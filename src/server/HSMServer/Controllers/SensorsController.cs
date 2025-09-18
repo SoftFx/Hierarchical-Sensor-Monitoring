@@ -11,7 +11,6 @@ using HSMCommon.Extensions;
 using HSMCommon.TaskResult;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.HistoryRequests;
-using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.BackgroundServices;
@@ -26,7 +25,7 @@ using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using HSMServer.Core.ApiObjectsConverters;
+using HSMServer.DTOs;
 
 
 namespace HSMServer.Controllers
@@ -324,7 +323,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
         [TypeFilter<SendDataKeyPermissionFilter>]
-        public async Task<ActionResult<AddOrUpdateSensorRequest>> Post([FromBody] AddOrUpdateSensorRequest sensorUpdate)
+        public async Task<ActionResult<AddOrUpdateSensorRequestDto>> Post([FromBody] AddOrUpdateSensorRequestDto sensorUpdate)
         {
             try
             {
@@ -363,7 +362,7 @@ namespace HSMServer.Controllers
                 {
                     var path = sensorCommands[i].Path;
 
-                    if (sensorCommands[i] is AddOrUpdateSensorRequest sensorUpdate)
+                    if (sensorCommands[i] is AddOrUpdateSensorRequestDto sensorUpdate)
                     {
                         var result = await TryBuildAndApplySensorUpdateRequest(sensorUpdate);
 
@@ -446,7 +445,7 @@ namespace HSMServer.Controllers
             return TaskResult<HistoryRequestModel>.FromError(InvalidRequest);
         }
 
-        private async Task<TaskResult> TryBuildAndApplySensorUpdateRequest(AddOrUpdateSensorRequest apiRequest)
+        private async Task<TaskResult> TryBuildAndApplySensorUpdateRequest(AddOrUpdateSensorRequestDto apiRequest)
         {
             var infoRequest = await IsValidPublicApiRequest(apiRequest);
 

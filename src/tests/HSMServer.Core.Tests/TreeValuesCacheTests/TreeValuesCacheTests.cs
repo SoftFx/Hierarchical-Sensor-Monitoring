@@ -680,9 +680,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         private static AddSensorValueRequest BuildSensorStoreInfo(Guid key, string path, SensorType type, ProductModel product) =>
-            new(product.Id, path, SensorValuesFactory.BuildValue(type))
-            {
-                Key = key
-            };
+            new(key, product.Id, path, SensorValuesFactory.BuildValue(type));
     }
 }

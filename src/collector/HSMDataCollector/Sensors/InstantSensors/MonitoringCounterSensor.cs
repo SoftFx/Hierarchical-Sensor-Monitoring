@@ -4,11 +4,12 @@ using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.Sensors
 {
-    internal sealed class MonitoringRateSensor : MonitoringSensorBase<double>, IMonitoringRateSensor
+    internal sealed class MonitoringRateSensor : MonitoringSensorBase<double, RateDisplayUnit>, IMonitoringRateSensor
     {
         private SensorStatus _lastStatus = SensorStatus.Ok;
         private string _lastComment = string.Empty;

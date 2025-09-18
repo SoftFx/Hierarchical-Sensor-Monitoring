@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Alerts;
 using HSMDataCollector.Core;
+using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects.SensorRequests;
@@ -61,8 +62,8 @@ namespace DatacollectorSandbox
             var collectorOptions = new CollectorOptions()
             {
                 //ServerAddress = "hsm.dev.soft-fx.eu",
-                AccessKey = "01ab0c6a-e5b2-4e63-825d-ec6c819d6ab8", //local key
-                Module = "Collector 3.4.0",
+                AccessKey = "b2742e7d-7a4c-4fce-b0af-5fc474e2d862", //local key
+                Module = "RMinorReports",
                 ComputerName = "LocalMachine",
             };
 
@@ -75,9 +76,17 @@ namespace DatacollectorSandbox
 
             _collector.Windows.SubscribeToWindowsServiceStatus(new ServiceSensorOptions() { ServiceName = "CaddyServer", IsHostService = false, SensorLocation = SensorLocation.Product,  SensorPath = $"{_collector.ComputerName}/CaddyService" });
 
-            var sensor = _collector.CreateStringSensor("Test", new InstantSensorOptions() { AggregateData = true, KeepHistory = TimeSpan.FromMinutes(1) });
+            var def = _collector.DefaultSensors.OfType<WindowsProcessTimeInGC>().FirstOrDefault();
+
+
+            var sensor = _collector.CreateStringSensor("test", new InstantSensorOptions() { AggregateData = true, KeepHistory = TimeSpan.FromMinutes(1) });
 
             //_collector.Windows.SubscribeToWindowsServiceStatus("CaddyServer");
+
+            var s1 = _collector.CreateRateSensor("rate", new RateSensorOptions
+            {
+                DisplayUnit = RateDisplayUnit.PerDay
+            });
 
 
             // bool result = _collector.Windows.UnsubscribeWindowsServiceStatus(new ServiceSensorOptions() { IsHostService = false, SensorLocation = SensorLocation.Product, SensorPath = $"{_collector.ComputerName}/CaddyService" });
@@ -94,9 +103,10 @@ namespace DatacollectorSandbox
             //    },
             //    SensorLocation = SensorLocation.Module,
             //});
-            var sens = _collector.CreateIntSensor("test_default", new InstantSensorOptions { SensorLocation = SensorLocation.Module });
+            var sens = _collector.CreateIntSensor("Big_Deals", new InstantSensorOptions { SensorLocation = SensorLocation.Module });
             while (true)
             {
+                s1.AddValue(1);
                 sens.AddValue(1);
                 Thread.Sleep(1000);
             }

@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using HSMDataCollector.Alerts;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects.SensorRequests;
@@ -8,7 +9,8 @@ namespace HSMDataCollector.Converters
 {
     internal static class ApiConverters
     {
-        internal static AddOrUpdateSensorRequest ToApi(this InstantSensorOptions options)
+
+        internal static AddOrUpdateSensorRequest<TDisplayUnit> ToApi<TDisplayUnit>(this BaseInstantSensorOptions<TDisplayUnit> options) where TDisplayUnit : struct, Enum
         {
             var info = options.ToBaseInfo();
 
@@ -17,7 +19,16 @@ namespace HSMDataCollector.Converters
             return info;
         }
 
-        internal static AddOrUpdateSensorRequest ToApi(this EnumSensorOptions options)
+        internal static AddOrUpdateSensorRequest<NoDisplayUnit> ToApi(this InstantSensorOptions options)
+        {
+            var info = options.ToBaseInfo();
+
+            info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
+
+            return info;
+        }
+
+        internal static AddOrUpdateSensorRequest<NoDisplayUnit> ToApi(this EnumSensorOptions options)
         {
             var info = options.ToBaseInfo();
 
@@ -29,7 +40,7 @@ namespace HSMDataCollector.Converters
         }
 
 
-        internal static AddOrUpdateSensorRequest ToApi(this BarSensorOptions options)
+        internal static AddOrUpdateSensorRequest<NoDisplayUnit> ToApi(this BarSensorOptions options)
         {
             var info = options.ToBaseInfo();
 
@@ -39,8 +50,9 @@ namespace HSMDataCollector.Converters
         }
 
 
-        private static AddOrUpdateSensorRequest ToBaseInfo(this SensorOptions options) =>
-            new AddOrUpdateSensorRequest
+        private static AddOrUpdateSensorRequest<TDisplayUnit> ToBaseInfo<TDisplayUnit>(this SensorOptions<TDisplayUnit> options) where TDisplayUnit : struct, Enum
+        {
+            return new AddOrUpdateSensorRequest<TDisplayUnit>
             {
                 TtlAlert = options.TtlAlert?.ToApi(),
 
@@ -62,7 +74,10 @@ namespace HSMDataCollector.Converters
 
                 DefaultAlertsOptions = options.DefaultAlertsOptions,
                 IsForceUpdate = options.IsForceUpdate,
+
+                DisplayUnit = options.DisplayUnit
             };
+        }
 
 
         internal static AlertUpdateRequest ToApi(this AlertBaseTemplate alert) =>

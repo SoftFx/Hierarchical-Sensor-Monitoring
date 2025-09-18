@@ -5,13 +5,14 @@ using System.Linq;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.Sensors
 {
-    internal abstract class BaseFunctionSensorInstant<T> : MonitoringSensorBase<T>, IBaseFuncSensor
+    internal abstract class BaseFunctionSensorInstant<T> : MonitoringSensorBase<T, NoDisplayUnit>, IBaseFuncSensor
     {
-        protected BaseFunctionSensorInstant(SensorOptions options) : base(options) { }
+        protected BaseFunctionSensorInstant(MonitoringInstantSensorOptions options) : base(options) { }
 
 
         TimeSpan IBaseFuncSensor.GetInterval() => PostTimePeriod;

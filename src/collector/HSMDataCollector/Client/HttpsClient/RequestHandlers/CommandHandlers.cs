@@ -31,7 +31,7 @@ namespace HSMDataCollector.Client.HttpsClient
             {
                 case IEnumerable<object> _:
                     return _endpoints.CommandsList;
-                case AddOrUpdateSensorRequest _:
+                case IAddOrUpdateSensorRequest _:
                     return _endpoints.AddOrUpdateSensor;
                 default:
                     throw new Exception($"Unsupported command type {rawData.GetType().FullName}");

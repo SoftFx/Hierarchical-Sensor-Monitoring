@@ -1,4 +1,5 @@
 ﻿using System;
+using HSMSensorDataObjects.SensorValueRequests;
 
 
 namespace HSMServer.Core.Model.Requests
@@ -9,8 +10,9 @@ namespace HSMServer.Core.Model.Requests
 
         public Guid Key { get; init; }
 
-        public AddSensorValueRequest(Guid productId, string path, BaseValue value) : base (productId, path)
+        public AddSensorValueRequest(Guid key, Guid productId, string path, BaseValue value) : base (productId, path)
         {
+            Key = key;
             BaseValue = value;
         }
     }
