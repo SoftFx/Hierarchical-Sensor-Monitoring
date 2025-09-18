@@ -29,7 +29,7 @@ namespace HSMDataCollector.Core
         event Action ToStopping;
         event Action ToStopped;
 
-        IEnumerable<SensorBase> DefaultSensors { get; }
+        IEnumerable<ISensor> DefaultSensors { get; }
 
         /// <summary>
         /// Check connection via client that was created in DataCollector constructor with CollectorOptions parameter

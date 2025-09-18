@@ -8,11 +8,20 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class SensorBase : IDisposable
+
+    public interface ISensor : IDisposable
+    {
+        string SensorPath { get; }
+        ValueTask<bool> InitAsync();
+        ValueTask<bool> StartAsync();
+        ValueTask StopAsync();
+    }
+
+    public abstract class SensorBase<TDisplayUnit> : ISensor where TDisplayUnit : struct, Enum
     {
         internal const string DefaultTimeFormat = "dd/MM/yyyy HH:mm:ss";
 
-        private readonly SensorOptions _metainfo;
+        private readonly SensorOptions<TDisplayUnit> _metainfo;
 
         public string SensorPath => _metainfo.Path;
 
@@ -22,7 +31,7 @@ namespace HSMDataCollector.DefaultSensors
 
         internal readonly DataProcessor _dataProcessor;
 
-        protected SensorBase(SensorOptions options)
+        protected SensorBase(SensorOptions<TDisplayUnit> options)
         {
             options.Path   = options.CalculateSystemPath();
             _metainfo      = options;
@@ -57,7 +66,7 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        internal virtual ValueTask<bool> InitAsync()
+        public virtual ValueTask<bool> InitAsync()
         {
             try
             {
@@ -73,9 +82,9 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        internal virtual ValueTask<bool> StartAsync() => new ValueTask<bool>(true);
+        public virtual ValueTask<bool> StartAsync() => new ValueTask<bool>(true);
 
-        internal virtual ValueTask StopAsync() => default;
+        public virtual ValueTask StopAsync() => default;
 
         protected void HandleException(Exception ex)
         {

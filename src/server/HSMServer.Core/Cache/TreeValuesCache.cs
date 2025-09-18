@@ -12,7 +12,6 @@ using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
-using HSMServer.Core.ApiObjectsConverters;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Confirmation;
 using HSMServer.Core.DataLayer;
@@ -29,6 +28,7 @@ using HSMServer.Core.Threading;
 using HSMServer.Core.TreeStateSnapshot;
 using HSMServer.PathTemplates;
 using SensorType = HSMServer.Core.Model.SensorType;
+using HSMServer.Core.ApiObjectsConverters;
 
 
 
@@ -1430,10 +1430,7 @@ namespace HSMServer.Core.Cache
 
         public async Task<TaskResult> AddSensorValueAsync(Guid key, Guid productId, SensorValueBase value, CancellationToken token = default)
         {
-            var request = new AddSensorValueRequest(productId, value.Path, value.Convert())
-            {
-                Key = key
-            };
+            var request = new AddSensorValueRequest(key, productId, value.Path, value.Convert());
 
             if (!request.TryCheckRequest(out var message))
                 return TaskResult.FromError(message);
@@ -1519,7 +1516,7 @@ namespace HSMServer.Core.Cache
         {
             foreach (var value in request.Values)
             {
-                var addRequest = new AddSensorValueRequest(request.ProductId, value.Path, value.Convert()) { Key = request.Key};
+                var addRequest = new AddSensorValueRequest(request.Key, request.ProductId, value.Path, value.Convert()) { Key = request.Key};
 
                 if (!addRequest.TryCheckRequest(out var message))
                 {

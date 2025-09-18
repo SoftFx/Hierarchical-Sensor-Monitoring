@@ -71,7 +71,13 @@ namespace HSMServer.Core.Model
         public PolicyResult ConfirmationResult => Policies.ConfimationResult;
 
 
-        public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(HasData ? LastUpdate : CreationDate) ?? false;
+        public bool ShouldDestroy()
+        {
+            if (Settings.SelfDestroy.Value == null)
+                return false;
+
+            return Settings.SelfDestroy.Value.TimeIsUp(HasData ? LastUpdate : CreationDate); 
+        }
 
         public bool CanSendNotifications => State is SensorState.Available && (!Status?.IsOfftime ?? true);
 

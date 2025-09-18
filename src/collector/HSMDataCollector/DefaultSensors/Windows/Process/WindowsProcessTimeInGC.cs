@@ -23,7 +23,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         internal WindowsProcessTimeInGC(BarSensorOptions options) : base(options) { }
 
 
-        internal override ValueTask<bool> InitAsync()
+        public override ValueTask<bool> InitAsync()
         {
             try
             {
@@ -40,7 +40,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
             return base.InitAsync();
         }
 
-        internal override ValueTask StopAsync()
+        public override ValueTask StopAsync()
         {
             _listener.OnTimeInGC -= OnTimeInGC;
             _listener.Dispose();

@@ -1,7 +1,5 @@
-﻿using System.IO;
+﻿using System;
 using System.Linq;
-using System.Reflection;
-using System.Web;
 using HSMDataCollector.Options;
 
 
@@ -14,8 +12,11 @@ namespace HSMDataCollector.Prototypes
         private const string PathSeparator = "/";
 
 
-        internal static T Merge<T>(SensorOptions defaultOptions, T customOptions) where T : SensorOptions, new() =>
-            new T()
+        internal static T Merge<T, TDisplayUnit>(SensorOptions<TDisplayUnit> defaultOptions, T customOptions) 
+            where T : SensorOptions<TDisplayUnit>, new()
+            where TDisplayUnit : struct, Enum
+        {
+            return new T()
             {
                 IsComputerSensor = defaultOptions.IsComputerSensor,
                 ComputerName = defaultOptions.ComputerName,
@@ -27,6 +28,8 @@ namespace HSMDataCollector.Prototypes
 
                 Description = customOptions?.Description ?? defaultOptions.Description,
                 SensorUnit = customOptions?.SensorUnit ?? defaultOptions.SensorUnit,
+
+                DisplayUnit = customOptions?.DisplayUnit ?? defaultOptions.DisplayUnit,
 
                 KeepHistory = customOptions?.KeepHistory ?? defaultOptions.KeepHistory,
                 SelfDestroy = customOptions?.SelfDestroy ?? defaultOptions.SelfDestroy,
@@ -41,6 +44,7 @@ namespace HSMDataCollector.Prototypes
 
                 SensorLocation = customOptions?.SensorLocation ?? defaultOptions.SensorLocation,
             };
+        }
 
 
         internal static string RevealDefaultPath(SensorOptions options, string category, string path) =>

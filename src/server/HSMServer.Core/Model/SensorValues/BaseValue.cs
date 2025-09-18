@@ -1,8 +1,8 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Model
 {

@@ -1,11 +1,12 @@
 using System;
 using System.Threading.Tasks;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.DefaultSensors.Other
 {
-    internal sealed class ProductVersionSensor : SensorBase<Version>
+    internal sealed class ProductVersionSensor : SensorBase<Version, NoDisplayUnit>
     {
         private readonly Version _version;
         private readonly DateTime _startTime;
@@ -18,7 +19,7 @@ namespace HSMDataCollector.DefaultSensors.Other
         }
 
 
-        internal override async ValueTask<bool> StartAsync()
+        public override async ValueTask<bool> StartAsync()
         {
             var ok = await base.StartAsync().ConfigureAwait(false);
 
@@ -29,7 +30,7 @@ namespace HSMDataCollector.DefaultSensors.Other
         }
 
 
-        internal override ValueTask StopAsync()
+        public override ValueTask StopAsync()
         {
             SendValue(_version, comment: $"Stop: {DateTime.UtcNow.ToString(DefaultTimeFormat)}");
 

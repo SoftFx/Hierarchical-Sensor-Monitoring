@@ -11,7 +11,7 @@ namespace HSMServer.BackgroundServices
         private readonly ITreeValuesCache _cache;
 
 
-        public override TimeSpan Delay { get; } = TimeSpan.FromHours(1);
+        public override TimeSpan Delay { get; } = TimeSpan.FromMinutes(1);
 
 
         public ClearDatabaseService(ITreeValuesCache cache)
@@ -50,17 +50,19 @@ namespace HSMServer.BackgroundServices
 
         private async Task RunSensorsSelfDestroy()
         {
-            var sensors = _cache.GetSensors().Where(s => s.ShouldDestroy).ToList();
-
-            foreach (var sensor in sensors)
+            foreach (var sensor in _cache.GetSensors())
             {
                 var id = sensor.Id;
 
-                _logger.Trace("Start removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                if (sensor.ShouldDestroy())
+                {
 
-                await _cache.RemoveSensorAsync(id, InitiatorInfo.AsSystemInfo("Clean up"));
+                    _logger.Trace("Start removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
 
-                _logger.Trace("Stop removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                    await _cache.RemoveSensorAsync(id, InitiatorInfo.AsSystemInfo("Clean up"));
+
+                    _logger.Trace("Stop removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                }
             }
         }
 

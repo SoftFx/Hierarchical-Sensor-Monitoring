@@ -58,7 +58,7 @@ namespace HSMDataCollector.Core
         public event EventHandler ValuesQueueOverflow;
 
 
-        public IEnumerable<SensorBase> DefaultSensors => _sensorsStorage.Values;
+        public IEnumerable<ISensor> DefaultSensors => _sensorsStorage.Values;
 
 
         /// <summary>

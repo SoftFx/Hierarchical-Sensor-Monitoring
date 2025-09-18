@@ -1,15 +1,15 @@
 using System;
 using System.Diagnostics;
-using System.Diagnostics.Eventing.Reader;
 using System.Threading.Tasks;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    public abstract class WindowsLogsSensorBase : SensorBase<string>
+    public abstract class WindowsLogsSensorBase : SensorBase<string, NoDisplayUnit>
     {
         private EventLog _eventLog;
 
@@ -18,12 +18,12 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected abstract string Category { get; }
 
 
-        protected WindowsLogsSensorBase(SensorOptions options) : base(options)
+        protected WindowsLogsSensorBase(SensorOptions<NoDisplayUnit> options) : base(options)
         {
         }
 
 
-        internal override ValueTask<bool> StartAsync()
+        public override ValueTask<bool> StartAsync()
         {
             try
             {
@@ -44,7 +44,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
             return base.StartAsync();
         }
 
-        internal override ValueTask StopAsync()
+        public override ValueTask StopAsync()
         {
             if (_eventLog != null)
             {

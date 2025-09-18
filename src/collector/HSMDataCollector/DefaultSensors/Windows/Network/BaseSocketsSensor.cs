@@ -2,11 +2,12 @@
 using System.Diagnostics;
 using System.Threading.Tasks;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
-    public abstract class BaseSocketsSensor : MonitoringSensorBase<int?>
+    public abstract class BaseSocketsSensor : MonitoringSensorBase<int?, NoDisplayUnit>
     {
         private const string CategoryTcp4 = "TCPv4";
         private const string CategoryTcp6 = "TCPv6";
@@ -18,10 +19,10 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         protected abstract string CounterName { get; }
 
 
-        protected internal BaseSocketsSensor(SensorOptions options) : base(options) { }
+        protected internal BaseSocketsSensor(MonitoringInstantSensorOptions options) : base(options) { }
 
 
-        internal override ValueTask<bool> InitAsync()
+        public override ValueTask<bool> InitAsync()
         {
             try
             {
@@ -38,7 +39,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             return base.InitAsync();
         }
 
-        internal override ValueTask StopAsync()
+        public override ValueTask StopAsync()
         {
             _counterTCPv4?.Dispose();
             _counterTCPv6?.Dispose();

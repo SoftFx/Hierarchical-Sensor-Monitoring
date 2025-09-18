@@ -298,6 +298,6 @@ namespace HSMDataCollector.DefaultSensors
             return Unregister(opt.Path);
         }
 
-        private WindowsSensorsCollection ToWindows(SensorBase sensor) => (WindowsSensorsCollection)Register(sensor);
+        private WindowsSensorsCollection ToWindows(ISensor sensor) => (WindowsSensorsCollection)Register(sensor);
     }
 }

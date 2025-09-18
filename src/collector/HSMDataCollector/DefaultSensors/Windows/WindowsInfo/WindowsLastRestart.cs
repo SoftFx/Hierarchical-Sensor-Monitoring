@@ -3,13 +3,14 @@ using System.Management;
 using System.Threading.Tasks;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    public sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
+    public sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan, NoDisplayUnit>
     {
-        internal WindowsLastRestart(SensorOptions options) : base(options) { }
+        internal WindowsLastRestart(MonitoringInstantSensorOptions options) : base(options) { }
 
         protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastBootTime().ToUniversalTime();
 

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using HSMDataCollector.Alerts;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.Prototypes

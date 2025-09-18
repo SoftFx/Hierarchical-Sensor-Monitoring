@@ -134,7 +134,7 @@ namespace HSMServer.Core.Tests.UpdatesQueueTests
 
         private static AddSensorValueRequest BuildStoreInfo(int value)
         {
-            return new(Guid.NewGuid(), "/", new IntegerValue() { Value = value });
+            return new(Guid.NewGuid(), Guid.NewGuid(), "/", new IntegerValue() { Value = value });
         }
     }
 }

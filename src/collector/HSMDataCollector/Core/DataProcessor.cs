@@ -81,19 +81,19 @@ namespace HSMDataCollector.Core
             SensorStorage?.Dispose();
         }
 
-        public void AddData(SensorBase sender, SensorValueBase data) => SendQueueOverflow(sender, _dataQueue.Enqeue(data), _dataQueue.QueueName);
+        public void AddData(ISensor sender, SensorValueBase data) => SendQueueOverflow(sender, _dataQueue.Enqeue(data), _dataQueue.QueueName);
 
-        public void AddData(SensorBase sender, IEnumerable<SensorValueBase> items) => SendQueueOverflow(sender, _dataQueue.Enqeue(items), _dataQueue.QueueName);
+        public void AddData(ISensor sender, IEnumerable<SensorValueBase> items) => SendQueueOverflow(sender, _dataQueue.Enqeue(items), _dataQueue.QueueName);
 
-        public void AddPriorityData(SensorBase sender, SensorValueBase data) => SendQueueOverflow(sender, _priorityQueue.Enqeue(data), _priorityQueue.QueueName);
+        public void AddPriorityData(ISensor sender, SensorValueBase data) => SendQueueOverflow(sender, _priorityQueue.Enqeue(data), _priorityQueue.QueueName);
 
-        public void AddPriorityData(SensorBase sender, IEnumerable<SensorValueBase> items) => SendQueueOverflow(sender, _priorityQueue.Enqeue(items), _priorityQueue.QueueName);
+        public void AddPriorityData(ISensor sender, IEnumerable<SensorValueBase> items) => SendQueueOverflow(sender, _priorityQueue.Enqeue(items), _priorityQueue.QueueName);
 
-        public void AddCommand(SensorBase sender, CommandRequestBase command) => SendQueueOverflow(sender, _commandQueue.Enqeue(command), _commandQueue.QueueName);
+        public void AddCommand(ISensor sender, CommandRequestBase command) => SendQueueOverflow(sender, _commandQueue.Enqeue(command), _commandQueue.QueueName);
 
-        public void AddCommand(SensorBase sender, IEnumerable<CommandRequestBase> commands) => SendQueueOverflow(sender, _commandQueue.Enqeue(commands), _commandQueue.QueueName);
+        public void AddCommand(ISensor sender, IEnumerable<CommandRequestBase> commands) => SendQueueOverflow(sender, _commandQueue.Enqeue(commands), _commandQueue.QueueName);
 
-        public void AddFile(SensorBase sender, FileSensorValue file) => SendQueueOverflow(sender, _fileQueue.Enqeue(file), _fileQueue.QueueName);
+        public void AddFile(ISensor sender, FileSensorValue file) => SendQueueOverflow(sender, _fileQueue.Enqeue(file), _fileQueue.QueueName);
 
         public void AddException(string sensorPath, Exception ex)
         {
@@ -117,7 +117,7 @@ namespace HSMDataCollector.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void SendQueueOverflow(SensorBase sender, int overflow, string queueName)
+        private void SendQueueOverflow(ISensor sender, int overflow, string queueName)
         {
             if (sender is QueueOverflowSensor)
                 return;

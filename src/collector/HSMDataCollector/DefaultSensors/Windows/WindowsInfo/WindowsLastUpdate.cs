@@ -5,13 +5,14 @@ using System.Management;
 using System.Threading.Tasks;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    public sealed class WindowsLastUpdate : MonitoringSensorBase<TimeSpan>
+    public sealed class WindowsLastUpdate : MonitoringSensorBase<TimeSpan, NoDisplayUnit>
     {
-        internal WindowsLastUpdate(SensorOptions options) : base(options) { }
+        internal WindowsLastUpdate(MonitoringInstantSensorOptions options) : base(options) { }
 
         private DateTime GetLastSuccessfulUpdateTime()
         {

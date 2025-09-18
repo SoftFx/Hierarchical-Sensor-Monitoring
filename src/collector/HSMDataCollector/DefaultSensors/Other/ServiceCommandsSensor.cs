@@ -1,11 +1,12 @@
 ﻿using System;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.DefaultSensors
 {
-    internal class ServiceCommandsSensor : SensorBase<string>, IServiceCommandsSensor
+    internal class ServiceCommandsSensor : SensorBase<string, NoDisplayUnit>, IServiceCommandsSensor
     {
         private const string ServiceUpdateCommand = "Service update";
 

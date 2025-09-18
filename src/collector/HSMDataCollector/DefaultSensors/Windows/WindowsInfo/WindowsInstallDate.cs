@@ -3,11 +3,12 @@ using System.Management;
 using System.Threading.Tasks;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    public sealed class WindowsInstallDate : MonitoringSensorBase<TimeSpan>
+    public sealed class WindowsInstallDate : MonitoringSensorBase<TimeSpan, NoDisplayUnit>
     {
 
         internal WindowsInstallDate(WindowsInfoSensorOptions options) : base(options) { }

@@ -9,7 +9,6 @@ using HSMCommon.Constants;
 using HSMDataCollector.Core;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
@@ -19,7 +18,7 @@ using HSMServer.Core.Model.Requests;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using Microsoft.Extensions.Options;
-using HSMServer.Core.ApiObjectsConverters;
+using HSMServer.DTOs;
 
 
 namespace HSMServer.BackgroundServices
@@ -164,7 +163,7 @@ namespace HSMServer.BackgroundServices
         {
             foreach (var command in commands)
             {
-                if (command is AddOrUpdateSensorRequest apiRequest)
+                if (command is AddOrUpdateSensorRequestDto apiRequest)
                 {
                     var relatedPath = apiRequest.Path;
                     var sensorType = apiRequest.SensorType;
