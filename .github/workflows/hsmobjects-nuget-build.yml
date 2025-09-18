@@ -17,11 +17,6 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Intall nuget
-        uses: nuget/setup-nuget@v2
-        with:
-          nuget-api-key: ${{ secrets.NUGETKEY }}
-
       - name: Pack Api
         run: dotnet pack ${{ env.ApiPath }} -c Release -o ${{ env.OutputFolder }}
 
