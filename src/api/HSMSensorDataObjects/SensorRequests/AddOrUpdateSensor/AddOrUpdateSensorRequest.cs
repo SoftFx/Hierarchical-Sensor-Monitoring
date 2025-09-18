@@ -31,6 +31,21 @@ namespace HSMSensorDataObjects.SensorRequests
         ValueInSecond = 3000,
     }
 
+    public enum NoDisplayUnit
+    {
+        None
+    }
+
+    public enum RateDisplayUnit
+    {
+        PerSecond = 0,
+        PerMinute = 1,
+        PerHour = 2,
+        PerDay = 3,
+        PerWeek = 4,
+        PerMonth = 5
+    }
+
 
     [Obsolete("This setting doesn't exist for sensor now")]
     public enum DefaultChatsMode : byte
@@ -58,7 +73,9 @@ namespace HSMSensorDataObjects.SensorRequests
     }
 
 
-    public sealed class AddOrUpdateSensorRequest : CommandRequestBase
+    public interface IAddOrUpdateSensorRequest { }
+
+    public sealed class AddOrUpdateSensorRequest<TDisplayUnit> : CommandRequestBase, IAddOrUpdateSensorRequest where TDisplayUnit : struct, Enum
     {
         [DefaultValue((int)Command.AddOrUpdateSensor)]
         public override Command Type => Command.AddOrUpdateSensor;
@@ -95,6 +112,7 @@ namespace HSMSensorDataObjects.SensorRequests
 
         public Unit? OriginalUnit { get; set; }
 
+        public TDisplayUnit? DisplayUnit { get; set; }
 
         public DefaultAlertsOptions DefaultAlertsOptions { get; set; }
 
