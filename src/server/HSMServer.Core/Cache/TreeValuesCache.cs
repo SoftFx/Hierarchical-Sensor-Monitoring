@@ -694,6 +694,8 @@ namespace HSMServer.Core.Cache
                     _journalService.RemoveRecords(sensorId);
 
 
+                _logger.Info($"Sensor removed: Id = {sensor.Id}, Name = {sensor.DisplayName}, Path = {sensor.Path}, ProductId = {sensor.Root.Id}, ProductName = {sensor.RootProductName}");
+
                 _database.RemoveSensorWithMetadata(sensorId.ToString());
                 _snapshot.Sensors.Remove(sensorId);
 
@@ -1543,7 +1545,7 @@ namespace HSMServer.Core.Cache
 
             if(!TryGetSensorFromCache(request.ProductId, request.Path, out BaseSensorModel sensor))
             {
-                _logger.Info($"Creating new sensor - Name = {request.SensorName}, Path = {request.Path}, CurrentNumber of sensors in cache = {_sensorsById.Count}");
+                _logger.Info($"Creating new sensor: ProductId = {request.ProductId}, Name = {request.SensorName}, Path = {request.Path}, CurrentNumber of sensors in cache = {_sensorsById.Count}");
                 if (!TryAddSensor(request, request.BaseValue.Type, request.ProductId, DefaultAlertsOptions.None, out sensor, out error))
                     return false;
             }
@@ -1708,44 +1710,8 @@ namespace HSMServer.Core.Cache
 
         private void ApplySensors(List<SensorEntity> sensorEntities, Dictionary<string, PolicyEntity> policies)
         {
-            _logger.Info($"{nameof(sensorEntities)} are applying");
-            BuildAndSubscribeSensors(sensorEntities, policies);
-            _logger.Info($"{nameof(sensorEntities)} applied");
-
-            _logger.Info("Links between products and their sensors are building");
-            foreach (var sensorEntity in sensorEntities)
-                if (!string.IsNullOrEmpty(sensorEntity.ProductId))
-                {
-                    var parentId = Guid.Parse(sensorEntity.ProductId);
-                    var sensorId = Guid.Parse(sensorEntity.Id);
-
-                    if (TryGetProduct(parentId, out var parent) && TryGetSensorById(sensorId, out var sensor))
-                        parent.AddSensor(sensor);
-                    else
-                    {
-                        _logger.Info($"Removing sensor id={sensorId}, parentId={parentId}," +
-                                     $" sensorExists={_sensorsById.ContainsKey(sensorId)}" +
-                                     $"parentExists={_tree.ContainsKey(parentId)}" +
-                                     $"NO REMOVE WILL BE APPLIED");
-                         RemoveSensor(sensorId);
-                    }
-                }
-
-            _logger.Info("Links between products and their sensors are built");
-
-            _logger.Info($"{nameof(FillSensorsData)} is started");
-            FillSensorsData();
-            _logger.Info($"{nameof(FillSensorsData)} is finished");
-
-            _logger.Info($"Set initial sensor state is started");
-            foreach (var sensor in _sensorsById.Values)
-                sensor.Policies.TimeToLive.InitLastTtlTime(sensor.CheckTimeout());
-            _logger.Info($"Set initial sensor state is finished");
-        }
-
-        private void BuildAndSubscribeSensors(List<SensorEntity> entities, Dictionary<string, PolicyEntity> policies)
-        {
-            foreach (var entity in entities)
+            _logger.Info("Sensors are applying");
+            foreach (var entity in sensorEntities)
             {
                 try
                 {
@@ -1767,6 +1733,7 @@ namespace HSMServer.Core.Cache
                     else
                     {
                         _logger.Info($"Removing sensor id={sensor.Id}, parentId={productId}," +
+                                     $" Name = {sensor.DisplayName}," +
                                      $" sensorExists={_sensorsById.ContainsKey(sensor.Id)}" +
                                      $"parentExists={_tree.ContainsKey(productId)}" +
                                      $"NO REMOVE WILL BE APPLIED");
@@ -1778,6 +1745,17 @@ namespace HSMServer.Core.Cache
                     _logger.Error($"Applying sensor {entity.Id} error: {ex.Message}");
                 }
             }
+
+            _logger.Info("Sensors are applied");
+
+            _logger.Info($"{nameof(FillSensorsData)} is started");
+            FillSensorsData();
+            _logger.Info($"{nameof(FillSensorsData)} is finished");
+
+            _logger.Info($"Set initial sensor state is started");
+            foreach (var sensor in _sensorsById.Values)
+                sensor.Policies.TimeToLive.InitLastTtlTime(sensor.CheckTimeout());
+            _logger.Info($"Set initial sensor state is finished");
         }
 
         private void ApplyAccessKeys(List<AccessKeyEntity> entities)

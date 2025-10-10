@@ -73,9 +73,7 @@ namespace HSMSensorDataObjects.SensorRequests
     }
 
 
-    public interface IAddOrUpdateSensorRequest { }
-
-    public sealed class AddOrUpdateSensorRequest<TDisplayUnit> : CommandRequestBase, IAddOrUpdateSensorRequest where TDisplayUnit : struct, Enum
+    public sealed class AddOrUpdateSensorRequest : CommandRequestBase
     {
         [DefaultValue((int)Command.AddOrUpdateSensor)]
         public override Command Type => Command.AddOrUpdateSensor;
@@ -112,7 +110,7 @@ namespace HSMSensorDataObjects.SensorRequests
 
         public Unit? OriginalUnit { get; set; }
 
-        public TDisplayUnit? DisplayUnit { get; set; }
+        public int? DisplayUnit { get; set; }
 
         public DefaultAlertsOptions DefaultAlertsOptions { get; set; }
 
