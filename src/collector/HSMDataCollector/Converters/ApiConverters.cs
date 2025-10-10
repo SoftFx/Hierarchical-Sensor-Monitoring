@@ -10,29 +10,35 @@ namespace HSMDataCollector.Converters
     internal static class ApiConverters
     {
 
-        internal static AddOrUpdateSensorRequest<TDisplayUnit> ToApi<TDisplayUnit>(this BaseInstantSensorOptions<TDisplayUnit> options) where TDisplayUnit : struct, Enum
+        internal static AddOrUpdateSensorRequest ToApi<TDisplayUnit>(this BaseInstantSensorOptions<TDisplayUnit> options) where TDisplayUnit : struct, Enum
         {
             var info = options.ToBaseInfo();
 
             info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
+
+            info.DisplayUnit = Convert.ToInt32(options.DisplayUnit);
 
             return info;
         }
 
-        internal static AddOrUpdateSensorRequest<NoDisplayUnit> ToApi(this InstantSensorOptions options)
+        internal static AddOrUpdateSensorRequest ToApi(this InstantSensorOptions options)
         {
             var info = options.ToBaseInfo();
 
             info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
+
+            info.DisplayUnit = null;
 
             return info;
         }
 
-        internal static AddOrUpdateSensorRequest<NoDisplayUnit> ToApi(this EnumSensorOptions options)
+        internal static AddOrUpdateSensorRequest ToApi(this EnumSensorOptions options)
         {
             var info = options.ToBaseInfo();
 
             info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
+
+            info.DisplayUnit = null;
 
             info.EnumOptions = options.EnumOptions?.ToList();
 
@@ -40,19 +46,21 @@ namespace HSMDataCollector.Converters
         }
 
 
-        internal static AddOrUpdateSensorRequest<NoDisplayUnit> ToApi(this BarSensorOptions options)
+        internal static AddOrUpdateSensorRequest ToApi(this BarSensorOptions options)
         {
             var info = options.ToBaseInfo();
 
             info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
 
+            info.DisplayUnit = null;
+
             return info;
         }
 
 
-        private static AddOrUpdateSensorRequest<TDisplayUnit> ToBaseInfo<TDisplayUnit>(this SensorOptions<TDisplayUnit> options) where TDisplayUnit : struct, Enum
+        private static AddOrUpdateSensorRequest ToBaseInfo<TDisplayUnit>(this SensorOptions<TDisplayUnit> options) where TDisplayUnit : struct, Enum
         {
-            return new AddOrUpdateSensorRequest<TDisplayUnit>
+            return new AddOrUpdateSensorRequest
             {
                 TtlAlert = options.TtlAlert?.ToApi(),
 
@@ -75,7 +83,7 @@ namespace HSMDataCollector.Converters
                 DefaultAlertsOptions = options.DefaultAlertsOptions,
                 IsForceUpdate = options.IsForceUpdate,
 
-                DisplayUnit = options.DisplayUnit
+                DisplayUnit = options.DisplayUnit.HasValue ? Convert.ToInt32(options.DisplayUnit.Value) : (int?)null
             };
         }
 

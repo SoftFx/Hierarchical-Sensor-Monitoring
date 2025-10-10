@@ -89,7 +89,7 @@ namespace HSMDataCollector.Options
 
     public abstract class SensorOptions<TDisplayUnit> : SensorOptions where TDisplayUnit : struct, Enum
     {
-        internal abstract AddOrUpdateSensorRequest<TDisplayUnit> ApiRequest { get; }
+        internal abstract AddOrUpdateSensorRequest ApiRequest { get; }
 
         public TDisplayUnit? DisplayUnit { get; set; }
     }
@@ -106,7 +106,7 @@ namespace HSMDataCollector.Options
     {
         public List<InstantAlertTemplate> Alerts { get; set; }
 
-        internal override AddOrUpdateSensorRequest<TDisplayUnit> ApiRequest => this.ToApi();
+        internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
     }
 
 
@@ -117,7 +117,7 @@ namespace HSMDataCollector.Options
 
     public class EnumSensorOptions : InstantSensorOptions
     {
-        internal override AddOrUpdateSensorRequest<NoDisplayUnit> ApiRequest => this.ToApi();
+        internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
         public List<EnumOption> EnumOptions { get; set; }
 
         public EnumSensorOptions()
@@ -202,7 +202,7 @@ namespace HSMDataCollector.Options
         public int Precision { get; set; } = 2;
 
 
-        internal override AddOrUpdateSensorRequest<NoDisplayUnit> ApiRequest => this.ToApi();
+        internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
 
         internal string GetBarOptionsInfo() => $"Bar period is {BarPeriod.ToReadableView()} with updates every {BarTickPeriod.ToReadableView()}.";
     }
