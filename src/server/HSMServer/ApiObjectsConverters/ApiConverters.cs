@@ -283,7 +283,7 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-        public static SensorUpdate Convert(this AddOrUpdateSensorRequestDto request, Guid sensorId, string keyName)
+        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, string keyName)
         {
             var initiator = InitiatorInfo.AsCollector(keyName, request.IsForceUpdate);
 

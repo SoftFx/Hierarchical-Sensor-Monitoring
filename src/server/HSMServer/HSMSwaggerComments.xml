@@ -130,7 +130,7 @@
             Get file (csv or txt) history [from, to] or [from - count] for some sensor
             </summary>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMServer.DTOs.AddOrUpdateSensorRequestDto)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorRequests.AddOrUpdateSensorRequest)">
             <summary>
             Add new sensor with selected properties or update sensor meta info
             </summary>

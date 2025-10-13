@@ -5,7 +5,7 @@
     <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>3.40.1</Version>
+    <Version>3.40.2</Version>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -37,10 +37,11 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.1" />
-    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.1.10" />
+    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.4.12" />
+    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.1.11" />
     <PackageReference Include="HtmlSanitizer" Version="9.0.886" />
     <PackageReference Include="Markdig" Version="0.41.3" />
-    <PackageReference Include="NLog.Web.AspNetCore" Version="6.0.3" />
+    <PackageReference Include="NLog.Web.AspNetCore" Version="6.0.5" />
     <PackageReference Include="SSH.NET" Version="2025.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
     <PackageReference Include="System.Linq.Async" Version="6.0.3" />

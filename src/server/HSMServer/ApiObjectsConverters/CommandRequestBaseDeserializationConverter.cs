@@ -1,5 +1,5 @@
 ﻿using HSMSensorDataObjects;
-using HSMServer.DTOs;
+using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -31,7 +31,7 @@ namespace HSMServer.ApiObjectsConverters
 
                 return (Command)requestType switch
                 {
-                    Command.AddOrUpdateSensor => JsonSerializer.Deserialize<AddOrUpdateSensorRequestDto>(ref reader, options),
+                    Command.AddOrUpdateSensor => JsonSerializer.Deserialize<AddOrUpdateSensorRequest>(ref reader, options),
                     _ => throw new JsonException(UnexpectedRequestTypeError),
                 };
             }

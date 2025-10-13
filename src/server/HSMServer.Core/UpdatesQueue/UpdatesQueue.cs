@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using HSMCommon.TaskResult;
-using HSMServer.Core.Cache;
 using NLog;
+using HSMCommon.TaskResult;
+using System.Diagnostics;
+
 
 namespace HSMServer.Core.SensorsUpdatesQueue
 {
@@ -24,6 +25,8 @@ namespace HSMServer.Core.SensorsUpdatesQueue
         private readonly Channel<StoreItem> _channel;
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _processingTask;
+
+        public Stopwatch Stopwatch { get; } = new Stopwatch();
 
         public int QueueSize => _channel.Reader.Count;
 

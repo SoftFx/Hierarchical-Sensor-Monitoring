@@ -81,8 +81,6 @@ namespace HSMServer.Core.Cache
         private readonly Task _updateTask;
         private readonly CancellationTokenSource _cts = new();
 
-        private readonly Stopwatch _stopwatch = new Stopwatch();
-
         private readonly ITreeStateSnapshot _snapshot;
         private readonly IJournalService _journalService;
         private readonly IDatabaseCore _database;
@@ -694,7 +692,7 @@ namespace HSMServer.Core.Cache
                     _journalService.RemoveRecords(sensorId);
 
 
-                _logger.Info($"Sensor removed: Id = {sensor.Id}, Name = {sensor.DisplayName}, Path = {sensor.Path}, ProductId = {sensor.Root.Id}, ProductName = {sensor.RootProductName}");
+                _logger.Info($"Sensor removed: Id = {sensor.Id}, Name = {sensor.DisplayName}, Path = {sensor.Path}, ProductId = {sensor.Root?.Id}, ProductName = {sensor.RootProductName}");
 
                 _database.RemoveSensorWithMetadata(sensorId.ToString());
                 _snapshot.Sensors.Remove(sensorId);
@@ -1446,7 +1444,7 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public async Task<Dictionary<string, string>> AddSensorValuesAsync(Guid key, Guid productId, IEnumerable<HSMSensorDataObjects.SensorValueRequests.SensorValueBase> values, CancellationToken token = default)
+        public async Task<Dictionary<string, string>> AddSensorValuesAsync(Guid key, Guid productId, IEnumerable<SensorValueBase> values, CancellationToken token = default)
         {
             var request = new AddSensorValuesRequest(key, productId, values);
 
@@ -1458,7 +1456,7 @@ namespace HSMServer.Core.Cache
 
         void IUpdateHandler.ProcessRequest(IUpdatesQueue queue, IUpdateRequest item)
         {
-            _stopwatch.Restart();
+            queue.Stopwatch.Restart();
 
             switch (item)
             {
@@ -1506,8 +1504,8 @@ namespace HSMServer.Core.Cache
                     break;
             }
 
-            _stopwatch.Stop();
-            int time = (int)_stopwatch.ElapsedMilliseconds;
+            queue.Stopwatch.Stop();
+            int time = (int)queue.Stopwatch.ElapsedMilliseconds;
             RequestProcessed?.Invoke(queue.Name, queue.QueueSize, time);
 
             if (time > 300)
@@ -1734,10 +1732,13 @@ namespace HSMServer.Core.Cache
                     {
                         _logger.Info($"Removing sensor id={sensor.Id}, parentId={productId}," +
                                      $" Name = {sensor.DisplayName}," +
-                                     $" sensorExists={_sensorsById.ContainsKey(sensor.Id)}" +
-                                     $"parentExists={_tree.ContainsKey(productId)}" +
-                                     $"NO REMOVE WILL BE APPLIED");
-                        RemoveSensor(sensor.Id);
+                                     $" parentExists={_tree.ContainsKey(productId)}," +
+                                     $" REMOVE WILL BE APPLIED");
+
+                        _database.RemoveSensorWithMetadata(entity.Id);
+                        _snapshot.Sensors.Remove(sensor.Id);
+
+                        ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
                     }
                 }
                 catch (Exception ex)
