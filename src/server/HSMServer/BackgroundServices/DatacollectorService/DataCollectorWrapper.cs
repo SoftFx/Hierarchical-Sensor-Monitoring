@@ -18,9 +18,8 @@ using HSMServer.Core.Model.Requests;
 using HSMServer.Extensions;
 using HSMServer.ServerConfiguration;
 using Microsoft.Extensions.Options;
-using HSMServer.DTOs;
-using HSMServer.Core.Managers;
 using HSMServer.Notifications;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMServer.BackgroundServices
@@ -181,7 +180,7 @@ namespace HSMServer.BackgroundServices
         {
             foreach (var command in commands)
             {
-                if (command is AddOrUpdateSensorRequestDto apiRequest)
+                if (command is AddOrUpdateSensorRequest apiRequest)
                 {
                     var relatedPath = apiRequest.Path;
                     var sensorType = apiRequest.SensorType;

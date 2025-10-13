@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMCommon.TaskResult;
@@ -11,6 +12,8 @@ namespace HSMServer.Core.SensorsUpdatesQueue
         string Name { get; }
 
         int QueueSize { get; }
+
+        Stopwatch Stopwatch { get; }
 
         Task<TaskResult> ProcessRequestAsync(IUpdateRequest storeInfo, CancellationToken token = default);
 

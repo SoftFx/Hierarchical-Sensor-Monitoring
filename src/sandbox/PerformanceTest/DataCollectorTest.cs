@@ -92,7 +92,7 @@ namespace PerformanceTest
                     BuildSensors(index + 1, $"{path}/{i}");
             else
                 for (int i = 0; i < MaxSensorsPerLevel; ++i)
-                    _sensors.Add(_collector.CreateDoubleSensor($"{path}/sensor{i}", null));
+                    _sensors.Add(_collector.CreateDoubleSensor($"{path}/sensor{i}", ""));
         }
     }
 }

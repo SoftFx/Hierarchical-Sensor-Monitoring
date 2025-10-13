@@ -51,11 +51,11 @@ namespace HSMServer.ServiceExtensions
                     .AddAsyncStorage<ITelegramChatsManager, TelegramChatsManager>()
                     .AddAsyncStorage<IDashboardManager, DashboardManager>();
 
-            services.AddSingleton<NotificationsCenter>()
-                    .AddSingleton<DataCollectorWrapper>()
+            services.AddSingleton<DataCollectorWrapper>()
                     .AddSingleton<TreeViewModel>()
                     .AddSingleton<TelemetryCollector>()
-                    .AddSingleton<BackupDatabaseService>();
+                    .AddSingleton<BackupDatabaseService>()
+                    .AddSingleton<NotificationsCenter>();
 
             services.AddHostedService<TreeSnapshotService>()
                     .AddHostedService<ClearDatabaseService>()
