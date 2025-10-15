@@ -187,11 +187,13 @@ function openNodeHandler(e, data) {
     collapseButton.reset();
 }
 
+
+
 function initializeTreeInternal() {
 
     initDropzone();
 
-    currentTreeInterval = window.treeInterval;
+    currentTreeInterval = getCurrentUpdateTreeInterval();
 
     //if (window.localStorage.jstree) {
     //    let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
@@ -761,8 +763,9 @@ window.changeTreeActivity = function (activityStatus) {
 
         //work interval
     if (activityStatus === Status.ACTIVE) {
-        console.log(getLogTime() + ' - changeTreeActivity: Status.ACTIVE: Status.ACTIVE: update every ' + window.treeInterval/1000 + ' sec');
-        currentTreeInterval = window.treeInterval;
+        let updateTreeInterval = getCurrentUpdateTreeInterval();
+        console.log(getLogTime() + ' - changeTreeActivity: Status.ACTIVE: Status.ACTIVE: update every ' + updateTreeInterval + ' sec');
+        currentTreeInterval = updateTreeInterval;
         window.updateTreeTimer();
         return;
     }

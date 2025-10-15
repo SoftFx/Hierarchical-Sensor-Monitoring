@@ -120,3 +120,7 @@ window.tryValidate = function (element, propertyElement, propertyName) {
 
     return input.length === 0 || input[0].reportValidity();
 }
+
+window.getCurrentUpdateTreeInterval =  function () {
+    return document.getElementById('treeInterval').value * 1000;
+}

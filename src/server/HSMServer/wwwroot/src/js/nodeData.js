@@ -22,22 +22,41 @@ window.currentSelectedNodeId = "";
 //    });
 //}
 
+function isHomeController(path) {
+    const result = path.toLowerCase();
+    return result.startsWith("/home/") || result == "/home";
+}
+
 
 function handleActivateNode(e, data) {
-    if (data.node.id != undefined) {
-        selectNodeAjax(data.node.id);
+
+    const path = window.location.pathname;
+
+    if (isHomeController(path)) {
+        if (data.node.id != undefined) {
+            selectNodeAjax(data.node.id);
+        }
     }
 }
 
 function handleStateReady() {
-    let selected = $(this).jstree('get_selected')[0];
-    let id = window.location.pathname.slice("/Home/".length);
 
-    if (id !== '' && id !== undefined) {
-        selected = id;
+    const path = window.location.pathname;
+
+    if (isHomeController(path)) {
+
+        let selected = $(this).jstree('get_selected')[0];
+
+        const prefix = "/Home/"
+
+        let id = path.slice(prefix.length);
+
+        if (id !== '' && id !== undefined) {
+            selected = id;
+        }
+
+        selectNodeAjax(selected);
     }
-
-    selectNodeAjax(selected);
 }
 
 window.initializeTreeNode = function () {
@@ -70,13 +89,14 @@ function selectNodeAjax(selectedId) {
         saveMetaData(selectedId);
     }
     else {
-        if (window.localStorage.isDashboardRedirect && window.localStorage.isDashboardRedirect === 'true') 
-        {
+        if (window.localStorage.isDashboardRedirect && window.localStorage.isDashboardRedirect === 'true') {
             $('#jstree').jstree('deselect_all').jstree('select_node', selectedId);
             window.localStorage.isDashboardRedirect = false;
         }
-        window.history.replaceState( {} , document.title, `/Home/${selectedId}` )
-        initSelectedNode(selectedId);
+        else {
+            window.history.replaceState({}, document.title, `/Home/${selectedId}`)
+            initSelectedNode(selectedId);
+        }
     }
 }
 

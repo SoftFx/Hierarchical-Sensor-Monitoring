@@ -107,10 +107,9 @@
 
 <script>
 
-       const scrollHandlers = {
+    const scrollHandlers = {
         saveTreeScroll: () => {
             const treeWrapper = document.querySelector('.tree-wrapper');
-            
 
             if (treeWrapper) {
                 const scrollPosition = treeWrapper.scrollTop;
@@ -120,7 +119,6 @@
                     sessionStorage.setItem('treeScrollPosition', scrollPosition.toString());
             }
         },
-
             restoreTreeScroll: () => {
             const savedPosition = sessionStorage.getItem('treeScrollPosition');
             //console.log("DOMContentLoaded: Scroll position: '" + savedPosition);
@@ -132,7 +130,6 @@
                     const treeWrapper = document.querySelector('.tree-wrapper');
 
                     if (treeWrapper) {
-                        
                         treeWrapper.scrollTop = savedPosition;
                         //console.log("Scroll position: '" + savedPosition + "' is set. Tree scroll: " + treeWrapper.scrollTop);
                     }
@@ -144,8 +141,6 @@
                         setTimeout(tryRestoreScroll, 100);
                         //console.log('Timer is started:');
                     }
-
-
                 };
 
                 setTimeout(() => { tryRestoreScroll(); }, 100);
@@ -154,24 +149,22 @@
     };
 
     window.addEventListener('beforeunload', scrollHandlers.saveTreeScroll);
-    window.addEventListener('DOMContentLoaded', scrollHandlers.restoreTreeScroll);
-
-    initializeTree();
-
 
     var clipboard = new ClipboardJS('[id^="copy_"]', {
         container: document.getElementById('accessKeys_modal')
     });
 
-    // var interval = $("#treeInterval").val() * 1000;
-    // setTimeout(updateTreeTimer, interval);
+    setTimeout(updateTreeTimer, getCurrentUpdateTreeInterval());
 
-    setTimeout(updateTreeTimer, window.treeInterval);
-    //console.log("_Layout: window.treeInterval = " + window.treeInterval);
+    document.addEventListener('DOMContentLoaded', () => {
 
+        initializeTree();
 
-    $(document).ready(() => {
-        $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
+        scrollHandlers.restoreTreeScroll();
+
+        const updateTimeElement = document.getElementById('updateTime');
+        updateTimeElement.innerHTML = '';
+        updateTimeElement.append('Update Time: ' + new Date().toUTCString());
     });
 
     $(window).on('load', function () {
