@@ -21,7 +21,8 @@ jobs:
      # - name: Intall nuget
      #   uses: nuget/setup-nuget@v2
      #   with:
-     #     nuget-api-key: ${{ secrets.NUGETKEY }}
+     #   nuget-api-key: ${{ secrets.NUGETKEY }}
+
 
       - name: Install dependencies
         run: dotnet restore ${{ env.SolutionPath }}
