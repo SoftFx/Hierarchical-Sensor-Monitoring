@@ -24,7 +24,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         internal WindowsSensorBase(BarSensorOptions options) : base(options) { }
 
 
-        internal override ValueTask<bool> InitAsync()
+        public override ValueTask<bool> InitAsync()
         {
             try
             {
@@ -56,7 +56,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         }
 
 
-        internal override ValueTask StopAsync()
+        public override ValueTask StopAsync()
         {
             _performanceCounter?.Dispose();
 

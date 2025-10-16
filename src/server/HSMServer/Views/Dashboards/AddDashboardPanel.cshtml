@@ -13,7 +13,7 @@
     var jsonOptions = new JsonSerializerOptions()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new PlotlyDoubleConverter(), new VersionSourceConverter() }
+        Converters = {new PlotlyDoubleConverter(), new VersionSourceConverter()}
     };
 
     var isYRangeAvailabe = !Model.MainSensorType.HasValue || Model.YRange.IsRangeScalePossible(Model.MainSensorType.Value);
@@ -61,6 +61,10 @@
                             <input type="checkbox" asp-for="ShowProduct" class="form-check-input" onchange="javascript:showProductInLabels()"/>
                             <label class="form-check-label" asp-for="ShowProduct"></label>
                         </div>
+                        <div class="form-check ms-4">
+                            <input type="checkbox" asp-for="ShowProperties" class="form-check-input" onchange="javascript:showProperiesInLabels()"/>
+                            <label class="form-check-label" asp-for="ShowProperties"></label>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -90,10 +94,10 @@
     <label class="col-form-label fw-bold">Sources:</label>
     <div id="plots" class="mt-1">
         <ul id="sources" class="list-group">
-            @foreach (var (_, source) in Model.Sources)
-            {
-                @await Html.PartialAsync("_SourceSettings", source);
-            }
+                @foreach (var (_, source) in Model.Sources)
+                {
+                    @await Html.PartialAsync("_SourceSettings", source)
+                }
         </ul>
     </div>
 
@@ -102,15 +106,21 @@
     </div>
 </div>
 
+
 @await Html.PartialAsync("_ApplyTemplateModal")
 @await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
 
-<script>  
-   
+<script>
+    function rgbToHex(rgb) { let rgbValues = rgb.match(/\d+/g); return "#" + rgbValues.map(value => { let hex = parseInt(value).toString(16); return hex.length === 1 ? "0" + hex : hex; }).join(""); }
     let rangePreviewUpdate;
     var multichartRange;
-    
+
+    $('.color-option').on('click', function(){
+        const color = $(this.parentNode.parentElement).find('.dropdown-color');
+        color.val(rgbToHex(this.style.backgroundColor)).trigger('input');
+    })
+
     $(() => {
         setMultichartRemoveListeners();
                 
@@ -193,6 +203,32 @@
                 $(`#productName_${sourceId}`).removeClass('d-none');
             else
                 $(`#productName_${sourceId}`).addClass('d-none');
+
+            realtimeUpdate(sourceId);
+        });
+    }
+
+    function showProperiesInLabels() {
+        $('#sources li').each(function (idx, li) {
+            let source = $(li);
+
+            let idAttr = source.attr('id');
+            let sourceId = idAttr.substring('source_'.length, idAttr.length);
+
+            const showPropertyInput = $(`#showSensorProperty_input_${sourceId}`);
+            const propertyLabel = $(`#label_property_${sourceId}`);
+            const showSensorPropertyLabel = $(`#showSensorProperty_${sourceId}`);
+            
+            if ($(`input[name='ShowProperties']`).is(':checked')) {
+                propertyLabel.removeClass('d-none');
+                showPropertyInput.attr('disabled', true).removeClass('fw-bold').addClass('fw-normal').prop('checked', true);
+                showSensorPropertyLabel.removeClass('fw-bold').addClass('fw-normal');
+            }
+            else {
+                propertyLabel.addClass('d-none'); 
+                showPropertyInput.attr('disabled', false).addClass('fw-bold').removeClass('fw-normal').prop('checked', false);
+                showSensorPropertyLabel.addClass('fw-bold').removeClass('fw-normal');
+            }
 
             realtimeUpdate(sourceId);
         });

@@ -1,4 +1,8 @@
-﻿using HSMSensorDataObjects.HistoryRequests;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -8,11 +12,11 @@ using HSMServer.Core.Model.HistoryValues;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableOfChanges;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
+using HSMServer.Core.Services;
 using ApiSensorStatus = HSMSensorDataObjects.SensorStatus;
+using HSMDataCollector.DefaultSensors;
+using HSMServer.DTOs;
+using RateDisplayUnit = HSMServer.Core.Model.RateDisplayUnit;
 
 
 namespace HSMServer.ApiObjectsConverters
@@ -22,17 +26,17 @@ namespace HSMServer.ApiObjectsConverters
         public static BooleanValue Convert(this BoolSensorValue value) =>
             new()
             {
-                Comment = value.Comment,
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = value.Value
+                Value = value.Value,
             };
 
 
         public static IntegerValue Convert(this IntSensorValue value) =>
             new()
             {
-                Comment = value.Comment,
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
@@ -42,7 +46,7 @@ namespace HSMServer.ApiObjectsConverters
         public static DoubleValue Convert(this DoubleSensorValue value) =>
             new()
             {
-                Comment = value.Comment,
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
@@ -52,50 +56,48 @@ namespace HSMServer.ApiObjectsConverters
         public static StringValue Convert(this StringSensorValue value) =>
             new()
             {
-                Comment = value.Comment,
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = value.Value
+                Value = HtmlSanitizerService.Sanitize(value.Value)
             };
 
 
         public static TimeSpanValue Convert(this TimeSpanSensorValue value) =>
             new()
             {
-                Comment = value.Comment,
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
 
 
-        public static VersionValue Convert(this VersionSensorValue value)
-        {
-            return new()
+        public static VersionValue Convert(this VersionSensorValue value) =>
+
+            new()
             {
-                Comment = value.Comment,
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
-        }
 
-        public static RateValue Convert(this RateSensorValue value)
-        {
-            return new()
+
+        public static RateValue Convert(this RateSensorValue value) =>
+            new()
             {
-                Comment = value.Comment,
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
-        }
 
 
         public static FileValue Convert(this FileSensorValue value) =>
             new()
             {
-                Comment = value.Comment,
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value?.ToArray() ?? [],
@@ -104,11 +106,10 @@ namespace HSMServer.ApiObjectsConverters
                 OriginalSize = value.Value?.Count ?? 0L
             };
 
-
         public static IntegerBarValue Convert(this IntBarSensorValue value) =>
             new()
             {
-                Comment = value.Comment,
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Count = value.Count,
@@ -125,7 +126,7 @@ namespace HSMServer.ApiObjectsConverters
         public static DoubleBarValue Convert(this DoubleBarSensorValue value) =>
             new()
             {
-                Comment = value.Comment,
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Count = value.Count,
@@ -141,10 +142,43 @@ namespace HSMServer.ApiObjectsConverters
         public static EnumValue Convert(this EnumSensorValue value) =>
             new()
             {
-                Comment = value.Comment,
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
                 Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
+            };
+
+        public static IntegerBarValue Convert(this IntMonitoringBar value) =>
+            new()
+            {
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Time = value.Time,
+                Status = value.Status.Convert(),
+                Count = value.Count,
+                OpenTime = value.OpenTime,
+                CloseTime = value.CloseTime,
+                Min = value.Min,
+                Max = value.Max,
+                Mean = value.Mean,
+                FirstValue = value.FirstValue,
+                LastValue = value.LastValue,
+            };
+
+
+        public static DoubleBarValue Convert(this DoubleMonitoringBar value) =>
+            new()
+            {
+                Comment = HtmlSanitizerService.Sanitize(value.Comment),
+                Time = value.Time,
+                Status = value.Status.Convert(),
+                Count = value.Count,
+                OpenTime = value.OpenTime,
+                CloseTime = value.CloseTime,
+                Min = value.Min,
+                Max = value.Max,
+                Mean = value.Mean,
+                FirstValue = value.FirstValue,
+                LastValue = value.LastValue,
             };
 
         public static BaseValue Convert(this SensorValueBase value) =>
@@ -161,6 +195,8 @@ namespace HSMServer.ApiObjectsConverters
                 FileSensorValue sv => sv.Convert(),
                 RateSensorValue sv => sv.Convert(),
                 EnumSensorValue sv => sv.Convert(),
+                IntMonitoringBar sv => sv.Convert(),
+                DoubleMonitoringBar sv => sv.Convert(),
                 _ => null
             };
 
@@ -237,8 +273,8 @@ namespace HSMServer.ApiObjectsConverters
             return apiValues;
         }
 
-        public static HistoryRequestModel Convert(this HistoryRequest request, Guid key) =>
-            new(key, request.Path)
+        public static HistoryRequestModel Convert(this HistoryRequest request, Guid key, Guid productId) =>
+            new(key, productId, request.Path)
             {
                 From = request.From,
                 To = request.To,
@@ -270,6 +306,8 @@ namespace HSMServer.ApiObjectsConverters
                 DefaultAlertsOptions = (Core.Model.DefaultAlertsOptions)request.DefaultAlertsOptions,
                 Initiator = initiator,
                 EnumOptions = request.EnumOptions,
+
+                DisplayUnit = request.DisplayUnit.HasValue ? (RateDisplayUnit)request.DisplayUnit.Value : (RateDisplayUnit?) null
             };
         }
 
@@ -326,7 +364,7 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-        private static SensorStatus Convert(this ApiSensorStatus status) =>
+        public static SensorStatus Convert(this ApiSensorStatus status) =>
             status switch
             {
                 ApiSensorStatus.Ok => SensorStatus.Ok,

@@ -3,6 +3,7 @@ using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Http;
+using NLog;
 using System;
 using System.Net;
 using System.Threading.Tasks;
@@ -19,28 +20,37 @@ namespace HSMServer.Middleware.Telemetry
 
         private protected readonly ClientStatisticsSensors _statistics = _collector.WebRequestsSensors;
 
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         public async Task<bool> TryRegisterPublicApiRequest(HttpContext context)
         {
-            if (IsPublicApiRequest(context))
+            try
             {
-                _statistics.Total.AddRequestData(context.Request);
-
-                if (TryBuildPublicApiInfo(context, out var info, out var error))
+                if (IsPublicApiRequest(context))
                 {
-                    context.SetPublicApiInfo(info);
+                    _statistics.Total.AddRequestData(context.Request);
 
-                    _statistics[info.TelemetryPath].AddRequestData(context.Request);
-                }
-                else
-                {
-                    await context.SetAccessError(error);
+                    if (TryBuildPublicApiInfo(context, out var info, out var error))
+                    {
+                        context.SetPublicApiInfo(info);
 
-                    return false;
+                        _statistics[info.TelemetryPath].AddRequestData(context.Request);
+                    }
+                    else
+                    {
+                        await context.SetAccessError(error);
+
+                        return false;
+                    }
                 }
+
+                return true;
             }
-
-            return true;
+            catch (Exception ex) 
+            {
+                _logger.Error(ex);
+                return false;
+            }
         }
 
         [Obsolete("Should be removed ater migration from v3 to v4")]
@@ -53,9 +63,9 @@ namespace HSMServer.Middleware.Telemetry
         private bool TryBuildPublicApiInfo(HttpContext context, out PublicApiRequestInfo info, out string error)
         {
             info = null;
-            error = null;
+            error = string.Empty;
 
-            if (!TryGetApiKey(context, out var apiKeyId))
+            if (!TryGetApiKey(context, out var apiKeyId, out error))
                 return false;
 
             if (!_cache.TryGetKey(apiKeyId, out var apiKey, out error))
@@ -80,12 +90,16 @@ namespace HSMServer.Middleware.Telemetry
             return true;
         }
 
-        private static bool TryGetApiKey(HttpContext context, out Guid apiKey)
+        private static bool TryGetApiKey(HttpContext context, out Guid apiKey, out string error)
         {
             apiKey = Guid.Empty;
 
-            return context.TryReadInfo(AccessKeyHeader, out var key) && !string.IsNullOrEmpty(key) && Guid.TryParse(key, out apiKey);
+            var result = context.TryReadInfo(AccessKeyHeader, out var key) && !string.IsNullOrEmpty(key) && Guid.TryParse(key, out apiKey);
+            error = result ? string.Empty : "Invalid access key";
+
+            return result;
         }
+        
 
         private static bool TryGetRemoteIP(HttpContext context, out string remoteIp)
         {
@@ -110,6 +124,6 @@ namespace HSMServer.Middleware.Telemetry
             return ip is not null;
         }
 
-        private static string GetClientName(HttpContext context) => context.TryReadInfo(ClientNameHeader, out var name) && !string.IsNullOrWhiteSpace(name) ? name.ToString() : EmptyClient;
+        private static string GetClientName(HttpContext context) => context.TryReadInfo(ClientNameHeader, out var name) && !string.IsNullOrWhiteSpace(name) ? name : EmptyClient;
     }
 }

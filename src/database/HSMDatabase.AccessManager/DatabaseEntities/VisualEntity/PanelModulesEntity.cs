@@ -31,6 +31,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public byte Property { get; set; }
 
         public byte Shape { get; set; }
+        
+        public bool ShowProperty { get; set; }
     }
 
 

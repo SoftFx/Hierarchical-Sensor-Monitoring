@@ -9,11 +9,12 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Sensors
 {
-    internal sealed class FileSensorInstant : SensorInstant<List<byte>>, IFileSensor
+    internal sealed class FileSensorInstant : SensorInstant<List<byte>, NoDisplayUnit>, IFileSensor
     {
         private readonly FileSensorOptions _options;
         private readonly ICollectorLogger _logger;

@@ -67,7 +67,7 @@ namespace HSMServer.Model.History
                 _lastBar = _sensor.LastValue as BarBaseValue;
 
             Table = new HistoryTableViewModel(_sensor);
-
+            
             NewValuesCnt = 0;
 
             sensor.ReceivedNewValue += NewSensorValueHandler;

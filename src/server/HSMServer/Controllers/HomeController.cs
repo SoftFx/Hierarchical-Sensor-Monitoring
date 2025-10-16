@@ -1,3 +1,11 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Text.Json;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -24,14 +32,10 @@ using HSMServer.Model.ViewModel;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using HSMServer.DTOs.Sensors;
 using TimeInterval = HSMServer.Model.TimeInterval;
+using HSMServer.Core.DataLayer;
+
 
 namespace HSMServer.Controllers
 {
@@ -44,16 +48,19 @@ namespace HSMServer.Controllers
         private readonly IJournalService _journalService;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
+        private readonly IDatabaseCore _database;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager) : base(userManager)
+                              IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager, 
+                              IDatabaseCore database) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
             _journalService = journalService;
             _telegramChatsManager = telegramChatsManager;
+            _database = database;
         }
 
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -159,7 +166,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void SetMutedStateToSensorFromModal(IgnoreNotificationsViewModel model)
+        public async ValueTask SetMutedStateToSensorFromModal(IgnoreNotificationsViewModel model)
         {
             var newMutingPeriod = model.EndOfIgnorePeriod;
 
@@ -169,15 +176,15 @@ namespace HSMServer.Controllers
                 if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
                 {
                     foreach (var sensorId in GetNodeSensors(decodedId))
-                        _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator, newMutingPeriod);
+                        await _treeValuesCache.UpdateMutedSensorStateAsync(sensorId, CurrentInitiator, newMutingPeriod);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator, newMutingPeriod);
+                    await _treeValuesCache.UpdateMutedSensorStateAsync(sensor.Id, CurrentInitiator, newMutingPeriod);
             }
         }
 
         [HttpPost]
-        public void RemoveMutedStateToSensor([FromBody] string[] ids)
+        public async ValueTask RemoveMutedStateToSensor([FromBody] string[] ids)
         {
             foreach (var id in ids)
             {
@@ -186,15 +193,15 @@ namespace HSMServer.Controllers
                 if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
                 {
                     foreach (var sensorId in GetNodeSensors(decodedId))
-                        _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator);
+                        await _treeValuesCache.UpdateMutedSensorStateAsync(sensorId, CurrentInitiator);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator);
+                    await _treeValuesCache.UpdateMutedSensorStateAsync(sensor.Id, CurrentInitiator);
             }
         }
 
         [HttpPost]
-        public ActionResult RemoveNode([FromBody] string[] ids)
+        public async Task<ActionResult> RemoveNode([FromBody] string[] ids)
         {
             var model = new MultiActionsToastViewModel();
 
@@ -214,7 +221,7 @@ namespace HSMServer.Controllers
                         continue;
                     }
 
-                    _treeValuesCache.RemoveProduct(node.Id, InitiatorInfo.AsUser(CurrentUser.Name));
+                    await _treeValuesCache.RemoveProductAsync(node.Id, InitiatorInfo.AsUser(CurrentUser.Name));
                     model.AddItem(node);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
@@ -225,7 +232,7 @@ namespace HSMServer.Controllers
                         continue;
                     }
 
-                    _treeValuesCache.RemoveSensor(sensor.Id, CurrentInitiator);
+                    await _treeValuesCache.RemoveSensorAsync(sensor.Id, CurrentInitiator);
                     model.AddItem(sensor);
                 }
             }
@@ -274,7 +281,7 @@ namespace HSMServer.Controllers
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var product))
                 {
-                    if (!CurrentUser.IsManager(product.RootProduct.Id))
+                    if (!CurrentUser.IsManager(product?.RootProduct?.Id ?? Guid.Empty))
                     {
                         toastViewModel.AddRoleError(product.Name, "edit");
                         continue;
@@ -296,7 +303,7 @@ namespace HSMServer.Controllers
                     else
                     {
                         toastViewModel.AddItem(product);
-                        _treeValuesCache.UpdateProduct(update);
+                        await _treeValuesCache.UpdateProductAsync(update);
                     }
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
@@ -315,7 +322,7 @@ namespace HSMServer.Controllers
                     };
 
                     toastViewModel.AddItem(sensor);
-                    _treeValuesCache.TryUpdateSensor(update, out _);
+                    await _treeValuesCache.UpdateSensorAsync(update);
                 }
             }
 
@@ -323,16 +330,16 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void ClearHistoryNode([FromQuery] string selectedId)
+        public async ValueTask ClearHistoryNode([FromQuery] string selectedId)
         {
             ClearHistoryRequest GetRequest(Guid id) => new(id, CurrentInitiator);
 
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                _treeValuesCache.ClearNodeHistory(GetRequest(node.Id));
+                await _treeValuesCache.ClearNodeHistoryAsync(GetRequest(node.Id));
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.ClearSensorHistory(GetRequest(sensor.Id));
+                await _treeValuesCache.ClearSensorHistoryAsync(GetRequest(sensor.Id));
         }
 
         [HttpPost]
@@ -356,7 +363,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public string GetNodePath([FromQuery] string selectedId, [FromQuery] bool isFullPath = false)
+        public string GetNodePath([FromQuery] string selectedId, [FromQuery] bool isFullPath = true)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
@@ -369,12 +376,12 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void EnableGrafana(string selectedId) => ChangeSensorsIntegration(selectedId, Integration.Grafana);
+        public ValueTask EnableGrafana(string selectedId) => ChangeSensorsIntegrationAsync(selectedId, Integration.Grafana);
 
         [HttpPost]
-        public void DisableGrafana(string selectedId) => ChangeSensorsIntegration(selectedId, 0);
+        public ValueTask DisableGrafana(string selectedId) => ChangeSensorsIntegrationAsync(selectedId, 0);
 
-        private void ChangeSensorsIntegration(string selectedNode, Integration integration)
+        private async ValueTask ChangeSensorsIntegrationAsync(string selectedNode, Integration integration)
         {
             foreach (var sensorId in GetNodeSensors(SensorPathHelper.DecodeGuid(selectedNode)))
             {
@@ -385,7 +392,7 @@ namespace HSMServer.Controllers
                     Initiator = CurrentInitiator
                 };
 
-                _treeValuesCache.TryUpdateSensor(update, out _);
+                await _treeValuesCache.UpdateSensorAsync(update);
             }
         }
 
@@ -594,7 +601,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateSensorInfo(SensorInfoViewModel newModel)
+        public async ValueTask<IActionResult> UpdateSensorInfo(SensorInfoViewModel newModel)
         {
             if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var sensor))
                 return _emptyResult;
@@ -607,7 +614,8 @@ namespace HSMServer.Controllers
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
                 ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
-            
+
+
             var update = new SensorUpdate
             {
                 Id = sensor.Id,
@@ -620,54 +628,60 @@ namespace HSMServer.Controllers
                 SelectedUnit = newModel.SelectedUnit,
                 AggregateValues = newModel.AggregateValues,
                 Statistics = newModel.GetOptions(),
-                Initiator = CurrentInitiator
+                Initiator = CurrentInitiator,
+                DisplayUnit = newModel.DisplayUnit
             };
 
-            _treeValuesCache.TryUpdateSensor(update, out _);
+            await _treeValuesCache.UpdateSensorAsync(update);
 
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
+        
+        [HttpPost]
+        public async ValueTask<IActionResult> UpdateSensorDisplayUnit(string encodedId, RateDisplayUnit displayUnit)
+        {
+            var sensorId = SensorPathHelper.DecodeGuid(encodedId);
+
+            var update = new SensorUpdate
+            {
+                Id = sensorId,
+                Initiator = CurrentInitiator,
+                DisplayUnit = displayUnit
+            };
+
+            await _treeValuesCache.UpdateSensorAsync(update);
+
+            return Ok();
+        }
+        
 
         public IActionResult AddDataPolicy(byte type, Guid entityId)
         {
-            if (!TryGetSelectedNode(entityId, out var entity))
-                return _emptyResult;
+            TryGetSelectedNode(entityId, out var entity);
 
-            DataAlertViewModelBase viewModel = type switch
-            {
-                (byte)SensorType.File => new FileDataAlertViewModel(entity),
-                (byte)SensorType.String => new StringDataAlertViewModel(entity),
-                (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(entity),
-                (byte)SensorType.Version => new SingleDataAlertViewModel<VersionValue>(entity),
-                (byte)SensorType.TimeSpan => new SingleDataAlertViewModel<TimeSpanValue>(entity),
-                (byte)SensorType.Integer => new NumericDataAlertViewModel<IntegerValue>(entity),
-                (byte)SensorType.Double => new NumericDataAlertViewModel<DoubleValue>(entity),
-                (byte)SensorType.Rate => new NumericDataAlertViewModel<RateValue>(entity),
-                (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue>(entity),
-                (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue>(entity),
-                (byte)SensorType.Enum => new NumericDataAlertViewModel<EnumValue>(entity),
-                TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(entity),
-                _ => null,
-            };
+            DataAlertViewModelBase viewModel = DataAlertViewModel.BuildAlert(type, entity);
 
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
 
-        public IActionResult AddAlertCondition(Guid sensorId) => _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
-            ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(sensor))
-            : _emptyResult;
-
-        public IActionResult AddAlertAction(Guid entityId, bool isMain, bool isTtl) => TryGetSelectedNode(entityId, out var entity)
-            ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, isTtl, entity))
-            : _emptyResult;
-
-        public IActionResult GetOperation(Guid sensorId, AlertProperty property)
+        public IActionResult AddAlertCondition(byte type)
         {
-            if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
-                return _emptyResult;
+            return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(type));
+        }
 
-            var condition = BuildAlertCondition(sensor);
+        public IActionResult AddAlertAction(Guid entityId, bool isMain, bool isTtl)
+        {
+            HashSet<Guid> chats = [];
+            if (TryGetSelectedNode(entityId, out var entity))
+                entity.TryGetChats(out chats);
+
+            return PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, isTtl, chats) { Icon = ActionViewModel.DefaultIcon });
+        }
+
+        public IActionResult GetOperation(byte type, AlertProperty property)
+        {
+            var condition = BuildAlertCondition(type);
 
             return property switch
             {
@@ -682,20 +696,20 @@ namespace HSMServer.Controllers
 
         public IActionResult IsTargetVisible(PolicyOperation operation) => Json(operation.IsTargetVisible());
 
-        private static ConditionViewModel BuildAlertCondition(SensorNodeViewModel sensor) =>
-            sensor.Type switch
+        private static ConditionViewModel BuildAlertCondition(byte type) =>
+            type switch
             {
-                SensorType.File => new FileConditionViewModel(false),
-                SensorType.String => new StringConditionViewModel(false),
-                SensorType.Boolean => new CommonConditionViewModel(false),
-                SensorType.Version => new SingleConditionViewModel(false),
-                SensorType.TimeSpan => new SingleConditionViewModel(false),
-                SensorType.Integer => new NumericConditionViewModel(false),
-                SensorType.Double => new NumericConditionViewModel(false),
-                SensorType.Rate => new NumericConditionViewModel(false),
-                SensorType.IntegerBar => new BarConditionViewModel(false),
-                SensorType.DoubleBar => new BarConditionViewModel(false),
-                SensorType.Enum => new NumericConditionViewModel(false),
+                (byte)SensorType.File => new FileConditionViewModel(false),
+                (byte)SensorType.String => new StringConditionViewModel(false),
+                (byte)SensorType.Boolean => new CommonConditionViewModel(false),
+                (byte)SensorType.Version => new VersionConditionViewModel(false),
+                (byte)SensorType.TimeSpan => new SingleConditionViewModel(false),
+                (byte)SensorType.Integer => new NumericConditionViewModel(false),
+                (byte)SensorType.Double => new NumericConditionViewModel(false),
+                (byte)SensorType.Rate => new NumericConditionViewModel(false),
+                (byte)SensorType.IntegerBar => new BarConditionViewModel(false),
+                (byte)SensorType.DoubleBar => new BarConditionViewModel(false),
+                (byte)SensorType.Enum => new NumericConditionViewModel(false),
                 _ => null,
             };
 
@@ -720,7 +734,9 @@ namespace HSMServer.Controllers
 
             var sensorModel = _treeValuesCache.GetSensor(alert.EntityId);
 
-            return Json(alert.BuildToastMessage(sensorModel));
+            var message = alert.BuildToastMessage(sensorModel);
+
+            return Json(MarkdownHelper.ToHtml(message));
         }
 
 
@@ -738,7 +754,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateSensorStatus(EditSensorStatusViewModal modal)
+        public async ValueTask<IActionResult> UpdateSensorStatus(EditSensorStatusViewModal modal)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
@@ -751,11 +767,10 @@ namespace HSMServer.Controllers
                 return BadRequest(ModelState);
             }
 
-            var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             var comment = modal.Comment;
-            var updateRequest = new UpdateSensorValueRequestModel
+            var updateRequest = new UpdateSensorValueRequestModel (modal.SensorId, modal.Path)
             {
-                Id = sensor.Id,
+                Id = modal.SensorId,
                 Status = modal.NewStatus.ToCore(),
                 Comment = comment,
                 Value = modal.NewValue,
@@ -764,11 +779,36 @@ namespace HSMServer.Controllers
                 Initiator = CurrentInitiator,
             };
 
-            _treeValuesCache.UpdateSensorValue(updateRequest);
-            _treeViewModel.Sensors.TryGetValue(updateRequest.Id, out var sensorNodeViewModel);
-            sensorNodeViewModel?.Update(sensor);
+            await _treeValuesCache.UpdateSensorValueAsync(updateRequest);
+
 
             return Ok();
+        }
+
+        [HttpPost("Home/{sensorId:guid}")]
+        public async Task<IActionResult> UpdateSensorTableSettings(Guid sensorId, [FromBody] TableSettingsUpdateDto tableSettingsUpdateDto)
+        {
+            var sensor = _treeValuesCache.GetSensor(sensorId);
+
+            if (sensor is null)
+                return BadRequest("No sensor found");
+
+            if (tableSettingsUpdateDto.MaxCommentHideSize is not null &&
+                tableSettingsUpdateDto.MaxCommentHideSize < 0)
+                return BadRequest("Can't use negative numbers");
+
+
+            var update = new SensorUpdate
+            {
+                Id = sensor.Id,
+                IsHideEnabled = tableSettingsUpdateDto.IsHideEnabled,
+                MaxCommentHideSize = tableSettingsUpdateDto.MaxCommentHideSize,
+                Initiator = CurrentInitiator
+            };
+
+            await _treeValuesCache.UpdateSensorAsync(update);
+
+            return Ok("Successfully updated");
         }
 
         #endregion
@@ -783,7 +823,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateProductInfo(ProductInfoViewModel newModel)
+        public async Task<IActionResult> UpdateProductInfo(ProductInfoViewModel newModel)
         {
             if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var product))
                 return _emptyResult;
@@ -806,7 +846,7 @@ namespace HSMServer.Controllers
                 Initiator = CurrentInitiator
             };
 
-            _treeValuesCache.UpdateProduct(update);
+            await _treeValuesCache.UpdateProductAsync(update);
 
             return PartialView("_MetaInfo", new ProductInfoViewModel(product.RecalculateCharacteristics()));
         }
@@ -839,6 +879,17 @@ namespace HSMServer.Controllers
             return await _folderManager.TryUpdate(update)
                 ? PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[update.Id]))
                 : _emptyResult;
+        }
+
+        [HttpGet]
+        public JsonResult Compact()
+        {
+            if (_database.IsCompactRunning)
+                return Json(JsonSerializer.Serialize(new { Status = "Error", Error = "Compact already running" }));
+
+            _database.Compact();
+
+            return Json(JsonSerializer.Serialize(new { Status = "Ok", Result = Math.Round(_database.TotalDbSize / (double)(1 << 20), 2, MidpointRounding.AwayFromZero) }));
         }
 
         private string GetSensorPath(string encodedId)

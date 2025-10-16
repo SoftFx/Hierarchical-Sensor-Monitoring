@@ -6,10 +6,12 @@ using HSMServer.Extensions;
 using HSMServer.Model.Model.History;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMServer.Core.Model.Sensors;
 
 namespace HSMServer.Model.History
 {
@@ -21,6 +23,8 @@ namespace HSMServer.Model.History
         private IAsyncEnumerator<List<BaseValue>> _pagesEnumerator;
 
 
+        public TableSettingsModel TableSettings => _model.TableSettings;
+        
         public List<TableValueViewModel> CurrentTablePage
         {
             get
@@ -50,10 +54,14 @@ namespace HSMServer.Model.History
 
         public bool IsBarSensor => _model.Type.IsBar();
 
+        public bool IsAliveSensor => string.Equals(_model.DisplayName, _serviceAliveSensorName);
+
         public int LastIndex => Pages.Count - 1;
 
 
         public int CurrentIndex { get; private set; }
+
+        public SensorType SensorType => _model.Type;
 
 
         internal HistoryTableViewModel(BaseSensorModel model)
@@ -102,6 +110,18 @@ namespace HSMServer.Model.History
         }
 
 
+
+        public async Task<List<BaseValue>> GetAllValues()
+        {
+            while (await TryReadNextPage())
+            {  }
+
+            List<BaseValue> result = new List<BaseValue>();
+            Pages.ForEach(result.AddRange);
+
+            return result;
+        }
+
         private async Task<bool> TryReadNextPage()
         {
             var hasNext = await _pagesEnumerator.MoveNextAsync();
@@ -131,7 +151,8 @@ namespace HSMServer.Model.History
 
         private TableValueViewModel Build(BaseValue value) => _model.Type switch
         {
-            SensorType.Boolean => Build((BooleanValue)value),
+            //SensorType.Boolean => Build((BooleanValue)value),
+            SensorType.Boolean => IsAliveSensor ? BuildIsAliveSensorValues((BooleanValue)value) : Build((BooleanValue)value),
             SensorType.Integer => Build((IntegerValue)value),
             SensorType.Double => Build((DoubleValue)value),
             SensorType.Rate => Build((RateValue)value),
@@ -144,6 +165,10 @@ namespace HSMServer.Model.History
             SensorType.Enum => Build((EnumValue)value),
             _ => throw new ArgumentException($"Sensor type {_model.Type} is not allowed for history table"),
         };
+
+        private const string _serviceAliveSensorName = "Service alive";
+
+       
 
         private SimpleSensorValueViewModel Build<T>(BaseValue<T> value) =>
             new()
@@ -181,13 +206,44 @@ namespace HSMServer.Model.History
                 IsTimeout = value.IsTimeout
             };
 
+        private SimpleSensorValueViewModel BuildIsAliveSensorValues(BaseValue<bool> value) =>
+            new()
+            {
+                Value = value.Value ? "Running" : "Restarted",
+                EmaValue = value.EmaValue?.ToString(),
+                Time = value.Time.ToUniversalTime(),
+                Status = value.Status.ToClient(),
+                Comment = BuildIsAliveSensorComment(value),
+                ReceivingTime = value.ReceivingTime,
+                LastUpdateTime = value.LastUpdateTime,
+                AggregatedValuesCount = value.AggregatedValuesCount,
+                IsTimeout = value.IsTimeout
+            };
+
+        private string BuildIsAliveSensorComment(BaseValue<bool> value)
+        {
+            if (!string.IsNullOrEmpty(value.Comment))
+                return value.Comment;
+
+            return value.Value ? "Service is working" : "Service has been restarted";
+        }
+
         private string GetTableValue<T>(BaseValue<T> value) => value switch
         {
             VersionValue version => version.Value?.RemoveTailZeroes() ?? string.Empty,
             TimeSpanValue timespan => timespan.Value.ToReadableView(),
-            RateValue rate => Math.Round(rate.Value, 5).ToString(),
-            EnumValue v => _model.EnumOptions.TryGetValue(v.Value, out var option) ? option.Value : v.Value.ToString(),
-            _ => value.Value?.ToString(),
+            RateValue rate => GetRateTableValue(rate, _model), // Math.Round(rate.Value, 5).ToString(),
+            EnumValue v => v.Value != null && _model.EnumOptions.TryGetValue(v.Value, out var option) ? option.Value : v.Value.ToString(),
+            _ => value.Value?.ToString() ?? string.Empty,
         };
+
+        private static string GetRateTableValue(RateValue rate, BaseSensorModel sensor )
+        {
+            var displayValue = ((BaseValue<double>)sensor.ToDisplayValue(rate)).Value;
+            if(Math.Abs(displayValue - rate.Value) > double.Epsilon)
+                return $"{Math.Round(displayValue, 5).ToString(CultureInfo.InvariantCulture)} / ({Math.Round(rate.Value, 5).ToString(CultureInfo.InvariantCulture)})";
+
+            return Math.Round(rate.Value, 5).ToString(CultureInfo.InvariantCulture);
+        }
     }
 }

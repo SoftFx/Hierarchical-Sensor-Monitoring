@@ -1,4 +1,12 @@
-﻿window.hiddenColumns = {
+﻿import {MutationObserverService} from "../ts/services/mutation-observer-service";
+
+window.createFormObserver = function (id){
+    const obs = new MutationObserverService();
+    obs.addFormToObserve(id);
+    return obs; 
+}
+
+window.hiddenColumns = {
     id: undefined,
     
     showText: "Show all columns",
@@ -111,4 +119,8 @@ window.tryValidate = function (element, propertyElement, propertyName) {
     var input = element.find($(`${propertyElement}[name='${propertyName}']`));
 
     return input.length === 0 || input[0].reportValidity();
+}
+
+window.getCurrentUpdateTreeInterval =  function () {
+    return document.getElementById('treeInterval').value * 1000;
 }

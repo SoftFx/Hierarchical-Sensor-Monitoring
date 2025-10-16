@@ -4,6 +4,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace HSMServer.Core.Model.Policies
@@ -43,6 +44,7 @@ namespace HSMServer.Core.Model.Policies
 
         public PolicySchedule Schedule { get; set; } = new();
 
+        public Guid? TemplateId { get; set; }
 
         public string Template
         {
@@ -64,39 +66,7 @@ namespace HSMServer.Core.Model.Policies
         {
             get
             {
-                Dictionary<Guid, string> GetParentChats(ProductModel parent)
-                {
-                    var dict = new Dictionary<Guid, string>();
-
-                    if (parent is null)
-                        return dict;
-                    
-                    foreach (var (id, name) in parent.Settings.DefaultChats.CurValue.Chats)
-                    {
-                        dict.TryAdd(id, name);
-                    }
-
-                    if (parent.Settings.DefaultChats.CurValue.IsFromParent)
-                    {
-                        var par = parent.Parent;
-
-                        while (par != null)
-                        {
-                            foreach (var (id, name) in GetParentChats(par))
-                            {
-                                dict.TryAdd(id, name);
-                            }
-                            
-                            par = par.Parent;
-                        }
-
-                        return dict;
-                    }
-
-                    return dict;
-                }
-                
-                var chats = new Dictionary<Guid, string>(1 << 3);
+                var chats = new Dictionary<Guid, string>();
 
                 if (Destination.IsFromParentChats)
                 {
@@ -116,6 +86,40 @@ namespace HSMServer.Core.Model.Policies
             }
         }
 
+        internal Dictionary<Guid, string> GetParentChats(ProductModel parent)
+        {
+            var dict = new Dictionary<Guid, string>();
+
+            if (parent is null)
+                return dict;
+
+            foreach (var (id, name) in parent.Settings.DefaultChats.CurValue.Chats)
+            {
+                dict.TryAdd(id, name);
+            }
+
+            if (parent.Settings.DefaultChats.CurValue.IsFromParent)
+            {
+                var par = parent.Parent;
+
+                //TODO: Add folder chats when parent.FolderId.HasValue
+
+                while (par != null)
+                {
+                    foreach (var (id, name) in GetParentChats(par))
+                    {
+                        dict.TryAdd(id, name);
+                    }
+
+                    par = par.Parent;
+                }
+
+                return dict;
+            }
+
+            return dict;
+        }
+
 
         public Policy()
         {
@@ -126,6 +130,24 @@ namespace HSMServer.Core.Model.Policies
         protected abstract AlertState GetState(BaseValue value);
 
         protected abstract PolicyCondition GetCondition(PolicyProperty property);
+
+
+        public static Policy BuildPolicy(byte type) => type switch
+        {
+            (byte)SensorType.File => new FilePolicy(),
+            (byte)SensorType.String => new StringPolicy(),
+            (byte)SensorType.Boolean => new BooleanPolicy(),
+            (byte)SensorType.Version => new VersionPolicy(),
+            (byte)SensorType.TimeSpan => new TimeSpanPolicy(),
+            (byte)SensorType.Integer => new IntegerPolicy(),
+            (byte)SensorType.Double => new DoublePolicy(),
+            (byte)SensorType.Rate => new RatePolicy(),
+            (byte)SensorType.IntegerBar => new IntegerBarPolicy(),
+            (byte)SensorType.DoubleBar => new DoubleBarPolicy(),
+            (byte)SensorType.Enum => new EnumPolicy(),
+            AlertTemplateModel.AnyType => new BooleanPolicy(),
+            _ => null
+        };
 
 
         public string RebuildState(PolicyCondition condition = null, BaseValue value = null)
@@ -144,13 +166,19 @@ namespace HSMServer.Core.Model.Policies
 
             Comment = State.BuildComment();
 
-            PolicyResult = new PolicyResult(Sensor.Id, this);
+            PolicyResult = new PolicyResult(this);
             SensorResult = new SensorResult(Status, Comment);
 
             return Comment;
         }
 
-        internal bool TryUpdate(PolicyUpdate update, out string error, BaseSensorModel sensor = null)
+        public Policy UpdatePolicy(PolicyUpdate update)
+        {
+            TryUpdate(update, out string error);
+            return this;
+        }
+
+        public bool TryUpdate(PolicyUpdate update, out string error, BaseSensorModel sensor = null)
         {
             error = null;
 
@@ -173,6 +201,9 @@ namespace HSMServer.Core.Model.Policies
                     return condition;
                 }
 
+                if (update.Id != Guid.Empty)
+                    Id = update.Id;
+
                 Sensor ??= sensor;
 
                 Destination.Update(update.Destination);
@@ -182,6 +213,7 @@ namespace HSMServer.Core.Model.Policies
                 Template = update.Template;
                 Status = update.Status;
                 Icon = update.Icon;
+                TemplateId = update.TemplateId;
 
                 UpdateConditions(update.Conditions, Update);
             }
@@ -193,13 +225,21 @@ namespace HSMServer.Core.Model.Policies
             return string.IsNullOrEmpty(error);
         }
 
-        internal void Apply(PolicyEntity entity, BaseSensorModel sensor = null)
+        public void Apply(PolicyEntity entity, BaseSensorModel sensor = null)
         {
             PolicyCondition Update(PolicyConditionEntity entity) => BuildCondition((PolicyProperty)entity.Property).FromEntity(entity);
 
             Sensor ??= sensor;
 
             Id = new Guid(entity.Id);
+            try
+            {
+                TemplateId = entity.TemplateId?.Length > 0 ? new Guid(entity.TemplateId) : null;
+            }
+            catch
+            {
+                TemplateId = null;
+            }
             Status = entity.SensorStatus.ToStatus();
 
             ConfirmationPeriod = entity.ConfirmationPeriod;
@@ -213,7 +253,7 @@ namespace HSMServer.Core.Model.Policies
             UpdateConditions(entity.Conditions, Update);
         }
 
-        internal PolicyEntity ToEntity() => new()
+        public PolicyEntity ToEntity() => new()
         {
             Id = Id.ToByteArray(),
 
@@ -227,6 +267,7 @@ namespace HSMServer.Core.Model.Policies
             IsDisabled = IsDisabled,
             Template = Template,
             Icon = Icon,
+            TemplateId = TemplateId.HasValue ? Id.ToByteArray() : []
         };
 
 

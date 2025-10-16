@@ -13,6 +13,7 @@ namespace HSMServer.Core.DataLayer
 
         ISnapshotDatabase Snapshots { get; }
 
+        public bool IsCompactRunning { get; }
 
         long SensorHistoryDbSize { get; }
 
@@ -23,6 +24,8 @@ namespace HSMServer.Core.DataLayer
         long BackupsSize { get; }
 
         long TotalDbSize { get; }
+
+        int SensorValuesPageCount { get; }
 
 
         TaskResult<string> BackupEnvironment(string backupPath);
@@ -75,6 +78,8 @@ namespace HSMServer.Core.DataLayer
 
         IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
 
+        IAsyncEnumerable<byte[]> GetSensorValues(Guid sensorId, DateTime from, DateTime to);
+
         List<SensorEntity> GetAllSensors();
 
         (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId);
@@ -109,6 +114,12 @@ namespace HSMServer.Core.DataLayer
 
         #endregion
 
+        #region Alert Templates
+        List<AlertTemplateEntity> GetAllAlertTemplates();
+        void AddAlertTemplate(AlertTemplateEntity policy);
+        void RemoveAlertTemplate(Guid id);
+        #endregion
+
         #region Journal
 
         void AddJournalValue(JournalKey journalKey, JournalRecordEntity value);
@@ -118,5 +129,7 @@ namespace HSMServer.Core.DataLayer
         IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count);
 
         #endregion
+
+        void Compact();
     }
 }

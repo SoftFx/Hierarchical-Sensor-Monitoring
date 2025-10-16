@@ -25,6 +25,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly byte[] _policyIdsKey = "NewPolicyIds"u8.ToArray();
         private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
         private readonly byte[] _telegramChatIdsKey = "TelegramChats"u8.ToArray();
+        private readonly byte[] _alertTemplatesIdsKey = "AlertTemplates"u8.ToArray();
 
         private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
@@ -660,6 +661,81 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         }
 
         #endregion
+
+        #region AlertTemplates
+
+        public void AddAlertTemplateIdToList(byte[] id)
+        {
+            try
+            {
+                var ids = GetAllAlertTemplatesIds();
+
+                if (!ids.Contains(id))
+                {
+                    ids.Add(id);
+                    _database.Put(_alertTemplatesIdsKey, JsonSerializer.SerializeToUtf8Bytes(ids));
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add Alert template id {id} to list");
+            }
+        }
+
+        public void AddAlertTemplate(AlertTemplateEntity entity)
+        {
+            try
+            {
+                _database.Put(entity.Id, JsonSerializer.SerializeToUtf8Bytes(entity, _options));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add alert template info for {entity.Id}");
+            }
+        }
+
+        public void RemoveAlertTemplate(byte[] id)
+        {
+            try
+            {
+
+                var ids = GetAllAlertTemplatesIds();
+                ids.RemoveAll(x => new Guid(x) == new Guid(id));
+     
+                _database.Put(_alertTemplatesIdsKey, JsonSerializer.SerializeToUtf8Bytes(ids));
+                _database.Delete(id);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove Alert template by {id}");
+            }
+        }
+
+        public List<byte[]> GetAllAlertTemplatesIds() => GetListOfBytes(_alertTemplatesIdsKey, "Failed to get all alert template Ids");
+
+
+        public AlertTemplateEntity GetAlertTemplate(byte[] id)
+        {
+            try
+            {
+                return _database.TryRead(id, out byte[] value)
+                       ? JsonSerializer.Deserialize<AlertTemplateEntity>(value)
+                       : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for alert template {id}");
+            }
+
+            return null;
+        }
+
+        #endregion
+
+        public void Compact()
+        {
+            _database.Compact();
+        }
 
         public void Dispose() => _database.Dispose();
 

@@ -1,9 +1,10 @@
 ﻿using HSMSensorDataObjects.HistoryRequests;
 using System;
 
+
 namespace HSMServer.Core.Model.Requests
 {
-    public class HistoryRequestModel : BaseRequestModel
+    public record HistoryRequestModel : BaseUpdateRequest
     {
         public DateTime From { get; set; }
 
@@ -13,10 +14,13 @@ namespace HSMServer.Core.Model.Requests
 
         public RequestOptions Options { get; set; }
 
+        public Guid Key { get; set; }
 
-        public HistoryRequestModel(string key, string path) : base(key, path) { }
-        
-        public HistoryRequestModel(Guid key, string path) : base(key, path) { }
+        public HistoryRequestModel(Guid key, Guid productId,  string path) : base (productId, path)
+        {
+            Key = key;
+        }
+
     }
 
 

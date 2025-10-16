@@ -2,7 +2,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows.Network
 {
-    internal abstract class ConnectionsDifferenceSensor : BaseSocketsSensor
+    public abstract class ConnectionsDifferenceSensor : BaseSocketsSensor
     {
         private int? _prevValue;
 

@@ -32,6 +32,13 @@ namespace HSMDataCollector.Prototypes
             "More info can be found [**here**](https://en.wikipedia.org/wiki/Random-access_memory).";
 
             SensorUnit = Unit.MB;
+
+            Alerts = new List<BarAlertTemplate>()
+            {
+                AlertsFactory.IfEmaMean(AlertOperation.LessThan, 2)
+                             .ThenSendInstantHourlyScheduledNotification("[$product]$path $property $operation $target$unit")
+                             .AndSetIcon(AlertIcon.Warning).Build(),
+            };
         }
     }
 

@@ -3,9 +3,9 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsFreeDiskSpacePrediction : FreeDiskSpacePredictionBase
+    public sealed class WindowsFreeDiskSpacePrediction : FreeDiskSpacePredictionBase
     {
-        public WindowsFreeDiskSpacePrediction(DiskSensorOptions options)
+        internal WindowsFreeDiskSpacePrediction(DiskSensorOptions options)
             : base(options, new WindowsDiskInfo(options.TargetPath)) { }
     }
 }

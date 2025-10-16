@@ -36,6 +36,8 @@ namespace HSMServer.Dashboards
         public bool AggregateValues { get; private set; }
 
         public bool ShowProduct { get; private set; }
+        
+        public bool ShowProperties { get; private set; }
 
 
         internal Panel(Dashboard board) : base()
@@ -57,6 +59,7 @@ namespace HSMServer.Dashboards
 
             AggregateValues = !entity.IsNotAggregate;
             ShowProduct = entity.ShowProduct;
+            ShowProperties = entity.ShowProperties;
 
             if (entity.Settings is not null)
                 Settings.FromEntity(entity.Settings);
@@ -75,6 +78,7 @@ namespace HSMServer.Dashboards
         {
             AggregateValues = update.IsAggregateValues ?? AggregateValues;
             ShowProduct = update.ShowProduct ?? ShowProduct;
+            ShowProperties = update.ShowProperties ?? ShowProperties;
 
             YRange.Update(update);
             Settings.Update(update);
@@ -85,7 +89,7 @@ namespace HSMServer.Dashboards
                     ApplyPanelSettings(sub);
 
                 foreach (var (_, source) in Sources)
-                    source.BuildSource(YRange, AggregateValues, Settings.IsSingleMode);
+                    source.BuildSource(YRange, AggregateValues, Settings.IsSingleMode, ShowProperties);
             }
         }
 
@@ -101,6 +105,7 @@ namespace HSMServer.Dashboards
 
             entity.IsNotAggregate = !AggregateValues;
             entity.ShowProduct = ShowProduct;
+            entity.ShowProperties = ShowProperties;
 
             return entity;
         }
@@ -126,6 +131,9 @@ namespace HSMServer.Dashboards
         {
             source = _board.TryGetSensor(sensorId, out var sensor) ? new PanelDatasource(sensor) : null;
 
+            if (source is not null)
+                source.ShowProperty = ShowProperties;
+            
             return TrySaveNewSource(source, out error).ThenCall().IsOk; ;
         }
 
@@ -192,6 +200,8 @@ namespace HSMServer.Dashboards
             foreach (var source in template.BuildMathedSources())
                 if (!TrySaveNewSource(source, out var errorBuild).IsOk)
                     errorBuilder.AppendLine(errorBuild);
+                else 
+                    source.ShowProperty = ShowProperties ? ShowProperties : template.ShowProperty;
 
             error = errorBuilder.ToString();
             Sources.Call();
@@ -228,14 +238,14 @@ namespace HSMServer.Dashboards
 
                 _sensorToSourceMap[source.Sensor.Id].Add(source.Id);
 
-                source.BuildSource(YRange, AggregateValues, Settings.IsSingleMode);
+                source.BuildSource(YRange, AggregateValues, Settings.IsSingleMode, ShowProperties);
                 SubscribeModuleToUpdates(source);
             }
-
+            
             return string.IsNullOrEmpty(error) ? Sources.IfTryAdd(source.Id, source, ApplyNewSource) : errorResult;
         }
 
-        private PanelSubscription ApplyPanelSettings(PanelSubscription sub) => sub.UpdatePanelSettings(YRange, AggregateValues);
+        private PanelSubscription ApplyPanelSettings(PanelSubscription sub) => sub.UpdatePanelSettings(YRange, AggregateValues, ShowProperties);
 
         private void SubscribeModuleToUpdates(IPanelModule module) => module.UpdateEvent += ThrowUpdateEvent;
 

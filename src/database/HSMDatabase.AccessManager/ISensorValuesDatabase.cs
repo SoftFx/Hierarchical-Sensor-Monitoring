@@ -31,5 +31,7 @@ namespace HSMDatabase.AccessManager
         IEnumerable<byte[]> GetValuesTo(byte[] from, byte[] to);
 
         IEnumerable<(byte[] key, byte[] value)> GetKeysValuesTo(byte[] from, byte[] to);
+
+        void Compact();
     }
 }

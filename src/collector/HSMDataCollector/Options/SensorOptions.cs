@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using HSMDataCollector.Alerts;
@@ -10,6 +9,7 @@ using HSMDataCollector.Prototypes;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 
+
 namespace HSMDataCollector.Options
 {
     public interface IMonitoringOptions
@@ -17,10 +17,8 @@ namespace HSMDataCollector.Options
         TimeSpan PostDataPeriod { get; set; }
     }
 
-
     public abstract class SensorOptions
     {
-        internal abstract AddOrUpdateSensorRequest ApiRequest { get; }
 
         internal SensorType Type { get; set; }
 
@@ -42,6 +40,7 @@ namespace HSMDataCollector.Options
         public string Description { get; set; }
 
         public Unit? SensorUnit { get; set; }
+
 
         [Obsolete("This setting doesn't exist for sensor now")]
         public DefaultChatsMode? DefaultChats { get; set; }
@@ -84,6 +83,15 @@ namespace HSMDataCollector.Options
         }
 
         internal object Copy() => MemberwiseClone();
+
+    }
+
+
+    public abstract class SensorOptions<TDisplayUnit> : SensorOptions where TDisplayUnit : struct, Enum
+    {
+        internal abstract AddOrUpdateSensorRequest ApiRequest { get; }
+
+        public TDisplayUnit? DisplayUnit { get; set; }
     }
 
 
@@ -94,13 +102,18 @@ namespace HSMDataCollector.Options
         public string Extension { get; set; }
     }
 
-
-    public class InstantSensorOptions : SensorOptions
+    public abstract class BaseInstantSensorOptions<TDisplayUnit> : SensorOptions<TDisplayUnit> where TDisplayUnit : struct, Enum
     {
         public List<InstantAlertTemplate> Alerts { get; set; }
 
         internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
     }
+
+
+    public class InstantSensorOptions : BaseInstantSensorOptions<NoDisplayUnit>
+    {
+    }
+
 
     public class EnumSensorOptions : InstantSensorOptions
     {
@@ -120,13 +133,19 @@ namespace HSMDataCollector.Options
             var sb = new StringBuilder(1024);
             foreach (var option in EnumOptions)
             {
-               sb.AppendLine($"* {option.Value} - {option.Description}");
+               sb.AppendLine($"* ({option.Key}) {option.Value} - {option.Description}");
             }
 
             sb.AppendLine();;
 
             return sb.ToString();
         }
+    }
+
+    public abstract class BaseMonitoringInstantSensorOptions<TDisplayUnit> : BaseInstantSensorOptions<TDisplayUnit>, IMonitoringOptions where TDisplayUnit : struct, Enum
+    {
+        public virtual TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
+
     }
 
 
@@ -136,7 +155,7 @@ namespace HSMDataCollector.Options
     }
 
 
-    public class RateSensorOptions : MonitoringInstantSensorOptions
+    public class RateSensorOptions : BaseMonitoringInstantSensorOptions<RateDisplayUnit>
     {
         public override TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromMinutes(1);
 
@@ -170,7 +189,7 @@ namespace HSMDataCollector.Options
     }
 
 
-    public class BarSensorOptions : SensorOptions, IMonitoringOptions
+    public class BarSensorOptions : SensorOptions<NoDisplayUnit>, IMonitoringOptions
     {
         public List<BarAlertTemplate> Alerts { get; set; }
 

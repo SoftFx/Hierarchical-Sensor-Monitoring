@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using HSMServer.Core.Model.Sensors.SensorModels;
 
 namespace HSMServer.Core.Model
 {

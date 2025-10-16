@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using HSMDataCollector.Alerts;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects.SensorRequests;
@@ -8,11 +9,25 @@ namespace HSMDataCollector.Converters
 {
     internal static class ApiConverters
     {
+
+        internal static AddOrUpdateSensorRequest ToApi<TDisplayUnit>(this BaseInstantSensorOptions<TDisplayUnit> options) where TDisplayUnit : struct, Enum
+        {
+            var info = options.ToBaseInfo();
+
+            info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
+
+            info.DisplayUnit = Convert.ToInt32(options.DisplayUnit);
+
+            return info;
+        }
+
         internal static AddOrUpdateSensorRequest ToApi(this InstantSensorOptions options)
         {
             var info = options.ToBaseInfo();
 
             info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
+
+            info.DisplayUnit = null;
 
             return info;
         }
@@ -22,6 +37,8 @@ namespace HSMDataCollector.Converters
             var info = options.ToBaseInfo();
 
             info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
+
+            info.DisplayUnit = null;
 
             info.EnumOptions = options.EnumOptions?.ToList();
 
@@ -35,12 +52,15 @@ namespace HSMDataCollector.Converters
 
             info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
 
+            info.DisplayUnit = null;
+
             return info;
         }
 
 
-        private static AddOrUpdateSensorRequest ToBaseInfo(this SensorOptions options) =>
-            new AddOrUpdateSensorRequest
+        private static AddOrUpdateSensorRequest ToBaseInfo<TDisplayUnit>(this SensorOptions<TDisplayUnit> options) where TDisplayUnit : struct, Enum
+        {
+            return new AddOrUpdateSensorRequest
             {
                 TtlAlert = options.TtlAlert?.ToApi(),
 
@@ -62,7 +82,10 @@ namespace HSMDataCollector.Converters
 
                 DefaultAlertsOptions = options.DefaultAlertsOptions,
                 IsForceUpdate = options.IsForceUpdate,
+
+                DisplayUnit = options.DisplayUnit.HasValue ? Convert.ToInt32(options.DisplayUnit.Value) : (int?)null
             };
+        }
 
 
         internal static AlertUpdateRequest ToApi(this AlertBaseTemplate alert) =>

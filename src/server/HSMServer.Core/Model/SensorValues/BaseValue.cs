@@ -1,6 +1,8 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using System.ComponentModel.DataAnnotations;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Model
 {
@@ -25,6 +27,26 @@ namespace HSMServer.Core.Model
         Version,
         Rate,
         Enum,
+    }
+
+
+    /// <summary>
+    /// Display units for Rate sensors
+    /// </summary>
+    public enum RateDisplayUnit
+    {
+        [Display(Name = "# per sec")]
+        PerSecond = 0,
+        [Display(Name = "# per min")]
+        PerMinute = 1,
+        [Display(Name = "# per hour")]
+        PerHour = 2,
+        [Display(Name = "# per day")]
+        PerDay = 3,
+        [Display(Name = "# per week")]
+        PerWeek = 4,
+        [Display(Name = "# per month")]
+        PerMonth = 5
     }
 
 
@@ -135,8 +157,9 @@ namespace HSMServer.Core.Model
 
         protected override bool IsEqual(BaseValue value)
         {
-            return base.IsEqual(value) && value is BaseValue<T> valueT &&
-                   ((Value is null && valueT.Value is null) || (Value?.Equals(valueT.Value) ?? false));
+            return base.IsEqual(value) &&
+                value is BaseValue<T> other &&
+                EqualityComparer<T>.Default.Equals(Value, other.Value);
         }
     }
 }

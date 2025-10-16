@@ -53,7 +53,7 @@ namespace HSMServer.BackgroundServices
                 TTL = TimeSpan.MaxValue,
                 EnableForGrafana = true,
                 SensorUnit = HSMSensorDataObjects.SensorRequests.Unit.MB,
-
+                KeepHistory = TimeSpan.MaxValue,
                 Description = $"The sensor sends information about {databaseName} database size. {sensor.Description}"
             };
 

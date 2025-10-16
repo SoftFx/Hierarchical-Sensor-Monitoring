@@ -16,6 +16,7 @@ using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
 using System.Text.Json.Serialization;
+using System.Globalization;
 
 const string NLogConfigFileName = "nlog.config";
 
@@ -82,6 +83,18 @@ builder.Services.Configure<HostOptions>(hostOptions =>
 try
 {
     var app = builder.Build();
+
+    var cultureInfo = CultureInfo.InvariantCulture;
+
+    CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
+    CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
+
+    app.UseRequestLocalization(new RequestLocalizationOptions
+    {
+        DefaultRequestCulture = new Microsoft.AspNetCore.Localization.RequestCulture(cultureInfo),
+        SupportedCultures = new[] { cultureInfo },
+        SupportedUICultures = new[] { cultureInfo }
+    });
 
     await app.Services.InitStorages();
 

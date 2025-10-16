@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
 
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
@@ -17,6 +18,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public int? OriginalUnit { get; init; }
 
+        public int? DisplayUnit { get; init; }
+
         public bool IsSingleton { get; init; }
 
         public long EndOfMuting { get; init; }
@@ -27,5 +30,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public Dictionary<int, EnumOptionEntity> EnumOptions { get; init; }
 
+        public TableSettingEntity TableSettings { get; init; }
     }
 }

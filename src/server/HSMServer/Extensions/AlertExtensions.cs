@@ -5,6 +5,8 @@ using HSMServer.Model.TreeViewModel;
 using System;
 using System.Linq;
 using HSMServer.Model.Controls;
+using System.Diagnostics.Metrics;
+using System.IO;
 
 namespace HSMServer.Extensions
 {
@@ -127,6 +129,7 @@ namespace HSMServer.Extensions
                 AlertProperty.Comment => new CommentOperation(),
 
                 AlertProperty.Value when condition is StringConditionViewModel => new StringOperation(),
+                AlertProperty.Value when condition is VersionConditionViewModel => new VersionOperation(),
 
                 AlertProperty.Value or AlertProperty.EmaValue or
                 AlertProperty.Min or AlertProperty.Max or AlertProperty.Mean or AlertProperty.Count or AlertProperty.FirstValue or AlertProperty.LastValue or
@@ -165,5 +168,6 @@ namespace HSMServer.Extensions
                                            (a.ChatsMode is ChatsMode.Custom && a.Chats.Count == 0) ||
                                           (a.ChatsMode is ChatsMode.FromParent && a.Chats.Count == 0 && sensor.Parent.DefaultChats.GetChatsCount() == 0)));
         }
+
     }
 }

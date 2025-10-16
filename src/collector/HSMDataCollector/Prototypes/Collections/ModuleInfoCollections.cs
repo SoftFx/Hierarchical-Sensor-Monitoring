@@ -7,6 +7,7 @@ using HSMDataCollector.Alerts;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.Prototypes
@@ -78,9 +79,7 @@ namespace HSMDataCollector.Prototypes
 
     internal sealed class ServiceStatusPrototype : EnumSensorOptionsPrototype<ServiceSensorOptions>
     {
-        private string _sensorName;
-
-        protected override string SensorName => _sensorName;
+        protected override string SensorName => "Service status";
 
         private string _category;
         protected override string Category => _category;
@@ -93,35 +92,42 @@ namespace HSMDataCollector.Prototypes
 
         public override ServiceSensorOptions Get(ServiceSensorOptions customOptions)
         {
-            _sensorName = customOptions.IsHostService? "Service status" : customOptions.ServiceName;
-            _category  = customOptions.IsHostService ? "" : "Windows Services";
-
             var options = DefaultPrototype.Merge(this, customOptions);
 
             options.IsHostService = customOptions.IsHostService;
             options.ServiceName = customOptions.ServiceName;
 
-            options.IsComputerSensor = !options.IsHostService;
+            if (options.IsHostService)
+                options.Path = DefaultPrototype.RevealDefaultPath(options, Category, SensorName);
+            else
+                options.Path = DefaultPrototype.BuildPath(customOptions.SensorPath, SensorName);
 
-            options.Path = DefaultPrototype.RevealDefaultPath(options, Category, SensorName);
 
             options.EnumOptions = new List<EnumOption>
             {
-                new EnumOption((int)ServiceControllerStatus.ContinuePending, nameof(ServiceControllerStatus.ContinuePending), "The service continue is pending", 0xFFB403),
-                new EnumOption((int)ServiceControllerStatus.Paused,          nameof(ServiceControllerStatus.Paused),          "The service is paused.",          0x0314FF),
-                new EnumOption((int)ServiceControllerStatus.PausePending,    nameof(ServiceControllerStatus.PausePending),    "The service pause is pending.",   0x809EFF),
-                new EnumOption((int)ServiceControllerStatus.Running,         nameof(ServiceControllerStatus.Running),         "The service is running.",         0x00FF00),
-                new EnumOption((int)ServiceControllerStatus.StartPending,    nameof(ServiceControllerStatus.StartPending),    "The service start pending.",      0xBFFFBF),
                 new EnumOption((int)ServiceControllerStatus.Stopped,         nameof(ServiceControllerStatus.Stopped),         "The service is stopped.",         0xFF0000),
-                new EnumOption((int)ServiceControllerStatus.StopPending,     nameof(ServiceControllerStatus.StopPending),     "The service stop pending.",       0xFD6464)
+                new EnumOption((int)ServiceControllerStatus.StartPending,    nameof(ServiceControllerStatus.StartPending),    "The service start pending.",      0xBFFFBF),
+                new EnumOption((int)ServiceControllerStatus.StopPending,     nameof(ServiceControllerStatus.StopPending),     "The service stop pending.",       0xFD6464),
+                new EnumOption((int)ServiceControllerStatus.Running,         nameof(ServiceControllerStatus.Running),         "The service is running.",         0x00FF00),
+                new EnumOption((int)ServiceControllerStatus.ContinuePending, nameof(ServiceControllerStatus.ContinuePending), "The service continue is pending", 0xFFB403),
+                new EnumOption((int)ServiceControllerStatus.PausePending,    nameof(ServiceControllerStatus.PausePending),    "The service pause is pending.",   0x809EFF),
+                new EnumOption((int)ServiceControllerStatus.Paused,          nameof(ServiceControllerStatus.Paused),          "The service is paused.",          0x0314FF),
             };
 
-            options.Description = $"This sensor subscribes to the specified [**Windows service**](https://en.wikipedia.org/wiki/Windows_service) {(options.IsHostService ? $"[{options.ServiceName}]": "")} and sends status changes." +
+            options.Description = $"This sensor subscribes to the specified [**Windows service**](https://en.wikipedia.org/wiki/Windows_service) and sends status changes." +
                 " Windows service has the following statuses: \n\n";
 
             options.Description += options.GenerateEnumOptionsDecription();
 
             options.Description += "\nMore information you can find [**here**](https://learn.microsoft.com/en-us/dotnet/api/system.serviceprocess.servicecontrollerstatus?view=dotnet-plat-ext-7.0)";
+
+            options.Alerts = new List<InstantAlertTemplate>()
+            {
+                AlertsFactory.IfValue(AlertOperation.NotEqual, (int)ServiceControllerStatus.Running)
+                             .AndConfirmationPeriod(TimeSpan.FromMinutes(5))
+                             .ThenSendInstantHourlyScheduledNotification($"[$product]$path $operation {nameof(ServiceControllerStatus.Running)}")
+                             .Build()
+            };
 
             return options;
         }

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using HSMDataCollector.Alerts;
-using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
@@ -12,6 +11,8 @@ namespace HSMDataCollector.Prototypes
 {
     internal abstract class WindowsInfoMonitoringPrototype : MonitoringInstantSensorOptionsPrototype<WindowsInfoSensorOptions>
     {
+        protected const string _wmiUrl = "https://learn.microsoft.com/windows/win32/wmisdk/wmi-start-page";
+
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromHours(12);
 
         protected override string Category => WindowsOsInfo;
@@ -42,10 +43,30 @@ namespace HSMDataCollector.Prototypes
         public WindowsLastRestartPrototype() : base()
         {
             Description = $"This sensor sends information about the time of the last OS restart." +
-                $" The information is read using the [**Windows Management Instrumentation**](https://learn.microsoft.com/en-us/windows/win32/wmisdk/wmi-start-page)" +
-                $" by class *{WindowsLastRestart.WMI_CLASS_NAME}* and property *{WindowsLastRestart.PROPERTY_NAME}*.";
+                          $" The information is read using the [**WMI**]({_wmiUrl}) class 'Win32_OperatingSystem'.";
 
             Type = SensorType.TimeSpanSensor;
+        }
+    }
+
+    internal sealed class WindowsInstallDatePrototype : WindowsInfoMonitoringPrototype
+    {
+        protected override string SensorName => "Install date";
+
+
+        public WindowsInstallDatePrototype() : base()
+        {
+            Description = $"This sensor sends information about the time of the OS install date." +
+                          $" The information is read using the [**WMI**]({_wmiUrl}) class 'Win32_OperatingSystem'.";
+
+            Type = SensorType.TimeSpanSensor;
+
+            Alerts = new List<InstantAlertTemplate>()
+            {
+                AlertsFactory.IfValue(AlertOperation.GreaterThan, TimeSpan.FromDays(365*4))
+                             .ThenSendNotification($"[$product] $sensor. Windows was installed more than $value ago")
+                             .AndSetIcon(AlertIcon.Warning).Build()
+            };
         }
     }
 
@@ -57,8 +78,8 @@ namespace HSMDataCollector.Prototypes
 
         public WindowsLastUpdatePrototype() : base()
         {
-            Description = "This sensor sends information about the time of the last OS update. The sensor reads Windows Logs from **Setup** category. " +
-                "The information is read using [**Event log**](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.eventlog?view=dotnet-plat-ext-7.0).";
+            Description = "This sensor sends information about the time of the last OS update." +
+                $" The information is read using the [**WMI**]({_wmiUrl}) class 'Win32_QuickFixEngineering'.";
 
             Type = SensorType.TimeSpanSensor;
 

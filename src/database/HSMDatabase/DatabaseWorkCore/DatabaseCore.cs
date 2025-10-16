@@ -15,11 +15,12 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 
+
 namespace HSMDatabase.DatabaseWorkCore
 {
     public sealed class DatabaseCore : IDatabaseCore
     {
-        private const int SensorValuesPageCount = 100;
+        public int SensorValuesPageCount => 100;
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -28,11 +29,11 @@ namespace HSMDatabase.DatabaseWorkCore
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly IDatabaseSettings _settings;
 
-
         public IDashboardCollection Dashboards { get; }
 
         public ISnapshotDatabase Snapshots { get; }
 
+        public bool IsCompactRunning { get; private set; }
 
         public long TotalDbSize => _settings.DatabaseFolder.GetSize();
 
@@ -125,6 +126,8 @@ namespace HSMDatabase.DatabaseWorkCore
                     else
                         break;
                 }
+
+            curDb.Dispose();
 
             return result;
         }
@@ -255,6 +258,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var result = new List<byte[]>(SensorValuesPageCount);
             var totalCount = 0;
+            var requestedCount = Math.Abs(count);
 
             foreach (var database in databases)
             {
@@ -266,11 +270,10 @@ namespace HSMDatabase.DatabaseWorkCore
                     if (result.Count == SensorValuesPageCount)
                     {
                         yield return result;
-
                         result.Clear();
                     }
 
-                    if (Math.Abs(count) == totalCount)
+                    if (requestedCount == totalCount)
                     {
                         yield return result;
                         yield break;
@@ -280,6 +283,39 @@ namespace HSMDatabase.DatabaseWorkCore
 
             yield return result;
         }
+
+        public async IAsyncEnumerable<byte[]> GetSensorValues(Guid sensorId, DateTime from, DateTime to)
+        {
+            var fromTicks = from.Ticks;
+            var toTicks = to.Ticks;
+
+            var fromBytes = BuildSensorValueKey(sensorId.ToString(), fromTicks);
+            var toBytes = BuildSensorValueKey(sensorId.ToString(), toTicks);
+
+            var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
+
+            //if (count > 0)
+            //    count *= (-1);
+
+            //var currentCount = 0;
+            //var requestedCount = Math.Abs(count);
+
+
+            foreach (var database in databases)
+            {
+                foreach (byte[] bytes in database.GetValuesTo(fromBytes, toBytes))
+                {
+                    //if (requestedCount == currentCount)
+                    //    yield break;
+
+                    //currentCount++;
+
+                    yield return bytes;
+                }
+            }
+
+        }
+
 
 
         private static byte[] BuildSensorValueKey(Guid sensorId, long time) =>
@@ -577,6 +613,102 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         #endregion
+
+        #region Alert template
+
+        public void AddAlertTemplate(AlertTemplateEntity entity)
+        {
+            _environmentDatabase.AddAlertTemplateIdToList(entity.Id);
+            _environmentDatabase.AddAlertTemplate(entity);
+        }
+
+        public void UpdateAlertTemplate(AlertTemplateEntity entity) => _environmentDatabase.AddAlertTemplate(entity);
+
+        public void RemoveAlertTemplate(Guid id) => _environmentDatabase.RemoveAlertTemplate(id.ToByteArray());
+
+        public List<AlertTemplateEntity> GetAllAlertTemplates()
+        {
+            var ids = _environmentDatabase.GetAllAlertTemplatesIds();
+
+            var result = new List<AlertTemplateEntity>(ids.Count);
+
+            foreach (var id in ids)
+            {
+                var template = _environmentDatabase.GetAlertTemplate(id);
+
+                if (template != null)
+                    result.Add(template);
+            }
+
+            return result;
+        }
+
+        #endregion
+
+        public void Compact()
+        {
+            if (IsCompactRunning)
+                return;
+
+            IsCompactRunning = true;
+
+            string name = string.Empty;
+
+            try
+            {
+                _logger.Info($"CompactDB start: Enviroment database {ConfigDbSize}");
+                try
+                {
+                    _environmentDatabase.Compact();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"An error was occurred while compacting database [Enviroment]: {ex.Message}", ex);
+                }
+                _logger.Info($"CompactDB stop: Enviroment database {ConfigDbSize}");
+
+                _logger.Info($"CompactDB start: Sensor values database {SensorHistoryDbSize}");
+                try
+                {
+                    foreach (var db in _sensorValuesDatabases)
+                    {
+                        name = db.Name;
+                        db.Compact();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"An error was occurred while compacting database [{name}]: {ex.Message}", ex);
+                }
+
+                _logger.Info($"CompactDB stop: Sensor values database {SensorHistoryDbSize}");
+
+                _logger.Info($"CompactDB start: Journal database {JournalDbSize}");
+                try
+                {
+                    foreach (var db in _journalValuesDatabases)
+                    {
+                        name = db.Name;
+                        db.Compact();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"An error was occurred while compacting database [{name}]: {ex.Message}", ex);
+                }
+
+                _logger.Info($"CompactDB stop: Journal database {JournalDbSize}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"An error was occurred while compacting databases: {ex.Message}", ex);
+            }
+            finally
+            {
+                IsCompactRunning = false;
+            }
+
+        }
 
         public void Dispose()
         {

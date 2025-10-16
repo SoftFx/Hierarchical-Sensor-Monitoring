@@ -20,33 +20,33 @@ export class VersionPlot extends Plot<string>{
             this.customdata.push(i.tooltip);
         }
     }
-
-    getY(value: IVersionEntity) : string {
+    getY(value: IVersionEntity): string {
         let stringRepresentation = "";
 
-        tryBuild(value.major, true)
-        tryBuild(value.minor)
-        tryBuild(value.build)
-        tryBuild(value.revision)
-        tryBuild(value.majorRevision)
-        tryBuild(value.minorRevision)
-        
-        function tryBuild(value: number, q: boolean = false){
+        //VersionExtensions: version.Revision == 0 ? version.ToString(3) : version.ToString();
+
+        tryBuild(value.major, true);
+        tryBuild(value.minor);
+        tryBuild(value.build);
+
+        if (value.revision != 0)
+            tryBuild(value.revision);
+
+        function tryBuild(value: number, q: boolean = false) {
             if (value < 0)
                 stringRepresentation += '.-1';
-            else 
+            else
                 stringRepresentation += q === true ? `${value}` : `.${value}`;
         }
-        
+
         return stringRepresentation;
     }
     
-    override getLayout(y: string[]): Partial<Layout>{
+    getLayout(): Partial<Layout>{
         const layoutVals : string[] = [];
         const layoutText: string[] = [];
         
-        
-        for (const yVal of y) {
+        for (const yVal of this.y) {
             layoutText.push(yVal.replaceAll('.-1', ''));
             layoutVals.push(yVal);
         }
@@ -60,6 +60,7 @@ export class VersionPlot extends Plot<string>{
                tickfont: {
                    size: 10
                },
+               categoryorder: 'category ascending',
                // @ts-ignore
                automargin: "width+height"
            },

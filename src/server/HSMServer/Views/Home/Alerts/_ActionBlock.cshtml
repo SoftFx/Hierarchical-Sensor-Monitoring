@@ -3,6 +3,8 @@
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Notifications
 @using HSMServer.Model.DataAlerts
+@using HSMServer.Controllers
+@using HSMServer.Constants
 
 @model ActionViewModel
 
@@ -13,89 +15,147 @@
 
 @{
     var action = Model.Action;
+      
 
     var isSendAction = action == ActionType.SendNotification;
-    var isShowAction = action == ActionType.ShowIcon;
+    var isNotSendAction = action != ActionType.SendNotification;
+    var isShowIcon = action == ActionType.ShowIcon;
+
     var hasSchedule = Model.ScheduleRepeatMode is not null;
 
     var isSecondaryCondition = !Model.IsMain;
 
-    var chats = new List<TelegramChat>();
-    if (Model.Node.TryGetChats(out var availableChats))
-        foreach (var chat in ChatsManager.GetValues())
-        {
-            if (availableChats.Contains(chat.Id))
-                chats.Add(chat);
-        }
+    var chats = ChatsManager.GetValues().Where(x => Model.AvailableChats.Contains(x.Id)).ToList();
 }
 
+@* <div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-3 w-100" > *@
+<div name="alertAction" class="d-flex align-items-top alert-blocks-group py-1 ms-2 w-100">
+    <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add alert-and me-2 mt-1">and</div>
 
-<div name="alertAction" class="d-flex flex-row align-items-center alert-blocks-group py-1 ms-3">
-    <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add alert-and me-3">and</div>
+    <select class="alert-block alert-select property-select me-2 mt-1" asp-for="Action" asp-items="Model.Actions"></select>
 
-    <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions"></select>
+    <div name="sendNotificationAction" class="@isSendAction.ToVisibility() d-flex align-items-center flex-wrap" style="flex-grow: 1;">
+        <input type="text" class="alert-block target-input target-comment flex-grow-1 mt-1" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)" style="max-width: 800px;">
 
-    <div name="sendNotificationAction" class="@isSendAction.ToVisibility() align-items-center">
-        <input type="text" class="alert-block target-input target-comment" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)">
-        <div class="alert-text-block operation-select">to</div>
+        <div class="d-flex align-items-center flex-nowrap pt-1">
+            <div class="alert-text-block operation-select ms-2">to</div>
 
-        <select class="selectpicker" name="Chats" multiple
-                data-width="100%" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-container="body">
-            <option class="general-group-chat-mode" value="@ChatsMode.FromParent" selected="@(Model.ChatsMode is ChatsMode.FromParent)">@ChatsMode.FromParent.GetDisplayName()</option>
-            <option class="general-group-chat-mode" value="@ChatsMode.NotInitialized" selected="@(Model.ChatsMode is ChatsMode.NotInitialized)">@ChatsMode.NotInitialized.GetDisplayName()</option>
-            <option class="general-group-chat-mode" value="@ChatsMode.Empty" selected="@(Model.ChatsMode is ChatsMode.Empty)">@ChatsMode.Empty.GetDisplayName()</option>
-            <option class="general-group-chat-mode" value="@ChatsMode.All" selected="@(Model.ChatsMode is ChatsMode.All)">@ChatsMode.All.GetDisplayName()</option>
+            <select class="selectpicker ms-2" name="Chats" multiple
+                    data-width="auto" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-container="body">
+                <option class="general-group-chat-mode" value="@ChatsMode.FromParent" selected="@(Model.ChatsMode is ChatsMode.FromParent)">@ChatsMode.FromParent.GetDisplayName()</option>
+                <option class="general-group-chat-mode" value="@ChatsMode.NotInitialized" selected="@(Model.ChatsMode is ChatsMode.NotInitialized)">@ChatsMode.NotInitialized.GetDisplayName()</option>
+                <option class="general-group-chat-mode" value="@ChatsMode.Empty" selected="@(Model.ChatsMode is ChatsMode.Empty)">@ChatsMode.Empty.GetDisplayName()</option>
+                <option class="general-group-chat-mode" value="@ChatsMode.All" selected="@(Model.ChatsMode is ChatsMode.All)">@ChatsMode.All.GetDisplayName()</option>
 
-            <option data-divider="true"></option>
-            <option disabled>Groups</option>
-            @foreach (var chat in chats.GetGroups())
-            {
-                <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
-            }
+                <option data-divider="true"></option>
+                <option disabled>Groups</option>
+                @foreach (var chat in chats.GetGroups())
+                {
+                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+                }
 
-            <option data-divider="true"></option>
-            <option disabled>Users</option>
-            @foreach (var chat in chats.GetPrivates())
-            {
-                <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
-            }
-        </select>
+                <option data-divider="true"></option>
+                <option disabled>Users</option>
+                @foreach (var chat in chats.GetPrivates())
+                {
+                    <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
+                }
+            </select>
+        </div>
 
-        <a class="addSchedule @(hasSchedule ? "d-none" : string.Empty)">
-            <i class="fa-regular fa-calendar-plus alert-schedule-button"></i>
+        <a class="addSchedule @(hasSchedule ? "d-none" : string.Empty) flex-shrink-0 pt-1"
+           data-bs-toggle="tooltip"
+           data-bs-placement="top"
+           title="Add schedule">
+
+            <i class="fa-regular fa-calendar-plus alert-schedule-button ms-2"></i>
         </a>
 
-        <div name="schedule" class="align-items-center @hasSchedule.ToVisibility()">
-            <a class="removeSchedule">
+
+
+
+
+
+        <div name="schedule" class="schedule-container align-items-center @hasSchedule.ToVisibility() ms-2 pt-1">
+            <a class="removeSchedule"
+               data-bs-toggle="tooltip"
+               data-bs-placement="top"
+               title="Remove schedule">
                 <i class="fa-regular fa-calendar-minus alert-schedule-button"></i>
             </a>
 
-            <div class="alert-text-block operation-select">scheduled every</div>
-            <select class="alert-block alert-select target-input" asp-for="ScheduleRepeatMode" asp-items="Enum.GetValues<ScheduleRepeatMode>().ToSelectedItems(k => k.GetDisplayName())"></select>
+            <div class="d-flex align-items-center flex-nowrap">
+                <div class="alert-text-block operation-select">scheduled every</div>
+                <select class="alert-block alert-select target-input ms-2" asp-for="ScheduleRepeatMode" asp-items="Enum.GetValues<ScheduleRepeatMode>().ToSelectedItems(k => k.GetDisplayName())"></select>
+            </div>
 
             @if (!Model.IsTtl)
             {
-                <div class="alert-text-block operation-select">starting at</div>
-                <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
 
-                <div class="alert-text-block operation-select">
-                    and instant send
-                    <i class='fas fa-question-circle' title='If the option is checked, the first alert message is sent immediately. And then at the end of scheduled period, the remaining alert messages will be sent, agregated into one message.'></i>
+                <div class="d-flex align-items-center flex-nowrap">
+                    <div class="alert-text-block operation-select me-2">starting at</div>
+                    <input class="alert-block target-input" type="datetime-local" step="1" id="schedule" asp-for="ScheduleStartTime">
                 </div>
-                <input class="form-check-input target-check" type="checkbox" asp-for="ScheduleInstantSend">
+
+                <div class="d-flex align-items-center flex-nowrap">
+                    <div class="alert-text-block operation-select">
+                        and instant send
+                        <i class='fas fa-question-circle' title='If the option is checked, the first alert message is sent immediately. And then at the end of scheduled period, the remaining alert messages will be sent, aggregated into one message.'></i>
+                    </div>
+                    <input class="form-check-input target-check ms-2" type="checkbox" asp-for="ScheduleInstantSend">
+                </div>
             }
+
+
         </div>
+
+        
+            <a class="deleteAction align-self-center pt-1"
+                data-bs-toggle="tooltip"
+                data-bs-placement="top"
+                title="Remove action">
+                <i class="fa-solid fa-xmark alert-delete-button"></i>
+            </a>
+
+
+        <div name="addActionForSend" class="align-self-center pt-1">
+             <a class="addAction" 
+                data-bs-toggle="tooltip"
+                data-bs-placement="top"
+                title="Add new action">
+                  <i class="fa-solid fa-plus alert-add-button" ></i>
+             </a>
+        </div> 
+
     </div>
 
-    <div name="showIconAction" class="@isShowAction.ToVisibility() alert-block">
+    <div name="showIconAction" class="@isShowIcon.ToVisibility() alert-block ms-2 mt-1">
         <div name="emoji" class="target-input">@Model.Icon</div>
-    </div>
+@* 
+                    <a class="deleteAction align-self-end  me-auto">
+            <i class="fa-solid fa-xmark alert-delete-button"></i>
+        </a> *@
+    </div> 
 
-    <a class="deleteAction">
-        <i class="fa-solid fa-xmark alert-delete-button"></i>
-    </a>
+    <div name="deleteIconForAll" class="@isNotSendAction.ToVisibility()">
+        <a class="deleteAction align-self-center" 
+             data-bs-toggle="tooltip"
+             data-bs-placement="top"
+             title="Remove action">
+            <i class="fa-solid fa-xmark alert-delete-button"></i>
+        </a>
+    </div> 
+
+    <div name="addActionForAll" class="@isNotSendAction.ToVisibility() align-self-center">
+        <a class="addAction align-self-end"
+                data-bs-toggle="tooltip"
+                data-bs-placement="top"
+                title="Add new action">
+              <i class="fa-solid fa-plus alert-add-button"></i>
+        </a>
+    </div> 
+
 </div>
-
 
 <script>
     $(document).ready(function () {
@@ -104,15 +164,15 @@
         $("select[name='Chats']").off('changed.bs.select').on('changed.bs.select', function (e, clickedIndex, isSelected, previousValue) {
             let allSelected = true;
 
-            $(this).children().each(function() {
+            $(this).children().each(function () {
                 allSelected &= $(this).is(':selected');
             });
-            
+
             if (allSelected) {
                 let $title = $(this).parent().find('.filter-option-inner-inner');
                 $title.text("all chats");
             }
-            
+
             if (clickedIndex >= 1 && clickedIndex <= 3 && isSelected) {
                 $(this).val($(this)[0].options[clickedIndex].value);
             }
@@ -124,11 +184,29 @@
             $(this).selectpicker('refresh')
         });
 
-        $("div[name='emoji']").emojioneArea({
-            filtersPosition: "bottom",
-            standalone: true,
-            autocomplete: false
-        });
+        
+
+
+           $("div[name='emoji']").emojioneArea({
+                pickerPosition: "bottom",
+                standalone: true,
+                hideSource: true,
+                filtersPosition: "bottom",
+                autocomplete: false,
+                inline: false,
+                saveEmojisAs: "unicode",
+                hidePickerOnBlur: true,
+                search: false,
+                tones: false,
+                buttonTitle: "Select icon",
+
+                ui: {
+                    hideButtons: true   
+                }
+
+
+            });
+
     });
 
     $('select[name="Action"]').off("change").on("change", function () {
@@ -136,8 +214,11 @@
 
         let send = actionBlock.find($(`div[name='sendNotificationAction']`));
         let show = actionBlock.find($(`div[name='showIconAction']`));
+        let divDelButton = actionBlock.find($(`div[name='deleteIconForAll']`));
+        let divAddButton = actionBlock.find($(`div[name='addActionForAll']`));
 
         let commentInput = send.find($(`input[name='Comment']`));
+
 
         let action = $(this).val();
         if (action === '@ActionType.SendNotification') {
@@ -145,28 +226,68 @@
 
             commentInput.attr('required', true);
             send.removeClass("d-none").addClass('d-flex');
+            divDelButton.removeClass("d-flex").addClass('d-none');
+            divAddButton.removeClass("d-flex").addClass('d-none');
         }
         else if (action === '@ActionType.ShowIcon') {
             commentInput.attr('required', false);
             send.removeClass("d-flex").addClass('d-none');
 
             show.removeClass("d-none").addClass('d-flex');
+            divDelButton.removeClass("d-none").addClass('d-flex');
+            divAddButton.removeClass("d-none").addClass('d-flex');
         }
         else if (action === '@ActionType.SetStatus') {
             commentInput.attr('required', false);
             send.removeClass("d-flex").addClass('d-none');
             show.removeClass("d-flex").addClass('d-none');
+            divDelButton.removeClass("d-none").addClass('d-flex');
+            divAddButton.removeClass("d-none").addClass('d-flex');
         }
+
+        
+
+        
     });
 
     $("a.deleteAction").off("click").on("click", function () {
         let actionsBlock = $(this).parents(`div[name='actionsBlock']`);
+        let allAlertActions = actionsBlock.find(`div[name='alertAction']`);
+    
+
+        if (allAlertActions.length <= 1) {
+            return;
+        }
+    
 
         $(this).parents("div[name='alertAction']:first").remove();
+    
 
-        let alertAction = actionsBlock.find(`div[name='alertAction']:first`);
-        alertAction.find('div.alert-and').remove();
+        allAlertActions = actionsBlock.find(`div[name='alertAction']`);
+    
+
+        if (allAlertActions.length > 0) {
+            allAlertActions.first().find('div.alert-and').remove();
+        }
+    
+        window.updateAlertsAddButton();
     });
+
+    // $("a.deleteAction").off("click").on("click", function () {
+
+
+    //     let actionsBlock = $(this).parents(`div[name='actionsBlock']`);
+
+
+    //     $(this).parents("div[name='alertAction']:first").remove();
+
+    //     //let actionsBlock = $(this).parents(`div[name='actionsBlock']`);
+    //     let alertAction = actionsBlock.find(`div[name='alertAction']:first`);
+    //     alertAction.find('div.alert-and').remove();
+
+    //     window.updateAlertsAddButton();
+    // });
+
 
     $("a.addSchedule").off("click").on("click", function () {
         let sendNotificationBlock = $(this).parents("div[name='sendNotificationAction']:first");
@@ -185,3 +306,25 @@
         schedule.removeClass("d-flex").addClass("d-none");
     });
 </script>
+
+<style>
+
+
+    .schedule-container {
+        flex-wrap: wrap;
+        gap: 10px;
+        max-width: 100%;
+        word-wrap: break-word;
+        overflow: hidden;
+    }
+
+    .emojionearea, 
+    .emojionearea.form-control {
+      background: #ffffff !important; 
+      border: none !important;        
+      box-shadow: none !important;    
+    }
+
+
+</style>
+

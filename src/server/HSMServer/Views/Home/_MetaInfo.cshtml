@@ -1,14 +1,16 @@
 @using HSMCommon.Extensions
 @using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Core.Model
 @using HSMServer.Extensions
+@using HSMServer.Helpers
 @using HSMServer.Model.Authentication
-@using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.ViewModel
 @using HSMServer.Model.Folders.ViewModels
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @using HSMServer.Model.DataAlerts
 @using HSMServer.TagHelpers
+@using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus
 
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
 
@@ -16,7 +18,7 @@
 @addTagHelper *, HSMServer
 
 @{
-    var user = User as User;
+    var user = (User)User;
     bool hasUserRights = Model is FolderInfoViewModel f ? user.IsFolderManager(f.Id) : user.IsManager(Model.RootProductId);
 
     string updateAction = null, getAction = null;
@@ -54,12 +56,39 @@
                 </span>
             }
 
-            <h5 id="nodeHeader" class="d-flex my-1">@Html.Raw(Model.Header)</h5>
+            
+            <h5 id="nodeHeader" class="d-flex my-1 align-items-center">
+                @Html.Raw(Model.Header)
+    
+                @if (Model is SensorInfoViewModel sensor)
+                {
+                    @if (sensor.DisplayUnit.HasValue)
+                    {
+                        <span class="ms-1 display-unit-wrapper">
+                            <span class="display-unit-container">
+                                <span id="displayUnitDisplay_@Model.EncodedId" class="display-unit-text">
+                                    (@sensor.DisplayUnit.Value.GetDisplayName())
+                                </span>
+        
+                                @if (hasUserRights)
+                                {
+                                    <select id="displayUnitDropdown_@Model.EncodedId" 
+                                            class="display-unit-select" 
+                                        onchange="updateDisplayUnit('@Model.EncodedId')">
+                                        @foreach (RateDisplayUnit unit in Enum.GetValues(typeof(RateDisplayUnit)))
+                                        {
+                                            <option value="@unit" selected="@(unit == sensor.DisplayUnit.Value)">
+                                                @unit.GetDisplayName()
+                                            </option>
+                                        }
+                                    </select>
+                                }
+                            </span>
+                        </span>
+                    }
+                }
+            </h5>
 
-            @if (Model is SensorInfoViewModel sensor && sensor.SelectedUnit.HasValue)
-            {
-                <h5 class="ms-1 my-1">(@sensor.SelectedUnit.GetDisplayName())</h5>
-            }
 
             @if (hasUserRights)
             {
@@ -74,7 +103,8 @@
 
     @if (Model is SensorInfoViewModel sensorModel)
     {
-        <h7 id="errorInfo_@Model.EncodedId" class="my-1 tree-icon-error" is-visible=@(sensorModel.Status == SensorStatus.Error)>@sensorModel.Status: @(sensorModel.StatusComment)</h7>
+        <h7 id="errorInfo_@Model.EncodedId" class="my-1 tree-icon-error" is-visible=@(sensorModel.Status == SensorStatus.Error)>@sensorModel.Status: @Html.Raw(MarkdownHelper.ToHtml(sensorModel.StatusComment))
+        </h7>
     }
 
     <form id="editMetaInfo_form" method="post" asp-action="@updateAction">
@@ -120,30 +150,55 @@
 
 
 <script>
+    var hasUserRights = @Json.Serialize(hasUserRights);
+
+    window.setupDisplayUnitHover = function() {
+        $('.display-unit-container').off('mouseenter mouseleave').hover(
+            function() {
+                if (!hasUserRights) return;
+
+                var textElement = $(this).find('.display-unit-text');
+                var selectElement = $(this).find('.display-unit-select');
+
+                textElement.addClass('d-none');
+                selectElement.removeClass('d-none');
+            },
+            function() {
+                if (!hasUserRights) return;
+
+                $(this).find('.display-unit-text').removeClass('d-none');
+                $(this).find('.display-unit-select').addClass('d-none');
+            }
+        );
+    }
+
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_span_description');
-        replaceHtmlToMarkdown('markdown_status_comment');
 
-        $('#editButtonMetaInfo').on('click', function (){
-            let icon = getAdvancedInfoButtonIcon();
-            if (!isAdvancedInfoVisible(icon)) {
-                $('#meta_info_collapse').click();
-                showAdvancedInfo(icon);
-            }
+        setupDisplayUnitHover();
 
-            editInfoButtonClick();
+        $('#editButtonMetaInfo').on('click',
+            function() {
+                let icon = getAdvancedInfoButtonIcon();
+                if (!isAdvancedInfoVisible(icon)) {
+                    $('#meta_info_collapse').click();
+                    showAdvancedInfo(icon);
+                }
 
-            $('#editButtonMetaInfo').addClass('d-none');
-        });
-        
-        $('#revertInfo').on('click', function (){
-            revertInfoButtonClick("@Url.Action(getAction, ViewConstants.HomeController)");
-           
-            $('#metainfo_separator').addClass('d-none');
-        });
+                editInfoButtonClick();
+
+                $('#editButtonMetaInfo').addClass('d-none');
+            });
+
+        $('#revertInfo').on('click',
+            function() {
+                revertInfoButtonClick("@Url.Action(getAction, ViewConstants.HomeController)");
+
+                $('#metainfo_separator').addClass('d-none');
+            });
 
         addObserve('editMetaInfo_form');
-    })
+    });
 
     $(document).on("submit", "#editMetaInfo_form", function (event) {
         event.preventDefault();
@@ -152,7 +207,7 @@
         var formData = new FormData(this);
         collectAlerts(formData);
         if (window.fillDefaultChatMode) {
-            fillDefaultChatMode(formData);
+            window.fillDefaultChatMode(formData);
         }
 
         $.ajax({
@@ -167,7 +222,9 @@
                 displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
 
                 if ($(".field-validation-error").length !== 0)
-                    editInfoButtonClick()
+                    editInfoButtonClick();
+
+                window.InitializeHistory();
             }
         });
     });
@@ -175,16 +232,23 @@
     function collectAlerts(formData) {
         $("[id^='dataAlertsList_']").each(function () {
             const type = this.id.substring("dataAlertsList_".length, this.id.length);
-
             setFormDataAlerts(formData, type, $(this));
         });
+
+        var displayUnitSelect = $('#displayUnitSelect_' + $('#metaInfo_encodedId').val());
+
+        if (displayUnitSelect.length > 0)
+            formData.append('DisplayUnit', displayUnitSelect.val());
     }
+
+
 
     function setFormDataAlerts(formData, type, alertsList) {
         alertsList.find(`div.dataAlertRow`).each(function (i) {
             setFormDataAlertsProperty(formData, "input", type, i, $(this), "Id");
             setFormDataAlertsProperty(formData, "input", type, i, $(this), "EntityId");
             setFormDataAlertsProperty(formData, "input", type, i, $(this), "IsDisabled");
+            setFormDataAlertsProperty(formData, "input", type, i, $(this), "TemplateId");
 
             $(this).find(`div[name='alertCondition']`).each(function (j) {
                 setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
@@ -315,4 +379,89 @@
         $('#headline_metainfo').addClass('d-none');
         $('#markdown_span_description').removeClass('ms-3');
     }
+    
+    function updateDisplayUnit(encodedId) {
+        var displayUnit = $('#displayUnitDropdown_' + encodedId).val();
+        var displayText = $('#displayUnitDropdown_' + encodedId + ' option:selected').text();
+
+        $.ajax({
+            url: '@Url.Action(nameof(HomeController.UpdateSensorDisplayUnit), "Home")',
+            type: 'POST',
+            data: {
+                encodedId: encodedId,
+                displayUnit: displayUnit
+            },
+            success: function() {
+                $('#displayUnitDisplay_' + encodedId).text('(' + displayText + ')');
+                //showToast('Display unit updated successfully', 'success');
+                window.InitializeHistory();
+            },
+            error: function() {
+                showToast('Error updating display unit', 'error');
+            }
+        });
+    }
+
 </script>
+
+<style>
+    .display-unit-wrapper {
+        display: inline-flex;
+        align-items: center;
+        vertical-align: middle;
+        height: 24px;
+        margin-left: 0.25rem;
+    }
+
+    .display-unit-container {
+        position: relative;
+        display: inline-block;
+        height: 24px;
+        color: royalblue; 
+        min-width: 80px;
+    }
+
+    .display-unit-select {
+        display: none;
+        appearance: none;
+        cursor: pointer;
+        outline: none;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        padding: 0 5px;
+        height: 24px;
+        line-height: 1.2;
+        background: white;
+        position: relative;
+        /* width: auto; */
+        min-width: 80px;
+        font: inherit;
+    }
+
+    .display-unit-text {
+        cursor: pointer;
+        padding: 0 2px;
+        border-radius: 3px;
+        display: inline-block;
+        height: 24px;
+        line-height: 1.2;
+        vertical-align: middle;
+        color: inherit;
+        font: inherit;
+    }
+
+    .display-unit-container:hover .display-unit-text {
+        display: none;
+    }
+
+    .display-unit-container:hover .display-unit-select {
+        display: inline-block !important;
+    }
+
+    .meta-info-edit-mode .display-unit-container:hover .display-unit-select {
+        display: none !important;
+    }
+
+
+</style>
+

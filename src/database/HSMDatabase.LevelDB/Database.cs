@@ -372,16 +372,20 @@ namespace HSMDatabase.LevelDB
                 ZipFile.CreateFromDirectory(backupPath, fileInfo.FullName);
                 Directory.Delete(backupPath, true);
 
-                return new TaskResult<string>(fileInfo.FullName);
+                return TaskResult<string>.FromValue(fileInfo.FullName);
             }
             catch (Exception ex)
             {
                 var msg = $"Backup database {backupPath} error: {ex}";
                 _logger.Error(msg);
-                return TaskResult<string>.AsError(msg);
+                return TaskResult<string>.FromError(msg);
             }
         }
 
+        public void Compact()
+        {
+            _database.Compact();
+        }
 
         public void Dispose()
         {

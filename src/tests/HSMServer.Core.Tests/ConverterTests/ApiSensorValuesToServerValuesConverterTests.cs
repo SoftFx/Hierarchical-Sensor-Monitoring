@@ -9,7 +9,6 @@ namespace HSMServer.Core.Tests.ConverterTests
     {
         private readonly ApiSensorValuesFactory _apiSensorValuesFactory;
 
-
         public ApiSensorValuesToServerValuesConverterTests(EntitiesConverterFixture converterFixture)
         {
             _apiSensorValuesFactory = converterFixture.ApiSensorValuesFactory;

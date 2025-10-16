@@ -135,6 +135,6 @@ namespace HSMDataCollector.DefaultSensors
         public IUnixCollection AddProductVersion(VersionSensorOptions options) => (IUnixCollection)AddProductVersionCommon(options);
 
 
-        private UnixSensorsCollection ToUnix(SensorBase sensor) => (UnixSensorsCollection)Register(sensor);
+        private UnixSensorsCollection ToUnix(ISensor sensor) => (UnixSensorsCollection)Register(sensor);
     }
 }

@@ -1,11 +1,13 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Core.Tests.TreeValuesCacheTests.Fixture;
 using System;
+using System.Threading.Tasks;
 using Xunit;
 using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
 
@@ -88,9 +90,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var invalidType in Enum.GetValues<SensorType>())
             {
                 if (invalidType == sensorType)
-                    break;
+                    continue;
 
-                Assert.False(sensor.TryAddValue(SensorValuesFactory.BuildSensorValue(invalidType)));
+                Assert.False(sensor.TryAddValue(SensorValuesFactory.BuildValue(invalidType)));
                 Assert.True(sensor.Status?.HasError);
                 Assert.Equal(SensorStatus.Error, sensor.Status?.Status);
                 Assert.True(sensor.Status?.Message.EndsWith(errorMessage));
@@ -106,7 +108,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorType in Enum.GetValues<SensorType>()[..^1])
             {
                 var sensor = BuildSensorModel(sensorType);
-                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with { Status = status };
+                var baseValue = SensorValuesFactory.BuildValue(sensorType) with { Status = status };
                 var expectedMessage = string.IsNullOrEmpty(baseValue.Comment)
                     ? string.Format(SensorValueStatusInvalid, status)
                     : baseValue.Comment;
@@ -135,7 +137,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var sensor = BuildSensorModel(sensorType);
                 sensor.Settings.TTL.TrySetValue(new TimeIntervalModel(ticks));
 
-                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
+                var baseValue = SensorValuesFactory.BuildValue(sensorType) with
                 { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
 
                 Assert.True(sensor.TryAddValue(baseValue));
@@ -181,7 +183,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var sensor = BuildSensorModel(sensorType);
                 sensor.Settings.TTL.TrySetValue(new TimeIntervalModel(TestTicks));
 
-                var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
+                var baseValue = SensorValuesFactory.BuildValue(sensorType) with
                 {
                     ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - TestTicks),
                     Status = status
@@ -199,9 +201,19 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "EmptyPathOrKey")]
-        public void EmptyPathOrKeyValidationTest()
+        public void EmptyProductIdValidationTest()
         {
-            var info = new StoreInfo(string.Empty, string.Empty);
+            var info = new AddSensorValueRequest(Guid.Empty, Guid.Empty, "sensor", new StringValue());
+
+            Assert.False(info.TryCheckRequest(out var message));
+            Assert.Equal(ErrorPathKey, message);
+        }
+
+        [Fact]
+        [Trait("Category", "EmptyPathOrKey")]
+        public void EmptyPathValidationTest()
+        {
+            var info = new AddSensorValueRequest(Guid.Empty, TestProductsManager.ProductId, string.Empty, new StringValue());
 
             Assert.False(info.TryCheckRequest(out var message));
             Assert.Equal(ErrorPathKey, message);
@@ -211,7 +223,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "TooLongPath")]
         public void TooLongPathValidationTest()
         {
-            var info = new StoreInfo(Guid.NewGuid().ToString(), InvalidTooLongPath);
+            var info = new AddSensorValueRequest(Guid.Empty, TestProductsManager.ProductId, InvalidTooLongPath, new StringValue());
 
             Assert.False(info.TryCheckRequest(out var message));
             Assert.Equal(ErrorTooLongPath, message);
@@ -241,26 +253,46 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "InvalidKey")]
         public void InvalidKeyValidationTest()
         {
-            var info = new StoreInfo(Guid.NewGuid().ToString(), ValidPath);
+            var info = new AddSensorValueRequest(Guid.Empty, TestProductsManager.ProductId, ValidPath, new StringValue()) { Key = Guid.NewGuid() };
 
-            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info, out var message));
-            Assert.Equal(ErrorKeyNotFound, message);
+            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info.Key, info.PathParts, out var message));
+            Assert.True(message.Contains("not found"));
+        }
+
+        [Theory]
+        [InlineData("s/s /s"  , "s/s/s")]
+        [InlineData("s/ s /s ", "s/s/s")]
+        [InlineData("s /s/s " , "s/s/s")]
+        [InlineData(" s/s/s " , "s/s/s")]
+        [InlineData("s/s/ s " , "s/s/s")]
+        [InlineData("s/s/s "  , "s/s/s")]
+        [InlineData("s", "s")]
+        [InlineData("s ", "s")]
+        [InlineData(" s", "s")]
+        [InlineData(" s ", "s")]
+        [InlineData(" ", "")]
+        [Trait("Category", "TrimPath")]
+        public void TrimPathTest(string path, string result)
+        {
+            var info = new AddSensorValueRequest(Guid.Empty, TestProductsManager.ProductId, path, new StringValue());
+
+            Assert.Equal(info.Path, result);
         }
 
         [Theory]
         [InlineData(KeyPermissions.CanAddNodes)]
         [InlineData(KeyPermissions.CanAddSensors)]
         [Trait("Category", "SmallRules")]
-        public void SmallRulesValidationTest(KeyPermissions permission)
+        public async Task SmallRulesValidationTest(KeyPermissions permission)
         {
-            var product = _valuesCache.AddProduct(TestProductsManager.ProductName, Guid.Empty);
+            var product = await _valuesCache.AddProductAsync(TestProductsManager.ProductName, Guid.Empty);
             var accessKey = new AccessKeyModel(EntitiesFactory.BuildAccessKeyEntity(productId: product.Id.ToString(), permissions: permission));
 
             _valuesCache.AddAccessKey(accessKey);
 
-            var info = new StoreInfo(accessKey.Id.ToString(), ValidPath);
+            var info = new AddSensorValueRequest(Guid.Empty, TestProductsManager.ProductId, ValidPath, new StringValue()) { Key = accessKey.Id };
 
-            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info, out var message));
+            Assert.False(_valuesCache.TryCheckKeyWritePermissions(info.Key, info.PathParts, out var message));
             Assert.Equal(ErrorHaventRule, message);
         }
 

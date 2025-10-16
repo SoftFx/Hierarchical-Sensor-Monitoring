@@ -20,6 +20,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using HSMServer.JsonConverters;
+using System.Linq;
 
 namespace HSMServer.Controllers
 {
@@ -44,6 +45,8 @@ namespace HSMServer.Controllers
     [Authorize]
     public class SensorHistoryController : BaseController
     {
+
+
         private readonly JsonSerializerOptions _serializationsOptions = new()
         {
             Converters = { new VersionSourceConverter() },
@@ -54,6 +57,7 @@ namespace HSMServer.Controllers
         
         internal const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
         private const int LatestHistoryCount = -300;
+        private const int SensorValuesCount = -5000;
 
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
@@ -85,7 +89,6 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
             await StoredUser.History.Reload(_cache, model);
-
             return GetHistoryTable(SelectedTable);
         }
 
@@ -98,7 +101,8 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task<IActionResult> GetNextTablePage()
         {
-            return GetHistoryTable(await SelectedTable?.ToNextPage());
+            var result = GetHistoryTable(await SelectedTable?.ToNextPage());
+            return result;
         }
 
 
@@ -114,8 +118,16 @@ namespace HSMServer.Controllers
         [HttpGet]
         public ActionResult<SensorInfoViewModel> GetSensorPlotInfo([FromQuery] Guid id)
         {
-            if (_tree.Sensors.TryGetValue(id, out var sensorNodeViewModel))
-                return new SensorInfoViewModel(sensorNodeViewModel.Type, sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type, sensorNodeViewModel.SelectedUnit?.GetDisplayName());
+            if (_tree.Sensors.TryGetValue(id, out SensorNodeViewModel model))
+            {
+                string units = model.DisplayUnit.HasValue
+                    ? model.DisplayUnit.GetDisplayName()
+                    : model.SelectedUnit?.GetDisplayName();
+
+                return new SensorInfoViewModel(model.Type,
+                    model.Name is "Service alive" or "Service status" ? SensorType.Enum : model.Type,
+                    units);
+            }
 
             return _emptyJsonResult;
         }
@@ -123,17 +135,27 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<JsonResult> ChartHistory([FromBody] GetSensorHistoryRequest model)
         {
-            if (model == null || !TryGetSensor(model.EncodedId, out var sensor))
+            if (model == null || !TryGetSensor(model.EncodedId, out SensorNodeViewModel sensor))
                 return _emptyJsonResult;
-
+            
             var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
 
             var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
 
             if (localValue is not null && (values.Count == 0 || values[0].Time != localValue.Time))
                 values.Add(localValue);
-            
-            return Json(HistoryProcessorFactory.BuildProcessor((int)sensor.Type).GetResultFromValues(sensor, values, model.BarsCount), _serializationsOptions);
+
+            var processor = HistoryProcessorFactory.BuildProcessor((int) sensor.Type);
+
+            if (processor is VersionHistoryProcessor versionProcessor)
+            {
+                var cacheSensor = _cache.GetSensor(sensor.Id);
+                versionProcessor.AttachSensor(cacheSensor);
+            }
+
+            List<BaseValue> displayValues = values.Select(v => sensor.ToDisplayValue(v)).ToList();
+
+            return processor.GetResultFromValues(sensor, displayValues, model.BarsCount);
         }
 
         [HttpPost]
@@ -181,20 +203,65 @@ namespace HSMServer.Controllers
                 : Task.FromResult(_emptyJsonResult);
         }
 
+        
+
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery] bool addHiddenColumns, [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
             if (!TryGetSensor(encodedId, out var sensor))
                 return null;
 
-            string fileName = $"{sensor.FullPath.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
-            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
+            //doesn't match with visivle table values
+            //var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount, RequestOptions.IncludeTtl);
 
-            var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount, RequestOptions.IncludeTtl);
+            if (!IsTableSelected())
+            {
+                GetSensorHistoryRequest request = new GetSensorHistoryRequest { EncodedId = encodedId };
+
+                if (from == DateTime.MinValue)
+                {
+                    //Default 300
+                    request.From = DateTime.MinValue;
+                    request.To = DateTime.Now.AddDays(2);
+                    request.Count = LatestHistoryCount;
+                }
+                else
+                {
+                    // time interval
+                    request.From = from;
+                    request.To = to;
+                    request.Count = SensorValuesCount;
+                }
+
+                //set SelectedTable
+                await TableHistory(request);
+            }
+
+            var values = await SelectedTable.GetAllValues();
+
+
+            //case Default 300
+            if (from == DateTime.MinValue && values.Any())
+            {
+                from = values.Last().LastUpdateTime;
+                to = values[0].LastUpdateTime;
+            }
+
+            string fileName = $"{sensor.FullPath.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
+            Response.Headers["Content-Disposition"] = $"attachment;filename={fileName}";
+
             var exportOptions = BuildExportOptions(encodedId, addHiddenColumns);
             var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(exportOptions));
 
             return File(content, fileName.GetContentType(), fileName);
+        }
+
+        private bool IsTableSelected()
+        {
+            if(SelectedTable == null)
+                return false;
+
+            return SelectedTable.LastIndex >= 0;
         }
 
 

@@ -374,6 +374,10 @@ img .tree-png-icon {
     opacity: 0.5;
 }
 
+.templatedAlert {
+    background-color: #dee2e6
+}
+
 .meta-info-label {
     min-width: 18rem;
 }
@@ -410,6 +414,10 @@ img .tree-png-icon {
     background-color: rgba(217,83,79,.3);
 }
 
+.fixed-width40 {
+    width: 40px;
+}
+
 .alert-add-button {
     cursor: pointer;
     color: rgba(92,184,92,.5);
@@ -423,13 +431,23 @@ img .tree-png-icon {
 .alert-schedule-button {
     cursor: pointer;
     color: rgba(3, 21, 3, 0.5);
-    padding: 0px 8px;
+    /*padding: 0px 8px;*/
 }
 
 .alert-schedule-button:hover {
     color: rgb(0, 0, 0);
 }
 
+.input-group-text {
+    background-color: #f8f9fa;
+    cursor: pointer;
+}
+
+.calendar-button {
+    cursor: pointer;
+    color: rgba(3, 21, 3, 0.5);
+    padding: 0px 8px 0px 1px;
+}
 
 .alert-delete-button {
     cursor: pointer;
@@ -674,4 +692,8 @@ input[type="search"]::-webkit-search-cancel-button {
 .disabled-group {
     opacity: 0.5;
     pointer-events: none;
+}
+
+.alert-template-tooltip {
+    --bs-tooltip-max-width: 800px !important;
 }

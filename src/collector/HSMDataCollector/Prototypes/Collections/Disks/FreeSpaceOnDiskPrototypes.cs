@@ -24,7 +24,7 @@ namespace HSMDataCollector.Prototypes
 
             options.Alerts = new List<InstantAlertTemplate>()
             {
-                AlertsFactory.IfEmaValue(AlertOperation.LessThanOrEqual, 5.GigobytesToMegabytes())
+                AlertsFactory.IfEmaValue(AlertOperation.LessThanOrEqual, 20.GigobytesToMegabytes())
                              .ThenSendInstantHourlyScheduledNotification($"[$product] {SensorName} is running out. Current free space is $value $unit")
                              .AndSetIcon(AlertIcon.ArrowDown).AndSetSensorError().Build()
             };

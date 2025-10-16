@@ -1,9 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Threading.Tasks;
+using HSMCommon.TaskResult;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TableOfChanges;
 using SensorStatus = HSMServer.Core.Model.SensorStatus;
 
@@ -13,7 +17,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
     /// <summary>
     /// If properties are null - there's no updates for that properties
     /// </summary>
-    public record SensorUpdate : BaseNodeUpdate
+    public record SensorUpdate : BaseNodeUpdate, IUpdateRequest
     {
         public List<PolicyUpdate> Policies { get; init; }
 
@@ -30,8 +34,15 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public Unit? SelectedUnit { get; init; }
 
+
+        public RateDisplayUnit? DisplayUnit { get; set; }
+
         public bool? IsSingleton { get; init; }
 
+        public bool? IsHideEnabled { get; init; }
+    
+        public int? MaxCommentHideSize { get; init; }
+        
 
         public DefaultAlertsOptions DefaultAlertsOptions { get; init; }
 
@@ -67,6 +78,26 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public InitiatorInfo Initiator { get; init; }
 
         public bool IsParentRequest { get; init; }
+
+        public Guid? TemplateId { get; init; }
+
+        public PolicyUpdate() { }
+
+        public PolicyUpdate (Policy policy, InitiatorInfo initiator = null)
+        {
+            Conditions = policy.Conditions.Select(x => new PolicyConditionUpdate(x.Operation, x.Property, x.Target, x.Combination)).ToList();
+            Destination = new PolicyDestinationUpdate(policy.Destination);
+            Schedule = new PolicyScheduleUpdate() { RepeatMode = policy.Schedule.RepeatMode, InstantSend = policy.Schedule.InstantSend, Time = policy.Schedule.Time };
+            ConfirmationPeriod = policy.ConfirmationPeriod;
+            Id = policy.Id;
+            Status = policy.Status;
+            Template = policy.Template;
+            IsDisabled = policy.IsDisabled;
+            Icon = policy.Icon;
+            TemplateId = policy.TemplateId;
+            Initiator = initiator;
+        }
+
     }
 
 
@@ -125,5 +156,14 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public bool? InstantSend { get; init; }
 
         public DateTime? Time { get; init; }
+
+        public PolicyScheduleUpdate() { }
+
+        public PolicyScheduleUpdate(PolicySchedule schedule)
+        {
+            RepeatMode = schedule.RepeatMode;
+            InstantSend = schedule.InstantSend;
+            Time = schedule.Time;
+        }
     }
 }

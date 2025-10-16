@@ -36,6 +36,8 @@
     var importAlerts = "@Url.Action(nameof(AlertsController.ImportAlerts), ViewConstants.AlertsController)";
 
     var getSourceSettings = "@Url.Action(nameof(DashboardsController.GetSourceSettings), ViewConstants.DashboardsController)";
+
+    var createAlertTemplate = "@Url.Action(nameof(AlertTemplatesController.New), ViewConstants.AlertTemplatesController)";
 </script>
 
 
@@ -101,21 +103,69 @@
 </div>
 
 
-<script>
-    initializeTree();
 
+
+<script>
+
+    const scrollHandlers = {
+        saveTreeScroll: () => {
+            const treeWrapper = document.querySelector('.tree-wrapper');
+
+            if (treeWrapper) {
+                const scrollPosition = treeWrapper.scrollTop;
+                //console.log("beforeunload: Scroll position: '" + scrollPosition);
+
+                if (scrollPosition != 0)
+                    sessionStorage.setItem('treeScrollPosition', scrollPosition.toString());
+            }
+        },
+            restoreTreeScroll: () => {
+            const savedPosition = sessionStorage.getItem('treeScrollPosition');
+            //console.log("DOMContentLoaded: Scroll position: '" + savedPosition);
+            
+            if (savedPosition) {
+                sessionStorage.removeItem('treeScrollPosition');
+
+                const tryRestoreScroll = () => {
+                    const treeWrapper = document.querySelector('.tree-wrapper');
+
+                    if (treeWrapper) {
+                        treeWrapper.scrollTop = savedPosition;
+                        //console.log("Scroll position: '" + savedPosition + "' is set. Tree scroll: " + treeWrapper.scrollTop);
+                    }
+                    else
+                        setTimeout(tryRestoreScroll, 100);
+
+                    if (treeWrapper?.scrollTop != savedPosition) {
+                        //console.log('Scroll position is not set:');
+                        setTimeout(tryRestoreScroll, 100);
+                        //console.log('Timer is started:');
+                    }
+                };
+
+                setTimeout(() => { tryRestoreScroll(); }, 100);
+            }
+        }
+    };
+
+    window.addEventListener('beforeunload', scrollHandlers.saveTreeScroll);
 
     var clipboard = new ClipboardJS('[id^="copy_"]', {
         container: document.getElementById('accessKeys_modal')
     });
 
-    var interval = $("#treeInterval").val() * 1000;
-    setTimeout(updateTreeTimer, interval);
+    setTimeout(updateTreeTimer, getCurrentUpdateTreeInterval());
 
+    document.addEventListener('DOMContentLoaded', () => {
 
-    $(document).ready(() => {
-        $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
-    })
+        initializeTree();
+
+        scrollHandlers.restoreTreeScroll();
+
+        const updateTimeElement = document.getElementById('updateTime');
+        updateTimeElement.innerHTML = '';
+        updateTimeElement.append('Update Time: ' + new Date().toUTCString());
+    });
 
     $(window).on('load', function () {
         $('body').css('overflow', 'hidden');
@@ -133,15 +183,42 @@
     $("#mainSpinner").css("display", "none");
     $('#mainContainer').removeClass('hidden_element');
 
-
     var refreshTreeTimeoutId;
-    var isRefreshing = false;
-    function updateTreeTimer() {
-        clearTimeout(refreshTreeTimeoutId);
-        isRefreshing = true;
+    let treeUpdateInProgress = false;
 
-        $('#jstree').jstree(true).refresh(true);
 
-        isRefreshing = false;
+    async function updateTreeTimer() {
+
+        if (treeUpdateInProgress)
+        {
+            console.log( 'updateTreeTimer: is in progress. Skipped.');
+            return;
+        }
+
+        // console.log(new Date().toLocaleTimeString(
+        //     'ru-RU', 
+        //     { 
+        //         hour: '2-digit', 
+        //         minute: '2-digit', 
+        //         second: '2-digit', 
+        //         fractionalSecondDigits: 3 
+        //     }) 
+        //     + ' updateTreeTimer: refresh tree...');
+        
+        treeUpdateInProgress = true;
+
+        const $tree = $('#jstree');
+        const treeWrapper = document.querySelector('.tree-wrapper');
+        treeWrapper.dataset.scrollPosition = treeWrapper.scrollTop;
+
+        try {
+            $tree.jstree(true)?.refresh(true);
+
+        } catch (e) {
+            console.error('Tree update failed:', e);
+        } finally {
+            treeUpdateInProgress = false;
+        }
     }
-</script>
+
+</script> 

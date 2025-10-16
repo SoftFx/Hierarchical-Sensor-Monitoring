@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
 using HSMServer.Folders;
+using HSMServer.Helpers;
 using HSMServer.ServerConfiguration;
 using NLog;
 using System;
@@ -24,26 +25,46 @@ namespace HSMServer.Notifications
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly ITelegramChatsManager _chatsManager;
         private readonly IFolderManager _folderManager;
-        private readonly ITreeValuesCache _cache;
         private readonly TelegramConfig _config;
+        private readonly TelegramBot _bot;
 
-        private string BotName => $"@{_config.BotName.ToLower()}";
+        private string BotName
+        {
+            get
+            {
+                return _config.BotName.StartsWith('@')?
+                    _config.BotName.ToLower() :
+                    $"@{_config.BotName.ToLower()}";
+            }
+        }
 
 
-        internal TelegramUpdateHandler(ITelegramChatsManager chatsManager, ITreeValuesCache cache, IFolderManager folderManager, TelegramConfig config)
+    internal TelegramUpdateHandler(TelegramBot bot, ITelegramChatsManager chatsManager, IFolderManager folderManager, TelegramConfig config)
         {
             _folderManager = folderManager;
             _chatsManager = chatsManager;
             _config = config;
-            _cache = cache;
+            _bot = bot;
         }
 
 
         public async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cToken)
         {
+            if(update?.Message is null)
+                return;
+
+            if(update.Message.MigrateToChatId.HasValue)
+            {
+                _logger.Info($"Migrate to Supergroup: '{update.Message.Chat.Id}' -> '{update.Message.MigrateToChatId.Value}'");
+                await _chatsManager.MigrateToSupergroup( update.Message.Chat.Id, update.Message.MigrateToChatId.Value);
+                return;
+            }
+
             try
             {
-                if (update is null || update.Message is null || update.Message.Chat is null || string.IsNullOrEmpty(update.Message.Text) || update.Type is not UpdateType.Message)
+                if (update.Message.Chat is null ||
+                    string.IsNullOrEmpty(update.Message.Text) ||
+                    update.Type is not UpdateType.Message)
                     return;
 
                 var message = update.Message;
@@ -67,9 +88,9 @@ namespace HSMServer.Notifications
                     TelegramBotCommands.Help => Help(),
                     _ => null,
                 };
-
+                
                 if (!string.IsNullOrEmpty(response))
-                    await botClient.SendTextMessageAsync(message.Chat, response, parseMode: ParseMode.MarkdownV2, cancellationToken: cToken);
+                    await botClient.SendMessage(message.Chat, response, parseMode: ParseMode.MarkdownV2, cancellationToken: cToken);
                 else
                     _logger.Warn($"There is some invalid update message: {msgText}");
             }
@@ -77,13 +98,6 @@ namespace HSMServer.Notifications
             {
                 _logger.Error($"Invalid message has been received: {update?.Type} - {update?.Message}. Exception: {ex}");
             }
-        }
-
-        public Task HandlePollingErrorAsync(ITelegramBotClient _, Exception ex, CancellationToken token)
-        {
-            _logger.Error($"There is some error in telegram bot: {ex}");
-
-            return Task.CompletedTask;
         }
 
 
@@ -111,7 +125,7 @@ namespace HSMServer.Notifications
             else
                 response.Append("Your token is invalid or expired.");
 
-            return response.ToString().EscapeMarkdownV2();
+            return MarkdownHelper.EscapeMarkdownV2( response.ToString());
         }
 
         private string EntitiesInfo(ChatId chatId)
@@ -122,26 +136,34 @@ namespace HSMServer.Notifications
             if (chat is not null)
             {
                 response.Append($"*Messages delay*");
-                response.AppendLine($": {chat.MessagesAggregationTimeSec} seconds".EscapeMarkdownV2());
+                response.AppendLine(MarkdownHelper.EscapeMarkdownV2($": {chat.MessagesAggregationTimeSec} seconds"));
 
                 response.Append($"*Messages are enabled*");
-                response.AppendLine($": {chat.SendMessages}".EscapeMarkdownV2());
+                response.AppendLine(MarkdownHelper.EscapeMarkdownV2($": {chat.SendMessages}"));
 
                 response.Append($"*Connected folders*");
-                response.AppendLine($": {string.Join(", ", chat.Folders.Select(f => _folderManager[f]?.Name).OrderBy(n => n))}".EscapeMarkdownV2());
+                response.AppendLine(MarkdownHelper.EscapeMarkdownV2($": {string.Join(", ", chat.Folders.Select(f => _folderManager[f]?.Name).OrderBy(n => n))}"));
             }
             else
-                response.AppendLine("Chat is not found.".EscapeMarkdownV2());
+                response.AppendLine(MarkdownHelper.EscapeMarkdownV2("Chat is not found."));
 
             return response.ToString();
         }
 
-        private static string Help() =>
+        private static string Help() => MarkdownHelper.EscapeMarkdownV2(
             $"""
             Statuses: 
                 {Core.OffTime.ToIcon()} (OffTime) -> {Core.Ok.ToIcon()} (Ok) -> {Core.Error.ToIcon()} (Error)
-            """.EscapeMarkdownV2();
+            """);
 
-        private static string ServerStatus() => $"HSM server {ServerConfig.Version} is alive.".EscapeMarkdownV2();
+        private static string ServerStatus() => MarkdownHelper.EscapeMarkdownV2($"HSM server {ServerConfig.Version} is alive.");
+
+        public Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, HandleErrorSource source, CancellationToken cancellationToken)
+        {
+            var message = $"Telegram bot '{botClient.BotId}' (source: '{source}') error: {exception}";
+            _logger.Error(message);
+            _bot.OnErrorHandled(message);
+            return Task.CompletedTask;
+        }
     }
 }

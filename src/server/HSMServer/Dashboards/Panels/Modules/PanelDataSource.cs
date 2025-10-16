@@ -25,7 +25,7 @@ namespace HSMServer.Dashboards
             Sensor = sensor;
 
             Property = sensor.Type.IsBar() ? PlottedProperty.Max : PlottedProperty.Value;
-            Label = $"{sensor.DisplayName} ({Property})";
+            Label = $"{sensor.DisplayName}";
         }
 
         public PanelDatasource(BaseSensorModel sensor, PanelSourceEntity entity) : base(entity)
@@ -35,7 +35,7 @@ namespace HSMServer.Dashboards
         }
 
 
-        public PanelDatasource BuildSource(PanelRangeSettings yRange, bool aggregateValues, bool isSingleMode)
+        public PanelDatasource BuildSource(PanelRangeSettings yRange, bool aggregateValues, bool isSingleMode, bool showProperty)
         {
             Source?.Dispose(); // unsubscribe prev version
 
@@ -51,7 +51,8 @@ namespace HSMServer.Dashboards
             };
 
             Source = DatasourceFactory.Build(Sensor, settings);
-
+            ShowProperty = showProperty ? showProperty : ShowProperty;
+            
             return this;
         }
 
@@ -72,6 +73,6 @@ namespace HSMServer.Dashboards
             Source?.Dispose();
         }
 
-        protected override void ChangeDependentProperties(PanelSourceUpdate update) => BuildSource(update.YRange, update.AggregateValues, update.IsSingleMode);
+        protected override void ChangeDependentProperties(PanelSourceUpdate update) => BuildSource(update.YRange, update.AggregateValues, update.IsSingleMode, update.ShowProperty);
     }
 }

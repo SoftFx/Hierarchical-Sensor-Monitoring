@@ -111,21 +111,23 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult CreateProduct(AddProductViewModel product)
+        public async ValueTask<IActionResult> CreateProduct(AddProductViewModel product)
         {
             if (ModelState.IsValid)
-                _treeValuesCache.AddProduct(product.Name, CurrentUser.Id);
+                await _treeValuesCache.AddProductAsync(product.Name, CurrentUser.Id);
 
             return PartialView("_AddProduct", product);
         }
 
-        public void RemoveProduct(Guid product) => _treeValuesCache.RemoveProduct(product);
 
-        public async Task MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
+        public async ValueTask MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
         {
             if (_treeViewModel.Nodes.TryGetValue(productId, out var product))
                 await _folderManager.MoveProduct(product, fromFolderId, toFolderId, CurrentInitiator);
         }
+
+
+        public async ValueTask RemoveProduct(Guid product) => await _treeValuesCache.RemoveProductAsync(product);
 
         #endregion
 
@@ -153,10 +155,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult EditProduct(ProductGeneralInfoViewModel viewModel)
+        public async ValueTask<IActionResult> EditProduct(ProductGeneralInfoViewModel viewModel)
         {
             if (_treeViewModel.Nodes.TryGetValue(viewModel.Id, out var product) && ModelState.IsValid)
-                _treeValuesCache.UpdateProduct(viewModel.ToUpdate(product, _telegramChatsManager, _folderManager, CurrentInitiator));
+                await _treeValuesCache.UpdateProductAsync(viewModel.ToUpdate(product, _telegramChatsManager, _folderManager, CurrentInitiator));
             else
                 viewModel.DefaultChats = new(product);
 
@@ -207,12 +209,13 @@ namespace HSMServer.Controllers
             if (role.Item1 == Guid.Empty && role.Item2 == 0)
                 return;
 
-            user.ProductsRoles.Remove(role);
+            user.ProductsRoles ??= [];
 
-            if (user.ProductsRoles == null || !user.ProductsRoles.Any())
-                user.ProductsRoles = new List<(Guid, ProductRoleEnum)> { pair };
-            else
-                user.ProductsRoles.Add(pair);
+            if (user.ProductsRoles.Count > 0)
+                user.ProductsRoles.Remove(role);
+
+            user.ProductsRoles.RemoveAll(x => x.Item1 == pair.Item1);
+            user.ProductsRoles.Add(pair);
 
             _userManager.UpdateUser(user);
         }

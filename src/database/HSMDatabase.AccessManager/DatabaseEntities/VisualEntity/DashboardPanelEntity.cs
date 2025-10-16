@@ -16,6 +16,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities.VisualEntity
         public bool IsNotAggregate { get; set; }
 
         public bool ShowProduct { get; set; }
+        
+        public bool ShowProperties { get; set; }
     }
 
 

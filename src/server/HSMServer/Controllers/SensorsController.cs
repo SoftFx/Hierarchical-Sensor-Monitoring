@@ -1,15 +1,21 @@
-﻿using HSMCommon.Extensions;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Mime;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using NLog;
+using AngleSharp.Io;
+using HSMCommon.Extensions;
 using HSMCommon.TaskResult;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.HistoryRequests;
-using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
 using HSMServer.Middleware;
 using HSMServer.Middleware.Telemetry;
@@ -19,15 +25,8 @@ using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Mime;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
-using SensorType = HSMSensorDataObjects.SensorType;
+using HSMSensorDataObjects.SensorRequests;
+
 
 namespace HSMServer.Controllers
 {
@@ -41,22 +40,19 @@ namespace HSMServer.Controllers
     {
         private const string InvalidRequest = "Public API request info not found";
 
-        private static readonly TaskResult _invalidRequestResult = new(InvalidRequest);
+        private static readonly TaskResult _invalidRequestResult = TaskResult.FromError(InvalidRequest);
 
-        private readonly ILogger<SensorsController> _logger;
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly DataCollectorWrapper _collector;
         private readonly TelemetryCollector _telemetry;
 
         private readonly ITreeValuesCache _cache;
-        private readonly IUpdatesQueue _updatesQueue;
 
 
-        public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector, ILogger<SensorsController> logger, ITreeValuesCache cache, TelemetryCollector telemetry)
+        public SensorsController(DataCollectorWrapper dataCollector, ITreeValuesCache cache, TelemetryCollector telemetry)
         {
             _telemetry = telemetry;
-            _logger = logger;
 
-            _updatesQueue = updatesQueue;
             _collector = dataCollector;
             _cache = cache;
         }
@@ -222,75 +218,32 @@ namespace HSMServer.Controllers
         {
             try
             {
-                var response = new Dictionary<string, string>(values.Count);
+                if (values.Count == 0)
+                    return BadRequest(values);
 
-                foreach (var value in values.OrderBy(u => u.Time))
+                var infoRequest = await IsValidPublicApiRequest(values.FirstOrDefault());
+
+                if (infoRequest.IsOk)
                 {
-                    var result = await TryBuildAndAddData(value);
+                    var info = infoRequest.Value;
 
-                    if (!result.IsOk)
-                        response[value.Path] = result.Error;
+                    var response = await _cache.AddSensorValuesAsync(info.Key.Id, info.Product.Id, values);
+
+                    _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(values.Count);
+                    _collector.WebRequestsSensors.Total.AddReceiveData(values.Count);
+
+                    return Ok(response);
                 }
 
-                return Ok(response);
+                return BadRequest(values);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogError(e, "Failed to put data");
+                _logger.Error("Failed to put data", ex);
                 return BadRequest(values);
             }
         }
 
-        /// <summary>
-        /// Obsolete method. Will be removed.
-        /// Accepts data in UnitedSensorValue format. Converts data to a typed format and saves it to the database.
-        /// </summary>
-        /// <param name="values"></param>
-        /// <returns></returns>
-        [HttpPost("listNew")]
-        [Consumes(MediaTypeNames.Application.Json)]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        [SendDataKeyPermissionFilter]
-        public ActionResult<List<UnitedSensorValue>> Post([FromBody] List<UnitedSensorValue> values)
-        {
-            if (values == null || values.Count == 0)
-                return BadRequest();
-
-            try
-            {
-                _collector.WebRequestsSensors.Total.AddReceiveData(values.Count);
-
-                var result = new Dictionary<string, string>(values.Count);
-                foreach (var value in values)
-                {
-                    BaseValue convertedValue = value.Type switch
-                    {
-                        SensorType.BooleanSensor => value.ConvertToBool(),
-                        SensorType.DoubleSensor => value.ConvertToDouble(),
-                        SensorType.IntSensor => value.ConvertToInt(),
-                        SensorType.StringSensor => value.ConvertToString(),
-                        SensorType.IntegerBarSensor => value.ConvertToIntBar(),
-                        SensorType.DoubleBarSensor => value.ConvertToDoubleBar(),
-                        _ => null
-                    };
-                    var storeInfo = new StoreInfo(value.Key, value.Path)
-                    {
-                        BaseValue = convertedValue
-                    };
-
-                    if (!CanAddToQueue(storeInfo, out var message))
-                        result[storeInfo.Path] = message;
-                }
-                return result.Count == 0 ? Ok(values) : StatusCode(406, result);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to put data");
-                return BadRequest(values);
-            }
-        }
 
         /// <summary>
         /// Get history [from, to] or [from - count] for some sensor
@@ -317,9 +270,9 @@ namespace HSMServer.Controllers
 
                 return StatusCode(406, coreRequest.Error);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogError(e, "Failed to get history!");
+                _logger.Error("Failed to get history!", ex);
                 return BadRequest(request);
             }
         }
@@ -351,9 +304,9 @@ namespace HSMServer.Controllers
 
                 return StatusCode(406, coreRequest.Error);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogError(e, "Failed to get history!");
+                _logger.Error("Failed to get history!", ex);
                 return BadRequest(request);
             }
         }
@@ -378,11 +331,11 @@ namespace HSMServer.Controllers
 
                 return result.IsOk ? Ok() : StatusCode(406, result.Error);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
                 var message = $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}";
 
-                _logger.LogError(e, message);
+                _logger.Error(message, ex);
 
                 return BadRequest(message);
             }
@@ -422,24 +375,13 @@ namespace HSMServer.Controllers
 
                 return Ok(response);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                _logger.LogError(e, "Failed to update sensors!");
+                _logger.Error("Failed to update sensors!", ex);
                 return BadRequest(response);
             }
         }
 
-
-        private bool CanAddToQueue(StoreInfo storeInfo, out string message)
-        {
-            if (storeInfo.TryCheckRequest(out message) && _cache.TryCheckKeyWritePermissions(storeInfo, out message))
-            {
-                _updatesQueue.AddItem(storeInfo);
-                return true;
-            }
-
-            return false;
-        }
 
         private async Task<ActionResult<T>> GetAddDataResult<T>(T value) where T : SensorValueBase
         {
@@ -451,7 +393,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to put data!");
+                _logger.Error("Failed to put data!", ex);
 
                 return BadRequest(value);
             }
@@ -468,27 +410,21 @@ namespace HSMServer.Controllers
                 {
                     var info = infoRequest.Value;
 
-                    var storeInfo = new StoreInfo(info.Key.Id, value.Path)
-                    {
-                        BaseValue = value.Convert(),
-                        Product = info.Product
-                    };
+                    var result = await _cache.AddSensorValueAsync(info.Key.Id, info.Product.Id, value);
 
-                    var result = CanAddToQueue(storeInfo, out var error);
-
-                    if (result)
+                    if (result.IsOk)
                     {
                         _collector.WebRequestsSensors[info.TelemetryPath].AddReceiveData(1);
                         _collector.WebRequestsSensors.Total.AddReceiveData(1);
                     }
 
-                    return result ? TaskResult.Ok : new TaskResult(error);
+                    return result;
                 }
 
             }
             catch (Exception ex)
             {
-
+                _logger.Error(ex);
             }
 
             return _invalidRequestResult;
@@ -500,13 +436,13 @@ namespace HSMServer.Controllers
 
             if (infoRequest.IsOk)
             {
-                var coreRequest = apiRequest.Convert(infoRequest.Value.Key.Id);
+                var coreRequest = apiRequest.Convert(infoRequest.Value.Key.Id, infoRequest.Value.Product.Id);
                 var isValid = apiRequest.TryValidate(out var error) && coreRequest.TryCheckRequest(out error);
 
-                return isValid ? new TaskResult<HistoryRequestModel>(coreRequest) : TaskResult<HistoryRequestModel>.AsError(error);
+                return isValid ? TaskResult<HistoryRequestModel>.FromValue(coreRequest) : TaskResult<HistoryRequestModel>.FromError(error);
             }
 
-            return TaskResult<HistoryRequestModel>.AsError(InvalidRequest);
+            return TaskResult<HistoryRequestModel>.FromError(InvalidRequest);
         }
 
         private async Task<TaskResult> TryBuildAndApplySensorUpdateRequest(AddOrUpdateSensorRequest apiRequest)
@@ -519,16 +455,16 @@ namespace HSMServer.Controllers
                 var sensorType = apiRequest.SensorType;
                 var info = infoRequest.Value;
 
-                if (!_cache.TryGetSensorByPath(info.Product.DisplayName, relatedPath, out var sensor) && sensorType is null)
-                    return new TaskResult($"{nameof(apiRequest.SensorType)} property is required, because sensor {relatedPath} doesn't exist");
+                if (!_cache.TryGetSensorByPath(info.Product.Id, relatedPath, out var sensor) && sensorType is null)
+                    return TaskResult.FromError($"{nameof(apiRequest.SensorType)} property is required, because sensor {relatedPath} doesn't exist");
 
-                var coreRequest = new SensorAddOrUpdateRequestModel(info.Key.Id, relatedPath)
+                var coreRequest = new SensorAddOrUpdateRequest(info.Product.Id, relatedPath)
                 {
                     Update = apiRequest.Convert(sensor?.Id ?? Guid.Empty, info.Key.DisplayName),
                     Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,
                 };
 
-                return _cache.TryAddOrUpdateSensor(coreRequest, out var error) ? TaskResult.Ok : new TaskResult(error);
+                return await _cache.AddOrUpdateSensorAsync(coreRequest);
             }
 
             return _invalidRequestResult;
@@ -539,17 +475,17 @@ namespace HSMServer.Controllers
             var context = HttpContext;
 
             if (context.TryGetPublicApiInfo(out var info))
-                return new TaskResult<PublicApiRequestInfo>(info);
+                return TaskResult<PublicApiRequestInfo>.FromValue(info);
 
             if (TelemetryCollector.TryAddKeyToHeader(context, request.Key))
             {
                 var result = await _telemetry.TryRegisterPublicApiRequest(HttpContext);
 
                 if (result && context.TryGetPublicApiInfo(out info))
-                    return new TaskResult<PublicApiRequestInfo>(info);
+                    return TaskResult<PublicApiRequestInfo>.FromValue(info);
             }
 
-            return TaskResult<PublicApiRequestInfo>.AsError("Cannot process a access key in the body");
+            return TaskResult<PublicApiRequestInfo>.FromError("Cannot process a access key in the body");
         }
     }
 }

@@ -16,7 +16,7 @@ namespace HSMServer.Controllers
 {
     public class DashboardsController : BaseController
     {
-        private readonly JsonSerializerOptions _serializerOptions = new ()
+        public static readonly JsonSerializerOptions SerializerOptions = new ()
         {
             Converters = { new VersionSourceConverter() },
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -184,6 +184,7 @@ namespace HSMServer.Controllers
                     Name = model.Name,
                     Description = model.Description ?? string.Empty,
                     ShowProduct = model.ShowProduct,
+                    ShowProperties = model.ShowProperties,
                     IsAggregateValues = model.AggregateValues,
 
                     AutoScale = model.YRange.AutoScale,
@@ -249,7 +250,7 @@ namespace HSMServer.Controllers
             {
                 var response = await datasource.Source.Initialize();
                 
-                return Json(new DatasourceViewModel(response, datasource, showProduct), _serializerOptions);
+                return Json(new DatasourceViewModel(response, datasource, showProduct), SerializerOptions);
             }
             return Json(new
             {

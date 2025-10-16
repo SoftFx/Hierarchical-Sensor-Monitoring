@@ -1,39 +1,32 @@
 ﻿using System;
-using System.Linq;
 using System.Management;
+using System.Threading.Tasks;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects.SensorRequests;
 
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
+    public sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan, NoDisplayUnit>
     {
-        public static string WMI_CLASS_NAME = "Win32_OperatingSystem";
-        public static string PROPERTY_NAME  = "LastBootUpTime";
+        internal WindowsLastRestart(MonitoringInstantSensorOptions options) : base(options) { }
 
-        protected override TimeSpan TimerDueTime => BarTimeHelper.GetTimerDueTime(PostTimePeriod);
-
-
-        public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options) { }
-
-
-        protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastBootTime();
-
+        protected override TimeSpan GetValue() => DateTime.UtcNow - GetLastBootTime().ToUniversalTime();
 
         private DateTime GetLastBootTime()
         {
-            using (var searcher = new ManagementObjectSearcher($"SELECT {PROPERTY_NAME} FROM {WMI_CLASS_NAME}"))
+            using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT LastBootUpTime FROM Win32_OperatingSystem"))
+            using (ManagementObjectCollection results = searcher.Get())
             {
-                var wmiObject = searcher.Get().OfType<ManagementObject>().FirstOrDefault();
-
-                if (wmiObject != null)
+                foreach (ManagementObject mo in results)
                 {
-                    return ManagementDateTimeConverter.ToDateTime(wmiObject.Properties[PROPERTY_NAME].Value.ToString()).ToUniversalTime();
+                    string lastBootUpTime = mo["LastBootUpTime"].ToString();
+                    return ManagementDateTimeConverter.ToDateTime(lastBootUpTime);
                 }
             }
 
-            return DateTime.MinValue;
+            throw new Exception("Can't get the date of the last reboot of Windows");
         }
     }
 }

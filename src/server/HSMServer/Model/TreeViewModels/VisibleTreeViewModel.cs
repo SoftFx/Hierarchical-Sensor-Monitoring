@@ -4,6 +4,7 @@ using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.UserTreeShallowCopy;
+using HSMServer.Model.ViewModel;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -59,10 +60,10 @@ public sealed class VisibleTreeViewModel
     public List<BaseShallowModel> GetUserTree(SearchPattern pattern)
     {
         _searchPattern.Recalculate(pattern);
-        
+
         // products should be updated before folders because folders should contain updated products
-        var products = GetUserProducts?.Invoke(_user).GetOrdered(_user);
-        var folders = GetFolders?.Invoke().GetOrdered(_user).ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
+        var products = GetUserProducts?.Invoke(_user).GetOrdered(_user).ToList() ?? new List<ProductNodeViewModel>();
+        var folders = GetFolders?.Invoke().GetOrdered(_user).ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user)) ?? new Dictionary<Guid, FolderShallowModel>();
 
         var folderTree = new List<BaseShallowModel>(1 << 4);
         var tree = new List<BaseShallowModel>(1 << 4);

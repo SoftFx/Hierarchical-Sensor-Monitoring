@@ -28,6 +28,9 @@ public sealed class PanelViewModel
 
     [Display(Name = "Show product names")]
     public bool ShowProduct { get; set; }
+    
+    [Display(Name = "Show properties")]
+    public bool ShowProperties { get; set; }
 
     public string Description { get; set; }
 
@@ -55,6 +58,7 @@ public sealed class PanelViewModel
         Name = panel.Name ?? DefaultName;
         Description = panel.Description;
         ShowProduct = panel.ShowProduct;
+        ShowProperties = panel.ShowProperties;
         AggregateValues = panel.AggregateValues;
         Id = panel.Id;
         DashboardId = dashboardId;

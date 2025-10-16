@@ -1,26 +1,133 @@
-﻿import {GetSensortInfo} from "./metaInfo";
+﻿
+import { invalid } from "moment";
+import {GetSensortInfo} from "./metaInfo";
 
 window.getFromAndTo = function (encodedId) {
+
     let from = $(`#from_${encodedId}`).val();
     let to = $(`#to_${encodedId}`).val();
 
-    if (to == "") {
-        to = new Date().AddDays(1);
-        $(`#to_${encodedId}`).val(datetimeLocal(to));
+    let fromDate = parseCustomDate(from);
+    let toDate = parseCustomDate(to);
+
+    if (!toDate) {
+        toDate = new Date().AddDays(1);
+        $(`#to_${encodedId}`).val(formatDateCustom(toDate));
     }
 
-    if (from == "") {
-        from = to.AddDays(-1);
-        $(`#from_${encodedId}`).val(datetimeLocal(from));
+    if (!fromDate) {
+        fromDate = new Date().AddDays(-1);
+        $(`#from_${encodedId}`).val(formatDateCustom(fromDate));
     }
 
-    return {from, to};
+    return {
+        from: datetimeLocal(fromDate),
+        to: datetimeLocal(toDate)
+    };
 }
 
-window.setFromAndTo = function (encodedId, from, to) {
-    $(`#from_${encodedId}`).val(datetimeLocal(from));
-    $(`#to_${encodedId}`).val(datetimeLocal(to));
+window.parseCustomDate = function (dateStr) {
+
+    if (!dateStr) {
+        return null
+    };
+
+    // MM/dd/yyyy HH:mm
+    const [datePart, timePart] = dateStr.split(' ');
+    const [month, day, year] = datePart.split('/');
+    const [hours, minutes] = timePart.split(':');
+
+    var utc = Date.UTC(year, month - 1, day, hours, minutes);
+    var result = new Date(utc);
+
+    return result;
 }
+
+
+function formatDateCustom(date) {
+
+    if (typeof date === 'number' && !isNaN(date)) {
+        date = new Date(date);
+    }
+
+    else if (!(date instanceof Date) || isInvalidDate(date)) {
+        date = new Date().AddDays(-30);
+        //throw new Error('Invalid date: must be Date object or timestamp');
+    }
+
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+
+    return `${month}/${day}/${year} ${hours}:${minutes}`;
+}
+
+function datetimeLocal(datetime) {
+    const dt = new Date(datetime);
+
+    if (isNaN(dt.getTime()))
+        return (new Date()).toISOString().slice(0, 16);
+
+    return dt.toISOString().slice(0, 16);
+}
+
+window.getDateUTC = function (date) {
+
+    if (!date || !(date instanceof Date)) {
+        date = new Date();
+    }
+
+    const utcDate = new Date(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate(),
+        date.getUTCHours(),
+        date.getUTCMinutes(),
+        date.getUTCSeconds()
+    );
+
+    return utcDate;
+}
+
+
+
+
+
+function isInvalidDate(date) {
+    return isNaN(date.getTime());
+}
+
+
+window.setFromAndTo = function (encodedId, from, to)
+{
+    const fromElement = document.getElementById(`from_${encodedId}`);
+    if (fromElement) {
+        const fromPicker = fromElement._flatpickr;
+        if (fromPicker) {
+            setFlatpickrValue(fromPicker, from)
+        }
+    }
+
+    const toElement = document.getElementById(`to_${encodedId}`);
+    if (toElement) {
+        const toPicker = toElement._flatpickr;
+
+        //toElement.value = formatDateCustom(to);
+        if (toPicker) {
+            setFlatpickrValue(toPicker, to);
+        }
+    }
+}
+
+function setFlatpickrValue(picker, date) {
+    var localDate = new Date(datetimeLocal(date));
+    picker.setDate(date);
+
+    updateTooltip(picker);
+}
+
 
 var millisecondsInHour = 1000 * 3600;
 var millisecondsInDay = millisecondsInHour * 24;
@@ -56,6 +163,7 @@ window.initialize = function () {
 
 window.searchHistory = function (encodedId) {
     const {from, to} = getFromAndTo(encodedId);
+
     GetSensortInfo(encodedId).done(function (types) {
         if (Object.keys(types).length === 0)
             return;
@@ -78,10 +186,12 @@ window.InitializeHistory = function () {
 
         if (historyPeriod === 'Custom') {
             let historyFrom = window.localStorage.getItem(`historyFrom_${encodedId}`);
-            let from = isNaN(Date.parse(historyFrom)) ? date.AddDays(-1) : new Date(historyFrom + 'Z');
+            //let from = isNaN(Date.parse(historyFrom)) ? date.AddDays(-1) : new Date(historyFrom + 'Z');
+            let from = isNaN(Date.parse(historyFrom)) ? date.AddDays(-1) : new Date(historyFrom);
 
             let historyTo = new Date(window.localStorage.getItem(`historyTo_${encodedId}`));
-            let to = isNaN(Date.parse(historyTo)) ? date.AddDays(1) : new Date(historyTo + 'Z');
+            //let to = isNaN(Date.parse(historyTo)) ? date.AddDays(1) : new Date(historyTo + 'Z');
+            let to = isNaN(Date.parse(historyTo)) ? date.AddDays(1) : new Date(historyTo);
 
             setFromAndTo(encodedId, from, to);
             searchHistory(encodedId);
@@ -91,11 +201,6 @@ window.InitializeHistory = function () {
         GetSensortInfo(encodedId).done(function (sensorInfo) {
             if (Object.keys(sensorInfo).length === 0)
                 return;
-
-            if (sensorInfo.realType === 0 && sensorInfo.plotType === 10) {
-                $('#history_period').trigger('change');
-                return;
-            }
             
             if (isFileSensor(sensorInfo.realType))
                 return;
@@ -163,13 +268,22 @@ function requestTable() {
     const {from, to} = getFromAndTo(encodedId);
 
     hideBarsCount(encodedId);
-    enableHistoryPeriod()
+    enableHistoryPeriod();
+
+    let action = historyAction;
+
+    let historyPeriod = window.localStorage.getItem(`historyPeriod_${encodedId}`);
+    if (historyPeriod == null || historyPeriod === 'Default') {
+         action = historyLatestAction;
+    }
+
+
     GetSensortInfo(encodedId).done(function (types) {
         if (Object.keys(types).length === 0)
             return;
 
         let body = Data(to, from, types.realType, encodedId);
-        initializeTable(encodedId, historyAction, types.realType, body);
+        initializeTable(encodedId, action, types.realType, body);
     })
 }
 
@@ -197,13 +311,20 @@ function requestHistory(encodedId, action, rawAction, types, reqData) {
 
 function exportCsv() {
     let encodedId = this.id.substring("button_export_csv_".length);
-    const {from, to} = getFromAndTo(encodedId);
+    const { from, to } = getFromAndTo(encodedId);
+
+    let fromToSend = from;
+        
+    let historyPeriod = window.localStorage.getItem(`historyPeriod_${encodedId}`);
+    if (historyPeriod == null || historyPeriod === 'Default') {
+        fromToSend = null;
+    }
 
     GetSensortInfo(encodedId).done(function (types) {
         if (Object.keys(types).length === 0)
             return;
 
-        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType + "&addHiddenColumns=" + hiddenColumns.isVisible + "&From=" + from + "&To=" + to;
+        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType + "&addHiddenColumns=" + hiddenColumns.isVisible + "&From=" + fromToSend + "&To=" + to;
     })
 }
 
@@ -226,17 +347,22 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
         if (noValuesElement != null) {
             $('#no_data_' + encodedId).show();
             $('#noDataValues').removeClass('d-none');
+            $('#commentTrimming').addClass('d-none')
         } else {
             $('#no_data_' + encodedId).hide();
             $('#noDataValues').addClass('d-none');
+            $('#commentTrimming').removeClass('d-none')
 
             if (needFillFromTo) {
                 let to = getToDate();
-                let from = new Date($(`#oldest_date_${encodedId}`).val());
+                const oldestDate = $(`#oldest_date_${encodedId}`).val();
+                let from = new Date(oldestDate);
                 
-                from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
-                $(`#from_${encodedId}`).val(datetimeLocal(from));
-                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+                //from.setMinutes(from.getMinutes() + from.getTimezoneOffset());
+
+                //const utcFrom = new Date(from.getTime() + from.getTimezoneOffset() * 60000);
+
+                setFromAndTo(encodedId, from, to.getTime());
 
                 reloadHistoryRequest(from, to, body);
             }
@@ -256,7 +382,7 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         dataType: 'html',
         cache: false,
         async: true
-    }).done(function (data) {
+    }).done(async function (data) {
         $("#tableHistoryRefreshButton").addClass("d-none");
         $('#allColumnsButton').addClass("d-none");
 
@@ -264,9 +390,9 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         if (parsedData.error === true)
             $('#points_limit').show();
         else
-            $('#points_limit').hide()
+            $('#points_limit').hide();
 
-        let values = parsedData.value.values;
+        let values = parsedData.values;
         if (values.length === 0) {
             $('#no_data_' + encodedId).show();
             $('#noDataGraph').removeClass('d-none');
@@ -276,15 +402,26 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
             $('#noDataGraph').addClass('d-none');
 
             if (needFillFromTo) {
-                let from = new Date(values[0].receivingTime);
+                let time = values[0].receivingTime;
+                if (sensorInfo.realType === 8)
+                    time = values.at(-1).time;
+
+                if (!time || isInvalidDate(new Date(time))) {
+                    const now = new Date();
+                    now.setMonth(now.getMonth() - 1); 
+                    time = now.toISOString(); 
+                }
+
+                let from = new Date(time);
+                const utcFrom = new Date(from.getTime() + from.getTimezoneOffset() * 60000);
+
                 let to = getToDate();
 
-                $(`#from_${encodedId}`).val(datetimeLocal(from));
-                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+                setFromAndTo(encodedId, utcFrom, to.getTime());
 
-                reloadHistoryRequest(from, to, body);
+                reloadHistoryRequest(utcFrom, to, body);
             }
-            displayGraph(JSON.stringify(parsedData.value), sensorInfo, `graph_${encodedId}`, encodedId);
+            await window.displayGraph(parsedData, sensorInfo, `graph_${encodedId}`, encodedId);
         }
 
         $("#sensorHistorySpinner").addClass("d-none");
@@ -313,7 +450,7 @@ function isFileSensor(type) {
 }
 
 function isGraphAvailable(type) {
-    return !(type === 3 || type === 6 || type === 8);
+    return !(type === 3 || type === 6);
 }
 
 function isTableAvailable(type) {
@@ -326,20 +463,10 @@ function isTableHistorySelected(encodedId) {
 }
 
 function getToDate() {
-    let now = new Date();
-
-    now.setDate(now.getDate() + 1);
+    let now = new getDateUTC();
+     now.setDate(now.getDate() + 1);
 
     return now;
-}
-
-function datetimeLocal(datetime) {
-    const dt = new Date(datetime);
-
-    if (isNaN(dt.getTime()))
-       return (new Date()).toISOString().slice(0, 16);
-
-    return dt.toISOString().slice(0, 16);
 }
 
 

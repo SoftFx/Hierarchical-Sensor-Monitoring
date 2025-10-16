@@ -10,7 +10,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class MonitoringSensorBase<T> : SensorBase<T>
+    public abstract class MonitoringSensorBase<T, TDisplayUnit> : SensorBase<T, TDisplayUnit> where TDisplayUnit : struct, Enum
     {
         private readonly IMonitoringOptions _options;
         private CancellationTokenSource _cancellationTokenSource;
@@ -18,11 +18,11 @@ namespace HSMDataCollector.DefaultSensors
 
         private readonly object _lock = new object();
 
-        protected virtual TimeSpan TimerDueTime => PostTimePeriod;
+        protected virtual TimeSpan TimerDueTime => TimeSpan.Zero;
 
         protected TimeSpan PostTimePeriod => _options.PostDataPeriod;
 
-        protected MonitoringSensorBase(SensorOptions options) : base(options)
+        protected MonitoringSensorBase(SensorOptions<TDisplayUnit> options) : base(options)
         {
             if (options is IMonitoringOptions monitoringOptions)
                 _options = monitoringOptions;
@@ -30,7 +30,7 @@ namespace HSMDataCollector.DefaultSensors
                 throw new ArgumentNullException(nameof(monitoringOptions));
         }
 
-        internal override ValueTask<bool> InitAsync()
+        public override ValueTask<bool> InitAsync()
         {
             try
             {
@@ -45,7 +45,7 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        internal override async ValueTask StopAsync()
+        public override async ValueTask StopAsync()
         {
             try
             {

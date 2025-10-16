@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
@@ -28,6 +29,7 @@ namespace HSMDataCollector.Core
         event Action ToStopping;
         event Action ToStopped;
 
+        IEnumerable<ISensor> DefaultSensors { get; }
 
         /// <summary>
         /// Check connection via client that was created in DataCollector constructor with CollectorOptions parameter

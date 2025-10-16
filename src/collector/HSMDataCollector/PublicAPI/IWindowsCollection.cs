@@ -59,10 +59,11 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null);
 
-
         IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options = null);
 
         IWindowsCollection AddWindowsLastRestart(WindowsInfoSensorOptions options = null);
+
+        IWindowsCollection AddWindowsInstallDate(WindowsInfoSensorOptions options = null);
 
         IWindowsCollection AddWindowsVersion(WindowsInfoSensorOptions options = null);
 
@@ -118,5 +119,7 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);
 
         IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options);
+
+        bool UnsubscribeWindowsServiceStatus(ServiceSensorOptions options);
     }
 }

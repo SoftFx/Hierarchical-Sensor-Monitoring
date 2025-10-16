@@ -69,11 +69,12 @@ namespace HSMServer.Dashboards
             return entity;
         }
 
-        public PanelSubscription UpdatePanelSettings(PanelRangeSettings ySetting, bool aggrValues)
+        public PanelSubscription UpdatePanelSettings(PanelRangeSettings ySetting, bool aggrValues, bool showProperty)
         {
             _panelAggrValue = aggrValues;
             _panelYSettings = ySetting;
-
+            ShowProperty = showProperty;
+            
             return this;
         }
 
@@ -92,7 +93,7 @@ namespace HSMServer.Dashboards
 
         public bool IsMatch(BaseSensorModel sensor) => IsPropertySuitable(sensor) && IsEmaPropertySuitable(sensor) && IsMatchTemplate(sensor);
 
-        public string BuildSensorLabel() => _pathTemplate.BuildStringByTempalte(Label) ?? Label;
+        public string BuildSensorLabel() => _pathTemplate.BuildStringByTempalte(Label);
 
 
         public Task StartScanning(Func<HashSet<Guid>, IEnumerable<BaseSensorModel>> getSensors)

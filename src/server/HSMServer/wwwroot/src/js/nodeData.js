@@ -6,20 +6,65 @@ export const formObserver = new MutationObserverService();
 window.currentSelectedNodeId = "";
 
 
-window.initializeTreeNode = function () {
-    $('#jstree').on('activate_node.jstree', function (e, data) {
+//window.initializeTreeNode = function () {
+//    $('#jstree').on('activate_node.jstree', function (e, data) {
+//        if (data.node.id != undefined) {
+//            selectNodeAjax(data.node.id);
+//        }
+//    }).on("state_ready.jstree", function () {
+//        let selected = $(this).jstree('get_selected')[0];
+
+//        let id = window.location.pathname.slice("/Home/".length)
+//        if (id !== '' && id !== undefined)
+//            selected = id;
+
+//        selectNodeAjax(selected);
+//    });
+//}
+
+function isHomeController(path) {
+    const result = path.toLowerCase();
+    return result.startsWith("/home/") || result == "/home";
+}
+
+
+function handleActivateNode(e, data) {
+
+    const path = window.location.pathname;
+
+    if (isHomeController(path)) {
         if (data.node.id != undefined) {
             selectNodeAjax(data.node.id);
         }
-    }).on("state_ready.jstree", function () {
+    }
+}
+
+function handleStateReady() {
+
+    const path = window.location.pathname;
+
+    if (isHomeController(path)) {
+
         let selected = $(this).jstree('get_selected')[0];
 
-        let id = window.location.pathname.slice("/Home/".length)
-        if (id !== '' && id !== undefined)
+        const prefix = "/Home/"
+
+        let id = path.slice(prefix.length);
+
+        if (id !== '' && id !== undefined) {
             selected = id;
+        }
 
         selectNodeAjax(selected);
-    });
+    }
+}
+
+window.initializeTreeNode = function () {
+
+    $('#jstree').off('activate_node.jstree', handleActivateNode).on('activate_node.jstree', handleActivateNode);
+    $('#jstree').off('state_ready.jstree', handleStateReady).on('state_ready.jstree', handleStateReady);
+
+    //console.log('initializeTreeNode is done');
 }
 
 window.activateNode = function (currentNodeId, nodeIdToActivate) {
@@ -44,13 +89,14 @@ function selectNodeAjax(selectedId) {
         saveMetaData(selectedId);
     }
     else {
-        if (window.localStorage.isDashboardRedirect && window.localStorage.isDashboardRedirect === 'true') 
-        {
+        if (window.localStorage.isDashboardRedirect && window.localStorage.isDashboardRedirect === 'true') {
             $('#jstree').jstree('deselect_all').jstree('select_node', selectedId);
             window.localStorage.isDashboardRedirect = false;
         }
-        window.history.replaceState( {} , document.title, `/Home/${selectedId}` )
-        initSelectedNode(selectedId);
+        else {
+            window.history.replaceState({}, document.title, `/Home/${selectedId}`)
+            initSelectedNode(selectedId);
+        }
     }
 }
 
@@ -119,6 +165,7 @@ function saveMetaData(selectedId) {
 }
 
 function initSelectedNode(selectedId) {
+    console.log('initSelectedNode selectedId=', selectedId);
     currentSelectedNodeId = selectedId;
 
     // Show spinner only if selected tree node contains 20 children (nodes/sensors) or it is sensor (doesn't have children)

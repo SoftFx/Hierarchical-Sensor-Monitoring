@@ -3,7 +3,6 @@ using System.Linq;
 using System.Collections.Generic;
 using HSMServer.Core;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Sensors;
 using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
@@ -50,7 +49,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
-        public bool IsChartSupported => Type is not SensorType.String and not SensorType.Version;
+        public bool IsChartSupported => Type is not SensorType.String;
 
         public bool IsTableFormatSupported => Type is not SensorType.File;
 
@@ -60,14 +59,21 @@ namespace HSMServer.Model.TreeViewModel
         public bool IsServiceAlive => Name == ServiceAliveName;
         public bool IsServiceStatus => Name == ServiceStatusName;
 
+        public RateDisplayUnit? DisplayUnit { get; private set; }
 
         public DateTime CreationTime { get; private set; }
 
         public Dictionary<int, EnumOptionModel> EnumOptions { get; private set; }
 
+        private BaseSensorModel _model;
+
+        public BaseValue ToDisplayValue(BaseValue value) => _model.ToDisplayValue(value);
+
         public SensorNodeViewModel(BaseSensorModel model) : base(model) 
         {
+            _model = model;
             EnumOptions = model.EnumOptions;
+            DisplayUnit = model.DisplayUnit;
         }
 
 
@@ -75,6 +81,7 @@ namespace HSMServer.Model.TreeViewModel
         {
             base.Update(model);
 
+            _model = model;
             Type = model.Type;
             State = model.State;
             IsEma = model.Statistics.HasEma();
@@ -86,6 +93,7 @@ namespace HSMServer.Model.TreeViewModel
             AggregateValues = model.AggregateValues;
             CreationTime = model.CreationDate;
             EnumOptions = model.EnumOptions;
+            DisplayUnit = model.DisplayUnit;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);
@@ -102,7 +110,7 @@ namespace HSMServer.Model.TreeViewModel
 
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
 
-            DataAlerts[(byte)Type] = model.Policies.Select(BuildAlert).ToList();
+            DataAlerts[(byte)Type] = model.Policies.Select(x => DataAlertViewModel.BuildAlert(x, this)).ToList();
 
             AlertIcons.Clear();
             foreach (var alert in model.PolicyResult)
@@ -117,22 +125,6 @@ namespace HSMServer.Model.TreeViewModel
                 AlertIcons[icon] += alert.Count;
             }
         }
-
-        private DataAlertViewModelBase BuildAlert(Policy policy) => policy switch
-        {
-            FilePolicy p => new FileDataAlertViewModel(p, this),
-            StringPolicy p => new StringDataAlertViewModel(p, this),
-            BooleanPolicy p => new DataAlertViewModel<BooleanValue>(p, this),
-            VersionPolicy p => new SingleDataAlertViewModel<VersionValue>(p, this),
-            TimeSpanPolicy p => new SingleDataAlertViewModel<TimeSpanValue>(p, this),
-            IntegerPolicy p => new NumericDataAlertViewModel<IntegerValue>(p, this),
-            DoublePolicy p => new NumericDataAlertViewModel<DoubleValue>(p, this),
-            RatePolicy p => new NumericDataAlertViewModel<RateValue>(p, this),
-            IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue>(p, this),
-            DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue>(p, this),
-            EnumPolicy p => new NumericDataAlertViewModel<EnumValue>(p, this),
-            _ => null,
-        };
 
         private static string GetFileNameString(SensorType sensorType, string value)
         {

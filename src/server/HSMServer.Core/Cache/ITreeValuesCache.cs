@@ -1,12 +1,18 @@
-﻿using HSMSensorDataObjects.HistoryRequests;
+﻿using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
+using HSMCommon.TaskResult;
+using HSMSensorDataObjects.HistoryRequests;
+using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
-using System;
-using System.Collections.Generic;
+
 
 namespace HSMServer.Core.Cache
 {
@@ -23,15 +29,21 @@ namespace HSMServer.Core.Cache
         event Action<ProductModel, ActionType> ChangeProductEvent;
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
+        event Action<string, int, int> RequestProcessed;
 
         event Action<AlertMessage> NewAlertMessageEvent;
+        event Action<FolderEventArgs> FillFolderChats;
+
+        int SensorsCount { get; }
+
 
         List<BaseSensorModel> GetSensors();
+        List<BaseSensorModel> GetSensors(string wildcard, SensorType? type, Guid? folderId);
         List<AccessKeyModel> GetAccessKeys();
 
-        ProductModel AddProduct(string productName, Guid authorId);
-        void UpdateProduct(ProductUpdate product);
-        void RemoveProduct(Guid id, InitiatorInfo initiator = null);
+        Task<ProductModel> AddProductAsync(string productName, Guid authorId, CancellationToken token = default);
+        Task UpdateProductAsync(ProductUpdate product, CancellationToken token = default);
+        Task RemoveProductAsync(Guid id, InitiatorInfo initiator = null, CancellationToken token = default);
         ProductModel GetProduct(Guid id);
         ProductModel GetProductByName(string name);
         bool TryGetProductByName(string name, out ProductModel product);
@@ -39,9 +51,9 @@ namespace HSMServer.Core.Cache
         List<ProductModel> GetProducts();
         List<ProductModel> GetAllNodes();
 
-        bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
-        bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
-        bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message);
+        //bool TryCheckKeyWritePermissions(BaseUpdateRequest request, out string message);
+        //bool TryCheckKeyReadPermissions(BaseUpdateRequest request, out string message);
+        //bool TryCheckSensorUpdateKeyPermission(BaseUpdateRequest request, out Guid sensorId, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         AccessKeyModel RemoveAccessKey(Guid id);
@@ -57,17 +69,23 @@ namespace HSMServer.Core.Cache
         bool TryGetProduct(string productId, out ProductModel product);
 
         void SetLastKeyUsage(Guid key, string ip);
-        
-        
-        bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);
-        bool TryUpdateSensor(SensorUpdate updatedSensor, out string error);
-        bool TryGetSensorByPath(string product, string path, out BaseSensorModel sensor);
-        void UpdateSensorValue(UpdateSensorValueRequestModel request);
-        void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null);
-        void UpdateMutedSensorState(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
-        void ClearSensorHistory(ClearHistoryRequest request);
-        void CheckSensorHistory(Guid sensorId);
-        void ClearNodeHistory(ClearHistoryRequest request);
+
+
+        Task<TaskResult> AddSensorValueAsync(Guid accessKey, Guid productId, SensorValueBase value, CancellationToken token = default);
+        Task<Dictionary<string, string>> AddSensorValuesAsync(Guid key, Guid productId, IEnumerable<SensorValueBase> values, CancellationToken token = default);
+
+        Task<TaskResult> AddOrUpdateSensorAsync(SensorAddOrUpdateRequest request, CancellationToken token = default);
+        //Task<TaskResult> UpdateSensor(SensorUpdate updatedSensor, out string error);
+
+        Task<TaskResult> UpdateSensorAsync(SensorUpdate updatedSensor);
+
+        bool TryGetSensorByPath(Guid productId, string path, out BaseSensorModel sensor);
+        Task<TaskResult> UpdateSensorValueAsync(UpdateSensorValueRequestModel request, CancellationToken token = default);
+        Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null);
+        Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
+        Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
+        Task CheckSensorHistoryAsync(Guid sensorId, CancellationToken token = default);
+        Task ClearNodeHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
 
         BaseSensorModel GetSensor(Guid sensorId);
         IEnumerable<BaseSensorModel> GetSensorsByFolder(HashSet<Guid> folderIds = null);
@@ -79,12 +97,20 @@ namespace HSMServer.Core.Cache
         SensorHistoryInfo GetSensorHistoryInfo(Guid sensorId);
         NodeHistoryInfo GetNodeHistoryInfo(Guid nodeId);
 
-        void UpdateCacheState();
+        //void UpdateCacheState();
 
-        void ClearEmptyNodes(ProductModel product);
+        Task ClearEmptyNodesAsync(ProductModel product, CancellationToken token = default);
 
-        void SaveLastStateToDb();
+        Task SaveLastStateToDbAsync(CancellationToken token = default);
 
         void RemoveChatsFromPolicies(Guid folderId, List<Guid> chats, InitiatorInfo initiator);
+
+        List<AlertTemplateModel> GetAlertTemplateModels();
+
+        Task AddAlertTemplateAsync(AlertTemplateModel model, CancellationToken tocken = default);
+
+        AlertTemplateModel GetAlertTemplate(Guid id);
+
+        Task RemoveAlertTemplateAsync(Guid id, CancellationToken token = default);
     }
 }

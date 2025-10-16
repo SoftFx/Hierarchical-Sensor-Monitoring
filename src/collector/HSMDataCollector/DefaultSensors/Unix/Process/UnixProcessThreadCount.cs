@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.DefaultSensors.Unix
 {
-    internal sealed class UnixProcessThreadCount : CollectableBarMonitoringSensorBase<DoubleMonitoringBar, double>
+    public sealed class UnixProcessThreadCount : CollectableBarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
         internal UnixProcessThreadCount(BarSensorOptions options) : base(options) { }
 

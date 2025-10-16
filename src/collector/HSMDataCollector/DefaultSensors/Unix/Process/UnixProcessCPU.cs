@@ -6,7 +6,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Unix
 {
-    internal sealed class UnixProcessCpu : CollectableBarMonitoringSensorBase<DoubleMonitoringBar, double>
+    public sealed class UnixProcessCpu : CollectableBarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
         private readonly Process _currentProcess = ProcessInfo.CurrentProcess;
 

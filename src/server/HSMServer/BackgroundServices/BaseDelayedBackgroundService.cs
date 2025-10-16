@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using HSMCommon.Extensions;
-using HSMServer.Threading;
+using HSMServer.Core.Threading;
 
 
 namespace HSMServer.BackgroundServices
@@ -29,30 +29,31 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ExecuteAsync(CancellationToken token)
         {
-            PeriodicTask.Run(ServiceActionAsync, DateTime.UtcNow.Ceil(Delay) - DateTime.UtcNow, Delay, token);
-
-            return Task.CompletedTask;
+            return PeriodicTask.Run(ServiceActionAsync, DateTime.UtcNow.Ceil(Delay) - DateTime.UtcNow, Delay, token);
         }
 
         protected virtual void RunAction(Action action)
         {
-            var methodName = action.Method.Name;
-
-            try
+            if (action != null)
             {
-                _logger.Info($"Start {methodName}");
+                var methodName = action.Method.Name;
 
-                action?.Invoke();
+                try
+                {
+                    _logger.Info($"Start {methodName}");
 
-                _logger.Info($"Stop {methodName}");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"{methodName} failed: {ex}");
+                    action.Invoke();
+
+                    _logger.Info($"Stop {methodName}");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"{methodName} failed: {ex}");
+                }
             }
         }
 
-        protected virtual async Task RunAction(Func<Task> action, string methodName = null)
+        protected virtual async Task RunActionAsync(Func<Task> action, string methodName = null)
         {
             methodName ??= action.Method.Name;
 

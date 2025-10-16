@@ -28,4 +28,6 @@ public interface IJournalValuesDatabase : IDisposable
     IEnumerable<(byte[] key, byte[] value)> GetValuesFrom(byte[] from, byte[] to);
 
     IEnumerable<(byte[] key, byte[] value)> GetValuesTo(byte[] from, byte[] to);
+
+    void Compact();
 }

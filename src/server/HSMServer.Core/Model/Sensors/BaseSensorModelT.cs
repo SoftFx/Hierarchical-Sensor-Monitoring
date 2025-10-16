@@ -28,7 +28,6 @@ namespace HSMServer.Core.Model
             {
                 Storage.AddValueBase((T)value);
                 ReceivedNewValue?.Invoke(value);
-
                 return true;
             }
 
@@ -38,20 +37,20 @@ namespace HSMServer.Core.Model
             if (value is T valueT && Statistics.HasEma())
                 value = Storage.CalculateStatistics(valueT);
 
-            var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
-            var canStore = Policies.TryValidate(value, out valueT, isLastValue);
+            bool isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
+            bool canStore = Policies.TryValidate(value, out var validatedValue, isLastValue);
 
             if (canStore)
             {
-                var isNewValue = true;
-
-                if (AggregateValues)
-                    isNewValue &= !Storage.TryAggregateValue(valueT);
-                else
-                    Storage.AddValue(valueT);
+                bool isNewValue = !AggregateValues || !Storage.TryAggregateValue(validatedValue);
 
                 if (isNewValue)
-                    ReceivedNewValue?.Invoke(valueT);
+                {
+                    if (!AggregateValues)
+                        Storage.AddValue(validatedValue);
+
+                    ReceivedNewValue?.Invoke(validatedValue);
+                }
             }
 
             return canStore;

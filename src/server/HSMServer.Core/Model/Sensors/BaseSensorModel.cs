@@ -1,5 +1,4 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMSensorDataObjects;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
@@ -47,8 +46,11 @@ namespace HSMServer.Core.Model
 
         public Unit? OriginalUnit { get; private set; }
 
+        public RateDisplayUnit? DisplayUnit { get; protected set; }
+
         public SensorState State { get; private set; }
 
+        public TableSettingsModel TableSettings { get; private set; } = new();
 
         public SensorResult? Status
         {
@@ -66,8 +68,16 @@ namespace HSMServer.Core.Model
 
         public PolicyResult PolicyResult => Policies.PolicyResult;
 
+        public PolicyResult ConfirmationResult => Policies.ConfimationResult;
 
-        public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(HasData ? LastUpdate : CreationDate) ?? false;
+
+        public bool ShouldDestroy()
+        {
+            if (Settings.SelfDestroy.Value == null)
+                return false;
+
+            return Settings.SelfDestroy.Value.TimeIsUp(HasData ? LastUpdate : CreationDate); 
+        }
 
         public bool CanSendNotifications => State is SensorState.Available && (!Status?.IsOfftime ?? true);
 
@@ -95,6 +105,9 @@ namespace HSMServer.Core.Model
             if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
 
+            if (entity.TableSettings is not null)
+                TableSettings = new TableSettingsModel(entity.TableSettings);
+            
             State = (SensorState)entity.State;
             OriginalUnit = (Unit?)entity.OriginalUnit;
             Integration = (Integration)entity.Integration;
@@ -102,6 +115,7 @@ namespace HSMServer.Core.Model
             AggregateValues = entity.AggregateValues;
             IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
+            
             if (entity.EnumOptions != null)
             {
                 foreach (var option in entity.EnumOptions)
@@ -136,11 +150,15 @@ namespace HSMServer.Core.Model
         {
             Update(update);
 
+            TableSettings.MaxCommentHideSize = UpdateProperty(TableSettings.MaxCommentHideSize, update.MaxCommentHideSize ?? TableSettings.MaxCommentHideSize, update.Initiator);
+            TableSettings.IsHideEnabled = UpdateProperty(TableSettings.IsHideEnabled, update.IsHideEnabled ?? TableSettings.IsHideEnabled, update.Initiator);
+            
             Statistics = UpdateProperty(Statistics, update.Statistics ?? Statistics, update.Initiator);
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
             IsSingleton = UpdateProperty(IsSingleton, update.IsSingleton ?? IsSingleton, update.Initiator, "Singleton");
             AggregateValues = UpdateProperty(AggregateValues, update.AggregateValues ?? AggregateValues, update.Initiator, "Aggregate values");
+            DisplayUnit = UpdateProperty(DisplayUnit, update.DisplayUnit ?? DisplayUnit, update.Initiator);
 
             State = UpdateProperty(State, update.State ?? State, update.Initiator, forced: true, update: update, oldModel: this);
             EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting", true);
@@ -168,6 +186,7 @@ namespace HSMServer.Core.Model
             return string.IsNullOrEmpty(error);
         }
 
+
         internal void ResetSensor()
         {
             Policies.Reset();
@@ -188,6 +207,7 @@ namespace HSMServer.Core.Model
             IsSingleton = IsSingleton,
             Integration = (int)Integration,
             OriginalUnit = (int?)OriginalUnit,
+            DisplayUnit = (int?)DisplayUnit,
             AggregateValues = AggregateValues,
             Policies = Policies.Select(u => u.Id.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
@@ -195,6 +215,15 @@ namespace HSMServer.Core.Model
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
             ChangeTable = ChangeTable.ToEntity(),
             EnumOptions = EnumOptions?.ToDictionary(k => k.Key, v => v.Value.ToEntity()),
+            TableSettings = TableSettings.ToEntity()
         };
+
+        protected virtual int GetDisplayCoeff()
+        {
+            return 1;
+        }
+
+        public virtual BaseValue ToDisplayValue(BaseValue value) => value;
+
     }
 }

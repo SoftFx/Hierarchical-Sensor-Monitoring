@@ -11,6 +11,9 @@ using System.Linq;
 using System.Reflection;
 using HSMServer.Extensions;
 using Xunit;
+using HSMServer.Core.Model.Requests;
+using HSMSensorDataObjects.SensorValueRequests;
+using HSMServer.Core.ApiObjectsConverters;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -164,7 +167,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestSensorValue(expectedSensorValue, actualSensorValue, actual.Type);
         }
 
-        internal static void AssertModels<T>(T actual, T expected)
+        internal static void AssertModels<T>(T actual, T expected, List<string> excepted = null)
         {
             if (expected is null)
             {
@@ -176,6 +179,9 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             foreach (var pi in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
             {
+                if (excepted != null && excepted.Contains(pi.Name))
+                    continue;
+
                 var actualValue = pi.GetValue(actual);
                 var expectedValue = pi.GetValue(expected);
 
@@ -208,7 +214,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Settings.TTL.Value, actual.Settings.TTL.Value);
         }
 
-        internal static void TestSensorModel(StoreInfo expected, BaseSensorModel actual, ProductModel parentProduct = null)
+        internal static void TestSensorModel(SensorValueBase expected, BaseSensorModel actual, ProductModel parentProduct = null)
         {
             Assert.NotNull(actual);
             Assert.False(string.IsNullOrEmpty(actual.Id.ToString()));
@@ -223,7 +229,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             else
                 Assert.Equal(parentProduct.Id, actual.Parent.Id);
 
-            AssertModels(expected.BaseValue, actual.LastValue);
+            AssertModels(expected.Convert(), actual.LastValue, ["ReceivingTime", "LastUpdateTime"]);
         }
 
         internal static void TestSensorModel(SensorUpdate expected, BaseSensorModel actual)

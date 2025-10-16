@@ -48,17 +48,44 @@
         </div>
     </div>
 
-    <div id="nodeDataPanel" class="hidden_element">@await Html.PartialAsync("_NodeDataPanel", (NodeViewModel)null)</div>
+    <div id="nodeDataPanel" class="hidden_element" style="min-width: 600px;">@await Html.PartialAsync("_NodeDataPanel", (NodeViewModel)null)</div>
 </div>
 
 
 <script>
+
+    const Status = {
+        ACTIVE: 'active',
+        INVISIBLE: 'pageInvisible',
+        NOTACTIVE: 'notActive'
+    };
+
     initialize();
-    initializeTreeNode();
 
 
-    var interval = $("#treeInterval").val() * 1000;
-    setTimeout(updateSelectedNodeData, interval);
+    //console.log('addEventListener document.addEventListener=' + document.addEventListener);
+    //console.log('addEventListener document.hidden=' + document.hidden);
+    //hide page browser event for stop updating tree
+    if (document.addEventListener && document.hidden !== undefined) {
+
+        //console.log('addEventListener(visibilitychange');
+        document.addEventListener('visibilitychange', function () {
+
+            
+
+            if (document.hidden) {
+                //console.log('changeTreeActivity(Status.INVISIBLE)');
+                changeTreeActivity(Status.INVISIBLE);
+            } else {
+                //console.log('changeTreeActivity(Status.ACTIVE)');
+                changeTreeActivity(Status.ACTIVE);
+            }
+        });
+    }
+    //console.log('addEventListener ended.');
+
+    window.treeStatus = Status.ACTIVE;
+    setTimeout(updateSelectedNodeData, getCurrentUpdateTreeInterval());
 
 
     function updateGridCell(dataObject) {
@@ -89,10 +116,18 @@
         if (dataObject.newValuesCount != null && $(`#link_table_${id}`).hasClass("active")) {
             $("#tableHistoryRefreshButton").removeClass("d-none");
         }
-        if (dataObject.status === 'Error')
-            $(`#errorInfo_${id}`).removeClass('d-none').addClass('d-flex').text(`${dataObject.status}: ${dataObject.validationError}`);
-        else
-            $(`#errorInfo_${id}`).removeClass('d-flex').addClass('d-none');
+
+        const $errorInfo = $(`#errorInfo_${id}`);
+        const isError = dataObject.status === 'Error';
+
+        $errorInfo
+            .toggleClass('d-none', !isError)
+            .toggleClass('d-flex', isError);
+
+        if (isError) {
+            $errorInfo.html(`${dataObject.status}: ${dataObject.validationError}`);
+        }
+
     }
 
     function updateGeneralInfo(selectedNodeId) {
@@ -155,9 +190,13 @@
 
     var updateSelectedNodeDataTimeoutId;
     function updateSelectedNodeData() {
+
         clearTimeout(updateSelectedNodeDataTimeoutId);
 
         var selectedNodeId = currentSelectedNodeId;
+
+        //console.log('updateSelectedNodeData selectedNodeId=', selectedNodeId);
+
         if (selectedNodeId != "")
             $.ajax({
                 type: 'POST',

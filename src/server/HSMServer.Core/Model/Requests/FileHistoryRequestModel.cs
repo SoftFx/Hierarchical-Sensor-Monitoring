@@ -1,12 +1,15 @@
-﻿namespace HSMServer.Core.Model.Requests
+﻿using System;
+
+
+namespace HSMServer.Core.Model.Requests
 {
-    public sealed class FileHistoryRequestModel : HistoryRequestModel
+    public sealed record FileHistoryRequestModel : HistoryRequestModel
     {
         public string Format { get; set; }
 
         public bool IsArchive { get; set; }
 
 
-        public FileHistoryRequestModel(string key, string path) : base(key, path) { }
+        public FileHistoryRequestModel(Guid key, Guid productId, string path) : base(key, productId,  path) { }
     }
 }

@@ -13,40 +13,49 @@
       method="get" class="px-2" id="filter" style="display: none;">
 
     <h6 class="dropdown-header px-0">Update tree interval</h6>
-    <div class="d-flex">
-        <input type="number" id="treeInterval" asp-for="TreeUpdateInterval" class="form-control" min="5" max="600"
-               value="@Model.TreeUpdateInterval" />
-        <label for="treeInterval" title="Expected update tree interval" class="form-text ms-2">sec</label>
+    <div class="d-flex flex-column">
+        <div class="d-flex align-items-center">
+            <input type="range" id="treeInterval" asp-for="TreeUpdateInterval" class="form-range flex-grow-1 me-2"
+                   min="5" max="90" step="5" value="@Model.TreeUpdateInterval"
+                   oninput="updateTreeIntervalValue(this.value)" />
+            <span id="treeIntervalValue" class="text-nowrap ms-2" style="min-width: 40px;">
+                @Model.TreeUpdateInterval sec
+            </span>
+        </div>
+        <div class="d-flex justify-content-between mt-1">
+            <small class="text-muted">5 sec</small>
+            <small class="text-muted">90 sec</small>
+        </div>
     </div>
     <div class="dropdown-divider"></div>
 
+    <!-- Остальная часть формы остается без изменений -->
     <h6 class="dropdown-header px-0">Status</h6>
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="ok" asp-for="HasOkStatus"/>
+        <input type="checkbox" class="form-check-input" id="ok" asp-for="HasOkStatus" />
         <label class="form-check-label text-nowrap" for="ok" title="Ok">
             Ok <i class="fas fa-circle tree-icon-ok"></i>
         </label>
     </div>
 
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="error" asp-for="HasErrorStatus"/>
+        <input type="checkbox" class="form-check-input" id="error" asp-for="HasErrorStatus" />
         <label class="form-check-label text-nowrap" for="error" title="Error">
             Error <i class="fas fa-circle tree-icon-error"></i>
         </label>
     </div>
 
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="offTime" asp-for="HasOffTimeStatus"/>
+        <input type="checkbox" class="form-check-input" id="offTime" asp-for="HasOffTimeStatus" />
         <label class="form-check-label text-nowrap" for="offTime" title="OffTime">
             OffTime <i class="fas fa-circle tree-icon-offTime"></i>
         </label>
     </div>
     <div class="dropdown-divider"></div>
 
-
     <h6 class="dropdown-header px-0">Visibility</h6>
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="history" asp-for="IsEmptyHistory"/>
+        <input type="checkbox" class="form-check-input" id="history" asp-for="IsEmptyHistory" />
         <label class="form-check-label text-nowrap" for="history">
             Empty sensors <i class="@NodeExtensions.GetEmptySensorIcon()"></i>
         </label>
@@ -64,18 +73,18 @@
         </label>
     </div>
     <div class="form-check">
-         <input type="checkbox" class="form-check-input" id="showIcons" asp-for="AreIconsVisible"/>
-         <label class="form-check-label text-nowrap" for="showIcons">
-             Icons
-         </label>
+        <input type="checkbox" class="form-check-input" id="showIcons" asp-for="AreIconsVisible" />
+        <label class="form-check-label text-nowrap" for="showIcons">
+            Icons
+        </label>
     </div>
     <div class="dropdown-divider"></div>
 
     <h6 class="dropdown-header px-0">Integrations</h6>
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="enableGrafana" asp-for="IsGrafanaEnabled"/>
+        <input type="checkbox" class="form-check-input" id="enableGrafana" asp-for="IsGrafanaEnabled" />
         <label class="form-check-label" for="enableGrafana" title="Enabled grafana">
-            Grafana <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!"/>
+            Grafana <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" />
         </label>
     </div>
 
@@ -102,15 +111,21 @@
 
     <h6 class="dropdown-header px-0">Sort By</h6>
     <div class="form-check">
-        <input class="form-check-input" type="radio" id="sorting"
-               value="@((int)TreeSortType.ByName)" asp-for="TreeSortType"/>
-        <label class="form-check-label text-nowrap" for="name">By Name <i class="fas fa-sort-alpha-down"></i></label>
+        <input class="form-check-input" type="radio" id="sortByName"
+               value="@((int)TreeSortType.ByName)" asp-for="TreeSortType" />
+        <label class="form-check-label text-nowrap" for="sortByName">By Name <i class="fas fa-sort-alpha-down"></i></label>
     </div>
     <div class="form-check">
-        <input class="form-check-input" type="radio" id="sorting"
-               value="@((int)TreeSortType.ByTime)" asp-for="TreeSortType"/>
-        <label class="form-check-label text-nowrap" for="time">By Last Update <i class="fas fa-sort-numeric-down-alt"></i></label>
+        <input class="form-check-input" type="radio" id="sortByTime"
+               value="@((int)TreeSortType.ByTime)" asp-for="TreeSortType" />
+        <label class="form-check-label text-nowrap" for="sortByTime">By Last Update <i class="fas fa-sort-numeric-down-alt"></i></label>
     </div>
 
     <button id="applyBtn" type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
 </form>
+
+<script>
+    function updateTreeIntervalValue(value) {
+        document.getElementById('treeIntervalValue').textContent = value + ' sec';
+    }
+</script>

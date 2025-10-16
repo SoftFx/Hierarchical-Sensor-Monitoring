@@ -136,7 +136,6 @@ export class DashboardStorage {
             }
 
             if (panel.sourceType === 8){
-
                 const ticks = VersionPlot.getYaxisTicks(data);
                 layout.yaxis.tickmode = 'array';
                 layout.yaxis.ticktext = ticks.ticktext;

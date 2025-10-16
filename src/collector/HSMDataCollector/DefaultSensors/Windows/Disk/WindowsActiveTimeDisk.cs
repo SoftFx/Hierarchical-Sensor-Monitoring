@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal class WindowsActiveTimeDisk : WindowsDiskBarSensorBase
+    public class WindowsActiveTimeDisk : WindowsDiskBarSensorBase
     {
         public const string Counter = "% Disk Time";
 

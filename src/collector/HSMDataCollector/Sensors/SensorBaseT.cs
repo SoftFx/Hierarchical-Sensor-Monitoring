@@ -8,16 +8,18 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class SensorBase<T> : SensorBase
+    public abstract class SensorBase<T, TDisplayUnit> : SensorBase<TDisplayUnit> where TDisplayUnit : struct, Enum
     {
         private readonly Func<T, SensorValueBase> _valueBuilder;
 
+        private T _current;
 
-        protected SensorBase(SensorOptions options) : base(options)
+        public virtual T Current => _current;
+
+        protected SensorBase(SensorOptions<TDisplayUnit> options) : base(options)
         {
             _valueBuilder = SensorValuesFactory.GetValueBuilder<T>(options.Type);
         }
-
 
         public void SendValue(T value, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
@@ -29,6 +31,11 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected virtual SensorValueBase GetSensorValue(T value) => value is SensorValueBase valueB ? valueB : _valueBuilder?.Invoke(value);
+        protected virtual SensorValueBase GetSensorValue(T value)
+        {
+            _current = value;
+            return value is SensorValueBase valueB ? valueB : _valueBuilder?.Invoke(value);
+        }
+
     }
 }

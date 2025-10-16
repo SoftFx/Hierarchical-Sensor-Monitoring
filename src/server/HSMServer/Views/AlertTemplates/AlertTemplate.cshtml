@@ -1,0 +1,269 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Core.Model
+@using HSMServer.Helpers
+@using HSMServer.Model.DataAlerts
+@using HSMServer.Model.DataAlertTemplates
+
+
+@model DataAlertTemplateViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    ViewData["Title"] = "Alert Templates";
+    Layout = "~/Views/Tree/_Layout.cshtml";
+
+    const byte booleanType = (byte)SensorType.Boolean;
+    const byte ttlType = TimeToLiveAlertViewModel.AlertKey;
+    var hasAlerts = Model.DataAlerts.Any(a => a.Value.Any(v => v.IsAlertDisplayed));
+}
+
+<div class="container">
+    <div class="row w-100 justify-content-center">
+        <div class="m-2">
+            @await Html.PartialAsync("_AlertTemplate", Model)
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        initForm();
+        if($('#PathTemplate').val() != '')
+            updateForm(@(Model.IsNew.ToString().ToLower()));
+    });
+
+    function initForm(){
+        $('#Type').off("change").on("change", function() {
+            onSensorTypeChanged();
+        });
+
+        $("#submit_form").off('click').on('click', function () {
+            submitForm();
+        });
+
+        $("#FolderId").off('click').on('click', function () {
+            updateForm(false);
+        });
+
+        let timeout = null;
+        document.getElementById("PathTemplate").addEventListener("input", () => {
+            clearTimeout(timeout);
+
+            timeout = setTimeout(() => {
+                updateForm();
+            }, 500);
+        });
+    }
+
+    function onSensorTypeChanged(needUpdateForm = true) {
+
+        if(needUpdateForm)
+            updateForm(false);
+
+        var val = $('#Type').val();
+
+        $("[id^='dataAlertsList_']").each(function () {
+            var type = $(this).attr('id').replace('dataAlertsList_', '');
+            if (type != @ttlType && type != val) {
+                $(this).empty();
+                $(this).attr('id', 'dataAlertsList_' + val);
+            }
+        });
+    }
+
+    function addDataAlert(isTtl, entityId) {
+        var type = @ttlType;
+
+        if (isTtl === 'False')
+            type = $('#Type').val();
+
+        var sendType = type;
+
+        if (type == @DataAlertTemplateViewModel.AnyType)
+            sendType = @booleanType;
+
+        $.ajax({
+            url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${sendType}&entityId=${entityId}`,
+            cache: false
+        }).done(function (viewData) {
+            if (type == '@ttlType') {
+                $('#addTtlAlert').addClass('disabled');
+            }
+            $(`#dataAlertsList_${type}`).append(viewData);
+        });
+    }
+
+    function submitForm() {
+        let form = document.getElementById('addAlertTemplate_form');
+        var formData = new FormData(form);
+        collectAlerts(formData);
+
+        $.ajax({
+            url: $("#addAlertTemplate_form").attr("action"),
+            type: $("#addAlertTemplate_form").attr("method"),
+            data: formData,
+            processData: false,
+            contentType: false,
+            async: true,
+            success: (viewData) => {
+                if (!viewData){
+                    window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))';
+                }
+                else {
+                    $("#addAlertTemplate_form").html(viewData);
+                    initForm();
+                }
+            }
+        });
+    }
+
+    function updateForm(needChangeType = true) {
+        var type = $('#Type').val();
+        var path = $('#PathTemplate').val();
+        var folderId = $('#FolderId').val();
+
+        $.ajax({
+            url: `@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)?type=${type}&path=${path}&folderId=${folderId}`,
+            cache: false,
+            success: (viewData) => {
+
+                var data = JSON.parse(viewData);
+
+                if (needChangeType & data['Type'] != null) {
+                    $('#Type').val(data['Type']);
+                    onSensorTypeChanged(false);
+                }
+
+                var dataName = data['Name'];
+                if (dataName){
+                    $('#Name').val(dataName);
+                }
+
+                if (data['Sensors'] != null) {
+                    $('#affected_sensors_cardbody').empty();
+                    $('#affected_sensors_cardbody').append(data['Sensors']);
+                    $('#affected_sensors').removeClass('d-none');
+                }
+                else {
+                    $('#affected_sensors_cardbody').empty();
+                    $('#affected_sensors_cardbody').html("No sensors were found along the specified path.");
+                    $('#affected_sensors').removeClass('d-none');
+                }
+            }
+        });
+    }
+
+    function collectAlerts(formData) {
+        $("[id^='dataAlertsList_']").each(function () {
+            const type = this.id.substring("dataAlertsList_".length, this.id.length);
+
+            setFormDataAlerts(formData, type, $(this));
+        });
+    }
+
+    function setFormDataAlerts(formData, type, alertsList) {
+        alertsList.find(`div.dataAlertRow`).each(function (i) {
+            setFormDataAlertsProperty(formData, "input", type, i, $(this), "Id");
+            setFormDataAlertsProperty(formData, "input", type, i, $(this), "EntityId");
+            setFormDataAlertsProperty(formData, "input", type, i, $(this), "IsDisabled");
+            setFormDataAlertsProperty(formData, "input", type, i, $(this), "TemplateId");
+
+
+            $(this).find(`div[name='alertCondition']`).each(function (j) {
+                setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
+
+                let intervalOperationBlock = $(this).find('div.interval-operation');
+                if (intervalOperationBlock.hasClass("d-flex")) {
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, intervalOperationBlock, "select", "Interval");
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, intervalOperationBlock, "input", "CustomString");
+                }
+                else {
+                    let operationBlock = $(this).find('div.operation');
+
+                    setFormDataAlertsListProperty(formData, type, i, j, operationBlock, "Conditions", "select", "Operation");
+                    setFormDataAlertsListProperty(formData, type, i, j, operationBlock, "Conditions", "input", "Target");
+                }
+            });
+
+            $(this).find(`div[name='alertAction']`).each(function (j) {
+                setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "select", "Action");
+
+                let sendBlock = $(this).find('div[name="sendNotificationAction"]');
+                if (sendBlock.hasClass('d-flex')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, sendBlock, "Actions", "input", "Comment");
+                    setFormDataAlertsSendNotificationChats(formData, type, i, j, sendBlock);
+
+                    let scheduleBlock = sendBlock.find('div[name="schedule"]');
+                    if (scheduleBlock.hasClass('d-flex')) {
+                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "select", "ScheduleRepeatMode");
+                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "input", "ScheduleStartTime");
+                        setFormDataAlertsListProperty(formData, type, i, j, scheduleBlock, "Actions", "input", "ScheduleInstantSend", 'checkbox');
+                    }
+                }
+
+                let showBlock = $(this).find('div[name="showIconAction"]');
+                if (showBlock.hasClass('d-flex')) {
+                    showBlock.find(`div[name='emoji']`).each(function () {
+                        formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Icon`, $(this)[0].innerText);
+                    });
+                }
+            });
+        });
+    }
+
+    function setFormDataAlertsProperty(formData, element, type, i, block, propertyName) {
+        block.find(`${element}[name='${propertyName}']:first`).each(function () {
+            formData.append(`DataAlerts[${type}][${i}].${propertyName}`, $(this).val());
+        });
+    }
+
+    function setFormDataAlertsListProperty(formData, type, i, j, block, list, element, propertyName, elementType = undefined) {
+        block.find(`${element}[name='${propertyName}']`).each(function () {
+            let value = $(this).val();
+            if (elementType == 'checkbox') {
+                value = this.checked;
+            }
+
+            formData.append(`DataAlerts[${type}][${i}].${list}[${j}].${propertyName}`, value);
+        });
+    }
+
+    function setFormDataAlertsConditionIntervals(formData, type, i, j, block, element, propertyName) {
+        var targetName = block.attr("name");
+
+        block.find(`${element}[name='Target.${propertyName}']`).each(function () {
+            formData.append(`DataAlerts[${type}][${i}].Conditions[${j}].${targetName}.${propertyName}`, $(this).val());
+        });
+    }
+
+    function setFormDataAlertsSendNotificationChats(formData, type, i, j, block) {
+        let chatsMode = '@ChatsMode.Custom';
+        let chats = [];
+
+        block.find("select[name='Chats']:first option").each(function () {
+            if ($(this).is(':selected')) {
+                if ($(this).val() === '@ChatsMode.FromParent' || $(this).val() === '@ChatsMode.NotInitialized' ||
+                    $(this).val() === '@ChatsMode.Empty' || $(this).val() === '@ChatsMode.All') {
+                    chatsMode = $(this).val();
+                    chats = [];
+                    return;
+                }
+
+                chats.push($(this).val());
+            }
+        });
+
+        block.find("div[name='Chats']").each(function () {
+            chatsMode = '@ChatsMode.FromParent';
+        });
+
+        formData.append(`DataAlerts[${type}][${i}].Actions[${j}].ChatsMode`, chatsMode);
+
+        for (let k = 0; k < chats.length; ++k){
+            formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Chats[${k}]`, chats[k]);
+        }
+    }
+
+</script>

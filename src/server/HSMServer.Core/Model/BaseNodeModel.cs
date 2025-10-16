@@ -41,7 +41,7 @@ namespace HSMServer.Core.Model
 
         public string FullPath => IsRoot ? $"{DisplayName}" : $"{Parent.FullPath}/{DisplayName}";
 
-        public string Path => IsRoot ? string.Empty : $"{Parent.Path}/{DisplayName}";
+        public string Path => IsRoot ? string.Empty : Parent.IsRoot ? DisplayName : $"{Parent.Path}/{DisplayName}";
 
         public string RootProductName => Parent?.RootProductName ?? DisplayName;
 

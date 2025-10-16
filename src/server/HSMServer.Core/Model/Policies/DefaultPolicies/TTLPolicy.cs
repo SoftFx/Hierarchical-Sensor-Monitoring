@@ -3,11 +3,13 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using System;
 using System.Text;
+using System.Xml.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
     public sealed class TTLPolicy : DefaultPolicyBase
     {
+        public const byte Key = 255;
         public const string DefaultIcon = "🕑";
         public const string DefaultTemplate = "[$product]$path";
 
@@ -33,6 +35,10 @@ namespace HSMServer.Core.Model.Policies
             }
         }
 
+        public TTLPolicy()
+        {
+            _okPolicy = new OkPolicy(this, null); 
+        }
 
         internal TTLPolicy(BaseNodeModel node, PolicyEntity entity)
         {
@@ -43,12 +49,26 @@ namespace HSMServer.Core.Model.Policies
                 Id = Id.ToByteArray(),
                 Template = DefaultTemplate,
                 Icon = DefaultIcon,
-                Destination = new PolicyDestinationEntity(),
+                Destination = new PolicyDestinationEntity() { UseDefaultChats = true},
             }, node as BaseSensorModel);
 
             _okPolicy = new OkPolicy(this, node);
         }
 
+        internal TTLPolicy(TimeIntervalSettingProperty interval, PolicyEntity entity)
+        {
+            _ttl = interval;
+
+            Apply(entity ?? new PolicyEntity
+            {
+                Id = Id.ToByteArray(),
+                Template = DefaultTemplate,
+                Icon = DefaultIcon,
+                Destination = new PolicyDestinationEntity() { UseDefaultChats = true },
+            }, null);
+
+            _okPolicy = new OkPolicy(this, null);
+        }
 
         internal void ApplyParent(TTLPolicy parent, bool disable = false)
         {
@@ -64,7 +84,7 @@ namespace HSMServer.Core.Model.Policies
             FullUpdate(update, Sensor);
         }
 
-        internal void FullUpdate(PolicyUpdate update, BaseSensorModel sensor = null)
+        public void FullUpdate(PolicyUpdate update, BaseSensorModel sensor = null)
         {
             TryUpdate(update, out _, sensor);
 
@@ -73,8 +93,21 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool HasTimeout(DateTime? time) => IsActive && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 
-        internal bool ResendNotification(DateTime? time) => HasTimeout(time) && Schedule.IsActive
-            && DateTime.UtcNow >= _lastTTLNotificationTime?.Add(Schedule.GetShiftTime());
+        internal bool ResendNotification(DateTime? time)
+        {
+            if (!HasTimeout(time))
+                return false;
+
+            if(!Schedule.IsActive)
+                return false;
+
+            if (!_lastTTLNotificationTime.HasValue)
+                return true;
+
+            return DateTime.UtcNow - _lastTTLNotificationTime >= Schedule.GetShiftTime();
+
+             //DateTime.UtcNow >= _lastTTLNotificationTime?.Add(Schedule.GetShiftTime());
+        }
 
         internal PolicyResult GetNotification(bool timeout)
         {

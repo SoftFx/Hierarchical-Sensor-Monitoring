@@ -3,7 +3,6 @@
 @using HSMServer.Extensions
 @using HSMServer.Helpers
 @using HSMServer.Model.Authentication
-@using HSMServer.Model
 @using HSMServer.ServerConfiguration;
 @using HSMServer.Dashboards
 
@@ -19,7 +18,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - HSM</title>
 
+    <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
+    
+
     <script src="~/dist/main.bundle.js" asp-append-version="true"></script>
+
+
 </head>
 <body>
     <div class="body-content-wrapper">
@@ -67,6 +71,12 @@
                                         <li class="nav-item">
                                             <a class="nav-link @Html.ActiveClass(ViewConstants.ProductController)" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ProductController)">
                                                 Products
+                                            </a>
+                                        </li>
+
+                                        <li class="nav-item">
+                                            <a class="nav-link @Html.ActiveClass(ViewConstants.AlertTemplatesController)" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AlertTemplatesController)">
+                                                Alert Templates
                                             </a>
                                         </li>
 
@@ -171,7 +181,7 @@
         <footer class="border-top footer text-muted content">
             <div class="d-flex justify-content-between align-items-center mx-3 my-2">
                 <div>
-                    &copy; 2024 - Soft-FX Current version: @ServerConfig.Version
+                    &copy; @DateTime.UtcNow.Year - Soft-FX Current version: @ServerConfig.Version
                 </div>
                 <div>
                     <div id="updateTime"></div>
@@ -180,6 +190,7 @@
         </footer>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     @RenderSection("Scripts", required: false)
 </body>
 </html>

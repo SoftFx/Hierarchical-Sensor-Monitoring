@@ -31,6 +31,21 @@ namespace HSMSensorDataObjects.SensorRequests
         ValueInSecond = 3000,
     }
 
+    public enum NoDisplayUnit
+    {
+        None
+    }
+
+    public enum RateDisplayUnit
+    {
+        PerSecond = 0,
+        PerMinute = 1,
+        PerHour = 2,
+        PerDay = 3,
+        PerWeek = 4,
+        PerMonth = 5
+    }
+
 
     [Obsolete("This setting doesn't exist for sensor now")]
     public enum DefaultChatsMode : byte
@@ -95,6 +110,7 @@ namespace HSMSensorDataObjects.SensorRequests
 
         public Unit? OriginalUnit { get; set; }
 
+        public int? DisplayUnit { get; set; }
 
         public DefaultAlertsOptions DefaultAlertsOptions { get; set; }
 

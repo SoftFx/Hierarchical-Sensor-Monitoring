@@ -5,6 +5,8 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Model.Requests;
+using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.DataAlerts;
@@ -18,6 +20,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
 {
@@ -86,7 +89,7 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public string ImportAlerts([FromBody] AlertImportViewModel model)
+        public async ValueTask<string> ImportAlerts([FromBody] AlertImportViewModel model)
         {
             var toast = new ImportAlertsToastViewModel();
             var targetId = _tree.Nodes.TryGetValue(model.NodeId, out var target) ? target.Id : Guid.Empty;
@@ -108,7 +111,7 @@ namespace HSMServer.Controllers
                     }
                 }
 
-                SendAlertUpdates(newAlerts, toast);
+                await SendAlertUpdatesAsync(newAlerts, toast);
             }
             catch (Exception ex)
             {
@@ -124,28 +127,29 @@ namespace HSMServer.Controllers
             if (_tree.Nodes.TryGetValue(nodeId, out var targetNode))
             {
                 var availableChats = targetNode.GetAvailableChats(_telegram).ToDictionary(k => k.Value, v => v.Key);
-                var productName = targetNode.RootProduct.Name;
+                var productId = targetNode.RootProduct.Id;
 
                 foreach (var sensorPath in importGroup.Sensors)
                 {
                     var fullSensorPath = $"{targetNode.Path}/{sensorPath}";
 
-                    if (_cache.TryGetSensorByPath(productName, fullSensorPath, out var sensor))
+                    if (_cache.TryGetSensorByPath(productId, fullSensorPath, out var sensor))
                     {
                         var newAlert = importGroup.ToUpdate(sensor.Id, availableChats);
 
                         newAlerts[sensor.Id].Add(newAlert);
                     }
                     else
-                        toast.AddError("Sensor by path not found", $"{productName}{fullSensorPath}");
+                        toast.AddError("Sensor by path not found", $"{productId}{fullSensorPath}");
                 }
             }
         }
 
-        private void SendAlertUpdates(CDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
+        private async ValueTask SendAlertUpdatesAsync(CDict<List<PolicyUpdate>> newAlerts, ImportAlertsToastViewModel toast)
         {
             foreach (var (sensorId, alertUpdates) in newAlerts)
             {
+
                 var update = new SensorUpdate()
                 {
                     Id = sensorId,
@@ -153,8 +157,16 @@ namespace HSMServer.Controllers
                     Initiator = CurrentInitiator,
                 };
 
-                if (!_cache.TryUpdateSensor(update, out var error))
-                    toast.AddError(error, _tree.Sensors[sensorId].Name);
+                try
+                {
+                    var result = await _cache.UpdateSensorAsync(update);
+                    if (!result.IsOk)
+                        toast.AddError(result.Error, _tree.Sensors[sensorId].Name);
+                }
+                catch (Exception ex)
+                {
+                    toast.AddError(ex.Message, _tree.Sensors[sensorId].Name);
+                }
             }
         }
 
@@ -195,6 +207,7 @@ namespace HSMServer.Controllers
 
             var fileName = $"{selectedNodePath.Replace('/', '_')}-alerts.json";
             var content = JsonSerializer.SerializeToUtf8Bytes(group.SelectMany(p => p.Value.Select(info => (p.Key, info)))
+                                                                   .Where(x => x.info.Policy.TemplateId == null)
                                                                    .GroupBy(g => (g.info.ProductName, g.Key))
                                                                    .Select(p => new AlertExportViewModel(p.Select(v => v.info), chats)), _serializeOptions);
 

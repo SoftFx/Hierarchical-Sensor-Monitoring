@@ -1,19 +1,15 @@
-﻿using HSMSensorDataObjects;
-using HSMServer.ServerConfiguration;
+﻿using System;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using NLog;
-using System.IO;
-using System.Text;
-using System.Threading.Tasks;
+using HSMServer.ServerConfiguration;
+
 
 namespace HSMServer.Middleware
 {
     internal sealed class LoggingExceptionMiddleware(RequestDelegate next, IServerConfig config)
     {
-        private const int MaxSizeForDeserializeContent = int.MaxValue;
-
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly int _sensorPort = config.Kestrel.SensorPort;
         private readonly RequestDelegate _next = next;
 
 
@@ -21,30 +17,17 @@ namespace HSMServer.Middleware
         {
             try
             {
-                context.Request.EnableBuffering();
-
                 await _next(context);
             }
-            catch
+            catch (Exception ex)
             {
-                if (context.Connection.LocalPort == _sensorPort)
+                if (context.Response.HasStarted)
                 {
-                    var request = context.Request;
-                    request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
-
-                    _logger.Error($"Path {request.Path}, access key = {key}, remote id, port: {context.Connection.RemoteIpAddress}:{context.Connection.RemotePort}, content size = {request.ContentLength}");
-
-                    if (request.ContentLength <= MaxSizeForDeserializeContent && request.Body.CanRead)
-                    {
-                        request.Body.Position = 0;
-
-                        using StreamReader reader = new(request.Body, Encoding.UTF8, true, 1024, true);
-                        var bodyStr = await reader.ReadToEndAsync();
-
-                        _logger.Error($"Error request: {bodyStr}");
-
-                        request.Body.Position = 0;
-                    }
+                    _logger.Error(ex, "Exception occurred, but response was already started");
+                }
+                else
+                {
+                    _logger.Error(ex, $"Error in {context.Request.Method} {context.Request.Host} {context.Request.Path} {context.Request.Protocol} => {context.Response.StatusCode}", ex);
                 }
 
                 throw;

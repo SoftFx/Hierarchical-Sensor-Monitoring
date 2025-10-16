@@ -7,10 +7,12 @@ namespace HSMServer.Extensions
     {
         private const string DateTimeDefaultFormat = "dd/MM/yyyy HH:mm:ss";
         private const string DateTimeWindowsFormat = "dd.MM.yyyyTHH.mm";
+        private const string DateTimeLongDefaultFormat = "dd.MM.yyyyTHH.mm";
         private const string DateWindowsFormat = "dd_MM_yyyy";
 
 
-        public static string ToDefaultFormat(this DateTime dateTime) => dateTime.ToString(DateTimeDefaultFormat);
+        public static string ToDefaultFormat(this DateTime dateTime) => dateTime.ToString("G", CultureInfo.InvariantCulture);
+        public static string ToFullDefaultFormat(this DateTime dateTime) => dateTime.ToString("F", CultureInfo.InvariantCulture);
 
         public static string ToDefaultFormat(this DateTime dateTime, string minValueString) =>
             dateTime == DateTime.MinValue ? minValueString : dateTime.ToDefaultFormat();

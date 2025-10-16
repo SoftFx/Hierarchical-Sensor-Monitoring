@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using HSMDataCollector.Client;
+using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
@@ -54,6 +56,9 @@ namespace HSMDataCollector.Core
 
         [Obsolete]
         public event EventHandler ValuesQueueOverflow;
+
+
+        public IEnumerable<ISensor> DefaultSensors => _sensorsStorage.Values;
 
 
         /// <summary>
@@ -141,10 +146,11 @@ namespace HSMDataCollector.Core
 
                 _ = customStartingTask.ContinueWith(_ => _dataProcessor.InitAsync())
                                       .ContinueWith(_ => ChangeStatus(CollectorStatus.Running));
+
             }
             catch (Exception ex)
             {
-                _logger.Error(ex);
+                _logger.Error($"DataCollector starting error: {ex}" );
 
                 await _dataProcessor.StopAsync();
 
@@ -176,6 +182,7 @@ namespace HSMDataCollector.Core
             }
 
         }
+
 
         public void Dispose()
         {

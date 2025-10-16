@@ -1,0 +1,51 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Model.Configuration
+
+@model ConfigurationViewModel
+
+
+<div class="row mt-5 d-flex align-items-center">
+    <div class="col-2">
+        <label class="col-form-label">Total database size (MB)</label>
+    </div>
+    <div class="col-auto form-check form-switch ms-3">
+        <input id="dbTotalSize" class="form-control" type="number" value="@Model.TotalDbSize" disabled>
+    </div>
+    <div class="col-auto">
+        <button id="dbButton" class="btn btn-primary" type="button" style ="width: 15em" onclick="compact()">
+            <span id="dbSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+            <span id="dbButtonName">Compact</span>
+        </button>
+    </div>
+     <div class="col">
+         <span id="dbError" class="text-danger text-start"></span>
+     </div>
+</div>
+
+<script>
+    function compact() {
+        $('#dbButtonName').text('Compacting...');
+        $('#dbButton').prop('disabled', true);
+        $('#dbSpinner').removeClass('d-none');
+        $.ajax({
+           type: 'GET',
+           url: '@Url.Action(nameof(HomeController.Compact), ViewConstants.HomeController)',
+           cache: false,
+           async: true,
+           success: function (data) {
+               var json = JSON.parse(data);
+
+               if (json.Status === "Ok")
+                   $('#dbTotalSize').val(json.Result);
+
+               if (json.Status === "Error")
+                   $('#dbError').text(json.Error);
+
+               $('#dbButtonName').text('Compact');
+               $('#dbButton').prop('disabled', false);
+               $('#dbSpinner').removeClass('d-none').addClass('d-none');
+           }
+       });
+    }
+</script>

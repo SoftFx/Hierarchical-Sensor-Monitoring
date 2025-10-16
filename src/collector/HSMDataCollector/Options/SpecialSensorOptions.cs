@@ -65,6 +65,8 @@ namespace HSMDataCollector.Options
 
         public bool IsHostService { get; set; } = true;
 
+        public string SensorPath { get; set; }
+
         public ServiceSensorOptions() { }
 
         public ServiceSensorOptions(string serviceName) : base()

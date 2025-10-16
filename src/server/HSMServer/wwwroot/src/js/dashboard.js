@@ -61,28 +61,6 @@ window.getRangeDate = function () {
     return [new Date(newDate).toISOString(), lastDate]
 }
 
-function defaultLabelUpdate(id, name) {
-    let sources = $('#sources').find('li');
-    if (sources.length <= id)
-        return name;
-
-    let row = sources[id];
-    let label = $(row).find('input[id^="name_input"]')
-    let property = $(row).find(`select[id^='property_']`).find(':selected');
-    let sensorNameDefault = $(row).find('input[id^="name_default"]').val();
-
-    if (label.length === 0)
-        return name;
-
-    if (label.val().startsWith(sensorNameDefault)) {
-        label.val(sensorNameDefault + ` (${property.text()})`)
-
-        return label.val();
-    }
-
-    return name;
-}
-
 export function getPlotSourceView(id) {
     let showProduct = $(`input[name='ShowProduct']`).is(':checked');
 
@@ -239,7 +217,7 @@ export async function createChart(chartId, data, layout, config) {
 }
 
 export function insertSourcePlot(data, id, panelId, dashboardId, range = undefined) {
-    let plot = convertToGraphData(JSON.stringify({values: data.values}), data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
+    let plot = convertToGraphData(data, data.sensorInfo, data.id, data.color, data.shape, data.chartType == 1, range);
 
     checkForYRange(plot)
 
@@ -470,14 +448,14 @@ function addResizable(interactable) {
     })
 }
 
-window.updateSource = function (name, color, property, shape, showProduct, id) {
+window.updateSource = function (name, color, property, shape, showProduct, showProperty, id) {
     if (multichartPanel[id] === undefined)
         multichartPanel[id] = {};
     
     if (multichartPanel[id].updateTimeout !== undefined)
         clearTimeout(multichartPanel[id].updateTimeout);
 
-    multichartPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, shape, showProduct, id);
+    multichartPanel[id].updateTimeout = setTimeout(updatePlotSource, plotColorDelay, name, color, property, shape, showProduct, showProperty, id);
 }
 
 window.initPanel = async function (id, settings, ySettings, values, lastUpdate, dashboardId, panelSourceType, unit, range = undefined) {
@@ -486,6 +464,7 @@ window.initPanel = async function (id, settings, ySettings, values, lastUpdate, 
 
 
 window.multiChartPanelInit = async (values, sourceType, unit = '', height = 300, range = true) => {
+    showProperiesInLabels();
     const data = [];
     values.forEach(function (x) {
         data.push(insertSourcePlot(x, `multichart`, undefined, undefined, range)[0]);
@@ -682,19 +661,18 @@ function showEventInfo(event) {
     $(`#${id}.cloned`).remove();
 }
 
-function updatePlotSource(name, color, property, shape, showProduct, id) {
-    let updatedName = defaultLabelUpdate(getMultichartTraceIndex(id), name)
-    
+function updatePlotSource(name, color, property, shape, showProduct, showProperty, id) {
     $.ajax({
         processData: false,
         type: 'put',
         contentType: 'application/json',
         url: window.location.pathname + '/' + id,
         data: JSON.stringify({
-            label: updatedName,
+            label: name,
             color: color,
             property: property,
-            shape: shape
+            shape: shape,
+            showProperty: showProperty
         })
     }).done(async function (response) {
         let traceId = getMultichartTraceIndex(id);
@@ -705,14 +683,21 @@ function updatePlotSource(name, color, property, shape, showProduct, id) {
         }
 
         if (showProduct)
-            updatedName = $(`#productName_${id}`).text() + updatedName;
+            name = $(`#productName_${id}`).text() + name;
+
+        if (showProperty || $(`#ShowProperties`).is(':checked')) {
+            name = name + ` (${property})`;
+            $('#label_property_' + id).text(`(${property})`).removeClass('d-none');
+        }
+        else
+            $('#label_property_' + id).addClass('d-none');
 
         let layoutUpdate = {
-            'hovertemplate': `${updatedName}, %{customdata}<extra></extra>`,
+            'hovertemplate': `${name}, %{customdata}<extra></extra>`,
             'line.color': color,
             'marker.color': color,
             'line.shape': shape,
-            name: updatedName
+            name: name
         }
 
         if (multichartPanel[id] !== undefined)

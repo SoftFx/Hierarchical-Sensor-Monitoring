@@ -26,57 +26,57 @@ namespace HSMServer.BackgroundServices
         //    return base.ExecuteAsync(token);
         //}
 
-        protected override Task ServiceActionAsync()
+        protected override async Task ServiceActionAsync()
         {
-            RunAction(RunClearHistory);
-            RunAction(RunSensorsSelfDestroy);
-            RunAction(RunProductsSelfDestroy);
-
-            return Task.CompletedTask;
+            await RunActionAsync(RunClearHistory);
+            await RunActionAsync(RunSensorsSelfDestroy);
+            await RunActionAsync(RunProductsSelfDestroy);
         }
 
 
-        private void RunClearHistory()
+        private async Task RunClearHistory()
         {
             foreach (var sensor in _cache.GetSensors())
             {
                 var id = sensor.Id;
 
-                _logger.Info("Start clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Trace("Start clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
 
-                _cache.CheckSensorHistory(id);
+                await _cache.CheckSensorHistoryAsync(id);
 
-                _logger.Info("Stop clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Trace("Stop clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
             }
         }
 
-        private void RunSensorsSelfDestroy()
+        private async Task RunSensorsSelfDestroy()
         {
-            var sensors = _cache.GetSensors().Where(s => s.ShouldDestroy).ToList();
-
-            foreach (var sensor in sensors)
+            foreach (var sensor in _cache.GetSensors())
             {
                 var id = sensor.Id;
 
-                _logger.Info("Start removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                if (sensor.ShouldDestroy())
+                {
 
-                _cache.RemoveSensor(id, InitiatorInfo.AsSystemInfo("Clean up"));
+                    _logger.Trace("Start removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
 
-                _logger.Info("Stop removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                    await _cache.RemoveSensorAsync(id, InitiatorInfo.AsSystemInfo("Clean up"));
+
+                    _logger.Trace("Stop removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
+                }
             }
         }
 
-        private void RunProductsSelfDestroy()
+        private async Task RunProductsSelfDestroy()
         {
             foreach (var product in _cache.GetProducts())
             {
                 var id = product.Id;
 
-                _logger.Info("Start clear scanner: {id} {product}", id, product.DisplayName);
+                _logger.Trace("Start clear scanner: {id} {product}", id, product.DisplayName);
 
-                _cache.ClearEmptyNodes(product);
+                await _cache.ClearEmptyNodesAsync(product);
 
-                _logger.Info("Stop clear scanner: {id} {product}", id, product.DisplayName);
+                _logger.Trace("Stop clear scanner: {id} {product}", id, product.DisplayName);
             }
         }
     }

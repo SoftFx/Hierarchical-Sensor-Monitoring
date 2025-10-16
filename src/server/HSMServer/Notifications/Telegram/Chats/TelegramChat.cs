@@ -35,7 +35,7 @@ namespace HSMServer.Notifications
         internal MessageBuilder MessageBuilder { get; } = new();
 
 
-        public ChatId ChatId { get; init; }
+        public ChatId ChatId { get; private set; }
 
         public ConnectedChatType Type { get; init; }
 
@@ -53,8 +53,9 @@ namespace HSMServer.Notifications
         public bool ShouldSendNotification => MessagesAggregationTimeSec > 0 && _nextSendMessageTime <= DateTime.UtcNow;
 
 
-        public TelegramChat() : base()
+        public TelegramChat(Chat chat) : base()
         {
+            ChatId = chat;
             SendMessages = DefaultSendMessages;
             MessagesAggregationTimeSec = DefaultMessagesAggregationTimeSec;
         }
@@ -67,6 +68,11 @@ namespace HSMServer.Notifications
             Type = (ConnectedChatType)entity.Type;
             MessagesAggregationTimeSec = entity.MessagesAggregationTimeSec;
             AuthorizationTime = new DateTime(entity.AuthorizationTime);
+        }
+
+        public void UpdateChatId(ChatId chatId)
+        {
+            ChatId = chatId;
         }
 
 

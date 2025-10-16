@@ -650,11 +650,12 @@ export class EnumPlot extends Plot {
                 this.annotations.push(
                         {
                             x: data[i].x,
-                            y: 1.1,
+                            y: 1.16,
                             xref: 'x',
                             yref: 'paper',
                             text: 'Restart',
-                            showarrow: false
+                            showarrow: false,
+                            textangle: -45
                         },
                 )
             }

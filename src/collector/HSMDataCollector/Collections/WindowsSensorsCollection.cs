@@ -5,6 +5,7 @@ using HSMDataCollector.DefaultSensors.Windows.Network;
 using HSMDataCollector.DefaultSensors.Windows.Service;
 using HSMDataCollector.DefaultSensors.Windows.WindowsInfo;
 using HSMDataCollector.Options;
+using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
 
 
@@ -186,13 +187,18 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsLastRestart(_prototype.WindowsLastRestart.Get(options)));
         }
 
+        public IWindowsCollection AddWindowsInstallDate(WindowsInfoSensorOptions options)
+        {
+            return ToWindows(new WindowsInstallDate(_prototype.WindowsInstallDate.Get(options)));
+        }
+
         public IWindowsCollection AddWindowsVersion(WindowsInfoSensorOptions options)
         {
             return ToWindows(new WindowsVersion(_prototype.WindowsVersion.Get(options)));
         }
 
         public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions infoOptions, InstantSensorOptions logsOptions) =>
-            AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
+            AddWindowsInstallDate(infoOptions).AddWindowsLastUpdate(infoOptions).AddWindowsLastRestart(infoOptions).AddWindowsVersion(infoOptions).AddAllWindowsLogs(logsOptions);
 
         public IWindowsCollection AddWindowsApplicationErrorLogs(InstantSensorOptions options = null)
         {
@@ -285,6 +291,13 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        private WindowsSensorsCollection ToWindows(SensorBase sensor) => (WindowsSensorsCollection)Register(sensor);
+        public bool UnsubscribeWindowsServiceStatus(ServiceSensorOptions options)
+        {
+            var opt = _prototype.ServiceStatus.Get(options);
+
+            return Unregister(opt.Path);
+        }
+
+        private WindowsSensorsCollection ToWindows(ISensor sensor) => (WindowsSensorsCollection)Register(sensor);
     }
 }
