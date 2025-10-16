@@ -1689,14 +1689,22 @@ namespace HSMServer.Core.Cache
             _logger.Info("Links between products are building");
 
             foreach (var productEntity in productEntities)
+            {
                 if (!string.IsNullOrEmpty(productEntity.ParentProductId))
                 {
                     var parentId = Guid.Parse(productEntity.ParentProductId);
                     var productId = Guid.Parse(productEntity.Id);
 
                     if (TryGetProduct(parentId, out var parent) && TryGetProduct(productId, out var product))
+                    {
                         parent.AddSubProduct(product);
+                    }
+                    else
+                    {
+                        _logger.Error($"Apply product error: Can't find parent product Id={productId}, productId={productId}");
+                    }
                 }
+            }
 
             _logger.Info("Links between products are built");
 
