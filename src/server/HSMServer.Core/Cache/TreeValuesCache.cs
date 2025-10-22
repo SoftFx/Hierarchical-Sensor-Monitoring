@@ -1646,9 +1646,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} is requesting");
             var sensorEntities = _database.GetAllSensors();
             _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} requested");
-
-            var a = sensorEntities.Where(s => s.DisplayUnit == 1);
-
+            
             return sensorEntities;
         }
 
@@ -1865,6 +1863,7 @@ namespace HSMServer.Core.Cache
                     Id = Guid.NewGuid().ToString(),
                     DisplayName = request.SensorName,
                     Type = (byte) type,
+                    DisplayUnit = 0,
                     CreationDate = DateTime.UtcNow.Ticks,
                 };
 
