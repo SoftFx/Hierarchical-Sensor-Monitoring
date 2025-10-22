@@ -61,7 +61,6 @@ function checkInactivity() {
         const inactiveTime = Date.now() - lastActivity;
 
         if (inactiveTime > inactiveThreshold && !wasNotified) {
-            //console.log('User is not active about ' + inactiveThreshold/1000 + ' sec');
             changeTreeActivity(Status.NOTACTIVE);
             wasNotified = true; 
         } else if (inactiveTime <= inactiveThreshold) {
@@ -116,8 +115,6 @@ function refreshTreeHandler(e, data) {
 
         clearTimeout(refreshTreeTimeoutId);
 
-        //console.log("+++++++++++++++++++++++++++++++++++++++refreshTreeHandler start +++++++++++++++++++++++++++++++++++++++++++++");
-
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, currentTreeInterval);
 
         if (window.hasOwnProperty('updateSelectedNodeDataTimeoutId')) {
@@ -137,8 +134,6 @@ function refreshTreeHandler(e, data) {
 
         if (jQuery.isEmptyObject(prevState) && prevState !== undefined) {
 
-            //console.log("refreshTreeHandler: apply prevState");
-
             let jstreeState = JSON.parse(localStorage.getItem('jstree'));
             jstreeState.state.core.open.forEach((node) => {
                 $(this).jstree('open_node', node);
@@ -151,8 +146,6 @@ function refreshTreeHandler(e, data) {
 
             prevState = undefined;
         }
-        //else
-        //    console.warn("refreshTreeHandler: not prevState");
 
         if (emptySearch !== undefined && emptySearch === true) {
             let selectedIds = $('#jstree').jstree('get_selected');
@@ -171,8 +164,7 @@ function refreshTreeHandler(e, data) {
         isRefreshing = false;
     }
 
-    //console.log("====================================refreshTreeHandler end ================================================");
-}
+ }
 
 function dblClickHandler(event) {
 
@@ -194,12 +186,6 @@ function initializeTreeInternal() {
     initDropzone();
 
     currentTreeInterval = getCurrentUpdateTreeInterval();
-
-    //if (window.localStorage.jstree) {
-    //    let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
-    //    if (initOpened > 1)
-    //        isRefreshing = true;
-    //}
 
 
     $('#jstree').jstree({
@@ -264,21 +250,23 @@ function initializeTreeInternal() {
         search($('#search_input').val());
     });
 
-    $('#search_input').on('keyup', function (e) {
-        if (e.keyCode == 13) {
-            search($(this).val());
-        }
-    }).on('input', function () {
+    $('#search_input').on('input', function () {
         let value = $(this).val();
         if (value === '') {
             $('#searchForm .fa-w').hide();
             emptySearch = true;
-            if (!jQuery.isEmptyObject(prevState)) {
-                applySelectedNodeToPreviousTreeState();
-                $('#jstree').jstree(true).refresh(true, true);
+
+            if (!prevState || jQuery.isEmptyObject(prevState)) {
+                prevState = $('#jstree').jstree('get_state');
             }
-            else
-                $('#jstree').jstree(true).refresh(true);
+
+            $('#jstree').jstree(true).refresh(true);
+
+            setTimeout(() => {
+                if (prevState && !jQuery.isEmptyObject(prevState)) {
+                    restoreTreeState();
+                }
+            }, 500);
         }
         else {
             if (value.length >= 2 && value[0] === '"' && value.at(-1) === '"')
@@ -291,6 +279,7 @@ function initializeTreeInternal() {
         }
     });
 
+
     function search(value) {
         if (value === '')
             return;
@@ -301,33 +290,45 @@ function initializeTreeInternal() {
             clearTimeout(updateSelectedNodeDataTimeoutId);
         }
 
-        if (jQuery.isEmptyObject(prevState))
-            prevState = $('#jstree').jstree('get_state')
+        if (!prevState || jQuery.isEmptyObject(prevState)) {
+            prevState = $('#jstree').jstree('get_state');
+        }
 
         searchClientRefresh = true;
-
         $('#jstree').hide().jstree(true).refresh(true);
-
         searchServerRefresh = true;
-
-        $('#jstreeSpinner').removeClass('d-none')
+        $('#jstreeSpinner').removeClass('d-none');
     }
 
-    function applySelectedNodeToPreviousTreeState() {
-        let jstreeState = JSON.parse(localStorage.getItem('jstree'));
-        prevState.core.selected = jstreeState.state.core.selected;
-        let currenotSelectedNode = $('#jstree').jstree('get_node', prevState.core.selected[0]);
-        if (currenotSelectedNode)
-            $.ajax({
-                url: `${addNodes}`,
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(currenotSelectedNode.parents.slice(0, -1))
-            })
-        jstreeState.state.core = prevState.core;
-        localStorage.setItem('jstree', JSON.stringify(jstreeState));
-        prevState = {};
+    function restoreTreeState() {
+        if (!prevState || jQuery.isEmptyObject(prevState)) return;
+
+        const tree = $('#jstree').jstree(true);
+        const currentSelected = tree.get_selected();
+
+        if (prevState.core && prevState.core.open) {
+            prevState.core.open.forEach(nodeId => {
+                try {
+                    tree.open_node(nodeId);
+                } catch (e) {
+                    console.log('Cannot open node:', nodeId);
+                }
+            });
+        }
+
+        if (currentSelected.length === 0 && prevState.core && prevState.core.selected) {
+            prevState.core.selected.forEach(nodeId => {
+                try {
+                    tree.select_node(nodeId);
+                } catch (e) {
+                    console.log('Cannot select node:', nodeId);
+                }
+            });
+        }
+
+        prevState = undefined;
     }
+
 
 }
 
