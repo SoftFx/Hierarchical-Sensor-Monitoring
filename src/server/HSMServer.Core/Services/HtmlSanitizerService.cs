@@ -12,7 +12,7 @@ namespace HSMServer.Core.Services
 
             _sanitizer.AllowedTags.Clear();
             _sanitizer.AllowedTags.Add("markdown");
-
+            _sanitizer.AllowedTags.Add("br");
             _sanitizer.AllowedAttributes.Clear();
 
             _sanitizer.AllowedSchemes.Clear();

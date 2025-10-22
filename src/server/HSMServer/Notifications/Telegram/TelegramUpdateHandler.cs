@@ -161,7 +161,6 @@ namespace HSMServer.Notifications
         public Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, HandleErrorSource source, CancellationToken cancellationToken)
         {
             var message = $"Telegram bot '{botClient.BotId}' (source: '{source}') error: {exception}";
-            _logger.Error(message);
             _bot.OnErrorHandled(message);
             return Task.CompletedTask;
         }
