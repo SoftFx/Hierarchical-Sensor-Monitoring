@@ -30,7 +30,12 @@ namespace HSMServer.Model.ViewModel
             AccessKeys = product.GetAccessKeys();
 
             _usedUsers = UsersRights.Select(ur => ur.Item1).ToList();
-            NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x)).ToHashSet();
+            //NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x)).ToHashSet();
+            NotAdminUsers = notAdminUsers
+                .Select(x => new UserViewModel(x))
+                .OrderBy(u => u.Username)
+                .ToHashSet();
+
             NotAdminUsers.ExceptWith(_usedUsers);
         }
     }
