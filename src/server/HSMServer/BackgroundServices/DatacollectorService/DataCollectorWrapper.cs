@@ -98,13 +98,16 @@ namespace HSMServer.BackgroundServices
 
             _notificationsCenter.TelegramBot.MessageSended += OnMessageSended;
             _notificationsCenter.TelegramBot.ErrorHandled += OnErrorHandled;
+            _notificationsCenter.TelegramBot.MessageSending += OnMesageSending;
 
 
         }
 
         private void OnRequestProcessed(string name, int queueSize, int milliseconds) => TreeValueCacheStatistics.AddRequestProcessed(name, queueSize, milliseconds);
 
-        private void OnMessageSended(string message) => TelegramBotStatistics.RegisterNotification(message);
+        private void OnMessageSended(string chat, string message) => TelegramBotStatistics.RegisterMessageSended(chat, message);
+
+        private void OnMesageSending() => TelegramBotStatistics.RegisterMessageSending();
 
         private void OnErrorHandled(string message) => TelegramBotStatistics.RegisterError(message);
 
@@ -114,6 +117,7 @@ namespace HSMServer.BackgroundServices
             _cache.RequestProcessed -= OnRequestProcessed;
             _notificationsCenter.TelegramBot.MessageSended -= OnMessageSended;
             _notificationsCenter.TelegramBot.ErrorHandled -= OnErrorHandled;
+            _notificationsCenter.TelegramBot.MessageSending -= OnMesageSending;
             _collector?.Dispose();
         }
 
