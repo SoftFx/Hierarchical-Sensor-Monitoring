@@ -102,7 +102,15 @@ function selectNodeAjax(selectedId) {
 
 function saveMetaData(selectedId) {
     let form = document.getElementById("editMetaInfo_form");
+
+    if (!form || !(form instanceof HTMLFormElement)) {
+        console.warn('Form element not found, initializing new node without save');
+        initSelectedNode(selectedId);
+        return;
+    }
+
     let formData = new FormData(form);
+    
     collectAlerts(formData);
 
     $.ajax({
@@ -155,7 +163,7 @@ function saveMetaData(selectedId) {
                     processData: false,
                     contentType: false,
                     async: true
-                }).done(() => initSelectedNode(selectedId))
+                }).done(() => initSelectedNode(selectedId));
             }
         }
         else {
