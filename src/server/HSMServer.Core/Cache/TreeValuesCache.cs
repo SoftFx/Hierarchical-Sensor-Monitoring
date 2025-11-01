@@ -1729,10 +1729,20 @@ namespace HSMServer.Core.Cache
 
                         var product = parent.Root;
 
-                        AddSensorToCache(product, sensor);
+                        if (TryAddSensorToCache(product, sensor, out var existingSensor))
+                        {
+                            SubscribeSensorToPolicyUpdate(sensor);
+                            SensorUpdateView(sensor);
+                        }
+                        else
+                        {
+                            parent.RemoveSensor(sensor.Id);
 
-                        SubscribeSensorToPolicyUpdate(sensor);
-                        SensorUpdateView(sensor);
+                            _database.RemoveSensorWithMetadata(entity.Id);
+                            _snapshot.Sensors.Remove(sensor.Id);
+
+                            ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
+                        }
                     }
                     else
                     {
@@ -1867,8 +1877,16 @@ namespace HSMServer.Core.Cache
                     CreationDate = DateTime.UtcNow.Ticks,
                 };
 
-                sensor = SensorModelFactory.Build(entity);
-                parentProduct.AddSensor(sensor);
+                var newSensor = SensorModelFactory.Build(entity);
+                parentProduct.AddSensor(newSensor);
+
+                var addedSensor = AddSensor(newSensor, product);
+                var isNewSensor = ReferenceEquals(newSensor, addedSensor);
+
+                sensor = addedSensor;
+
+                if (!isNewSensor)
+                    return true;
 
                 if (!sensor.Settings.TTL.IsSet)
                     sensor.Policies.TimeToLive.ApplyParent(parentProduct.Policies.TimeToLive,
@@ -1878,7 +1896,6 @@ namespace HSMServer.Core.Cache
 
                 //sensor.Policies.AddDefault(options);
 
-                AddSensor(sensor, product);
                 UpdateProduct(parentProduct);
 
                 _journalService.AddRecord(new JournalRecordModel(sensor.Id, InitiatorInfo.System)
@@ -1897,25 +1914,33 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private void AddSensor(BaseSensorModel sensor, ProductModel productModel)
+        private BaseSensorModel AddSensor(BaseSensorModel sensor, ProductModel productModel)
         {
             try
             {
-                foreach (var template in _alertTemplates.Values)
+                if (TryAddSensorToCache(productModel, sensor, out var cachedSensor))
                 {
-                    if (template.IsMatch(sensor))
-                        AddAlertFromTemplate(sensor, template);
+                    foreach (var template in _alertTemplates.Values)
+                    {
+                        if (template.IsMatch(sensor))
+                            AddAlertFromTemplate(sensor, template);
+                    }
+
+                    _database.AddSensor(sensor.ToEntity());
+
+                    ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
+
+                    return sensor;
                 }
 
-                AddSensorToCache(productModel, sensor);
+                sensor.Parent?.RemoveSensor(sensor.Id);
 
-                _database.AddSensor(sensor.ToEntity());
-
-                ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
+                return cachedSensor ?? sensor;
             }
             catch (Exception ex)
             {
                 _logger.Error(ex);
+                return sensor;
             }
         }
 
@@ -2172,13 +2197,19 @@ namespace HSMServer.Core.Cache
         }
 
 
-        private void AddSensorToCache(ProductModel product, BaseSensorModel sensor)
+        private bool TryAddSensorToCache(ProductModel product, BaseSensorModel sensor, out BaseSensorModel existingSensor)
         {
-            _cache.AddOrUpdate(product.Id,
-                    key => { var value = new CachedValue(product, this); value.Sensors.TryAdd(sensor.Path, sensor);  return value; },
-                    (key, existingValue) => { existingValue.Sensors.TryAdd(sensor.Path, sensor); return existingValue; }
-                    );
-            _sensorsById.TryAdd(sensor.Id, sensor);
+            var cachedValue = _cache.GetOrAdd(product.Id, key => new CachedValue(product, this));
+
+            if (cachedValue.Sensors.TryAdd(sensor.Path, sensor))
+            {
+                _sensorsById.TryAdd(sensor.Id, sensor);
+                existingSensor = sensor;
+                return true;
+            }
+
+            cachedValue.Sensors.TryGetValue(sensor.Path, out existingSensor);
+            return false;
         }
 
         public bool TryGetSensorFromCache(Guid productId, string path, out BaseSensorModel model)
