@@ -455,12 +455,9 @@ namespace HSMServer.Controllers
                 var sensorType = apiRequest.SensorType;
                 var info = infoRequest.Value;
 
-                if (!_cache.TryGetSensorByPath(info.Product.Id, relatedPath, out var sensor) && sensorType is null)
-                    return TaskResult.FromError($"{nameof(apiRequest.SensorType)} property is required, because sensor {relatedPath} doesn't exist");
-
                 var coreRequest = new SensorAddOrUpdateRequest(info.Product.Id, relatedPath)
                 {
-                    Update = apiRequest.Convert(sensor?.Id ?? Guid.Empty, info.Key.DisplayName),
+                    Update = apiRequest.Convert(Guid.Empty, info.Key.DisplayName),
                     Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,
                 };
 
