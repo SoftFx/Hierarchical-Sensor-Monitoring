@@ -551,21 +551,16 @@ namespace HSMServer.Core.Cache
         {
             var update = request.Update;
 
-            if (update.Id == Guid.Empty)
+            if (!TryGetSensorFromCache(request.ProductId, request.Path, out var sensor))
             {
-
-                if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, out BaseSensorModel sensor, out error))
-                {
-                    error = $"Can't create sensor {request}";
+                if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, out sensor, out error))
                     return false;
-                }
 
-                update = update with { Id = sensor.Id };
-
-                return TryUpdateSensor(update, out error);
+                return true;
             }
             else
             {
+                update = update with { Id = sensor.Id };
                 return TryUpdateSensor(update, out error);
             }
         }
@@ -2127,7 +2122,6 @@ namespace HSMServer.Core.Cache
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
         {
-
             var snapshot = _snapshot.Sensors[sensor.Id];
             if (snapshot.IsExpired != timeout)
             {
@@ -2175,9 +2169,19 @@ namespace HSMServer.Core.Cache
         private void AddSensorToCache(ProductModel product, BaseSensorModel sensor)
         {
             _cache.AddOrUpdate(product.Id,
-                    key => { var value = new CachedValue(product, this); value.Sensors.TryAdd(sensor.Path, sensor);  return value; },
-                    (key, existingValue) => { existingValue.Sensors.TryAdd(sensor.Path, sensor); return existingValue; }
+                    key => 
+                    { 
+                        var value = new CachedValue(product, this);
+                        value.Sensors.TryAdd(sensor.Path, sensor);
+                        return value;
+                    },
+                    (key, existingValue) => 
+                    {
+                        existingValue.Sensors.TryAdd(sensor.Path, sensor);
+                        return existingValue;
+                    }
                     );
+
             _sensorsById.TryAdd(sensor.Id, sensor);
         }
 
