@@ -24,7 +24,7 @@ window.currentSelectedNodeId = "";
 
 function isHomeController(path) {
     const result = path.toLowerCase();
-    return result.startsWith("/home/") || result == "/home";
+    return result.startsWith("/home/") || result == "/home" || result == "/" || result == "";
 }
 
 
