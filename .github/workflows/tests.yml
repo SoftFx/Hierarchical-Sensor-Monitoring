@@ -216,6 +216,12 @@ jobs:
           path: ./container-logs/
           retention-days: 30
 
+      - name: Stop and remove test container
+        if: always()
+        run: |
+          docker stop test-container || true
+          docker rm test-container || true
+
       #- name: Push VERSION image to remote Docker
       #  run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
 
