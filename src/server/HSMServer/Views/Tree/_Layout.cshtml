@@ -194,21 +194,12 @@
             console.log( 'updateTreeTimer: is in progress. Skipped.');
             return;
         }
-
-        // console.log(new Date().toLocaleTimeString(
-        //     'ru-RU', 
-        //     { 
-        //         hour: '2-digit', 
-        //         minute: '2-digit', 
-        //         second: '2-digit', 
-        //         fractionalSecondDigits: 3 
-        //     }) 
-        //     + ' updateTreeTimer: refresh tree...');
         
         treeUpdateInProgress = true;
 
         const $tree = $('#jstree');
         const treeWrapper = document.querySelector('.tree-wrapper');
+
         treeWrapper.dataset.scrollPosition = treeWrapper.scrollTop;
 
         try {
