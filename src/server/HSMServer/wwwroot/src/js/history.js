@@ -373,7 +373,20 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
     });
 }
 
+let graphControllers = new Map();
+
 function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFillFromTo = false) {
+
+    console.log('initializeGraph called for:', encodedId);
+
+    if (graphControllers.has(encodedId)) {
+        console.log('Aborting previous graph operations for:', encodedId);
+        graphControllers.get(encodedId).abort();
+    }
+
+    const controller = new AbortController();
+    graphControllers.set(encodedId, controller);
+
     $.ajax({
         type: 'POST',
         data: JSON.stringify(body),
@@ -383,6 +396,13 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
         cache: false,
         async: true
     }).done(async function (data) {
+
+        if (controller.signal.aborted) {
+            console.log('Request aborted, skipping processing for:', encodedId);
+            return;
+        }
+
+
         $("#tableHistoryRefreshButton").addClass("d-none");
         $('#allColumnsButton').addClass("d-none");
 
@@ -421,11 +441,27 @@ function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFill
 
                 reloadHistoryRequest(utcFrom, to, body);
             }
-            await window.displayGraph(parsedData, sensorInfo, `graph_${encodedId}`, encodedId);
+
+            try {
+                await window.displayGraph(parsedData, sensorInfo, `graph_${encodedId}`, encodedId, controller.signal);
+            } catch (error) {
+                if (!controller.signal.aborted) {
+                    console.warn('Graph rendering failed:', error);
+                }
+            }
         }
 
-        $("#sensorHistorySpinner").addClass("d-none");
-        $('#historyDataPanel').removeClass('hidden_element');
+        if (!controller.signal.aborted) {
+            $("#sensorHistorySpinner").addClass("d-none");
+            $('#historyDataPanel').removeClass('hidden_element');
+        }
+    }).always(function () {
+        // Don't remove immediately, keep for canceling subsequent operations
+        setTimeout(() => {
+            if (graphControllers.has(encodedId)) {
+                graphControllers.delete(encodedId);
+            }
+        }, 1000); // Keep for 1 second to cancel async operations, then remove
     });
 }
 

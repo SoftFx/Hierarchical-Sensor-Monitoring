@@ -107,12 +107,16 @@ window.removePlot = function (name, isInit = false) {
     }
 }
 
-window.displayGraph = async function (data, sensorInfo, graphElementId, graphName) {
+window.displayGraph = async function (data, sensorInfo, graphElementId, graphName, signal) {
+
+    if (signal?.aborted) return;
+
     graphData.graph.id = graphElementId;
     graphData.graph.self = $(`#${graphElementId}`)[0];
 
     let plot = convertToGraphData(data, sensorInfo, graphName);
 
+    if (signal?.aborted) return;
     let config = {
         responsive: true,
         displaylogo: false,
@@ -128,6 +132,7 @@ window.displayGraph = async function (data, sensorInfo, graphElementId, graphNam
         doubleClick: false
     }
 
+    if (signal?.aborted) return;
     let layout = plot.getLayout();
     
     if (sensorInfo.plotType === 10) {
@@ -140,10 +145,19 @@ window.displayGraph = async function (data, sensorInfo, graphElementId, graphNam
     if (!layout.xaxis.autorange && layout.xaxis.range === undefined)
         layout.xaxis.autorange = true;
 
+    if (signal?.aborted) return;
+        if (!document.getElementById(graphElementId)) {
+        console.warn(`Element ${graphElementId} not found, skipping Plotly`);
+        return;
+    }
+
     await Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config)
+
+    if (signal?.aborted) return;
     await customReset($(`#${graphElementId}`)[0], getCurrentFromTo(graphName))
     
 
+    if (signal?.aborted) return;
     if (plot.name === serviceAlivePlotName)
         config.modeBarButtonsToAdd.forEach(x => {
             if (x.name === "Show/Hide service alive plot")
@@ -175,15 +189,17 @@ window.displayGraph = async function (data, sensorInfo, graphElementId, graphNam
         })
     }
 
-    let graphDiv = document.getElementById(graphElementId);
-    graphDiv.on('plotly_relayout',
-        function (eventData) {
-            window.sessionStorage.setItem(graphElementId, JSON.stringify(eventData));
-        });
+    if (!signal?.aborted) {
+        let graphDiv = document.getElementById(graphElementId);
+        graphDiv.on('plotly_relayout',
+            function (eventData) {
+                window.sessionStorage.setItem(graphElementId, JSON.stringify(eventData));
+            });
 
-    graphDiv.on('plotly_doubleclick', function () {
-        customReset(graphDiv, getCurrentFromTo(graphName))
-    })
+        graphDiv.on('plotly_doubleclick', function () {
+            customReset(graphDiv, getCurrentFromTo(graphName))
+        })
+    }
 }
 
 function getCurrentFromTo(id) {
