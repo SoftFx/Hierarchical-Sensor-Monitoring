@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.TableOfChanges;
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundServices
@@ -36,16 +35,7 @@ namespace HSMServer.BackgroundServices
 
         private async Task RunClearHistory()
         {
-            foreach (var sensor in _cache.GetSensors())
-            {
-                var id = sensor.Id;
-
-                _logger.Trace("Start clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
-
-                await _cache.CheckSensorHistoryAsync(id);
-
-                _logger.Trace("Stop clear: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
-            }
+            await _cache.CheckSensorsHistoryAsync();
         }
 
         private async Task RunSensorsSelfDestroy()
@@ -56,7 +46,6 @@ namespace HSMServer.BackgroundServices
 
                 if (sensor.ShouldDestroy())
                 {
-
                     _logger.Trace("Start removing: {id} {product}{path}", id, sensor.RootProductName, sensor.Path);
 
                     await _cache.RemoveSensorAsync(id, InitiatorInfo.AsSystemInfo("Clean up"));

@@ -731,26 +731,34 @@ namespace HSMServer.Core.Cache
                 await ClearSensorHistoryAsync(request with {Id = sensorId}, token);
         }
 
-        public async Task CheckSensorHistoryAsync(Guid sensorId, CancellationToken token = default)
+        public async Task CheckSensorsHistoryAsync(CancellationToken token = default)
         {
-            if (!TryGetSensorById(sensorId, out var sensor))
-                return;
-
-            await ProcessRequestAsync(sensor.Root.Id, new CheckSensorHistoryRequest(sensorId), token);
+            foreach (var product in GetProducts())
+            {
+                await ProcessRequestAsync(product.Id, new CheckSensorsHistoryRequest(product.Id), token);
+            }
         }
 
-        private void CheckSensorHistory(CheckSensorHistoryRequest request)
+        private void CheckSensorHistory(CheckSensorsHistoryRequest request)
         {
-            var sensorId = request.SensorId;
+            _cache.TryGetValue(request.ProductId, out var value);
 
-            if(!TryGetSensorById(sensorId, out var sensor))
-                return;
+            _logger.Info($"Clear history started: [{value.Product.Id}] {value.Product.DisplayName}");
 
-            var from = _snapshot.Sensors[sensorId].History.From;
-            var policy = sensor.Settings.KeepHistory.Value;
+            int cleared = 0;
+            foreach (var sensor in value.Sensors.Values)
+            {
+                var from = _snapshot.Sensors[sensor.Id].History.From;
+                var policy = sensor.Settings.KeepHistory.Value;
 
-            if (policy.TimeIsUp(from))
-                ClearSensorHistory(new(sensorId, policy.GetShiftedTime(DateTime.UtcNow, -1)));
+                if (policy.TimeIsUp(from))
+                {
+                    ClearSensorHistory(new(sensor.Id, policy.GetShiftedTime(DateTime.UtcNow, -1)));
+                    cleared++;
+                }
+            }
+
+            _logger.Info($"Clear history ended: [{value.Product.Id}] {value.Product.DisplayName} cleared {cleared} of {value.Sensors.Values.Count}");
         }
 
         public async Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default)
@@ -1496,6 +1504,9 @@ namespace HSMServer.Core.Cache
                     break;
                 case SaveLastStateRequest request:
                     SaveLastStateToDb(request);
+                    break;
+                case CheckSensorsHistoryRequest request:
+                    CheckSensorHistory(request);
                     break;
             }
 
