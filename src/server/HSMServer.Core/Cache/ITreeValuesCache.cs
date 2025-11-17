@@ -84,7 +84,7 @@ namespace HSMServer.Core.Cache
         Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null);
         Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
         Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
-        Task CheckSensorHistoryAsync(Guid sensorId, CancellationToken token = default);
+        Task CheckSensorsHistoryAsync(CancellationToken token = default);
         Task ClearNodeHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
 
         BaseSensorModel GetSensor(Guid sensorId);
