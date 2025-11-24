@@ -2030,45 +2030,15 @@ namespace HSMServer.Core.Cache
                 }
             }
 
-            if (_snapshot.IsFinal)
+            var latestValues = _database.GetLatestValuesBySensorName(GetSensors().Select(s => s.Id));
+
+            ApplyLastValues(latestValues);
+
+            if (!_snapshot.IsFinal)
             {
-                var requests = GetSensors().ToDictionary(k => k.Id, _ => 0L);
-
-                foreach (var (key, state) in _snapshot.Sensors)
-                    if (requests.ContainsKey(key))
-                        requests[key] = state.History.To.Ticks;
-
-                ApplyLastValues(_database.GetLatestValues(requests));
-            }
-            else
-            {
-                var maxTo = DateTime.MaxValue.Ticks;
-                var requests = GetSensors().ToDictionary(k => k.Id, _ => (0L, maxTo));
-
-                if (_snapshot.HasData)
-                {
-                    foreach (var (key, state) in _snapshot.Sensors)
-                        if (requests.ContainsKey(key))
-                            requests[key] = (state.History.To.Ticks, maxTo);
-                }
-
-                ApplyLastValues(_database.GetLatestValuesFromTo(requests));
-
-                requests.Clear();
-
                 foreach (var sensor in GetSensors())
-                    if (sensor.LastTimeout is not null)
-                    {
-                        _snapshot.Sensors[sensor.Id].IsExpired = true;
-
-                        var fromVal = _snapshot.Sensors.TryGetValue(sensor.Id, out var state)
-                            ? state.History.To.Ticks
-                            : 0L;
-
-                        requests.Add(sensor.Id, (fromVal, sensor.LastTimeout.ReceivingTime.Ticks));
-                    }
-
-                ApplyLastValues(_database.GetLatestValuesFromTo(requests));
+                    if (sensor.LastTimeout is not null && _snapshot.Sensors.TryGetValue(sensor.Id, out var state))
+                        state.IsExpired = true;
 
                 _snapshot.FlushState(true);
             }
