@@ -11,6 +11,7 @@ using HSMServer.Core.DataLayer;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -146,6 +147,38 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var (key, (_, _, value)) in tempResult)
                 result[Guid.Parse(Encoding.UTF8.GetString(key))] = value;
+
+            return result;
+        }
+
+        public Dictionary<Guid, byte[]> GetLatestValuesBySensorName(IEnumerable<Guid> sensorIds)
+        {
+            var result = GetResult(sensorIds.ToList());
+            var sensorsToLoad = new HashSet<Guid>(result.Keys);
+            var maxTime = DateTime.MaxValue.Ticks;
+
+            foreach (var directory in GetSensorValuesDirectories().OrderByDescending(d => d))
+            {
+                if (sensorsToLoad.Count == 0)
+                    break;
+
+                var (from, to) = GetDatesFromFolderName(directory);
+
+                using var database = LevelDBManager.GetSensorValuesDatabaseInstance(directory, from, to);
+
+                foreach (var sensorId in sensorsToLoad.ToList())
+                {
+                    var sensorKey = Encoding.UTF8.GetBytes(sensorId.ToString());
+                    var maxKey = BuildSensorValueKey(sensorId.ToString(), maxTime);
+                    var value = database.GetLatest(maxKey, sensorKey);
+
+                    if (value is not null)
+                    {
+                        result[sensorId] = value;
+                        sensorsToLoad.Remove(sensorId);
+                    }
+                }
+            }
 
             return result;
         }
@@ -324,6 +357,25 @@ namespace HSMDatabase.DatabaseWorkCore
         // "D19" string format is for inserting leading zeros (long.MaxValue has 19 symbols)
         private static byte[] BuildSensorValueKey(string sensorId, long time) =>
             Encoding.UTF8.GetBytes($"{sensorId}_{time:D19}");
+
+        private static (long from, long to) GetDatesFromFolderName(string folder)
+        {
+            var from = 0L;
+            var to = 0L;
+
+            var splitResults = folder.Split('_');
+
+            if (long.TryParse(splitResults[1], out long fromTicks))
+                from = fromTicks;
+
+            if (long.TryParse(splitResults[2], out long toTicks))
+                to = toTicks;
+
+            return (from, to);
+        }
+
+        private List<string> GetSensorValuesDirectories() =>
+            Directory.GetDirectories(_settings.DatabaseFolder, $"{_settings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
 
         #endregion
 
