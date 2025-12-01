@@ -7,6 +7,7 @@ using HSMDatabase.Extensions;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
 using HSMDatabase.SnapshotsDb;
+using HSMDataCollector.DefaultSensors;
 using HSMServer.Core.DataLayer;
 using NLog;
 using System;
@@ -101,36 +102,49 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
 
-        public Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors)
+        public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds)
         {
-            var orderedList = sensors.OrderByDescending(u => u.Value).ToList();
-            var result = GetResult(sensors.Keys.ToList());
+            var results = new Dictionary<Guid, (byte[], byte[])>();
 
-            var curDb = _sensorValuesDatabases.GetEnumerator();
-            var maxBorder = DateTime.MaxValue.Ticks;
+            foreach (var db in _sensorValuesDatabases)
+            {
+                results = db.GetLastAndFirstValues(sensorIds, BuildSensorValueKey, results);
+            }
 
-            var dbExist = curDb.MoveNext(); //go to first db
-
-            foreach (var (sensorId, time) in orderedList)
-                if (time < maxBorder) //skip no data sensors
-                {
-                    while (dbExist && !curDb.Current.IsInclude(time))
-                        dbExist = curDb.MoveNext();
-
-                    if (dbExist)
-                    {
-                        var id = sensorId.ToString();
-
-                        result[sensorId] = curDb.Current.Get(BuildSensorValueKey(id, time), Encoding.UTF8.GetBytes(id));
-                    }
-                    else
-                        break;
-                }
-
-            curDb.Dispose();
-
-            return result;
+            return results;
         }
+
+
+        //public Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors)
+        //{
+        //    var orderedList = sensors.OrderByDescending(u => u.Value).ToList();
+        //    var result = GetResult(sensors.Keys.ToList());
+
+        //    var curDb = _sensorValuesDatabases.GetEnumerator();
+        //    var maxBorder = DateTime.MaxValue.Ticks;
+
+        //    var dbExist = curDb.MoveNext(); //go to first db
+
+        //    foreach (var (sensorId, time) in orderedList)
+        //        if (time < maxBorder) //skip no data sensors
+        //        {
+        //            while (dbExist && !curDb.Current.IsInclude(time))
+        //                dbExist = curDb.MoveNext();
+
+        //            if (dbExist)
+        //            {
+        //                var id = sensorId.ToString();
+
+        //                result[sensorId] = curDb.Current.Get(BuildSensorValueKey(id, time), Encoding.UTF8.GetBytes(id));
+        //            }
+        //            else
+        //                break;
+        //        }
+
+        //    curDb.Dispose();
+
+        //    return result;
+        //}
 
         public Dictionary<Guid, byte[]> GetLatestValuesFromTo(Dictionary<Guid, (long, long)> sensors)
         {

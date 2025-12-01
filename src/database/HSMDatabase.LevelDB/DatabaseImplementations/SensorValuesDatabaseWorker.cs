@@ -111,6 +111,19 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Func<Guid, long, byte[]> createKeyFunc, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null)
+        {
+            try
+            {
+                return _openedDb.GetLastAndFirstValues(sensorIds, createKeyFunc, results);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting latest values - {e.Message}");
+                return new Dictionary<Guid, (byte[], byte[])>();
+            }
+        }
+
         public IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to)
         {
             try

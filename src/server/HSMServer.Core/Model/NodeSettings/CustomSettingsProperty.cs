@@ -18,6 +18,8 @@ namespace HSMServer.Core.Model.NodeSettings
 
             return CurValue is null ? GetEmpty() : CurValue.IsNone ? GetEmpty() : CurValue.ToString();
         }
+
+        public override string ToString() => GetJournalValue();
     }
 
 

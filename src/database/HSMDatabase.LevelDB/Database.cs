@@ -7,6 +7,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
+using System.Text;
 using CompressionLevel = LevelDB.CompressionLevel;
 using Exception = System.Exception;
 
@@ -160,6 +162,76 @@ namespace HSMDatabase.LevelDB
                 iterator?.Dispose();
             }
         }
+
+        public Dictionary<Guid, (byte[] firstValue, byte[] lastValue)> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Func<Guid, long, byte[]> createKeyFunc, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null)
+        {
+            results ??= new Dictionary<Guid, (byte[] firstValue, byte[] lasttValue)>();
+
+            if (!sensorIds.Any())
+                return results;
+
+            long minTime = DateTime.MinValue.Ticks;
+            long maxTime = DateTime.MaxValue.Ticks;
+
+            using (var iterator = _database.CreateIterator(_iteratorOptions))
+            {
+                try
+                {
+                    foreach (var sensorId in sensorIds)
+                    {
+                        byte[] firstValue = null;
+                        byte[] lastValue = null;
+
+                        var sensorIdBytes = Encoding.UTF8.GetBytes(sensorId.ToString());
+
+                        bool hasResult = results.TryGetValue(sensorId, out var existing);
+
+                        if (hasResult)
+                        {
+                            lastValue = existing.lastValue;
+                            firstValue = existing.firstValue;
+                        }
+
+                        var minKey = createKeyFunc(sensorId, minTime);
+
+                        iterator.Seek(minKey);
+                        if (iterator.IsValid && iterator.Key().StartsWith(sensorIdBytes))
+                        {
+                            firstValue = iterator.Value();
+                        }
+
+                        if (hasResult && existing.lastValue == null)
+                        {
+                            var maxKey = createKeyFunc(sensorId, maxTime);
+                            iterator.Seek(maxKey);
+
+                            if (iterator.IsValid && iterator.Key().StartsWith(sensorIdBytes))
+                                lastValue = iterator.Value();
+
+                            if (iterator.IsValid)
+                                iterator.Prev();
+
+                            if (iterator.IsValid && iterator.Key().StartsWith(sensorIdBytes))
+                                lastValue = iterator.Value();
+                        }
+                        else if (hasResult)
+                        {
+                            lastValue = existing.lastValue;
+                        }
+
+                        results[sensorId] = (firstValue, lastValue);
+                    }
+
+                    return results;
+
+                }
+                catch (Exception ex)
+                {
+                    throw new ServerDatabaseException(ex.Message, ex);
+                }
+            }
+        }
+
 
 
         public IEnumerable<byte[]> GetValueFromTo(byte[] from, byte[] to)
@@ -391,5 +463,6 @@ namespace HSMDatabase.LevelDB
         {
             _database?.Dispose();
         }
+
     }
 }

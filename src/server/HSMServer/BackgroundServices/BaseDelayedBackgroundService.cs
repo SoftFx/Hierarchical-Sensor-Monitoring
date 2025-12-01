@@ -13,6 +13,7 @@ namespace HSMServer.BackgroundServices
     {
         protected readonly Logger _logger;
 
+        public virtual TimeSpan StartDelay { get; } = TimeSpan.Zero;
 
         public abstract TimeSpan Delay { get; }
 
@@ -25,11 +26,13 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        protected abstract Task ServiceActionAsync();
+        protected abstract Task ServiceActionAsync(CancellationToken token = default);
+
 
         protected override Task ExecuteAsync(CancellationToken token)
         {
-            return PeriodicTask.Run(ServiceActionAsync, DateTime.UtcNow.Ceil(Delay) - DateTime.UtcNow, Delay, token);
+            var now = DateTime.UtcNow;
+            return PeriodicTask.Run(() => ServiceActionAsync(token), (now + StartDelay).Ceil(Delay) - now, Delay, token);
         }
 
         protected virtual void RunAction(Action action)

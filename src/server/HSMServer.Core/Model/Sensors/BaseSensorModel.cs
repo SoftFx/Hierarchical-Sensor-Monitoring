@@ -4,6 +4,7 @@ using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.Model.Sensors;
+using HSMServer.Core.TreeStateSnapshot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,6 +29,10 @@ namespace HSMServer.Core.Model
 
 
         internal abstract ValuesStorage Storage { get; }
+
+        internal LastHistoryPeriod HistoryPeriod { get; } = new();
+
+        internal bool IsExpired { get; set; }
 
         public abstract SensorType Type { get; }
 
@@ -136,7 +141,7 @@ namespace HSMServer.Core.Model
 
         internal abstract bool TryAddValue(BaseValue value);
 
-        internal abstract void AddDbValue(byte[] bytes);
+        internal abstract BaseValue AddDbValue(byte[] bytes);
 
         internal abstract bool TryUpdateLastValue(BaseValue value);
 

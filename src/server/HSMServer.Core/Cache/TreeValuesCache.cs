@@ -1,17 +1,12 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using NLog;
+﻿using AngleSharp.Dom;
 using HSMCommon.Collections;
 using HSMCommon.Extensions;
 using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDataCollector.DefaultSensors;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
+using HSMServer.Core.ApiObjectsConverters;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Confirmation;
 using HSMServer.Core.DataLayer;
@@ -27,8 +22,14 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Threading;
 using HSMServer.Core.TreeStateSnapshot;
 using HSMServer.PathTemplates;
+using NLog;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using SensorType = HSMServer.Core.Model.SensorType;
-using HSMServer.Core.ApiObjectsConverters;
 
 
 
@@ -85,6 +86,9 @@ namespace HSMServer.Core.Cache
         private readonly IJournalService _journalService;
         private readonly IDatabaseCore _database;
 
+        private readonly TimeSpan StateUpdatePeriod = TimeSpan.FromMinutes(1);
+        private readonly TimeSpan StateUpdateStartDelay = TimeSpan.FromMinutes(2);
+
         public event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
@@ -99,7 +103,7 @@ namespace HSMServer.Core.Cache
 
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot,
-            IJournalService journalService, TimeSpan updatePeriod = default)
+            IJournalService journalService)
         {
             _database = database;
             _snapshot = snapshot;
@@ -111,10 +115,7 @@ namespace HSMServer.Core.Cache
             _confirmationManager.NewMessageEvent += _scheduleManager.ProcessMessage;
             _scheduleManager.NewMessageEvent += SendAlertMessage;
 
-            if (updatePeriod == default)
-                updatePeriod = TimeSpan.FromSeconds(61);
-
-            _updateTask = PeriodicTask.Run(UpdateCacheState, updatePeriod, updatePeriod, _cts.Token, _logger);
+            _updateTask = PeriodicTask.Run(UpdateCacheState, StateUpdateStartDelay, StateUpdatePeriod, _cts.Token, _logger);
         }
 
 
@@ -280,6 +281,8 @@ namespace HSMServer.Core.Cache
 
                 RemoveBaseNodeSubscription(product);
 
+                _logger.Info($"Node removed: Id = {product.Id}, Name = {product.DisplayName}, Path = {product.Path}, RootId = {product.Root?.Id}, RootName = {product.RootProductName}, Created = {product.CreationDate}, Settings = {product.Settings.SelfDestroy}");
+
                 product.Parent?.SubProducts.TryRemove(productId, out _);
                 _database.RemoveProduct(product.Id.ToString());
 
@@ -312,6 +315,47 @@ namespace HSMServer.Core.Cache
                 _logger.Error(ex);
             }
         }
+
+        public async Task RunSensorsSelfDestroyAsync(CancellationToken token = default)
+        {
+            _logger.Info("Start sensors sefl destroy");
+
+            var sensors = GetSensors();
+            var removed = 0;
+            foreach (var sensor in sensors)
+            {
+                if (token.IsCancellationRequested)
+                    break;
+
+                if (sensor.ShouldDestroy())
+                {
+                    await RemoveSensorAsync(sensor.Id, InitiatorInfo.AsSystemInfo("Clean up"), token: token);
+                    removed++;
+                }
+            }
+
+            _logger.Info($"Stop sensors self destroy: removed {removed} of {sensors.Count} ");
+        }
+
+        public async Task RunProductsSelfDestroyAsync(CancellationToken token = default)
+        {
+            _logger.Info("Start product self destroy");
+
+            var products = GetProducts();
+
+            var removed = 0;
+            foreach (var product in products)
+            {
+                if (token.IsCancellationRequested)
+                    break;
+
+                await ClearEmptyNodesAsync(product, token);
+                removed++;
+            }
+
+            _logger.Info($"Stop product self destroy: removed {removed} of {products.Count}");
+        }
+
 
         public ProductModel GetProduct(Guid id)
         {
@@ -552,17 +596,11 @@ namespace HSMServer.Core.Cache
             var update = request.Update;
 
             if (!TryGetSensorFromCache(request.ProductId, request.Path, out var sensor))
-            {
                 if (!TryAddSensor(request, request.Type, request.ProductId, request.Update.DefaultAlertsOptions, out sensor, out error))
                     return false;
 
-                return true;
-            }
-            else
-            {
-                update = update with { Id = sensor.Id };
-                return TryUpdateSensor(update, out error);
-            }
+            update = update with { Id = sensor.Id };
+            return TryUpdateSensor(update, out error);
         }
 
         public async Task<TaskResult> UpdateSensorAsync(SensorUpdate update)
@@ -651,14 +689,14 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public async Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null)
+        public async Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null, CancellationToken token = default)
         {
             if (!TryGetSensorById(sensorId, out var sensor))
                 return;
 
             var request = new RemoveSensorRequest(sensorId, initiator, parentId);
 
-            await ProcessRequestAsync(sensor.Root.Id, request);
+            await ProcessRequestAsync(sensor.Root.Id, request, token);
         }
 
         private void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null)
@@ -687,10 +725,9 @@ namespace HSMServer.Core.Cache
                     _journalService.RemoveRecords(sensorId);
 
 
-                _logger.Info($"Sensor removed: Id = {sensor.Id}, Name = {sensor.DisplayName}, Path = {sensor.Path}, ProductId = {sensor.Root?.Id}, ProductName = {sensor.RootProductName}");
+                _logger.Info($"Sensor removed: Id = {sensor.Id}, Name = {sensor.DisplayName}, Path = {sensor.Path}, ProductId = {sensor.Root?.Id}, ProductName = {sensor.RootProductName}, LastUpdate = {sensor.LastUpdate}, Created = {sensor.CreationDate}, Settings = {sensor.Settings.SelfDestroy}, Initiator = {initiator}");
 
                 _database.RemoveSensorWithMetadata(sensorId.ToString());
-                _snapshot.Sensors.Remove(sensorId);
 
                 ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
             }
@@ -748,7 +785,7 @@ namespace HSMServer.Core.Cache
             int cleared = 0;
             foreach (var sensor in value.Sensors.Values)
             {
-                var from = _snapshot.Sensors[sensor.Id].History.From;
+                var from = sensor.HistoryPeriod.From;
                 var policy = sensor.Settings.KeepHistory.Value;
 
                 if (policy.TimeIsUp(from))
@@ -777,7 +814,7 @@ namespace HSMServer.Core.Cache
                 return;
             }
 
-            var from = _snapshot.Sensors[request.Id].History.From;
+            var from = sensor.HistoryPeriod.From;
             var to = request.To;
 
             if (from > to)
@@ -808,7 +845,7 @@ namespace HSMServer.Core.Cache
             }
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, to);
-            _snapshot.Sensors[request.Id].History.From = to;
+            sensor.HistoryPeriod.From = to;
 
             SensorUpdateView(sensor);
         }
@@ -1569,9 +1606,6 @@ namespace HSMServer.Core.Cache
         private void SaveSensorValueToDb(BaseValue value, Guid sensorId, bool ignoreSnapshot = false)
         {
             _database.AddSensorValue(value.ToEntity(sensorId));
-
-            if (!value.IsTimeout && !ignoreSnapshot)
-                _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
         }
 
         private void NotifyAboutProductChange(ProductModel product)
@@ -1618,25 +1652,25 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
 
-            TimeoutValueAfterRestartFix();
+            //TimeoutValueAfterRestartFix();
         }
 
-        private void TimeoutValueAfterRestartFix()
-        {
-            foreach (var sensor in _sensorsById.Values)
-            {
-                if (_snapshot.Sensors.TryGetValue(sensor.Id, out var state) && state.IsExpired)
-                {
-                    var lastValue = sensor.Convert(_database.GetLatestValue(sensor.Id, DateTime.UtcNow.Ticks));
-                    if ((!lastValue?.IsTimeout ?? false) && sensor.LastValue is not null)
-                    {
-                        var timeoutValue = sensor.GetTimeoutValue();
+        //private void TimeoutValueAfterRestartFix()
+        //{
+        //    foreach (var sensor in _sensorsById.Values)
+        //    {
+        //        if (_snapshot.Sensors.TryGetValue(sensor.Id, out var state) && state.IsExpired)
+        //        {
+        //            var lastValue = sensor.Convert(_database.GetLatestValue(sensor.Id, DateTime.UtcNow.Ticks));
+        //            if ((!lastValue?.IsTimeout ?? false) && sensor.LastValue is not null)
+        //            {
+        //                var timeoutValue = sensor.GetTimeoutValue();
 
-                        SaveSensorValueToDb(timeoutValue, sensor.Id);
-                    }
-                }
-            }
-        }
+        //                SaveSensorValueToDb(timeoutValue, sensor.Id);
+        //            }
+        //        }
+        //    }
+        //}
 
         private List<ProductEntity> RequestProducts()
         {
@@ -1705,7 +1739,14 @@ namespace HSMServer.Core.Cache
                     }
                     else
                     {
-                        _logger.Error($"Apply product error: Can't find parent product Id={productId}, productId={productId}");
+                        _logger.Info($"Removing node id={productId}, parentId={parentId}," +
+                                     $" parentExists={_tree.ContainsKey(productId)}," +
+                                     $" REMOVE WILL BE APPLIED");
+
+                        _database.RemoveProduct(productId.ToString());
+                        _tree.Remove(productId, out var deletedProduct);
+
+                        ChangeProductEvent?.Invoke(deletedProduct, ActionType.Delete);
                     }
                 }
             }
@@ -1748,7 +1789,6 @@ namespace HSMServer.Core.Cache
                                      $" REMOVE WILL BE APPLIED");
 
                         _database.RemoveSensorWithMetadata(entity.Id);
-                        _snapshot.Sensors.Remove(sensor.Id);
 
                         ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
                     }
@@ -2014,63 +2054,27 @@ namespace HSMServer.Core.Cache
 
         private void FillSensorsData()
         {
-            void ApplyLastValues(Dictionary<Guid, byte[]> lasts)
+            var results = _database.GetLastAndFirstValues(_sensorsById.Keys);
+
+            foreach (var (sensorId, (firstValueBytes, lastValueBytes)) in results)
             {
-                foreach (var (sensorId, value) in lasts)
+                if (lastValueBytes is not null && TryGetSensorById(sensorId, out var sensor))
                 {
-                    if (value is not null && TryGetSensorById(sensorId, out var sensor))
-                    {
-                        sensor.AddDbValue(value);
+                    var lastValue = sensor.AddDbValue(lastValueBytes);
 
-                        SendNotification(sensor.Id, sensor.Notifications.LeftOnlyScheduled());
+                    if (lastValue.IsTimeout)
+                        sensor.IsExpired = true;
 
-                        if (!_snapshot.IsFinal && sensor.LastValue is not null)
-                            _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
-                    }
+                    var firstValue = sensor.Convert(firstValueBytes);
+
+                    sensor.HistoryPeriod.From = firstValue.Time;
+                    sensor.HistoryPeriod.To = lastValue.Time;
+
+                    //SendNotification(sensor.Id, sensor.Notifications.LeftOnlyScheduled());
+
+                    //if (!_snapshot.IsFinal && sensor.LastValue is not null)
+                    //    _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
                 }
-            }
-
-            if (_snapshot.IsFinal)
-            {
-                var requests = GetSensors().ToDictionary(k => k.Id, _ => 0L);
-
-                foreach (var (key, state) in _snapshot.Sensors)
-                    if (requests.ContainsKey(key))
-                        requests[key] = state.History.To.Ticks;
-
-                ApplyLastValues(_database.GetLatestValues(requests));
-            }
-            else
-            {
-                var maxTo = DateTime.MaxValue.Ticks;
-                var requests = GetSensors().ToDictionary(k => k.Id, _ => (0L, maxTo));
-
-                if (_snapshot.HasData)
-                {
-                    foreach (var (key, state) in _snapshot.Sensors)
-                        if (requests.ContainsKey(key))
-                            requests[key] = (state.History.To.Ticks, maxTo);
-                }
-
-                ApplyLastValues(_database.GetLatestValuesFromTo(requests));
-
-                requests.Clear();
-
-                foreach (var sensor in GetSensors())
-                    if (sensor.LastTimeout is not null)
-                    {
-                        _snapshot.Sensors[sensor.Id].IsExpired = true;
-
-                        var fromVal = _snapshot.Sensors.TryGetValue(sensor.Id, out var state)
-                            ? state.History.To.Ticks
-                            : 0L;
-
-                        requests.Add(sensor.Id, (fromVal, sensor.LastTimeout.ReceivingTime.Ticks));
-                    }
-
-                ApplyLastValues(_database.GetLatestValuesFromTo(requests));
-
-                _snapshot.FlushState(true);
             }
         }
 
@@ -2108,9 +2112,10 @@ namespace HSMServer.Core.Cache
             foreach (var (_, node) in product.SubProducts)
                 await ClearEmptyNodesAsync(node, token);
 
-            if (!product.IsRoot && product.IsEmpty &&
-                product.Settings.SelfDestroy.Value.GetShiftedTime(product.CreationDate) < DateTime.UtcNow)
+            if (!product.IsRoot && product.IsEmpty && product.Settings.SelfDestroy.Value.GetShiftedTime(product.CreationDate) < DateTime.UtcNow)
+            {
                 await RemoveProductAsync(product.Id, InitiatorInfo.AsSystemForce("Old empty node"), token);
+            }
         }
 
 
@@ -2133,11 +2138,10 @@ namespace HSMServer.Core.Cache
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
         {
-            var snapshot = _snapshot.Sensors[sensor.Id];
-            if (snapshot.IsExpired != timeout)
+            if (sensor.IsExpired != timeout)
             {
                 var ttl = sensor.Policies.TimeToLive;
-                snapshot.IsExpired = timeout;
+                sensor.IsExpired = timeout;
 
                 if (timeout && sensor.HasData)
                 {

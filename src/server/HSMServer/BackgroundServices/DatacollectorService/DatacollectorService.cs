@@ -39,7 +39,7 @@ namespace HSMServer.BackgroundServices
             await base.ExecuteAsync(token);
         }
 
-        protected override Task ServiceActionAsync()
+        protected override Task ServiceActionAsync(CancellationToken token)
         {
             if (_isMonitoringEnabled)
                 _collector.UpdateStatictics();

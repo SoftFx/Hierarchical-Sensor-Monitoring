@@ -23,5 +23,10 @@ namespace HSMServer.Core.Model.Requests
             Values = values;
             Response = new Dictionary<string, string>();
         }
+
+        public override string ToString()
+        {
+            return $"Key = {Key}, ProductId = {ProductId}, Count = { (Values is List<SensorValueBase> list ? list.Count : string.Empty) }";
+        }
     }
 }

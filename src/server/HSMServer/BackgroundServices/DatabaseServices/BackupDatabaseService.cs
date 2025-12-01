@@ -79,7 +79,7 @@ namespace HSMServer.BackgroundServices
             }
         }
 
-        protected override async Task ServiceActionAsync()
+        protected override async Task ServiceActionAsync(CancellationToken token = default)
         {
             if (!IsBackupEnabled)
                 return;
