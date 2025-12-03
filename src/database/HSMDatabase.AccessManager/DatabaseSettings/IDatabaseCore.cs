@@ -15,6 +15,8 @@ namespace HSMServer.Core.DataLayer
 
         public bool IsCompactRunning { get; }
 
+        public bool IsExportRunning { get; }
+
         long SensorHistoryDbSize { get; }
 
         long JournalDbSize { get; }
@@ -27,9 +29,11 @@ namespace HSMServer.Core.DataLayer
 
         int SensorValuesPageCount { get; }
 
+        List<ISensorValuesDatabase> SensorValuesDatabases { get; }
 
         TaskResult<string> BackupEnvironment(string backupPath);
 
+        IDatabaseSettings DatabaseSettings { get; }
 
         #region Folders
 
@@ -72,7 +76,7 @@ namespace HSMServer.Core.DataLayer
 
         byte[] GetLatestValue(Guid sensorId, long to);
 
-        Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors);
+        Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds);
 
         Dictionary<Guid, byte[]> GetLatestValuesFromTo(Dictionary<Guid, (long, long)> sensors);
 
@@ -81,6 +85,8 @@ namespace HSMServer.Core.DataLayer
         IAsyncEnumerable<byte[]> GetSensorValues(Guid sensorId, DateTime from, DateTime to);
 
         List<SensorEntity> GetAllSensors();
+
+        void ExportValuesDatabase(string databaseName, Dictionary<string, string> sensors);
 
         (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId);
 
@@ -131,5 +137,6 @@ namespace HSMServer.Core.DataLayer
         #endregion
 
         void Compact();
+
     }
 }

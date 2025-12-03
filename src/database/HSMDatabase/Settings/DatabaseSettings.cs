@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager;
+using System.IO;
 
 namespace HSMDatabase.Settings
 {
@@ -14,6 +15,7 @@ namespace HSMDatabase.Settings
         private const string DefaultJournalValuesDatabaseName = "JournalValues";
         private const string DefaultServerLayoutDatabaseName = "ServerLayout";
 
+        private const string DefaultExportFolder = "Export";
 
         public string DatabaseFolder { get; init; } = DefaultDatabaseFolder;
 
@@ -21,6 +23,7 @@ namespace HSMDatabase.Settings
 
         public string JournalFolder { get; init; } = DefaultJournalFolder;
 
+        public string ExportFolder { get; init; } = Path.Combine(DefaultDatabaseFolder, DefaultExportFolder);
 
         public string SnaphotsDatabaseName { get; init; } = DefaultSnaphotsDatabaseName;
 

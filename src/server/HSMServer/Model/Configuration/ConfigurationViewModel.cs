@@ -1,6 +1,8 @@
 ﻿using HSMServer.Core.DataLayer;
 using HSMServer.ServerConfiguration;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.Configuration
 {
@@ -18,5 +20,8 @@ namespace HSMServer.Model.Configuration
 
         public bool IsCompactRunning => database.IsCompactRunning;
 
+        public bool IsExportRunning => database.IsExportRunning;
+
+        public List<string> Databases => [.. database.SensorValuesDatabases.Select(x => x.Name)];
     }
 }

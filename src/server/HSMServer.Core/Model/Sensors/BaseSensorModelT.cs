@@ -28,6 +28,7 @@ namespace HSMServer.Core.Model
             {
                 Storage.AddValueBase((T)value);
                 ReceivedNewValue?.Invoke(value);
+                HistoryPeriod.To = value.Time;
                 return true;
             }
 
@@ -48,6 +49,8 @@ namespace HSMServer.Core.Model
                 {
                     if (!AggregateValues)
                         Storage.AddValue(validatedValue);
+
+                    HistoryPeriod.To = validatedValue.Time;
 
                     ReceivedNewValue?.Invoke(validatedValue);
                 }
@@ -72,12 +75,14 @@ namespace HSMServer.Core.Model
 
         internal override bool CheckTimeout() => Policies.SensorTimeout(LastValue);
 
-        internal override void AddDbValue(byte[] bytes)
+        internal override BaseValue AddDbValue(byte[] bytes)
         {
             var dbValue = Convert(bytes);
 
             if (dbValue.IsTimeout || Policies.TryValidate(dbValue, out _))
                 Storage.AddValue((T)dbValue);
+
+            return dbValue;
         }
 
 

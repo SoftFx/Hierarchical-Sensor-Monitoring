@@ -33,7 +33,7 @@ namespace HSMServer.BackgroundServices
             return base.StartAsync(token);
         }
 
-        protected override Task ServiceActionAsync() => SaveStateAsync(false);
+        protected override Task ServiceActionAsync(CancellationToken token) => SaveStateAsync(false);
 
 
         private async Task SaveStateAsync(bool isFinal)

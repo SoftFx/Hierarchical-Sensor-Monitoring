@@ -7,8 +7,8 @@ namespace HSMServer.Core.TreeStateSnapshot
 {
     public interface ITreeStateSnapshot
     {
-        ISnapshotCollection<LastSensorState> Sensors { get; }
-        
+        //ISnapshotCollection<LastSensorState> Sensors { get; }
+
         ISnapshotCollection<LastKeyState> Keys { get; }
 
         public bool HasData { get; }

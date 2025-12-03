@@ -11,12 +11,16 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using NLog;
 using NLog.Extensions.Logging;
 using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
-using System.Text.Json.Serialization;
 using System.Globalization;
+using System.Reflection;
+using System.Text.Json.Serialization;
+using LogLevel = Microsoft.Extensions.Logging.LogLevel;
+
 
 const string NLogConfigFileName = "nlog.config";
 
@@ -31,8 +35,14 @@ var serverConfig = new ServerConfig(config);
 LayoutRenderer.Register("buildConfiguration", logEvent => builder.Environment.IsDevelopment() ? "Debug" : "Release");
 LayoutRenderer.Register("infrastructureLogger", logEvent => CommonConstants.InfrastructureLoggerName);
 
-var logger = NLogBuilder.ConfigureNLog(NLogConfigFileName)
-                        .GetCurrentClassLogger();
+NLogBuilder.ConfigureNLog(NLogConfigFileName);
+
+var logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
+
+var assembly = Assembly.GetExecutingAssembly();
+var version = assembly.GetName().Version?.ToString();
+
+logger.Info($"HSM Server {version} starting...");
 
 builder.WebHost.ConfigureWebHost(serverConfig);
 

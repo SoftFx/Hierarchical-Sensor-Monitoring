@@ -81,7 +81,7 @@ namespace HSMServer.Core.Cache
 
         bool TryGetSensorByPath(Guid productId, string path, out BaseSensorModel sensor);
         Task<TaskResult> UpdateSensorValueAsync(UpdateSensorValueRequestModel request, CancellationToken token = default);
-        Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null);
+        Task RemoveSensorAsync(Guid sensorId, InitiatorInfo initiator = null, Guid? parentId = null, CancellationToken token = default);
         Task UpdateMutedSensorStateAsync(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
         Task ClearSensorHistoryAsync(ClearHistoryRequest request, CancellationToken token = default);
         Task CheckSensorsHistoryAsync(CancellationToken token = default);
@@ -112,5 +112,10 @@ namespace HSMServer.Core.Cache
         AlertTemplateModel GetAlertTemplate(Guid id);
 
         Task RemoveAlertTemplateAsync(Guid id, CancellationToken token = default);
+
+        Task RunSensorsSelfDestroyAsync(CancellationToken token = default);
+
+        Task RunProductsSelfDestroyAsync(CancellationToken token = default);
+
     }
 }

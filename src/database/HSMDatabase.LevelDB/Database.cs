@@ -1,12 +1,15 @@
-using HSMCommon.TaskResult;
+﻿using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB.Extensions;
 using LevelDB;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.Design;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
+using System.Text;
 using CompressionLevel = LevelDB.CompressionLevel;
 using Exception = System.Exception;
 
@@ -29,11 +32,14 @@ namespace HSMDatabase.LevelDB
             WriteBufferSize = 8 * 1024 * 1024,
         };
 
+        private string _databaseName;
 
         public LevelDBDatabaseAdapter(string name)
         {
             Directory.CreateDirectory(Path.Combine(Environment.CurrentDirectory, name));
             var attempts = 0;
+
+            _databaseName = name;
 
             while (++attempts <= OpenDbMaxAttempts) //sometimes Leveldb throws unexpected error when it tries to open db on Windows
             {
@@ -159,6 +165,83 @@ namespace HSMDatabase.LevelDB
             {
                 iterator?.Dispose();
             }
+        }
+
+        public Dictionary<Guid, (byte[] firstValue, byte[] lastValue)> GetLastAndFirstValues(
+            IEnumerable<Guid> sensorIds,
+            Func<Guid, long, byte[]> createKeyFunc,
+            Dictionary<Guid, (byte[] firstValue, byte[] lastValue)> results = null)
+        {
+            results ??= new Dictionary<Guid, (byte[] firstValue, byte[] lastValue)>();
+
+            if (!sensorIds.Any())
+                return results;
+
+            using var iterator = _database.CreateIterator(_iteratorOptions);
+
+            foreach (var sensorId in sensorIds)
+            {
+                byte[] currentFirstValue = null;
+                byte[] currentLastValue = null;
+
+                // Префикс для проверки принадлежности
+                var prefixBytes = Encoding.UTF8.GetBytes(sensorId.ToString());
+
+                // Строим диапазон через createKeyFunc
+                byte[] minKey = createKeyFunc(sensorId, DateTime.MinValue.Ticks);
+                byte[] maxKey = createKeyFunc(sensorId, DateTime.MaxValue.Ticks);
+
+                // Проверяем, есть ли уже firstValue из предыдущей (старой) базы
+                bool firstAlreadyKnown =
+                    results.TryGetValue(sensorId, out var existing) &&
+                    existing.firstValue != null;
+
+                // ---------- 1. FIRST (оптимизация: пропускаем, если уже найден ранее) ----------
+                if (!firstAlreadyKnown)
+                {
+                    iterator.Seek(minKey);
+
+                    if (iterator.IsValid && iterator.Key().StartsWith(prefixBytes))
+                    {
+                        currentFirstValue = iterator.Value();
+                    }
+                }
+
+                // ---------- 2. LAST (всегда нужно искать) ----------
+                iterator.Seek(maxKey);
+
+                if (iterator.IsValid && iterator.Key().StartsWith(prefixBytes))
+                {
+                    currentLastValue = iterator.Value();
+                }
+                else if (iterator.IsValid)
+                {
+                    iterator.Prev();
+
+                    if (iterator.IsValid && iterator.Key().StartsWith(prefixBytes))
+                    {
+                        currentLastValue = iterator.Value();
+                    }
+                }
+
+                // ---------- 3. MERGE результатов ----------
+                if (results.TryGetValue(sensorId, out existing))
+                {
+                    results[sensorId] = (
+                        existing.firstValue ?? currentFirstValue,  // first не перезаписываем
+                        currentLastValue ?? existing.lastValue     // last обновляем
+                    );
+                }
+                else if (currentFirstValue != null || currentLastValue != null)
+                {
+                    results[sensorId] = (
+                        currentFirstValue ?? currentLastValue,
+                        currentLastValue ?? currentFirstValue
+                    );
+                }
+            }
+
+            return results;
         }
 
 
@@ -387,9 +470,30 @@ namespace HSMDatabase.LevelDB
             _database.Compact();
         }
 
+
+        public IEnumerable<(byte[], byte[])> GetAll()
+        {
+            using (var snapshot = _database.CreateSnapshot())
+            {
+                using (var readOptions = new ReadOptions() { Snapshot = snapshot })
+                {
+                    using (var snapshotIterator = _database.CreateIterator(readOptions))
+                    {
+                        snapshotIterator.SeekToFirst();
+                        while (snapshotIterator.IsValid)
+                        {
+                            yield return (snapshotIterator.Key(), snapshotIterator.Value());
+                            snapshotIterator.Next();
+                        }
+                    }
+                }
+            }
+        }
+
         public void Dispose()
         {
             _database?.Dispose();
         }
+
     }
 }

@@ -892,6 +892,17 @@ namespace HSMServer.Controllers
             return Json(JsonSerializer.Serialize(new { Status = "Ok", Result = Math.Round(_database.TotalDbSize / (double)(1 << 20), 2, MidpointRounding.AwayFromZero) }));
         }
 
+        [HttpGet]
+        public JsonResult Export(string name)
+        {
+            if (_database.IsExportRunning)
+                return Json(JsonSerializer.Serialize(new { Status = "Error", Error = "Export already running" }));
+
+            _database.ExportValuesDatabase(name, _treeValuesCache.GetSensors().ToDictionary(x => x.Id.ToString(), x => x.FullPath));
+
+            return Json(JsonSerializer.Serialize(new { Status = "Ok" }));
+        }
+
         private string GetSensorPath(string encodedId)
         {
             _treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor);

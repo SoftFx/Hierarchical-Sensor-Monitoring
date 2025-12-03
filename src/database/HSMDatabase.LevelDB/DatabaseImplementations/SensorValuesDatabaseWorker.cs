@@ -111,6 +111,19 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Func<Guid, long, byte[]> createKeyFunc, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null)
+        {
+            try
+            {
+                return _openedDb.GetLastAndFirstValues(sensorIds, createKeyFunc, results);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting latest values - {e.Message}");
+                return new Dictionary<Guid, (byte[], byte[])>();
+            }
+        }
+
         public IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to)
         {
             try
@@ -150,6 +163,20 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 _logger.Error($"Failed getting value [{to.GetString()}, {from.GetString()}] - {e.Message}");
 
                 return Enumerable.Empty<(byte[], byte[])>();
+            }
+        }
+
+        public IEnumerable<(byte[] key, byte[] value)> GetAll()
+        {
+            try
+            {
+                return _openedDb.GetAll();
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting all values - {e.Message}");
+
+                return [];
             }
         }
 
