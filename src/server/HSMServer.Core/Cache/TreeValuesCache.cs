@@ -26,9 +26,12 @@ using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 using SensorType = HSMServer.Core.Model.SensorType;
 
 
@@ -2058,17 +2061,25 @@ namespace HSMServer.Core.Cache
 
             foreach (var (sensorId, (firstValueBytes, lastValueBytes)) in results)
             {
-                if (lastValueBytes is not null && TryGetSensorById(sensorId, out var sensor))
+                if (TryGetSensorById(sensorId, out var sensor))
                 {
-                    var lastValue = sensor.AddDbValue(lastValueBytes);
+                    if (lastValueBytes is not null)
+                    {
+                        var lastValue = sensor.AddDbValue(lastValueBytes);
 
-                    if (lastValue.IsTimeout)
-                        sensor.IsExpired = true;
+                        sensor.HistoryPeriod.To = lastValue.Time;
 
-                    var firstValue = sensor.Convert(firstValueBytes);
+                        if (lastValue.IsTimeout)
+                            sensor.IsExpired = true;
+                    }
 
-                    sensor.HistoryPeriod.From = firstValue.Time;
-                    sensor.HistoryPeriod.To = lastValue.Time;
+                    if (firstValueBytes is not null)
+                    {
+                        var firstValue = sensor.Convert(firstValueBytes);
+                        sensor.HistoryPeriod.From = firstValue.Time;
+                    }
+
+                    _logger.Info($"{sensor.Id} {sensor.FullPath} initialized history from {sensor.HistoryPeriod.From} to {sensor.HistoryPeriod.To}, timeout = {sensor.IsExpired}");
 
                     //SendNotification(sensor.Id, sensor.Notifications.LeftOnlyScheduled());
 

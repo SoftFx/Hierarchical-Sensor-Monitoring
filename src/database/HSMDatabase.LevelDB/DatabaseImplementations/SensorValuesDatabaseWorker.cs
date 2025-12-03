@@ -166,6 +166,20 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public IEnumerable<(byte[] key, byte[] value)> GetAll()
+        {
+            try
+            {
+                return _openedDb.GetAll();
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting all values - {e.Message}");
+
+                return [];
+            }
+        }
+
         public void Compact()
         {
             _openedDb.Compact();

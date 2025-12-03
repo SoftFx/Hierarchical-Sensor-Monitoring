@@ -116,5 +116,6 @@ namespace HSMServer.Core.Cache
         Task RunSensorsSelfDestroyAsync(CancellationToken token = default);
 
         Task RunProductsSelfDestroyAsync(CancellationToken token = default);
+
     }
 }

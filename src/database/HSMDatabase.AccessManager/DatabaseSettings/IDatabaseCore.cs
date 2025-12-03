@@ -15,6 +15,8 @@ namespace HSMServer.Core.DataLayer
 
         public bool IsCompactRunning { get; }
 
+        public bool IsExportRunning { get; }
+
         long SensorHistoryDbSize { get; }
 
         long JournalDbSize { get; }
@@ -27,9 +29,11 @@ namespace HSMServer.Core.DataLayer
 
         int SensorValuesPageCount { get; }
 
+        List<ISensorValuesDatabase> SensorValuesDatabases { get; }
 
         TaskResult<string> BackupEnvironment(string backupPath);
 
+        IDatabaseSettings DatabaseSettings { get; }
 
         #region Folders
 
@@ -82,6 +86,8 @@ namespace HSMServer.Core.DataLayer
 
         List<SensorEntity> GetAllSensors();
 
+        void ExportValuesDatabase(string databaseName, Dictionary<string, string> sensors);
+
         (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId);
 
         #endregion
@@ -131,5 +137,6 @@ namespace HSMServer.Core.DataLayer
         #endregion
 
         void Compact();
+
     }
 }

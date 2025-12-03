@@ -35,5 +35,7 @@ namespace HSMDatabase.AccessManager
         void Compact();
 
         Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Func<Guid, long, byte[]> createKeyFunc, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null);
+
+        IEnumerable<(byte[] key, byte[] value)> GetAll();
     }
 }

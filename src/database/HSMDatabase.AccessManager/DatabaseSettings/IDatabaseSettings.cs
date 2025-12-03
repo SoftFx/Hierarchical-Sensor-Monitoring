@@ -10,6 +10,7 @@ namespace HSMDatabase.AccessManager
 
         public string JournalFolder { get; init; }
 
+        public string ExportFolder  { get; init; }
 
         public string JournalValuesDatabaseName { get; init; }
 
@@ -29,6 +30,8 @@ namespace HSMDatabase.AccessManager
         public string PathToSnaphotsDb => Path.Combine(DatabaseFolder, SnaphotsDatabaseName);
 
         public string PathToJournalDb => Path.Combine(DatabaseFolder, JournalFolder);
+
+        public string PathToExport => Path.Combine(DatabaseFolder, ExportFolder);
 
 
         public string GetPathToJournalValueDatabase(long from, long to) => BuildWeeklyDbName(PathToJournalDb, JournalValuesDatabaseName, from, to);

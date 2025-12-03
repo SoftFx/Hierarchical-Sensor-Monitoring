@@ -12,9 +12,12 @@ using HSMServer.Core.DataLayer;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 
 namespace HSMDatabase.DatabaseWorkCore
@@ -35,6 +38,8 @@ namespace HSMDatabase.DatabaseWorkCore
         public ISnapshotDatabase Snapshots { get; }
 
         public bool IsCompactRunning { get; private set; }
+
+        public bool IsExportRunning { get; private set; }
 
         public long TotalDbSize => _settings.DatabaseFolder.GetSize();
 
@@ -57,6 +62,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public long BackupsSize => _settings.DatabaseBackupsFolder.GetSize();
 
+        public List<ISensorValuesDatabase> SensorValuesDatabases => [.. _sensorValuesDatabases];
+
+        public IDatabaseSettings DatabaseSettings => _settings;
 
         private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
         private delegate IEnumerable<(byte[], byte[])> GetJournalValuesFunc(IJournalValuesDatabase db);
@@ -106,7 +114,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var results = new Dictionary<Guid, (byte[], byte[])>();
 
-            foreach (var db in _sensorValuesDatabases)
+            foreach (var db in _sensorValuesDatabases.OrderBy(x => x.From))
             {
                 results = db.GetLastAndFirstValues(sensorIds, BuildSensorValueKey, results);
             }
@@ -722,6 +730,45 @@ namespace HSMDatabase.DatabaseWorkCore
                 IsCompactRunning = false;
             }
 
+        }
+
+        public void ExportValuesDatabase(string name, Dictionary<string, string> sensors)
+        {
+            if (IsExportRunning)
+                return;
+
+            IsExportRunning = true;
+
+            try
+            {
+                var database = _sensorValuesDatabases.FirstOrDefault(x => x.Name == name);
+
+                if (database == null)
+                    return;
+
+                if(!Directory.Exists(_settings.ExportFolder))
+                    Directory.CreateDirectory(_settings.ExportFolder);
+
+                using (var writer = new StreamWriter(Path.Combine(_settings.ExportFolder, $"{name.Replace("Databases\\","")}.csv")))
+                {
+                    foreach (var (keyByte, valueByte) in database.GetAll())
+                    {
+                        var key = Encoding.UTF8.GetString(keyByte);
+                        var result = key.Split("_");
+                        var ticks = long.Parse(result[1]);
+                        sensors.TryGetValue(result[0], out var path);
+                        writer.WriteLine($"{result[0]},{path},{new DateTime(ticks)},{valueByte.Length},{Encoding.UTF8.GetString(valueByte)}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"An error was occurred while compacting databases: {ex.Message}", ex);
+            }
+            finally
+            {
+                IsExportRunning = false;
+            }
         }
 
         public void Dispose()
