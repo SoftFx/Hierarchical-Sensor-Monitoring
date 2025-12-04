@@ -172,8 +172,18 @@ function saveMetaData(selectedId) {
     });
 }
 
+let currentNodeController = null;
+
 function initSelectedNode(selectedId) {
     console.log('initSelectedNode selectedId=', selectedId);
+
+    //  cancel operations
+    if (currentNodeController) {
+        currentNodeController.abort();
+        console.log('Previous node operations aborted');
+    }
+
+    currentNodeController = new AbortController();
     currentSelectedNodeId = selectedId;
 
     // Show spinner only if selected tree node contains 20 children (nodes/sensors) or it is sensor (doesn't have children)
@@ -190,10 +200,14 @@ function initSelectedNode(selectedId) {
         contenttype: 'application/json',
         cache: false,
         success: function (viewData) {
+            if (currentNodeController.signal.aborted) return;
             $("#nodeDataPanel").removeClass('d-none').html(viewData);
         }
     }).done(function () {
-        initialize();
+        if (currentNodeController.signal.aborted) return;
+
+        initialize(currentNodeController.signal);
+
 
         if (needToActivateListTab) {
             selectNodeInfoTab("list", selectedId);
