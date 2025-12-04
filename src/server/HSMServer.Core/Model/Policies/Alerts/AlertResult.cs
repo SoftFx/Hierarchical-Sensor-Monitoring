@@ -1,6 +1,8 @@
 ﻿using HSMServer.Core.Extensions;
+using HSMServer.Core.TreeStateSnapshot.States;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Text;
 
 namespace HSMServer.Core.Model.Policies
@@ -150,11 +152,40 @@ namespace HSMServer.Core.Model.Policies
                 sb.Append($" ({totalCnt} times)");
 
             if (RetryCount > 0)
-                sb.Append($" #{RetryCount}");
+            {
+                TimeSpan ago = TimeSpan.Zero;
+                if (DateTime.TryParse(LastState.Time, out DateTime time))
+                    ago = DateTime.UtcNow - time;
+
+                sb.Append($" #{RetryCount} {(ago != TimeSpan.Zero ? ($"{(FormatTimeSpan(ago))} ago") : "")}");
+            }
 
             return sb.ToString().Trim();
         }
 
         public override string ToString() => BuildFullComment(LastComment);
+
+
+        public static string FormatTimeSpan(TimeSpan timeSpan)
+        {
+            var sb = new StringBuilder();
+
+            if (timeSpan.Days > 0)
+            {
+                sb.Append($"{timeSpan.Days} day{(timeSpan.Days != 1 ? "s" : "")} ");
+            }
+
+            if (timeSpan.Hours > 0)
+            {
+                sb.Append($"{timeSpan.Hours} hour{(timeSpan.Hours != 1 ? "s" : "")} ");
+            }
+
+            if (timeSpan.Minutes > 0 || sb.Length == 0)
+            {
+                sb.Append($"{timeSpan.Minutes} min{(timeSpan.Minutes != 1 ? "s" : "")}");
+            }
+
+            return sb.ToString().Trim();
+        }
     }
 }

@@ -67,21 +67,16 @@ namespace HSMServer.Core.Model
 
         internal virtual void AddValueBase(T value)
         {
-            if (value.IsTimeout)
-            {
-                if (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime)
-                    _lastTimeout = value;
-            }
-            else
-            {
-                _cache.Enqueue(value);
+            if (value.IsTimeout && (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime))
+                _lastTimeout = value;
 
-                if (_cache.Count > CacheSize)
-                    _cache.TryDequeue(out _);
+            _cache.Enqueue(value);
 
-                if (_lastValue is null || value.Time >= _lastValue.Time)
-                    _lastValue = value;
-            }
+            if (_cache.Count > CacheSize)
+                _cache.TryDequeue(out _);
+
+            if (_lastValue is null || value.Time >= _lastValue.Time)
+                _lastValue = value;
         }
 
         internal override bool TryChangeLastValue(BaseValue value)
