@@ -82,6 +82,9 @@ namespace HSMServer.Core.Model
             if (dbValue.IsTimeout || Policies.TryValidate(dbValue, out _))
                 Storage.AddValue((T)dbValue);
 
+            if (dbValue.IsTimeout)
+                IsExpired = true;
+
             return dbValue;
         }
 

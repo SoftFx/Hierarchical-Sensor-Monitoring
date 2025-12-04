@@ -2068,9 +2068,6 @@ namespace HSMServer.Core.Cache
                         var lastValue = sensor.AddDbValue(lastValueBytes);
 
                         sensor.HistoryPeriod.To = lastValue.Time;
-
-                        if (lastValue.IsTimeout)
-                            sensor.IsExpired = true;
                     }
 
                     if (firstValueBytes is not null)
