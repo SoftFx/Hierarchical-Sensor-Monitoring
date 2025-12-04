@@ -788,7 +788,8 @@ namespace HSMServer.Core.Cache
             int cleared = 0;
             foreach (var sensor in value.Sensors.Values)
             {
-                var from = sensor.HistoryPeriod.From;
+                var from = sensor.HistoryPeriod.From.AddMilliseconds(-1);
+
                 var policy = sensor.Settings.KeepHistory.Value;
 
                 if (policy.TimeIsUp(from))
@@ -817,7 +818,8 @@ namespace HSMServer.Core.Cache
                 return;
             }
 
-            var from = sensor.HistoryPeriod.From;
+            var from = sensor.HistoryPeriod.From.AddMilliseconds(-1);
+
             var to = request.To;
 
             if (from > to)
