@@ -746,19 +746,19 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (database == null)
                     return;
 
-                if(!Directory.Exists(_settings.ExportFolder))
+                var basePath = name.Split('\\');
+
+                if (!Directory.Exists(_settings.ExportFolder))
                     Directory.CreateDirectory(_settings.ExportFolder);
 
-                using (var writer = new StreamWriter(Path.Combine(_settings.ExportFolder, $"{name.Replace("Databases\\","")}.csv")))
+                using var writer = new StreamWriter(Path.Combine(_settings.ExportFolder, $"{basePath[^1]}.csv"));
+                foreach (var (keyByte, valueByte) in database.GetAll())
                 {
-                    foreach (var (keyByte, valueByte) in database.GetAll())
-                    {
-                        var key = Encoding.UTF8.GetString(keyByte);
-                        var result = key.Split("_");
-                        var ticks = long.Parse(result[1]);
-                        sensors.TryGetValue(result[0], out var path);
-                        writer.WriteLine($"{result[0]},{path},{new DateTime(ticks)},{valueByte.Length},{Encoding.UTF8.GetString(valueByte)}");
-                    }
+                    var key = Encoding.UTF8.GetString(keyByte);
+                    var result = key.Split("_");
+                    var ticks = long.Parse(result[1]);
+                    sensors.TryGetValue(result[0], out var path);
+                    writer.WriteLine($"{result[0]},{path},{new DateTime(ticks)},{valueByte.Length},{Encoding.UTF8.GetString(valueByte)}");
                 }
             }
             catch (Exception ex)
