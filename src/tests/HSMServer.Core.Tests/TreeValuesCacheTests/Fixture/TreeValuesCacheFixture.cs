@@ -74,7 +74,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     };
                     var intValue = new IntegerValue()
                     {
-                        Time = DateTime.UtcNow,
+                        Time = DateTime.UtcNow.AddSeconds(-10),
                         Status = SensorStatus.Ok,
                         Comment = "sensorValue1",
                         Value = 12345,
