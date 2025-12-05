@@ -746,7 +746,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 if (database == null)
                     return;
 
-                var basePath = name.Split('\\');
+                var basePath = name.Split(Path.DirectorySeparatorChar);
 
                 if (!Directory.Exists(_settings.ExportFolder))
                     Directory.CreateDirectory(_settings.ExportFolder);
