@@ -73,18 +73,13 @@ namespace HSMDatabase.LevelDB
 
         public void DeleteValueFromTo(byte[] from, byte[] to)
         {
-            Iterator iterator = null;
+            using var iterator = _database.CreateIterator(_iteratorOptions);
 
-            try
+            iterator.Seek(from);
+            while (iterator.IsValid && iterator.Key().IsSmallerOrEquals(to))
             {
-                iterator = _database.CreateIterator(_iteratorOptions);
-
-                for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
-                    _database.Delete(iterator.Key());
-            }
-            finally
-            {
-                iterator?.Dispose();
+                _database.Delete(iterator.Key());
+                iterator.Next();
             }
         }
 

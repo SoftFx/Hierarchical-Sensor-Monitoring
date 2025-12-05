@@ -6,7 +6,7 @@ namespace HSMServer.Core.TreeStateSnapshot
 {
     public sealed class LastSensorState : ILastState<SensorStateEntity>
     {
-        public LastHistoryPeriod History { get; } = new();
+        public LastHistoryPeriod History { get; private set; } = new();
 
         public bool IsExpired { get; set; } //TTL
 
@@ -17,15 +17,15 @@ namespace HSMServer.Core.TreeStateSnapshot
         public void SetLastUpdate(DateTime lastUpdate, bool isExpired = false)
         {
             IsExpired = isExpired;
-            History.To = lastUpdate;
+            History.Update(lastUpdate);
         }
 
 
         public void FromEntity(SensorStateEntity entity)
         {
             IsExpired = entity.IsExpired;
-            History.From = new DateTime(entity.HistoryFrom);
-            History.To = entity.HistoryTo == 0L ? DateTime.MaxValue : new DateTime(entity.HistoryTo);
+
+            History = new LastHistoryPeriod(new DateTime(entity.HistoryFrom), entity.HistoryTo == 0L ? DateTime.MaxValue : new DateTime(entity.HistoryTo));
         }
 
         public SensorStateEntity ToEntity() =>
@@ -43,11 +43,33 @@ namespace HSMServer.Core.TreeStateSnapshot
         private static readonly DateTime _fromDefault = DateTime.MinValue;
         private static readonly DateTime _toDefault = DateTime.MinValue;
 
+        public LastHistoryPeriod()
+        { }
 
-        public DateTime From { get; set; } = _fromDefault;
+        public LastHistoryPeriod(DateTime from, DateTime to)
+        {
+            From = from;
+            To = to;
+        }
 
-        public DateTime To { get; set; } = _toDefault;
+        public DateTime From { get; private set; } = _fromDefault;
+
+        public DateTime To { get; private set; } = _toDefault;
 
         internal bool IsDefault => From == _fromDefault && To == _toDefault;
+
+        public void Update(DateTime time)
+        {
+            if (From == _fromDefault)
+                From = time;
+
+            if (To < time)
+                To = time;
+        }
+
+        public void Cut(DateTime time)
+        {
+            From = time;
+        }
     }
 }
