@@ -788,7 +788,7 @@ namespace HSMServer.Core.Cache
             int cleared = 0;
             foreach (var sensor in value.Sensors.Values)
             {
-                var from = sensor.HistoryPeriod.From.AddMilliseconds(-1);
+                var from = sensor.HistoryPeriod.From;
 
                 var policy = sensor.Settings.KeepHistory.Value;
 
@@ -818,7 +818,7 @@ namespace HSMServer.Core.Cache
                 return;
             }
 
-            var from = sensor.HistoryPeriod.From.AddMilliseconds(-1);
+            var from = sensor.HistoryPeriod.From;
 
             var to = request.To;
 
@@ -850,7 +850,7 @@ namespace HSMServer.Core.Cache
             }
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, to);
-            sensor.HistoryPeriod.From = to;
+            sensor.HistoryPeriod.Cut(to);
 
             SensorUpdateView(sensor);
         }
@@ -2069,13 +2069,13 @@ namespace HSMServer.Core.Cache
                     {
                         var lastValue = sensor.AddDbValue(lastValueBytes);
 
-                        sensor.HistoryPeriod.To = lastValue.Time;
+                        sensor.HistoryPeriod.Update(lastValue.Time);
                     }
 
                     if (firstValueBytes is not null)
                     {
                         var firstValue = sensor.Convert(firstValueBytes);
-                        sensor.HistoryPeriod.From = firstValue.Time;
+                        sensor.HistoryPeriod.Update(firstValue.Time);
                     }
 
                     _logger.Info($"{sensor.Id} {sensor.FullPath} initialized history from {sensor.HistoryPeriod.From} to {sensor.HistoryPeriod.To}, timeout = {sensor.IsExpired}");

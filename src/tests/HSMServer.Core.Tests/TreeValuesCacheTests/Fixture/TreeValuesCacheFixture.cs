@@ -51,7 +51,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     };
                     var boolValue = new BooleanValue()
                     {
-                        Time = DateTime.UtcNow,
+                        Time = DateTime.UtcNow.AddSeconds(-10),
                         Status = SensorStatus.Error,
                         Comment = "sensorValue",
                         Value = true,

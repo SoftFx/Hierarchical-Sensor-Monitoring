@@ -43,12 +43,12 @@ namespace HSMServer.Core
             BaseValue BuildDefault<T>() where T : BaseValue, new()
             {
                 var ttl = sensor.Settings.TTL.Value.Ticks;
-
+                var now = DateTime.UtcNow;
                 return sensor.LastValue with
                 {
                     IsTimeout = true,
-                    Time = DateTime.UtcNow,
-                    ReceivingTime = DateTime.UtcNow,
+                    Time = now,
+                    ReceivingTime = now,
                     AggregatedValuesCount = 1,
                     Comment = $"{TimeoutComment} - {sensor.LastUpdate.ToDefaultFormat()}, TTL = {new TimeSpan(ttl)}"
                 };
