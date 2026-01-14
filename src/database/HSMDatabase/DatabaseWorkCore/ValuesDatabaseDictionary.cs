@@ -64,7 +64,10 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private string[] GetSensorValuesDirectories()
         {
-           return Directory.GetDirectories(_dbSettings.DatabaseFolder, _folderTemplate, SearchOption.TopDirectoryOnly);
+            if (!Directory.Exists(_dbSettings.DatabaseFolder))
+                return [];
+
+            return Directory.GetDirectories(_dbSettings.DatabaseFolder, _folderTemplate, SearchOption.TopDirectoryOnly);
 
         }
 
