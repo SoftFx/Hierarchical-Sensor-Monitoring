@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Extensions;
+using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.ComponentModel.DataAnnotations;

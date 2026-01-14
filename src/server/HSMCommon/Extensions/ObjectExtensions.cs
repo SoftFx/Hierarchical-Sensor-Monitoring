@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using HSMCommon.Model;
+using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 
 namespace HSMCommon.Extensions
@@ -16,5 +17,13 @@ namespace HSMCommon.Extensions
 
             return property.GetCustomAttribute<DisplayAttribute>()?.Name ?? property.Name;
         }
+
+        public static SensorStatus ToStatus(this byte status) => status switch
+        {
+            (byte)SensorStatus.Ok => SensorStatus.Ok,
+            (byte)SensorStatus.OffTime => SensorStatus.OffTime,
+            _ => SensorStatus.Error,
+        };
+
     }
 }

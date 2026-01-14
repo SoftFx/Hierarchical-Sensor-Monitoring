@@ -6,6 +6,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Sensors;
 using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
+using HSMCommon.Model;
 
 
 namespace HSMServer.Model.TreeViewModel

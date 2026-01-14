@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMCommon.Model;
+
 
 namespace HSMServer.Model.History
 {

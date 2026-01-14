@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\database\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
+    <ProjectReference Include="..\..\database\HSMDatabase.LevelDB\HSMDatabase.LevelDB.csproj" />
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
   </ItemGroup>
 

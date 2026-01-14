@@ -458,7 +458,7 @@ namespace HSMServer.Controllers
                 var coreRequest = new SensorAddOrUpdateRequest(info.Product.Id, relatedPath)
                 {
                     Update = apiRequest.Convert(Guid.Empty, info.Key.DisplayName),
-                    Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,
+                    Type = sensorType?.Convert() ?? HSMCommon.Model.SensorType.Boolean,
                 };
 
                 return await _cache.AddOrUpdateSensorAsync(coreRequest);

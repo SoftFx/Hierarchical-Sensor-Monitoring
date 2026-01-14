@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text;
+using HSMCommon.Model;
 
 namespace HSMServer.Core.Model.Policies
 {

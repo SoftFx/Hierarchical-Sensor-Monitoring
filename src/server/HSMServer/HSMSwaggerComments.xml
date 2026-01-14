@@ -174,7 +174,7 @@
             </summary>
             <param name="summary"></param>
         </member>
-        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.ProcessItem(HSMServer.Core.Model.BarBaseValue{`0},HSMServer.Model.History.SummaryBarItem{`0},System.Boolean@)">
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.ProcessItem(HSMCommon.Model.BarBaseValue{`0},HSMServer.Model.History.SummaryBarItem{`0},System.Boolean@)">
             <summary>
             This method applies possible changes to the current data item for fields, for which collecting datas is not required
             </summary>

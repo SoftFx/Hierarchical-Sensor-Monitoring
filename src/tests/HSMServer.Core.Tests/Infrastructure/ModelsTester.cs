@@ -4,16 +4,15 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
-using HSMServer.Core.SensorsUpdatesQueue;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HSMServer.Extensions;
 using Xunit;
-using HSMServer.Core.Model.Requests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.ApiObjectsConverters;
+using HSMCommon.Model;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {

@@ -11,7 +11,7 @@ namespace HSMDatabase.Settings
         private const string DefaultJournalFolder = "Journals";
 
         private const string DefaultEnvironmentDatabaseName = "EnvironmentData";
-        private const string DefaultSensorValuesDatabaseName = "SensorValues";
+        private const string DefaultSensorValuesDatabaseName = "SensorValuesV2";
         private const string DefaultJournalValuesDatabaseName = "JournalValues";
         private const string DefaultServerLayoutDatabaseName = "ServerLayout";
 

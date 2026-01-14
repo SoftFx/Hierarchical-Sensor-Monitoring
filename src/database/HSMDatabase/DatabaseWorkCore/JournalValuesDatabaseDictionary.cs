@@ -34,12 +34,12 @@ internal sealed class JournalValuesDatabaseDictionary : IEnumerable<IJournalValu
     }
 
 
-    internal IJournalValuesDatabase GetNewestDatabases(long time)
+    internal IJournalValuesDatabase GetDatabaseByTime(long time)
     {
         if (_lastDb == null || _lastDb.To < time)
         {
-            var from = DateTimeMethods.GetMinDateTimeTicks(time);
-            var to = DateTimeMethods.GetMaxDateTimeTicks(time);
+            var from = DateTimeMethods.GetStartOfWeekTicks(time);
+            var to = DateTimeMethods.GetEndOfWeekTicks(time);
 
             return AddNewDb(_dbSettings.GetPathToJournalValueDatabase(from, to), from, to);
         }

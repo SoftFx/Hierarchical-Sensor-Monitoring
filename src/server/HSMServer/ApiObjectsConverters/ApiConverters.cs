@@ -15,8 +15,8 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Services;
 using ApiSensorStatus = HSMSensorDataObjects.SensorStatus;
 using HSMDataCollector.DefaultSensors;
-using HSMServer.DTOs;
-using RateDisplayUnit = HSMServer.Core.Model.RateDisplayUnit;
+using RateDisplayUnit = HSMCommon.Model.RateDisplayUnit;
+using HSMCommon.Model;
 
 
 namespace HSMServer.ApiObjectsConverters

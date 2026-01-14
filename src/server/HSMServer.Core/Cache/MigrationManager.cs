@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Cache.UpdateEntities;
+﻿using HSMCommon.Model;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;

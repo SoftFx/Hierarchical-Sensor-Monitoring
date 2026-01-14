@@ -1,5 +1,5 @@
 ﻿using HSMCommon.Extensions;
-using HSMServer.Core.Model;
+using HSMCommon.Model;
 using HSMServer.Model.TreeViewModel;
 using System.Collections.Generic;
 using System.Linq;

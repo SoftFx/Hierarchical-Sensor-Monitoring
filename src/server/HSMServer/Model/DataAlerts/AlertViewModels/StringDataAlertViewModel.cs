@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMCommon.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Model.TreeViewModel;
 

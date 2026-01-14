@@ -10,7 +10,7 @@ namespace HSMDatabase.LevelDB
 
         public static ISensorValuesDatabase GetSensorValuesDatabaseInstance(string name, long from, long to) =>
             new SensorValuesDatabaseWorker(name, from, to);
-        
+
         public static IJournalValuesDatabase GetJournalValuesDatabaseInstance(string name, long from, long to) =>
             new JournalValuesDatabaseWorker(name, from, to);
 

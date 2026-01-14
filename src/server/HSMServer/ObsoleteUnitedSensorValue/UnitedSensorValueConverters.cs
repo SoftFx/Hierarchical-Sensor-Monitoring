@@ -1,6 +1,6 @@
-﻿using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Text.Json;
+using HSMCommon.Model;
 using ApiSensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMServer.ObsoleteUnitedSensorValue

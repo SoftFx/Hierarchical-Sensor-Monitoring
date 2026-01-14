@@ -35,6 +35,7 @@ using Microsoft.AspNetCore.Mvc;
 using HSMServer.DTOs.Sensors;
 using TimeInterval = HSMServer.Model.TimeInterval;
 using HSMServer.Core.DataLayer;
+using HSMCommon.Model;
 
 
 namespace HSMServer.Controllers
@@ -898,7 +899,7 @@ namespace HSMServer.Controllers
             if (_database.IsExportRunning)
                 return Json(JsonSerializer.Serialize(new { Status = "Error", Error = "Export already running" }));
 
-            _database.ExportValuesDatabase(name, _treeValuesCache.GetSensors().ToDictionary(x => x.Id.ToString(), x => x.FullPath));
+            _database.ExportValuesDatabase(name, _treeValuesCache.GetSensors().ToDictionary(x => x.Id, x => x.FullPath));
 
             return Json(JsonSerializer.Serialize(new { Status = "Ok" }));
         }

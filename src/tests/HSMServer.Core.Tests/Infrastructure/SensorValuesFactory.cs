@@ -1,5 +1,5 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
-using HSMServer.Core.Model;
+﻿using HSMCommon.Model;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
 
@@ -24,20 +24,20 @@ namespace HSMServer.Core.Tests.Infrastructure
                 _ => null,
             };
 
-        internal static SensorValueBase BuildSensorValue(SensorType sensorType, string path) =>
+        internal static SensorValueBase BuildSensorValue(SensorType sensorType, string path, DateTime time) =>
             sensorType switch
             {
-                SensorType.Boolean => BuildBooleanSensorValue(path),
-                SensorType.Integer => BuildIntegerSensorValue(path),
-                SensorType.Double => BuildDoubleSensorValue(path),
-                SensorType.Rate => BuildRateSensorValue(path),
-                SensorType.String => BuildStringSensorValue(path),
-                SensorType.IntegerBar => BuildIntegerBarSensorValue(path),
-                SensorType.DoubleBar => BuildDoubleBarSensorValue(path),
-                SensorType.File => BuildFileSensorValue(path),
-                SensorType.TimeSpan => BuildTimeSpanSensorValue(path),
-                SensorType.Version => BuildVersionSensorValue(path),
-                SensorType.Enum => BuildEnumSensorValue(path),
+                SensorType.Boolean => BuildBooleanSensorValue(path, time),
+                SensorType.Integer => BuildIntegerSensorValue(path, time),
+                SensorType.Double => BuildDoubleSensorValue(path, time),
+                SensorType.Rate => BuildRateSensorValue(path, time),
+                SensorType.String => BuildStringSensorValue(path, time),
+                SensorType.IntegerBar => BuildIntegerBarSensorValue(path, time),
+                SensorType.DoubleBar => BuildDoubleBarSensorValue(path, time),
+                SensorType.File => BuildFileSensorValue(path, time),
+                SensorType.TimeSpan => BuildTimeSpanSensorValue(path, time),
+                SensorType.Version => BuildVersionSensorValue(path, time),
+                SensorType.Enum => BuildEnumSensorValue(path, time),
                 _ => null,
             };
 
@@ -50,11 +50,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Value = RandomGenerator.GetRandomBool(),
             };
 
-        internal static BoolSensorValue BuildBooleanSensorValue(string path) =>
+        internal static BoolSensorValue BuildBooleanSensorValue(string path, DateTime time) =>
             new()
             {
-                Comment = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow,
+                Comment = time.Microsecond.ToString(),
+                Time = time,
                 Status = HSMSensorDataObjects.SensorStatus.Ok,
                 Value = RandomGenerator.GetRandomBool(),
                 Path = path,
@@ -69,11 +69,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Value = RandomGenerator.GetRandomInt(),
             };
 
-        internal static IntSensorValue BuildIntegerSensorValue(string path) =>
+        internal static IntSensorValue BuildIntegerSensorValue(string path, DateTime time) =>
             new()
             {
                 Comment = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow,
+                Time = time,
                 Status = HSMSensorDataObjects.SensorStatus.Ok,
                 Value = RandomGenerator.GetRandomInt(),
                 Path = path,
@@ -88,11 +88,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Value = RandomGenerator.GetRandomDouble(),
             };
 
-        internal static DoubleSensorValue BuildDoubleSensorValue(string path) =>
+        internal static DoubleSensorValue BuildDoubleSensorValue(string path, DateTime time) =>
             new()
             {
                 Comment = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow,
+                Time = time,
                 Status = HSMSensorDataObjects.SensorStatus.Ok,
                 Value = RandomGenerator.GetRandomDouble(),
                 Path = path
@@ -107,11 +107,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Value = RandomGenerator.GetRandomDouble(),
             };
 
-        internal static RateSensorValue BuildRateSensorValue(string path) =>
+        internal static RateSensorValue BuildRateSensorValue(string path, DateTime time) =>
             new()
             {
                 Comment = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow,
+                Time = time,
                 Status = HSMSensorDataObjects.SensorStatus.Ok,
                 Value = RandomGenerator.GetRandomDouble(),
                 Path = path
@@ -126,11 +126,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Value = RandomGenerator.GetRandomString(),
             };
 
-        internal static StringSensorValue BuildStringSensorValue(string path) =>
+        internal static StringSensorValue BuildStringSensorValue(string path, DateTime time) =>
             new()
             {
                 Comment = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow,
+                Time = time,
                 Status = HSMSensorDataObjects.SensorStatus.Ok,
                 Value = RandomGenerator.GetRandomString(),
                 Path = path
@@ -145,11 +145,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Value = RandomGenerator.GetRandomTimeSpan(),
             };
 
-        internal static TimeSpanSensorValue BuildTimeSpanSensorValue(string path) =>
+        internal static TimeSpanSensorValue BuildTimeSpanSensorValue(string path, DateTime time) =>
             new()
             {
                 Comment = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow,
+                Time = time,
                 Status = HSMSensorDataObjects.SensorStatus.Ok,
                 Value = RandomGenerator.GetRandomTimeSpan(),
                 Path = path
@@ -164,11 +164,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Value = new Version(RandomGenerator.GetRandomInt(positive: true), RandomGenerator.GetRandomInt(positive: true)),
             };
 
-        internal static VersionSensorValue BuildVersionSensorValue(string path) =>
+        internal static VersionSensorValue BuildVersionSensorValue(string path, DateTime time) =>
             new()
             {
                 Comment = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow,
+                Time = time,
                 Status = HSMSensorDataObjects.SensorStatus.Ok,
                 Value = new Version(RandomGenerator.GetRandomInt(positive: true), RandomGenerator.GetRandomInt(positive: true)),
                 Path = path
@@ -190,11 +190,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 LastValue = RandomGenerator.GetRandomInt(),
             };
 
-        internal static IntBarSensorValue BuildIntegerBarSensorValue(string path) =>
+        internal static IntBarSensorValue BuildIntegerBarSensorValue(string path, DateTime time) =>
             new()
             {
                 Comment = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow,
+                Time = time,
                 Status = HSMSensorDataObjects.SensorStatus.Ok,
                 Count = RandomGenerator.GetRandomInt(positive: true),
                 OpenTime = DateTime.UtcNow.AddSeconds(-10),
@@ -223,11 +223,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 LastValue = RandomGenerator.GetRandomDouble(),
             };
 
-        internal static DoubleBarSensorValue BuildDoubleBarSensorValue(string path) =>
+        internal static DoubleBarSensorValue BuildDoubleBarSensorValue(string path, DateTime time) =>
             new()
             {
                 Comment = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow,
+                Time = time,
                 Status = HSMSensorDataObjects.SensorStatus.Ok,
                 Count = RandomGenerator.GetRandomInt(positive: true),
                 OpenTime = DateTime.UtcNow.AddSeconds(-10),
@@ -256,14 +256,14 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
         }
 
-        internal static FileSensorValue BuildFileSensorValue(string path)
+        internal static FileSensorValue BuildFileSensorValue(string path, DateTime time)
         {
             var fileContent = RandomGenerator.GetRandomBytes();
 
             return new()
             {
                 Comment = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow,
+                Time = time,
                 Status = HSMSensorDataObjects.SensorStatus.Ok,
                 Value = [.. fileContent],
                 Extension = RandomGenerator.GetRandomString(3),
@@ -281,11 +281,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Value = RandomGenerator.GetRandomInt(),
             };
 
-        internal static EnumSensorValue BuildEnumSensorValue(string path) =>
+        internal static EnumSensorValue BuildEnumSensorValue(string path, DateTime time) =>
             new()
             {
                 Comment = RandomGenerator.GetRandomString(),
-                Time = DateTime.UtcNow,
+                Time = time,
                 Status = HSMSensorDataObjects.SensorStatus.Ok,
                 Value = RandomGenerator.GetRandomInt(),
                 Path = path

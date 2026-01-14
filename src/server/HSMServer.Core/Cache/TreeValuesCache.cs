@@ -1,9 +1,8 @@
-﻿using AngleSharp.Dom;
-using HSMCommon.Collections;
+﻿using HSMCommon.Collections;
 using HSMCommon.Extensions;
+using HSMCommon.Model;
 using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMDataCollector.DefaultSensors;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.ApiObjectsConverters;
@@ -23,17 +22,16 @@ using HSMServer.Core.Threading;
 using HSMServer.Core.TreeStateSnapshot;
 using HSMServer.PathTemplates;
 using NLog;
+using NLog.Web.Enums;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-using SensorType = HSMServer.Core.Model.SensorType;
-
+using SensorType = HSMCommon.Model.SensorType;
 
 
 namespace HSMServer.Core.Cache
@@ -730,7 +728,7 @@ namespace HSMServer.Core.Cache
 
                 _logger.Info($"Sensor removed: Id = {sensor.Id}, Name = {sensor.DisplayName}, Path = {sensor.Path}, ProductId = {sensor.Root?.Id}, ProductName = {sensor.RootProductName}, LastUpdate = {sensor.LastUpdate}, Created = {sensor.CreationDate}, Settings = {sensor.Settings.SelfDestroy}, Initiator = {initiator}");
 
-                _database.RemoveSensorWithMetadata(sensorId.ToString());
+                _database.RemoveSensorWithMetadata(sensorId);
 
                 ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
             }
@@ -794,8 +792,13 @@ namespace HSMServer.Core.Cache
 
                 if (policy.TimeIsUp(from))
                 {
+                    _logger.Info($"Clearing history [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
                     ClearSensorHistory(new(sensor.Id, policy.GetShiftedTime(DateTime.UtcNow, -1)));
                     cleared++;
+                }
+                else
+                {
+                    _logger.Info($"Skipped [{sensor.Id}][{sensor.FullPath}] {policy} : {from}");
                 }
             }
 
@@ -837,10 +840,10 @@ namespace HSMServer.Core.Cache
             {
                 if (IsBorderedValue(sensor, from.Ticks - 1, out var latestFrom) && from <= latestFrom.LastUpdateTime &&
                     latestFrom.LastUpdateTime <= to)
-                    from = latestFrom.ReceivingTime;
+                    from = latestFrom.Time;
 
                 if (IsBorderedValue(sensor, to.Ticks, out var latestTo))
-                    to = latestTo.ReceivingTime.AddTicks(-1);
+                    to = latestTo.Time.AddTicks(-1);
 
                 if (from > to)
                 {
@@ -849,7 +852,7 @@ namespace HSMServer.Core.Cache
                 }
             }
 
-            _database.ClearSensorValues(sensor.Id.ToString(), from, to);
+            _database.ClearSensorValues(sensor.Id, from, to);
             sensor.HistoryPeriod.Cut(to);
 
             SensorUpdateView(sensor);
@@ -865,7 +868,7 @@ namespace HSMServer.Core.Cache
             {
                 latest = sensor.Convert(bytes);
 
-                return latest.ReceivingTime.Ticks <= pointTicks && pointTicks <= latest.LastUpdateTime.Ticks;
+                return latest.Time.Ticks <= pointTicks && pointTicks <= latest.LastUpdateTime.Ticks;
             }
 
             return false;
@@ -908,8 +911,6 @@ namespace HSMServer.Core.Cache
 
         public void SendAlertMessage(AlertMessage message)
         {
-            _logger.Info($"TSend: SendAlertMessage enter");
-            
             if (message.IsEmpty)
                 return;
 
@@ -1021,7 +1022,7 @@ namespace HSMServer.Core.Cache
 
                 if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) &&
                     (includeTtl || IsNotTimout(latest)))
-                    from = latest.ReceivingTime;
+                    from = latest.Time;
 
                 var result = new List<BaseValue>(_database.SensorValuesPageCount);
                 var totalCount = 0;
@@ -1074,7 +1075,7 @@ namespace HSMServer.Core.Cache
 
                 if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) &&
                     (includeTtl || IsNotTimout(latest)))
-                    from = latest.ReceivingTime;
+                    from = latest.Time;
 
                 await foreach (var page in _database.GetSensorValuesPage(sensor.Id, from, to, count))
                 {
@@ -1600,7 +1601,7 @@ namespace HSMServer.Core.Cache
                 return true;
 
             if (sensor.TryAddValue(request.BaseValue) && sensor.LastDbValue != null)
-                SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
+               SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
             SensorUpdateViewAndNotify(sensor);
 
@@ -1610,7 +1611,7 @@ namespace HSMServer.Core.Cache
 
         private void SaveSensorValueToDb(BaseValue value, Guid sensorId, bool ignoreSnapshot = false)
         {
-            _database.AddSensorValue(value.ToEntity(sensorId));
+            _database.AddSensorValue(sensorId, value);
         }
 
         private void NotifyAboutProductChange(ProductModel product)
@@ -1793,7 +1794,7 @@ namespace HSMServer.Core.Cache
                                      $" parentExists={_tree.ContainsKey(productId)}," +
                                      $" REMOVE WILL BE APPLIED");
 
-                        _database.RemoveSensorWithMetadata(entity.Id);
+                        _database.RemoveSensorWithMetadata(Guid.Parse(entity.Id));
 
                         ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
                     }
@@ -1806,6 +1807,8 @@ namespace HSMServer.Core.Cache
 
             _logger.Info("Sensors are applied");
 
+            MigrateDatabseV2();
+
             _logger.Info($"{nameof(FillSensorsData)} is started");
             FillSensorsData();
             _logger.Info($"{nameof(FillSensorsData)} is finished");
@@ -1814,6 +1817,34 @@ namespace HSMServer.Core.Cache
             foreach (var sensor in _sensorsById.Values)
                 sensor.Policies.TimeToLive.InitLastTtlTime(sensor.CheckTimeout());
             _logger.Info($"Set initial sensor state is finished");
+        }
+
+
+        public IEnumerable<(byte[], byte[])> GetAll()
+        {
+            return _database.GetAll();
+        }
+
+        private void MigrateDatabseV2()
+        {
+            foreach ((byte[] key, byte[] value) in _database.MigrateDatabaseV2())
+            {
+                var keyArr = Encoding.UTF8.GetString(key).Split("_");
+                var sensorId = Guid.Parse(keyArr[0]);
+
+                var sensor = GetSensor(sensorId);
+                if (sensor != null)
+                {
+                    var policy = sensor.Settings.KeepHistory.Value;
+
+                    var val = sensor.ConvertFromJson(Encoding.UTF8.GetString(value));
+
+                    if (!policy.TimeIsUp(val.Time))
+                    {
+                        _database.AddSensorValue(sensorId, val);
+                    }
+                }
+            }
         }
 
         private void ApplyAccessKeys(List<AccessKeyEntity> entities)

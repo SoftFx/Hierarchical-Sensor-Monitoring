@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Model;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Model.Policies
 {

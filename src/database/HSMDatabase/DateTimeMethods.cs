@@ -2,30 +2,24 @@
 
 namespace HSMDatabase
 {
-    internal static class DateTimeMethods
+    public static class DateTimeMethods
     {
-        public static DateTime GetMaxDateTime(DateTime dateTime) =>
-            GetMaxDateTimeFromMinDateTime(GetMinDateTime(dateTime));
-
-        public static DateTime GetMinDateTime(DateTime dateTime)
+        public static DateTime GetStartOfWeek(DateTime dateTime)
         {
-            int daysDiff = (7 + ((int)dateTime.DayOfWeek - (int)DayOfWeek.Monday)) % 7;
-            var result = dateTime.AddDays(-daysDiff)
-                                 .AddHours(-dateTime.Hour)
-                                 .AddMinutes(-dateTime.Minute)
-                                 .AddSeconds(-dateTime.Second)
-                                 .AddMilliseconds(-dateTime.Millisecond);
+            int diff = dateTime.DayOfWeek - DayOfWeek.Monday;
+            if (diff < 0) diff += 7;
 
-            return result;
+            return dateTime.AddDays(-diff).Date;
         }
 
-        public static long GetMaxDateTimeTicks(long ticks) =>
-            GetMaxDateTime(new DateTime(ticks)).Ticks;
+        public static DateTime GetEndOfWeek(DateTime dateTime) =>
+            GetStartOfWeek(dateTime).AddDays(7);
 
-        public static long GetMinDateTimeTicks(long ticks) =>
-            GetMinDateTime(new DateTime(ticks)).Ticks;
+        public static long GetStartOfWeekTicks(long ticks) =>
+            GetStartOfWeek(new DateTime(ticks)).Ticks;
 
-        private static DateTime GetMaxDateTimeFromMinDateTime(DateTime minDateTime) =>
-            minDateTime.AddDays(7);
+        public static long GetEndOfWeekTicks(long ticks) =>
+            GetEndOfWeek(new DateTime(ticks)).Ticks;
+
     }
 }

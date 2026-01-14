@@ -35,7 +35,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public void Dispose() => _openedDb.Dispose();
 
 
-        public bool IsInclude(long time) => From <= time && time <= To;
+        public bool IsInclude(long time) => From <= time && time < To;
 
         public bool IsInclude(long from, long to) => From <= to && To >= from;
         

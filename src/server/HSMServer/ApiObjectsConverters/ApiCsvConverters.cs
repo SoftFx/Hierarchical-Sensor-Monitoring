@@ -1,13 +1,14 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
-using HSMServer.Core.Extensions;
-using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HSMCommon.Model;
+using HSMSensorDataObjects.SensorValueRequests;
+using HSMServer.Core.Extensions;
+
 
 namespace HSMServer.ApiObjectsConverters
 {

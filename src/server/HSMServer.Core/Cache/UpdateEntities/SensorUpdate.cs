@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMCommon.Model;
 using HSMCommon.TaskResult;
 using HSMSensorDataObjects;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TableOfChanges;
-using SensorStatus = HSMServer.Core.Model.SensorStatus;
+using SensorStatus = HSMCommon.Model.SensorStatus;
 
 
 namespace HSMServer.Core.Cache.UpdateEntities

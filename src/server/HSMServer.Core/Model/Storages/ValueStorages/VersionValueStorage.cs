@@ -1,3 +1,6 @@
+using HSMCommon.Model;
+
+
 namespace HSMServer.Core.Model;
 
 public class VersionValueStorage : ValuesStorage<VersionValue>

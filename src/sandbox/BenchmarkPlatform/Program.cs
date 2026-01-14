@@ -1,5 +1,5 @@
 ﻿using BenchmarkDotNet.Running;
-using TestLevelDB;
+using PerformanceBenchmarks;
 
 namespace BenchmarkPlatform
 {
@@ -7,10 +7,11 @@ namespace BenchmarkPlatform
     {
         static void Main(string[] args)
         {
-            //var b = new SyncQueuePerformanceTest();
-            //await b.SyncQueue();
-            //BenchmarkRunner.Run<SyncQueuePerformanceTest>();
-            BenchmarkRunner.Run<ByteKeyConverters>();
+            // BenchmarkRunner.Run<SerializationSpeedBenchmarks>();
+            var test = new SerializationSpeedBenchmarks();
+            test.DataSize = 1000;
+            test.Setup();
+            test.Cleanup();
         }
     }
 }

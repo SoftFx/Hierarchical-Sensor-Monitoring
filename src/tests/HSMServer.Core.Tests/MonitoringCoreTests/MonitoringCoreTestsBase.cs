@@ -35,13 +35,14 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             dbRegisterFixture.RegisterDatabase(_databaseCoreManager);
 
-            fixture.InitializeDatabase(_databaseCoreManager.DatabaseCore);
-
             var snaphot = new Mock<ITreeStateSnapshot>();
 
             snaphot.Setup(a => a.Keys).Returns(new StateCollection<LastKeyState, LastKeyStateEntity>());
 
             _journalService = new JournalService(_databaseCoreManager.DatabaseCore);
+
+            fixture.InitializeDatabase(_databaseCoreManager.DatabaseCore);
+
             _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, snaphot.Object, _journalService);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();

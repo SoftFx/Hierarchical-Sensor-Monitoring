@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Model;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
@@ -149,6 +150,8 @@ namespace HSMServer.Core.Model
         internal abstract IEnumerable<BaseValue> Convert(List<byte[]> valuesBytes);
 
         internal abstract BaseValue Convert(byte[] bytes);
+
+        internal abstract BaseValue ConvertFromJson(string data);
 
 
         internal bool TryUpdate(SensorUpdate update, out string error)

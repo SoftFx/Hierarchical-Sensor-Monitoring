@@ -1,9 +1,9 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Model;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -15,7 +15,6 @@ using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
@@ -439,7 +438,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             const string subSubProductName = "new_subSubProduct";
             const string sensorName = "new_sensor";
             const string productPath = $"{subProductName}/{subSubProductName}/{sensorName}";
-            var storeInfo = SensorValuesFactory.BuildSensorValue(type, productPath);
+            var storeInfo = SensorValuesFactory.BuildSensorValue(type, productPath, DateTime.UtcNow);
 
             _valuesCache.ChangeProductEvent += ChangeProductEventHandler;
             _valuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
@@ -511,13 +510,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var product = _valuesCache.GetProduct(productId);
 
-            var storeInfo = SensorValuesFactory.BuildSensorValue(type, sensorName);
+            var storeInfo = SensorValuesFactory.BuildSensorValue(type, sensorName, DateTime.UtcNow);
             await _valuesCache.AddSensorValueAsync(accessKey, TestProductsManager.ProductId, storeInfo);
             var sensorWithFirstValue = GetClonedSensorModel(GetSensorByNameFromCache(sensorName));
 
             _valuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
 
-            storeInfo = SensorValuesFactory.BuildSensorValue(type, sensorName);
+            storeInfo = SensorValuesFactory.BuildSensorValue(type, sensorName, DateTime.UtcNow);
             await _valuesCache.AddSensorValueAsync(accessKey, TestProductsManager.ProductId, storeInfo);
 
             _valuesCache.ChangeSensorEvent -= ChangeSensorEventHandler;

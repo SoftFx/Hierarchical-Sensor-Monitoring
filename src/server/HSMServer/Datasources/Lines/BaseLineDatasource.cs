@@ -1,7 +1,9 @@
-﻿using HSMServer.Core.Model;
+﻿using System;
+using HSMCommon.Model;
+using HSMServer.Core.Model;
 using HSMServer.Dashboards;
 using HSMServer.Datasources.Aggregators;
-using System;
+
 
 namespace HSMServer.Datasources.Lines
 {

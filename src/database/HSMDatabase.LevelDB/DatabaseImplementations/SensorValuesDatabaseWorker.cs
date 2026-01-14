@@ -1,21 +1,15 @@
-﻿using HSMDatabase.AccessManager;
-using HSMDatabase.LevelDB.Extensions;
-using NLog;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using NLog;
+using HSMDatabase.AccessManager;
+using HSMDatabase.LevelDB.Extensions;
+
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal sealed class SensorValuesDatabaseWorker : ISensorValuesDatabase
     {
-        private static readonly JsonSerializerOptions _options = new()
-        {
-            IgnoreReadOnlyProperties = true,
-            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
-        };
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly LevelDBDatabaseAdapter _openedDb;
@@ -41,7 +35,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public void Dispose() => _openedDb.Dispose();
 
 
-        public bool IsInclude(long time) => From <= time && time <= To;
+        public bool IsInclude(long time) => From <= time && time < To;
 
         public bool IsInclude(long from, long to) => From <= to && To >= from;
 
@@ -58,12 +52,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void PutSensorValue(byte[] key, object value)
+        public void PutSensorValue(byte[] key, byte[] value)
         {
             try
             {
-                var valueBytes = JsonSerializer.SerializeToUtf8Bytes(value, _options);
-                _openedDb.Put(key, valueBytes);
+                _openedDb.Put(key, value);
             }
             catch (Exception e)
             {
@@ -111,11 +104,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds, Func<Guid, long, byte[]> createKeyFunc, Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null)
+        public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds,Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null)
         {
             try
             {
-                return _openedDb.GetLastAndFirstValues(sensorIds, createKeyFunc, results);
+                return _openedDb.GetLastAndFirstValues(sensorIds, results);
             }
             catch (Exception e)
             {

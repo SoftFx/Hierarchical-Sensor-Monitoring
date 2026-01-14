@@ -2,11 +2,11 @@
 using System.Linq;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
-using HSMServer.Core.Model;
 using HSMServer.Core.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Core.Model.Sensors;
 using ColorExtensions = HSMServer.Extensions.ColorExtensions;
+using HSMCommon.Model;
 
 
 namespace HSMServer.Model.History

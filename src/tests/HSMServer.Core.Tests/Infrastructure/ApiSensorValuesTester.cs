@@ -1,7 +1,7 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
-using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Numerics;
+using HSMCommon.Model;
+using HSMSensorDataObjects.SensorValueRequests;
 using Xunit;
 using SensorType = HSMSensorDataObjects.SensorType;
 
@@ -74,17 +74,17 @@ namespace HSMServer.Core.Tests.Infrastructure
         }
 
 
-        private static Model.SensorType Convert(this SensorType type) =>
+        private static HSMCommon.Model.SensorType Convert(this SensorType type) =>
             type switch
             {
-                SensorType.BooleanSensor => Model.SensorType.Boolean,
-                SensorType.IntSensor => Model.SensorType.Integer,
-                SensorType.DoubleSensor => Model.SensorType.Double,
-                SensorType.StringSensor => Model.SensorType.String,
-                SensorType.FileSensor => Model.SensorType.File,
-                SensorType.IntegerBarSensor => Model.SensorType.IntegerBar,
-                SensorType.DoubleBarSensor => Model.SensorType.DoubleBar,
-                SensorType.RateSensor => Model.SensorType.Rate,
+                SensorType.BooleanSensor => HSMCommon.Model.SensorType.Boolean,
+                SensorType.IntSensor => HSMCommon.Model.SensorType.Integer,
+                SensorType.DoubleSensor => HSMCommon.Model.SensorType.Double,
+                SensorType.StringSensor => HSMCommon.Model.SensorType.String,
+                SensorType.FileSensor => HSMCommon.Model.SensorType.File,
+                SensorType.IntegerBarSensor => HSMCommon.Model.SensorType.IntegerBar,
+                SensorType.DoubleBarSensor => HSMCommon.Model.SensorType.DoubleBar,
+                SensorType.RateSensor => HSMCommon.Model.SensorType.Rate,
                 _ => throw new NotImplementedException(),
             };
 

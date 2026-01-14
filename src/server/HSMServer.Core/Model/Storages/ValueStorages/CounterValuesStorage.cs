@@ -1,4 +1,7 @@
-﻿namespace HSMServer.Core.Model.Storages.ValueStorages
+﻿using HSMCommon.Model;
+
+
+namespace HSMServer.Core.Model.Storages.ValueStorages
 {
     internal sealed class RateValuesStorage : ValuesStorage<RateValue>
     {
