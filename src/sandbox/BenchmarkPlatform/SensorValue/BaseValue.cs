@@ -1,8 +1,9 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using MemoryPack;
+using System;
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
-using HSMDatabase.AccessManager.DatabaseEntities;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
 {
@@ -50,7 +51,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract record BaseValue
+    public abstract partial record BaseValue
     {
         private DateTime _time;
 
@@ -120,13 +121,12 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract record BaseInstantValue : BaseValue
+    public abstract partial record BaseInstantValue : BaseValue
     {
         public double? EmaValue { get; init; }
     }
 
-
-    public abstract record BaseValue<T> : BaseInstantValue
+    public abstract partial record BaseValue<T> : BaseInstantValue
     {
         public T Value { get; init; }
 

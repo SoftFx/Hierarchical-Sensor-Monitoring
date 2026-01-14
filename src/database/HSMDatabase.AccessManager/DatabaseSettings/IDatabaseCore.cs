@@ -1,4 +1,5 @@
-﻿using HSMCommon.TaskResult;
+﻿using HSMCommon.Model;
+using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.DatabaseSettings;
@@ -69,10 +70,10 @@ namespace HSMServer.Core.DataLayer
 
         void AddSensor(SensorEntity entity);
         void UpdateSensor(SensorEntity entity);
-        void RemoveSensorWithMetadata(string sensorId);
+        void RemoveSensorWithMetadata(Guid sensorId);
 
-        void AddSensorValue(SensorValueEntity valueEntity);
-        void ClearSensorValues(string sensorId, DateTime from, DateTime to);
+        void AddSensorValue(Guid sensorId, BaseValue value);
+        void ClearSensorValues(Guid sensorId, DateTime from, DateTime to);
 
         byte[] GetLatestValue(Guid sensorId, long to);
 
@@ -86,9 +87,12 @@ namespace HSMServer.Core.DataLayer
 
         List<SensorEntity> GetAllSensors();
 
-        void ExportValuesDatabase(string databaseName, Dictionary<string, string> sensors);
+        void ExportValuesDatabase(string databaseName, Dictionary<Guid, string> sensors);
 
         (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId);
+
+
+        IEnumerable<(byte[], byte[])> MigrateDatabaseV2();
 
         #endregion
 
@@ -137,6 +141,9 @@ namespace HSMServer.Core.DataLayer
         #endregion
 
         void Compact();
+
+
+        IEnumerable<(byte[], byte[])> GetAll();
 
     }
 }

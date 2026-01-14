@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using HSMCommon.Model;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
-using HSMServer.Folders;
-using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
-using Microsoft.AspNetCore.Mvc.Rendering;
+
 
 
 namespace HSMServer.Model.DataAlertTemplates

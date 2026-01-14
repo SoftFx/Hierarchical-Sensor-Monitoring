@@ -1,5 +1,7 @@
-﻿using HSMServer.Core.Extensions;
-using System.Numerics;
+﻿using System.Numerics;
+using HSMCommon.Model;
+using HSMServer.Core.Extensions;
+
 
 namespace HSMServer.Core.Model.Storages
 {

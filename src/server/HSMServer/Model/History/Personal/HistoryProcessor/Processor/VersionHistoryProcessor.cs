@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using HSMCommon.Model;
 using HSMServer.Controllers;
 using HSMServer.Core.Model;
 using HSMServer.Dashboards;

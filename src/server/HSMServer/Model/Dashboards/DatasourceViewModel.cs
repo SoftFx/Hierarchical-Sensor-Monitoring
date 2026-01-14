@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Extensions;
+using HSMCommon.Model;
 using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Dashboards;

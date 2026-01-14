@@ -6,12 +6,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BenchmarkDotNet" Version="0.13.1" />
-    <PackageReference Include="BenchmarkDotNet.Annotations" Version="0.13.1" />
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+    <PackageReference Include="BenchmarkDotNet.Annotations" Version="0.15.8" />
+    <PackageReference Include="MemoryPack" Version="1.21.4" />
+    <PackageReference Include="MessagePack" Version="3.1.4" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\database\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
+    <Reference Include="HSMCommon">
+      <HintPath>..\..\database\HSMDatabase.AccessManager\bin\Release\net8.0\HSMCommon.dll</HintPath>
+    </Reference>
+    <Reference Include="HSMDatabase.AccessManager">
+      <HintPath>..\..\database\HSMDatabase.AccessManager\bin\Release\net8.0\HSMDatabase.AccessManager.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

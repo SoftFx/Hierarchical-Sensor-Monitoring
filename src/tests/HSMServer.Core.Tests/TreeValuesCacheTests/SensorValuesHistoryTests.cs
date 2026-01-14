@@ -10,9 +10,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using HSMServer.Extensions;
 using Xunit;
-using System.Threading;
-using HSMServer.Core.Model.Requests;
 using HSMServer.Core.ApiObjectsConverters;
+using HSMCommon.Model;
+using HSMDatabase.AccessManager;
+
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
 {
@@ -73,8 +74,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var sensors = await AddAndGetSensorsWithAllSensorValues(sensorsCount, sensorValuesCount, type);
 
-            var from = DateTime.UtcNow.AddMilliseconds(-100);
-            var to = DateTime.UtcNow.AddMilliseconds(-50);
+            var now = DateTime.UtcNow;
+            var from = now.AddMilliseconds(10);
+            var to = now.AddMilliseconds(100);
 
             foreach (var (sensor, sensorValues) in sensors)
             {
@@ -120,6 +122,17 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
                 var actualValues = await _valuesCache.GetSensorValuesPage(sensor.Id, from, to, MaxHistoryCount).Flatten();
 
+                var all = _valuesCache.GetAll();
+                var actual = new List<BaseValue>(expectedValues.Count);
+                var sens = _valuesCache.GetSensor(sensor.Id);
+                foreach ((byte[] keyBytes, byte[] valueBytes) in all)
+                {
+                    var key = DbKey.FromBytes(keyBytes);
+
+                    if (key.SensorId == sensor.Id)
+                        actual.Add(sens.Convert(valueBytes));
+                }
+
                 Assert.Equal(expectedValues.Count, actualValues.Count);
                 for (int i = 0; i < expectedValues.Count; ++i)
                     ModelsTester.AssertModels(expectedValues[i], actualValues[i], ["ReceivingTime", "LastUpdateTime"]);
@@ -139,13 +152,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var key = product.AccessKeys.Values.FirstOrDefault(x => x.State == KeyState.Active);
 
+            var time = DateTime.UtcNow;
+
             for (int i = 0; i < sensorValuesCount; ++i)
             {
                 var sensorInfo = sensors[RandomGenerator.GetRandomInt(min: 0, max: sensorsCount)];
-                var value = SensorValuesFactory.BuildSensorValue(sensorInfo.Type, sensorInfo.Path);
+                var value = SensorValuesFactory.BuildSensorValue(sensorInfo.Type, sensorInfo.Path, time.AddMilliseconds(i));
 
+                await _valuesCache.AddSensorValueAsync(key.Id, TestProductsManager.ProductId, value);
 
-                await _valuesCache.AddSensorValueAsync(key.Id, TestProductsManager.ProductId,  value);
                 map[sensorInfo].Add(value.Convert());
             }
 
@@ -189,7 +204,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             public string Path { get; init; }
 
             public SensorType Type { get; init; }
-
 
             public Guid Id { get; set; } = Guid.NewGuid();
         }

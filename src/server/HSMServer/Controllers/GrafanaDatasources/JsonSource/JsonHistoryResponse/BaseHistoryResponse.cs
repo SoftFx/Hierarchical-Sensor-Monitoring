@@ -1,5 +1,6 @@
-﻿using HSMServer.Core.Model;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using HSMCommon.Model;
+
 
 namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 {

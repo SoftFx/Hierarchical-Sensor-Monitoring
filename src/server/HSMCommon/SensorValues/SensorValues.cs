@@ -1,12 +1,13 @@
-﻿using HSMCommon.Extensions;
-using HSMServer.Core.Extensions;
-using HSMServer.Core.Model.Storages;
-using System;
+﻿using System;
 using System.IO;
+using HSMCommon.Extensions;
+using MemoryPack;
 
-namespace HSMServer.Core.Model
+
+namespace HSMCommon.Model
 {
-    public record BooleanValue : BaseValue<bool>
+    [MemoryPackable]
+    public partial record BooleanValue : BaseValue<bool>
     {
         public override SensorType Type => SensorType.Boolean;
 
@@ -14,8 +15,8 @@ namespace HSMServer.Core.Model
         public override bool TryParseValue(string value, out bool parsedValue) => bool.TryParse(value, out parsedValue);
     }
 
-
-    public record IntegerValue : BaseValue<int>
+    [MemoryPackable]
+    public partial record IntegerValue : BaseValue<int>
     {
         public override SensorType Type => SensorType.Integer;
 
@@ -23,8 +24,8 @@ namespace HSMServer.Core.Model
         public override bool TryParseValue(string value, out int parsedValue) => int.TryParse(value, out parsedValue);
     }
 
-
-    public record DoubleValue : BaseValue<double>
+    [MemoryPackable]
+    public partial record DoubleValue : BaseValue<double>
     {
         public override SensorType Type => SensorType.Double;
 
@@ -32,8 +33,8 @@ namespace HSMServer.Core.Model
         public override bool TryParseValue(string value, out double parsedValue) => double.TryParse(value, out parsedValue);
     }
 
-
-    public record StringValue : BaseValue<string>
+    [MemoryPackable]
+    public partial record StringValue : BaseValue<string>
     {
         public override SensorType Type => SensorType.String;
 
@@ -46,9 +47,10 @@ namespace HSMServer.Core.Model
         }
     }
 
-
-    public record TimeSpanValue : BaseValue<TimeSpan>
+    [MemoryPackable]
+    public partial record TimeSpanValue : BaseValue<TimeSpan>
     {
+
         public override SensorType Type => SensorType.TimeSpan;
 
         public override object RawValue => Value.Ticks;
@@ -57,8 +59,8 @@ namespace HSMServer.Core.Model
         public override bool TryParseValue(string value, out TimeSpan parsedValue) => TimeSpan.TryParse(value, out parsedValue);
     }
 
-
-    public record VersionValue : BaseValue<Version>
+    [MemoryPackable]
+    public partial record VersionValue : BaseValue<Version>
     {
         public override SensorType Type => SensorType.Version;
 
@@ -68,8 +70,8 @@ namespace HSMServer.Core.Model
         public override bool TryParseValue(string value, out Version parsedValue) => Version.TryParse(value, out parsedValue);
     }
 
-
-    public record RateValue : BaseValue<double>
+    [MemoryPackable]
+    public partial record RateValue : BaseValue<double>
     {
         public override SensorType Type => SensorType.Rate;
 
@@ -77,15 +79,14 @@ namespace HSMServer.Core.Model
         public override bool TryParseValue(string value, out double parsedValue) => double.TryParse(value, out parsedValue);
     }
 
-
-    public record FileValue : BaseValue<byte[]>
+    [MemoryPackable]
+    public partial record FileValue : BaseValue<byte[]>
     {
         public string Name { get; init; }
 
         public string Extension { get; init; }
 
         public long OriginalSize { get; init; }
-
 
         public override SensorType Type => SensorType.File;
 
@@ -125,19 +126,20 @@ namespace HSMServer.Core.Model
         }
     }
 
-
-    public record IntegerBarValue : BarBaseValue<int>
+    [MemoryPackable]
+    public partial record IntegerBarValue : BarBaseValue<int>
     {
         public override SensorType Type => SensorType.IntegerBar;
     }
 
-
-    public record DoubleBarValue : BarBaseValue<double>
+    [MemoryPackable]
+    public partial record DoubleBarValue : BarBaseValue<double>
     {
         public override SensorType Type => SensorType.DoubleBar;
     }
 
-    public record EnumValue : BaseValue<int>
+    [MemoryPackable]
+    public partial record EnumValue : BaseValue<int>
     {
         public override SensorType Type => SensorType.Enum;
 

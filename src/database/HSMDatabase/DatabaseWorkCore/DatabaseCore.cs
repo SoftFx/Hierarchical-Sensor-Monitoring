@@ -1,4 +1,12 @@
-﻿using HSMCommon.Constants;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using NLog;
+using HSMCommon.Constants;
+using HSMCommon.Model;
 using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
@@ -7,17 +15,8 @@ using HSMDatabase.Extensions;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
 using HSMDatabase.SnapshotsDb;
-using HSMDataCollector.DefaultSensors;
 using HSMServer.Core.DataLayer;
-using NLog;
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
+using HSMDatabase.AccessManager.Formatters;
 
 
 namespace HSMDatabase.DatabaseWorkCore
@@ -27,6 +26,8 @@ namespace HSMDatabase.DatabaseWorkCore
         public int SensorValuesPageCount => 100;
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
+
+        private readonly MemoryPackFormatter _formatter = new MemoryPackFormatter();
 
         private readonly SensorValuesDatabaseDictionary _sensorValuesDatabases;
         private readonly JournalValuesDatabaseDictionary _journalValuesDatabases;
@@ -94,13 +95,12 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public byte[] GetLatestValue(Guid sensorId, long to)
         {
-            var maxKey = BuildSensorValueKey(sensorId.ToString(), to);
-            var idBytes = Encoding.UTF8.GetBytes(sensorId.ToString());
+            var maxKey = new DbKey(sensorId, to);
 
             foreach (var database in _sensorValuesDatabases)
                 if (database.From <= to)
                 {
-                    var value = database.GetLatest(maxKey, idBytes);
+                    var value = database.GetLatest(maxKey.ToBytes(), maxKey.ToPrefixBytes());
 
                     if (value is not null)
                         return value;
@@ -116,7 +116,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var db in _sensorValuesDatabases.OrderBy(x => x.From))
             {
-                results = db.GetLastAndFirstValues(sensorIds, BuildSensorValueKey, results);
+                results = db.GetLastAndFirstValues(sensorIds, results);
             }
 
             return results;
@@ -161,13 +161,16 @@ namespace HSMDatabase.DatabaseWorkCore
             var tempResult = new Dictionary<byte[], (long from, byte[] to, byte[] value)>(sensors.Count);
 
             foreach (var (id, (from, to)) in sensors)
-                tempResult.Add(Encoding.UTF8.GetBytes(id.ToString()), (from, BuildSensorValueKey(id.ToString(), to), null));
+            {
+                var key = new DbKey(id, to);
+                tempResult.Add(key.ToPrefixBytes(), (from, key.ToBytes(), null));
+            }
 
             foreach (var database in _sensorValuesDatabases)
                 database.FillLatestValues(tempResult);
 
             foreach (var (key, (_, _, value)) in tempResult)
-                result[Guid.Parse(Encoding.UTF8.GetString(key))] = value;
+                result[new Guid(key)] = value;
 
             return result;
         }
@@ -187,13 +190,13 @@ namespace HSMDatabase.DatabaseWorkCore
         public void UpdateSensor(SensorEntity entity) =>
             _environmentDatabase.AddSensor(entity);
 
-        public void ClearSensorValues(string sensorId, DateTime from, DateTime to)
+        public void ClearSensorValues(Guid sensorId, DateTime from, DateTime to)
         {
             var fromTicks = from.ToUniversalTime().Ticks;
             var toTicks = to.ToUniversalTime().Ticks;
 
-            var fromBytes = BuildSensorValueKey(sensorId, fromTicks);
-            var toBytes = BuildSensorValueKey(sensorId, toTicks);
+            var fromBytes = new DbKey(sensorId, fromTicks).ToBytes();
+            var toBytes = new DbKey(sensorId, toTicks).ToBytes();
 
             foreach (var db in _sensorValuesDatabases)
             {
@@ -206,8 +209,8 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public (long dateCnt, long keySize, long valueSize) CalculateSensorHistorySize(Guid sensorId)
         {
-            var fromKey = BuildSensorValueKey(sensorId, DateTime.MinValue.Ticks);
-            var toKey = BuildSensorValueKey(sensorId, DateTime.MaxValue.Ticks);
+            var fromKey = new DbKey(sensorId, DateTime.MinValue.Ticks).ToBytes();
+            var toKey = new DbKey(sensorId, DateTime.MaxValue.Ticks).ToBytes();
 
             var totalDataCnt = 0L;
             var totalKeySize = 0L;
@@ -224,20 +227,22 @@ namespace HSMDatabase.DatabaseWorkCore
             return (totalDataCnt, totalKeySize, totalValueSize);
         }
 
-        public void RemoveSensorWithMetadata(string sensorId)
+        public void RemoveSensorWithMetadata(Guid sensorId)
         {
-            _environmentDatabase.RemoveSensor(sensorId);
-            _environmentDatabase.RemoveSensorIdFromList(sensorId);
+            _environmentDatabase.RemoveSensor(sensorId.ToString());
+            _environmentDatabase.RemoveSensorIdFromList(sensorId.ToString());
 
             ClearSensorValues(sensorId, DateTime.MinValue, DateTime.MaxValue);
         }
 
-        public void AddSensorValue(SensorValueEntity valueEntity)
+        public void AddSensorValue(Guid sensorId, BaseValue value)
         {
-            var dbs = _sensorValuesDatabases.GetDatabaseByTime(valueEntity.ReceivingTime);
-            var key = BuildSensorValueKey(valueEntity.SensorId, valueEntity.ReceivingTime);
+            var dbs = _sensorValuesDatabases.GetDatabaseByTime(value.Time.Ticks);
 
-            dbs.PutSensorValue(key, valueEntity.Value);
+            var key = new DbKey(sensorId, value.Time.Ticks);
+            var data = _formatter.Serialize(value);
+
+            dbs.PutSensorValue(key.ToBytes(), data);
         }
 
 
@@ -261,8 +266,8 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
-            var fromBytes = BuildSensorValueKey(sensorId.ToString(), fromTicks);
-            var toBytes = BuildSensorValueKey(sensorId.ToString(), toTicks);
+            var fromBytes = new DbKey(sensorId, fromTicks).ToBytes();
+            var toBytes = new DbKey(sensorId, toTicks).ToBytes();
 
             var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
             GetValuesFunc getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
@@ -311,8 +316,8 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
-            var fromBytes = BuildSensorValueKey(sensorId.ToString(), fromTicks);
-            var toBytes = BuildSensorValueKey(sensorId.ToString(), toTicks);
+            var fromBytes = new DbKey(sensorId, fromTicks).ToBytes();
+            var toBytes = new DbKey(sensorId, toTicks).ToBytes();
 
             var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
 
@@ -337,15 +342,6 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
         }
-
-
-
-        private static byte[] BuildSensorValueKey(Guid sensorId, long time) =>
-            BuildSensorValueKey(sensorId.ToString(), time);
-
-        // "D19" string format is for inserting leading zeros (long.MaxValue has 19 symbols)
-        private static byte[] BuildSensorValueKey(string sensorId, long time) =>
-            Encoding.UTF8.GetBytes($"{sensorId}_{time:D19}");
 
         #endregion
 
@@ -541,7 +537,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddJournalValue(JournalKey journalKey, JournalRecordEntity value)
         {
-            var dbs = _journalValuesDatabases.GetNewestDatabases(journalKey.Time);
+            var dbs = _journalValuesDatabases.GetDatabaseByTime(journalKey.Time);
 
             dbs.Put(journalKey.GetBytes(), value);
         }
@@ -732,7 +728,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         }
 
-        public void ExportValuesDatabase(string name, Dictionary<string, string> sensors)
+        public void ExportValuesDatabase(string name, Dictionary<Guid, string> sensors)
         {
             if (IsExportRunning)
                 return;
@@ -754,11 +750,9 @@ namespace HSMDatabase.DatabaseWorkCore
                 using var writer = new StreamWriter(Path.Combine(_settings.ExportFolder, $"{basePath[^1]}.csv"));
                 foreach (var (keyByte, valueByte) in database.GetAll())
                 {
-                    var key = Encoding.UTF8.GetString(keyByte);
-                    var result = key.Split("_");
-                    var ticks = long.Parse(result[1]);
-                    sensors.TryGetValue(result[0], out var path);
-                    writer.WriteLine($"{result[0]},{path},{new DateTime(ticks)},{valueByte.Length},{Encoding.UTF8.GetString(valueByte)}");
+                    var key = DbKey.FromBytes(keyByte);
+                    sensors.TryGetValue(key.SensorId, out var path);
+                    writer.WriteLine($"{key.SensorId},{path},{new DateTime(key.Timestamp)},{valueByte.Length},{ JsonSerializer.Serialize(_formatter.Deserialize(valueByte))}");
                 }
             }
             catch (Exception ex)
@@ -769,6 +763,42 @@ namespace HSMDatabase.DatabaseWorkCore
             {
                 IsExportRunning = false;
             }
+        }
+
+        public IEnumerable<(byte[], byte[])> GetAll()
+        {
+            foreach (var db in _sensorValuesDatabases)
+            {
+                foreach (var item in db.GetAll())
+                    yield return item;
+            }
+        }
+
+        public IEnumerable<(byte[], byte[])> MigrateDatabaseV2()
+        {
+            var settings = new DatabaseSettings() { SensorValuesDatabaseName = "SensorValues" };
+            var oldDbs = new SensorValuesDatabaseDictionary(settings);
+
+            foreach (var oldDb in oldDbs)
+            {
+
+                foreach (var item in oldDb.GetAll())
+                    yield return item;
+
+                var oldDirectory = Path.Combine(Environment.CurrentDirectory, oldDb.Name);
+                var newDirectory = Path.Combine(Environment.CurrentDirectory, oldDb.Name.Replace("SensorValues_", "!SensorValues_"));
+
+                try
+                {
+                    oldDb.Dispose();
+                    Directory.Move(oldDirectory, newDirectory);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"An error was occured while renaming direcory {oldDirectory} -> {newDirectory}", ex);
+                }
+            }
+
         }
 
         public void Dispose()

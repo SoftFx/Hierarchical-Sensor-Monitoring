@@ -1,8 +1,10 @@
-﻿using HSMServer.Core;
+﻿using HSMCommon.Model;
+using HSMServer.Core;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Model.Model.History;
 using System.Threading.Tasks;
+
 
 namespace HSMServer.Model.History
 {

@@ -1,6 +1,7 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
-using HSMServer.Core.Model;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
+using HSMCommon.Model;
+using HSMDatabase.AccessManager.DatabaseEntities.VisualEntity;
+
 
 namespace HSMServer.Dashboards
 {

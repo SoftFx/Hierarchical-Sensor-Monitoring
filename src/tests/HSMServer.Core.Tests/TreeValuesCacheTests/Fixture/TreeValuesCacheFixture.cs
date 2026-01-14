@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Model;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
@@ -24,7 +25,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 dbCore.AddSensor(sensor);
 
             foreach (var sensorValue in sensorValues)
-                dbCore.AddSensorValue(sensorValue);
+                dbCore.AddSensorValue(Guid.Parse(sensorValue.SensorId), (BaseValue)sensorValue.Value);
         }
 
         private static (List<ProductEntity>, List<SensorEntity>, List<SensorValueEntity>) GenerateTestData()

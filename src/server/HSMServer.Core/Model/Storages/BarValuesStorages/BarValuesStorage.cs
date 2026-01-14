@@ -1,6 +1,8 @@
-﻿using HSMServer.Core.Extensions;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using HSMCommon.Model;
+using HSMServer.Core.Extensions;
+
 
 namespace HSMServer.Core.Model
 {

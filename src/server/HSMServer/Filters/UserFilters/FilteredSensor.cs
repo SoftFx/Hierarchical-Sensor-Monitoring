@@ -1,4 +1,6 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMCommon.Model;
+using HSMServer.Core.Model;
+
 
 namespace HSMServer.UserFilters
 {

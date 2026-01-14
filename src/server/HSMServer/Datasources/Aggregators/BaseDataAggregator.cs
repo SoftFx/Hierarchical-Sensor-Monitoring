@@ -1,6 +1,7 @@
-﻿using HSMServer.Core.Model;
+﻿using System;
+using HSMCommon.Model;
 using HSMServer.Core.Model.Requests;
-using System;
+
 
 namespace HSMServer.Datasources.Aggregators
 {

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using HSMCommon.Extensions;
+using HSMCommon.Model;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
@@ -344,7 +345,7 @@ namespace HSMServer.Model.DataAlerts
             if (!string.IsNullOrEmpty(policy.Icon))
                 Actions.Add(new ActionViewModel(IsActionMain, IsTtl, chats) { Action = ActionType.ShowIcon, Icon = policy.Icon });
 
-            if (policy.Status == Core.Model.SensorStatus.Error)
+            if (policy.Status == HSMCommon.Model.SensorStatus.Error)
                 Actions.Add(new ActionViewModel(IsActionMain, IsTtl, chats) { Action = ActionType.SetStatus });
         }
 
@@ -430,7 +431,7 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public class DataAlertViewModel<T> : DataAlertViewModel where T : Core.Model.BaseValue
+    public class DataAlertViewModel<T> : DataAlertViewModel where T : HSMCommon.Model.BaseValue
     {
         public DataAlertViewModel() : base() { }
 

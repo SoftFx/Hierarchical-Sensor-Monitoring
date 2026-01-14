@@ -1,4 +1,7 @@
-﻿namespace HSMServer.Core.Model.Policies
+﻿using HSMCommon.Model;
+
+
+namespace HSMServer.Core.Model.Policies
 {
     public abstract class Policy<T> : Policy where T : BaseValue
     {

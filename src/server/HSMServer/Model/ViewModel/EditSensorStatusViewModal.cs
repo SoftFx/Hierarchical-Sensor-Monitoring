@@ -1,8 +1,8 @@
-using HSMServer.Core.Model;
-using HSMServer.Extensions;
-using HSMServer.Model.TreeViewModel;
 using System;
 using System.ComponentModel.DataAnnotations;
+using HSMCommon.Model;
+using HSMServer.Extensions;
+using HSMServer.Model.TreeViewModel;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
 namespace HSMServer.Model.ViewModel;

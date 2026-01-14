@@ -1,7 +1,8 @@
-﻿using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
+﻿using System;
+using HSMCommon.Model;
+using HSMServer.Core.Cache;
 using HSMServer.Dashboards;
-using System;
+
 
 namespace HSMServer.Datasources
 {

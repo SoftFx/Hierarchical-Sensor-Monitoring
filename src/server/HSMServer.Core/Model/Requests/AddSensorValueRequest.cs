@@ -1,5 +1,5 @@
 ﻿using System;
-using HSMSensorDataObjects.SensorValueRequests;
+using HSMCommon.Model;
 
 
 namespace HSMServer.Core.Model.Requests

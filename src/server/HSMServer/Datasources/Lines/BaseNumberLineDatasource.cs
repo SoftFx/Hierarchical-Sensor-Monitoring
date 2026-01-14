@@ -1,7 +1,8 @@
-﻿using HSMServer.Core.Model;
+﻿using System.Numerics;
+using HSMCommon.Model;
 using HSMServer.Datasources.Aggregators;
 using HSMServer.Datasources.Lines;
-using System.Numerics;
+
 
 namespace HSMServer.Datasources
 {

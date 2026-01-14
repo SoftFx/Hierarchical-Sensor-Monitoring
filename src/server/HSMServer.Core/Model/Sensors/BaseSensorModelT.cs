@@ -1,13 +1,19 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using HSMCommon.Model;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.Formatters;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model.Policies;
-using System.Collections.Generic;
-using System.Linq;
+
 
 namespace HSMServer.Core.Model
 {
     public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue, new()
     {
+        private readonly MemoryPackFormatter _formatter = new MemoryPackFormatter();
+
         public override SensorPolicyCollection<T> Policies { get; }
 
         internal override ValuesStorage<T> Storage { get; }
@@ -91,6 +97,9 @@ namespace HSMServer.Core.Model
 
         internal override IEnumerable<BaseValue> Convert(List<byte[]> pages) => pages.Select(Convert);
 
-        internal override BaseValue Convert(byte[] bytes) => bytes.ToValue<T>();
+        internal override BaseValue Convert(byte[] bytes) => _formatter.Deserialize(bytes);
+
+        internal override BaseValue ConvertFromJson(string data) => JsonSerializer.Deserialize<T>(data);
+
     }
 }

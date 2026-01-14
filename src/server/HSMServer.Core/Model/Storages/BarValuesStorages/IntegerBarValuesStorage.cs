@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model.Storages;
+﻿using HSMCommon.Model;
+using HSMServer.Core.Model.Storages;
 
 namespace HSMServer.Core.Model
 {

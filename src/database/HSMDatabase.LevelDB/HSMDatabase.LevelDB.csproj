@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MemoryPack" Version="1.21.4" />
     <PackageReference Include="NLog" Version="5.1.2" />
     <PackageReference Include="SoftFX.LevelDB.Standard" Version="1.2.1" />
   </ItemGroup>

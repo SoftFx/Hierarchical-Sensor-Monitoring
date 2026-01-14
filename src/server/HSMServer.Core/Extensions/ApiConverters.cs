@@ -10,6 +10,7 @@ using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Services;
 using ApiSensorStatus = HSMSensorDataObjects.SensorStatus;
 using HSMDataCollector.DefaultSensors;
+using HSMCommon.Model;
 
 
 namespace HSMServer.Core.ApiObjectsConverters

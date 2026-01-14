@@ -1,9 +1,11 @@
-﻿using HSMCommon.Extensions;
-using HSMServer.Core.Extensions;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using HSMCommon.Extensions;
+using HSMCommon.Model;
+using HSMServer.Core.Extensions;
+
 
 namespace HSMServer.Core.Model
 {

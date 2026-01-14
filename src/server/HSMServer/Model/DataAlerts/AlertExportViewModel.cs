@@ -1,10 +1,11 @@
-﻿using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
-using HSMServer.Extensions;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMCommon.Model;
+using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model.Policies;
+using HSMServer.Extensions;
+
 
 namespace HSMServer.Model.DataAlerts
 {

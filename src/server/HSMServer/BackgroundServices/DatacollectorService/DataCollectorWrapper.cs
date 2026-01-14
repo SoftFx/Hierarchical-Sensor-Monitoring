@@ -198,7 +198,7 @@ namespace HSMServer.BackgroundServices
                     var coreRequest = new SensorAddOrUpdateRequest(_productModel.Id, relatedPath)
                     {
                         Update = apiRequest.Convert(sensor?.Id ?? Guid.Empty, SelfCollectorName),
-                        Type = sensorType?.Convert() ?? Core.Model.SensorType.Boolean,
+                        Type = sensorType?.Convert() ?? HSMCommon.Model.SensorType.Boolean,
                     };
 
                     await _cache.AddOrUpdateSensorAsync(coreRequest, token);

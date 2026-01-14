@@ -1,6 +1,7 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using System;
+﻿using System;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model.Sensors.SensorModels;
+using HSMCommon.Model;
 
 namespace HSMServer.Core.Model
 {

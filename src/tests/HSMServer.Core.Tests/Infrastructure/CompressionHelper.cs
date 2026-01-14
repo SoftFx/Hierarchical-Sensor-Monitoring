@@ -1,6 +1,7 @@
-﻿using HSMServer.Core.Model;
-using System.IO;
+﻿using System.IO;
 using System.IO.Compression;
+using HSMCommon.Model;
+
 
 namespace HSMServer.Core.Tests.Infrastructure
 {

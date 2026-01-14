@@ -1,9 +1,11 @@
-﻿using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HSMCommon.Model;
+using HSMDatabase.AccessManager.Formatters;
+
 
 namespace HSMServer.Core.Extensions
 {
@@ -11,16 +13,11 @@ namespace HSMServer.Core.Extensions
     {
         private const int RoundPrecision = 2;
 
-
-        private static readonly JsonSerializerOptions _options = new()
-        {
-            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
-        };
-
+        private static MemoryPackFormatter _formatter = new MemoryPackFormatter();
 
         public static BaseValue ToValue<T>(this byte[] bytes) where T : BaseValue
         {
-            return bytes == null ? null : (BaseValue)JsonSerializer.Deserialize<T>(bytes, _options);
+            return bytes == null ? null : _formatter.Deserialize(bytes);
         }
 
         public static double Round(this double value) => Math.Round(value, RoundPrecision, MidpointRounding.AwayFromZero);

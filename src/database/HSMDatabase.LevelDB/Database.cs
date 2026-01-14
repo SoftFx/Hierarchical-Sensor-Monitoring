@@ -1,15 +1,14 @@
-﻿using HSMCommon.TaskResult;
-using HSMDatabase.AccessManager;
-using HSMDatabase.LevelDB.Extensions;
-using LevelDB;
-using NLog;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.Design;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using HSMCommon.TaskResult;
+using HSMDatabase.AccessManager;
+using HSMDatabase.LevelDB.Extensions;
+using LevelDB;
+using NLog;
 using CompressionLevel = LevelDB.CompressionLevel;
 using Exception = System.Exception;
 
@@ -164,7 +163,6 @@ namespace HSMDatabase.LevelDB
 
         public Dictionary<Guid, (byte[] firstValue, byte[] lastValue)> GetLastAndFirstValues(
             IEnumerable<Guid> sensorIds,
-            Func<Guid, long, byte[]> createKeyFunc,
             Dictionary<Guid, (byte[] firstValue, byte[] lastValue)> results = null)
         {
             results ??= new Dictionary<Guid, (byte[] firstValue, byte[] lastValue)>();
@@ -179,12 +177,11 @@ namespace HSMDatabase.LevelDB
                 byte[] currentFirstValue = null;
                 byte[] currentLastValue = null;
 
-                // Префикс для проверки принадлежности
-                var prefixBytes = Encoding.UTF8.GetBytes(sensorId.ToString());
-
                 // Строим диапазон через createKeyFunc
-                byte[] minKey = createKeyFunc(sensorId, DateTime.MinValue.Ticks);
-                byte[] maxKey = createKeyFunc(sensorId, DateTime.MaxValue.Ticks);
+                DbKey minKey = new DbKey(sensorId, DateTime.MinValue);
+                DbKey maxKey = new DbKey(sensorId, DateTime.MaxValue.Ticks);
+
+                byte[] prefixBytes = minKey.ToPrefixBytes();
 
                 // Проверяем, есть ли уже firstValue из предыдущей (старой) базы
                 bool firstAlreadyKnown =
@@ -194,7 +191,7 @@ namespace HSMDatabase.LevelDB
                 // ---------- 1. FIRST (оптимизация: пропускаем, если уже найден ранее) ----------
                 if (!firstAlreadyKnown)
                 {
-                    iterator.Seek(minKey);
+                    iterator.Seek(minKey.ToBytes());
 
                     if (iterator.IsValid && iterator.Key().StartsWith(prefixBytes))
                     {
@@ -203,7 +200,7 @@ namespace HSMDatabase.LevelDB
                 }
 
                 // ---------- 2. LAST (всегда нужно искать) ----------
-                iterator.Seek(maxKey);
+                iterator.Seek(maxKey.ToBytes());
 
                 if (iterator.IsValid && iterator.Key().StartsWith(prefixBytes))
                 {

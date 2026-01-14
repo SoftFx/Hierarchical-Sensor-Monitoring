@@ -1,11 +1,12 @@
-﻿using Client = HSMServer.Model.TreeViewModel;
-using Server = HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
+using Client = HSMServer.Model.TreeViewModel;
+using Server = HSMCommon.Model;
 
 namespace HSMServer.Extensions
 {
     internal static class StatusExtensions
     {
-        internal static Client.SensorStatus ToClient(this Server.SensorResult? result)
+        internal static Client.SensorStatus ToClient(this SensorResult? result)
         {
             return result?.Status.ToClient() ?? Client.SensorStatus.Empty;
         }

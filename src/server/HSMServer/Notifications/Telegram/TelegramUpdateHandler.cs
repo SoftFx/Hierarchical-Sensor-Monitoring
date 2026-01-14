@@ -17,7 +17,7 @@ using Telegram.Bot.Types.Enums;
 
 namespace HSMServer.Notifications
 {
-    using Core = Core.Model.SensorStatus;
+    using Core = HSMCommon.Model.SensorStatus;
 
 
     public sealed class TelegramUpdateHandler : IUpdateHandler

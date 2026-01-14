@@ -177,7 +177,7 @@ namespace HSMServer.Core.Model.Policies
 
             if (timeSpan.Hours > 0)
             {
-                sb.Append($"{timeSpan.Hours} hour{(timeSpan.Hours != 1 ? "s" : "")} ");
+                sb.Append($"{timeSpan.Hours} hr{(timeSpan.Hours != 1 ? "s" : "")} ");
             }
 
             if (timeSpan.Minutes > 0 || sb.Length == 0)

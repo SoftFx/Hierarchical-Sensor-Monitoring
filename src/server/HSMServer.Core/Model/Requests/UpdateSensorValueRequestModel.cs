@@ -1,4 +1,5 @@
 ﻿using System;
+using HSMCommon.Model;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TableOfChanges;
 

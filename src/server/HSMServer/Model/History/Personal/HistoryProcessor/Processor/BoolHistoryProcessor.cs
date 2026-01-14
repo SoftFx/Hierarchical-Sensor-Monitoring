@@ -1,10 +1,11 @@
 ﻿using System;
-using HSMServer.Core.Model;
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
+using HSMCommon.Model;
+
 
 namespace HSMServer.Model.History
 {

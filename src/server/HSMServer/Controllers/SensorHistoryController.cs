@@ -21,6 +21,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using HSMServer.JsonConverters;
 using System.Linq;
+using HSMCommon.Model;
 
 namespace HSMServer.Controllers
 {

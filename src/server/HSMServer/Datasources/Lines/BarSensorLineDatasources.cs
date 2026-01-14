@@ -1,7 +1,8 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Dashboards;
-using System;
+﻿using System;
 using System.Numerics;
+using HSMCommon.Model;
+using HSMServer.Dashboards;
+
 
 namespace HSMServer.Datasources
 {

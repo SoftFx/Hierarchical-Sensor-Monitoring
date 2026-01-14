@@ -1,4 +1,5 @@
 ﻿using System;
+using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Storages.ValueStorages;

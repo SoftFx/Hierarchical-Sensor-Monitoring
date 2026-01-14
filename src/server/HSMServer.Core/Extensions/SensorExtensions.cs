@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Extensions;
+﻿using HSMCommon.Model;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using System;
 
@@ -30,13 +31,6 @@ namespace HSMServer.Core
         public static bool HasGrafana(this Integration integration) => integration.HasFlag(Integration.Grafana);
 
         public static bool HasEma(this StatisticsOptions statistics) => statistics.HasFlag(StatisticsOptions.EMA);
-
-        public static SensorStatus ToStatus(this byte status) => status switch
-        {
-            (byte)SensorStatus.Ok => SensorStatus.Ok,
-            (byte)SensorStatus.OffTime => SensorStatus.OffTime,
-            _ => SensorStatus.Error,
-        };
 
         public static BaseValue GetTimeoutValue(this BaseSensorModel sensor)
         {
