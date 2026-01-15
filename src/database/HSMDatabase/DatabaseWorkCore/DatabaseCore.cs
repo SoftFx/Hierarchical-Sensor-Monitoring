@@ -779,15 +779,11 @@ namespace HSMDatabase.DatabaseWorkCore
             var settings = new DatabaseSettings() { SensorValuesDatabaseName = "SensorValues" };
             var oldDbs = new SensorValuesDatabaseDictionary(settings);
 
-            if (!Directory.Exists(Path.Combine(Environment.CurrentDirectory, settings.DatabaseFolder)))
-                yield break;
-
             foreach (var oldDb in oldDbs)
             {
 
                 foreach (var item in oldDb.GetAll())
                     yield return item;
-
 
 
                 var oldDirectory = Path.Combine(Environment.CurrentDirectory, oldDb.Name);
