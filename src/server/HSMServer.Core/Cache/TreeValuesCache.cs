@@ -1832,12 +1832,20 @@ namespace HSMServer.Core.Cache
                 var keyArr = Encoding.UTF8.GetString(key).Split("_");
                 var sensorId = Guid.Parse(keyArr[0]);
 
+                BaseValue val;
                 var sensor = GetSensor(sensorId);
                 if (sensor != null)
                 {
                     var policy = sensor.Settings.KeepHistory.Value;
 
-                    var val = sensor.ConvertFromJson(Encoding.UTF8.GetString(value));
+                    try
+                    {
+                        val = sensor.ConvertFromJson(Encoding.UTF8.GetString(value));
+                    }
+                    catch
+                    {
+                        continue;
+                    }
 
                     if (!policy.TimeIsUp(val.Time))
                     {
