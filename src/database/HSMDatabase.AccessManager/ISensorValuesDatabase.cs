@@ -11,10 +11,9 @@ namespace HSMDatabase.AccessManager
 
         long To { get; }
 
+        bool Contains(long time);
 
-        bool IsInclude(long time);
-
-        bool IsInclude(long from, long to);
+        bool Overlaps(long from, long to);
 
         void FillLatestValues(Dictionary<byte[], (long from, byte[] toKey, byte[] latestValue)> keyValuePairs);
 
