@@ -97,7 +97,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var maxKey = new DbKey(sensorId, to);
 
-            foreach (var database in _sensorValuesDatabases.OrderByDescending(x => x.From).ToList())
+            foreach (var database in _sensorValuesDatabases.OrderByDescending(x => x.From))
                 if (database.From <= to)
                 {
                     var value = database.GetLatest(maxKey.ToBytes(), maxKey.ToPrefixBytes());
@@ -114,7 +114,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var results = new Dictionary<Guid, (byte[], byte[])>();
 
-            foreach (var db in _sensorValuesDatabases.OrderBy(x => x.From).ToList())
+            foreach (var db in _sensorValuesDatabases.OrderBy(x => x.From))
             {
                 results = db.GetLastAndFirstValues(sensorIds, results);
             }
@@ -166,7 +166,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 tempResult.Add(key.ToPrefixBytes(), (from, key.ToBytes(), null));
             }
 
-            foreach (var database in _sensorValuesDatabases.OrderByDescending(x => x.From).ToList())
+            foreach (var database in _sensorValuesDatabases.OrderByDescending(x => x.From))
                 database.FillLatestValues(tempResult);
 
             foreach (var (key, (_, _, value)) in tempResult)
@@ -198,7 +198,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = new DbKey(sensorId, fromTicks).ToBytes();
             var toBytes = new DbKey(sensorId, toTicks).ToBytes();
 
-            foreach (var db in _sensorValuesDatabases.OrderByDescending(x => x.From).ToList())
+            foreach (var db in _sensorValuesDatabases.OrderByDescending(x => x.From))
             {
                 if (db.Overlaps(fromTicks, toTicks))
                     db.RemoveSensorValues(fromBytes, toBytes);
@@ -269,7 +269,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = new DbKey(sensorId, fromTicks).ToBytes();
             var toBytes = new DbKey(sensorId, toTicks).ToBytes();
 
-            var databases = _sensorValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks)).OrderByDescending(x => x.From).ToList();
+            var databases = _sensorValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks)).OrderByDescending(x => x.From);
             GetValuesFunc getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
 
             if (count > 0)
@@ -281,7 +281,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return GetSensorValuesPage(databases, count, getValues);
         }
 
-        private async IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(List<ISensorValuesDatabase> databases, int count, GetValuesFunc getValues)
+        private async IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(IEnumerable<ISensorValuesDatabase> databases, int count, GetValuesFunc getValues)
         {
             var result = new List<byte[]>(SensorValuesPageCount);
             var totalCount = 0;
@@ -319,7 +319,6 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = new DbKey(sensorId, fromTicks).ToBytes();
             var toBytes = new DbKey(sensorId, toTicks).ToBytes();
 
-            var databases = _sensorValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks)).OrderByDescending(x => x.From).ToList();
 
             //if (count > 0)
             //    count *= (-1);
@@ -328,7 +327,7 @@ namespace HSMDatabase.DatabaseWorkCore
             //var requestedCount = Math.Abs(count);
 
 
-            foreach (var database in databases)
+            foreach (var database in _sensorValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks)).OrderByDescending(x => x.From))
             {
                 foreach (byte[] bytes in database.GetValuesTo(fromBytes, toBytes))
                 {
@@ -767,7 +766,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public IEnumerable<(byte[], byte[])> GetAll()
         {
-            foreach (var db in _sensorValuesDatabases.OrderByDescending(x => x.From).ToList())
+            foreach (var db in _sensorValuesDatabases.OrderByDescending(x => x.From))
             {
                 foreach (var item in db.GetAll())
                     yield return item;
@@ -810,12 +809,12 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _logger.Info($"Starting disposing {nameof(DatabaseCore)}...");
             _environmentDatabase.Dispose();
-            foreach (var item in _sensorValuesDatabases.ToList())
+            foreach (var item in _sensorValuesDatabases)
             {
                 item?.Dispose();
             }
             
-            foreach (var item in _journalValuesDatabases.ToList())
+            foreach (var item in _journalValuesDatabases)
             {
                 item?.Dispose();
             }
