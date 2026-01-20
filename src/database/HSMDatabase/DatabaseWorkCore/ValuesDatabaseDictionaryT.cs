@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,17 +11,14 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     internal abstract class ValuesDatabaseDictionary<T> : IEnumerable<T> where T : IDisposable
     {
-        private readonly Dictionary<long, T> _dbs = new();
-        private readonly object _lock = new();
+        private readonly ConcurrentDictionary<long, T> _dbs = new();
 
 
         protected readonly IDatabaseSettings _dbSettings;
 
         protected abstract Func<string, long, long, T> CreateDb { get; }
-
         protected abstract Func<long, long, string> GetDbPath { get; }
-
-        protected abstract string _folderTemplate { get;  }
+        protected abstract string _folderTemplate { get; }
 
         internal ValuesDatabaseDictionary(IDatabaseSettings dbSettings)
         {
@@ -30,78 +28,63 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var directory in sensorValuesDirectories)
             {
                 (var from, var to) = GetDatesFromFolderName(directory);
-                AddNewDatabase(directory, from, to);
+                var db = CreateDb.Invoke(directory, from, to);
+                _dbs.TryAdd(from, db);
             }
         }
-
 
         internal T GetDatabaseByTime(long time)
         {
-            lock (_lock)
+            var from = DateTimeMethods.GetStartOfWeekTicks(time);
+
+            var to = DateTimeMethods.GetEndOfWeekTicks(time);
+
+            return _dbs.GetOrAdd(from, key =>
             {
-                var from = DateTimeMethods.GetStartOfWeekTicks(time);
-
-                if (_dbs.TryGetValue(from, out var db))
-                    return db;
-
                 var to = DateTimeMethods.GetEndOfWeekTicks(time);
-
-                return AddNewDatabase(GetDbPath.Invoke(from, to), from, to);
-            }
+                string name = GetDbPath.Invoke(key, to);
+                return CreateDb.Invoke(name, key, to);
+            });
         }
 
-        private T AddNewDatabase(string name, long from, long to)
-        {
-            lock(_lock)
-            {
-                T newDb = CreateDb.Invoke(name, from , to);
-
-                _dbs.Add(from, newDb);
-
-                return newDb;
-            }
-        }
 
         private string[] GetSensorValuesDirectories()
         {
             if (!Directory.Exists(_dbSettings.DatabaseFolder))
                 return [];
 
-            return Directory.GetDirectories(_dbSettings.DatabaseFolder, _folderTemplate, SearchOption.TopDirectoryOnly);
-
+            return Directory.GetDirectories(
+                _dbSettings.DatabaseFolder,
+                _folderTemplate,
+                SearchOption.TopDirectoryOnly
+            );
         }
 
         private static (long from, long to) GetDatesFromFolderName(string folder)
         {
-            var from = 0L;
-            var to = 0L;
-
             var splitResults = folder.Split('_');
+            long from = 0L, to = 0L;
 
-            if (long.TryParse(splitResults[1], out long fromTicks))
-                from = new DateTime(fromTicks).Date.Ticks;
+            if (splitResults.Length >= 3)
+            {
+                if (long.TryParse(splitResults[1], out long fromTicks))
+                    from = new DateTime(fromTicks).Date.Ticks;
 
-            if (long.TryParse(splitResults[2], out long toTicks))
-                to = new DateTime(toTicks).Date.Ticks;
+                if (long.TryParse(splitResults[2], out long toTicks))
+                    to = new DateTime(toTicks).Date.Ticks;
+            }
 
             return (from, to);
         }
 
         public IEnumerator<T> GetEnumerator()
         {
-            List<T> copy;
-            lock (_lock)
-            {
-                copy = _dbs.Values.ToList();
-            }
-
-            foreach (var db in copy)
+            foreach (var db in _dbs.Values.ToList())
             {
                 yield return db;
             }
         }
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
     }
 }

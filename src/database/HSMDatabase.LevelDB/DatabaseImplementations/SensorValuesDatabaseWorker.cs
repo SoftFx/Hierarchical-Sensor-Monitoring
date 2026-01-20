@@ -35,9 +35,9 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public void Dispose() => _openedDb.Dispose();
 
 
-        public bool IsInclude(long time) => From <= time && time < To;
+        public bool Contains(long time) => From <= time && time < To;
 
-        public bool IsInclude(long from, long to) => From <= to && To >= from;
+        public bool Overlaps(long from, long to) => From < to && To > from;
 
 
         public void FillLatestValues(Dictionary<byte[], (long, byte[], byte[])> keyValuePairs)
