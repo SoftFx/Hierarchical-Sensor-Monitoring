@@ -19,6 +19,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
         protected abstract Func<string, long, long, T> CreateDb { get; }
         protected abstract Func<long, long, string> GetDbPath { get; }
+
+        protected abstract string _databaseFolder { get; }
+
         protected abstract string _folderTemplate { get; }
 
         internal ValuesDatabaseDictionary(IDatabaseSettings dbSettings)
@@ -53,11 +56,11 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private string[] GetSensorValuesDirectories()
         {
-            if (!Directory.Exists(_dbSettings.DatabaseFolder))
+            if (!Directory.Exists(_databaseFolder))
                 return [];
 
             return Directory.GetDirectories(
-                _dbSettings.DatabaseFolder,
+                _databaseFolder,
                 _folderTemplate,
                 SearchOption.TopDirectoryOnly
             );

@@ -1,6 +1,7 @@
-﻿using System;
-using HSMDatabase.AccessManager;
+﻿using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB;
+using System;
+using System.Runtime;
 
 
 namespace HSMDatabase.DatabaseWorkCore
@@ -15,5 +16,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         protected override Func<long, long, string> GetDbPath => _dbSettings.GetPathToSensorValueDatabase;
         protected override string _folderTemplate => $"{_dbSettings.SensorValuesDatabaseName}_*";
+        protected override string _databaseFolder => _dbSettings.DatabaseFolder;
     }
 }
