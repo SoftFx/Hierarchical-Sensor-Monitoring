@@ -1,17 +1,18 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager;
+using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using HSMDatabase.AccessManager;
+using System.Threading;
 
 
 namespace HSMDatabase.DatabaseWorkCore
 {
     internal abstract class ValuesDatabaseDictionary<T> : IEnumerable<T> where T : IDisposable
     {
-        private readonly ConcurrentDictionary<long, T> _dbs = new();
+        private readonly ConcurrentDictionary<long, Lazy<T>> _dbs = new();
 
 
         protected readonly IDatabaseSettings _dbSettings;
@@ -28,23 +29,25 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var directory in sensorValuesDirectories)
             {
                 (var from, var to) = GetDatesFromFolderName(directory);
-                var db = CreateDb.Invoke(directory, from, to);
-                _dbs.TryAdd(from, db);
+                var db = new Lazy<T> (() => CreateDb.Invoke(directory, from, to));
+                _dbs.GetOrAdd(from, db);
             }
         }
 
         internal T GetDatabaseByTime(long time)
         {
             var from = DateTimeMethods.GetStartOfWeekTicks(time);
+            var to   = DateTimeMethods.GetEndOfWeekTicks(time);
 
-            var to = DateTimeMethods.GetEndOfWeekTicks(time);
+            var lazyDb = _dbs.GetOrAdd(from,
+                    key => new Lazy<T>(() =>
+                    {
+                        string name = GetDbPath.Invoke(from, to);
+                        return CreateDb.Invoke(name, from, to);
+                    }, LazyThreadSafetyMode.ExecutionAndPublication)
+                );
 
-            return _dbs.GetOrAdd(from, key =>
-            {
-                var to = DateTimeMethods.GetEndOfWeekTicks(time);
-                string name = GetDbPath.Invoke(key, to);
-                return CreateDb.Invoke(name, key, to);
-            });
+            return lazyDb.Value;
         }
 
 
@@ -81,7 +84,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             foreach (var db in _dbs.Values.ToList())
             {
-                yield return db;
+                yield return db.Value;
             }
         }
 
