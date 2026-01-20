@@ -9,36 +9,13 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
-    internal sealed class JournalValuesDatabaseWorker : IJournalValuesDatabase
+    internal sealed class JournalValuesDatabaseWorker : IntervalDataseBase, IJournalValuesDatabase
     {
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly LevelDBDatabaseAdapter _openedDb;
 
-
-        public string Name { get; }
-
-        public long From { get; }
-
-        public long To { get; }
-
-
-        public JournalValuesDatabaseWorker(string name, long from, long to)
+        public JournalValuesDatabaseWorker(string name, long from, long to) : base(name, from, to)
         {
-            _openedDb = new LevelDBDatabaseAdapter(name);
-
-            Name = name;
-            From = from;
-            To = to;
         }
 
-
-        public void Dispose() => _openedDb.Dispose();
-
-
-        public bool IsInclude(long time) => From <= time && time < To;
-
-        public bool IsInclude(long from, long to) => From <= to && To >= from;
-        
 
         public void Put(byte[] key, JournalRecordEntity value)
         {

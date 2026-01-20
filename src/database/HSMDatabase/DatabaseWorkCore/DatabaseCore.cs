@@ -550,7 +550,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var toBytes = new JournalKey(id, toTicks, RecordType.Changes).GetBytes();
 
             foreach (var db in _journalValuesDatabases)
-                if (db.IsInclude(fromTicks, toTicks))
+                if (db.Overlaps(fromTicks, toTicks))
                 {
                     PutRecordsToParent(fromBytes, toBytes, parentId, db);
 
@@ -576,7 +576,7 @@ namespace HSMDatabase.DatabaseWorkCore
                     }
             }
 
-            var databases = _journalValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
+            var databases = _journalValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks));
             GetJournalValuesFunc getValues = (db) => GetValuesEnumerator(db, db.GetValuesFrom);
 
             if (count < 0)
@@ -599,7 +599,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 }
         }
 
-        private async IAsyncEnumerable<List<(byte[], JournalRecordEntity)>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
+        private async IAsyncEnumerable<List<(byte[], JournalRecordEntity)>> GetJournalValuesPage(IEnumerable<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
         {
             var result = new List<(byte[], JournalRecordEntity)>(SensorValuesPageCount);
             var totalCount = 0;

@@ -4,19 +4,8 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMDatabase.AccessManager;
 
-public interface IJournalValuesDatabase : IDisposable
+public interface IJournalValuesDatabase : IIntervalDatabase
 {
-    string Name { get; }
-
-    long From { get; }
-
-    long To { get; }
-
-
-    bool IsInclude(long time);
-
-    bool IsInclude(long from, long to);
-
     void Put(byte[] key, JournalRecordEntity value);
 
     void Put(byte[] key, byte[] value);
