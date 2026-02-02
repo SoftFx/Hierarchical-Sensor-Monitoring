@@ -97,7 +97,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var maxKey = new DbKey(sensorId, to);
 
-            foreach (var database in _sensorValuesDatabases.OrderByDescending(x => x.From))
+            foreach (var database in _sensorValuesDatabases)
                 if (database.From <= to)
                 {
                     var value = database.GetLatest(maxKey.ToBytes(), maxKey.ToPrefixBytes());
@@ -114,7 +114,7 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             var results = new Dictionary<Guid, (byte[], byte[])>();
 
-            foreach (var db in _sensorValuesDatabases.OrderBy(x => x.From))
+            foreach (var db in _sensorValuesDatabases.Reverse())
             {
                 results = db.GetLastAndFirstValues(sensorIds, results);
             }
@@ -166,7 +166,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 tempResult.Add(key.ToPrefixBytes(), (from, key.ToBytes(), null));
             }
 
-            foreach (var database in _sensorValuesDatabases.OrderByDescending(x => x.From))
+            foreach (var database in _sensorValuesDatabases)
                 database.FillLatestValues(tempResult);
 
             foreach (var (key, (_, _, value)) in tempResult)
@@ -198,7 +198,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = new DbKey(sensorId, fromTicks).ToBytes();
             var toBytes = new DbKey(sensorId, toTicks).ToBytes();
 
-            foreach (var db in _sensorValuesDatabases.OrderByDescending(x => x.From))
+            foreach (var db in _sensorValuesDatabases)
             {
                 if (db.Overlaps(fromTicks, toTicks))
                     db.RemoveSensorValues(fromBytes, toBytes);
@@ -269,7 +269,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = new DbKey(sensorId, fromTicks).ToBytes();
             var toBytes = new DbKey(sensorId, toTicks).ToBytes();
 
-            var databases = _sensorValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks)).OrderByDescending(x => x.From);
+            var databases = _sensorValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks));
             GetValuesFunc getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
 
             if (count > 0)
@@ -327,7 +327,7 @@ namespace HSMDatabase.DatabaseWorkCore
             //var requestedCount = Math.Abs(count);
 
 
-            foreach (var database in _sensorValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks)).OrderByDescending(x => x.From))
+            foreach (var database in _sensorValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks)))
             {
                 foreach (byte[] bytes in database.GetValuesTo(fromBytes, toBytes))
                 {
@@ -576,7 +576,7 @@ namespace HSMDatabase.DatabaseWorkCore
                     }
             }
 
-            var databases = _journalValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks));
+            var databases = _journalValuesDatabases.Where(db => db.Overlaps(fromTicks, toTicks)).Reverse();
             GetJournalValuesFunc getValues = (db) => GetValuesEnumerator(db, db.GetValuesFrom);
 
             if (count < 0)
@@ -751,7 +751,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 {
                     var key = DbKey.FromBytes(keyByte);
                     sensors.TryGetValue(key.SensorId, out var path);
-                    writer.WriteLine($"{key.SensorId},{path},{new DateTime(key.Timestamp)},{valueByte.Length},{ JsonSerializer.Serialize(_formatter.Deserialize(valueByte))}");
+                    writer.WriteLine($"{key.SensorId},{path},{new DateTime(key.Timestamp)},{valueByte.Length},{_formatter.Deserialize(valueByte)}");
                 }
             }
             catch (Exception ex)
@@ -766,7 +766,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public IEnumerable<(byte[], byte[])> GetAll()
         {
-            foreach (var db in _sensorValuesDatabases.OrderByDescending(x => x.From))
+            foreach (var db in _sensorValuesDatabases)
             {
                 foreach (var item in db.GetAll())
                     yield return item;
