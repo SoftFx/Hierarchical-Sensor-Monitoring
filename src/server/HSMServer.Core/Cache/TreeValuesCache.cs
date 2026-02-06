@@ -786,7 +786,7 @@ namespace HSMServer.Core.Cache
             int cleared = 0;
             foreach (var sensor in value.Sensors.Values)
             {
-                var from = sensor.HistoryPeriod.From;
+                var from = sensor.From;
 
                 var policy = sensor.Settings.KeepHistory.Value;
 
@@ -821,7 +821,7 @@ namespace HSMServer.Core.Cache
                 return;
             }
 
-            var from = sensor.HistoryPeriod.From;
+            var from = sensor.From;
 
             var to = request.To;
 
@@ -853,7 +853,7 @@ namespace HSMServer.Core.Cache
             }
 
             _database.ClearSensorValues(sensor.Id, from, to);
-            sensor.HistoryPeriod.Cut(to);
+            sensor.From = to;
 
             SensorUpdateView(sensor);
         }

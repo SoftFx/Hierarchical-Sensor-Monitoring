@@ -5,7 +5,6 @@ using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.Model.Sensors;
-using HSMServer.Core.TreeStateSnapshot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,10 +27,11 @@ namespace HSMServer.Core.Model
 
         public override SensorPolicyCollection Policies { get; }
 
+        public DateTime From => Storage.From;
+
+        public DateTime To => Storage.To;
 
         internal abstract ValuesStorage Storage { get; }
-
-        internal LastHistoryPeriod HistoryPeriod { get; } = new();
 
         internal bool IsExpired { get; set; }
 
@@ -132,6 +132,10 @@ namespace HSMServer.Core.Model
 
         }
 
+        public void Cut(DateTime time)
+        {
+            Storage.From = time;
+        }
 
         public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask() ?? Task.FromResult(new List<BaseValue>());
 

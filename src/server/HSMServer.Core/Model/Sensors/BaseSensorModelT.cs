@@ -34,7 +34,6 @@ namespace HSMServer.Core.Model
             {
                 Storage.AddValueBase((T)value);
                 ReceivedNewValue?.Invoke(value);
-                HistoryPeriod.Update(value.Time);
                 return true;
             }
 
@@ -55,8 +54,6 @@ namespace HSMServer.Core.Model
                 {
                     if (!AggregateValues)
                         Storage.AddValue(validatedValue);
-
-                    HistoryPeriod.Update(validatedValue.Time);
 
                     ReceivedNewValue?.Invoke(validatedValue);
                 }
