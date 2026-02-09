@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
@@ -94,7 +95,7 @@ namespace HSMServer.Core.Model
 
         public BaseValue LastTimeout => Storage.LastTimeout;
 
-        public BaseValue LastValue => Storage.LastValue;
+        public BaseValue LastValue => Storage?.LastValue;
 
 
         public bool HasData => Storage.HasData;

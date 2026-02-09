@@ -1,6 +1,7 @@
 ﻿using System;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Storages.ValueStorages;
 
@@ -8,7 +9,7 @@ namespace HSMServer.Core.Model.Sensors.SensorModels
 {
     internal sealed class RateSensorModel : BaseSensorModel<RateValue>
     {
-        internal override RateValuesStorage Storage { get; } = new RateValuesStorage();
+        internal override RateValuesStorage Storage { get; }
 
 
         public override SensorPolicyCollection<RateValue, RatePolicy> Policies { get; } = new();
@@ -16,7 +17,7 @@ namespace HSMServer.Core.Model.Sensors.SensorModels
         public override SensorType Type { get; } = SensorType.Rate;
 
 
-        public RateSensorModel(SensorEntity entity) : base(entity)
+        public RateSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database)
         {
             if (entity.DisplayUnit.HasValue)
                 DisplayUnit = (RateDisplayUnit)entity.DisplayUnit;
@@ -25,6 +26,8 @@ namespace HSMServer.Core.Model.Sensors.SensorModels
                 //default value
                 DisplayUnit = RateDisplayUnit.PerSecond;
             }
+
+            Storage = new RateValuesStorage(_getLastValue, _getLastValue);
         }
 
         protected override int GetDisplayCoeff()

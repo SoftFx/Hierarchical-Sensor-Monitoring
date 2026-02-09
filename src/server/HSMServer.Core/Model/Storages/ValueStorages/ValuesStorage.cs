@@ -51,13 +51,13 @@ namespace HSMServer.Core.Model
         private T _lastValue, _lastTimeout;
 
         private DateTime? _from, _to;
-        private readonly Func<T> _getFirstValue, _getLastValue;
+        private readonly Func<BaseValue> _getFirstValue, _getLastValue;
 
         private readonly object _lock = new();
 
         private bool IsLastEmptyOrTimeout => LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime;
 
-        public ValuesStorage(Func<T> getFirstValue, Func<T> getLastValue)
+        public ValuesStorage(Func<BaseValue> getFirstValue, Func<BaseValue> getLastValue)
         {
             _getFirstValue = getFirstValue ?? throw new ArgumentNullException(nameof(getFirstValue));
             _getLastValue = getLastValue ?? throw new ArgumentNullException(nameof(getLastValue));
@@ -199,7 +199,7 @@ namespace HSMServer.Core.Model
                     var item = _getLastValue.Invoke();
                     if (item != null)
                     {
-                        AddValue(item);
+                        AddValue((T)item);
                     }
                     else
                     {
