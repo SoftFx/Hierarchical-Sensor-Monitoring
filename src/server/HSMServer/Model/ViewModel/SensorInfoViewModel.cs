@@ -26,7 +26,10 @@ namespace HSMServer.Model.ViewModel
 
         public Unit? SelectedUnit { get; set; }
 
-        public RateDisplayUnit? DisplayUnit { get; set; }
+        public RateDisplayUnit? DisplayUnit {
+            get;
+            set;
+        }
 
 
         public bool AggregateValues { get; set; }
