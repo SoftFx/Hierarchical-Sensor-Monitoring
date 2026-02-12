@@ -786,7 +786,7 @@ namespace HSMServer.Core.Cache
             int cleared = 0;
             foreach (var sensor in value.Sensors.Values)
             {
-                var from = sensor.HistoryPeriod.From;
+                var from = sensor.From;
 
                 var policy = sensor.Settings.KeepHistory.Value;
 
@@ -821,7 +821,7 @@ namespace HSMServer.Core.Cache
                 return;
             }
 
-            var from = sensor.HistoryPeriod.From;
+            var from = sensor.From;
 
             var to = request.To;
 
@@ -853,7 +853,7 @@ namespace HSMServer.Core.Cache
             }
 
             _database.ClearSensorValues(sensor.Id, from, to);
-            sensor.HistoryPeriod.Cut(to);
+            sensor.Cut(to);
 
             SensorUpdateView(sensor);
         }
@@ -1772,7 +1772,7 @@ namespace HSMServer.Core.Cache
             {
                 try
                 {
-                    var sensor = SensorModelFactory.Build(entity);
+                    var sensor = SensorModelFactory.Build(entity, _database);
                     sensor.Policies.ApplyPolicies(entity.Policies, policies);
 
                     var productId = Guid.Parse(entity.ProductId);
@@ -1809,9 +1809,9 @@ namespace HSMServer.Core.Cache
 
             MigrateDatabseV2();
 
-            _logger.Info($"{nameof(FillSensorsData)} is started");
-            FillSensorsData();
-            _logger.Info($"{nameof(FillSensorsData)} is finished");
+            //_logger.Info($"{nameof(FillSensorsData)} is started");
+            //FillSensorsData();
+            //_logger.Info($"{nameof(FillSensorsData)} is finished");
 
             _logger.Info($"Set initial sensor state is started");
             foreach (var sensor in _sensorsById.Values)
@@ -1957,7 +1957,7 @@ namespace HSMServer.Core.Cache
                     CreationDate = DateTime.UtcNow.Ticks,
                 };
 
-                sensor = SensorModelFactory.Build(entity);
+                sensor = SensorModelFactory.Build(entity, _database);
                 parentProduct.AddSensor(sensor);
 
                 if (!sensor.Settings.TTL.IsSet)
@@ -2096,36 +2096,36 @@ namespace HSMServer.Core.Cache
             return _keys.TryGetValue(key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
         }
 
-        private void FillSensorsData()
-        {
-            var results = _database.GetLastAndFirstValues(_sensorsById.Keys);
+        //private void FillSensorsData()
+        //{
+        //    var results = _database.GetLastAndFirstValues(_sensorsById.Keys);
 
-            foreach (var (sensorId, (firstValueBytes, lastValueBytes)) in results)
-            {
-                if (TryGetSensorById(sensorId, out var sensor))
-                {
-                    if (lastValueBytes is not null)
-                    {
-                        var lastValue = sensor.AddDbValue(lastValueBytes);
+        //    foreach (var (sensorId, (firstValueBytes, lastValueBytes)) in results)
+        //    {
+        //        if (TryGetSensorById(sensorId, out var sensor))
+        //        {
+        //            if (lastValueBytes is not null)
+        //            {
+        //                var lastValue = sensor.AddDbValue(lastValueBytes);
 
-                        sensor.HistoryPeriod.Update(lastValue.Time);
-                    }
+        //                sensor.HistoryPeriod.Update(lastValue.Time);
+        //            }
 
-                    if (firstValueBytes is not null)
-                    {
-                        var firstValue = sensor.Convert(firstValueBytes);
-                        sensor.HistoryPeriod.Update(firstValue.Time);
-                    }
+        //            if (firstValueBytes is not null)
+        //            {
+        //                var firstValue = sensor.Convert(firstValueBytes);
+        //                sensor.HistoryPeriod.Update(firstValue.Time);
+        //            }
 
-                    _logger.Info($"{sensor.Id} {sensor.FullPath} initialized history from {sensor.HistoryPeriod.From} to {sensor.HistoryPeriod.To}, timeout = {sensor.IsExpired}");
+        //            _logger.Info($"{sensor.Id} {sensor.FullPath} initialized history from {sensor.HistoryPeriod.From} to {sensor.HistoryPeriod.To}, timeout = {sensor.IsExpired}");
 
-                    //SendNotification(sensor.Id, sensor.Notifications.LeftOnlyScheduled());
+        //            //SendNotification(sensor.Id, sensor.Notifications.LeftOnlyScheduled());
 
-                    //if (!_snapshot.IsFinal && sensor.LastValue is not null)
-                    //    _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
-                }
-            }
-        }
+        //            //if (!_snapshot.IsFinal && sensor.LastValue is not null)
+        //            //    _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
+        //        }
+        //    }
+        //}
 
         private async Task UpdateCacheState()
         {

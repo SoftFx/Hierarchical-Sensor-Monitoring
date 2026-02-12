@@ -10,6 +10,9 @@ namespace HSMServer.Core.Model
     {
         private T _prevValue;
 
+        protected BarValuesStorage(Func<BaseValue> getFirstValue, Func<BaseValue> getLastValue) : base(getFirstValue, getLastValue)
+        {
+        }
 
         internal override T LastDbValue => _prevValue;
 

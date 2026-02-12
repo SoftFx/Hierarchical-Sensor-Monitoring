@@ -77,6 +77,8 @@ namespace HSMServer.Core.DataLayer
 
         byte[] GetLatestValue(Guid sensorId, long to);
 
+        byte[] GetFirstValue(Guid sensorId);
+
         Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds);
 
         Dictionary<Guid, byte[]> GetLatestValuesFromTo(Dictionary<Guid, (long, long)> sensors);

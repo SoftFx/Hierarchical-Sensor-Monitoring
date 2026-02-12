@@ -1,11 +1,13 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.AccessManager.Formatters;
-using HSMServer.Core.Extensions;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.Policies;
+using NLog.Web.Enums;
 
 
 namespace HSMServer.Core.Model
@@ -14,12 +16,27 @@ namespace HSMServer.Core.Model
     {
         private readonly MemoryPackFormatter _formatter = new MemoryPackFormatter();
 
+        protected readonly Func<BaseValue> _getLastValue, _getFirstValue;
+
         public override SensorPolicyCollection<T> Policies { get; }
 
         internal override ValuesStorage<T> Storage { get; }
 
 
-        protected BaseSensorModel(SensorEntity entity) : base(entity) { }
+        protected BaseSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity) 
+        {
+            _getFirstValue = () => 
+            {
+                byte[] item = database.GetLatestValue(Guid.Parse(entity.Id), DateTime.MinValue.Ticks);
+                return Convert(item);
+            };
+
+            _getLastValue = () =>
+            {
+                byte[] item = database.GetFirstValue(Guid.Parse(entity.Id));
+                return Convert(item);
+            };
+        }
 
 
         internal override void Revalidate()
@@ -34,7 +51,6 @@ namespace HSMServer.Core.Model
             {
                 Storage.AddValueBase((T)value);
                 ReceivedNewValue?.Invoke(value);
-                HistoryPeriod.Update(value.Time);
                 return true;
             }
 
@@ -55,8 +71,6 @@ namespace HSMServer.Core.Model
                 {
                     if (!AggregateValues)
                         Storage.AddValue(validatedValue);
-
-                    HistoryPeriod.Update(validatedValue.Time);
 
                     ReceivedNewValue?.Invoke(validatedValue);
                 }

@@ -109,6 +109,21 @@ namespace HSMDatabase.DatabaseWorkCore
             return null;
         }
 
+        public byte[] GetFirstValue(Guid sensorId)
+        {
+            var minKey = new DbKey(sensorId, DateTime.MinValue);
+
+            foreach (var database in _sensorValuesDatabases.Reverse())
+            {
+                var value = database.GetFirst(minKey.ToBytes(), minKey.ToPrefixBytes());
+
+                if (value is not null)
+                    return value;
+            }
+
+            return null;
+        }
+
 
         public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds)
         {

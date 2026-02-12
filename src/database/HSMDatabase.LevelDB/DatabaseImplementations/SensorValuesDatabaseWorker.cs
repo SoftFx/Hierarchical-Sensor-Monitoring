@@ -80,6 +80,20 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public byte[] GetFirst(byte[] key, byte[] sensorId)
+        {
+            try
+            {
+                return _openedDb.GetFirst(key, sensorId);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting first value {key.GetString()} - {e.Message}");
+
+                return null;
+            }
+        }
+
         public Dictionary<Guid, (byte[], byte[])> GetLastAndFirstValues(IEnumerable<Guid> sensorIds,Dictionary<Guid, (byte[] lastValue, byte[] firstValue)> results = null)
         {
             try
