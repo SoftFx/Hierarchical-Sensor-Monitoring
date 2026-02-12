@@ -22,13 +22,11 @@ using HSMServer.Core.Threading;
 using HSMServer.Core.TreeStateSnapshot;
 using HSMServer.PathTemplates;
 using NLog;
-using NLog.Web.Enums;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using SensorType = HSMCommon.Model.SensorType;
@@ -1813,10 +1811,10 @@ namespace HSMServer.Core.Cache
             //FillSensorsData();
             //_logger.Info($"{nameof(FillSensorsData)} is finished");
 
-            _logger.Info($"Set initial sensor state is started");
-            foreach (var sensor in _sensorsById.Values)
-                sensor.Policies.TimeToLive.InitLastTtlTime(sensor.CheckTimeout());
-            _logger.Info($"Set initial sensor state is finished");
+            //_logger.Info($"Set initial sensor state is started");
+            //foreach (var sensor in _sensorsById.Values)
+            //    sensor.Policies.TimeToLive.InitLastTtlTime(sensor.CheckTimeout());
+            //_logger.Info($"Set initial sensor state is finished");
         }
 
 
@@ -2132,6 +2130,7 @@ namespace HSMServer.Core.Cache
             _logger.Info("Update cache state");
 
             _confirmationManager.FlushMessages();
+
             _scheduleManager.FlushMessages();
 
             await Parallel.ForEachAsync(GetProducts(), new ParallelOptions
