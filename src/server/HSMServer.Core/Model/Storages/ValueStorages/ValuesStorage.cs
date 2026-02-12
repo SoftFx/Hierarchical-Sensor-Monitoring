@@ -107,7 +107,10 @@ namespace HSMServer.Core.Model
         internal virtual void AddValueBase(T value)
         {
             if (value.IsTimeout && (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime))
+            {
                 _lastTimeout = value;
+                return;
+            }
 
             _cache.Enqueue(value);
 
