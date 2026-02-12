@@ -116,7 +116,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var db in _sensorValuesDatabases.Reverse())
             {
+                _logger.Info($"Start reading db {db.Name}");
                 results = db.GetLastAndFirstValues(sensorIds, results);
+                _logger.Info($"Stop reading db {db.Name}");
             }
 
             return results;
