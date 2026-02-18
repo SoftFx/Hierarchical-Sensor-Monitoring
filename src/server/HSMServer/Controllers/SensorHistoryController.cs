@@ -121,7 +121,7 @@ namespace HSMServer.Controllers
         {
             if (_tree.Sensors.TryGetValue(id, out SensorNodeViewModel model))
             {
-                string units = model.DisplayUnit.HasValue
+                string units = IsRateSensor(model)
                     ? model.DisplayUnit.GetDisplayName()
                     : model.SelectedUnit?.GetDisplayName();
 
@@ -131,6 +131,13 @@ namespace HSMServer.Controllers
             }
 
             return _emptyJsonResult;
+        }
+
+        private bool IsRateSensor(SensorNodeViewModel model)
+        {
+            if(model == null) return false;
+
+            return model.Type == SensorType.Rate && model.DisplayUnit.HasValue;
         }
 
         [HttpPost]
