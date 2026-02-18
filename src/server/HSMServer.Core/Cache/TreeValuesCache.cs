@@ -9,6 +9,7 @@ using HSMServer.Core.ApiObjectsConverters;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Confirmation;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
@@ -784,6 +785,8 @@ namespace HSMServer.Core.Cache
             int cleared = 0;
             foreach (var sensor in value.Sensors.Values)
             {
+                sensor.Initialize();
+
                 var from = sensor.From;
 
                 var policy = sensor.Settings.KeepHistory.Value;
@@ -819,6 +822,8 @@ namespace HSMServer.Core.Cache
                 return;
             }
 
+            sensor.Initialize();
+
             var from = sensor.From;
 
             var to = request.To;
@@ -829,7 +834,7 @@ namespace HSMServer.Core.Cache
                 return;
             }
 
-            sensor.Storage.Clear(to);
+            sensor.Clear(to);
 
             if (!sensor.HasData)
                 sensor.ResetSensor();
@@ -1807,6 +1812,8 @@ namespace HSMServer.Core.Cache
 
             MigrateDatabseV2();
 
+            Task.Run(() => FillSensorsData()).Forget(_logger);
+
             //_logger.Info($"{nameof(FillSensorsData)} is started");
             //FillSensorsData();
             //_logger.Info($"{nameof(FillSensorsData)} is finished");
@@ -2092,6 +2099,14 @@ namespace HSMServer.Core.Cache
         private AccessKeyModel GetAccessKeyModel(Guid key)
         {
             return _keys.TryGetValue(key, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
+        }
+
+        private ValueTask FillSensorsData()
+        {
+            foreach (var sensor in GetSensors())
+                sensor.Initialize();
+
+            return ValueTask.CompletedTask;
         }
 
         //private void FillSensorsData()

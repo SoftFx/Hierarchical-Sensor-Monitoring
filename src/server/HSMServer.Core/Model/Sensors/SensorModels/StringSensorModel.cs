@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
 {
     public sealed class StringSensorModel : BaseSensorModel<StringValue>
     {
-        internal override StringValuesStorage Storage { get; }
+        protected override StringValuesStorage Storage { get; } = new StringValuesStorage();
 
 
         public override SensorPolicyCollection<StringValue, StringPolicy> Policies { get; } = new();
@@ -18,7 +18,6 @@ namespace HSMServer.Core.Model
 
         public StringSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database)
         {
-            Storage = new StringValuesStorage(_getFirstValue, _getLastValue);
         }
     }
 }

@@ -23,11 +23,15 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public IntervalDataseBase(string name, long from, long to)
         {
+            _logger.Info($"Start opening DB {name}");
+
             _openedDb = new LevelDBDatabaseAdapter(name);
 
             Name = name;
             From = from;
             To = to;
+
+            _logger.Info($"End opening DB {name}");
         }
 
         public void Dispose() => _openedDb.Dispose();

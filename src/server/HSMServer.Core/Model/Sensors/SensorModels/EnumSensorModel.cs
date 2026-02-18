@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
 {
     public sealed class EnumSensorModel : BaseSensorModel<EnumValue>
     {
-        internal override EnumValuesStorage Storage { get; }
+        protected override EnumValuesStorage Storage { get; } = new EnumValuesStorage();
 
 
         public override SensorPolicyCollection<EnumValue, EnumPolicy> Policies { get; } = new();
@@ -18,7 +18,6 @@ namespace HSMServer.Core.Model
 
         public EnumSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database)
         {
-            Storage = new EnumValuesStorage(_getFirstValue, _getLastValue);
         }
 
     }

@@ -125,9 +125,9 @@ namespace HSMServer.Core.Model.Policies
             return Ok;
         }
 
-        internal void InitLastTtlTime(bool timeout)
+        internal void InitLastTtlTime(DateTime time)
         {
-            _lastTTLNotificationTime = timeout ? DateTime.UtcNow : null;
+            _lastTTLNotificationTime = time;
         }
 
         public override string ToString()

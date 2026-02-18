@@ -7,7 +7,7 @@ namespace HSMServer.Core.Model
 {
     public sealed class DoubleBarSensorModel : BaseSensorModel<DoubleBarValue>, IBarSensor
     {
-        internal override DoubleBarValuesStorage Storage { get; }
+        protected override DoubleBarValuesStorage Storage { get; } = new DoubleBarValuesStorage();
 
 
         public override SensorPolicyCollection<DoubleBarValue, DoubleBarPolicy> Policies { get; } = new();
@@ -20,7 +20,6 @@ namespace HSMServer.Core.Model
 
         public DoubleBarSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database) 
         {
-           Storage = new DoubleBarValuesStorage(_getFirstValue, _getLastValue);
         }
     }
 }

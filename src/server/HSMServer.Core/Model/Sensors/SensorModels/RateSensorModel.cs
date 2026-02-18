@@ -9,7 +9,7 @@ namespace HSMServer.Core.Model.Sensors.SensorModels
 {
     internal sealed class RateSensorModel : BaseSensorModel<RateValue>
     {
-        internal override RateValuesStorage Storage { get; }
+        protected override RateValuesStorage Storage { get; } = new RateValuesStorage();
 
 
         public override SensorPolicyCollection<RateValue, RatePolicy> Policies { get; } = new();
@@ -26,8 +26,6 @@ namespace HSMServer.Core.Model.Sensors.SensorModels
                 //default value
                 DisplayUnit = RateDisplayUnit.PerSecond;
             }
-
-            Storage = new RateValuesStorage(_getLastValue, _getLastValue);
         }
 
         protected override int GetDisplayCoeff()

@@ -7,10 +7,6 @@ namespace HSMServer.Core.Model
 {
     public sealed class EnumValuesStorage : ValuesStorage<EnumValue>
     {
-        public EnumValuesStorage(Func<BaseValue> getFirstValue, Func<BaseValue> getLastValue) : base(getFirstValue, getLastValue)
-        {
-        }
-
         internal override EnumValue CalculateStatistics(EnumValue value) => StatisticsCalculation.CalculateEma<EnumValue, int>(LastValue, value);
 
         internal override EnumValue RecalculateStatistics(EnumValue value) => StatisticsCalculation.RecalculateEma<EnumValue, int>(LastValue, value);

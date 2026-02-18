@@ -52,6 +52,9 @@ namespace HSMDatabase.DatabaseWorkCore
             var from = DateTimeMethods.GetStartOfWeekTicks(time);
             var to   = DateTimeMethods.GetEndOfWeekTicks(time);
 
+            if (_dbs.TryGetValue(from, out var db))
+                return db.Value;
+
             lock (_lock)
             {
                 if (!_dbs.TryGetValue(from, out var lazyDb))
@@ -61,9 +64,8 @@ namespace HSMDatabase.DatabaseWorkCore
                             string name = GetDbPath.Invoke(from, to);
                             return CreateDb.Invoke(name, from, to);
                         }, LazyThreadSafetyMode.ExecutionAndPublication);
-                    
-                    _dbs.Add(from, lazyDb);
 
+                    _dbs.Add(from, lazyDb);
                 }
                 return lazyDb.Value;
             }
@@ -98,6 +100,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return (from, to);
         }
+
         public IEnumerator<T> GetEnumerator()
         {
             List<Lazy<T>> dbCopies;

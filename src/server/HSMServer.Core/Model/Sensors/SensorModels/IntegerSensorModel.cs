@@ -7,7 +7,7 @@ namespace HSMServer.Core.Model
 {
     public sealed class IntegerSensorModel : BaseSensorModel<IntegerValue>
     {
-        internal override IntegerValuesStorage Storage { get; }
+        protected override IntegerValuesStorage Storage { get; } = new IntegerValuesStorage();
 
 
         public override SensorPolicyCollection<IntegerValue, IntegerPolicy> Policies { get; } = new();
@@ -17,7 +17,6 @@ namespace HSMServer.Core.Model
 
         public IntegerSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database)
         {
-            Storage = new IntegerValuesStorage(_getFirstValue, _getLastValue);
         }
     }
 }

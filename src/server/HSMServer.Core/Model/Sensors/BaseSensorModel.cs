@@ -32,7 +32,7 @@ namespace HSMServer.Core.Model
 
         public DateTime To => Storage.To;
 
-        internal abstract ValuesStorage Storage { get; }
+        protected abstract ValuesStorage Storage { get; }
 
         internal bool IsExpired { get; set; }
 
@@ -70,6 +70,7 @@ namespace HSMServer.Core.Model
             }
         }
 
+        public void Clear(DateTime to) => Storage.Clear(to);
 
         public PolicyResult Notifications => Policies.NotificationResult;
 
@@ -133,9 +134,11 @@ namespace HSMServer.Core.Model
 
         }
 
+        internal abstract BaseValue GetEmptyValue();
+
         public void Cut(DateTime time)
         {
-            Storage.From = time;
+            Storage.Cut(time);
         }
 
         public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask() ?? Task.FromResult(new List<BaseValue>());
@@ -147,8 +150,6 @@ namespace HSMServer.Core.Model
 
         internal abstract bool TryAddValue(BaseValue value);
 
-        internal abstract BaseValue AddDbValue(byte[] bytes);
-
         internal abstract bool TryUpdateLastValue(BaseValue value);
 
 
@@ -157,6 +158,8 @@ namespace HSMServer.Core.Model
         internal abstract BaseValue Convert(byte[] bytes);
 
         internal abstract BaseValue ConvertFromJson(string data);
+
+        internal abstract void Initialize();
 
 
         internal bool TryUpdate(SensorUpdate update, out string error)

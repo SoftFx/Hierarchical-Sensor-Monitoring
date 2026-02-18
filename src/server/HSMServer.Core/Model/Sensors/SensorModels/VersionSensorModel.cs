@@ -9,7 +9,7 @@ namespace HSMServer.Core.Model;
 
 public class VersionSensorModel : BaseSensorModel<VersionValue>
 {
-    internal override VersionValueStorage Storage { get; }
+    protected override VersionValueStorage Storage { get; } = new VersionValueStorage();
 
 
     public override SensorPolicyCollection<VersionValue, VersionPolicy> Policies { get; } = new();
@@ -19,6 +19,5 @@ public class VersionSensorModel : BaseSensorModel<VersionValue>
 
     public VersionSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database)
     {
-        Storage = new VersionValueStorage(_getFirstValue, _getLastValue);
     }
 }

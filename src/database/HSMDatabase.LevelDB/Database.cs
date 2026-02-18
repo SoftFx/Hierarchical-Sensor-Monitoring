@@ -171,7 +171,7 @@ namespace HSMDatabase.LevelDB
             if (iterator.IsValid && iterator.Key().StartsWith(prefix))
                 return iterator.Value();
 
-            return [];
+            return null;
         }
 
         public Dictionary<Guid, (byte[] firstValue, byte[] lastValue)> GetLastAndFirstValues(

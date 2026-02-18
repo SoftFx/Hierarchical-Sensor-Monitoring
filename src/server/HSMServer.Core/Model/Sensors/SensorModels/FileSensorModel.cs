@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
 {
     public sealed class FileSensorModel : BaseSensorModel<FileValue>
     {
-        internal override FileValuesStorage Storage { get; }
+        protected override FileValuesStorage Storage { get; } = new FileValuesStorage();
 
 
         public override SensorPolicyCollection<FileValue, FilePolicy> Policies { get; } = new();
@@ -18,7 +18,6 @@ namespace HSMServer.Core.Model
 
         public FileSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database)
         {
-           Storage = new FileValuesStorage(_getFirstValue, _getLastValue);
         }
     }
 }
