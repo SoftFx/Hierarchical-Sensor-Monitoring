@@ -1,14 +1,16 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager;
+using LevelDB;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using HSMDatabase.AccessManager;
+using System.Threading;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
     internal abstract class ValuesDatabaseDictionary<T> : IEnumerable<T> where T : IDisposable
     {
-        private readonly SortedDictionary<long, T> _dbs = new(Comparer<long>.Create((x, y) => y.CompareTo(x)));
+        private readonly SortedDictionary<long, Lazy<T>> _dbs = new(Comparer<long>.Create((x, y) => y.CompareTo(x)));
         private readonly object _lock = new();
 
         protected readonly IDatabaseSettings _dbSettings;
@@ -37,7 +39,12 @@ namespace HSMDatabase.DatabaseWorkCore
                     (var from, var to) = GetDatesFromFolderName(directory);
                     if (!_dbs.ContainsKey(from))
                     {
-                        var db = CreateDb.Invoke(directory, from, to);
+                        var db = new Lazy<T>(() =>
+                        {
+                            string name = GetDbPath.Invoke(from, to);
+                            return CreateDb.Invoke(name, from, to);
+                        }, LazyThreadSafetyMode.ExecutionAndPublication);
+
                         _dbs.Add(from, db);
                     }
                 }
@@ -50,25 +57,22 @@ namespace HSMDatabase.DatabaseWorkCore
             var to = DateTimeMethods.GetEndOfWeekTicks(time);
 
             if (_dbs.TryGetValue(from, out var existingDb))
-                return existingDb;
-
-            if (_dbs.TryGetValue(from, out var db))
-                return db.Value;
+                return existingDb.Value;
 
             lock (_lock)
             {
                 if (!_dbs.TryGetValue(from, out var db))
                 {
-                    lazyDb = new Lazy<T>(() =>
+                    db = new Lazy<T>(() =>
                         {
                             string name = GetDbPath.Invoke(from, to);
                             return CreateDb.Invoke(name, from, to);
                         }, LazyThreadSafetyMode.ExecutionAndPublication);
 
-                    _dbs.Add(from, lazyDb);
+                    _dbs.Add(from, db);
                 }
 
-                return db;
+                return db.Value;
             }
         }
 
@@ -103,7 +107,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public IEnumerator<T> GetEnumerator()
         {
-            List<T> dbCopies;
+            List<Lazy<T>> dbCopies;
 
             lock (_lock)
             {
@@ -112,7 +116,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var db in dbCopies)
             {
-                yield return db;
+                yield return db.Value;
             }
         }
 
