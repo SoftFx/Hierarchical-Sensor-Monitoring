@@ -33,6 +33,9 @@ namespace HSMServer.Core.Model
         protected BaseSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity) 
         {
             _database = database;
+
+            if (database == null)
+                _isInitialized = true;
         }
 
 
