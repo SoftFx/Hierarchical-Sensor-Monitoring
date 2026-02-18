@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Model;
 using HSMServer.Core.Model.Storages;
+using System;
 
 namespace HSMServer.Core.Model
 {

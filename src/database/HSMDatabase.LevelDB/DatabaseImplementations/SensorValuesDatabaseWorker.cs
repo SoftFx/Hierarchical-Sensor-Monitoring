@@ -76,7 +76,21 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 _logger.Error($"Failed getting latest value {key.GetString()} - {e.Message}");
 
-                return [];
+                return null;
+            }
+        }
+
+        public byte[] GetFirst(byte[] key, byte[] sensorId)
+        {
+            try
+            {
+                return _openedDb.GetFirst(key, sensorId);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting first value {key.GetString()} - {e.Message}");
+
+                return null;
             }
         }
 

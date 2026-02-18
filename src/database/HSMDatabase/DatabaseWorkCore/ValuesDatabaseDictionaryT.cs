@@ -52,13 +52,20 @@ namespace HSMDatabase.DatabaseWorkCore
             if (_dbs.TryGetValue(from, out var existingDb))
                 return existingDb;
 
+            if (_dbs.TryGetValue(from, out var db))
+                return db.Value;
+
             lock (_lock)
             {
                 if (!_dbs.TryGetValue(from, out var db))
                 {
-                    string name = GetDbPath.Invoke(from, to);
-                    db = CreateDb.Invoke(name, from, to);
-                    _dbs.Add(from, db);
+                    lazyDb = new Lazy<T>(() =>
+                        {
+                            string name = GetDbPath.Invoke(from, to);
+                            return CreateDb.Invoke(name, from, to);
+                        }, LazyThreadSafetyMode.ExecutionAndPublication);
+
+                    _dbs.Add(from, lazyDb);
                 }
 
                 return db;

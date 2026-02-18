@@ -78,6 +78,15 @@ namespace HSMServer.Core.Model
 
         protected T GetLastBar(T value) => IsNewBar(value) ? LastValue : LastDbValue;
 
-        private bool IsNewBar(T value) => PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime;
+        private bool IsNewBar(T value)
+        {
+            if (PartialLastValue == null)
+            {
+                PartialLastValue = value;
+                return true;
+            }
+
+            return PartialLastValue.OpenTime != value.OpenTime;
+        }
     }
 }

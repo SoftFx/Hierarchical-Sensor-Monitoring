@@ -161,6 +161,19 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        public byte[] GetFirst(byte[] key, byte[] prefix)
+        {
+
+            using var iterator = _database.CreateIterator(_iteratorOptions);
+
+            iterator.Seek(key);
+
+            if (iterator.IsValid && iterator.Key().StartsWith(prefix))
+                return iterator.Value();
+
+            return null;
+        }
+
         public Dictionary<Guid, (byte[] firstValue, byte[] lastValue)> GetLastAndFirstValues(
             IEnumerable<Guid> sensorIds,
             Dictionary<Guid, (byte[] firstValue, byte[] lastValue)> results = null)

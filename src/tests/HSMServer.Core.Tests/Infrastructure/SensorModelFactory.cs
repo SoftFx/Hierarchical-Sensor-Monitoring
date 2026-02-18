@@ -1,29 +1,30 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using System;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using System;
 using HSMServer.Core.Model.Sensors.SensorModels;
 using HSMCommon.Model;
+using HSMServer.Core.DataLayer;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
     public static class SensorModelFactory
     {
-        public static BaseSensorModel Build(SensorEntity entity)
+        public static BaseSensorModel Build(SensorEntity entity, IDatabaseCore database)
         {
             return (SensorType)entity.Type switch
             {
-                SensorType.Boolean => new BooleanSensorModel(entity),
-                SensorType.Integer => new IntegerSensorModel(entity),
-                SensorType.Double => new DoubleSensorModel(entity),
-                SensorType.Rate => new RateSensorModel(entity),
-                SensorType.String => new StringSensorModel(entity),
-                SensorType.IntegerBar => new IntegerBarSensorModel(entity),
-                SensorType.DoubleBar => new DoubleBarSensorModel(entity),
-                SensorType.File => new FileSensorModel(entity),
-                SensorType.TimeSpan => new TimeSpanSensorModel(entity),
-                SensorType.Version => new VersionSensorModel(entity),
-                SensorType.Enum => new EnumSensorModel(entity),
+                SensorType.Boolean => new BooleanSensorModel(entity, database),
+                SensorType.Integer => new IntegerSensorModel(entity, database),
+                SensorType.Double => new DoubleSensorModel(entity, database),
+                SensorType.Rate => new RateSensorModel(entity, database),
+                SensorType.String => new StringSensorModel(entity, database),
+                SensorType.IntegerBar => new IntegerBarSensorModel(entity, database),
+                SensorType.DoubleBar => new DoubleBarSensorModel(entity, database),
+                SensorType.File => new FileSensorModel(entity, database),
+                SensorType.TimeSpan => new TimeSpanSensorModel(entity, database),
+                SensorType.Version => new VersionSensorModel(entity, database),
+                SensorType.Enum => new EnumSensorModel(entity, database),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }

@@ -1,11 +1,11 @@
 ﻿using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.Model.Sensors;
-using HSMServer.Core.TreeStateSnapshot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,10 +28,11 @@ namespace HSMServer.Core.Model
 
         public override SensorPolicyCollection Policies { get; }
 
+        public DateTime From => Storage.From;
 
-        internal abstract ValuesStorage Storage { get; }
+        public DateTime To => Storage.To;
 
-        internal LastHistoryPeriod HistoryPeriod { get; } = new();
+        protected abstract ValuesStorage Storage { get; }
 
         internal bool IsExpired { get; set; }
 
@@ -69,6 +70,7 @@ namespace HSMServer.Core.Model
             }
         }
 
+        public void Clear(DateTime to) => Storage.Clear(to);
 
         public PolicyResult Notifications => Policies.NotificationResult;
 
@@ -94,7 +96,7 @@ namespace HSMServer.Core.Model
 
         public BaseValue LastTimeout => Storage.LastTimeout;
 
-        public BaseValue LastValue => Storage.LastValue;
+        public BaseValue LastValue => Storage?.LastValue;
 
 
         public bool HasData => Storage.HasData;
@@ -132,6 +134,12 @@ namespace HSMServer.Core.Model
 
         }
 
+        internal abstract BaseValue GetEmptyValue();
+
+        public void Cut(DateTime time)
+        {
+            Storage.Cut(time);
+        }
 
         public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask() ?? Task.FromResult(new List<BaseValue>());
 
@@ -142,8 +150,6 @@ namespace HSMServer.Core.Model
 
         internal abstract bool TryAddValue(BaseValue value);
 
-        internal abstract BaseValue AddDbValue(byte[] bytes);
-
         internal abstract bool TryUpdateLastValue(BaseValue value);
 
 
@@ -152,6 +158,8 @@ namespace HSMServer.Core.Model
         internal abstract BaseValue Convert(byte[] bytes);
 
         internal abstract BaseValue ConvertFromJson(string data);
+
+        internal abstract void Initialize();
 
 
         internal bool TryUpdate(SensorUpdate update, out string error)

@@ -25,6 +25,9 @@ namespace HSMServer.Core.Model
 
         internal abstract bool HasData { get; }
 
+        internal abstract DateTime From { get; }
+
+        internal abstract DateTime To { get; }
 
         internal abstract List<BaseValue> GetValues(DateTime from, DateTime to);
 
@@ -32,11 +35,12 @@ namespace HSMServer.Core.Model
 
         internal abstract bool TryChangeLastValue(BaseValue value);
 
-        internal abstract BaseValue GetEmptyValue();
-
         internal abstract void Clear(DateTime to);
 
         internal abstract void Clear();
+
+        internal abstract void Cut(DateTime time);
+
     }
 
 
@@ -47,9 +51,10 @@ namespace HSMServer.Core.Model
 
         private T _lastValue, _lastTimeout;
 
+        DateTime _from = DateTime.MinValue;
+        DateTime _to   = DateTime.MaxValue;
 
         private bool IsLastEmptyOrTimeout => LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime;
-
 
         internal override T LastDbValue => _cache.LastOrDefault();
 
@@ -59,6 +64,8 @@ namespace HSMServer.Core.Model
 
         internal override bool HasData => !_cache.IsEmpty;
 
+        internal override DateTime From => _from;
+        internal override DateTime To => _to;
 
         internal virtual T CalculateStatistics(T value) => value;
 
@@ -70,15 +77,19 @@ namespace HSMServer.Core.Model
         internal virtual void AddValueBase(T value)
         {
             if (value.IsTimeout && (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime))
+            {
                 _lastTimeout = value;
-
-            _cache.Enqueue(value);
-
-            if (_cache.Count > CacheSize)
-                _cache.TryDequeue(out _);
-
-            if (_lastValue is null || value.Time >= _lastValue.Time)
+            }
+            else if (_lastValue is null || value.Time >= _lastValue.Time)
+            {
                 _lastValue = value;
+                _to = value.Time;
+
+                _cache.Enqueue(value);
+
+                if (_cache.Count > CacheSize)
+                    _cache.TryDequeue(out _);
+            }
         }
 
         internal override bool TryChangeLastValue(BaseValue value)
@@ -91,8 +102,6 @@ namespace HSMServer.Core.Model
 
             return false;
         }
-
-        internal override BaseValue GetEmptyValue() => new T();
 
         internal bool TryAggregateValue(T value)
         {
@@ -121,6 +130,12 @@ namespace HSMServer.Core.Model
 
             if (_cache.IsEmpty)
                 _lastValue = null;
+        }
+
+
+        internal override void Cut(DateTime time)
+        {
+            _from = time;
         }
 
         internal override void Clear()
