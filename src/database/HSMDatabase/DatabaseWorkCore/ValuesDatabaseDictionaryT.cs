@@ -1,18 +1,15 @@
-﻿using HSMDatabase.AccessManager;
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
-
+using HSMDatabase.AccessManager;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
     internal abstract class ValuesDatabaseDictionary<T> : IEnumerable<T> where T : IDisposable
     {
-        private readonly SortedDictionary<long, Lazy<T>> _dbs = new(Comparer<long>.Create((x, y) => y.CompareTo(x)));
+        private readonly SortedDictionary<long, T> _dbs = new(Comparer<long>.Create((x, y) => y.CompareTo(x)));
         private readonly object _lock = new();
-
 
         protected readonly IDatabaseSettings _dbSettings;
 
@@ -40,7 +37,7 @@ namespace HSMDatabase.DatabaseWorkCore
                     (var from, var to) = GetDatesFromFolderName(directory);
                     if (!_dbs.ContainsKey(from))
                     {
-                        var db = new Lazy<T>(() => CreateDb.Invoke(directory, from, to));
+                        var db = CreateDb.Invoke(directory, from, to);
                         _dbs.Add(from, db);
                     }
                 }
@@ -50,14 +47,17 @@ namespace HSMDatabase.DatabaseWorkCore
         internal T GetDatabaseByTime(long time)
         {
             var from = DateTimeMethods.GetStartOfWeekTicks(time);
-            var to   = DateTimeMethods.GetEndOfWeekTicks(time);
+            var to = DateTimeMethods.GetEndOfWeekTicks(time);
+
+            if (_dbs.TryGetValue(from, out var existingDb))
+                return existingDb;
 
             if (_dbs.TryGetValue(from, out var db))
                 return db.Value;
 
             lock (_lock)
             {
-                if (!_dbs.TryGetValue(from, out var lazyDb))
+                if (!_dbs.TryGetValue(from, out var db))
                 {
                     lazyDb = new Lazy<T>(() =>
                         {
@@ -67,10 +67,10 @@ namespace HSMDatabase.DatabaseWorkCore
 
                     _dbs.Add(from, lazyDb);
                 }
-                return lazyDb.Value;
+
+                return db;
             }
         }
-
 
         private string[] GetSensorValuesDirectories()
         {
@@ -103,7 +103,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public IEnumerator<T> GetEnumerator()
         {
-            List<Lazy<T>> dbCopies;
+            List<T> dbCopies;
 
             lock (_lock)
             {
@@ -112,7 +112,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var db in dbCopies)
             {
-                yield return db.Value;
+                yield return db;
             }
         }
 

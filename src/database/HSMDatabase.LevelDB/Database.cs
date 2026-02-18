@@ -187,6 +187,8 @@ namespace HSMDatabase.LevelDB
 
             foreach (var sensorId in sensorIds)
             {
+                _logger.Info(sensorId);
+
                 byte[] currentFirstValue = null;
                 byte[] currentLastValue = null;
 
