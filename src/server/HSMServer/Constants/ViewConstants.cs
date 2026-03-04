@@ -9,6 +9,7 @@
         public const string DashboardsController = "Dashboards";
         public const string AlertsController = "Alerts";
         public const string AlertTemplatesController = "AlertTemplates";
+        public const string AlertSchedulesController = "AlertSchedules";
         public const string AccountController = "Account";
         public const string ProductController = "Product";
         public const string FoldersController = "Folders";
