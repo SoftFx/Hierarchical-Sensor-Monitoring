@@ -1,0 +1,67 @@
+﻿@using HSMCommon.Model
+@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Core.Model
+@using HSMServer.Helpers
+@using HSMServer.Model.DataAlerts
+@using HSMServer.Model.AlertSchedule
+
+
+@model AlertScheduleViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    ViewData["Title"] = "Alert Schedules";
+    Layout = "~/Views/Tree/_Layout.cshtml";
+
+    bool isNew = Model.Id == Guid.Empty;
+;
+}
+
+<div class="container">
+    <div class="row w-100 justify-content-center">
+        <div class="m-2">
+
+            <form id="addAlertTemplate_form" method="post" action="@Html.Raw(Url.Action(nameof(AlertSchedulesController.Save), ViewConstants.AlertSchedulesController))">
+                <div class="row">
+                    <h5>@(isNew ? "New alert schedule" : "Edit alert schedule")</h5>
+                </div>
+                <div class="row py-2">
+                    <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Name"></label>
+                    <div class="col w-auto">
+                        <input type='text' class='form-control' asp-for="Name" />
+                        <span asp-validation-for="Name"></span>
+                    </div>
+                </div>
+                <div class="row py-2">
+                    <label class="col-1 col-form-label d-flex justify-content-end" asp-for="TimeZone"></label>
+                    <div class="col w-auto">
+                        <select class="form-control" asp-for="TimeZone" asp-items="Model.TimeZoneList">
+                            <option value="">-- Select time zone --</option>
+                        </select>
+                        <span asp-validation-for="TimeZone"></span>
+                    </div>
+                </div>
+
+                <div class="row py-2">
+                    <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Schedule"></label>
+                    <div class="col w-auto">
+                        <textarea class="form-control" asp-for="Schedule" rows="15"></textarea>
+                        <span asp-validation-for="Schedule"></span>
+                    </div>
+                </div>
+
+                <div class="form-group mt-3">
+                    <div align="right">
+                        <button id="submit_form" class="btn btn-secondary col-2" type="submit">@(isNew ? "Create" : "Save")</button>
+                        <a class="btn btn-secondary col-2 px-2" type="button" href="@Html.Raw(Url.Action(nameof(AlertSchedulesController.Index), ViewConstants.AlertSchedulesController))">Cancel</a>
+                    </div>
+                </div>
+                <input type='text' class='d-none' asp-for="Id" />
+            </form>
+
+        </div>
+    </div>
+</div>
+
