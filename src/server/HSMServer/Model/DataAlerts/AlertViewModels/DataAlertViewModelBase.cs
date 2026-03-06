@@ -13,6 +13,7 @@ using HSMServer.Model.Controls;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Html;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
 namespace HSMServer.Model.DataAlerts
@@ -44,6 +45,10 @@ namespace HSMServer.Model.DataAlerts
         public bool IsTemplate { get; protected set; }
 
         public Guid? TemplateId { get; set; }
+
+        public Guid? Schedule { get; set; }
+
+        public List<SelectListItem> ScheduleList { get; set; }
 
         internal bool IsAlertDisplayed
         {

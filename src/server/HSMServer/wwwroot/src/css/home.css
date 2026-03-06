@@ -418,6 +418,10 @@ img .tree-png-icon {
     width: 40px;
 }
 
+.fixed-width80 {
+    width: 80px;
+}
+
 .alert-add-button {
     cursor: pointer;
     color: rgba(92,184,92,.5);
