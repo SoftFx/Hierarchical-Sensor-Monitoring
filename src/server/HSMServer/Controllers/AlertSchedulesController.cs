@@ -95,5 +95,53 @@ namespace HSMServer.Controllers
 
             return RedirectToAction("Index");
         }
+
+        [HttpGet]
+        public IActionResult NewPartial()
+        {
+            return PartialView("_AlertSchedule", new AlertScheduleViewModel());
+        }
+
+        [HttpGet]
+        public IActionResult EditPartial(Guid id)
+        {
+            var data = _database.GetAlertSchedule(id);
+            if (data == null)
+                return NotFound();
+
+            return PartialView("_AlertSchedule", new AlertScheduleViewModel(data));
+        }
+
+        [HttpPost]
+        public IActionResult SavePartial(AlertScheduleViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                if (model.Id == Guid.Empty)
+                    model.Id = Guid.NewGuid();
+
+                var entity = new HSMDatabase.AccessManager.DatabaseEntities.AlertScheduleEntity()
+                {
+                    Id = model.Id.ToByteArray(),
+                    Name = model.Name,
+                    TimeZone = model.TimeZone,
+                    Schedule = model.Schedule,
+                };
+
+                _database.AddAlertSchedule(entity); 
+
+                var list = _database.GetAllAlertSchedules().Select(x => new AlertScheduleViewModel(x)).ToList();
+                return PartialView("_AlertSchedulesTable", list);
+            }
+
+            return PartialView("_AlertSchedule", model);
+        }
+
+        [HttpGet]
+        public IActionResult GetAlertSchedulesTable()
+        {
+            var list = _database.GetAllAlertSchedules().Select(x => new AlertScheduleViewModel(x)).ToList();
+            return PartialView("_AlertSchedulesTable", list);
+        }
     }
 }

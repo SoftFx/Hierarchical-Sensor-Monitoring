@@ -1,6 +1,5 @@
 ﻿const path = require("path");
 const webpack = require('webpack');
-
 const CopyPlugin = require("copy-webpack-plugin");
 const MomentLocalesPlugin = require('moment-locales-webpack-plugin');
 
@@ -30,10 +29,18 @@ module.exports = {
                 use: 'ts-loader',
                 exclude: /node_modules/,
             },
+            {
+                test: /\.m?js$/,
+                include: /node_modules/,
+                resolve: {
+                    fullySpecified: false
+                }
+            }
         ]
     },
     resolve: {
         extensions: ['.ts', '.js'],
+        fullySpecified: false, // глобально разрешаем импорты без расширений
         fallback: {
             stream: require.resolve("stream-browserify"),
             os: require.resolve("os-browserify"),

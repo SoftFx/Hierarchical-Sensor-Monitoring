@@ -46,8 +46,14 @@
 
                 <div class="row py-2">
                     <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Schedule"></label>
-                    <div class="col w-auto">
+@*                     <div class="col w-auto">
                         <textarea class="form-control" asp-for="Schedule" rows="15"></textarea>
+                        <span asp-validation-for="Schedule"></span>
+                    </div> *@
+
+                    <div class="col w-auto">
+                        <textarea asp-for="Schedule" style="display:none;"></textarea>
+                        <div id="alert-schedule-editor-container" class="border rounded" style="height: 400px;"></div>
                         <span asp-validation-for="Schedule"></span>
                     </div>
                 </div>

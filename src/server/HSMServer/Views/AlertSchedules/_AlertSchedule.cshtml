@@ -1,0 +1,75 @@
+@using HSMCommon.Model
+@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Core.Model
+@using HSMServer.Model.AlertSchedule
+
+@model AlertScheduleViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+<form id="alertScheduleForm" method="post" action="@Url.Action(nameof(AlertSchedulesController.SavePartial), ViewConstants.AlertSchedulesController)">
+    <div class="row py-2">
+        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Name"></label>
+        <div class="col w-auto">
+            <input type='text' class='form-control' asp-for="Name" />
+            <span asp-validation-for="Name" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="row py-2">
+        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="TimeZone"></label>
+        <div class="col w-auto">
+            <select class="form-control" asp-for="TimeZone" asp-items="Model.TimeZoneList">
+                <option value="">-- Select time zone --</option>
+            </select>
+            <span asp-validation-for="TimeZone" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="row py-2">
+        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Schedule"></label>
+        <div class="col w-auto">
+            <textarea asp-for="Schedule" style="display:none;"></textarea>
+            <div id="alert-schedule-editor-container" class="border rounded" style="height: 50vh; min-height: 200px;"></div>
+            <span asp-validation-for="Schedule" class="text-danger"></span>
+        </div>
+    </div>
+
+    <input type="hidden" asp-for="Id" />
+
+    <div class="form-group mt-3">
+        <div align="right">
+            <button id="submitScheduleForm" class="btn btn-secondary col-2" type="submit">Save</button>
+            <button class="btn btn-secondary col-2 px-2" type="button" onclick="hideScheduleModal()">Cancel</button>
+        </div>
+    </div>
+</form>
+
+<script>
+    (function() {
+        
+        function updateSaveButtonState() {
+            const nameInput = document.getElementById('Name');
+            const timeZoneSelect = document.getElementById('TimeZone');
+            const saveButton = document.getElementById('submitScheduleForm');
+            if (nameInput && timeZoneSelect && saveButton) {
+                const nameFilled = nameInput.value.trim() !== '';
+                const timeZoneSelected = timeZoneSelect.value !== '';
+                
+                const yamlHasErrors = window.checkYamlErrors ? window.checkYamlErrors() : true;
+                saveButton.disabled = !(nameFilled && timeZoneSelected && !yamlHasErrors);
+            }
+        }
+
+        
+        window.onScheduleYamlChange = updateSaveButtonState;
+
+        
+        updateSaveButtonState();
+
+        
+        $('#Name').on('input', updateSaveButtonState);
+        $('#TimeZone').on('change', updateSaveButtonState);
+
+        setTimeout(updateSaveButtonState, 100);
+    })();
+</script>
