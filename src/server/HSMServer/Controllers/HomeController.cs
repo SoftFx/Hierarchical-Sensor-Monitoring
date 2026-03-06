@@ -1,14 +1,8 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Text.Json;
+using HSMCommon.Model;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
@@ -16,10 +10,12 @@ using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.DTOs.Sensors;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
@@ -32,10 +28,16 @@ using HSMServer.Model.ViewModel;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using HSMServer.DTOs.Sensors;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Telegram.Bot.Types;
 using TimeInterval = HSMServer.Model.TimeInterval;
-using HSMServer.Core.DataLayer;
-using HSMCommon.Model;
 
 
 namespace HSMServer.Controllers
@@ -375,6 +377,49 @@ namespace HSMServer.Controllers
 
             return string.Empty;
         }
+
+        [HttpGet]
+        public IActionResult ExportNode([FromQuery] string selectedId)
+        {
+            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+            {
+                var fileName = node.Name;
+
+                using (var memoryStream = new MemoryStream())
+                using (var writer = new StreamWriter(memoryStream, Encoding.UTF8))
+                {
+
+                    writer.WriteLine("sep=;");
+                    writer.WriteLine("\"Path\";\"Type\";\"Discription\"");
+
+                    AddNodeToStream(node, writer);
+
+                    writer.Flush();
+
+                    memoryStream.Position = 0;
+
+                    return File(memoryStream.ToArray(), "text/csv", $"{fileName}.csv");
+                }
+            }
+
+            return Ok();
+        }
+        private void AddNodeToStream(ProductNodeViewModel node, StreamWriter stream)
+        {
+            foreach (var item in node.Nodes.Values)
+            {
+                AddNodeToStream(item, stream);
+            }
+
+            foreach (var sensor in node.Sensors.Values)
+            {
+                stream.WriteLine($"\"{sensor.FullPath}\";\"{sensor.Type}\";\"{sensor.Description}\"");
+            }
+
+        }
+
 
         [HttpPost]
         public ValueTask EnableGrafana(string selectedId) => ChangeSensorsIntegrationAsync(selectedId, Integration.Grafana);
