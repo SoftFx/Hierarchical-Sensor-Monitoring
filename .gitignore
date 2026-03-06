@@ -130,3 +130,5 @@ src/server/HSMServer/TestResults/
 # Custom configs
 src/server/HSMServer/Config/*
 src/module/HSMPingModule/Config/*
+/code-review-report.md
+/code-review-report.json
