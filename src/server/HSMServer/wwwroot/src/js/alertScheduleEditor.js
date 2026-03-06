@@ -1,5 +1,4 @@
-﻿// Import necessary modules from CodeMirror 6 and related libraries
-import { EditorView, basicSetup } from 'codemirror';
+﻿import { EditorView, basicSetup } from 'codemirror';
 import { EditorState } from '@codemirror/state';
 import { yaml } from '@codemirror/lang-yaml';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
@@ -8,10 +7,7 @@ import { linter } from '@codemirror/lint';
 import { yamlSchema, yamlCompletion } from 'codemirror-json-schema/yaml';
 import yamlParser from 'js-yaml';
 
-// ============================================================
-// 1. Define the JSON schema for YAML validation
-//    This schema describes the expected structure of the YAML.
-// ============================================================
+
 const scheduleSchema = {
     type: "object",
     additionalProperties: false,
@@ -93,17 +89,14 @@ const scheduleSchema = {
     required: ["daySchedules"]
 };
 
-// ============================================================
-// 2. YAML syntax linter (checks for basic YAML errors)
-// ============================================================
+
 const yamlSyntaxLinter = linter(async (view) => {
     const text = view.state.doc.toString();
     const diagnostics = [];
 
     try {
-        yamlParser.load(text); // try to parse the YAML
+        yamlParser.load(text); 
     } catch (e) {
-        // Extract error position if available (js-yaml provides e.mark)
         let from = 0;
         let to = 0;
         if (e.mark) {
@@ -120,14 +113,19 @@ const yamlSyntaxLinter = linter(async (view) => {
     return diagnostics;
 });
 
-// ============================================================
-// 3. Main function to initialize the editor on a given page
-// ============================================================
-/**
- * Initializes a CodeMirror editor for YAML editing.
- * @param {string} textareaId - The id of the original <textarea> element (will be hidden).
- * @param {string} containerId - The id of the div where the editor will be mounted.
- */
+
+window.checkYamlErrors = function () {
+    if (window.scheduleEditor) {
+        try {
+            yamlParser.load(window.scheduleEditor.state.doc.toString());
+            return false; 
+        } catch (e) {
+            return true; 
+        }
+    }
+    return true; 
+};
+
 export function initAlertScheduleEditor(textareaId, containerId) {
     const textarea = document.getElementById(textareaId);
     const container = document.getElementById(containerId);
@@ -137,36 +135,38 @@ export function initAlertScheduleEditor(textareaId, containerId) {
         return;
     }
 
-    // Use the current value of the textarea as initial document
     const initialYaml = textarea.value;
 
-    // Create the editor state with all desired extensions
     const startState = EditorState.create({
         doc: initialYaml,
         extensions: [
-            basicSetup,                           // includes line numbers, history, etc.
-            syntaxHighlighting(defaultHighlightStyle), // default syntax highlighting
-            yaml(),                                 // YAML language support
+            basicSetup,
+            syntaxHighlighting(defaultHighlightStyle),
+            yaml(),
             autocompletion({
-                override: [
-                    yamlCompletion(scheduleSchema) // schema‑based suggestions for fields
-                ]
+                override: [yamlCompletion(scheduleSchema)]
             }),
-            yamlSyntaxLinter,                       // YAML syntax checker
-            yamlSchema(scheduleSchema)               // JSON schema validation
+            yamlSyntaxLinter,
+            yamlSchema(scheduleSchema),
+
+            EditorView.updateListener.of((update) => {
+                if (update.docChanged && window.onScheduleYamlChange) {
+                    window.onScheduleYamlChange();
+                }
+            })
         ]
     });
 
-    // Create the editor view inside the container
     const editor = new EditorView({
         state: startState,
         parent: container
     });
 
-    // Hide the original textarea (it will still hold the value for submission)
+
+    window.scheduleEditor = editor;
+
     textarea.style.display = 'none';
 
-    // Before the form is submitted, copy the editor content back to the textarea
     const form = textarea.closest('form');
     if (form) {
         form.addEventListener('submit', () => {
