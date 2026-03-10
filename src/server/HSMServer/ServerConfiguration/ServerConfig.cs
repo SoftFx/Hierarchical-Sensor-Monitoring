@@ -40,6 +40,9 @@ namespace HSMServer.ServerConfiguration
         [JsonIgnore]
         public static string Name { get; }
 
+        [JsonIgnore]
+        public static string Company { get; }
+
 
         public ServerCertificateConfig ServerCertificate { get; }
 
@@ -60,10 +63,19 @@ namespace HSMServer.ServerConfiguration
             ExecutableDirectory = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
 
             Version = assembly.GetVersion().RemoveTailZeroes();
-
+            Company = GetCompany();
             if (!Directory.Exists(ConfigPath))
                 FileManager.SafeCreateDirectory(ConfigPath);
         }
+
+
+        private static string GetCompany()
+        {
+            return Assembly.GetEntryAssembly()
+                ?.GetCustomAttribute<AssemblyCompanyAttribute>()
+                ?.Company ?? "Unknown";
+        }
+
 
         public ServerConfig(IConfigurationRoot configuration)
         {
