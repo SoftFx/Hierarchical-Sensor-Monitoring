@@ -7,6 +7,7 @@ env:
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj
   DOCKER_DOCKERHUB_ORG: hsmonitoring
   DOCKER_MAIN_REPOS: hierarchical_sensor_monitoring
+  DOCKER_IMAGE_NAME: hsmonitoring/hierarchical_sensor_monitoring
   CONTAINER_NAME: test-container
 
 jobs:
@@ -42,11 +43,21 @@ jobs:
             --name "${{ env.CONTAINER_NAME }}" \
             -p 44330:44330 -p 44333:44333 \
             -v "$(pwd)/container-logs:/app/logs" \
-            "${{ env.DockerMainName }}:latest"
+            "${{ env.DOCKER_IMAGE_NAME }}:latest"
 
       - name: Wait for container to be ready
         run: |
-          timeout 180s bash -c 'until curl -s http://localhost:44330 > /dev/null; do echo "Waiting for container..."; sleep 5; done'
+          echo "Checking if container is running..."
+          docker ps -a # Посмотрим статус: Up или Exited?
+
+          echo "Waiting for HSMServer to respond..."
+          # Убираем флаг -s (silent), чтобы видеть ошибку curl (например, Connection Refused)
+          # Стучимся сразу на 44333 (HTTPS), так как Playwright настроен на него
+          timeout 120s bash -c 'until curl -vk https://localhost:44333; do 
+            echo "Still waiting... Check docker logs:"
+            docker logs --tail 10 "${{ env.CONTAINER_NAME }}"
+            sleep 10
+          done'
 
       - name: Setup Playwright
         working-directory: src/tests/Autotests
