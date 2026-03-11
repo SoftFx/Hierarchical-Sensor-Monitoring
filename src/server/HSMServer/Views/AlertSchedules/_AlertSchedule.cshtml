@@ -1,4 +1,4 @@
-@using HSMCommon.Model
+﻿@using HSMCommon.Model
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Core.Model
@@ -8,68 +8,125 @@
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-<form id="alertScheduleForm" method="post" action="@Url.Action(nameof(AlertSchedulesController.SavePartial), ViewConstants.AlertSchedulesController)">
-    <div class="row py-2">
-        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Name"></label>
-        <div class="col w-auto">
-            <input type='text' class='form-control' asp-for="Name" />
-            <span asp-validation-for="Name" class="text-danger"></span>
+<form id="alertScheduleForm" method="post" action="@Url.Action(nameof(AlertSchedulesController.SavePartial), ViewConstants.AlertSchedulesController)" style="display: flex; flex-direction: column; height: 100%;">
+    <div style="flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 5px;">
+
+        <div class="row py-2 schedule-form-row">
+            <label class="col-1 col-form-label d-flex justify-content-end schedule-form-label" asp-for="Name"></label>
+            <div class="col w-auto">
+                <input type='text' class='form-control' asp-for="Name" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
         </div>
-    </div>
-    <div class="row py-2">
-        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="TimeZone"></label>
-        <div class="col w-auto">
-            <select class="form-control" asp-for="TimeZone" asp-items="Model.TimeZoneList">
-                <option value="">-- Select time zone --</option>
-            </select>
-            <span asp-validation-for="TimeZone" class="text-danger"></span>
+        <div class="row py-2 schedule-form-row">
+            <label class="col-1 col-form-label d-flex justify-content-end schedule-form-label" asp-for="TimeZone"></label>
+            <div class="col w-auto">
+                <select class="form-control" asp-for="TimeZone" asp-items="Model.TimeZoneList">
+                    <option value="">-- Select time zone --</option>
+                </select>
+                <span asp-validation-for="TimeZone" class="text-danger"></span>
+            </div>
         </div>
-    </div>
-    <div class="row py-2">
-        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Schedule"></label>
-        <div class="col w-auto">
-            <textarea asp-for="Schedule" style="display:none;"></textarea>
-            <div id="alert-schedule-editor-container" class="border rounded" style="height: 50vh; min-height: 200px;"></div>
-            <span asp-validation-for="Schedule" class="text-danger"></span>
+        <div class="row py-2 schedule-form-row">
+            <label class="col-1 col-form-label d-flex justify-content-end schedule-form-label" asp-for="Schedule"></label>
+            <div class="col w-auto" style="height:100%; display:flex; flex-direction:column;">
+                <textarea asp-for="Schedule" style="display:none;"></textarea>
+                <div id="alert-schedule-editor-container" class="border rounded" style="flex:1; min-height:0; width:100%;"></div>
+                <div class="mt-2" style="flex-shrink:0;">
+                    <a href="#" id="setSampleLink" class="text-decoration-none" style="font-size: 0.9rem;">set sample</a>
+                </div>
+                <span asp-validation-for="Schedule" class="text-danger"></span>
+            </div>
         </div>
+
+        <input type="hidden" asp-for="Id" />
     </div>
 
-    <input type="hidden" asp-for="Id" />
-
-    <div class="form-group mt-3">
+    <div class="form-group mt-3" style="flex-shrink: 0;">
         <div align="right">
             <button id="submitScheduleForm" class="btn btn-secondary col-2" type="submit">Save</button>
             <button class="btn btn-secondary col-2 px-2" type="button" onclick="hideScheduleModal()">Cancel</button>
         </div>
     </div>
+
+    <style>
+        .schedule-form-label {
+            min-width: 120px;
+            flex-shrink: 0;
+        }
+
+        @@media (max-width: 576px) {
+            .schedule-form-row {
+                flex-wrap: wrap;
+            }
+
+            .schedule-form-label {
+                min-width: 100%;
+                text-align: left;
+                margin-bottom: 5px;
+            }
+        }
+    </style>
 </form>
 
 <script>
-    (function() {
-        
-        function updateSaveButtonState() {
-            const nameInput = document.getElementById('Name');
-            const timeZoneSelect = document.getElementById('TimeZone');
-            const saveButton = document.getElementById('submitScheduleForm');
-            if (nameInput && timeZoneSelect && saveButton) {
-                const nameFilled = nameInput.value.trim() !== '';
-                const timeZoneSelected = timeZoneSelect.value !== '';
-                
-                const yamlHasErrors = window.checkYamlErrors ? window.checkYamlErrors() : true;
-                saveButton.disabled = !(nameFilled && timeZoneSelected && !yamlHasErrors);
+        (function() {
+            function updateSaveButtonState() {
+                const nameInput = document.getElementById('Name');
+                const timeZoneSelect = document.getElementById('TimeZone');
+                const saveButton = document.getElementById('submitScheduleForm');
+                if (nameInput && timeZoneSelect && saveButton) {
+                    const nameFilled = nameInput.value.trim() !== '';
+                    const timeZoneSelected = timeZoneSelect.value !== '';
+                    const yamlHasErrors = window.checkYamlErrors ? window.checkYamlErrors() : true;
+                    saveButton.disabled = !(nameFilled && timeZoneSelected && !yamlHasErrors);
+                }
             }
-        }
 
-        
-        window.onScheduleYamlChange = updateSaveButtonState;
+            window.onScheduleYamlChange = updateSaveButtonState;
+            updateSaveButtonState();
 
-        
-        updateSaveButtonState();
+            $('#Name').on('input', updateSaveButtonState);
+            $('#TimeZone').on('change', updateSaveButtonState);
+            setTimeout(updateSaveButtonState, 100);
 
-        
-        $('#Name').on('input', updateSaveButtonState);
-        $('#TimeZone').on('change', updateSaveButtonState);
 
-        setTimeout(updateSaveButtonState, 100);
-    })();
+            $('#setSampleLink').on('click', function(e) {
+                e.preventDefault();
+                if (window.scheduleEditor) {
+                    const sampleYaml = `daySchedules:
+    - days: [Mon, Tue, Wed, Thu, Fri]
+      windows:
+        - { start: "09:00", end: "11:30" }
+        - { start: "12:30", end: "15:00" }
+
+    - days: [Sat]
+      windows:
+        - { start: "10:00", end: "14:00" }
+
+disabledDates: ["2026-02-11", "2026-02-23"]
+
+overrides:
+    enabledDates: ["2026-03-20"]
+
+    customScheduleDates:
+        - date: "2026-03-21"
+          scheduleType: "Sat"
+
+        - date: "2026-03-22"
+          scheduleType: "Mon"
+
+        - date: "2026-03-23"
+          windows:
+            - { start: "11:00", end: "16:00" }`;
+                    window.scheduleEditor.dispatch({
+                        changes: {
+                            from: 0,
+                            to: window.scheduleEditor.state.doc.length,
+                            insert: sampleYaml
+                        }
+                    });
+                }
+            });
+        })();
 </script>
