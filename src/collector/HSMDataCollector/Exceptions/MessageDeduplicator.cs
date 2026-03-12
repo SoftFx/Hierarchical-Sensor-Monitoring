@@ -31,7 +31,7 @@ namespace HSMDataCollector.Exceptions
                 _cancellationTokenSource = new CancellationTokenSource();
                 var now = DateTime.UtcNow;
 
-                _task = PeriodicTask.Run(Cleanup, now.Ceil(window) - now, window, _cancellationTokenSource.Token);
+                _task = PeriodicTask.Run(Cleanup, now.Ceil(window) - now, window, _cancellationTokenSource.Token, ex => _action?.Invoke(ex.ToString()));
             }
         }
 
@@ -39,7 +39,10 @@ namespace HSMDataCollector.Exceptions
         public void AddMessage(string message, TimeSpan? window = null)
         {
             if (_deduplicationWindow == TimeSpan.Zero)
+            {
                 _action?.Invoke(message);
+                return;
+            }
 
             var now = DateTime.UtcNow;
             var expiryTime = now + (window ?? _deduplicationWindow);

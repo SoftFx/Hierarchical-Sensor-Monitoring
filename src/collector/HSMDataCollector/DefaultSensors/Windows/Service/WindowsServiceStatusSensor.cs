@@ -40,7 +40,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
                 if (_statusWatcher == null)
                 {
                     _cancellationTokenSource = new CancellationTokenSource();
-                    _statusWatcher = PeriodicTask.Run(CheckServiceStatusAsync, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token);
+                    _statusWatcher = PeriodicTask.Run(CheckServiceStatusAsync, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token, HandleException);
                 }
             }
 
