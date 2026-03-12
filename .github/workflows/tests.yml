@@ -69,8 +69,10 @@ jobs:
         working-directory: src/tests/Autotests
         env:
           PLAYWRIGHT_TEST_BASE_URL: https://localhost:44333
-        run: npx playwright test
-
+        # Мы добавляем xvfb-run и флаг --headed (на всякий случай)
+        # Это создаст виртуальный экран, и браузер "подумает", что монитор есть
+        run: xvfb-run npx playwright test --project=chromium
+        
       - name: Upload container logs
         if: always()
         uses: actions/upload-artifact@v4
