@@ -76,10 +76,10 @@
 
 
                                         <li class="nav-item dropdown">
-                                            <a class="nav-link dropdown-toggle" href="#" id="optionsDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                                Configuration
+                                            <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                Alerts
                                             </a>
-                                            <ul class="dropdown-menu" aria-labelledby="optionsDropdown">
+                                            <ul class="dropdown-menu" aria-labelledby="alertsDropdown">
                                                 <li>
                                                     <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AlertTemplatesController)">
                                                         Alert Templates
@@ -90,6 +90,15 @@
                                                         Alert Schedules
                                                     </a>
                                                 </li>
+                                            </ul>
+                                        </li>
+
+
+                                        <li class="nav-item dropdown">
+                                            <a class="nav-link dropdown-toggle" href="#" id="optionsDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                Configuration
+                                            </a>
+                                            <ul class="dropdown-menu" aria-labelledby="optionsDropdown">
                                                 <li>
                                                     <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AccessKeysController)">
                                                         Access keys
@@ -107,7 +116,7 @@
                                                 {
                                                     <li>
                                                         <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ConfigurationController)">
-                                                            Configuration
+                                                            Settings
                                                         </a>
                                                     </li>
                                                 }
@@ -118,7 +127,6 @@
                                                 </li>
                                             </ul>
                                         </li>
-
 
                                     </ul>
 
