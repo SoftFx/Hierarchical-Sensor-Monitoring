@@ -132,18 +132,40 @@ function refreshTreeHandler(e, data) {
             searchClientRefresh = false;
         }
 
-        if (jQuery.isEmptyObject(prevState) && prevState !== undefined) {
+        //if (jQuery.isEmptyObject(prevState) && prevState !== undefined) {
 
-            let jstreeState = JSON.parse(localStorage.getItem('jstree'));
-            jstreeState.state.core.open.forEach((node) => {
-                $(this).jstree('open_node', node);
-            })
+        //    let jstreeState = JSON.parse(localStorage.getItem('jstree'));
+        //    jstreeState.state.core.open.forEach((node) => {
+        //        $(this).jstree('open_node', node);
+        //    })
 
-            jstreeState.state.core.selected.forEach((node) => {
-                $(this).jstree('open_node', node);
-                $(this).jstree('select_node', node);
-            })
+        //    jstreeState.state.core.selected.forEach((node) => {
+        //        $(this).jstree('open_node', node);
+        //        $(this).jstree('select_node', node);
+        //    })
 
+        //    prevState = undefined;
+        //}
+
+        if (!prevState || jQuery.isEmptyObject(prevState)) {
+            console.log('refreshTreeHandler: restoring tree state from localStorage');
+            const savedState = localStorage.getItem('jstree');
+            if (savedState) {
+                try {
+                    const jstreeState = JSON.parse(savedState);
+                    if (jstreeState.state && jstreeState.state.core) {
+                        jstreeState.state.core.open.forEach((node) => {
+                            $(this).jstree('open_node', node);
+                        });
+                        jstreeState.state.core.selected.forEach((node) => {
+                            $(this).jstree('open_node', node);
+                            $(this).jstree('select_node', node);
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error parsing jstree state from localStorage', e);
+                }
+            }
             prevState = undefined;
         }
 
@@ -233,6 +255,9 @@ function initializeTreeInternal() {
                     } catch (e) {
                         console.error('Error restoring tree state:', e);
                     }
+                }
+                else {
+                    console.warn('Tree state not found in localStorage');
                 }
             }
         }, 300);
