@@ -94,7 +94,8 @@ namespace HSMServer.Controllers
         //    }
         //}
 
-        [HttpGet]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public IActionResult Remove(Guid id)
         {
             _scheduleProvider.DeleteSchedule(id);

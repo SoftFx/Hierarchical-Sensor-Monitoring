@@ -25,7 +25,11 @@
                         </button>
                         <div class="dropdown-menu dropdown-menu-end">
                             <a class="dropdown-item text-decoration-none fw-normal button-link schedule-edit" data-id="@item.Id" data-name="@item.Name">Edit</a>
-                            <a class="dropdown-item text-decoration-none fw-normal button-link" href="@Url.Action(nameof(AlertSchedulesController.Remove), ViewConstants.AlertSchedulesController, new { id = item.Id })">Remove</a>
+                            <form method="post" action="@Url.Action(nameof(AlertSchedulesController.Remove), ViewConstants.AlertSchedulesController)" style="display:inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@item.Id" />
+                                <button type="submit" class="dropdown-item text-decoration-none fw-normal button-link border-0 bg-transparent w-100 text-start">Remove</button>
+                            </form>
                         </div>
                     </div>
                 </td>
