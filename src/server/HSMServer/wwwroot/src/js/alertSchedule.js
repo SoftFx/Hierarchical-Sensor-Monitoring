@@ -53,6 +53,9 @@ function loadScheduleForm(url, title) {
 
             showLargeScheduleModal();
             showScheduleModal();
+        },
+        error: function (xhr, status, error) {
+            alert('Failed to load schedule form. Please try again.\n' + (error || status));
         }
     });
 }
@@ -95,6 +98,9 @@ $(document).ready(function () {
                         window.initAlertScheduleEditor('Schedule', 'alert-schedule-editor-container');
                     }, 0);
                 }
+            },
+            error: function (xhr, status, error) {
+                alert('Failed to save schedule. Please try again.\n' + (error || status));
             }
         });
     });
