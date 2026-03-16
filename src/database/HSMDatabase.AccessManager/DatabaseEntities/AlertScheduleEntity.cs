@@ -9,8 +9,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public string Name { get; set; }
 
-        public string TimeZone { get; set; }
+        public string Timezone { get; set; }
         public string Schedule { get; set; }
+
     }
 
 }

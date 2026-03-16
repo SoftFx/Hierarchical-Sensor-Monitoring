@@ -9,6 +9,7 @@ using HSMServer.Authentication;
 using HSMServer.Core.DataLayer;
 using HSMServer.Model.AlertSchedule;
 using System.Collections.Generic;
+using HSMServer.Core.Schedule;
 
 
 
@@ -28,7 +29,8 @@ namespace HSMServer.Controllers
             AllowTrailingCommas = true,
         };
 
-        private readonly IDatabaseCore _database;
+        private readonly IAlertScheduleProvider _scheduleProvider;
+        private readonly AlertScheduleParser _parser = new();
 
         static AlertSchedulesController()
         {
@@ -38,60 +40,64 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertSchedulesController(IDatabaseCore database, IUserManager users) : base(users)
+        public AlertSchedulesController(IAlertScheduleProvider scheduleProvider, IUserManager users) : base(users)
         {
-            _database = database;
+            _scheduleProvider = scheduleProvider;
         }
 
         [HttpGet]
         public IActionResult Index()
         {
-            List<AlertScheduleViewModel> result = _database.GetAllAlertSchedules().Select(x => new AlertScheduleViewModel(x)).ToList() ?? [];
+            List<AlertScheduleViewModel> result = _scheduleProvider.GetAllSchedules().Select(x => new AlertScheduleViewModel(x)).ToList() ?? [];
 
             return View(result);
         }
 
 
-        [HttpGet]
-        public IActionResult New()
-        {
-            return View("AlertSchedule", new AlertScheduleViewModel());
-        }
+        //[HttpGet]
+        //public IActionResult New()
+        //{
+        //    return View("AlertSchedule", new AlertScheduleViewModel());
+        //}
 
-        [HttpGet]
-        public IActionResult Edit(Guid id)
-        {
+        //[HttpGet]
+        //public IActionResult Edit(Guid id)
+        //{
 
-            var data = _database.GetAlertSchedule(id);
+        //    var data = _scheduleProvider.GetSchedule(id);
 
-            return View("AlertSchedule", new AlertScheduleViewModel(data));
-        }
+        //    return View("AlertSchedule", new AlertScheduleViewModel(data));
+        //}
 
-        [HttpPost]
-        public IActionResult Save(AlertScheduleViewModel model)
-        {
-            if (model.Id == Guid.Empty)
-                model.Id = Guid.NewGuid();
+        //[HttpPost]
+        //public IActionResult Save(AlertScheduleViewModel model)
+        //{
+        //    if (model.Id == Guid.Empty)
+        //        model.Id = Guid.NewGuid();
 
-            var list = _database.GetAllAlertSchedules();
+        //    try
+        //    {
+        //        var schedule = _parser.Parse(model.Schedule);
 
-            var entity = new HSMDatabase.AccessManager.DatabaseEntities.AlertScheduleEntity()
-            {
-                Id = model.Id.ToByteArray(),
-                Name = model.Name,
-                TimeZone = model.TimeZone,
-                Schedule = model.Schedule,
-            };
+        //        schedule.Id = model.Id;
+        //        schedule.Name = model.Name;
+        //        schedule.Timezone = model.Timezone;
 
-            _database.AddAlertSchedule(entity);
+        //        _scheduleProvider.SaveSchedule(schedule);
 
-            return RedirectToAction("Index");
-        }
+        //        return RedirectToAction("Index");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        ModelState.AddModelError("Schedule", ex.Message);
+        //        return View("AlertSchedule", model);
+        //    }
+        //}
 
         [HttpGet]
         public IActionResult Remove(Guid id)
         {
-            _database.RemoveAlertSchedule(id);
+            _scheduleProvider.DeleteSchedule(id);
 
             return RedirectToAction("Index");
         }
@@ -105,7 +111,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult EditPartial(Guid id)
         {
-            var data = _database.GetAlertSchedule(id);
+            var data = _scheduleProvider.GetSchedule(id);
             if (data == null)
                 return NotFound();
 
@@ -120,18 +126,24 @@ namespace HSMServer.Controllers
                 if (model.Id == Guid.Empty)
                     model.Id = Guid.NewGuid();
 
-                var entity = new HSMDatabase.AccessManager.DatabaseEntities.AlertScheduleEntity()
+                try
                 {
-                    Id = model.Id.ToByteArray(),
-                    Name = model.Name,
-                    TimeZone = model.TimeZone,
-                    Schedule = model.Schedule,
-                };
+                    var schedule = _parser.Parse(model.Schedule);
 
-                _database.AddAlertSchedule(entity); 
+                    schedule.Id = model.Id;
+                    schedule.Name = model.Name;
+                    schedule.Timezone = model.Timezone;
 
-                var list = _database.GetAllAlertSchedules().Select(x => new AlertScheduleViewModel(x)).ToList();
-                return PartialView("_AlertSchedulesTable", list);
+                    _scheduleProvider.SaveSchedule(schedule);
+
+                    var list = _scheduleProvider.GetAllSchedules().Select(x => new AlertScheduleViewModel(x)).ToList();
+                    return PartialView("_AlertSchedulesTable", list);
+                }
+                catch (Exception ex)
+                {
+                    ModelState.AddModelError("Schedule", ex.Message);
+                    return PartialView("_AlertSchedule", model);
+                }
             }
 
             return PartialView("_AlertSchedule", model);
@@ -140,7 +152,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetAlertSchedulesTable()
         {
-            var list = _database.GetAllAlertSchedules().Select(x => new AlertScheduleViewModel(x)).ToList();
+            var list = _scheduleProvider.GetAllSchedules().Select(x => new AlertScheduleViewModel(x)).ToList();
             return PartialView("_AlertSchedulesTable", list);
         }
     }

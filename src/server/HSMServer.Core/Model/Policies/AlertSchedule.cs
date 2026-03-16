@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 
 namespace HSMServer.Core.Model.Policies
@@ -8,7 +9,10 @@ namespace HSMServer.Core.Model.Policies
     public class AlertSchedule
     {
         public Guid Id { get; set; } = Guid.NewGuid();
+        public string Name { get; set; }
         public string Timezone { get; set; }
+        public string Schedule { get; set; }
+
         public List<DaySchedule> DaySchedules { get; set; } = new();
         public List<DateTime> DisabledDates { get; set; } = new();
         public Overrides Overrides { get; set; } = new();
@@ -129,6 +133,17 @@ namespace HSMServer.Core.Model.Policies
             var regularSchedule = GetDaySchedule(date.DayOfWeek);
             return regularSchedule?.Windows ?? new List<TimeWindow>();
         }
+
+        public AlertScheduleEntity ToEntity()
+        {
+            return new()
+            {
+                Id = Id.ToByteArray(),
+                Name = Name,
+                Timezone = Timezone,
+                Schedule = Schedule,
+            };
+        }
     }
     public class DaySchedule
     {
@@ -190,6 +205,5 @@ namespace HSMServer.Core.Model.Policies
             Date = date;
             Windows = windows;
         }
-
     }
 }

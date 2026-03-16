@@ -47,6 +47,8 @@ namespace HSMServer.Core.Model.Policies
 
         public Guid? TemplateId { get; set; }
 
+        public Guid? ScheduleId { get; set; }
+
         public string Template
         {
             get => _userTemplate;
@@ -215,6 +217,7 @@ namespace HSMServer.Core.Model.Policies
                 Status = update.Status;
                 Icon = update.Icon;
                 TemplateId = update.TemplateId;
+                ScheduleId = update.ScheduleId;
 
                 UpdateConditions(update.Conditions, Update);
             }
@@ -241,6 +244,16 @@ namespace HSMServer.Core.Model.Policies
             {
                 TemplateId = null;
             }
+
+            try
+            {
+                ScheduleId = entity.ScheduleId?.Length > 0 ? new Guid(entity.ScheduleId) : null;
+            }
+            catch
+            {
+                ScheduleId = null;
+            }
+
             Status = entity.SensorStatus.ToStatus();
 
             ConfirmationPeriod = entity.ConfirmationPeriod;
@@ -268,7 +281,8 @@ namespace HSMServer.Core.Model.Policies
             IsDisabled = IsDisabled,
             Template = Template,
             Icon = Icon,
-            TemplateId = TemplateId.HasValue ? Id.ToByteArray() : []
+            TemplateId = TemplateId.HasValue ? Id.ToByteArray() : [],
+            ScheduleId = ScheduleId.HasValue ? ScheduleId.Value.ToByteArray() : []
         };
 
 

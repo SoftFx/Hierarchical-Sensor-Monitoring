@@ -1,8 +1,8 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 
 namespace HSMServer.Model.AlertSchedule
@@ -14,7 +14,7 @@ namespace HSMServer.Model.AlertSchedule
 
         public string Name { get; set; }
 
-        public string TimeZone { get; set; }
+        public string Timezone { get; set; }
 
         public List<SelectListItem> TimeZoneList { get; set; }
 
@@ -23,7 +23,8 @@ namespace HSMServer.Model.AlertSchedule
         public AlertScheduleViewModel()
         {
             TimeZoneList = InitTimeZoneList();
-            Schedule = @"daySchedules:
+
+            Schedule ??= @"daySchedules:
     - days: [Mon, Tue, Wed, Thu, Fri]
       windows:
         - { start: ""09:00"", end: ""11:30"" }
@@ -50,13 +51,20 @@ overrides:
             - { start: ""11:00"", end: ""16:00"" }";
         }
 
-        public AlertScheduleViewModel(AlertScheduleEntity entity) 
+        public AlertScheduleViewModel(AlertScheduleEntity entity) : this()
         {
             Id = new Guid(entity.Id);
             Name = entity.Name;
-            TimeZone = entity.TimeZone;
-            TimeZoneList = InitTimeZoneList();
+            Timezone = entity.Timezone;
             Schedule = entity.Schedule;
+        }
+
+        public AlertScheduleViewModel(Core.Model.Policies.AlertSchedule schedule) : this()
+        {
+            Id = schedule.Id;
+            Name = schedule.Name;
+            Timezone = schedule.Timezone;
+            Schedule = schedule.Schedule;
         }
 
         private List<SelectListItem> InitTimeZoneList()

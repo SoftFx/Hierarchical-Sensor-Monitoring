@@ -27,6 +27,7 @@ using HSMServer.Middleware.Telemetry;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
+using HSMServer.Core.Schedule;
 
 
 namespace HSMServer.ServiceExtensions
@@ -42,6 +43,7 @@ namespace HSMServer.ServiceExtensions
             services.AddSingleton(config);
 
             services.AddSingleton<IDatabaseCore, DatabaseCore>()
+                    .AddSingleton<IAlertScheduleProvider, AlertScheduleProvider>()
                     .AddSingleton<ITreeStateSnapshot, TreeStateSnapshot>()
                     .AddSingleton<ITreeValuesCache, TreeValuesCache>()
                     .AddSingleton<IJournalService, JournalService>();

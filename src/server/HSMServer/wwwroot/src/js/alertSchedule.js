@@ -91,6 +91,9 @@ $(document).ready(function () {
                     hideScheduleModal();
                 } else {
                     setScheduleModalBody(result);
+                    setTimeout(() => {
+                        window.initAlertScheduleEditor('Schedule', 'alert-schedule-editor-container');
+                    }, 0);
                 }
             }
         });

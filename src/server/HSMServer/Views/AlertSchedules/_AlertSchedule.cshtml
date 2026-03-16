@@ -17,19 +17,20 @@
         </div>
     </div>
     <div class="row py-2">
-        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="TimeZone"></label>
+        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Timezone"></label>
         <div class="col w-auto">
-            <select class="form-control" asp-for="TimeZone" asp-items="Model.TimeZoneList">
+            <select class="form-control" asp-for="Timezone" asp-items="Model.TimeZoneList">
                 <option value="">-- Select time zone --</option>
             </select>
-            <span asp-validation-for="TimeZone" class="text-danger"></span>
+            <span asp-validation-for="Timezone" class="text-danger"></span>
         </div>
     </div>
     <div class="row py-2">
         <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Schedule"></label>
         <div class="col w-auto">
-            <textarea asp-for="Schedule" style="display:none;"></textarea>
-            <div id="alert-schedule-editor-container" class="border rounded" style="height: 50vh; min-height: 200px;"></div>
+            <div id="alert-schedule-editor-container" class="border rounded" style="height: 52vh; min-height: 200px;">
+                <textarea asp-for="Schedule"></textarea>
+            </div>
             <span asp-validation-for="Schedule" class="text-danger"></span>
         </div>
     </div>
@@ -60,13 +61,10 @@
             }
         }
 
-        
         window.onScheduleYamlChange = updateSaveButtonState;
 
-        
         updateSaveButtonState();
 
-        
         $('#Name').on('input', updateSaveButtonState);
         $('#TimeZone').on('change', updateSaveButtonState);
 

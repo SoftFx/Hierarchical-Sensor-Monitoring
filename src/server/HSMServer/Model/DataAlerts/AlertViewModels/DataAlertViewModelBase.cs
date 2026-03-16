@@ -46,9 +46,7 @@ namespace HSMServer.Model.DataAlerts
 
         public Guid? TemplateId { get; set; }
 
-        public Guid? Schedule { get; set; }
-
-        public List<SelectListItem> ScheduleList { get; set; }
+        public Guid? ScheduleId { get; set; }
 
         internal bool IsAlertDisplayed
         {
@@ -99,7 +97,8 @@ namespace HSMServer.Model.DataAlerts
                 IsDisabled = IsDisabled,
                 Schedule = actions.Schedule,
                 Destination = actions.Destination,
-                TemplateId = TemplateId
+                TemplateId = TemplateId,
+                ScheduleId = ScheduleId,
             };
         }
 
@@ -118,6 +117,7 @@ namespace HSMServer.Model.DataAlerts
                 Schedule = actions.Schedule,
                 Initiator = initiator,
                 TemplateId = TemplateId,
+                ScheduleId = ScheduleId,
             };
         }
 
@@ -321,6 +321,7 @@ namespace HSMServer.Model.DataAlerts
             EntityId = node?.Id ?? new Guid();
             Id = policy.Id;
             TemplateId = policy.TemplateId;
+            ScheduleId = policy.ScheduleId;
 
             IsDisabled = policy.IsDisabled;
 

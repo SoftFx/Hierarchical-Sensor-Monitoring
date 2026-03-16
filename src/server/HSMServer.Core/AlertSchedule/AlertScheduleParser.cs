@@ -1,6 +1,4 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Model.Policies;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -9,6 +7,8 @@ using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.Policies;
 
 public class AlertScheduleParser
 {
@@ -40,6 +40,9 @@ public class AlertScheduleParser
     {
         var result = Parse(entity.Schedule);
         result.Id = new Guid(entity.Id);
+        result.Schedule = entity.Schedule;
+        result.Timezone = entity.Timezone;
+        result.Name = entity.Name;
         return result;
     }
 
@@ -48,6 +51,8 @@ public class AlertScheduleParser
         try
         {
             var schedule = _deserializer.Deserialize<AlertSchedule>(yaml);
+
+            schedule.Schedule = yaml;
 
             if (!Validate(schedule, out var errors))
             {
@@ -153,22 +158,22 @@ public class AlertScheduleParser
     {
         if (window.Start < TimeSpan.Zero || window.Start >= TimeSpan.FromDays(1))
         {
-            errors.Add($"Invalid start time {window.Start} in schedule '{scheduleId}'");
+            errors.Add($"Invalid start time {window.Start}");
         }
 
         if (window.End < TimeSpan.Zero || window.End > TimeSpan.FromDays(1))
         {
-            errors.Add($"Invalid end time {window.End} in schedule '{scheduleId}'");
+            errors.Add($"Invalid end time {window.End}");
         }
 
         if (window.Start >= window.End)
         {
-            errors.Add($"Start time {window.Start} must be less than end time {window.End} in schedule '{scheduleId}'");
+            errors.Add($"Start time {window.Start} must be less than end time {window.End}");
         }
 
         if (window.End - window.Start < TimeSpan.FromMinutes(1))
         {
-            errors.Add($"Time window too short (minimum 1 minute) in schedule '{scheduleId}'");
+            errors.Add($"Time window too short (minimum 1 minute)");
         }
     }
 

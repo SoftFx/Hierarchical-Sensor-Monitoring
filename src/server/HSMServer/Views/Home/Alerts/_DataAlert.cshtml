@@ -149,8 +149,7 @@
                     <span>and</span>
                 }
 
-                @Html.Raw(actions[i])
-                ;
+                @Html.Raw(actions[i]);
             }
         }
         else
@@ -192,9 +191,14 @@
                     }
 
                 </div>
+            </div>
 
-
-
+            <div class="d-flex flex-row align-items-top alert-blocks-group">
+                <div class="alert-text-block alert-add ms-3 me-2">and</div>
+                <div class="alert-block alert-select property-select px-2">schedule</div>
+                <select class="alert-block alert-select target-input ms-2" asp-for="ScheduleId" asp-items="@schedules" data-style="alert-block target-input" data-container="body">
+                    <option value="">any time</option>
+                </select>
             </div>
 
             <div class="d-flex flex-row align-items-top alert-blocks-group fullAction @(Model.IsTtl ? "ttlAction" : string.Empty)">
@@ -216,16 +220,6 @@
                     <i class="fa-solid fa-plus alert-add-button"></i>
                 </a> *@
             </div>
-
-
-
-            <div class="dd-flex flex-row align-items-top alert-blocks-group">
-                <div class="alert-text-block alert-add me-2 fixed-width80">Schedule</div>
-                <select class="alert-block alert-select target-input ms-2" asp-for="Schedule" asp-items="@schedules" data-style="alert-block target-input" data-container="body">
-                    <option value=""></option>
-                </select>
-            </div>
-
         </div>
     </div>
 

@@ -1,16 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using Occurify;
-using NodaTime;
 using HSMServer.Core.Model.Policies;
-using Occurify.TimeZones;
 
 namespace HSMServer.Core.Schedule
 {
     public interface IAlertScheduleProvider
     {
         List<AlertSchedule> GetAllSchedules();
+
+        AlertSchedule GetSchedule(Guid id);
 
         void SaveSchedule(AlertSchedule schedule);
 
