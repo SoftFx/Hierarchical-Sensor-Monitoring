@@ -29,3 +29,4 @@ jobs:
             Post your findings as inline review comments on the relevant lines.
             Do NOT run any build commands, tests, or shell commands. Only read and analyze the code statically.
           claude_args: "--max-turns 15"
+          show_full_output: true
