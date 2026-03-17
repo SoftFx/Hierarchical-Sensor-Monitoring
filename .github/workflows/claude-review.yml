@@ -27,4 +27,5 @@ jobs:
             - Code quality and maintainability
             - Performance issues
             Post your findings as inline review comments on the relevant lines.
-          claude_args: "--max-turns 5"
+            Do NOT run any build commands, tests, or shell commands. Only read and analyze the code statically.
+          claude_args: "--max-turns 15"
