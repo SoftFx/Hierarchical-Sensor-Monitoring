@@ -28,7 +28,7 @@
 <body>
     <div class="body-content-wrapper">
         <div class="body-content">
-            <header>
+            <header class="sticky-top">
                 <div id="navbar">
                     @if (Context.User is User)
                     {
@@ -200,7 +200,7 @@
         <footer class="border-top footer text-muted content">
             <div class="d-flex justify-content-between align-items-center mx-3 my-2">
                 <div>
-                    &copy; @DateTime.UtcNow.Year - Soft-FX Current version: @ServerConfig.Version
+                    &copy; @DateTime.UtcNow.Year - @ServerConfig.Company version: @ServerConfig.Version
                 </div>
                 <div>
                     <div id="updateTime"></div>

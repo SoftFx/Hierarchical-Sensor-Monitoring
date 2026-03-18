@@ -58,7 +58,7 @@ namespace HSMDataCollector.DefaultSensors
                     _currentChangeSpeed = 0.0;
                     _requestsCount = 0;
 
-                    _workTask = PeriodicTask.Run(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, _tokenSource.Token);
+                    _workTask = PeriodicTask.Run(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, _tokenSource.Token, HandleException);
                 }
             }
 

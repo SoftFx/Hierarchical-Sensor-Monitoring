@@ -490,6 +490,13 @@ function buildContextMenu(node) {
             "separator_after": true,
             "action": _ => copyToClipboard(node.data.jstree.title),
         };
+
+        contextMenu["Export"] = {
+            "label": "Export",
+            "separator_after": true,
+            "action": _ => window.location.href = `${exportNodeAction}?selectedId=${node.id}`,
+        };
+
     }
     else if (!isFolder) {
         contextMenu["CopyPath"] = {

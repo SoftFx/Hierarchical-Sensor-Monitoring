@@ -16,6 +16,7 @@ using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
@@ -37,6 +38,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Telegram.Bot.Types;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 
@@ -386,6 +388,49 @@ namespace HSMServer.Controllers
 
             return string.Empty;
         }
+
+        [HttpGet]
+        public IActionResult ExportNode([FromQuery] string selectedId)
+        {
+            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+            {
+                var fileName = node.Name;
+
+                using (var memoryStream = new MemoryStream())
+                using (var writer = new StreamWriter(memoryStream, Encoding.UTF8))
+                {
+
+                    writer.WriteLine("sep=;");
+                    writer.WriteLine("\"Path\";\"Type\";\"Discription\"");
+
+                    AddNodeToStream(node, writer);
+
+                    writer.Flush();
+
+                    memoryStream.Position = 0;
+
+                    return File(memoryStream.ToArray(), "text/csv", $"{fileName}.csv");
+                }
+            }
+
+            return Ok();
+        }
+        private void AddNodeToStream(ProductNodeViewModel node, StreamWriter stream)
+        {
+            foreach (var item in node.Nodes.Values)
+            {
+                AddNodeToStream(item, stream);
+            }
+
+            foreach (var sensor in node.Sensors.Values)
+            {
+                stream.WriteLine($"\"{sensor.FullPath}\";\"{sensor.Type}\";\"{sensor.Description}\"");
+            }
+
+        }
+
 
         [HttpPost]
         public ValueTask EnableGrafana(string selectedId) => ChangeSensorsIntegrationAsync(selectedId, Integration.Grafana);
