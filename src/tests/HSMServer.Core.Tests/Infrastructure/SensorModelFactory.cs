@@ -14,17 +14,17 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             return (SensorType)entity.Type switch
             {
-                SensorType.Boolean => new BooleanSensorModel(entity, null),
-                SensorType.Integer => new IntegerSensorModel(entity, null),
-                SensorType.Double => new DoubleSensorModel(entity, null),
-                SensorType.Rate => new RateSensorModel(entity, null),
-                SensorType.String => new StringSensorModel(entity, null),
-                SensorType.IntegerBar => new IntegerBarSensorModel(entity, null),
-                SensorType.DoubleBar => new DoubleBarSensorModel(entity, null),
-                SensorType.File => new FileSensorModel(entity, null),
-                SensorType.TimeSpan => new TimeSpanSensorModel(entity, null),
-                SensorType.Version => new VersionSensorModel(entity, null),
-                SensorType.Enum => new EnumSensorModel(entity, null),
+                SensorType.Boolean => new BooleanSensorModel(entity, null, null),
+                SensorType.Integer => new IntegerSensorModel(entity, null, null),
+                SensorType.Double => new DoubleSensorModel(entity, null, null),
+                SensorType.Rate => new RateSensorModel(entity, null, null),
+                SensorType.String => new StringSensorModel(entity, null, null),
+                SensorType.IntegerBar => new IntegerBarSensorModel(entity, null, null),
+                SensorType.DoubleBar => new DoubleBarSensorModel(entity, null, null),
+                SensorType.File => new FileSensorModel(entity, null, null),
+                SensorType.TimeSpan => new TimeSpanSensorModel(entity, null, null),
+                SensorType.Version => new VersionSensorModel(entity, null, null),
+                SensorType.Enum => new EnumSensorModel(entity, null, null),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }

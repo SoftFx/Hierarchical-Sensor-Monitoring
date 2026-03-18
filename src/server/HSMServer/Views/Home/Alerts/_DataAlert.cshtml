@@ -15,7 +15,6 @@
 @model DataAlertViewModelBase
 
 @inject ITelegramChatsManager ChatsManager
-@inject IDatabaseCore DataBase
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -29,11 +28,6 @@
 
     ViewData["type"] = (byte)Model.Type;
 
-    List<SelectListItem> schedules = DataBase.GetAllAlertSchedules().Select(tz => new SelectListItem
-    {
-        Value = new Guid(tz.Id).ToString(),
-        Text = $"{tz.Name}"
-    }).ToList();
 }
 
 
@@ -195,8 +189,9 @@
 
             <div class="d-flex flex-row align-items-top alert-blocks-group">
                 <div class="alert-text-block alert-add ms-3 me-2">and</div>
-                <div class="alert-block alert-select property-select px-2">schedule</div>
-                <select class="alert-block alert-select target-input ms-2" asp-for="ScheduleId" asp-items="@schedules" data-style="alert-block target-input" data-container="body">
+                <div class="alert-block alert-select property-select px-2 me-2">schedule</div>
+                <div class="alert-text-block operation-select px-2 me-2">is</div>
+                <select class="alert-block alert-select target-input px-2" asp-for="ScheduleId" asp-items="@Model.Schedules" data-style="alert-block target-input" data-container="body">
                     <option value="">any time</option>
                 </select>
             </div>

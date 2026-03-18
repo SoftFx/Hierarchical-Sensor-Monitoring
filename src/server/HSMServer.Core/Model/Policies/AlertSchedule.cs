@@ -19,23 +19,21 @@ namespace HSMServer.Core.Model.Policies
 
         public bool IsWorkingTime(DateTime dateTime)
         {
-            var date = dateTime.Date;
-            var timeOfDay = dateTime.TimeOfDay;
+            var localDateTime = ConvertUtcToLocalTime(dateTime);
+            var date = localDateTime.Date;
+            var timeOfDay = localDateTime.TimeOfDay;
 
-            // 1. Сначала проверяем custom_schedule_dates (имеют высший приоритет)
             var customOverride = Overrides.CustomScheduleDates
                 .FirstOrDefault(c => c.Date == date);
 
             if (customOverride != null)
             {
-                // Если указаны конкретные окна
                 if (customOverride.Windows?.Any() == true)
                 {
                     return customOverride.Windows.Any(w =>
                         timeOfDay >= w.Start && timeOfDay <= w.End);
                 }
 
-                // Если указан тип дня (schedule_type)
                 if (!string.IsNullOrEmpty(customOverride.ScheduleType))
                 {
                     var scheduleForType = GetScheduleByType(customOverride.ScheduleType);
@@ -47,7 +45,6 @@ namespace HSMServer.Core.Model.Policies
                 }
             }
 
-            // 2. Проверяем enabled_dates (обычные переопределения)
             if (Overrides.EnabledDates.Contains(date))
             {
                 var daySchedule = GetDaySchedule(date.DayOfWeek);
@@ -55,14 +52,24 @@ namespace HSMServer.Core.Model.Policies
                     timeOfDay >= w.Start && timeOfDay <= w.End) ?? false;
             }
 
-            // 3. Проверяем исключения (нерабочие дни)
             if (DisabledDates.Contains(date))
                 return false;
 
-            // 4. Обычное расписание по дню недели
             var regularSchedule = GetDaySchedule(date.DayOfWeek);
             return regularSchedule?.Windows.Any(w =>
                 timeOfDay >= w.Start && timeOfDay <= w.End) ?? false;
+        }
+
+        private DateTime ConvertUtcToLocalTime(DateTime utcDateTime)
+        {
+            if (utcDateTime.Kind != DateTimeKind.Utc)
+            {
+                utcDateTime = DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
+            }
+
+            var timezone = TimeZoneInfo.FindSystemTimeZoneById(Timezone);
+
+            return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, timezone);
         }
 
         private DaySchedule GetDaySchedule(DayOfWeek dayOfWeek)
@@ -73,7 +80,6 @@ namespace HSMServer.Core.Model.Policies
 
         private DaySchedule GetScheduleByType(string scheduleType)
         {
-            // Ищем расписание, где тип совпадает с ID или первым днем
             return DaySchedules?
                 .FirstOrDefault(ds =>
                     ds.Id == scheduleType ||

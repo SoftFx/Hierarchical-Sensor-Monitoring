@@ -1,14 +1,16 @@
-﻿using HSMCommon.Model;
-using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.TableOfChanges;
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using HSMCommon.Model;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Schedule;
+using HSMServer.Core.TableOfChanges;
+
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -45,7 +47,6 @@ namespace HSMServer.Core.Model.Policies
             ConfimationResult = PolicyResult.Ok;
         }
 
-
         public abstract IEnumerator<Policy> GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -56,6 +57,14 @@ namespace HSMServer.Core.Model.Policies
     {
         private protected CorrectTypePolicy<T> _typePolicy;
         private protected BaseSensorModel _sensor;
+
+        protected readonly IAlertScheduleProvider _scheduleProvider;
+
+
+        public SensorPolicyCollection(IAlertScheduleProvider provider)
+        {
+            _scheduleProvider = provider;
+        }
 
 
         protected abstract bool CalculateStorageResult(T value, bool isLastValue, bool isRecalculate);
@@ -99,6 +108,15 @@ namespace HSMServer.Core.Model.Policies
 
             if (TimeToLive is not null && !TimeToLive.IsDisabled)
             {
+                bool schedulePassed = true;
+                if (TimeToLive.ScheduleId.HasValue)
+                {
+                    schedulePassed = _scheduleProvider.IsWorkingTime(TimeToLive.ScheduleId.Value, value.Time);
+                }
+
+                if (!schedulePassed)
+                    return false;
+
                 timeout = TimeToLive.HasTimeout(value.LastUpdateTime);
 
                 if (timeout)
@@ -112,7 +130,6 @@ namespace HSMServer.Core.Model.Policies
 
             return timeout;
         }
-
 
         private void RemoveAlert(Policy policy)
         {
@@ -145,6 +162,10 @@ namespace HSMServer.Core.Model.Policies
         private readonly ConcurrentDictionary<Guid, PolicyType> _storage = new();
 
 
+        public SensorPolicyCollection(IAlertScheduleProvider provider) : base(provider)
+        {
+        }
+
         protected override bool CalculateStorageResult(ValueType value, bool isLastValue, bool isReplace)
         {
             SensorResult = SensorResult.Ok;
@@ -157,6 +178,15 @@ namespace HSMServer.Core.Model.Policies
                 foreach (var policy in _storage.Values)
                 {
                     if (policy.IsDisabled)
+                        continue;
+
+                    bool schedulePassed = true;
+                    if (policy.ScheduleId.HasValue)
+                    {
+                        schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, value.Time);
+                    }
+
+                    if (!schedulePassed)
                         continue;
 
                     if (policy.Validate(value))
@@ -183,7 +213,6 @@ namespace HSMServer.Core.Model.Policies
 
             return true;
         }
-
 
         internal override void AddPolicy<T>(T policy)
         {
@@ -319,7 +348,6 @@ namespace HSMServer.Core.Model.Policies
                 Uploaded?.Invoke(ActionType.Add, policy);
             }
         }
-
 
         public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
     }

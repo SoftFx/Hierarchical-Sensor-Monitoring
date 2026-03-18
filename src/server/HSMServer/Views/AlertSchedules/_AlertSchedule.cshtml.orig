@@ -18,13 +18,32 @@
                 <span asp-validation-for="Name" class="text-danger"></span>
             </div>
         </div>
+<<<<<<< HEAD
+    </div>
+    <div class="row py-2">
+        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Timezone"></label>
+        <div class="col w-auto">
+            <select class="form-control" asp-for="Timezone" asp-items="Model.TimeZoneList">
+                <option value="">-- Select time zone --</option>
+            </select>
+            <span asp-validation-for="Timezone" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="row py-2">
+        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="Schedule"></label>
+        <div class="col w-auto">
+            <div id="alert-schedule-editor-container" class="border rounded" style="height: 52vh; min-height: 200px;">
+                <textarea asp-for="Schedule"></textarea>
+            </div>
+            <span asp-validation-for="Schedule" class="text-danger"></span>
+=======
         <div class="row py-2 schedule-form-row">
-            <label class="col-1 col-form-label d-flex justify-content-end schedule-form-label" asp-for="Timezone"></label>
+            <label class="col-1 col-form-label d-flex justify-content-end schedule-form-label" asp-for="TimeZone"></label>
             <div class="col w-auto">
-                <select class="form-control" asp-for="Timezone" asp-items="Model.TimeZoneList">
+                <select class="form-control" asp-for="TimeZone" asp-items="Model.TimeZoneList">
                     <option value="">-- Select time zone --</option>
                 </select>
-                <span asp-validation-for="Timezone" class="text-danger"></span>
+                <span asp-validation-for="TimeZone" class="text-danger"></span>
             </div>
         </div>
         <div class="row py-2 schedule-form-row">
@@ -37,6 +56,7 @@
                 </div>
                 <span asp-validation-for="Schedule" class="text-danger"></span>
             </div>
+>>>>>>> 463da6ca4b29abcb345cd54c499bb34e17499a1a
         </div>
 
         <input type="hidden" asp-for="Id" />
@@ -83,6 +103,14 @@
                 }
             }
 
+<<<<<<< HEAD
+        window.onScheduleYamlChange = updateSaveButtonState;
+
+        updateSaveButtonState();
+
+        $('#Name').on('input', updateSaveButtonState);
+        $('#TimeZone').on('change', updateSaveButtonState);
+=======
             window.onScheduleYamlChange = updateSaveButtonState;
             updateSaveButtonState();
 
@@ -178,4 +206,5 @@ disabledDates: ["2026-02-11", "2026-02-23"]`;
             });
         })();
 </script>
+>>>>>>> 463da6ca4b29abcb345cd54c499bb34e17499a1a
 

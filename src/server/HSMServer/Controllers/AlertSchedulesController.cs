@@ -53,47 +53,6 @@ namespace HSMServer.Controllers
             return View(result);
         }
 
-
-        //[HttpGet]
-        //public IActionResult New()
-        //{
-        //    return View("AlertSchedule", new AlertScheduleViewModel());
-        //}
-
-        //[HttpGet]
-        //public IActionResult Edit(Guid id)
-        //{
-
-        //    var data = _scheduleProvider.GetSchedule(id);
-
-        //    return View("AlertSchedule", new AlertScheduleViewModel(data));
-        //}
-
-        //[HttpPost]
-        //public IActionResult Save(AlertScheduleViewModel model)
-        //{
-        //    if (model.Id == Guid.Empty)
-        //        model.Id = Guid.NewGuid();
-
-        //    try
-        //    {
-        //        var schedule = _parser.Parse(model.Schedule);
-
-        //        schedule.Id = model.Id;
-        //        schedule.Name = model.Name;
-        //        schedule.Timezone = model.Timezone;
-
-        //        _scheduleProvider.SaveSchedule(schedule);
-
-        //        return RedirectToAction("Index");
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        ModelState.AddModelError("Schedule", ex.Message);
-        //        return View("AlertSchedule", model);
-        //    }
-        //}
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult Remove(Guid id)

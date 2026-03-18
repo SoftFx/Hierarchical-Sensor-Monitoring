@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMServer.Core.Schedule;
+using System;
 using Xunit;
 
 

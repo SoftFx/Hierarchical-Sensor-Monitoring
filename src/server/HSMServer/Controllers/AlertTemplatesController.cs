@@ -1,21 +1,23 @@
-﻿using System;
+﻿using HSMCommon.Model;
+using HSMServer.ApiObjectsConverters;
+using HSMServer.Authentication;
+using HSMServer.Core.Cache;
+using HSMServer.Core.Model;
+using HSMServer.Core.Schedule;
+using HSMServer.Folders;
+using HSMServer.Model.DataAlertTemplates;
+using HSMServer.Model.TreeViewModel;
+using HSMServer.Notifications;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using HSMServer.ApiObjectsConverters;
-using HSMServer.Authentication;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
-using HSMServer.Folders;
-using HSMServer.Model.DataAlertTemplates;
-using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications;
 using System.Threading.Tasks;
-using HSMCommon.Model;
 
 
 
@@ -39,6 +41,7 @@ namespace HSMServer.Controllers
         private readonly ITreeValuesCache _cache;
         private readonly IFolderManager _folders;
         private readonly TreeViewModel _tree;
+        private readonly IAlertScheduleProvider _alertScheduleProvider;
 
 
         static AlertTemplatesController()
@@ -49,12 +52,14 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertTemplatesController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache, IUserManager users) : base(users)
+        public AlertTemplatesController(ITelegramChatsManager telegram, IFolderManager folders, TreeViewModel tree, ITreeValuesCache cache,
+                                        IUserManager users, IAlertScheduleProvider provider) : base(users)
         {
             _telegram = telegram;
             _folders = folders;
             _cache = cache;
             _tree = tree;
+            _alertScheduleProvider = provider;
         }
 
         [HttpGet]
@@ -153,7 +158,12 @@ namespace HSMServer.Controllers
             if (data is null)
                 return _emptyResult;
 
-            return View("AlertTemplate", new DataAlertTemplateViewModel(data, _folders.GetUserFolders(CurrentUser)));
+            var model = new DataAlertTemplateViewModel(data, _folders.GetUserFolders(CurrentUser));
+            foreach (var (_, alerts) in model.DataAlerts)
+                foreach (var alert in alerts)
+                    alert.Schedules = GetAlertSchedulesSelectList();
+
+            return View("AlertTemplate", model);
         }
 
         [HttpPost]
@@ -170,6 +180,10 @@ namespace HSMServer.Controllers
             }
 
             data = new DataAlertTemplateViewModel(data.ToModel(), _folders.GetUserFolders(CurrentUser));
+
+            foreach (var (_, alerts) in data.DataAlerts)
+                foreach (var alert in alerts)
+                    alert.Schedules = GetAlertSchedulesSelectList();
 
             return PartialView("_AlertTemplate", data);
         }
@@ -209,6 +223,15 @@ namespace HSMServer.Controllers
 
             return $"{folderName}/{result[^1]}";
 
+        }
+
+        private List<SelectListItem> GetAlertSchedulesSelectList()
+        {
+            return [.. _alertScheduleProvider.GetAllSchedules().Select(tz => new SelectListItem
+            {
+                Value = tz.Id.ToString(),
+                Text = $"{tz.Name}"
+            })];
         }
 
     }

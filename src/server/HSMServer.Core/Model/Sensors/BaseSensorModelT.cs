@@ -47,7 +47,7 @@ namespace HSMServer.Core.Model
 
         internal override bool TryAddValue(BaseValue value)
         {
-            if (_isInitialized)
+            if (!_isInitialized)
                 Initialize();
 
             if (value?.IsTimeout ?? false)

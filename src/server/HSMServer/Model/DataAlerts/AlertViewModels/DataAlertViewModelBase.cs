@@ -48,6 +48,9 @@ namespace HSMServer.Model.DataAlerts
 
         public Guid? ScheduleId { get; set; }
 
+        public List<SelectListItem> Schedules { get; set; }
+
+
         internal bool IsAlertDisplayed
         {
             get

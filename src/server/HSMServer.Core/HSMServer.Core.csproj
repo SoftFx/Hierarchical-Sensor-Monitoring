@@ -9,9 +9,6 @@
     <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.1.11" />
     <PackageReference Include="HtmlSanitizer" Version="9.0.886" />
     <PackageReference Include="NLog.Web.AspNetCore" Version="6.0.5" />
-    <PackageReference Include="NodaTime" Version="3.3.0" />
-    <PackageReference Include="Occurify" Version="0.10.0" />
-    <PackageReference Include="Occurify.TimeZones" Version="0.10.0" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 

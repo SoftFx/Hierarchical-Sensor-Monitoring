@@ -57,8 +57,6 @@ namespace HSMServer.Core.Model
 
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
-
-            Policies.Attach(this);
         }
 
         protected BaseNodeModel(string name, Guid? authorId) : this()

@@ -281,7 +281,7 @@ namespace HSMServer.Core.Model.Policies
             IsDisabled = IsDisabled,
             Template = Template,
             Icon = Icon,
-            TemplateId = TemplateId.HasValue ? Id.ToByteArray() : [],
+            TemplateId = TemplateId.HasValue ? TemplateId.Value.ToByteArray() : [],
             ScheduleId = ScheduleId.HasValue ? ScheduleId.Value.ToByteArray() : []
         };
 
