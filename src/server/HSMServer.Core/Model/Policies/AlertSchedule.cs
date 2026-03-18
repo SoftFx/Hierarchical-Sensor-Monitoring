@@ -31,7 +31,7 @@ namespace HSMServer.Core.Model.Policies
                 if (customOverride.Windows?.Any() == true)
                 {
                     return customOverride.Windows.Any(w =>
-                        timeOfDay >= w.Start && timeOfDay <= w.End);
+                        timeOfDay >= w.Start && timeOfDay < w.End);
                 }
 
                 if (!string.IsNullOrEmpty(customOverride.ScheduleType))
@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model.Policies
                     if (scheduleForType != null)
                     {
                         return scheduleForType.Windows.Any(w =>
-                            timeOfDay >= w.Start && timeOfDay <= w.End);
+                            timeOfDay >= w.Start && timeOfDay < w.End);
                     }
                 }
             }
@@ -49,7 +49,7 @@ namespace HSMServer.Core.Model.Policies
             {
                 var daySchedule = GetDaySchedule(date.DayOfWeek);
                 return daySchedule?.Windows.Any(w =>
-                    timeOfDay >= w.Start && timeOfDay <= w.End) ?? false;
+                    timeOfDay >= w.Start && timeOfDay < w.End) ?? false;
             }
 
             if (DisabledDates.Contains(date))
@@ -57,7 +57,7 @@ namespace HSMServer.Core.Model.Policies
 
             var regularSchedule = GetDaySchedule(date.DayOfWeek);
             return regularSchedule?.Windows.Any(w =>
-                timeOfDay >= w.Start && timeOfDay <= w.End) ?? false;
+                timeOfDay >= w.Start && timeOfDay < w.End) ?? false;
         }
 
         private DateTime ConvertUtcToLocalTime(DateTime utcDateTime)
