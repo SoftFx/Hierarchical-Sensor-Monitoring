@@ -18,7 +18,6 @@ namespace HSMServer.Core.Schedule
         private readonly IDeserializer _deserializer;
         private readonly ISerializer _serializer;
         private const string DateFormat = "yyyy-MM-dd";
-        private const string TimeFormat = @"hh\:mm";
         private readonly Regex _timeRegex = new Regex(@"^([0-1][0-9]|2[0-3]):[0-5][0-9]$", RegexOptions.Compiled);
 
         public AlertScheduleParser()

@@ -1,10 +1,10 @@
-﻿using HSMServer.Core.DataLayer;
-using HSMServer.Core.Model.Policies;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using NLog;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using NLog;
+using HSMServer.Core.DataLayer;
+using HSMServer.Core.Model.Policies;
+
 
 
 namespace HSMServer.Core.Schedule
@@ -95,7 +95,7 @@ namespace HSMServer.Core.Schedule
             lock (_lock)
             {
                 _cache.TryGetValue(id, out var entry);
-                return entry.Schedule;
+                return entry?.Schedule;
             }
         }
 
