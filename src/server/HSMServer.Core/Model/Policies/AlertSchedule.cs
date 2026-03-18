@@ -62,11 +62,6 @@ namespace HSMServer.Core.Model.Policies
 
         private DateTime ConvertUtcToLocalTime(DateTime utcDateTime)
         {
-            if (utcDateTime.Kind != DateTimeKind.Utc)
-            {
-                utcDateTime = DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
-            }
-
             var timezone = TimeZoneInfo.FindSystemTimeZoneById(Timezone);
 
             return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, timezone);

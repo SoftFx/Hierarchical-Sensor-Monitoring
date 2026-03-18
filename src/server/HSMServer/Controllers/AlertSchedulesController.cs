@@ -79,6 +79,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public IActionResult SavePartial(AlertScheduleViewModel model)
         {
             if (ModelState.IsValid)

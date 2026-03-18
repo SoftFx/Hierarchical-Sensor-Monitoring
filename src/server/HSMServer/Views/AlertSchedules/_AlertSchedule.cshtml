@@ -10,7 +10,7 @@
 
 <form id="alertScheduleForm" method="post" action="@Url.Action(nameof(AlertSchedulesController.SavePartial), ViewConstants.AlertSchedulesController)" style="display: flex; flex-direction: column; height: 100%;">
     <div style="flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 5px;">
-
+        @Html.AntiForgeryToken()
         <div class="row py-2 schedule-form-row">
             <label class="col-1 col-form-label d-flex justify-content-end schedule-form-label" asp-for="Name"></label>
             <div class="col w-auto">
@@ -73,7 +73,7 @@
         (function() {
             function updateSaveButtonState() {
                 const nameInput = document.getElementById('Name');
-                const timeZoneSelect = document.getElementById('TimeZone');
+                const timeZoneSelect = document.getElementById('Timezone');
                 const saveButton = document.getElementById('submitScheduleForm');
                 if (nameInput && timeZoneSelect && saveButton) {
                     const nameFilled = nameInput.value.trim() !== '';

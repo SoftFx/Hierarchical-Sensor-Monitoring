@@ -1,8 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
 
 
 namespace HSMServer.Model.AlertSchedule
@@ -12,8 +13,10 @@ namespace HSMServer.Model.AlertSchedule
 
         public Guid Id { get; set; } = Guid.Empty;
 
+        [Required]
         public string Name { get; set; }
 
+        [Required]
         public string Timezone { get; set; }
 
         public List<SelectListItem> TimeZoneList { get; set; }
