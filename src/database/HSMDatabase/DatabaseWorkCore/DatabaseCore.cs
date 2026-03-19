@@ -679,6 +679,41 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
+
+        #region AlertSchedule
+        public List<AlertScheduleEntity> GetAllAlertSchedules()
+        {
+            var ids = _environmentDatabase.GetAllAlertScheduleIds();
+
+            var result = new List<AlertScheduleEntity>(ids.Count);
+
+            foreach (var id in ids)
+            {
+                var schedule = _environmentDatabase.GetAlertSchedule(id);
+
+                if (schedule != null)
+                    result.Add(schedule);
+            }
+
+            return result;
+        }
+
+        public AlertScheduleEntity GetAlertSchedule(Guid id)
+        {
+            return _environmentDatabase.GetAlertSchedule(id.ToByteArray());
+        }
+
+        public void AddAlertSchedule(AlertScheduleEntity schedule)
+        {
+            _environmentDatabase.AddAlertSchedule(schedule);
+            _environmentDatabase.AddAlertScheduleIdToList(schedule.Id);
+        }
+
+        public void RemoveAlertSchedule(Guid id)
+        {
+            _environmentDatabase.RemoveAlertSchedule(id.ToByteArray());
+        }
+        #endregion
         public void Compact()
         {
             if (IsCompactRunning)

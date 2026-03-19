@@ -16,6 +16,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.Schedule;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
@@ -85,6 +86,7 @@ namespace HSMServer.Core.Cache
         private readonly ITreeStateSnapshot _snapshot;
         private readonly IJournalService _journalService;
         private readonly IDatabaseCore _database;
+        private readonly IAlertScheduleProvider _alertScheduleProvider;
 
         private readonly TimeSpan StateUpdatePeriod = TimeSpan.FromMinutes(1);
         private readonly TimeSpan StateUpdateStartDelay = TimeSpan.FromMinutes(2);
@@ -103,12 +105,14 @@ namespace HSMServer.Core.Cache
 
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot,
-            IJournalService journalService)
+            IJournalService journalService, IAlertScheduleProvider alertScheduleProvider)
         {
             _database = database;
             _snapshot = snapshot;
 
             _journalService = journalService;
+
+            _alertScheduleProvider = alertScheduleProvider;
 
             Initialize();
 
@@ -1775,7 +1779,7 @@ namespace HSMServer.Core.Cache
             {
                 try
                 {
-                    var sensor = SensorModelFactory.Build(entity, _database);
+                    var sensor = SensorModelFactory.Build(entity, _database, _alertScheduleProvider);
                     sensor.Policies.ApplyPolicies(entity.Policies, policies);
 
                     var productId = Guid.Parse(entity.ProductId);
@@ -1962,7 +1966,7 @@ namespace HSMServer.Core.Cache
                     CreationDate = DateTime.UtcNow.Ticks,
                 };
 
-                sensor = SensorModelFactory.Build(entity, _database);
+                sensor = SensorModelFactory.Build(entity, _database, _alertScheduleProvider);
                 parentProduct.AddSensor(sensor);
 
                 if (!sensor.Settings.TTL.IsSet)

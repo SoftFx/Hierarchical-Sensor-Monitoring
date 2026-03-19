@@ -26,6 +26,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
         private readonly byte[] _telegramChatIdsKey = "TelegramChats"u8.ToArray();
         private readonly byte[] _alertTemplatesIdsKey = "AlertTemplates"u8.ToArray();
+        private readonly byte[] _alertScheduleIdsKey = "AlertSchedule"u8.ToArray();
 
         private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
@@ -732,6 +733,76 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
+
+        #region Alert Schedule
+        public void AddAlertScheduleIdToList(byte[] id)
+        {
+            try
+            {
+                var ids = GetAllAlertScheduleIds();
+
+                if (!ids.Any(existingId => existingId.SequenceEqual(id)))
+                {
+                    ids.Add(id);
+                    _database.Put(_alertScheduleIdsKey, JsonSerializer.SerializeToUtf8Bytes(ids));
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add alert schedule id {id} to list");
+            }
+        }
+
+        public void AddAlertSchedule(AlertScheduleEntity entity)
+        {
+            try
+            {
+                _database.Put(entity.Id, JsonSerializer.SerializeToUtf8Bytes(entity, _options));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add alert schedule info for {entity.Id}");
+            }
+        }
+
+        public void RemoveAlertSchedule(byte[] id)
+        {
+            try
+            {
+
+                var ids = GetAllAlertScheduleIds();
+                ids.RemoveAll(x => new Guid(x) == new Guid(id));
+
+                _database.Put(_alertScheduleIdsKey, JsonSerializer.SerializeToUtf8Bytes(ids));
+                _database.Delete(id);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove alert schedule by {id}");
+            }
+        }
+
+        public List<byte[]> GetAllAlertScheduleIds() => GetListOfBytes(_alertScheduleIdsKey, "Failed to get all alert schedule Ids");
+
+
+        public AlertScheduleEntity GetAlertSchedule(byte[] id)
+        {
+            try
+            {
+                return _database.TryRead(id, out byte[] value)
+                       ? JsonSerializer.Deserialize<AlertScheduleEntity>(value)
+                       : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for alert schedule {id}");
+            }
+
+            return null;
+        }
+
+        #endregion
+
         public void Compact()
         {
             _database.Compact();
@@ -771,4 +842,5 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return new();
         }
     }
+
 }

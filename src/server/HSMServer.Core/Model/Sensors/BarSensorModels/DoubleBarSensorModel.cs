@@ -2,6 +2,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Schedule;
 
 namespace HSMServer.Core.Model
 {
@@ -10,7 +11,7 @@ namespace HSMServer.Core.Model
         protected override DoubleBarValuesStorage Storage { get; } = new DoubleBarValuesStorage();
 
 
-        public override SensorPolicyCollection<DoubleBarValue, DoubleBarPolicy> Policies { get; } = new();
+        public override SensorPolicyCollection<DoubleBarValue, DoubleBarPolicy> Policies { get; }
 
         public override SensorType Type { get; } = SensorType.DoubleBar;
 
@@ -18,8 +19,10 @@ namespace HSMServer.Core.Model
         BarBaseValue IBarSensor.LocalLastValue => Storage.PartialLastValue;
 
 
-        public DoubleBarSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database) 
+        public DoubleBarSensorModel(SensorEntity entity, IDatabaseCore database, IAlertScheduleProvider provider) : base(entity, database) 
         {
+            Policies = new(provider);
+            Policies.Attach(this);
         }
     }
 }

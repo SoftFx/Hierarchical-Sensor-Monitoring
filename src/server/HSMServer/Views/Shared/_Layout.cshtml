@@ -19,7 +19,7 @@
     <title>@ViewData["Title"] - HSM</title>
 
     <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
-    
+
 
     <script src="~/dist/main.bundle.js" asp-append-version="true"></script>
 
@@ -74,41 +74,60 @@
                                             </a>
                                         </li>
 
-                                        <li class="nav-item">
-                                            <a class="nav-link @Html.ActiveClass(ViewConstants.AlertTemplatesController)" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AlertTemplatesController)">
-                                                Alert Templates
+
+                                        <li class="nav-item dropdown">
+                                            <a class="nav-link dropdown-toggle" href="#" id="alertsDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                Alerts
                                             </a>
+                                            <ul class="dropdown-menu" aria-labelledby="alertsDropdown">
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AlertTemplatesController)">
+                                                        Alert Templates
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AlertSchedulesController)">
+                                                        Alert Schedules
+                                                    </a>
+                                                </li>
+                                            </ul>
                                         </li>
 
-                                        <li class="nav-item">
-                                            <a class="nav-link @Html.ActiveClass(ViewConstants.AccessKeysController)" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AccessKeysController)">
-                                                Access keys
+
+                                        <li class="nav-item dropdown">
+                                            <a class="nav-link dropdown-toggle" href="#" id="optionsDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                Configuration
                                             </a>
+                                            <ul class="dropdown-menu" aria-labelledby="optionsDropdown">
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AccessKeysController)">
+                                                        Access keys
+                                                    </a>
+                                                </li>
+                                                @if (UserRoleHelper.IsUsersPageAllowed((User)Context.User))
+                                                {
+                                                    <li>
+                                                        <a class="dropdown-item" href="@Url.Action(ViewConstants.UsersAction, ViewConstants.AccountController)">
+                                                            Users
+                                                        </a>
+                                                    </li>
+                                                }
+                                                @if (UserRoleHelper.IsConfigurationPageAllowed((User)Context.User))
+                                                {
+                                                    <li>
+                                                        <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ConfigurationController)">
+                                                            Settings
+                                                        </a>
+                                                    </li>
+                                                }
+                                                <li>
+                                                    <a class="dropdown-item" target="_blank" href="https://@(Context.Request.Host.Value.Replace("44333", "44330") + ViewConstants.ApiSwagger)">
+                                                        API
+                                                    </a>
+                                                </li>
+                                            </ul>
                                         </li>
 
-                                        @if (UserRoleHelper.IsUsersPageAllowed((User)Context.User))
-                                        {
-                                            <li class="nav-item">
-                                                <a class="nav-link @Html.ActiveClass(ViewConstants.AccountController)" href="@Url.Action(ViewConstants.UsersAction, ViewConstants.AccountController)">
-                                                    Users
-                                                </a>
-                                            </li>
-                                        }
-
-                                        @if (UserRoleHelper.IsConfigurationPageAllowed((User)Context.User))
-                                        {
-                                            <li class="nav-item">
-                                                <a class="nav-link @Html.ActiveClass(ViewConstants.ConfigurationController)" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ConfigurationController)">
-                                                    Configuration
-                                                </a>
-                                            </li>
-                                        }
-
-                                        <li class="nav-item">
-                                            <a class="nav-link" target="_blank" href="https://@(Context.Request.Host.Value.Replace("44333", "44330") + ViewConstants.ApiSwagger)">
-                                                API
-                                            </a>
-                                        </li>
                                     </ul>
 
                                     <ul class="navbar-nav">

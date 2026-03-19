@@ -8,6 +8,7 @@ using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.Schedule;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.DTOs.Sensors;
@@ -28,6 +29,7 @@ using HSMServer.Model.ViewModel;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -52,11 +54,12 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly IDatabaseCore _database;
+        private readonly IAlertScheduleProvider _alertScheduleProvider;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
                               IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager, 
-                              IDatabaseCore database) : base(userManager)
+                              IDatabaseCore database, IAlertScheduleProvider provider) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
@@ -64,6 +67,7 @@ namespace HSMServer.Controllers
             _journalService = journalService;
             _telegramChatsManager = telegramChatsManager;
             _database = database;
+            _alertScheduleProvider = provider;
         }
 
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -114,7 +118,14 @@ namespace HSMServer.Controllers
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
                     viewModel = sensor;
+                    var schedulesList = GetAlertSchedulesSelectList();
                     StoredUser.History.ConnectSensor(_treeValuesCache.GetSensor(id));
+                    sensor.TTLAlert.Schedules = schedulesList;
+                    foreach (var (key, alerts) in sensor.DataAlerts)
+                        foreach (var alert in alerts)
+                        {
+                            alert.Schedules = schedulesList;
+                        }
                 }
             }
 
@@ -680,7 +691,13 @@ namespace HSMServer.Controllers
 
             await _treeValuesCache.UpdateSensorAsync(update);
 
-            return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
+            var model = new SensorInfoViewModel(sensor);
+            var schedulesList = GetAlertSchedulesSelectList();
+            foreach (var (key, dataAlerts) in model.DataAlerts)
+                foreach(var alert in dataAlerts)
+                    alert.Schedules = schedulesList;
+
+            return PartialView("_MetaInfo", model);
         }
 
         
@@ -707,6 +724,7 @@ namespace HSMServer.Controllers
             TryGetSelectedNode(entityId, out var entity);
 
             DataAlertViewModelBase viewModel = DataAlertViewModel.BuildAlert(type, entity);
+            viewModel.Schedules = GetAlertSchedulesSelectList();
 
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
@@ -965,6 +983,15 @@ namespace HSMServer.Controllers
             }
 
             return null;
+        }
+
+        private List<SelectListItem> GetAlertSchedulesSelectList()
+        {
+            return [.. _alertScheduleProvider.GetAllSchedules().Select(tz => new SelectListItem
+            {
+                Value = tz.Id.ToString(),
+                Text = $"{tz.Name}"
+            })];
         }
     }
 }

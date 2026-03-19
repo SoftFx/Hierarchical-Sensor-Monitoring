@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using HSMServer.Core.Journal;
 using Xunit;
 using HSMServer.Core.TreeStateSnapshot.States;
+using HSMServer.Core.Schedule;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
@@ -24,6 +25,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         protected readonly TreeValuesCache _valuesCache;
         protected readonly IUserManager _userManager;
         protected readonly JournalService _journalService;
+        protected readonly IAlertScheduleProvider _alertScheduleProvider;
 
 
         protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture, bool addTestProduct = true)
@@ -43,7 +45,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             fixture.InitializeDatabase(_databaseCoreManager.DatabaseCore);
 
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, snaphot.Object, _journalService);
+            _alertScheduleProvider = new AlertScheduleProvider(_databaseCoreManager.DatabaseCore);
+
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, snaphot.Object, _journalService, _alertScheduleProvider);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, _valuesCache, userManagerLogger);

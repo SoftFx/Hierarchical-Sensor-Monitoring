@@ -1,7 +1,8 @@
-﻿using HSMCommon.TaskResult;
-using HSMDatabase.AccessManager.DatabaseEntities;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using HSMCommon.TaskResult;
+using HSMDatabase.AccessManager.DatabaseEntities;
+
 
 namespace HSMDatabase.AccessManager
 {
@@ -91,6 +92,14 @@ namespace HSMDatabase.AccessManager
         void AddAlertTemplate(AlertTemplateEntity alertTemplate);
         void RemoveAlertTemplate(byte[] id);
         #endregion
+
+        #region Alert Schedules
+        List<byte[]> GetAllAlertScheduleIds();
+        AlertScheduleEntity GetAlertSchedule(byte[] id);
+        void AddAlertScheduleIdToList(byte[] id);
+        void AddAlertSchedule(AlertScheduleEntity alertScheduleEntity);
+        void RemoveAlertSchedule(byte[] id);
+        #endregion Alert Schedules
 
         void Compact();
     }
