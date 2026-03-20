@@ -36,11 +36,13 @@ jobs:
 
             Use `git diff origin/${{ github.base_ref }}...origin/${{ github.head_ref }}` to see the changes.
             Analyze the changes, identify potential bugs, security issues, performance problems, and suggest improvements.
-            Output your review as markdown text.
+            Write your review to /tmp/claude-review.md
 
       - name: Post Claude review as PR comment
         if: always() && github.event.pull_request.number != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr comment ${{ github.event.pull_request.number }} --body "${{ steps.claude.outputs.result }}"
+          if [ -f /tmp/claude-review.md ]; then
+            gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/claude-review.md
+          fi
