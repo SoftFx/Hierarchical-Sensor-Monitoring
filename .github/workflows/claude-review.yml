@@ -26,6 +26,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
           prompt: |
             Please review this pull request. Analyze the changes, identify potential bugs,
             security issues, performance problems, and suggest improvements.
