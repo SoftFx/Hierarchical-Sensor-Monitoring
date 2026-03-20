@@ -22,6 +22,7 @@ jobs:
           fetch-depth: 0
 
       - name: Claude Code Review
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -35,4 +36,11 @@ jobs:
 
             Use `git diff origin/${{ github.base_ref }}...origin/${{ github.head_ref }}` to see the changes.
             Analyze the changes, identify potential bugs, security issues, performance problems, and suggest improvements.
-            Output your review as markdown text — it will be posted automatically as a PR comment.
+            Output your review as markdown text.
+
+      - name: Post Claude review as PR comment
+        if: always() && github.event.pull_request.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "${{ steps.claude.outputs.result }}"
