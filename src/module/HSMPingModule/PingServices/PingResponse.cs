@@ -40,8 +40,7 @@ internal record PingResponse
     {
         Status = SensorStatus.Error;
         Comment = exception.Message;
-        // Value = double.NaN; TODO: should be uncomment after chart fixes
-        Value = 0;
+        Value = 0; // TODO: replace with double.NaN after chart fixes
 
         _str = BuildStrState();
     }
