@@ -29,6 +29,9 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
           use_sticky_comment: true
+          additional_permissions: |
+            Bash(git*)
+            Write(/tmp/*)
           prompt: |
             Please review pull request #${{ github.event.pull_request.number }} in this repository.
             PR title: ${{ github.event.pull_request.title }}
