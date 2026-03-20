@@ -30,7 +30,7 @@ internal record PingResponse
         {
             Status = SensorStatus.Error;
             Comment = reply.Status.ToString();
-            Value = reply.RoundtripTime / MillisecondsInSecond;
+            Value = 0;
         }
 
         _str = BuildStrState();
