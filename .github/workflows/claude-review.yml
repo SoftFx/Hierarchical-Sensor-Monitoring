@@ -22,16 +22,12 @@ jobs:
           fetch-depth: 0
 
       - name: Claude Code Review
-        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
-          use_sticky_comment: true
-          additional_permissions: |
-            Bash(git*)
-            Write(/tmp/*)
+          claude_args: --allowedTools "Bash(git diff*),Bash(git log*),Bash(gh pr comment*),Bash(gh pr diff*),Bash(gh pr view*)"
           prompt: |
             Please review pull request #${{ github.event.pull_request.number }} in this repository.
             PR title: ${{ github.event.pull_request.title }}
@@ -39,13 +35,4 @@ jobs:
 
             Use `git diff origin/${{ github.base_ref }}...origin/${{ github.head_ref }}` to see the changes.
             Analyze the changes, identify potential bugs, security issues, performance problems, and suggest improvements.
-            Write your review to /tmp/claude-review.md
-
-      - name: Post Claude review as PR comment
-        if: always() && github.event.pull_request.number != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ -f /tmp/claude-review.md ]; then
-            gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/claude-review.md
-          fi
+            Post your review using: gh pr comment ${{ github.event.pull_request.number }} --body "your review here"
