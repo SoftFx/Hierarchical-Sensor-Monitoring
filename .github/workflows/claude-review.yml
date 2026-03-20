@@ -27,11 +27,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           show_full_output: true
-          additional_permissions: |
-            - Bash(gh pr*)
-            - Bash(gh api*)
-            - Bash(git diff*)
-            - Bash(git log*)
+          use_sticky_comment: true
           prompt: |
             Please review pull request #${{ github.event.pull_request.number }} in this repository.
             PR title: ${{ github.event.pull_request.title }}
@@ -39,4 +35,4 @@ jobs:
 
             Use `git diff origin/${{ github.base_ref }}...origin/${{ github.head_ref }}` to see the changes.
             Analyze the changes, identify potential bugs, security issues, performance problems, and suggest improvements.
-            Post your review as a comment using: gh pr comment ${{ github.event.pull_request.number }} --body "your review here"
+            Output your review as markdown text — it will be posted automatically as a PR comment.
