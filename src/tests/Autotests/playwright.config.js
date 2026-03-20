@@ -25,6 +25,7 @@ export default defineConfig({
     
     // Ignor HTTPErrors
     ignoreHTTPSErrors: true,
+    viewport: { width: 1280, height: 720 },
     trace: 'on-first-retry',
   },
 

@@ -2,13 +2,7 @@ import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 
-test.use({
-  ignoreHTTPSErrors: true,
-  headless: false, // чтобы видеть, что происходит
-  viewport: { width: 1280, height: 720 }
-});
-
-  // Loging
+// Loging
 test('Add environment', async ({ page }) => {
   const {apiUrl, apiUrl2, admin_user, admin_user_password, userName1, user1password, userName2, user2password } = testConfig;
   await login(page, admin_user, admin_user_password, apiUrl,);

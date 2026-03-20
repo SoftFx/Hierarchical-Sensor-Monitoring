@@ -2,13 +2,7 @@ import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
 import { login } from '../login.ts';
 
-test.use({
-  ignoreHTTPSErrors: true,
-  headless: false, // чтобы видеть, что происходит
-  viewport: { width: 1280, height: 720 }
-});
-
-  // Loging
+// Loging
 test('Add folders/products', async ({ page }) => {
   const {apiUrl, apiUrl2, admin_user, admin_user_password, folder_name1, folder_description1, folder_color1, folder_name3, folder_description3, folder_color3 } = testConfig;
   const colorInput = page.locator('#Color');
