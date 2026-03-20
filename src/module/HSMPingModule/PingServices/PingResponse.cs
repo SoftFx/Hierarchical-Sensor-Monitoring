@@ -6,7 +6,7 @@ namespace HSMPingModule.PingServices;
 
 internal record PingResponse
 {
-    private const double Milleseconds = 1000;
+    private const double Milliseconds = 1000;
 
     private readonly string _str;
 
@@ -24,13 +24,13 @@ internal record PingResponse
         {
             Status = SensorStatus.Ok;
             Comment = nameof(SensorStatus.Ok);
-            Value = reply.RoundtripTime / Milleseconds;
+            Value = reply.RoundtripTime / Milliseconds;
         }
         else
         {
             Status = SensorStatus.Error;
             Comment = reply.Status.ToString();
-            Value = reply.RoundtripTime / Milleseconds;
+            Value = reply.RoundtripTime / Milliseconds;
         }
 
         _str = BuildStrState();
