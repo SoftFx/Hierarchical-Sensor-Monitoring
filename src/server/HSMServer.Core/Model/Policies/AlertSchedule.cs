@@ -63,8 +63,11 @@ namespace HSMServer.Core.Model.Policies
         private DateTime ConvertUtcToLocalTime(DateTime utcDateTime)
         {
             var timezone = TimeZoneInfo.FindSystemTimeZoneById(Timezone);
+            var utc = utcDateTime.Kind == DateTimeKind.Local
+                ? utcDateTime.ToUniversalTime()
+                : DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
 
-            return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, timezone);
+            return TimeZoneInfo.ConvertTimeFromUtc(utc, timezone);
         }
 
         private DaySchedule GetDaySchedule(DayOfWeek dayOfWeek)
