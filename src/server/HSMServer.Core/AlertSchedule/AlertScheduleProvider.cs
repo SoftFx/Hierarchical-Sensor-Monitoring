@@ -133,8 +133,9 @@ namespace HSMServer.Core.Schedule
                     {
                         schedule = _parser.Parse(entity);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Error(ex, $"Failed to parse alert schedule. Id = {entity.Id}, Name = {entity.Name}. Using raw entity as fallback.");
                         schedule = new AlertSchedule()
                         {
                             Id = new Guid(entity.Id),

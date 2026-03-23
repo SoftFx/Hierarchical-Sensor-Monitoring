@@ -1851,8 +1851,9 @@ namespace HSMServer.Core.Cache
                     {
                         val = sensor.ConvertFromJson(Encoding.UTF8.GetString(value));
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Error(ex, $"Failed to deserialize sensor value during V2 migration. SensorId = {sensorId}");
                         continue;
                     }
 
