@@ -55,6 +55,17 @@ test('Home->Add Product and check it in the tree', async ({ page }) => {
     console.log('✅ Tabs appear on the page');
   });
 
+  await test.step('Cleanup: remove TestProduct', async () => {
+    await page.getByRole('link', { name: 'Products' }).click();
+    const row = page.getByRole('row').filter({
+      has: page.getByRole('link', { name: 'TestProduct', exact: true })
+    });
+    await row.locator('#actionButton').click();
+    await row.locator('a.dropdown-item', { hasText: 'Remove' }).click();
+    await page.getByRole('button', { name: 'OK' }).click();
+    console.log('✅ TestProduct removed');
+  });
+
   await test.step('Logout', async () => {
     await page.getByRole('link', { name: 'Logout' }).click();
     await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();

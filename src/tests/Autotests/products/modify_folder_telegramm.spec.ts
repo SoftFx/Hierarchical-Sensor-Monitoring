@@ -46,9 +46,9 @@ test('Modify Folder General tabs', async ({ page }) => {
   await selectLocator.selectOption('Empty');
   await page.getByRole('button', { name: 'Save' }).click();
   const toastBodyLocator = page.locator('#toast_body');
-  //await expect(toastBodyLocator).toBeVisible();
+  await expect(toastBodyLocator).toBeVisible({ timeout: 5000 });
   await expect(toastBodyLocator).toHaveText('Folder telegram chats have been succesfully saved!');
-  await expect(toastBodyLocator).not.toBeVisible(); 
+  await expect(toastBodyLocator).not.toBeVisible({ timeout: 10000 });
 
   //Ckeck that modification saved
   await page.reload();

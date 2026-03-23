@@ -3,7 +3,7 @@ import { testConfig, testData } from '../config.ts';
 import { login } from '../login.ts';
 
 test('Check all templates fields', async ({ page }) => {
-  const { apiUrl, admin_user, admin_user_password } = testConfig;
+  const { apiUrl, admin_user, admin_user_password, alertFolderGuid } = testConfig;
   const { templatePath, duplicateError, templateName, templateName2 } = testData;
 
   await login(page, admin_user, admin_user_password, apiUrl);
@@ -11,7 +11,7 @@ test('Check all templates fields', async ({ page }) => {
   await page.getByRole('link', { name: 'Alert Templates' }).click();
   await page.getByRole('link', { name: 'Add Template' }).click();
 
-  await page.getByLabel('Folder').selectOption('c1727475-48e7-4850-8400-c65427de0b7c');
+  await page.getByLabel('Folder').selectOption(alertFolderGuid);
   await page.getByRole('textbox', { name: 'PathTemplate' }).fill(templatePath);
   await page.getByRole('textbox', { name: 'Name' }).fill(templateName);
 
@@ -25,7 +25,7 @@ test('Check all templates fields', async ({ page }) => {
 
   // Вторая попытка — ошибка уникальности
   await page.getByRole('link', { name: 'Add Template' }).click();
-  await page.getByLabel('Folder').selectOption('c1727475-48e7-4850-8400-c65427de0b7c');
+  await page.getByLabel('Folder').selectOption(alertFolderGuid);
   await page.getByRole('textbox', { name: 'PathTemplate' }).fill(templatePath);
   await page.getByRole('textbox', { name: 'Name' }).fill(templateName);
   await page.getByRole('button', { name: 'Create' }).click();

@@ -43,10 +43,7 @@ test('Add, Edit, Remove product', async ({ page }) => {
   const removeOption = menuContainer.locator('a', { hasText: removeText });
   await expect(removeOption).toBeVisible(); 
   await removeOption.click();
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }), // Ждем завершения загрузки
-    page.getByRole('button', { name: 'OK' }).click(),
-]);
+  await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText(targetRecordName)).not.toBeVisible();
 
   //Logout ---

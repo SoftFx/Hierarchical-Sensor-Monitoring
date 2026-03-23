@@ -26,7 +26,10 @@ export interface TestConfig {
 
   folder_name3: string;
   folder_description3: string;
-  folder_color3: string
+  folder_color3: string;
+
+  alertFolderGuid: string;
+  sensorApiKey: string;
 
 }
 
@@ -65,6 +68,9 @@ export const testConfig: TestConfig = {
   folder_name2: 'TestAutoFolder2',
   folder_description2: 'test delete2',
   folder_color2: '#a11b2f',
+
+  alertFolderGuid: 'c1727475-48e7-4850-8400-c65427de0b7c',
+  sensorApiKey: '9643e4ce-1480-47f8-8186-644fec277f11',
 };
 
 export const testData = {
