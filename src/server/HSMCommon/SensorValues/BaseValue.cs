@@ -89,7 +89,7 @@ namespace HSMCommon.Model
 
         [JsonIgnore]
         [MemoryPackIgnore]
-        public DateTime LastUpdateTime => LastReceivingTime ?? ReceivingTime;
+        public DateTime LastUpdateTime => LastReceivingTime ?? Time;
 
 
         [JsonIgnore]
@@ -113,7 +113,7 @@ namespace HSMCommon.Model
         {
             if (IsEqual(value))
             {
-                LastReceivingTime = value.ReceivingTime;
+                LastReceivingTime = value.Time;
                 AggregatedValuesCount++;
 
                 return true;
