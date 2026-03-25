@@ -111,7 +111,7 @@ namespace HSMServer.Core.Model.Policies
                 bool schedulePassed = true;
                 if (TimeToLive.ScheduleId.HasValue)
                 {
-                    schedulePassed = _scheduleProvider.IsWorkingTime(TimeToLive.ScheduleId.Value, value.Time);
+                    schedulePassed = _scheduleProvider.IsWorkingTime(TimeToLive.ScheduleId.Value, value.LastUpdateTime);
                 }
 
                 if (!schedulePassed)
@@ -183,7 +183,7 @@ namespace HSMServer.Core.Model.Policies
                     bool schedulePassed = true;
                     if (policy.ScheduleId.HasValue)
                     {
-                        schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, value.Time);
+                        schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, value.LastUpdateTime);
                     }
 
                     if (!schedulePassed)

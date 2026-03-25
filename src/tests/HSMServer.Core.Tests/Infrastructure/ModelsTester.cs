@@ -158,7 +158,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.NotNull(expectedSensorValue);
 
             Assert.True(actual.HasData);
-            Assert.Equal(expectedSensorValue.ReceivingTime, actual.LastUpdate);
+            Assert.Equal(expectedSensorValue.Time, actual.LastUpdate);
 
             Assert.Equal(expectedSensorValue.Status, actual.Status?.Status);
             Assert.Equal(expectedSensorValue.Comment, actual.Status?.Message);

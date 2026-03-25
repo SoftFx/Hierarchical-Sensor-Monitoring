@@ -343,7 +343,8 @@ namespace HSMServer.Core.Schedule
 
         public void WriteYaml(IEmitter emitter, object value, Type type, ObjectSerializer serializer)
         {
-            throw new NotImplementedException();
+            var timeSpan = (TimeSpan)value;
+            emitter.Emit(new Scalar(timeSpan.ToString(@"hh\:mm")));
         }
     }
 
