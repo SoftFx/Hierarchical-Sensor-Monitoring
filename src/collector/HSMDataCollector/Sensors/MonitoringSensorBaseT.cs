@@ -117,7 +117,7 @@ namespace HSMDataCollector.DefaultSensors
                 if (_sendTask == null)
                 {
                     _cancellationTokenSource = new CancellationTokenSource();
-                    _sendTask = PeriodicTask.Run(SendValueAction, TimerDueTime, PostTimePeriod, _cancellationTokenSource.Token);
+                    _sendTask = PeriodicTask.Run(SendValueAction, TimerDueTime, PostTimePeriod, _cancellationTokenSource.Token, HandleException);
                 }
             }
         }

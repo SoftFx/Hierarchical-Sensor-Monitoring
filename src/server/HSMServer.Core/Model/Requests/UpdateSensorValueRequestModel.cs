@@ -45,7 +45,7 @@ namespace HSMServer.Core.Model.Requests
 
         public BaseValue BuildNewValue(BaseSensorModel sensor)
         {
-            var value = sensor.Storage.GetEmptyValue();
+            var value = sensor.GetEmptyValue();
             var oldValue = sensor.LastValue;
 
             if (value is FileValue && oldValue is FileValue oldFileValue)

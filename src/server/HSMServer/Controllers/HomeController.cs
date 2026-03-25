@@ -1,25 +1,22 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Text.Json;
+using HSMCommon.Model;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.Schedule;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;
+using HSMServer.DTOs.Sensors;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
@@ -32,10 +29,17 @@ using HSMServer.Model.ViewModel;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using HSMServer.DTOs.Sensors;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Telegram.Bot.Types;
 using TimeInterval = HSMServer.Model.TimeInterval;
-using HSMServer.Core.DataLayer;
-using HSMCommon.Model;
 
 
 namespace HSMServer.Controllers
@@ -50,11 +54,12 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly IDatabaseCore _database;
+        private readonly IAlertScheduleProvider _alertScheduleProvider;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
                               IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager, 
-                              IDatabaseCore database) : base(userManager)
+                              IDatabaseCore database, IAlertScheduleProvider provider) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
@@ -62,6 +67,7 @@ namespace HSMServer.Controllers
             _journalService = journalService;
             _telegramChatsManager = telegramChatsManager;
             _database = database;
+            _alertScheduleProvider = provider;
         }
 
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -112,7 +118,14 @@ namespace HSMServer.Controllers
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
                     viewModel = sensor;
+                    var schedulesList = GetAlertSchedulesSelectList();
                     StoredUser.History.ConnectSensor(_treeValuesCache.GetSensor(id));
+                    sensor.TTLAlert.Schedules = schedulesList;
+                    foreach (var (key, alerts) in sensor.DataAlerts)
+                        foreach (var alert in alerts)
+                        {
+                            alert.Schedules = schedulesList;
+                        }
                 }
             }
 
@@ -376,6 +389,49 @@ namespace HSMServer.Controllers
             return string.Empty;
         }
 
+        [HttpGet]
+        public IActionResult ExportNode([FromQuery] string selectedId)
+        {
+            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+            {
+                var fileName = node.Name;
+
+                using (var memoryStream = new MemoryStream())
+                using (var writer = new StreamWriter(memoryStream, Encoding.UTF8))
+                {
+
+                    writer.WriteLine("sep=;");
+                    writer.WriteLine("\"Path\";\"Type\";\"Discription\"");
+
+                    AddNodeToStream(node, writer);
+
+                    writer.Flush();
+
+                    memoryStream.Position = 0;
+
+                    return File(memoryStream.ToArray(), "text/csv", $"{fileName}.csv");
+                }
+            }
+
+            return Ok();
+        }
+        private void AddNodeToStream(ProductNodeViewModel node, StreamWriter stream)
+        {
+            foreach (var item in node.Nodes.Values)
+            {
+                AddNodeToStream(item, stream);
+            }
+
+            foreach (var sensor in node.Sensors.Values)
+            {
+                stream.WriteLine($"\"{sensor.FullPath}\";\"{sensor.Type}\";\"{sensor.Description}\"");
+            }
+
+        }
+
+
         [HttpPost]
         public ValueTask EnableGrafana(string selectedId) => ChangeSensorsIntegrationAsync(selectedId, Integration.Grafana);
 
@@ -635,7 +691,13 @@ namespace HSMServer.Controllers
 
             await _treeValuesCache.UpdateSensorAsync(update);
 
-            return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
+            var model = new SensorInfoViewModel(sensor);
+            var schedulesList = GetAlertSchedulesSelectList();
+            foreach (var (key, dataAlerts) in model.DataAlerts)
+                foreach(var alert in dataAlerts)
+                    alert.Schedules = schedulesList;
+
+            return PartialView("_MetaInfo", model);
         }
 
         
@@ -662,6 +724,7 @@ namespace HSMServer.Controllers
             TryGetSelectedNode(entityId, out var entity);
 
             DataAlertViewModelBase viewModel = DataAlertViewModel.BuildAlert(type, entity);
+            viewModel.Schedules = GetAlertSchedulesSelectList();
 
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
@@ -920,6 +983,15 @@ namespace HSMServer.Controllers
             }
 
             return null;
+        }
+
+        private List<SelectListItem> GetAlertSchedulesSelectList()
+        {
+            return [.. _alertScheduleProvider.GetAllSchedules().Select(tz => new SelectListItem
+            {
+                Value = tz.Id.ToString(),
+                Text = $"{tz.Name}"
+            })];
         }
     }
 }

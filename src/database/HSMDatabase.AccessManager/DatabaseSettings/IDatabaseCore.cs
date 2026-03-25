@@ -132,6 +132,15 @@ namespace HSMServer.Core.DataLayer
         void RemoveAlertTemplate(Guid id);
         #endregion
 
+        #region Schedules
+
+        List<AlertScheduleEntity> GetAllAlertSchedules();
+        AlertScheduleEntity GetAlertSchedule(Guid id);
+        void AddAlertSchedule(AlertScheduleEntity schedule);
+        void RemoveAlertSchedule(Guid id);
+
+        #endregion Schedules
+
         #region Journal
 
         void AddJournalValue(JournalKey journalKey, JournalRecordEntity value);

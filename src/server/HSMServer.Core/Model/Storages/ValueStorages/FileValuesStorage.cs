@@ -7,10 +7,6 @@ namespace HSMServer.Core.Model
 {
     public sealed class FileValuesStorage : ValuesStorage<FileValue>
     {
-        public FileValuesStorage(Func<BaseValue> getFirstValue, Func<BaseValue> getLastValue) : base(getFirstValue, getLastValue)
-        {
-        }
-
         protected override int CacheSize => 1;
 
 

@@ -10,6 +10,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Managers;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.StatisticInfo;
 using HSMServer.Core.TableOfChanges;

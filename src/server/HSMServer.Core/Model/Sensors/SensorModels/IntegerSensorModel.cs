@@ -2,22 +2,24 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Schedule;
 
 namespace HSMServer.Core.Model
 {
     public sealed class IntegerSensorModel : BaseSensorModel<IntegerValue>
     {
-        internal override IntegerValuesStorage Storage { get; }
+        protected override IntegerValuesStorage Storage { get; } = new IntegerValuesStorage();
 
 
-        public override SensorPolicyCollection<IntegerValue, IntegerPolicy> Policies { get; } = new();
+        public override SensorPolicyCollection<IntegerValue, IntegerPolicy> Policies { get; }
 
         public override SensorType Type { get; } = SensorType.Integer;
 
 
-        public IntegerSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database)
+        public IntegerSensorModel(SensorEntity entity, IDatabaseCore database, IAlertScheduleProvider provider) : base(entity, database)
         {
-            Storage = new IntegerValuesStorage(_getFirstValue, _getLastValue);
+            Policies = new(provider);
+            Policies.Attach(this);
         }
     }
 }

@@ -2,15 +2,16 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Schedule;
 
 namespace HSMServer.Core.Model
 {
     public sealed class IntegerBarSensorModel : BaseSensorModel<IntegerBarValue>, IBarSensor
     {
-        internal override IntegerBarValuesStorage Storage { get; }
+        protected override IntegerBarValuesStorage Storage { get; } = new IntegerBarValuesStorage();
 
 
-        public override SensorPolicyCollection<IntegerBarValue, IntegerBarPolicy> Policies { get; } = new();
+        public override SensorPolicyCollection<IntegerBarValue, IntegerBarPolicy> Policies { get; }
 
         public override SensorType Type { get; } = SensorType.IntegerBar;
 
@@ -18,9 +19,10 @@ namespace HSMServer.Core.Model
         BarBaseValue IBarSensor.LocalLastValue => Storage.PartialLastValue;
 
 
-        public IntegerBarSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database)
+        public IntegerBarSensorModel(SensorEntity entity, IDatabaseCore database, IAlertScheduleProvider provider) : base(entity, database)
         {
-            Storage = new IntegerBarValuesStorage(_getFirstValue, _getLastValue);
+            Policies = new(provider);
+            Policies.Attach(this);
         }
     }
 }

@@ -25,7 +25,7 @@ namespace HSMServer.Core.Model
 
         internal abstract bool HasData { get; }
 
-        internal abstract DateTime From { get; set; }
+        internal abstract DateTime From { get; }
 
         internal abstract DateTime To { get; }
 
@@ -35,11 +35,12 @@ namespace HSMServer.Core.Model
 
         internal abstract bool TryChangeLastValue(BaseValue value);
 
-        internal abstract BaseValue GetEmptyValue();
-
         internal abstract void Clear(DateTime to);
 
         internal abstract void Clear();
+
+        internal abstract void Cut(DateTime time);
+
     }
 
 
@@ -50,18 +51,10 @@ namespace HSMServer.Core.Model
 
         private T _lastValue, _lastTimeout;
 
-        private DateTime? _from, _to;
-        private readonly Func<BaseValue> _getFirstValue, _getLastValue;
-
-        private readonly object _lock = new();
+        DateTime _from = DateTime.MinValue;
+        DateTime _to   = DateTime.MaxValue;
 
         private bool IsLastEmptyOrTimeout => LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime;
-
-        public ValuesStorage(Func<BaseValue> getFirstValue, Func<BaseValue> getLastValue)
-        {
-            _getFirstValue = getFirstValue ?? throw new ArgumentNullException(nameof(getFirstValue));
-            _getLastValue = getLastValue ?? throw new ArgumentNullException(nameof(getLastValue));
-        }
 
         internal override T LastDbValue => _cache.LastOrDefault();
 
@@ -71,31 +64,8 @@ namespace HSMServer.Core.Model
 
         internal override bool HasData => !_cache.IsEmpty;
 
-        internal override DateTime From
-        {
-            get
-            {
-                if (!_from.HasValue)
-                    InitFirstValue();
-
-                return _from.Value;
-            }
-            set
-            {
-                _from = value;
-            }
-        }
-
-        internal override DateTime To
-        {
-            get
-            {
-                if (!_to.HasValue)
-                    InitLastValue();
-
-                return _to.Value;
-            }
-        }
+        internal override DateTime From => _from;
+        internal override DateTime To => _to;
 
         internal virtual T CalculateStatistics(T value) => value;
 
@@ -121,6 +91,11 @@ namespace HSMServer.Core.Model
             {
                 _lastValue = value;
                 _to = value.Time;
+
+                _cache.Enqueue(value);
+
+                if (_cache.Count > CacheSize)
+                    _cache.TryDequeue(out _);
             }
         }
 
@@ -134,8 +109,6 @@ namespace HSMServer.Core.Model
 
             return false;
         }
-
-        internal override BaseValue GetEmptyValue() => new T();
 
         internal bool TryAggregateValue(T value)
         {
@@ -166,51 +139,17 @@ namespace HSMServer.Core.Model
                 _lastValue = null;
         }
 
+
+        internal override void Cut(DateTime time)
+        {
+            _from = time;
+        }
+
         internal override void Clear()
         {
             _cache.Clear();
 
             _lastValue = null;
-        }
-
-        private void InitFirstValue()
-        {
-            lock (_lock)
-            {
-                if (!_from.HasValue)
-                {
-                    var item = _getFirstValue.Invoke();
-                    if (item != null)
-                    {
-                        _from = item.Time;
-                    }
-                    else
-                    {
-                        _from = DateTime.MinValue;
-                        _to   = DateTime.MaxValue;
-                    }
-                }
-            }
-        }
-
-        private void InitLastValue()
-        {
-            lock (_lock)
-            {
-                if (!_to.HasValue)
-                {
-                    var item = _getLastValue.Invoke();
-                    if (item != null)
-                    {
-                        AddValue((T)item);
-                    }
-                    else
-                    {
-                        _from = DateTime.MinValue;
-                        _to   = DateTime.MaxValue;
-                    }
-                }
-            }
         }
     }
 }

@@ -13,6 +13,7 @@ using HSMServer.Model.Controls;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Html;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
 namespace HSMServer.Model.DataAlerts
@@ -44,6 +45,11 @@ namespace HSMServer.Model.DataAlerts
         public bool IsTemplate { get; protected set; }
 
         public Guid? TemplateId { get; set; }
+
+        public Guid? ScheduleId { get; set; }
+
+        public List<SelectListItem> Schedules { get; set; }
+
 
         internal bool IsAlertDisplayed
         {
@@ -94,7 +100,8 @@ namespace HSMServer.Model.DataAlerts
                 IsDisabled = IsDisabled,
                 Schedule = actions.Schedule,
                 Destination = actions.Destination,
-                TemplateId = TemplateId
+                TemplateId = TemplateId,
+                ScheduleId = ScheduleId,
             };
         }
 
@@ -113,6 +120,7 @@ namespace HSMServer.Model.DataAlerts
                 Schedule = actions.Schedule,
                 Initiator = initiator,
                 TemplateId = TemplateId,
+                ScheduleId = ScheduleId,
             };
         }
 
@@ -316,6 +324,7 @@ namespace HSMServer.Model.DataAlerts
             EntityId = node?.Id ?? new Guid();
             Id = policy.Id;
             TemplateId = policy.TemplateId;
+            ScheduleId = policy.ScheduleId;
 
             IsDisabled = policy.IsDisabled;
 

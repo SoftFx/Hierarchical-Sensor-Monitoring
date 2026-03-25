@@ -42,6 +42,7 @@ namespace HSMServer.Core.Model
         {
             State = ProductState.FullAccess;
 
+            Policies.Attach(this);
             Policies.BuildDefault(this);
         }
 
@@ -53,6 +54,7 @@ namespace HSMServer.Core.Model
             State = (ProductState)entity.State;
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
 
+            Policies.Attach(this);
             Policies.BuildDefault(this, entity.TTLPolicy);
         }
 

@@ -223,8 +223,6 @@ namespace HSMServer.Notifications
             if (!CanSendNotifications)
                 return;
 
-            _logger.Info($"TSend: send chats notifications");
-
             try
             {
                 foreach (var chat in _chatsManager.GetValues())

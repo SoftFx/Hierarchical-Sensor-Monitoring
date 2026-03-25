@@ -70,11 +70,13 @@ namespace HSMServer.Model.TreeViewModel
 
         public BaseValue ToDisplayValue(BaseValue value) => _model.ToDisplayValue(value);
 
-        public SensorNodeViewModel(BaseSensorModel model) : base(model) 
+        public SensorNodeViewModel(BaseSensorModel model) : base(model)
         {
             _model = model;
             EnumOptions = model.EnumOptions;
-            DisplayUnit = model.DisplayUnit;
+
+            if (model.Type == SensorType.Rate)
+                DisplayUnit = model.DisplayUnit;
         }
 
 
@@ -94,7 +96,9 @@ namespace HSMServer.Model.TreeViewModel
             AggregateValues = model.AggregateValues;
             CreationTime = model.CreationDate;
             EnumOptions = model.EnumOptions;
-            DisplayUnit = model.DisplayUnit;
+
+            if (model.Type == SensorType.Rate)
+                DisplayUnit = model.DisplayUnit;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);

@@ -47,7 +47,7 @@ namespace HSMDataCollector.DefaultSensors
                 if (_collectTask == null)
                 {
                     _cancellationTokenSource = new CancellationTokenSource();
-                    _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token);
+                    _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token, HandleException);
                 }
             }
 

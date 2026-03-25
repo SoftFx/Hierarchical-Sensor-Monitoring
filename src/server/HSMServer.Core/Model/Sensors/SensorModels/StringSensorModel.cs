@@ -2,23 +2,25 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Schedule;
 
 
 namespace HSMServer.Core.Model
 {
     public sealed class StringSensorModel : BaseSensorModel<StringValue>
     {
-        internal override StringValuesStorage Storage { get; }
+        protected override StringValuesStorage Storage { get; } = new StringValuesStorage();
 
 
-        public override SensorPolicyCollection<StringValue, StringPolicy> Policies { get; } = new();
+        public override SensorPolicyCollection<StringValue, StringPolicy> Policies { get; }
 
         public override SensorType Type { get; } = SensorType.String;
 
 
-        public StringSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database)
+        public StringSensorModel(SensorEntity entity, IDatabaseCore database, IAlertScheduleProvider provider) : base(entity, database)
         {
-            Storage = new StringValuesStorage(_getFirstValue, _getLastValue);
+            Policies = new(provider);
+            Policies.Attach(this);
         }
     }
 }

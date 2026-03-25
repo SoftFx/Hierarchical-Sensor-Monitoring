@@ -76,7 +76,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 _logger.Error($"Failed getting latest value {key.GetString()} - {e.Message}");
 
-                return [];
+                return null;
             }
         }
 

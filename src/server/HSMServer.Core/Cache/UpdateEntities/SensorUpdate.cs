@@ -82,6 +82,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public Guid? TemplateId { get; init; }
 
+        public Guid? ScheduleId { get; init; }
+
         public PolicyUpdate() { }
 
         public PolicyUpdate (Policy policy, InitiatorInfo initiator = null)
@@ -96,6 +98,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
             IsDisabled = policy.IsDisabled;
             Icon = policy.Icon;
             TemplateId = policy.TemplateId;
+            ScheduleId = policy.ScheduleId;
             Initiator = initiator;
         }
 

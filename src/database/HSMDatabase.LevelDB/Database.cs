@@ -171,7 +171,7 @@ namespace HSMDatabase.LevelDB
             if (iterator.IsValid && iterator.Key().StartsWith(prefix))
                 return iterator.Value();
 
-            return [];
+            return null;
         }
 
         public Dictionary<Guid, (byte[] firstValue, byte[] lastValue)> GetLastAndFirstValues(
@@ -187,6 +187,8 @@ namespace HSMDatabase.LevelDB
 
             foreach (var sensorId in sensorIds)
             {
+                _logger.Info(sensorId);
+
                 byte[] currentFirstValue = null;
                 byte[] currentLastValue = null;
 

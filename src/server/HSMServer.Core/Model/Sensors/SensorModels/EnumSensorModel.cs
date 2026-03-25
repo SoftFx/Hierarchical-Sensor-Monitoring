@@ -2,23 +2,25 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Schedule;
 
 
 namespace HSMServer.Core.Model
 {
     public sealed class EnumSensorModel : BaseSensorModel<EnumValue>
     {
-        internal override EnumValuesStorage Storage { get; }
+        protected override EnumValuesStorage Storage { get; } = new EnumValuesStorage();
 
 
-        public override SensorPolicyCollection<EnumValue, EnumPolicy> Policies { get; } = new();
+        public override SensorPolicyCollection<EnumValue, EnumPolicy> Policies { get; }
 
         public override SensorType Type { get; } = SensorType.Enum;
 
 
-        public EnumSensorModel(SensorEntity entity, IDatabaseCore database) : base(entity, database)
+        public EnumSensorModel(SensorEntity entity, IDatabaseCore database, IAlertScheduleProvider provider) : base(entity, database)
         {
-            Storage = new EnumValuesStorage(_getFirstValue, _getLastValue);
+            Policies = new(provider);
+            Policies.Attach(this);
         }
 
     }

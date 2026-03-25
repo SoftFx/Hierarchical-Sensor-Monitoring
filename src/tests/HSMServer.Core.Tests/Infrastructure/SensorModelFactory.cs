@@ -10,21 +10,21 @@ namespace HSMServer.Core.Tests.Infrastructure
 {
     public static class SensorModelFactory
     {
-        public static BaseSensorModel Build(SensorEntity entity, IDatabaseCore database)
+        public static BaseSensorModel Build(SensorEntity entity)
         {
             return (SensorType)entity.Type switch
             {
-                SensorType.Boolean => new BooleanSensorModel(entity, database),
-                SensorType.Integer => new IntegerSensorModel(entity, database),
-                SensorType.Double => new DoubleSensorModel(entity, database),
-                SensorType.Rate => new RateSensorModel(entity, database),
-                SensorType.String => new StringSensorModel(entity, database),
-                SensorType.IntegerBar => new IntegerBarSensorModel(entity, database),
-                SensorType.DoubleBar => new DoubleBarSensorModel(entity, database),
-                SensorType.File => new FileSensorModel(entity, database),
-                SensorType.TimeSpan => new TimeSpanSensorModel(entity, database),
-                SensorType.Version => new VersionSensorModel(entity, database),
-                SensorType.Enum => new EnumSensorModel(entity, database),
+                SensorType.Boolean => new BooleanSensorModel(entity, null, null),
+                SensorType.Integer => new IntegerSensorModel(entity, null, null),
+                SensorType.Double => new DoubleSensorModel(entity, null, null),
+                SensorType.Rate => new RateSensorModel(entity, null, null),
+                SensorType.String => new StringSensorModel(entity, null, null),
+                SensorType.IntegerBar => new IntegerBarSensorModel(entity, null, null),
+                SensorType.DoubleBar => new DoubleBarSensorModel(entity, null, null),
+                SensorType.File => new FileSensorModel(entity, null, null),
+                SensorType.TimeSpan => new TimeSpanSensorModel(entity, null, null),
+                SensorType.Version => new VersionSensorModel(entity, null, null),
+                SensorType.Enum => new EnumSensorModel(entity, null, null),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }
