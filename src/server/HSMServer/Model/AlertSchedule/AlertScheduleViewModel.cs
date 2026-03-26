@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
@@ -19,14 +20,17 @@ namespace HSMServer.Model.AlertSchedule
         [Required]
         public string Timezone { get; set; }
 
-        public List<SelectListItem> TimeZoneList { get; set; }
+
+        private static readonly Lazy<List<SelectListItem>> _timezones = new(InitTimeZoneList);
+
+        public List<SelectListItem> TimeZoneList => _timezones.Value;
 
         public string Schedule { get; set; }
 
+        public List<BaseSensorModel> Sensors { get; set; } = new();
+
         public AlertScheduleViewModel()
         {
-            TimeZoneList = InitTimeZoneList();
-
             Schedule ??= @"daySchedules:
     - days: [Mon, Tue, Wed, Thu, Fri]
       windows:
@@ -37,21 +41,7 @@ namespace HSMServer.Model.AlertSchedule
       windows:
         - { start: ""10:00"", end: ""14:00"" }
 
-disabledDates: [""2026-02-11"", ""2026-02-23""]
-
-overrides:
-    enabledDates: [""2026-03-20""]
-
-    customScheduleDates:
-        - date: ""2026-03-21""
-          scheduleType: ""Sat""
-
-        - date: ""2026-03-22""
-          scheduleType: ""Mon""
-
-        - date: ""2026-03-23""
-          windows:
-            - { start: ""11:00"", end: ""16:00"" }";
+disabledDates: [""2026-02-11"", ""2026-02-23""]";
         }
 
         public AlertScheduleViewModel(AlertScheduleEntity entity) : this()
@@ -70,7 +60,7 @@ overrides:
             Schedule = schedule.Schedule;
         }
 
-        private List<SelectListItem> InitTimeZoneList()
+        private static List<SelectListItem> InitTimeZoneList()
         {
             return TimeZoneInfo.GetSystemTimeZones()
             .Select(tz => new SelectListItem

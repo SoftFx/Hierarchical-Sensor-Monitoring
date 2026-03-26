@@ -15,5 +15,7 @@ namespace HSMServer.Core.Schedule
         void DeleteSchedule(Guid Id);
 
         bool IsWorkingTime(Guid id, DateTime time);
+
+        bool IsWorkingTime(Guid id, DateTime startTime, DateTime endTime);
     }
 }

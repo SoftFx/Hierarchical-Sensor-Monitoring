@@ -2292,5 +2292,28 @@ namespace HSMServer.Core.Cache
             _cache.TryRemove(product.Id, out var value);
         }
 
+        public List<BaseSensorModel> GetSensorsByAlertSchedule(Guid id)
+        {
+            var result = new List<BaseSensorModel>();
+            foreach (var (_, sensor) in _sensorsById)
+            {
+                if (sensor.Policies.TimeToLive.ScheduleId == id)
+                {
+                    result.Add(sensor);
+                    continue;
+                }
+
+
+                foreach (var policy in sensor.Policies)
+                {
+                    if (policy.ScheduleId == id)
+                    {
+                        result.Add(sensor);
+                        continue;
+                    }
+                }
+            }
+            return result;
+        }
     }
 }

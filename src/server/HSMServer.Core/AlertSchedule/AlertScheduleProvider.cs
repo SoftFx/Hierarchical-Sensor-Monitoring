@@ -25,6 +25,9 @@ namespace HSMServer.Core.Schedule
             public DateTime? CachedTime { get; set; }
             public bool? WorkingTimeResult { get; set; }
 
+            public Dictionary<(DateTime StartTime, DateTime EndTime), bool> IntervalCache { get; set; } = new();
+
+
             public bool IsCacheValid(DateTime time)
             {
                 if (!CachedTime.HasValue || !WorkingTimeResult.HasValue)
@@ -33,7 +36,28 @@ namespace HSMServer.Core.Schedule
                 return RoundToMinute(CachedTime.Value) == RoundToMinute(time);
             }
 
-            private DateTime RoundToMinute(DateTime time)
+            public void AddIntervalToCache(DateTime startTime, DateTime endTime, bool result)
+            {
+                var key = (startTime, endTime);
+                IntervalCache[key] = result;
+            }
+
+            public bool? GetCachedIntervalResult(DateTime startTime, DateTime endTime)
+            {
+                var key = (startTime, endTime);
+                if (IntervalCache.TryGetValue(key, out var result))
+                    return result;
+                return null;
+            }
+
+            public void InvalidateCache()
+            {
+                CachedTime = null;
+                WorkingTimeResult = null;
+                IntervalCache.Clear();
+            }
+
+            private static DateTime RoundToMinute(DateTime time)
             {
                 return new DateTime(time.Year, time.Month, time.Day,
                     time.Hour, time.Minute, 0, time.Kind);
@@ -62,6 +86,35 @@ namespace HSMServer.Core.Schedule
 
                     cacheEntry.CachedTime = time;
                     cacheEntry.WorkingTimeResult = result;
+
+                    return result;
+                }
+                else
+                {
+                    _logger.Error($"Alert Schedule with id = {id} was not found.");
+                    return true;
+                }
+            }
+        }
+
+        public bool IsWorkingTime(Guid id, DateTime startTime, DateTime endTime)
+        {
+            if (startTime >= endTime)
+                throw new ArgumentException("Start time must be less than end time");
+
+            lock (_lock)
+            {
+                if (_cache.TryGetValue(id, out var cacheEntry))
+                {
+                    var cachedResult = cacheEntry.GetCachedIntervalResult(startTime, endTime);
+                    if (cachedResult.HasValue)
+                    {
+                        return cachedResult.Value;
+                    }
+
+                    var result = cacheEntry.Schedule.IsWorkingTime(startTime, endTime);
+
+                    cacheEntry.AddIntervalToCache(startTime, endTime, result);
 
                     return result;
                 }
@@ -106,8 +159,7 @@ namespace HSMServer.Core.Schedule
                 if (_cache.TryGetValue(schedule.Id, out var cacheEntry))
                 {
                     cacheEntry.Schedule = schedule;
-                    cacheEntry.CachedTime = null;
-                    cacheEntry.WorkingTimeResult = null;
+                    cacheEntry.InvalidateCache();
                 }
                 else
                 {
