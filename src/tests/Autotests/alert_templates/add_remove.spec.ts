@@ -1,17 +1,17 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
-import { login } from '../login.ts';
+import { login, navigateToAlertTemplates } from '../login.ts';
 
 test('Create/remove alert and verify it appears on sensor', async ({ page }) => {
   // --- Login ---
   const { apiUrl, admin_user, admin_user_password, alertFolderGuid } = testConfig;
   await login(page, admin_user, admin_user_password, apiUrl);
 
-  // Проверка, что залогинились (например, появилась ссылка "Alert Templates")
-  await expect(page.getByRole('link', { name: 'Alert Templates' })).toBeVisible();
+  // Проверка, что залогинились
+  await expect(page.getByRole('button', { name: 'Alerts' })).toBeVisible();
 
   // --- Создание нового алерта ---
-  await page.getByRole('link', { name: 'Alert Templates' }).click();
+  await navigateToAlertTemplates(page);
   await expect(page).toHaveURL(/.*AlertTemplates\/Index/);
   await page.getByRole('link', { name: 'Add Template' }).click();
 
@@ -64,7 +64,7 @@ test('Create/remove alert and verify it appears on sensor', async ({ page }) => 
   // TODO: добавить проверки что темплейт применился к сенсору
 
   //Удаляем алерт темплейт
-  await page.getByRole('link', { name: 'Alert Templates' }).click();
+  await navigateToAlertTemplates(page);
 
   // ищем строку таблицы, где есть имя нашего алерта
   const alertRow = page.getByRole('row', { name: /Beta_Service alive BetaTTS/ });

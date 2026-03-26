@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { testConfig } from '../config.ts';
-import { login } from '../login.ts';
+import { login, navigateToUsers } from '../login.ts';
 
 // Фикстура для авторизации перед каждым тестом
 test.beforeEach(async ({ page }) => {
@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
   await login(page, admin_user, admin_user_password, apiUrl);
 
   // Ждём перехода на Users
-  await page.getByRole('link', { name: 'Users' }).click();
+  await navigateToUsers(page);
   await expect(page).toHaveURL(/.*Users/);
 });
 

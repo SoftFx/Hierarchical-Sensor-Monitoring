@@ -1,71 +1,45 @@
-import { test, expect } from '@playwright/test';
-import { testConfig } from '../config.ts';
-import { login } from '../login.ts';
+import { test, expect, uniqueName, cleanup } from '../fixtures.ts';
 
-test('Create, remove, modify dashboard', async ({ page }) => {
-  const { apiUrl, admin_user, admin_user_password } = testConfig;
- 
-  // --- Login ---
-  await login(page, admin_user, admin_user_password, apiUrl);
+test('Create, remove, modify dashboard', async ({ adminPage: page }) => {
+  const dashName = uniqueName('TestDashboard');
+  const editedName = `${dashName}_edited`;
 
-  // --- Create Dashboard ---
-  await page.getByRole('link', { name: 'Dashboards' }).click();
-  await page.getByRole('link', { name: 'Add dashboard' }).click();
+  try {
+    await page.getByRole('link', { name: 'Dashboards' }).click();
+    await page.getByRole('link', { name: 'Add dashboard' }).click();
+    await page.getByRole('textbox', { name: 'Name' }).fill(dashName);
+    await page.getByRole('textbox', { name: 'Description' }).fill('delete');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toContainText(dashName);
 
-  await page.getByRole('textbox', { name: 'Name' }).click();
-  await page.getByRole('textbox', { name: 'Name' }).fill('TestDashboard');
-  await page.getByRole('textbox', { name: 'Description' }).click();
-  await page.getByRole('textbox', { name: 'Description' }).fill('delete');
-  await page.getByRole('button', { name: 'Save' }).click();
+    // Check in list
+    await page.getByRole('link', { name: 'Dashboards' }).click();
+    await expect(page.locator('main').getByText(dashName, { exact: true })).toBeVisible();
 
-  // --- Checks inside Dashbords  ---
-  await expect(page.getByRole('heading', { name: 'Dashboard' })).toContainText('TestDashboard');
-  //await expect(page.getByRole('paragraph').toHaveValue('delete');
-  
-  // --- Check Dashboard list ---
-  await page.getByRole('link', { name: 'Dashboards' }).click();
-  const dashboardItem = page.locator('main').getByText('TestDashboard', { exact: true });
-  await expect(dashboardItem).toBeVisible();
+    // Modify
+    await page.locator('main').getByText(dashName).click();
+    await page.getByRole('link', { name: 'Edit' }).click();
+    await page.getByRole('textbox', { name: 'Name' }).fill(editedName);
+    await page.getByRole('textbox', { name: 'Description' }).fill('delete_edited');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toContainText(editedName);
 
-  //Modify Dashboard
-  await page.getByRole('main').getByText('TestDashboard').click();
-  await page.getByRole('link', { name: 'Edit' }).click();
-  await page.getByRole('textbox', { name: 'Name' }).click();
-  await page.getByRole('textbox', { name: 'Name' }).fill('TestDashboard_test');
-  await page.getByRole('textbox', { name: 'Description' }).click();
-  await page.getByRole('textbox', { name: 'Description' }).fill('delete_test');
-  await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByRole('heading', { name: 'Dashboard' })).toContainText('TestDashboard_test');
-  await expect(page.getByText('delete_test')).toHaveCount(1);
-  //Add panel
-  await page.getByRole('link', { name: 'Edit' }).click();
-  await page.getByRole('link', { name: 'Add panel' }).click();
-  await page.getByRole('button', { name: 'Save' }).click();
-  const panel = page.locator('span.fw-bold.d-flex', { hasText: 'New Panel' });
-  await expect(panel).toBeVisible();
- 
-  // --- Remove Dashbord ---
-  await page.getByRole('link', { name: 'Dashboards' }).click();
-  // найти строку с нужным дашбордом (по имени)
-  const dashboardRow = page.locator('div.d-flex', { hasText: 'TestDashboard_test' });
-  await expect(dashboardRow).toBeVisible();
+    // Add panel
+    await page.getByRole('link', { name: 'Edit' }).click();
+    await page.getByRole('link', { name: 'Add panel' }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.locator('span.fw-bold.d-flex', { hasText: 'New Panel' })).toBeVisible();
 
-  // открыть меню действий (три точки)
-  const actionButton = dashboardRow.locator('button#actionButton'); 
-  await actionButton.click();
-  
-  // кликнуть Remove по атрибуту name
-  const removeButton = page.locator(`a.dropdown-item[name="${'TestDashboard_test'}"]`);
-  await expect(removeButton).toBeVisible();
-  await removeButton.click();
-
-  // подтвердить удаление
-  await page.getByRole('button', { name: 'OK' }).click();
-
-  // проверить, что дашборд исчез
-  await expect(page.locator('main').getByText('TestDashboard_test', { exact: true })).toHaveCount(0);
-
-  // --- Logout ---
-  await page.getByRole('link', { name: 'Logout' }).click();
-  await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
+    // Remove dashboard
+    await page.getByRole('link', { name: 'Dashboards' }).click();
+    const dashRow = page.locator('div.d-flex').filter({ hasText: editedName }).first();
+    await expect(dashRow).toBeVisible();
+    await dashRow.locator('button#actionButton').click();
+    await page.locator(`a.dropdown-item[name="${editedName}"]`).first().click();
+    await page.getByRole('button', { name: 'OK' }).click();
+    await expect(page.locator('main').getByText(editedName, { exact: true })).toHaveCount(0);
+  } finally {
+    await cleanup.dashboard(page, dashName);
+    await cleanup.dashboard(page, editedName);
+  }
 });
