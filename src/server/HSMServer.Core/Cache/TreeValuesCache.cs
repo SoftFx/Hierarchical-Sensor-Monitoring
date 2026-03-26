@@ -1836,6 +1836,9 @@ namespace HSMServer.Core.Cache
 
         private void MigrateDatabseV2()
         {
+            var success = 0;
+            var failed = 0;
+
             foreach ((byte[] key, byte[] value) in _database.MigrateDatabaseV2())
             {
                 var keyArr = Encoding.UTF8.GetString(key).Split("_");
@@ -1851,8 +1854,10 @@ namespace HSMServer.Core.Cache
                     {
                         val = sensor.ConvertFromJson(Encoding.UTF8.GetString(value));
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Error(ex, $"Failed to deserialize sensor value during V2 migration. SensorId = {sensorId}");
+                        failed++;
                         continue;
                     }
 
@@ -1860,8 +1865,15 @@ namespace HSMServer.Core.Cache
                     {
                         _database.AddSensorValue(sensorId, val);
                     }
+
+                    success++;
                 }
             }
+
+            if (failed > 0)
+                _logger.Warn($"V2 migration completed with errors: {success} records migrated, {failed} records skipped due to deserialization errors.");
+            else
+                _logger.Info($"V2 migration completed successfully: {success} records migrated.");
         }
 
         private void ApplyAccessKeys(List<AccessKeyEntity> entities)

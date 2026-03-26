@@ -135,14 +135,8 @@ namespace HSMServer.Core.Schedule
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error(ex, $"Failed to parse AlertSchedule {new Guid(entity.Id)} ('{entity.Name}'). A stub schedule will be used.");
-                        schedule = new AlertSchedule()
-                        {
-                            Id = new Guid(entity.Id),
-                            Name = entity.Name,
-                            Timezone = entity.Timezone,
-                            Schedule = entity.Schedule,
-                        };
+                        _logger.Error(ex, $"Failed to parse alert schedule. Id = {entity.Id}, Name = {entity.Name}. Schedule will be skipped.");
+                        continue;
                     }
 
                     _cache[schedule.Id] = new CacheEntry
