@@ -2298,7 +2298,7 @@ namespace HSMServer.Core.Cache
 
             foreach (var sensor in _sensorsById.Values)
             {
-                if (sensor.Policies.TimeToLive.ScheduleId == id)
+                if (sensor.Policies.TimeToLive?.ScheduleId == id)
                 {
                     result.Add(sensor);
                     continue;

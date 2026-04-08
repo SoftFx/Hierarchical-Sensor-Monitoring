@@ -9,7 +9,7 @@ using HSMServer.Core.Model.Policies;
 
 namespace HSMServer.Core.Schedule
 {
-    public class AlertScheduleProvider : IAlertScheduleProvider
+    public class AlertScheduleProvider : IAlertScheduleProvider, IDisposable
     {
         private readonly TimeSpan CLEANUP_PERIOD = TimeSpan.FromMinutes(5);
 
@@ -189,7 +189,7 @@ namespace HSMServer.Core.Schedule
             {
                 lock (_lock)
                 {
-                    var cleanupThreshold = DateTime.UtcNow.AddMinutes(1);
+                    var cleanupThreshold = DateTime.UtcNow.AddMinutes(-1);
                     int totalRemoved = 0;
 
                     foreach (var cacheEntry in _cache.Values)
