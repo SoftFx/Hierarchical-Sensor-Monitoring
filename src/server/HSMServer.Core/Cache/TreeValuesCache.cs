@@ -2295,7 +2295,8 @@ namespace HSMServer.Core.Cache
         public List<BaseSensorModel> GetSensorsByAlertSchedule(Guid id)
         {
             var result = new List<BaseSensorModel>();
-            foreach (var (_, sensor) in _sensorsById)
+
+            foreach (var sensor in _sensorsById.Values)
             {
                 if (sensor.Policies.TimeToLive.ScheduleId == id)
                 {
@@ -2303,16 +2304,10 @@ namespace HSMServer.Core.Cache
                     continue;
                 }
 
-
-                foreach (var policy in sensor.Policies)
-                {
-                    if (policy.ScheduleId == id)
-                    {
-                        result.Add(sensor);
-                        continue;
-                    }
-                }
+                if (sensor.Policies.Any(policy => policy.ScheduleId == id))
+                    result.Add(sensor);
             }
+
             return result;
         }
     }

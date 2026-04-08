@@ -1,16 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using NLog;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.Policies;
-
 
 
 namespace HSMServer.Core.Schedule
 {
     public class AlertScheduleProvider : IAlertScheduleProvider
     {
+        private readonly TimeSpan CLEANUP_PERIOD = TimeSpan.FromMinutes(5);
+
         private readonly IDatabaseCore _database;
         private readonly AlertScheduleParser _parser = new();
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -18,6 +20,9 @@ namespace HSMServer.Core.Schedule
         private readonly Dictionary<Guid, CacheEntry> _cache = new();
 
         private readonly object _lock = new object();
+
+        private readonly Timer _cleanupTimer;
+        private bool _disposed = false;
 
         private class CacheEntry
         {
@@ -69,6 +74,11 @@ namespace HSMServer.Core.Schedule
         {
             _database = database;
             LoadSchedulesFromDatabase();
+
+            _cleanupTimer = new Timer(_ => CleanupIntervalCache(),
+                null,
+                CLEANUP_PERIOD,
+                CLEANUP_PERIOD);
         }
 
         public bool IsWorkingTime(Guid id, DateTime time)
@@ -100,7 +110,7 @@ namespace HSMServer.Core.Schedule
         public bool IsWorkingTime(Guid id, DateTime startTime, DateTime endTime)
         {
             if (startTime >= endTime)
-                throw new ArgumentException("Start time must be less than end time");
+                throw new ArgumentException("Start time must be less than end time", nameof(startTime));
 
             lock (_lock)
             {
@@ -173,6 +183,47 @@ namespace HSMServer.Core.Schedule
             }
         }
 
+        public void CleanupIntervalCache()
+        {
+            try
+            {
+                lock (_lock)
+                {
+                    var cleanupThreshold = DateTime.UtcNow.AddMinutes(1);
+                    int totalRemoved = 0;
+
+                    foreach (var cacheEntry in _cache.Values)
+                    {
+                        var keysToRemove = new HashSet<(DateTime, DateTime)>();
+
+                        foreach (var kvp in cacheEntry.IntervalCache)
+                        {
+                            if (kvp.Key.EndTime < cleanupThreshold)
+                            {
+                                keysToRemove.Add(kvp.Key);
+                            }
+                        }
+
+                        foreach (var key in keysToRemove)
+                        {
+                            cacheEntry.IntervalCache.Remove(key);
+                        }
+
+                        totalRemoved += keysToRemove.Count;
+                    }
+
+                    if (totalRemoved > 0)
+                    {
+                        _logger.Debug($"Cleaned up {totalRemoved} expired interval cache entries");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error during interval cache cleanup");
+            }
+        }
+
         private void LoadSchedulesFromDatabase()
         {
             var scheduleEntities = _database.GetAllAlertSchedules();
@@ -202,6 +253,16 @@ namespace HSMServer.Core.Schedule
                        Schedule = schedule,
                     };
                 }
+            }
+        }
+
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                _cleanupTimer?.Dispose();
+                _disposed = true;
+                GC.SuppressFinalize(this);
             }
         }
     }

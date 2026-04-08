@@ -63,10 +63,10 @@ namespace HSMServer.Core.Model.Policies
         public bool IsWorkingTime(DateTime startTime, DateTime endTime)
         {
             if (startTime >= endTime)
-                throw new ArgumentException("Start time must be less than end time");
+                throw new ArgumentException("Start time must be less than end time", nameof(startTime));
 
-            var currentTime = startTime;
-            var end = endTime;
+            var currentTime = ConvertUtcToLocalTime(startTime);
+            var end = ConvertUtcToLocalTime(endTime);
 
             while (currentTime.Date <= end.Date)
             {
