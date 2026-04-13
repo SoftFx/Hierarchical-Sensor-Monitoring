@@ -9,6 +9,28 @@ using HSMServer.Core.Model.Policies;
 
 namespace HSMServer.Core.Schedule
 {
+    private readonly struct CacheEntryKey : IEquatable<CacheEntryKey>
+    {
+        public DateTime StartTime { get; }
+        public DateTime EndTime { get; }
+
+        public CacheEntryKey(DateTime startTime, DateTime endTime)
+        {
+            StartTime = startTime;
+            EndTime = endTime;
+        }
+
+        public bool Equals(CacheEntryKey other) =>
+            StartTime == other.StartTime && EndTime == other.EndTime;
+
+        public override bool Equals(object obj) => obj is CacheEntryKey other && Equals(other);
+
+        public override int GetHashCode() => HashCode.Combine(StartTime, EndTime);
+
+        public static bool operator ==(CacheEntryKey left, CacheEntryKey right) => left.Equals(right);
+        public static bool operator !=(CacheEntryKey left, CacheEntryKey right) => !left.Equals(right);
+    }
+
     public class AlertScheduleProvider : IAlertScheduleProvider, IDisposable
     {
         private readonly TimeSpan CLEANUP_PERIOD = TimeSpan.FromMinutes(5);
@@ -30,7 +52,7 @@ namespace HSMServer.Core.Schedule
             public DateTime? CachedTime { get; set; }
             public bool? WorkingTimeResult { get; set; }
 
-            public Dictionary<(DateTime StartTime, DateTime EndTime), bool> IntervalCache { get; set; } = new();
+            public Dictionary<CacheEntryKey, bool> IntervalCache { get; set; } = new();
 
 
             public bool IsCacheValid(DateTime time)
@@ -43,13 +65,13 @@ namespace HSMServer.Core.Schedule
 
             public void AddIntervalToCache(DateTime startTime, DateTime endTime, bool result)
             {
-                var key = (startTime, endTime);
+                var key = new CacheEntryKey(startTime, endTime);
                 IntervalCache[key] = result;
             }
 
             public bool? GetCachedIntervalResult(DateTime startTime, DateTime endTime)
             {
-                var key = (startTime, endTime);
+                var key = new CacheEntryKey(startTime, endTime);
                 if (IntervalCache.TryGetValue(key, out var result))
                     return result;
                 return null;
@@ -194,7 +216,7 @@ namespace HSMServer.Core.Schedule
 
                     foreach (var cacheEntry in _cache.Values)
                     {
-                        var keysToRemove = new HashSet<(DateTime, DateTime)>();
+                        var keysToRemove = new HashSet<CacheEntryKey>();
 
                         foreach (var kvp in cacheEntry.IntervalCache)
                         {

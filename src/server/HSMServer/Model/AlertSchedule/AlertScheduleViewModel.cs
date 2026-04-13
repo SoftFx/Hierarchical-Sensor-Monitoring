@@ -29,6 +29,8 @@ namespace HSMServer.Model.AlertSchedule
 
         public List<BaseSensorModel> Sensors { get; set; } = new();
 
+        public string SensorsTooltip => string.Join("<br>", Sensors.Select(s => s.FullPath));
+
         public AlertScheduleViewModel()
         {
             Schedule ??= @"daySchedules:

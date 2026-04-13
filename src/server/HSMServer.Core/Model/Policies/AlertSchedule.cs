@@ -100,12 +100,24 @@ namespace HSMServer.Core.Model.Policies
 
         private DateTime ConvertUtcToLocalTime(DateTime utcDateTime)
         {
-            var timezone = TimeZoneInfo.FindSystemTimeZoneById(Timezone);
+            var timezone = TryGetTimeZone() ?? TimeZoneInfo.Utc;
             var utc = utcDateTime.Kind == DateTimeKind.Local
                 ? utcDateTime.ToUniversalTime()
                 : DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
 
             return TimeZoneInfo.ConvertTimeFromUtc(utc, timezone);
+        }
+
+        private TimeZoneInfo TryGetTimeZone()
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(Timezone);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                return null;
+            }
         }
 
         private DaySchedule GetDaySchedule(DayOfWeek dayOfWeek)
