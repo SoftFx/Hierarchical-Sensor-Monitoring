@@ -8,6 +8,13 @@ window.currentSelectedNodeId = "";
 // Tracks the active lazy-load listener namespace to clean it up on re-entry
 let activeSelectNs = null;
 
+function selectAndScrollTo(tree, id) {
+    tree.deselect_all();
+    tree.select_node(id);
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "instant", block: "center", inline: "nearest" });
+}
+
 
 //window.initializeTreeNode = function () {
 //    $('#jstree').on('activate_node.jstree', function (e, data) {
@@ -61,9 +68,7 @@ function handleStateReady() {
             }
 
             if (tree.get_node(id)) {
-                tree.deselect_all();
-                tree.select_node(id);
-                $(`#${id}`)[0].scrollIntoView({ behavior: "instant", block: "center", inline: "nearest" });
+                selectAndScrollTo(tree, id);
             } else {
                 const ns = '.selectOnLoad_' + id;
                 activeSelectNs = ns;
@@ -73,9 +78,7 @@ function handleStateReady() {
                     if (t && t.get_node(id)) {
                         $('#jstree').off(ns);
                         activeSelectNs = null;
-                        t.deselect_all();
-                        t.select_node(id);
-                        $(`#${id}`)[0].scrollIntoView({ behavior: "instant", block: "center", inline: "nearest" });
+                        selectAndScrollTo(t, id);
                         selectNodeAjax(id);
                     }
                 };
@@ -83,9 +86,14 @@ function handleStateReady() {
                 $('#jstree').on('load_node.jstree' + ns, onNodeLoaded);
             }
 
+            // Load content panel eagerly; tree visual selection is deferred to onNodeLoaded if the node isn't in the tree yet
             selectNodeAjax(id);
         }
         else {
+            if (activeSelectNs) {
+                $('#jstree').off(activeSelectNs);
+                activeSelectNs = null;
+            }
             let selected = $('#jstree').jstree('get_selected')[0];
             selectNodeAjax(selected);
         }
