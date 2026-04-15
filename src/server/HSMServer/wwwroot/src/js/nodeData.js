@@ -8,9 +8,6 @@ window.currentSelectedNodeId = "";
 // Tracks the active lazy-load listener namespace to clean it up on re-entry
 let activeSelectNs = null;
 
-// Timeout for lazy-loading cleanup (5s — covers most tree AJAX fetch cycles)
-const SELECT_ON_LOAD_TIMEOUT_MS = 5000;
-
 
 //window.initializeTreeNode = function () {
 //    $('#jstree').on('activate_node.jstree', function (e, data) {
@@ -57,40 +54,33 @@ function handleStateReady() {
             let tree = $('#jstree').jstree(true);
             if (!tree) return;
 
+            // Cancel any pending lazy-select from a prior navigation
+            if (activeSelectNs) {
+                $('#jstree').off(activeSelectNs);
+                activeSelectNs = null;
+            }
+
             if (tree.get_node(id)) {
                 tree.deselect_all();
                 tree.select_node(id);
+                tree.scroll_to_node(id);
             } else {
-                // Clean up any pending listener from a previous navigation
-                if (activeSelectNs) {
-                    $('#jstree').off(activeSelectNs);
-                    activeSelectNs = null;
-                }
-
-                // Use namespace for deterministic cleanup even if user navigates away
                 const ns = '.selectOnLoad_' + id;
                 activeSelectNs = ns;
-                let timeoutId = null;
 
                 const onNodeLoaded = function () {
                     const t = $('#jstree').jstree(true);
                     if (t && t.get_node(id)) {
                         $('#jstree').off(ns);
-                        clearTimeout(timeoutId);
                         activeSelectNs = null;
                         t.deselect_all();
                         t.select_node(id);
+                        t.scroll_to_node(id);
+                        selectNodeAjax(id);
                     }
                 };
 
                 $('#jstree').on('load_node.jstree' + ns, onNodeLoaded);
-
-                // Time-based cleanup: if node doesn't load within the timeout,
-                // silently remove the listener. 5s covers most tree AJAX fetch cycles.
-                timeoutId = setTimeout(function () {
-                    $('#jstree').off(ns);
-                    activeSelectNs = null;
-                }, SELECT_ON_LOAD_TIMEOUT_MS);
             }
 
             selectNodeAjax(id);
