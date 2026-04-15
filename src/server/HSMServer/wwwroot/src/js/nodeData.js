@@ -63,7 +63,7 @@ function handleStateReady() {
             if (tree.get_node(id)) {
                 tree.deselect_all();
                 tree.select_node(id);
-                tree.scroll_to_node(id);
+                $(`#${id}`)[0].scrollIntoView({ behavior: "instant", block: "center", inline: "nearest" });
             } else {
                 const ns = '.selectOnLoad_' + id;
                 activeSelectNs = ns;
@@ -75,7 +75,7 @@ function handleStateReady() {
                         activeSelectNs = null;
                         t.deselect_all();
                         t.select_node(id);
-                        t.scroll_to_node(id);
+                        $(`#${id}`)[0].scrollIntoView({ behavior: "instant", block: "center", inline: "nearest" });
                         selectNodeAjax(id);
                     }
                 };
