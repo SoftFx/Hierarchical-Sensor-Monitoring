@@ -55,26 +55,31 @@ function handleStateReady() {
                 tree.deselect_all();
                 tree.select_node(id);
             } else {
-                let attempts = 0;
-                const maxAttempts = 10;
+                // Use namespace for deterministic cleanup even if user navigates away
+                const ns = '.selectOnLoad_' + id;
+                let timeoutId = null;
 
                 const onNodeLoaded = function () {
                     if (tree.get_node(id)) {
-                        $('#jstree').off('load_node.jstree', onNodeLoaded);
+                        $('#jstree').off(ns);
+                        clearTimeout(timeoutId);
                         tree.deselect_all();
                         tree.select_node(id);
-                    } else if (++attempts >= maxAttempts) {
-                        $('#jstree').off('load_node.jstree', onNodeLoaded);
                     }
                 };
 
-                $('#jstree').on('load_node.jstree', onNodeLoaded);
+                $('#jstree').on('load_node.jstree' + ns, onNodeLoaded);
+
+                // Time-based cleanup: 3 seconds is enough for lazy-loading to complete
+                timeoutId = setTimeout(function () {
+                    $('#jstree').off(ns);
+                }, 3000);
             }
 
             selectNodeAjax(id);
         }
         else {
-            let selected = $(this).jstree('get_selected')[0];
+            let selected = $('#jstree').jstree('get_selected')[0];
             selectNodeAjax(selected);
         }
     }
