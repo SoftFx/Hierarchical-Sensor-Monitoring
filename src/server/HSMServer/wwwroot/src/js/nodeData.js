@@ -45,24 +45,30 @@ function handleStateReady() {
 
     if (isHomeController(path)) {
 
-        const prefix = "/Home/"
-        let id = path.slice(prefix.length);
+        let id = path.slice("/Home/".length);
 
-        if (id && id !== '') {
+        if (id) {
             let tree = $('#jstree').jstree(true);
+            if (!tree) return;
 
-            // Если узел уже есть в дереве — выделяем сразу
             if (tree.get_node(id)) {
                 tree.deselect_all();
                 tree.select_node(id);
             } else {
-                // Узел ещё не загружен (lazy loading) — ждём загрузки
-                $('#jstree').one('load_node.jstree', function () {
+                let attempts = 0;
+                const maxAttempts = 10;
+
+                const onNodeLoaded = function () {
                     if (tree.get_node(id)) {
+                        $('#jstree').off('load_node.jstree', onNodeLoaded);
                         tree.deselect_all();
                         tree.select_node(id);
+                    } else if (++attempts >= maxAttempts) {
+                        $('#jstree').off('load_node.jstree', onNodeLoaded);
                     }
-                });
+                };
+
+                $('#jstree').on('load_node.jstree', onNodeLoaded);
             }
 
             selectNodeAjax(id);
