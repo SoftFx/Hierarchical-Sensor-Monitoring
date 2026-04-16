@@ -5,6 +5,16 @@ export const formObserver = new MutationObserverService();
 
 window.currentSelectedNodeId = "";
 
+// Tracks the active lazy-load listener namespace to clean it up on re-entry
+let activeSelectNs = null;
+
+function selectAndScrollTo(tree, id) {
+    tree.deselect_all();
+    tree.select_node(id);
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "instant", block: "center", inline: "nearest" });
+}
+
 
 //window.initializeTreeNode = function () {
 //    $('#jstree').on('activate_node.jstree', function (e, data) {
@@ -45,17 +55,48 @@ function handleStateReady() {
 
     if (isHomeController(path)) {
 
-        let selected = $(this).jstree('get_selected')[0];
+        let id = path.slice("/Home/".length);
 
-        const prefix = "/Home/"
+        if (id) {
+            let tree = $('#jstree').jstree(true);
+            if (!tree) return;
 
-        let id = path.slice(prefix.length);
+            // Cancel any pending lazy-select from a prior navigation
+            if (activeSelectNs) {
+                $('#jstree').off(activeSelectNs);
+                activeSelectNs = null;
+            }
 
-        if (id !== '' && id !== undefined) {
-            selected = id;
+            if (tree.get_node(id)) {
+                selectAndScrollTo(tree, id);
+            } else {
+                const ns = '.selectOnLoad_' + id;
+                activeSelectNs = ns;
+
+                const onNodeLoaded = function () {
+                    const t = $('#jstree').jstree(true);
+                    if (t && t.get_node(id)) {
+                        $('#jstree').off(ns);
+                        activeSelectNs = null;
+                        selectAndScrollTo(t, id);
+                        selectNodeAjax(id);
+                    }
+                };
+
+                $('#jstree').on('load_node.jstree' + ns, onNodeLoaded);
+            }
+
+            // Load content panel eagerly; tree visual selection is deferred to onNodeLoaded if the node isn't in the tree yet
+            selectNodeAjax(id);
         }
-
-        selectNodeAjax(selected);
+        else {
+            if (activeSelectNs) {
+                $('#jstree').off(activeSelectNs);
+                activeSelectNs = null;
+            }
+            let selected = $('#jstree').jstree('get_selected')[0];
+            selectNodeAjax(selected);
+        }
     }
 }
 
@@ -68,7 +109,8 @@ window.initializeTreeNode = function () {
 }
 
 window.activateNode = function (currentNodeId, nodeIdToActivate) {
-    needToActivateListTab = $(`#list_${currentNodeId}`).hasClass('active');
+    const listEl = document.getElementById(`list_${currentNodeId}`);
+    needToActivateListTab = listEl && listEl.classList.contains('active');
 
     $('#jstree').jstree('activate_node', nodeIdToActivate);
     $('#jstree').jstree('open_node', nodeIdToActivate);
