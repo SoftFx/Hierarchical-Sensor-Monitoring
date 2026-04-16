@@ -68,3 +68,9 @@ var collectorOptions = new CollectorOptions()
 
 var collector = new DataCollector(collectorOptions).AddCustomLogger(new CustomLogger());
 ```
+
+## Связанные документы
+
+- [[32-DataCollector-Обзор]] — общий обзор DataCollector
+- [[26-DataCollector-Состояния]] — состояния коллектора
+- [[05-Быстрый-старт]] — пример добавления логирования
