@@ -109,7 +109,8 @@ window.initializeTreeNode = function () {
 }
 
 window.activateNode = function (currentNodeId, nodeIdToActivate) {
-    needToActivateListTab = $(`#list_${currentNodeId}`).hasClass('active');
+    const listEl = document.getElementById(`list_${currentNodeId}`);
+    needToActivateListTab = listEl && listEl.classList.contains('active');
 
     $('#jstree').jstree('activate_node', nodeIdToActivate);
     $('#jstree').jstree('open_node', nodeIdToActivate);
