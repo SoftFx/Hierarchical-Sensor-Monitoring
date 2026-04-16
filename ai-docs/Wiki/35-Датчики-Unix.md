@@ -184,3 +184,10 @@ IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions opt
 // VersionSensorOptions: NodePath = "Product Info", Version = "0.0.0", SensorName = "Version", StartTime = DateTime.UtcNow.
 IUnixCollection AddProductVersion(VersionSensorOptions options = null);
 ```
+
+## Связанные документы
+
+- [[32-DataCollector-Обзор]] — обзор DataCollector
+- [[16-Типы-датчиков]] — типы датчиков
+- [[34-Датчики-Windows]] — аналогичные датчики для Windows-систем
+- [[28-DataCollector-Настройки-датчиков]] — настройки датчиков

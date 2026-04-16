@@ -217,3 +217,10 @@ IWindowsCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions 
 // Примечание: VersionSensorOptions содержит NodePath ("Product Info"), Version ("0.0.0"), SensorName ("Version"), StartTime (DateTime.UtcNow).
 IWindowsCollection AddProductVersion(VersionSensorOptions options = null);
 ```
+
+## Связанные документы
+
+- [[32-DataCollector-Обзор]] — обзор DataCollector
+- [[16-Типы-датчиков]] — типы датчиков
+- [[35-Датчики-Unix]] — аналогичные датчики для Unix-систем
+- [[28-DataCollector-Настройки-датчиков]] — настройки датчиков

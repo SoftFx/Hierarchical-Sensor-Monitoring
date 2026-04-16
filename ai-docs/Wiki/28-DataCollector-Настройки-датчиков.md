@@ -86,6 +86,13 @@ var barSensor = collector.CreateIntBarSensor("testSettings/testAlerts22222", sen
 await collector.Start();
 ```
 
+## Связанные документы
+
+- [[32-DataCollector-Обзор]] — общий обзор DataCollector
+- [[16-Типы-датчиков]] — описание типов датчиков
+- [[10-Оповещения-Обзор]] — настройка оповещений для датчиков
+- [[05-Быстрый-старт]] — пример создания датчиков
+
 Или просто задать описание датчика:
 
 ```csharp

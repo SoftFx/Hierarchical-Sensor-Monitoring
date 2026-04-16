@@ -89,6 +89,13 @@ var sensorOptions = new InstantSensorOptions()
 
 ### Bar-датчики
 
+## Связанные документы
+
+- [[05-Быстрый-старт]] — пример запуска DataCollector
+- [[26-DataCollector-Состояния]] — состояния коллектора
+- [[27-DataCollector-Логирование]] — настройка логирования
+- [[28-DataCollector-Настройки-датчиков]] — настройки датчиков
+
 ```csharp
 var sensorOptions = new BarSensorOptions()
 {
