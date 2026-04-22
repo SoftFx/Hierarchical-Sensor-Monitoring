@@ -1,9 +1,10 @@
-﻿using HSMCommon;
+using HSMCommon;
 using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.Extensions;
 using HSMServer.Filters;
+using HSMServer.Core.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.Validators;
@@ -200,6 +201,75 @@ namespace HSMServer.Controllers
             return Redirect("/Home");
         }
 
+        [ActionName(nameof(Profile))]
+        public IActionResult Profile()
+        {
+            return View("Profile", CurrentUser);
+        }
+
+        #region MCP Access Keys API
+
+        [HttpGet("api/account/mcpkeys")]
+        public IActionResult GetMcpAccessKeys()
+        {
+            var keys = _userManager.GetUserMcpAccessKeys(CurrentUser.Id);
+            return Json(keys.Select(k => new
+            {
+                id = k.Id,
+                displayName = k.DisplayName,
+                creationTime = k.CreationTime,
+                expirationTime = k.ExpirationTime,
+                state = k.State.ToString()
+            }));
+        }
+
+        [HttpPost("api/account/mcpkeys")]
+        public IActionResult CreateMcpAccessKey([FromBody] CreateMcpKeyRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.DisplayName))
+                return BadRequest(new { error = "DisplayName is required" });
+
+            if (request.DisplayName.Length > 100)
+                return BadRequest(new { error = "DisplayName must be 100 characters or less" });
+
+            var existingKeys = _userManager.GetUserMcpAccessKeys(CurrentUser.Id);
+            if (existingKeys.Any(k => k.DisplayName == request.DisplayName))
+                return BadRequest(new { error = "DisplayName already exists" });
+
+            var key = new McpAccessKeyModel(CurrentUser.Id, request.DisplayName.Trim());
+
+            if (request.ExpirationTime.HasValue && request.ExpirationTime.Value <= DateTime.UtcNow)
+                return BadRequest(new { error = "ExpirationTime must be in the future" });
+
+            key.ExpirationTime = request.ExpirationTime ?? DateTime.MaxValue;
+
+            if (!_userManager.AddMcpAccessKey(key))
+                return StatusCode(500, new { error = "Failed to create key" });
+
+            return Json(new
+            {
+                id = key.Id,
+                displayName = key.DisplayName,
+                creationTime = key.CreationTime,
+                expirationTime = key.ExpirationTime,
+                state = key.State.ToString()
+            });
+        }
+
+        [HttpDelete("api/account/mcpkeys/{id}")]
+        public IActionResult DeleteMcpAccessKey(Guid id)
+        {
+            var key = _userManager.GetMcpAccessKey(id);
+            if (key == null || key.UserId != CurrentUser.Id)
+                return NotFound(new { error = "Key not found" });
+
+            if (!_userManager.RemoveMcpAccessKey(id))
+                return StatusCode(500, new { error = "Failed to delete key" });
+
+            return Ok(new { message = "Key deleted successfully" });
+        }
+
+        #endregion
 
         private Task Authenticate(string login, bool keepLoggedIn)
         {

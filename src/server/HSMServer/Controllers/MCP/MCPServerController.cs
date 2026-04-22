@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Schedule;
@@ -6,6 +8,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.DataAlerts;
 using HSMCommon.Model;
@@ -26,33 +29,47 @@ namespace HSMServer.Controllers.MCP
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
         private readonly IAlertScheduleProvider _scheduleProvider;
+        private readonly IUserManager _userManager;
 
-        public MCPServerController(ITreeValuesCache cache, TreeViewModel tree, IAlertScheduleProvider scheduleProvider)
+        public MCPServerController(ITreeValuesCache cache, TreeViewModel tree, IAlertScheduleProvider scheduleProvider, IUserManager userManager)
         {
             _cache = cache;
             _tree = tree;
             _scheduleProvider = scheduleProvider;
+            _userManager = userManager;
         }
 
-        private Guid? CurrentProductId
+        private User CurrentUser => HttpContext.GetMcpUser();
+
+        private IEnumerable<Guid> CurrentUserProductIds
         {
             get
             {
-                if (HttpContext.TryGetPublicApiInfo(out var info))
-                    return info.Product.Id;
-                return null;
+                var user = CurrentUser;
+                if (user == null)
+                    return Enumerable.Empty<Guid>();
+
+                return user.ProductsRoles.Select(p => p.Item1);
             }
         }
 
+        private bool HasAccessToProduct(Guid productId)
+        {
+            var user = CurrentUser;
+            if (user == null)
+                return false;
+
+            return user.IsProductAvailable(productId) || user.IsAdmin;
+        }
+
         [HttpGet("health")]
-        [McpAuthorize(HealthOnly = true)]
+        [AllowAnonymous]
         public IActionResult Health()
         {
             return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
         }
 
         [HttpGet("tools")]
-        [McpAuthorize(HealthOnly = true)]
         public IActionResult GetTools()
         {
             var tools = new[]
@@ -109,13 +126,11 @@ namespace HSMServer.Controllers.MCP
 
         private object ListSensors(Dictionary<string, object> args)
         {
-            var productId = CurrentProductId;
             var status = args?.GetValueOrDefault("status")?.ToString();
 
-            var sensors = _tree.Sensors.Values.ToList();
-
-            if (productId.HasValue)
-                sensors = sensors.Where(s => s.RootProduct?.Id == productId.Value).ToList();
+            var sensors = _tree.Sensors.Values
+                .Where(s => HasAccessToProduct(s.RootProduct?.Id ?? Guid.Empty))
+                .ToList();
 
             if (!string.IsNullOrEmpty(status) && Enum.TryParse<SensorStatus>(status, true, out var sensorStatus))
                 sensors = sensors.Where(s => s.Status == sensorStatus).ToList();
@@ -144,7 +159,7 @@ namespace HSMServer.Controllers.MCP
             if (!_tree.Sensors.TryGetValue(guid, out var sensor))
                 return new { error = "Sensor not found" };
 
-            if (CurrentProductId.HasValue && sensor.RootProduct?.Id != CurrentProductId.Value)
+            if (!HasAccessToProduct(sensor.RootProduct?.Id ?? Guid.Empty))
                 return new { error = "Access denied: sensor belongs to different product" };
 
             return new
@@ -174,7 +189,7 @@ namespace HSMServer.Controllers.MCP
             if (!_tree.Sensors.TryGetValue(sensorGuid, out var sensor))
                 return new { error = "Sensor not found" };
 
-            if (CurrentProductId.HasValue && sensor.RootProduct?.Id != CurrentProductId.Value)
+            if (!HasAccessToProduct(sensor.RootProduct?.Id ?? Guid.Empty))
                 return new { error = "Access denied: sensor belongs to different product" };
 
             var from = string.IsNullOrEmpty(fromStr) ? DateTime.UtcNow.AddDays(-1) : DateTime.Parse(fromStr);
@@ -198,10 +213,7 @@ namespace HSMServer.Controllers.MCP
 
         private object ListProducts()
         {
-            var products = _tree.Nodes.Values.AsEnumerable();
-
-            if (CurrentProductId.HasValue)
-                products = products.Where(p => p.Id == CurrentProductId.Value);
+            var products = _tree.Nodes.Values.Where(p => HasAccessToProduct(p.Id));
 
             return products.Select(p => new
             {
@@ -338,10 +350,7 @@ namespace HSMServer.Controllers.MCP
             
             var alerts = new List<object>();
             
-            var sensors = _tree.Sensors.Values.AsEnumerable();
-            
-            if (CurrentProductId.HasValue)
-                sensors = sensors.Where(s => s.RootProduct?.Id == CurrentProductId.Value);
+            var sensors = _tree.Sensors.Values.Where(s => HasAccessToProduct(s.RootProduct?.Id ?? Guid.Empty));
 
             foreach (var sensor in sensors)
             {
@@ -378,9 +387,7 @@ namespace HSMServer.Controllers.MCP
             if (!Guid.TryParse(alertId, out var alertGuid))
                 return new { error = "Invalid alertId format" };
 
-            var sensors = _tree.Sensors.Values.AsEnumerable();
-            if (CurrentProductId.HasValue)
-                sensors = sensors.Where(s => s.RootProduct?.Id == CurrentProductId.Value);
+            var sensors = _tree.Sensors.Values.Where(s => HasAccessToProduct(s.RootProduct?.Id ?? Guid.Empty));
 
             foreach (var sensor in sensors)
             {
@@ -418,7 +425,7 @@ namespace HSMServer.Controllers.MCP
             if (!_tree.Sensors.TryGetValue(sensorGuid, out var sensor))
                 return new { error = "Sensor not found" };
 
-            if (CurrentProductId.HasValue && sensor.RootProduct?.Id != CurrentProductId.Value)
+            if (!HasAccessToProduct(sensor.RootProduct?.Id ?? Guid.Empty))
                 return new { error = "Access denied: sensor belongs to different product" };
 
             var alertScheduleId = ParseGuid(args?.GetValueOrDefault("alertScheduleId")?.ToString());
@@ -450,9 +457,7 @@ namespace HSMServer.Controllers.MCP
             if (!Guid.TryParse(alertId, out var alertGuid))
                 return new { error = "Invalid alertId format" };
 
-            var sensors = _tree.Sensors.Values.AsEnumerable();
-            if (CurrentProductId.HasValue)
-                sensors = sensors.Where(s => s.RootProduct?.Id == CurrentProductId.Value);
+            var sensors = _tree.Sensors.Values.Where(s => HasAccessToProduct(s.RootProduct?.Id ?? Guid.Empty));
 
             foreach (var sensor in sensors)
             {
@@ -500,9 +505,7 @@ namespace HSMServer.Controllers.MCP
             if (!Guid.TryParse(alertId, out var alertGuid))
                 return new { error = "Invalid alertId format" };
 
-            var sensors = _tree.Sensors.Values.AsEnumerable();
-            if (CurrentProductId.HasValue)
-                sensors = sensors.Where(s => s.RootProduct?.Id == CurrentProductId.Value);
+            var sensors = _tree.Sensors.Values.Where(s => HasAccessToProduct(s.RootProduct?.Id ?? Guid.Empty));
 
             foreach (var sensor in sensors)
             {

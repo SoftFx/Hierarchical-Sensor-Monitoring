@@ -1,4 +1,4 @@
-﻿@using HSMServer.Constants
+@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Extensions
 @using HSMServer.Helpers
@@ -131,16 +131,22 @@
                                     </ul>
 
                                     <ul class="navbar-nav">
-                                        <li class="nav-item">
-                                            <a class="nav-link" href="#">
-                                                Hello, @(((User)Context.User).Name)
+                                        <li class="nav-item dropdown">
+                                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                @(((User)Context.User).Name)
                                             </a>
-                                        </li>
-                                        <li class="nav-item">
-                                            <a class="nav-link" href="@Url.Action(ViewConstants.LogoutAction, ViewConstants.AccountController)">
-                                                Logout
-                                                <i class="fas fa-sign-out-alt"></i>
-                                            </a>
+                                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action(ViewConstants.ProfileAction, ViewConstants.AccountController)">
+                                                        <i class="fas fa-user"></i> Profile
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action(ViewConstants.LogoutAction, ViewConstants.AccountController)">
+                                                        <i class="fas fa-sign-out-alt"></i> Logout
+                                                    </a>
+                                                </li>
+                                            </ul>
                                         </li>
                                     </ul>
                                 </div>

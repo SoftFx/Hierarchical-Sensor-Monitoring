@@ -1,58 +1,63 @@
-using HSMServer.Core.Cache;
+using HSMServer.Authentication;
 using HSMServer.Core.Model;
-using HSMServer.Extensions;
+using HSMServer.Model.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
+using System.Linq;
 
 namespace HSMServer.Controllers.MCP
 {
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
     public class McpAuthorizeAttribute : Attribute, IAuthorizationFilter
     {
-        public bool HealthOnly { get; set; }
-
         public void OnAuthorization(AuthorizationFilterContext context)
         {
-            if (HealthOnly && !context.HttpContext.TryGetPublicApiInfo(out _))
+            var keyValue = context.HttpContext.Request.Headers["Key"].FirstOrDefault();
+            if (string.IsNullOrEmpty(keyValue))
             {
+                context.Result = new UnauthorizedObjectResult(new { error = "Missing Key header" });
                 return;
             }
 
-            if (!context.HttpContext.TryGetPublicApiInfo(out var info))
+            if (!Guid.TryParse(keyValue, out var keyId))
             {
-                context.Result = new UnauthorizedObjectResult(new { error = "Invalid or missing access key. Provide 'Key' header with valid GUID." });
+                context.Result = new UnauthorizedObjectResult(new { error = "Invalid Key format" });
                 return;
             }
 
-            if (info.Key.State == KeyState.Blocked)
+            var userManager = context.HttpContext.RequestServices.GetService(typeof(IUserManager)) as IUserManager;
+            if (userManager == null)
             {
-                context.Result = new ObjectResult(new { error = "Access key is blocked" }) { StatusCode = 403 };
+                context.Result = new ObjectResult(new { error = "Service unavailable" }) { StatusCode = 503 };
                 return;
             }
 
-            if (info.Key.State == KeyState.Expired || info.Key.ExpirationTime < DateTime.UtcNow)
+            var mcpKey = userManager.GetMcpAccessKey(keyId);
+            if (mcpKey == null)
             {
-                context.Result = new ObjectResult(new { error = "Access key has expired" }) { StatusCode = 403 };
+                context.Result = new UnauthorizedObjectResult(new { error = "Invalid Key" });
                 return;
             }
+
+            var user = userManager.GetUsers(u => u.Id == mcpKey.UserId).FirstOrDefault();
+            if (user == null)
+            {
+                context.Result = new UnauthorizedObjectResult(new { error = "User not found" });
+                return;
+            }
+
+            context.HttpContext.Items["McpAccessKey"] = mcpKey;
+            context.HttpContext.Items["McpAccessKeyUser"] = user;
         }
     }
 
     public static class McpAuthorizationExtensions
     {
-        public static Guid? GetKeyProductId(this AuthorizationFilterContext context)
-        {
-            if (context.HttpContext.TryGetPublicApiInfo(out var info))
-                return info.Product.Id;
-            return null;
-        }
+        public static McpAccessKeyModel GetMcpAccessKey(this Microsoft.AspNetCore.Http.HttpContext context) =>
+            context.Items.TryGetValue("McpAccessKey", out var key) ? key as McpAccessKeyModel : null;
 
-        public static Guid? GetKeyId(this AuthorizationFilterContext context)
-        {
-            if (context.HttpContext.TryGetPublicApiInfo(out var info))
-                return info.Key.Id;
-            return null;
-        }
+        public static User GetMcpUser(this Microsoft.AspNetCore.Http.HttpContext context) =>
+            context.Items.TryGetValue("McpAccessKeyUser", out var user) ? user as User : null;
     }
 }

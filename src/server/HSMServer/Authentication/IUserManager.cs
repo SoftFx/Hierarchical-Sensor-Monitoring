@@ -1,5 +1,6 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.Model;
 using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
@@ -9,19 +10,10 @@ namespace HSMServer.Authentication
 {
     public interface IUserManager : IConcurrentStorageNames<User, UserEntity, UserUpdate>
     {
-        /// <summary>
-        /// Add new user with the specified parameters
-        /// </summary>
-        /// <param name="userName">Login of the new user, must be unique and not empty</param>
-        /// <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
         Task<bool> AddUser(string userName, string passwordHash, bool isAdmin, List<(Guid, ProductRoleEnum)> productRoles = null);
 
         Task<bool> TryAdd(User user);
 
-        /// <summary>
-        /// New user object
-        /// </summary>
-        /// <param name="user">User object (password field must be password hash).</param>
         Task<bool> UpdateUser(User user);
 
         bool TryAuthenticate(string login, string password);
@@ -34,5 +26,15 @@ namespace HSMServer.Authentication
         List<User> GetManagers(Guid productId);
 
         IEnumerable<User> GetUsers(Func<User, bool> filter = null);
+
+        McpAccessKeyModel GetMcpAccessKey(Guid keyId);
+
+        IEnumerable<McpAccessKeyModel> GetUserMcpAccessKeys(Guid userId);
+
+        bool AddMcpAccessKey(McpAccessKeyModel key);
+
+        bool UpdateMcpAccessKey(McpAccessKeyModel key);
+
+        bool RemoveMcpAccessKey(Guid keyId);
     }
 }

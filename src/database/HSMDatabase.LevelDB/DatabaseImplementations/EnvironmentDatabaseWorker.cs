@@ -1,4 +1,4 @@
-﻿using HSMCommon.TaskResult;
+using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using NLog;
@@ -21,6 +21,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         private readonly byte[] _productListKey = "ProductsNames"u8.ToArray();
         private readonly byte[] _accessKeyListKey = "AccessKeys"u8.ToArray();
+        private readonly byte[] _mcpAccessKeyListKey = "McpAccessKeys"u8.ToArray();
         private readonly byte[] _sensorIdsKey = "SensorIds"u8.ToArray();
         private readonly byte[] _policyIdsKey = "NewPolicyIds"u8.ToArray();
         private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
@@ -331,6 +332,119 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
 
             return null;
+        }
+
+        #endregion
+
+        #region McpAccessKey
+
+        public List<string> GetMcpAccessKeyList()
+        {
+            List<string> result = new();
+            try
+            {
+                if (_database.TryRead(_mcpAccessKeyListKey, out byte[] value))
+                    result = JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value)) ?? new();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get McpAccessKeys list");
+            }
+            return result;
+        }
+
+        public void AddMcpAccessKeyToList(string id)
+        {
+            try
+            {
+                var currentList = GetMcpAccessKeyList();
+                if (!currentList.Contains(id))
+                {
+                    currentList.Add(id);
+                    _database.Put(_mcpAccessKeyListKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add McpAccessKey {id} to list");
+            }
+        }
+
+        public void RemoveMcpAccessKeyFromList(string id)
+        {
+            try
+            {
+                var currentList = GetMcpAccessKeyList();
+                currentList.Remove(id);
+                _database.Put(_mcpAccessKeyListKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove McpAccessKey {id} from list");
+            }
+        }
+
+        public void AddMcpAccessKey(McpAccessKeyEntity entity)
+        {
+            var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
+            try
+            {
+                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(entity));
+                AddMcpAccessKeyToList(entity.Id);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to put McpAccessKey for {entity.Id}");
+            }
+        }
+
+        public void RemoveMcpAccessKey(string id)
+        {
+            byte[] bytesKey = Encoding.UTF8.GetBytes(id);
+            try
+            {
+                _database.Delete(bytesKey);
+                RemoveMcpAccessKeyFromList(id);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove McpAccessKey by {id}");
+            }
+        }
+
+        public McpAccessKeyEntity GetMcpAccessKey(string id)
+        {
+            var bytesKey = Encoding.UTF8.GetBytes(id);
+            try
+            {
+                return _database.TryRead(bytesKey, out byte[] value)
+                    ? JsonSerializer.Deserialize<McpAccessKeyEntity>(Encoding.UTF8.GetString(value)) : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read McpAccessKey by {id}");
+            }
+            return null;
+        }
+
+        public List<McpAccessKeyEntity> GetAllMcpAccessKeys()
+        {
+            var result = new List<McpAccessKeyEntity>();
+            try
+            {
+                var keyIds = GetMcpAccessKeyList();
+                foreach (var keyId in keyIds)
+                {
+                    var keyEntity = GetMcpAccessKey(keyId);
+                    if (keyEntity != null)
+                        result.Add(keyEntity);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get all McpAccessKeys");
+            }
+            return result;
         }
 
         #endregion
