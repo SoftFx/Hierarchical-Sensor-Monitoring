@@ -14,6 +14,7 @@ var searchServerRefresh = false;
 var emptySearch = false;
 var prevState = undefined;
 
+let isInitialLoad = true;
 let lastActivity = Date.now();
 let isCheckingActive = false;
 let wasNotified = false;
@@ -106,6 +107,11 @@ function refreshTreeHandler(e, data) {
 
     if (isRefreshing) {
         console.log('refreshTreeHandler: Refresh already in progress, skipping');
+        return;
+    }
+
+    if (isInitialLoad) {
+        console.log('refreshTreeHandler: Skipping during initial load');
         return;
     }
 
@@ -258,10 +264,12 @@ function initializeTreeInternal() {
                         console.error('Error restoring tree state:', e);
                     }
                 }
-                else {
+                                else {
                     console.warn('Tree state not found in localStorage');
                 }
             }
+
+            isInitialLoad = false;
         }, 300);
     });
 
