@@ -69,7 +69,7 @@ namespace HSMServer.Model.AccessKeysViewModels
         
         
         public List<ProductModel> Products { get; set; } = new ();
-        public List<SelectListItem> ProductsItems => Products.Select(x => new SelectListItem()
+        public List<SelectListItem> ProductsItems => Products.OrderBy(x => x.DisplayName).Select(x => new SelectListItem()
         {
             Text = x.DisplayName,
             Value = x.Id.ToString(),
