@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager.DatabaseEntities;
@@ -41,6 +41,18 @@ namespace HSMDatabase.AccessManager
         void AddAccessKey(AccessKeyEntity entity);
         void RemoveAccessKey(string id);
         AccessKeyEntity GetAccessKey(string id);
+
+        #endregion
+
+        #region McpAccessKey
+
+        void AddMcpAccessKeyToList(string id);
+        List<string> GetMcpAccessKeyList();
+        void RemoveMcpAccessKeyFromList(string id);
+        void AddMcpAccessKey(McpAccessKeyEntity entity);
+        void RemoveMcpAccessKey(string id);
+        McpAccessKeyEntity GetMcpAccessKey(string id);
+        List<McpAccessKeyEntity> GetAllMcpAccessKeys();
 
         #endregion
 

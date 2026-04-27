@@ -28,6 +28,7 @@ using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
 using HSMServer.Core.Schedule;
+using HSMServer.Controllers.MCP;
 
 
 namespace HSMServer.ServiceExtensions
@@ -57,7 +58,8 @@ namespace HSMServer.ServiceExtensions
                     .AddSingleton<TreeViewModel>()
                     .AddSingleton<TelemetryCollector>()
                     .AddSingleton<BackupDatabaseService>()
-                    .AddSingleton<NotificationsCenter>();
+                    .AddSingleton<NotificationsCenter>()
+                    .AddSingleton<IMcpToolService, McpToolService>();
 
             services.AddHostedService<TreeSnapshotService>()
                     .AddHostedService<ClearDatabaseService>()
@@ -145,6 +147,8 @@ namespace HSMServer.ServiceExtensions
 
             applicationBuilder.UseAuthentication();
             applicationBuilder.UseAuthorization();
+            applicationBuilder.UseRateLimiter();
+            applicationBuilder.UseAntiforgery();
 
             applicationBuilder.UseMiddleware<TelemetryMiddleware>();
             applicationBuilder.UseMiddleware<UserProcessorMiddleware>();

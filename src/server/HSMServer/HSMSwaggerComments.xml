@@ -4,19 +4,6 @@
         <name>HSMServer</name>
     </assembly>
     <members>
-        <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.Boolean,System.Collections.Generic.List{System.ValueTuple{System.Guid,HSMServer.Model.Authentication.ProductRoleEnum}})">
-            <summary>
-            Add new user with the specified parameters
-            </summary>
-            <param name="userName">Login of the new user, must be unique and not empty</param>
-            <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
-        </member>
-        <member name="M:HSMServer.Authentication.IUserManager.UpdateUser(HSMServer.Model.Authentication.User)">
-            <summary>
-            New user object
-            </summary>
-            <param name="user">User object (password field must be password hash).</param>
-        </member>
         <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.TestConnection">
             <summary>
             with 200 status code response. Used for "Test connection" on the datasource config page.

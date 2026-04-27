@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Constants
+namespace HSMServer.Constants
 {
     public static class ViewConstants
     {
@@ -21,6 +21,7 @@
 
         public const string LogoutAction = "Logout";
         public const string RegistrationAction = "Registration";
+        public const string ProfileAction = "Profile";
 
         public const string IndexAction = "Index";
 

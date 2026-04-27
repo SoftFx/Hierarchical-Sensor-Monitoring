@@ -1,0 +1,301 @@
+@using HSMServer.Constants
+@using HSMServer.Controllers
+@model HSMServer.Model.Authentication.User
+@{
+    ViewData["Title"] = "Profile";
+}
+
+<div class="container mt-4">
+    <h2>User Profile</h2>
+    
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5>Account Information</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-2">
+                <div class="col-md-3 fw-bold">Username:</div>
+                <div class="col-md-9">@Model.Name</div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-3 fw-bold">Role:</div>
+                <div class="col-md-9">@(Model.IsAdmin ? "Admin" : "User")</div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-3 fw-bold">Products Access:</div>
+                <div class="col-md-9">
+                    @if (Model.ProductsRoles.Any())
+                    {
+                        <ul class="mb-0">
+                            @foreach (var product in Model.ProductsRoles)
+                            {
+                                <li>@product.Item1 - @product.Item2</li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <span>No products</span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">MCP Access Keys</h5>
+            <button class="btn btn-primary btn-sm" onclick="showAddKeyModal()">
+                <i class="fas fa-plus"></i> Add Key
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="mcpKeysList">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addKeyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add MCP Access Key</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Display Name</label>
+                    <input type="text" class="form-control" id="keyDisplayName" maxlength="100" required>
+                    <div class="invalid-feedback" id="displayNameError"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Expiration Time (optional)</label>
+                    <input type="datetime-local" class="form-control" id="keyExpirationTime">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createKey()">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteKeyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Key</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the key "<span id="deleteKeyName"></span>"?</p>
+                <p class="text-muted">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="deleteKey()">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="keyDetailsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Key Created</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Your new MCP Access Key has been created:</p>
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="newKeyValue" readonly>
+                    <button class="btn btn-outline-secondary" type="button" onclick="copyKey()">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+                <p class="text-warning"><i class="fas fa-exclamation-triangle"></i> Keep this key secure. Do not share it publicly.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@Html.AntiForgeryToken()
+
+<script>
+    let deleteKeyId = null;
+
+    function getAntiForgeryToken() {
+        const input = document.querySelector('input[name="__RequestVerificationToken"]');
+        return input ? input.value : '';
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadMcpKeys();
+    });
+
+    function loadMcpKeys() {
+        fetch('/api/account/mcpkeys')
+            .then(response => response.json())
+            .then(data => {
+                renderKeys(data);
+            })
+            .catch(error => {
+                document.getElementById('mcpKeysList').innerHTML = 
+                    '<div class="text-danger">Failed to load keys</div>';
+            });
+    }
+
+    function renderKeys(keys) {
+        if (!keys || keys.length === 0) {
+            document.getElementById('mcpKeysList').innerHTML = 
+                '<p class="text-muted">No MCP access keys. Click "Add Key" to create one.</p>';
+            return;
+        }
+
+        let html = '<table class="table table-hover"><thead><tr>' +
+            '<th>Name</th><th>Created</th><th>Expires</th><th>Status</th><th>Actions</th>' +
+            '</tr></thead><tbody>';
+        
+        keys.forEach(key => {
+            const created = new Date(key.creationTime).toLocaleString();
+            const expires = key.expirationTime && key.expirationTime !== '9999-12-31T23:59:59.9999999'
+                ? new Date(key.expirationTime).toLocaleString()
+                : 'Never';
+            
+            let statusClass = key.state === 'Active' ? 'badge-success' : 
+                             key.state === 'Expired' ? 'badge-warning' : 'badge-danger';
+            
+            html += `<tr>
+                <td>${escapeHtml(key.displayName)}</td>
+                <td>${created}</td>
+                <td>${expires}</td>
+                <td><span class="badge ${statusClass}">${key.state}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="confirmDeleteKey('${key.id}', '${escapeHtml(key.displayName)}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>`;
+        });
+        
+        html += '</tbody></table>';
+        document.getElementById('mcpKeysList').innerHTML = html;
+    }
+
+    function showAddKeyModal() {
+        document.getElementById('keyDisplayName').value = '';
+        document.getElementById('keyExpirationTime').value = '';
+        document.getElementById('displayNameError').textContent = '';
+        document.getElementById('keyDisplayName').classList.remove('is-invalid');
+        
+        var modal = new bootstrap.Modal(document.getElementById('addKeyModal'));
+        modal.show();
+    }
+
+    function createKey() {
+        const displayName = document.getElementById('keyDisplayName').value.trim();
+        const expirationTimeInput = document.getElementById('keyExpirationTime').value;
+        
+        if (!displayName) {
+            document.getElementById('keyDisplayName').classList.add('is-invalid');
+            document.getElementById('displayNameError').textContent = 'Display name is required';
+            return;
+        }
+
+        let expirationTime = null;
+        if (expirationTimeInput) {
+            expirationTime = new Date(expirationTimeInput).toISOString();
+        }
+
+        fetch('/api/account/mcpkeys', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': getAntiForgeryToken()
+            },
+            body: JSON.stringify({ displayName: displayName, expirationTime: expirationTime })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => { throw { isValidationError: true, error: data.error || 'Failed to create key' }; });
+            }
+            return response.json();
+        })
+        .then(data => {
+            bootstrap.Modal.getInstance(document.getElementById('addKeyModal')).hide();
+            document.getElementById('newKeyValue').value = data.id;
+            var detailsModal = new bootstrap.Modal(document.getElementById('keyDetailsModal'));
+            detailsModal.show();
+            loadMcpKeys();
+        })
+        .catch(error => {
+            if (error && error.isValidationError) {
+                document.getElementById('keyDisplayName').classList.add('is-invalid');
+                document.getElementById('displayNameError').textContent = error.error;
+            } else {
+                alert('Failed to create key');
+            }
+        });
+    }
+
+    function confirmDeleteKey(id, name) {
+        deleteKeyId = id;
+        document.getElementById('deleteKeyName').textContent = name;
+        var modal = new bootstrap.Modal(document.getElementById('deleteKeyModal'));
+        modal.show();
+    }
+
+    function deleteKey() {
+        fetch(`/api/account/mcpkeys/${deleteKeyId}`, {
+            method: 'DELETE',
+            headers: { 'RequestVerificationToken': getAntiForgeryToken() }
+        })
+        .then(response => {
+            if (!response.ok && response.status !== 200) {
+                throw new Error('Failed to delete key');
+            }
+            return response.json();
+        })
+        .then(data => {
+            bootstrap.Modal.getInstance(document.getElementById('deleteKeyModal')).hide();
+            loadMcpKeys();
+        })
+        .catch(error => {
+            alert('Failed to delete key');
+        });
+    }
+
+    function copyKey() {
+        const keyValue = document.getElementById('newKeyValue').value;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(keyValue).catch(function() {
+                fallbackCopy();
+            });
+        } else {
+            fallbackCopy();
+        }
+    }
+
+    function fallbackCopy() {
+        const keyInput = document.getElementById('newKeyValue');
+        keyInput.select();
+        document.execCommand('copy');
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
