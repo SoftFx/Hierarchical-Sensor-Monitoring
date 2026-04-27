@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Text.Encodings.Web;
 
 
 namespace HSMServer.Model.AlertSchedule
@@ -29,7 +30,7 @@ namespace HSMServer.Model.AlertSchedule
 
         public List<BaseSensorModel> Sensors { get; set; } = new();
 
-        public string SensorsTooltip => string.Join("<br>", Sensors.Select(s => s.FullPath));
+        public string SensorsTooltip => string.Join("<br>", Sensors.Select(s => HtmlEncoder.Default.Encode(s.FullPath)));
 
         public AlertScheduleViewModel()
         {

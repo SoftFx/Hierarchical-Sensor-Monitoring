@@ -9,30 +9,29 @@ using HSMServer.Core.Model.Policies;
 
 namespace HSMServer.Core.Schedule
 {
-    private readonly struct CacheEntryKey : IEquatable<CacheEntryKey>
-    {
-        public DateTime StartTime { get; }
-        public DateTime EndTime { get; }
-
-        public CacheEntryKey(DateTime startTime, DateTime endTime)
-        {
-            StartTime = startTime;
-            EndTime = endTime;
-        }
-
-        public bool Equals(CacheEntryKey other) =>
-            StartTime == other.StartTime && EndTime == other.EndTime;
-
-        public override bool Equals(object obj) => obj is CacheEntryKey other && Equals(other);
-
-        public override int GetHashCode() => HashCode.Combine(StartTime, EndTime);
-
-        public static bool operator ==(CacheEntryKey left, CacheEntryKey right) => left.Equals(right);
-        public static bool operator !=(CacheEntryKey left, CacheEntryKey right) => !left.Equals(right);
-    }
-
     public class AlertScheduleProvider : IAlertScheduleProvider, IDisposable
     {
+        private readonly struct CacheEntryKey : IEquatable<CacheEntryKey>
+        {
+            public DateTime StartTime { get; }
+            public DateTime EndTime { get; }
+
+            public CacheEntryKey(DateTime startTime, DateTime endTime)
+            {
+                StartTime = startTime;
+                EndTime = endTime;
+            }
+
+            public bool Equals(CacheEntryKey other) =>
+                StartTime == other.StartTime && EndTime == other.EndTime;
+
+            public override bool Equals(object obj) => obj is CacheEntryKey other && Equals(other);
+
+            public override int GetHashCode() => HashCode.Combine(StartTime, EndTime);
+
+            public static bool operator ==(CacheEntryKey left, CacheEntryKey right) => left.Equals(right);
+            public static bool operator !=(CacheEntryKey left, CacheEntryKey right) => !left.Equals(right);
+        }
         private readonly TimeSpan CLEANUP_PERIOD = TimeSpan.FromMinutes(5);
 
         private readonly IDatabaseCore _database;
@@ -44,7 +43,7 @@ namespace HSMServer.Core.Schedule
         private readonly object _lock = new object();
 
         private readonly Timer _cleanupTimer;
-        private bool _disposed = false;
+        private volatile int _disposed = 0;
 
         private class CacheEntry
         {
@@ -205,7 +204,7 @@ namespace HSMServer.Core.Schedule
             }
         }
 
-        public void CleanupIntervalCache()
+        private void CleanupIntervalCache()
         {
             try
             {
@@ -280,12 +279,11 @@ namespace HSMServer.Core.Schedule
 
         public void Dispose()
         {
-            if (!_disposed)
-            {
-                _cleanupTimer?.Dispose();
-                _disposed = true;
-                GC.SuppressFinalize(this);
-            }
+            if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
+                return;
+
+            _cleanupTimer?.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 }
