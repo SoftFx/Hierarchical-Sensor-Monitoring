@@ -192,7 +192,7 @@ namespace HSMServer.Controllers
         {
             return new()
             {
-                Keys = GetAvailableAccessKeys().Where(x => x.Id.ToString().Contains(searchKey)).ToList(),
+                Keys = GetAvailableAccessKeys().Where(x => x.DisplayName.Contains(searchKey, StringComparison.OrdinalIgnoreCase) || x.Id.ToString().Contains(searchKey)).ToList(),
                 FullTable = true
             };
         }

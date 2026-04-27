@@ -26,8 +26,9 @@
             </div>
         </div>
         <div class="container row my-1 pe-0">
-            <div class="col-4 p-0">
-                <input id="searchKey" type="text" class="form-control" placeholder="Filter by key"/>
+            <div class="position-relative col-4 p-0">
+                <input id="searchKey" type="text" class="form-control pe-4" placeholder="Filter by Name and key" onkeydown="if(event.key === 'Enter') { event.preventDefault(); searchKey(); }" oninput="toggleClearButton()"/>
+                <button id="clearSearchBtn" type="button" class="btn-close position-absolute top-50 end-0 translate-middle-y me-2" style="font-size: 0.65rem; display: none;" onclick="clearSearch()"></button>
             </div>
             <div class="d-flex justify-content-between col">
                 <button onclick="searchKey()" type="button" class="btn btn-secondary ms-1">
@@ -77,6 +78,11 @@
     
     function searchKey() {
         const keyToSearch = document.getElementById("searchKey").value;
+        if (keyToSearch) {
+            history.pushState({ searchKey: keyToSearch }, '', '?searchKey=' + encodeURIComponent(keyToSearch));
+        } else {
+            history.replaceState({}, '', window.location.pathname);
+        }
         $.ajax({
                type: 'GET',
                url: getSearchKeyResult + "?searchKey=" + keyToSearch,
@@ -87,6 +93,33 @@
                     document.querySelectorAll("#accessTable tr").length <= 1 ? $('#accessKeysTable').html("<div><h2><strong>Keys not found</strong></h2></div>") : this;
                }
         });
+    }
+
+    window.addEventListener('popstate', function(e) {
+        const keyToSearch = e.state && e.state.searchKey ? e.state.searchKey : '';
+        document.getElementById('searchKey').value = keyToSearch;
+        $.ajax({
+               type: 'GET',
+               url: getSearchKeyResult + "?searchKey=" + keyToSearch,
+               cache: false,
+               async: true,
+               success: function (viewData) {
+                    $('#accessKeysTable').html(viewData)
+               }
+        });
+    });
+    
+    function toggleClearButton() {
+        const input = document.getElementById("searchKey");
+        const btn = document.getElementById("clearSearchBtn");
+        btn.style.display = input.value.length > 0 ? "block" : "none";
+    }
+
+    function clearSearch() {
+        document.getElementById("searchKey").value = "";
+        document.getElementById("clearSearchBtn").style.display = "none";
+        history.replaceState({}, '', window.location.pathname);
+        allProductsChanged();
     }
     
     function createAccessKey() {
