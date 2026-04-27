@@ -144,9 +144,11 @@
         const params = new URLSearchParams(window.location.search);
         const initialSearchKey = params.get('searchKey') || '';
         if (initialSearchKey && searchInput) {
-                    searchInput.value = initialSearchKey;
-                    toggleClearButton();
-                }
+                            searchInput.value = initialSearchKey;
+                            toggleClearButton();
+                            history.replaceState({ searchKey: initialSearchKey }, '', window.location.search);
+                            fetchSearchResults(initialSearchKey);
+                        }
         
         if (searchInput) {
             searchInput.addEventListener('keydown', function(e) {
