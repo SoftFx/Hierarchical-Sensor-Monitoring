@@ -79,19 +79,22 @@ namespace HSMServer.Controllers
             return View(result);
         }
 
+        private sealed record ChatItem(Guid Id, string Name, byte Type);
+
         private class UpdateResponse
         {
             private const int MAX_SENSORS = 4;
 
             public byte? Type { get; set; }
             public string Sensors { get; set; }
-
             public string Name { get; set; }
+            public List<ChatItem> Chats { get; set; }
 
-            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, string name)
+            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, string name, List<ChatItem> chats)
             {
                 Type = type;
                 Name = name;
+                Chats = chats;
 
                 if (sensors.Count > 0)
                 {
@@ -120,7 +123,16 @@ namespace HSMServer.Controllers
 
             var name = GetTemplateName(path, folderId);
 
-            var response = new UpdateResponse(sensorType, sensors, name);
+            List<ChatItem> chats = [];
+            if (_folders.TryGetValue(folderId, out var folder))
+            {
+                chats = _telegram.GetValues()
+                    .Where(c => folder.TelegramChats.Contains(c.Id))
+                    .Select(c => new ChatItem(c.Id, c.Name, (byte)c.Type))
+                    .ToList();
+            }
+
+            var response = new UpdateResponse(sensorType, sensors, name, chats);
 
             return Json(JsonSerializer.Serialize(response));
         }
@@ -159,6 +171,10 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
             var model = new DataAlertTemplateViewModel(data, _folders.GetUserFolders(CurrentUser));
+
+            if (_folders.TryGetValue(data.FolderId, out var folder))
+                PopulateAvailableChats(model, folder.TelegramChats);
+
             foreach (var (_, alerts) in model.DataAlerts)
                 foreach (var alert in alerts)
                     alert.Schedules = GetAlertSchedulesSelectList();
@@ -180,6 +196,9 @@ namespace HSMServer.Controllers
             }
 
             data = new DataAlertTemplateViewModel(data.ToModel(), _folders.GetUserFolders(CurrentUser));
+
+            if (_folders.TryGetValue(data.FolderId, out var folder))
+                PopulateAvailableChats(data, folder.TelegramChats);
 
             foreach (var (_, alerts) in data.DataAlerts)
                 foreach (var alert in alerts)
@@ -232,6 +251,14 @@ namespace HSMServer.Controllers
                 Value = tz.Id.ToString(),
                 Text = $"{tz.Name}"
             })];
+        }
+
+        private static void PopulateAvailableChats(DataAlertTemplateViewModel model, HashSet<Guid> folderChats)
+        {
+            foreach (var (_, alerts) in model.DataAlerts)
+                foreach (var alert in alerts)
+                    foreach (var action in alert.Actions)
+                        action.AvailableChats.UnionWith(folderChats);
         }
 
     }

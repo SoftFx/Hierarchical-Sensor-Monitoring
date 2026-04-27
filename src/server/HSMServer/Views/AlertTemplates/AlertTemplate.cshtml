@@ -86,7 +86,7 @@
             sendType = @booleanType;
 
         $.ajax({
-            url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${sendType}&entityId=${entityId}`,
+            url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${sendType}&entityId=${entityId}&folderId=${$('#FolderId').val()}`,
             cache: false
         }).done(function (viewData) {
             if (type == '@ttlType') {
@@ -151,6 +151,10 @@
                     $('#affected_sensors_cardbody').empty();
                     $('#affected_sensors_cardbody').html("No sensors were found along the specified path.");
                     $('#affected_sensors').removeClass('d-none');
+                }
+
+                if (data['Chats'] != null) {
+                    updateTemplateChatDropdowns(data['Chats']);
                 }
             }
         });
@@ -266,6 +270,34 @@
         for (let k = 0; k < chats.length; ++k){
             formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Chats[${k}]`, chats[k]);
         }
+    }
+
+    function updateTemplateChatDropdowns(chats) {
+        var groups = chats.filter(c => c.Type === 1);
+        var users = chats.filter(c => c.Type === 0);
+
+        $('form#addAlertTemplate_form select[name="Chats"]').each(function() {
+            var $select = $(this);
+            var currentSelected = ($select.val() || []).slice();
+
+            $select.find('option').not('.general-group-chat-mode').remove();
+
+            $select.append('<option data-divider="true"></option>');
+            $select.append('<option disabled>Groups</option>');
+            groups.forEach(function(chat) {
+                var isSelected = currentSelected.includes(chat.Id);
+                $select.append(`<option value="${chat.Id}" ${isSelected ? 'selected' : ''}>${chat.Name}</option>`);
+            });
+
+            $select.append('<option data-divider="true"></option>');
+            $select.append('<option disabled>Users</option>');
+            users.forEach(function(chat) {
+                var isSelected = currentSelected.includes(chat.Id);
+                $select.append(`<option value="${chat.Id}" ${isSelected ? 'selected' : ''}>${chat.Name}</option>`);
+            });
+
+            $select.selectpicker('refresh');
+        });
     }
 
 </script>
