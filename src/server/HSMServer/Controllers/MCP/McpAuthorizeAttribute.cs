@@ -13,7 +13,8 @@ namespace HSMServer.Controllers.MCP
     {
         public void OnAuthorization(AuthorizationFilterContext context)
         {
-            var keyValue = context.HttpContext.Request.Headers["Key"].FirstOrDefault();
+            var keyValue = context.HttpContext.Request.Headers["Key"].FirstOrDefault()
+                ?? context.HttpContext.Request.Query["key"].FirstOrDefault();
 
             if (string.IsNullOrEmpty(keyValue))
             {
