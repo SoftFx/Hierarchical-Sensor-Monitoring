@@ -73,7 +73,7 @@
             cache: false,
             async: true,
             success: function (viewData) {
-                $('#accessKeysTable').html(viewData);
+                $('#accessKeysTable').replaceWith(viewData);
             }
         });
     }
@@ -85,8 +85,8 @@
             cache: false,
             async: true,
             success: function (viewData) {
-                $('#accessKeysTable').html(viewData);
-                // "Keys not found" check
+                $('#accessKeysTable').replaceWith(viewData);
+                // "Keys not found" check - #accessTable is the parent container
                 if (document.querySelectorAll("#accessTable tr").length <= 1) {
                     $('#accessKeysTable').html("<div><h2><strong>Keys not found</strong></h2></div>");
                 }
