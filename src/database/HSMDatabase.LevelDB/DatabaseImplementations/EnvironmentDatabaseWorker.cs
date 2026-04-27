@@ -31,6 +31,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
+        private readonly object _lock = new();
 
 
         public EnvironmentDatabaseWorker(string name)
@@ -357,11 +358,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                var currentList = GetMcpAccessKeyList();
-                if (!currentList.Contains(id))
+                lock (_lock)
                 {
-                    currentList.Add(id);
-                    _database.Put(_mcpAccessKeyListKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+                    var currentList = GetMcpAccessKeyList();
+                    if (!currentList.Contains(id))
+                    {
+                        currentList.Add(id);
+                        _database.Put(_mcpAccessKeyListKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+                    }
                 }
             }
             catch (Exception e)
@@ -374,9 +378,12 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                var currentList = GetMcpAccessKeyList();
-                currentList.Remove(id);
-                _database.Put(_mcpAccessKeyListKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+                lock (_lock)
+                {
+                    var currentList = GetMcpAccessKeyList();
+                    currentList.Remove(id);
+                    _database.Put(_mcpAccessKeyListKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+                }
             }
             catch (Exception e)
             {
