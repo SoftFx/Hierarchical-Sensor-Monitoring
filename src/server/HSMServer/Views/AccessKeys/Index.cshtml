@@ -102,7 +102,10 @@
     function searchKey() {
         const keyToSearch = document.getElementById("searchKey").value;
         if (keyToSearch) {
-            history.pushState({ searchKey: keyToSearch }, '', '?searchKey=' + encodeURIComponent(keyToSearch));
+            // Avoid pushing duplicate history entries
+            if (!history.state || history.state.searchKey !== keyToSearch) {
+                history.pushState({ searchKey: keyToSearch }, '', '?searchKey=' + encodeURIComponent(keyToSearch));
+            }
         } else {
             history.replaceState({}, '', window.location.pathname);
         }
@@ -126,7 +129,7 @@
         document.getElementById("searchKey").value = "";
         document.getElementById("clearSearchBtn").style.display = "none";
         history.replaceState({}, '', window.location.pathname);
-        allProductsChanged();
+        fetchSearchResults('');
     }
     
     function createAccessKey() {
@@ -141,6 +144,15 @@
         const searchButton = document.getElementById('searchButton');
         const clearSearchBtn = document.getElementById('clearSearchBtn');
         const createAccessKeyButton = document.getElementById('createAccessKeyButton');
+        
+        // Handle initial page load with search query parameter
+        const params = new URLSearchParams(window.location.search);
+        const initialSearchKey = params.get('searchKey') || '';
+        if (initialSearchKey && searchInput) {
+            searchInput.value = initialSearchKey;
+            toggleClearButton();
+            fetchSearchResults(initialSearchKey);
+        }
         
         if (searchInput) {
             searchInput.addEventListener('keydown', function(e) {
