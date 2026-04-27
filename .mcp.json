@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "hsm": {
-      "type": "streamable-http",
-      "url": "https://localhost:44330/mcp?key=b0a1b0ac-71c4-43c7-a1e9-14f4a8aeccef"
-    }
-  }
-}
