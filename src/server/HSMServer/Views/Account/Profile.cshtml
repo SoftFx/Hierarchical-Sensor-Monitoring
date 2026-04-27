@@ -130,8 +130,15 @@
     </div>
 </div>
 
+@Html.AntiForgeryToken()
+
 <script>
     let deleteKeyId = null;
+
+    function getAntiForgeryToken() {
+        const input = document.querySelector('input[name="__RequestVerificationToken"]');
+        return input ? input.value : '';
+    }
 
     document.addEventListener('DOMContentLoaded', function() {
         loadMcpKeys();
@@ -213,7 +220,10 @@
 
         fetch('/api/account/mcpkeys', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': getAntiForgeryToken()
+            },
             body: JSON.stringify({ displayName: displayName, expirationTime: expirationTime })
         })
         .then(response => {
@@ -248,7 +258,8 @@
 
     function deleteKey() {
         fetch(`/api/account/mcpkeys/${deleteKeyId}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'RequestVerificationToken': getAntiForgeryToken() }
         })
         .then(response => {
             if (!response.ok && response.status !== 200) {

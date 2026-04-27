@@ -17,8 +17,11 @@ using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 
@@ -71,6 +74,8 @@ builder.Services.AddHsts(options =>
     options.IncludeSubDomains = true;
 });
 
+builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
+
 builder.Services.AddMvc()
                 .AddJsonOptions(options =>
                 {
@@ -84,6 +89,27 @@ builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.S
 
 builder.Services.AddApplicationServices(serverConfig)
                 .Configure<MonitoringOptions>(config.GetSection(nameof(serverConfig.MonitoringOptions)));
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("mcp", context =>
+    {
+        var key = context.Request.Headers["Key"].FirstOrDefault()
+                  ?? context.Request.Query["key"].FirstOrDefault()
+                  ?? context.Connection.RemoteIpAddress?.ToString()
+                  ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter(key,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+
+    options.RejectionStatusCode = 429;
+});
 
 builder.Services.Configure<HostOptions>(hostOptions =>
 {

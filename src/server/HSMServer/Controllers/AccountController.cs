@@ -224,6 +224,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost("api/account/mcpkeys")]
+        [ValidateAntiForgeryToken]
         public IActionResult CreateMcpAccessKey([FromBody] CreateMcpKeyRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.DisplayName))
@@ -257,6 +258,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpDelete("api/account/mcpkeys/{id}")]
+        [ValidateAntiForgeryToken]
         public IActionResult DeleteMcpAccessKey(Guid id)
         {
             var key = _userManager.GetMcpAccessKey(id);

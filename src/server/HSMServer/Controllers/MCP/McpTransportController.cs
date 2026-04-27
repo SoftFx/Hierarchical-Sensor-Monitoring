@@ -4,6 +4,7 @@ using HSMServer.Model.Authentication;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -19,6 +20,7 @@ namespace HSMServer.Controllers.MCP
     [ApiController]
     [Route("mcp")]
     [McpAuthorize]
+    [EnableRateLimiting("mcp")]
     [ResponseCache(NoStore = true)]
     public class McpTransportController : ControllerBase
     {

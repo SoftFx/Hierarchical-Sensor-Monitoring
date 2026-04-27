@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using HSMServer.Authentication;
 using HSMServer.Model.Authentication;
 using Microsoft.Extensions.Logging;
@@ -11,6 +12,7 @@ namespace HSMServer.Controllers.MCP
     [ApiController]
     [Route("api/mcp/v1")]
     [McpAuthorize]
+    [EnableRateLimiting("mcp")]
     public class MCPServerController : ControllerBase
     {
         private readonly IMcpToolService _toolService;
@@ -26,6 +28,7 @@ namespace HSMServer.Controllers.MCP
 
         [HttpGet("health")]
         [AllowAnonymous]
+        [DisableRateLimiting]
         public IActionResult Health()
         {
             return Ok(new { status = "healthy", timestamp = DateTime.UtcNow });

@@ -147,6 +147,8 @@ namespace HSMServer.ServiceExtensions
 
             applicationBuilder.UseAuthentication();
             applicationBuilder.UseAuthorization();
+            applicationBuilder.UseRateLimiter();
+            applicationBuilder.UseAntiforgery();
 
             applicationBuilder.UseMiddleware<TelemetryMiddleware>();
             applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
