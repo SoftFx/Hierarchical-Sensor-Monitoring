@@ -266,7 +266,7 @@
             let isTtlAlert = element.hasClass("ttlAction");
 
             $.ajax({
-                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?entityId=@Model.EntityId&isMain=${isMainAction}&isTtl=${isTtlAlert}`,
+                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?entityId=@Model.EntityId&isMain=${isMainAction}&isTtl=${isTtlAlert}`@Html.Raw(isTemplate ? " + '&folderId=' + $('#FolderId').val()" : ""),
                 cache: false
             }).done(function (viewData) {
                 actionsBlock.append(viewData);
