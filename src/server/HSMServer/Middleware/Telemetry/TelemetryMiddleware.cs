@@ -10,6 +10,14 @@ namespace HSMServer.Middleware.Telemetry
     {
         public async Task InvokeAsync(HttpContext context)
         {
+            var path = context.Request.Path.Value;
+
+            if (path.StartsWith("/api/mcp/") || path.StartsWith("/mcp"))
+            {
+                await _next(context);
+                return;
+            }
+
             var result = await TryRegisterPublicApiRequest(context);
 
             if (result)

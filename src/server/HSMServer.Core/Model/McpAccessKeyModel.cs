@@ -73,10 +73,15 @@ namespace HSMServer.Core.Model
                 return false;
             }
 
+            if (State == McpKeyState.Expired)
+            {
+                message = "Key expired.";
+                return false;
+            }
+
             if (ExpirationTime < DateTime.UtcNow)
             {
                 message = "Key expired.";
-                State = McpKeyState.Expired;
                 return false;
             }
 

@@ -121,7 +121,7 @@
                         <i class="fas fa-copy"></i> Copy
                     </button>
                 </div>
-                <p class="text-warning"><i class="fas fa-exclamation-triangle"></i> Save this key now. You won't be able to see it again!</p>
+                <p class="text-warning"><i class="fas fa-exclamation-triangle"></i> Keep this key secure. Do not share it publicly.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
@@ -216,21 +216,26 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ displayName: displayName, expirationTime: expirationTime })
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                document.getElementById('keyDisplayName').classList.add('is-invalid');
-                document.getElementById('displayNameError').textContent = data.error;
-            } else {
-                bootstrap.Modal.getInstance(document.getElementById('addKeyModal')).hide();
-                document.getElementById('newKeyValue').value = data.id;
-                var detailsModal = new bootstrap.Modal(document.getElementById('keyDetailsModal'));
-                detailsModal.show();
-                loadMcpKeys();
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => { throw { isValidationError: true, error: data.error || 'Failed to create key' }; });
             }
+            return response.json();
+        })
+        .then(data => {
+            bootstrap.Modal.getInstance(document.getElementById('addKeyModal')).hide();
+            document.getElementById('newKeyValue').value = data.id;
+            var detailsModal = new bootstrap.Modal(document.getElementById('keyDetailsModal'));
+            detailsModal.show();
+            loadMcpKeys();
         })
         .catch(error => {
-            alert('Failed to create key');
+            if (error && error.isValidationError) {
+                document.getElementById('keyDisplayName').classList.add('is-invalid');
+                document.getElementById('displayNameError').textContent = error.error;
+            } else {
+                alert('Failed to create key');
+            }
         });
     }
 
@@ -245,7 +250,12 @@
         fetch(`/api/account/mcpkeys/${deleteKeyId}`, {
             method: 'DELETE'
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok && response.status !== 200) {
+                throw new Error('Failed to delete key');
+            }
+            return response.json();
+        })
         .then(data => {
             bootstrap.Modal.getInstance(document.getElementById('deleteKeyModal')).hide();
             loadMcpKeys();
@@ -256,6 +266,17 @@
     }
 
     function copyKey() {
+        const keyValue = document.getElementById('newKeyValue').value;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(keyValue).catch(function() {
+                fallbackCopy();
+            });
+        } else {
+            fallbackCopy();
+        }
+    }
+
+    function fallbackCopy() {
         const keyInput = document.getElementById('newKeyValue');
         keyInput.select();
         document.execCommand('copy');

@@ -14,6 +14,7 @@ namespace HSMServer.Controllers.MCP
         public void OnAuthorization(AuthorizationFilterContext context)
         {
             var keyValue = context.HttpContext.Request.Headers["Key"].FirstOrDefault();
+
             if (string.IsNullOrEmpty(keyValue))
             {
                 context.Result = new UnauthorizedObjectResult(new { error = "Missing Key header" });
@@ -37,6 +38,12 @@ namespace HSMServer.Controllers.MCP
             if (mcpKey == null)
             {
                 context.Result = new UnauthorizedObjectResult(new { error = "Invalid Key" });
+                return;
+            }
+
+            if (!mcpKey.IsValid(out var validationMessage))
+            {
+                context.Result = new UnauthorizedObjectResult(new { error = validationMessage });
                 return;
             }
 
