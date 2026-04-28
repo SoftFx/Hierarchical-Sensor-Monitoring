@@ -338,13 +338,13 @@ namespace HSMServer.Core.Schedule
         public void WriteYaml(IEmitter emitter, object value, Type type)
         {
             var timeSpan = (TimeSpan)value;
-            emitter.Emit(new Scalar(timeSpan.ToString(@"hh\:mm")));
+            emitter.Emit(new Scalar(timeSpan.ToString(@"HH\:mm")));
         }
 
         public void WriteYaml(IEmitter emitter, object value, Type type, ObjectSerializer serializer)
         {
             var timeSpan = (TimeSpan)value;
-            emitter.Emit(new Scalar(timeSpan.ToString(@"hh\:mm")));
+            emitter.Emit(new Scalar(timeSpan.ToString(@"HH\:mm")));
         }
     }
 

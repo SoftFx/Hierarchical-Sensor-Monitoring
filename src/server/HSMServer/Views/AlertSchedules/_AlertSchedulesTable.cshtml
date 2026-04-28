@@ -10,6 +10,8 @@
         <tr>
             <th scope="col">Name</th>
             <th scope="col">TimeZone</th>
+            <th scope="col">Affected sensors</th>
+            <th scope="col">Actions</th>
         </tr>
     </thead>
     <tbody>
@@ -18,6 +20,7 @@
             <tr>
                 <td scope="row">@item.Name</td>
                 <td>@item.Timezone</td>
+                <td data-bs-toggle="tooltip" data-bs-html="true" data-bs-custom-class="alert-template-tooltip" title="@item.SensorsTooltip">@item.Sensors.Count</td>
                 <td class="text-end">
                     <div>
                         <button class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">

@@ -138,21 +138,6 @@ function refreshTreeHandler(e, data) {
             searchClientRefresh = false;
         }
 
-        //if (jQuery.isEmptyObject(prevState) && prevState !== undefined) {
-
-        //    let jstreeState = JSON.parse(localStorage.getItem('jstree'));
-        //    jstreeState.state.core.open.forEach((node) => {
-        //        $(this).jstree('open_node', node);
-        //    })
-
-        //    jstreeState.state.core.selected.forEach((node) => {
-        //        $(this).jstree('open_node', node);
-        //        $(this).jstree('select_node', node);
-        //    })
-
-        //    prevState = undefined;
-        //}
-
         if (!prevState || jQuery.isEmptyObject(prevState)) {
             console.log('refreshTreeHandler: restoring tree state from localStorage');
             const savedState = localStorage.getItem('jstree');
