@@ -698,3 +698,44 @@ input[type="search"]::-webkit-search-cancel-button {
 .alert-template-tooltip {
     --bs-tooltip-max-width: 800px !important;
 }
+
+.alert-templates-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.alert-templates-table th:nth-child(1),
+.alert-templates-table td:nth-child(1) {
+    width: calc((100% - 210px) * 0.4);
+}
+
+.alert-templates-table th:nth-child(2),
+.alert-templates-table td:nth-child(2) {
+    width: calc((100% - 210px) * 0.6);
+}
+
+.alert-templates-table th:nth-child(3),
+.alert-templates-table td:nth-child(3) {
+    width: 130px;
+}
+
+.alert-templates-table th:nth-child(4),
+.alert-templates-table td:nth-child(4) {
+    width: 80px;
+}
+
+.alert-template-cell-name {
+    display: block;
+    max-width: 25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.alert-template-cell-path {
+    display: block;
+    max-width: 40rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
