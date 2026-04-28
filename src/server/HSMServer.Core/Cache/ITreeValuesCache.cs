@@ -109,7 +109,7 @@ namespace HSMServer.Core.Cache
 
         List<AlertTemplateModel> GetAlertTemplateModels();
 
-        Task AddAlertTemplateAsync(AlertTemplateModel model, CancellationToken tocken = default);
+        Task<(bool Success, string Error)> AddAlertTemplateAsync(AlertTemplateModel model, CancellationToken tocken = default);
 
         AlertTemplateModel GetAlertTemplate(Guid id);
 

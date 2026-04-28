@@ -175,7 +175,11 @@ namespace HSMServer.Controllers
             if (ModelState.IsValid)
             {
                 var model = data.ToModel();
-                await _cache.AddAlertTemplateAsync(model);
+                var (success, error) = await _cache.AddAlertTemplateAsync(model);
+
+                if (!success)
+                    return Json(new { success = false, error = error });
+
                 return Ok();
             }
 

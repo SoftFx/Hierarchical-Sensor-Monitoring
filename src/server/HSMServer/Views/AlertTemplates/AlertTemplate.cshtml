@@ -112,6 +112,16 @@
                 if (!viewData){
                     window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))';
                 }
+                else if (typeof viewData === 'object' && viewData.success === false) {
+                    showConfirmationModal(
+                        'Failed to save template',
+                        viewData.error,
+                        () => {},
+                        () => { window.location.href = '@Html.Raw(Url.Action(nameof(AlertTemplatesController.Index), ViewConstants.AlertTemplatesController))'; },
+                        'Edit',
+                        'Discard'
+                    );
+                }
                 else {
                     $("#addAlertTemplate_form").html(viewData);
                     initForm();
