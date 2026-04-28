@@ -1226,9 +1226,12 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public async Task AddAlertTemplateAsync(AlertTemplateModel alertTemplateModel, CancellationToken token = default)
+        public async Task<(bool Success, string Error)> AddAlertTemplateAsync(AlertTemplateModel alertTemplateModel, CancellationToken token = default)
         {
             var products = GetProducts().Where(x => x.FolderId == alertTemplateModel.FolderId).ToList();
+
+            if (products.Count == 0)
+                return (false, "No products found in the selected folder.");
 
             var first = products.FirstOrDefault();
 
@@ -1243,6 +1246,8 @@ namespace HSMServer.Core.Cache
 
                 await ProcessRequestAsync(product.Id, request, ct);
             });
+
+            return (true, null);
         }
 
         private void AddAlertTemplate(AddAlertTemplateRequest request)
