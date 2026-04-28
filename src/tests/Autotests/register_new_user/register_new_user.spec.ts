@@ -8,6 +8,8 @@ test.beforeEach(async ({ page }) => {
    // Открываем страницу
   await login(page, admin_user, admin_user_password, apiUrl);
 
+  // Открываем dropdown Configuration
+  await page.getByRole('button', { name: 'Configuration' }).click();
   // Ждём перехода на Users
   await page.getByRole('link', { name: 'Users' }).click();
   await expect(page).toHaveURL(/.*Users/);
