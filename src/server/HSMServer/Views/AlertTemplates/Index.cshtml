@@ -22,7 +22,7 @@
                 </div>
             </div>
 
-<table class="table table-striped">
+<table class="table table-striped alert-templates-table">
   <thead>
     <tr>
       <th scope="col">Name</th>
@@ -35,7 +35,7 @@
       @foreach(var item in Model.Keys)
       {
       <tr>
-        <td scope="row">@item.Name</td>
+        <td scope="row"><span class="alert-template-cell-name" title="@item.Name">@item.Name</span></td>
         <td data-bs-toggle="tooltip" data-bs-html="true" data-bs-custom-class ="alert-template-tooltip" title="@{
                                     foreach (var alerts in item.DataAlerts.Values)
                                         foreach (var alert in alerts)
@@ -46,7 +46,7 @@
                                                         <br />
                                         }
                                 }">
-        @item.PathTemplate</td>
+        <span class="alert-template-cell-path" title="@item.PathTemplate">@item.PathTemplate</span></td>
         <td data-bs-toggle="tooltip" data-bs-html="true" data-bs-custom-class ="alert-template-tooltip" title="@{
                             foreach(var sensor in item.Sensors)
                             {
