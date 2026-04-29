@@ -183,7 +183,10 @@ namespace HSMServer.Core.Model.Policies
                     bool schedulePassed = true;
                     if (policy.ScheduleId.HasValue)
                     {
-                        schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, value.LastUpdateTime);
+                        if (value is BarBaseValue barValue)
+                            schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, barValue.OpenTime, barValue.CloseTime);
+                        else
+                            schedulePassed = _scheduleProvider.IsWorkingTime(policy.ScheduleId.Value, value.LastUpdateTime);
                     }
 
                     if (!schedulePassed)

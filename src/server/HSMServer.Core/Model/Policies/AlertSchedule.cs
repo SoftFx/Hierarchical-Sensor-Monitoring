@@ -60,14 +60,64 @@ namespace HSMServer.Core.Model.Policies
                 timeOfDay >= w.Start && timeOfDay < w.End) ?? false;
         }
 
+        public bool IsWorkingTime(DateTime startTime, DateTime endTime)
+        {
+            if (startTime >= endTime)
+                throw new ArgumentException("Start time must be less than end time", nameof(startTime));
+
+            var currentTime = ConvertUtcToLocalTime(startTime);
+            var end = ConvertUtcToLocalTime(endTime);
+
+            while (currentTime.Date <= end.Date)
+            {
+                var date = currentTime.Date;
+
+                var workingWindows = GetWorkingWindowsForDate(date);
+
+                if (workingWindows.Count != 0)
+                {
+                    var dayStart = currentTime;
+                    var dayEnd = currentTime.Date.AddDays(1);
+
+                    if (date == end.Date)
+                        dayEnd = end;
+
+                    foreach (var window in workingWindows)
+                    {
+                        var windowStart = date.Add(window.Start);
+                        var windowEnd = date.Add(window.End);
+
+                        if (dayStart < windowEnd && dayEnd > windowStart)
+                            return true;
+                    }
+                }
+
+                currentTime = currentTime.Date.AddDays(1);
+            }
+
+            return false;
+        }
+
         private DateTime ConvertUtcToLocalTime(DateTime utcDateTime)
         {
-            var timezone = TimeZoneInfo.FindSystemTimeZoneById(Timezone);
+            var timezone = TryGetTimeZone() ?? TimeZoneInfo.Utc;
             var utc = utcDateTime.Kind == DateTimeKind.Local
                 ? utcDateTime.ToUniversalTime()
                 : DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
 
             return TimeZoneInfo.ConvertTimeFromUtc(utc, timezone);
+        }
+
+        private TimeZoneInfo TryGetTimeZone()
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(Timezone);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                return null;
+            }
         }
 
         private DaySchedule GetDaySchedule(DayOfWeek dayOfWeek)

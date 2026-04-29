@@ -119,5 +119,6 @@ namespace HSMServer.Core.Cache
 
         Task RunProductsSelfDestroyAsync(CancellationToken token = default);
 
+        List<BaseSensorModel> GetSensorsByAlertSchedule(Guid id);
     }
 }
