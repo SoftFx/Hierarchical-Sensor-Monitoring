@@ -11,14 +11,15 @@ window.showConfirmationModal = function (title, body, okButtonAction, cancelButt
     setConfirmationModalOkButton(okButtonAction, okButton);
     setConfirmationModalCancelButton(cancelButtonAction, cancelButton);
 
-    $(`#${modalId}`).modal({
-        backdrop: 'static'
-    });
-    $(`#${modalId}`).modal('show');
+    const el = document.getElementById(modalId);
+    const modal = bootstrap.Modal.getOrCreateInstance(el, { backdrop: 'static' });
+    modal.show();
 }
 
 window.hideConfirmationModal = function () {
-    $(`#${modalId}`).modal('hide');
+    const el = document.getElementById(modalId);
+    const modal = bootstrap.Modal.getInstance(el);
+    if (modal) modal.hide();
 }
 
 
