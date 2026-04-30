@@ -719,12 +719,19 @@ namespace HSMServer.Controllers
         }
         
 
-        public IActionResult AddDataPolicy(byte type, Guid entityId)
+        public IActionResult AddDataPolicy(byte type, Guid entityId, Guid? folderId = null)
         {
             TryGetSelectedNode(entityId, out var entity);
 
             DataAlertViewModelBase viewModel = DataAlertViewModel.BuildAlert(type, entity);
             viewModel.Schedules = GetAlertSchedulesSelectList();
+
+            if (entity is null && folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
+            {
+                var folderChats = folder.TelegramChats;
+                foreach (var action in viewModel.Actions)
+                    action.AvailableChats.UnionWith(folderChats);
+            }
 
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
@@ -734,11 +741,13 @@ namespace HSMServer.Controllers
             return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(type));
         }
 
-        public IActionResult AddAlertAction(Guid entityId, bool isMain, bool isTtl)
+        public IActionResult AddAlertAction(Guid entityId, bool isMain, bool isTtl, Guid? folderId = null)
         {
             HashSet<Guid> chats = [];
             if (TryGetSelectedNode(entityId, out var entity))
                 entity.TryGetChats(out chats);
+            else if (folderId.HasValue && _folderManager.TryGetValue(folderId.Value, out var folder))
+                chats = folder.TelegramChats;
 
             return PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(isMain, isTtl, chats) { Icon = ActionViewModel.DefaultIcon });
         }

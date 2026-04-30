@@ -14,6 +14,7 @@ var searchServerRefresh = false;
 var emptySearch = false;
 var prevState = undefined;
 
+let isInitialLoad = true;
 let lastActivity = Date.now();
 let isCheckingActive = false;
 let wasNotified = false;
@@ -109,6 +110,11 @@ function refreshTreeHandler(e, data) {
         return;
     }
 
+    if (isInitialLoad) {
+        console.log('refreshTreeHandler: Skipping during initial load');
+        return;
+    }
+
     isRefreshing = true;
 
     try {
@@ -132,25 +138,34 @@ function refreshTreeHandler(e, data) {
             searchClientRefresh = false;
         }
 
-        if (jQuery.isEmptyObject(prevState) && prevState !== undefined) {
-
-            let jstreeState = JSON.parse(localStorage.getItem('jstree'));
-            jstreeState.state.core.open.forEach((node) => {
-                $(this).jstree('open_node', node);
-            })
-
-            jstreeState.state.core.selected.forEach((node) => {
-                $(this).jstree('open_node', node);
-                $(this).jstree('select_node', node);
-            })
-
+        if (!prevState || jQuery.isEmptyObject(prevState)) {
+            console.log('refreshTreeHandler: restoring tree state from localStorage');
+            const savedState = localStorage.getItem('jstree');
+            if (savedState) {
+                try {
+                    const jstreeState = JSON.parse(savedState);
+                    if (jstreeState.state && jstreeState.state.core) {
+                        jstreeState.state.core.open.forEach((node) => {
+                            $(this).jstree('open_node', node);
+                        });
+                        jstreeState.state.core.selected.forEach((node) => {
+                            $(this).jstree('open_node', node);
+                            $(this).jstree('select_node', node);
+                        });
+                    }
+                } catch (e) {
+                    console.error('Error parsing jstree state from localStorage', e);
+                }
+            }
             prevState = undefined;
         }
 
         if (emptySearch !== undefined && emptySearch === true) {
             let selectedIds = $('#jstree').jstree('get_selected');
-            if (selectedIds.length > 0)
-                $(`#${selectedIds[0]}`)[0].scrollIntoView();
+            if (selectedIds.length > 0) {
+                const el = document.getElementById(selectedIds[0]);
+                if (el) el.scrollIntoView();
+            }
 
             emptySearch = false;
             searchServerRefresh = false;
@@ -234,7 +249,12 @@ function initializeTreeInternal() {
                         console.error('Error restoring tree state:', e);
                     }
                 }
+                                else {
+                    console.warn('Tree state not found in localStorage');
+                }
             }
+
+            isInitialLoad = false;
         }, 300);
     });
 

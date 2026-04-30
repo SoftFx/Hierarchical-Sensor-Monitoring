@@ -10,6 +10,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Model.AlertSchedule;
 using System.Collections.Generic;
 using HSMServer.Core.Schedule;
+using HSMServer.Core.Cache;
 
 
 
@@ -31,6 +32,7 @@ namespace HSMServer.Controllers
 
         private readonly IAlertScheduleProvider _scheduleProvider;
         private readonly AlertScheduleParser _parser = new();
+        private readonly ITreeValuesCache _cache;
 
         static AlertSchedulesController()
         {
@@ -40,17 +42,16 @@ namespace HSMServer.Controllers
             _serializeOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
-        public AlertSchedulesController(IAlertScheduleProvider scheduleProvider, IUserManager users) : base(users)
+        public AlertSchedulesController(IAlertScheduleProvider scheduleProvider, IUserManager users, ITreeValuesCache cache) : base(users)
         {
             _scheduleProvider = scheduleProvider;
+            _cache = cache;
         }
 
         [HttpGet]
         public IActionResult Index()
         {
-            List<AlertScheduleViewModel> result = _scheduleProvider.GetAllSchedules().Select(x => new AlertScheduleViewModel(x)).ToList() ?? [];
-
-            return View(result);
+            return View(GetAlertScheduleList());
         }
 
         [HttpPost]
@@ -113,8 +114,21 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetAlertSchedulesTable()
         {
-            var list = _scheduleProvider.GetAllSchedules().Select(x => new AlertScheduleViewModel(x)).ToList();
-            return PartialView("_AlertSchedulesTable", list);
+            return PartialView("_AlertSchedulesTable", GetAlertScheduleList());
         }
-    }
+
+
+        private List<AlertScheduleViewModel> GetAlertScheduleList()
+        {
+
+            var list = _scheduleProvider.GetAllSchedules().Select(x => new AlertScheduleViewModel(x)).ToList();
+
+            foreach (var item in list)
+            {
+                item.Sensors = _cache.GetSensorsByAlertSchedule(item.Id);
+            }
+
+            return list;
+        }
+}
 }

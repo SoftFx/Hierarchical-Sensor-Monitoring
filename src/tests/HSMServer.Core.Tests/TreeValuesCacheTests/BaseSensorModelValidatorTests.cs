@@ -138,7 +138,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 sensor.Settings.TTL.TrySetValue(new TimeIntervalModel(ticks));
 
                 var baseValue = SensorValuesFactory.BuildValue(sensorType) with
-                { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
+                { Time = new DateTime(DateTime.UtcNow.Ticks - ticks) };
 
                 Assert.True(sensor.TryAddValue(baseValue));
                 Assert.True(sensor.CheckTimeout());
@@ -185,7 +185,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
                 var baseValue = SensorValuesFactory.BuildValue(sensorType) with
                 {
-                    ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - TestTicks),
+                    Time = new DateTime(DateTime.UtcNow.Ticks - TestTicks),
                     Status = status
                 };
 

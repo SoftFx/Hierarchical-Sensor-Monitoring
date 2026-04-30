@@ -1,6 +1,8 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
 using HSMServer.Core.DataLayer;
+using NLog;
+using System;
 using System.Threading.Tasks;
 using HSMServer.Core.TreeStateSnapshot.States;
 
@@ -8,6 +10,8 @@ namespace HSMServer.Core.TreeStateSnapshot
 {
     public sealed class TreeStateSnapshot : ITreeStateSnapshot
     {
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
         private readonly StateCollection<LastSensorState, SensorStateEntity> _sensors = new();
         private readonly StateCollection<LastKeyState, LastKeyStateEntity> _keys = new();
         private readonly ISnapshotDatabase _db;
@@ -35,8 +39,9 @@ namespace HSMServer.Core.TreeStateSnapshot
 
                     IsFinal = node.IsFinal;
                 }
-                catch 
+                catch (Exception ex)
                 {
+                    _logger.Error(ex, "Failed to deserialize tree state snapshot. Starting with empty state.");
                     HasData = false;
                 }
             }

@@ -3,10 +3,6 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
 
 jobs:
   claude-review:
@@ -16,13 +12,27 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Claude Code Review
-        uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          base_branch: master
+          claude_args: --allowedTools "Bash(gh pr comment*),Bash(gh pr diff*),Bash(gh pr view*),Bash(git diff*),Bash(git log*),Write"
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            Branch: ${{ github.head_ref }} -> ${{ github.base_ref }}
+
+            Review this pull request. Focus on:
+            - Bugs and logic errors
+            - Security vulnerabilities
+            - Code quality and maintainability
+            - Performance issues
+
+            Use `git diff origin/${{ github.base_ref }}...origin/${{ github.head_ref }}` to see the changes.
+            Write your review to review_output.md, then post it:
+            gh pr comment ${{ github.event.pull_request.number }} --body-file review_output.md

@@ -1226,9 +1226,12 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public async Task AddAlertTemplateAsync(AlertTemplateModel alertTemplateModel, CancellationToken token = default)
+        public async Task<(bool Success, string Error)> AddAlertTemplateAsync(AlertTemplateModel alertTemplateModel, CancellationToken token = default)
         {
             var products = GetProducts().Where(x => x.FolderId == alertTemplateModel.FolderId).ToList();
+
+            if (products.Count == 0)
+                return (false, "No products found in the selected folder.");
 
             var first = products.FirstOrDefault();
 
@@ -1243,6 +1246,8 @@ namespace HSMServer.Core.Cache
 
                 await ProcessRequestAsync(product.Id, request, ct);
             });
+
+            return (true, null);
         }
 
         private void AddAlertTemplate(AddAlertTemplateRequest request)
@@ -1836,6 +1841,9 @@ namespace HSMServer.Core.Cache
 
         private void MigrateDatabseV2()
         {
+            var success = 0;
+            var failed = 0;
+
             foreach ((byte[] key, byte[] value) in _database.MigrateDatabaseV2())
             {
                 var keyArr = Encoding.UTF8.GetString(key).Split("_");
@@ -1851,8 +1859,10 @@ namespace HSMServer.Core.Cache
                     {
                         val = sensor.ConvertFromJson(Encoding.UTF8.GetString(value));
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Error(ex, $"Failed to deserialize sensor value during V2 migration. SensorId = {sensorId}");
+                        failed++;
                         continue;
                     }
 
@@ -1860,8 +1870,15 @@ namespace HSMServer.Core.Cache
                     {
                         _database.AddSensorValue(sensorId, val);
                     }
+
+                    success++;
                 }
             }
+
+            if (failed > 0)
+                _logger.Warn($"V2 migration completed with errors: {success} records migrated, {failed} records skipped due to deserialization errors.");
+            else
+                _logger.Info($"V2 migration completed successfully: {success} records migrated.");
         }
 
         private void ApplyAccessKeys(List<AccessKeyEntity> entities)
@@ -2292,5 +2309,23 @@ namespace HSMServer.Core.Cache
             _cache.TryRemove(product.Id, out var value);
         }
 
+        public List<BaseSensorModel> GetSensorsByAlertSchedule(Guid id)
+        {
+            var result = new List<BaseSensorModel>();
+
+            foreach (var sensor in _sensorsById.Values)
+            {
+                if (sensor.Policies.TimeToLive?.ScheduleId == id)
+                {
+                    result.Add(sensor);
+                    continue;
+                }
+
+                if (sensor.Policies.Any(policy => policy.ScheduleId == id))
+                    result.Add(sensor);
+            }
+
+            return result;
+        }
     }
 }

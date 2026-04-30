@@ -94,35 +94,36 @@
                                         </li>
 
 
-                                        <li class="nav-item dropdown">
+                                                                                <li class="nav-item dropdown">
                                             <a class="nav-link dropdown-toggle" href="#" id="optionsDropdown" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                                 Configuration
                                             </a>
                                             <ul class="dropdown-menu" aria-labelledby="optionsDropdown">
                                                 <li>
                                                     <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AccessKeysController)">
-                                                        Access keys
+                                                        <i class="fas fa-key me-2"></i>Access keys
                                                     </a>
                                                 </li>
                                                 @if (UserRoleHelper.IsUsersPageAllowed((User)Context.User))
                                                 {
                                                     <li>
                                                         <a class="dropdown-item" href="@Url.Action(ViewConstants.UsersAction, ViewConstants.AccountController)">
-                                                            Users
+                                                            <i class="fas fa-users me-2"></i>Users
                                                         </a>
                                                     </li>
                                                 }
+                                                <li><hr class="dropdown-divider"></li>
                                                 @if (UserRoleHelper.IsConfigurationPageAllowed((User)Context.User))
                                                 {
                                                     <li>
                                                         <a class="dropdown-item" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ConfigurationController)">
-                                                            Settings
+                                                            <i class="fas fa-cog me-2"></i>Settings
                                                         </a>
                                                     </li>
                                                 }
                                                 <li>
                                                     <a class="dropdown-item" target="_blank" href="https://@(Context.Request.Host.Value.Replace("44333", "44330") + ViewConstants.ApiSwagger)">
-                                                        API
+                                                        <i class="fas fa-plug me-2"></i>API
                                                     </a>
                                                 </li>
                                             </ul>

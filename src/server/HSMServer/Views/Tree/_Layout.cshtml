@@ -155,11 +155,11 @@
         container: document.getElementById('accessKeys_modal')
     });
 
-    setTimeout(updateTreeTimer, getCurrentUpdateTreeInterval());
-
-    document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', () => {
 
         initializeTree();
+
+        setTimeout(updateTreeTimer, getCurrentUpdateTreeInterval());
 
         scrollHandlers.restoreTreeScroll();
 

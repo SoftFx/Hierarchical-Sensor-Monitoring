@@ -65,6 +65,21 @@ namespace HSMServer.Model.History
 
         public SensorType SensorType => _model.Type;
 
+        public string ValueColumnName
+        {
+            get
+            {
+                if (_model.Type != SensorType.Rate || !_model.DisplayUnit.HasValue)
+                    return "Value";
+
+                var displayName = _model.DisplayUnit.Value.GetDisplayName();
+
+                return _model.DisplayUnit.Value == RateDisplayUnit.PerSecond
+                    ? displayName
+                    : $"{displayName} / ({RateDisplayUnit.PerSecond.GetDisplayName()})";
+            }
+        }
+
 
         internal HistoryTableViewModel(BaseSensorModel model)
         {

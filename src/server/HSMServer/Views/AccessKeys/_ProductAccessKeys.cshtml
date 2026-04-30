@@ -17,8 +17,10 @@
 <input class="d-none" id='accessKey_prodcutId' value="@Model.EncodedId"/>
 <input class="d-none" id='accessKey_productName' value="@Model.Name"/>
 <div class="container-fluid">
-    <div class="table-responsive overflow-visible">
-        @await Html.PartialAsync("_AllAccessKeys",new AccessKeyTableViewModel() { Keys = Model.GetAccessKeys()})
+    <div style="overflow-x: auto;">
+        <div style="min-width: 900px;">
+            @await Html.PartialAsync("_AllAccessKeys",new AccessKeyTableViewModel() { Keys = Model.GetAccessKeys()})
+        </div>
     </div>
 
 

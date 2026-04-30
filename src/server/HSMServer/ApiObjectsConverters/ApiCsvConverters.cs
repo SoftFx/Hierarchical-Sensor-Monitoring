@@ -61,7 +61,7 @@ namespace HSMServer.ApiObjectsConverters
             NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
         };
 
-        private static readonly Func<BaseValue, string> _baseLastUpdateLambda = value => value.LastReceivingTime is null ? nameof(BaseValue.ReceivingTime) : nameof(BaseValue.LastReceivingTime);
+        private static readonly Func<BaseValue, string> _baseLastUpdateLambda = value => value.LastReceivingTime is null ? nameof(BaseValue.Time) : nameof(BaseValue.LastReceivingTime);
 
         private static readonly Dictionary<Header, ExportOptions> _simpleSensorHeader = new()
         {

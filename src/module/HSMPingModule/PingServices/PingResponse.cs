@@ -6,7 +6,7 @@ namespace HSMPingModule.PingServices;
 
 internal record PingResponse
 {
-    private const double Milleseconds = 1000;
+    private const double MillisecondsInSecond = 1000;
 
     private readonly string _str;
 
@@ -24,13 +24,13 @@ internal record PingResponse
         {
             Status = SensorStatus.Ok;
             Comment = nameof(SensorStatus.Ok);
-            Value = reply.RoundtripTime / Milleseconds;
+            Value = reply.RoundtripTime / MillisecondsInSecond;
         }
         else
         {
             Status = SensorStatus.Error;
             Comment = reply.Status.ToString();
-            Value = reply.RoundtripTime / Milleseconds;
+            Value = 0;
         }
 
         _str = BuildStrState();
@@ -40,8 +40,7 @@ internal record PingResponse
     {
         Status = SensorStatus.Error;
         Comment = exception.Message;
-        // Value = double.NaN; TODO: should be uncomment after chart fixes
-        Value = 0;
+        Value = 0; // TODO: replace with double.NaN after chart fixes
 
         _str = BuildStrState();
     }
