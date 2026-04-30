@@ -73,10 +73,9 @@ namespace HSMServer.Model.History
                     return "Value";
 
                 var displayName = _model.DisplayUnit.Value.GetDisplayName();
+                var perSecName = RateDisplayUnit.PerSecond.GetDisplayName();
 
-                return _model.DisplayUnit.Value == RateDisplayUnit.PerSecond
-                    ? displayName
-                    : $"{displayName} / ({RateDisplayUnit.PerSecond.GetDisplayName()})";
+                return $"Value ({displayName} / {perSecName})";
             }
         }
 
