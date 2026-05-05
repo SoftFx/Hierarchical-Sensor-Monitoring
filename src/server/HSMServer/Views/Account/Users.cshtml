@@ -34,6 +34,7 @@
     .member-list { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
     .products-more-link { font-size: 0.75rem; color: #3b82f6; text-decoration: none; cursor: pointer; line-height: 2; white-space: nowrap; }
     .products-more-link:hover { text-decoration: underline; }
+    .modal-password-field { -webkit-text-security: disc; -moz-text-security: disc; text-security: disc; }
 </style>
 
 <div class="members-container">
@@ -74,9 +75,10 @@
             for (var i = 0; i < Model.Count; i++)
             {
                 var userItem = Model[i];
-                var initials = userItem.Username != null && userItem.Username.Length >= 2
-                    ? userItem.Username.Trim().Substring(0, 2).ToUpper()
-                    : (userItem.Username ?? "??").ToUpper();
+                var trimmed = userItem.Username?.Trim() ?? string.Empty;
+                var initials = trimmed.Length >= 2 ? trimmed.Substring(0, 2).ToUpper()
+                    : trimmed.Length == 1 ? trimmed.ToUpper()
+                    : "??";
                 var avatarColors = new[] { "#9ca3af", "#8b95b0", "#7a87c5", "#6979da", "#586bef", "#4659f5", "#3b4de0", "#2d3fc7" };
                 var avatarColor = avatarColors[(userItem.UserId.GetHashCode() & 0x7FFFFFFF) % avatarColors.Length];
 
@@ -118,8 +120,8 @@
                                             products?.TryGetValue(r.Item1, out n);
                                             return (n ?? r.Item1.ToString()) + " (" + r.Item2 + ")";
                                         }));
-                                        <a href="#" class="products-more-link" data-bs-toggle="popover" data-bs-trigger="focus" tabindex="0"
-                                           data-bs-html="true" data-bs-content="@allProducts">+@(userItem.ProductsRoles.Count - limit) more</a>
+                                        <a href="javascript:void(0)" class="products-more-link" tabindex="0"
+                                           data-bs-content="@allProducts">+@(userItem.ProductsRoles.Count - limit) more</a>
                                     }
                                 }
                             }
@@ -159,20 +161,23 @@
             </div>
             <div class="modal-body">
             <div id="modalError" class="alert alert-danger d-none"></div>
-            <form autocomplete="off" onsubmit="return false;">
                 <div class="mb-3">
-                    <label for="modalUsername" class="form-label">Username</label>
+                    <span class="form-label">Username</span>
                     <input id="modalUsername" type="text" class="form-control" autocomplete="off" readonly onfocus="this.removeAttribute('readonly');" />
                 </div>
                 <div class="mb-3">
-                    <label for="modalPassword" class="form-label">Password</label>
-                    <input id="modalPassword" type="text" class="form-control" autocomplete="off" readonly onfocus="this.removeAttribute('readonly');" style="-webkit-text-security: disc;" />
+                    <span class="form-label">Password</span>
+                    <div class="position-relative">
+                        <input id="modalPassword" type="text" class="form-control modal-password-field pe-5" autocomplete="off" readonly onfocus="this.removeAttribute('readonly');" placeholder="Enter new password" />
+                        <button id="togglePassword" type="button" class="btn btn-link position-absolute top-50 end-0 translate-middle-y text-secondary text-decoration-none p-0 me-2" style="font-size: 0.875rem;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="form-check">
                     <input id="modalIsAdmin" type="checkbox" class="form-check-input" />
-                    <label for="modalIsAdmin" class="form-check-label">Admin</label>
+                    <span class="form-check-label">Admin</span>
                 </div>
-            </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" style="min-width: 100px;" data-bs-dismiss="modal">Cancel</button>
@@ -211,7 +216,7 @@
 
     var userModal = new bootstrap.Modal(document.getElementById('modalUser'));
     var modalMode = 'create';
-    var editUserId = null;
+    var passwordChanged = false;
 
     var usernameRegex = /^[a-zA-Z0-9._@@+-]+$/;
 
@@ -222,14 +227,45 @@
         $('#modalError').addClass('d-none');
     }
 
+    function updateTogglePassword() {
+        var val = $('#modalPassword').val();
+        if (val) {
+            $('#togglePassword').removeClass('d-none');
+            $('#modalPassword').addClass('modal-password-field');
+            $('#togglePassword').find('i').removeClass('fa-eye-slash').addClass('fa-eye');
+        } else {
+            $('#togglePassword').addClass('d-none');
+            $('#modalPassword').removeClass('modal-password-field');
+            $('#togglePassword').find('i').removeClass('fa-eye-slash').addClass('fa-eye');
+        }
+    }
+
+    $('#modalPassword').on('input', function () {
+        passwordChanged = true;
+        updateTogglePassword();
+    });
+
+    $('#togglePassword').on('click', function () {
+        var input = $('#modalPassword');
+        var icon = $(this).find('i');
+        if (input.hasClass('modal-password-field')) {
+            input.removeClass('modal-password-field');
+            icon.removeClass('fa-eye').addClass('fa-eye-slash');
+        } else {
+            input.addClass('modal-password-field');
+            icon.removeClass('fa-eye-slash').addClass('fa-eye');
+        }
+    });
+
     // Add member
     $('#toggleAddForm').on('click', function () {
         modalMode = 'create';
-        editUserId = null;
+        passwordChanged = false;
         hideModalError();
         $('#modalUserLabel').text('Add member');
         $('#modalUsername').val('').prop('disabled', false);
         $('#modalPassword').val('');
+        updateTogglePassword();
         $('#modalIsAdmin').prop('checked', false);
         $('#modalSaveButton').text('Create');
         userModal.show();
@@ -238,13 +274,14 @@
     // Edit member
     $('[id^=change_]').on('click', function () {
         modalMode = 'edit';
-        editUserId = $(this).data('userid');
         var username = $(this).data('username');
         var isAdmin = $(this).attr('data-isadmin') === 'true';
+        passwordChanged = false;
         hideModalError();
         $('#modalUserLabel').text('Edit member');
         $('#modalUsername').val(username).prop('disabled', true);
-        $('#modalPassword').val('**************');
+        $('#modalPassword').val('');
+        updateTogglePassword();
         document.getElementById('modalIsAdmin').checked = isAdmin;
         $('#modalSaveButton').text('Save');
         userModal.show();
@@ -281,12 +318,12 @@
                 document.location.reload();
             });
         } else {
-            if (password && password !== '**************' && password.length < 8) {
+            if (passwordChanged && password.length < 8) {
                 showModalError('Password min length is 8 characters.');
                 return;
             }
 
-            var actualPassword = (password === '**************') ? '' : password;
+            var actualPassword = passwordChanged ? password : '';
             var data = createData(username, actualPassword, isAdmin, null);
             $.ajax({
                 type: 'POST',
@@ -310,8 +347,8 @@
         var userId = this.id.substring('delete_'.length);
         var username = this.name;
 
-        $('#modalDeleteBody').empty();
-        $('#modalDeleteBody').append('Do you really want to remove "' + username.substring(0, 100) + '" user?');
+        $('#modalDeleteBody').empty()
+            .append(document.createTextNode('Do you really want to remove "' + username.substring(0, 100) + '" user?'));
 
         var deleteModal = new bootstrap.Modal(document.getElementById('modalDelete'));
         deleteModal.show();
@@ -355,11 +392,22 @@
     });
 
     $('.products-more-link').each(function () {
-        new bootstrap.Popover(this, {
+        var el = this;
+        new bootstrap.Popover(el, {
             html: true,
             trigger: 'focus',
             placement: 'left',
-            sanitize: false
+            content: function () {
+                var raw = el.getAttribute('data-bs-content');
+                var div = document.createElement('div');
+                div.textContent = raw;
+                return div.innerHTML.replace(/&lt;br\/&gt;/g, '<br/>');
+            }
         });
+    });
+
+    $('.products-more-link').on('click', function (e) {
+        e.preventDefault();
+        this.focus();
     });
 </script>
