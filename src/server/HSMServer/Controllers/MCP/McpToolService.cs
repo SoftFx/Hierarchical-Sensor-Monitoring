@@ -6,6 +6,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
+using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.DataAlerts;
@@ -14,6 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
@@ -26,15 +28,17 @@ namespace HSMServer.Controllers.MCP
         private readonly TreeViewModel _tree;
         private readonly IAlertScheduleProvider _scheduleProvider;
         private readonly IUserManager _userManager;
+        private readonly IFolderManager _folders;
         private readonly ILogger<McpToolService> _logger;
 
         public McpToolService(ITreeValuesCache cache, TreeViewModel tree, IAlertScheduleProvider scheduleProvider,
-            IUserManager userManager, ILogger<McpToolService> logger)
+            IUserManager userManager, IFolderManager folders, ILogger<McpToolService> logger)
         {
             _cache = cache;
             _tree = tree;
             _scheduleProvider = scheduleProvider;
             _userManager = userManager;
+            _folders = folders;
             _logger = logger;
         }
 
@@ -56,7 +60,12 @@ namespace HSMServer.Controllers.MCP
                 new("get_alert", "Get alert details", new { alertId = "" }, new[] { "alertId" }),
                 new("create_alert", "Create a new alert for a sensor", new { sensorId = "", condition = "", property = "", targetValue = "", combination = "", isEnabled = false, template = "", icon = "", triggerStatus = "", confirmationPeriod = "", repeatMode = "", instantSend = false, scheduleTime = "", destinationMode = "", alertScheduleId = "" }, new[] { "sensorId" }),
                 new("update_alert", "Update an existing alert", new { alertId = "", condition = "", property = "", targetValue = "", combination = "", isEnabled = false, template = "", icon = "", triggerStatus = "", confirmationPeriod = "", repeatMode = "", instantSend = false, scheduleTime = "", destinationMode = "", alertScheduleId = "" }, new[] { "alertId" }),
-                new("delete_alert", "Delete an alert", new { alertId = "" }, new[] { "alertId" })
+                new("delete_alert", "Delete an alert", new { alertId = "" }, new[] { "alertId" }),
+                new("list_alert_templates", "List all alert templates, optionally filtered by folder", new { folderId = "" }),
+                new("get_alert_template", "Get alert template details", new { templateId = "" }, new[] { "templateId" }),
+                new("create_alert_template", "Create a new alert template", new { name = "", path = "", folderId = "", sensorType = "" }, new[] { "name", "path", "folderId" }),
+                new("update_alert_template", "Update an existing alert template", new { templateId = "", name = "", path = "", folderId = "", sensorType = "" }, new[] { "templateId" }),
+                new("delete_alert_template", "Delete an alert template", new { templateId = "" }, new[] { "templateId" })
             };
         }
 
@@ -77,6 +86,8 @@ namespace HSMServer.Controllers.MCP
                 "delete_schedule" => DeleteSchedule(user, args),
                 "list_alerts" => ListAlerts(user, args),
                 "get_alert" => GetAlert(user, args),
+                "list_alert_templates" => ListAlertTemplates(user, args),
+                "get_alert_template" => GetAlertTemplate(user, args),
                 _ => new { error = $"Unknown tool: {toolName}" }
             };
         }
@@ -92,6 +103,9 @@ namespace HSMServer.Controllers.MCP
                 "create_alert" => await CreateAlert(user, args),
                 "update_alert" => await UpdateAlert(user, args),
                 "delete_alert" => await DeleteAlert(user, args),
+                "create_alert_template" => await CreateAlertTemplate(user, args),
+                "update_alert_template" => await UpdateAlertTemplate(user, args),
+                "delete_alert_template" => await DeleteAlertTemplate(user, args),
                 _ => ExecuteTool(toolName, user, args)
             };
         }
@@ -561,6 +575,236 @@ namespace HSMServer.Controllers.MCP
             }
 
             return new { error = "Alert not found" };
+        }
+
+
+        public object ListAlertTemplates(User user, Dictionary<string, object> args)
+        {
+            var folderIdStr = args?.GetValueOrDefault("folderId")?.ToString();
+
+            var templates = _cache.GetAlertTemplateModels()
+                .Where(t => HasAccessToFolder(user, t.FolderId));
+
+            if (!string.IsNullOrEmpty(folderIdStr) && Guid.TryParse(folderIdStr, out var folderId))
+            {
+                if (!HasAccessToFolder(user, folderId))
+                    return new { error = "Access denied: folder not available" };
+
+                templates = templates.Where(t => t.FolderId == folderId);
+            }
+
+            return templates.Select(t => new
+            {
+                id = t.Id,
+                name = t.Name,
+                path = t.Path,
+                sensorType = t.GetSensorType()?.ToString() ?? "AnyType",
+                folderId = t.FolderId,
+                policyCount = t.Policies?.Count ?? 0,
+                hasTTLPolicy = t.TTLPolicy != null
+            }).ToList();
+        }
+
+        public object GetAlertTemplate(User user, Dictionary<string, object> args)
+        {
+            var templateId = args?["templateId"]?.ToString();
+            if (string.IsNullOrEmpty(templateId))
+                return new { error = "templateId is required" };
+
+            if (!Guid.TryParse(templateId, out var guid))
+                return new { error = "Invalid templateId format" };
+
+            var template = _cache.GetAlertTemplate(guid);
+            if (template == null)
+                return new { error = "Alert template not found" };
+
+            if (!HasAccessToFolder(user, template.FolderId))
+                return new { error = "Access denied" };
+
+            return new
+            {
+                id = template.Id,
+                name = template.Name,
+                path = template.Path,
+                sensorType = template.GetSensorType()?.ToString() ?? "AnyType",
+                folderId = template.FolderId,
+                policies = template.Policies?.Select(p => p.ToString()).ToList() ?? [],
+                hasTTLPolicy = template.TTLPolicy != null
+            };
+        }
+
+        public async Task<object> CreateAlertTemplate(User user, Dictionary<string, object> args)
+        {
+            var name = args?["name"]?.ToString();
+            var path = args?["path"]?.ToString();
+            var folderIdStr = args?["folderId"]?.ToString();
+
+            if (string.IsNullOrEmpty(name))
+                return new { error = "name is required" };
+
+            if (string.IsNullOrEmpty(path))
+                return new { error = "path is required" };
+
+            if (string.IsNullOrEmpty(folderIdStr) || !Guid.TryParse(folderIdStr, out var folderId))
+                return new { error = "folderId is required and must be a valid GUID" };
+
+            if (!HasAccessToFolder(user, folderId))
+                return new { error = "Access denied: folder not available" };
+
+            var sensorTypeStr = args?.GetValueOrDefault("sensorType")?.ToString();
+            var sensorType = ParseSensorType(sensorTypeStr);
+
+            var tempModel = new AlertTemplateModel();
+            if (!tempModel.TryApplyPathTemplate(path, out var pathError))
+                return new { error = $"Invalid path template: {pathError}" };
+
+            if (_cache.GetAlertTemplateModels().Any(x => x.Name == name))
+                return new { error = $"Alert template with name '{name}' already exists" };
+
+            var model = new AlertTemplateModel
+            {
+                Id = Guid.NewGuid(),
+                Name = name,
+                Path = path,
+                SensorType = sensorType,
+                FolderId = folderId,
+                Policies = [],
+            };
+            model.TryApplyPathTemplate(path, out _);
+
+            await _cache.AddAlertTemplateAsync(model, CancellationToken.None);
+
+            _logger.LogInformation("MCP: Alert template {TemplateId} created by user {User}", model.Id, user.Name);
+
+            return new
+            {
+                id = model.Id,
+                name = model.Name,
+                path = model.Path,
+                sensorType = model.GetSensorType()?.ToString() ?? "AnyType",
+                folderId = model.FolderId,
+                message = "Alert template created successfully"
+            };
+        }
+
+        public async Task<object> UpdateAlertTemplate(User user, Dictionary<string, object> args)
+        {
+            var templateId = args?["templateId"]?.ToString();
+            if (string.IsNullOrEmpty(templateId))
+                return new { error = "templateId is required" };
+
+            if (!Guid.TryParse(templateId, out var guid))
+                return new { error = "Invalid templateId format" };
+
+            var existing = _cache.GetAlertTemplate(guid);
+            if (existing == null)
+                return new { error = "Alert template not found" };
+
+            if (!HasAccessToFolder(user, existing.FolderId))
+                return new { error = "Access denied" };
+
+            var name = args?.GetValueOrDefault("name")?.ToString();
+            var path = args?.GetValueOrDefault("path")?.ToString();
+            var folderIdStr = args?.GetValueOrDefault("folderId")?.ToString();
+            var sensorTypeStr = args?.GetValueOrDefault("sensorType")?.ToString();
+
+            Guid? newFolderId = null;
+            if (!string.IsNullOrEmpty(folderIdStr) && Guid.TryParse(folderIdStr, out var fid))
+                newFolderId = fid;
+
+            if (newFolderId.HasValue && !HasAccessToFolder(user, newFolderId.Value))
+                return new { error = "Access denied: new folder not available" };
+
+            var newName = !string.IsNullOrEmpty(name) ? name : existing.Name;
+            if (!string.IsNullOrEmpty(name) && _cache.GetAlertTemplateModels().Any(x => x.Name == newName && x.Id != existing.Id))
+                return new { error = $"Alert template with name '{newName}' already exists" };
+
+            var newPath = !string.IsNullOrEmpty(path) ? path : existing.Path;
+
+            var tempModel = new AlertTemplateModel();
+            if (!tempModel.TryApplyPathTemplate(newPath, out var pathError))
+                return new { error = $"Invalid path template: {pathError}" };
+
+            var updated = new AlertTemplateModel
+            {
+                Id = existing.Id,
+                Name = newName,
+                Path = newPath,
+                SensorType = !string.IsNullOrEmpty(sensorTypeStr) ? ParseSensorType(sensorTypeStr) : existing.SensorType,
+                FolderId = newFolderId ?? existing.FolderId,
+                Policies = existing.Policies,
+                TTLPolicy = existing.TTLPolicy,
+                TTL = existing.TTL,
+            };
+            updated.TryApplyPathTemplate(updated.Path, out _);
+
+            await _cache.AddAlertTemplateAsync(updated, CancellationToken.None);
+
+            _logger.LogInformation("MCP: Alert template {TemplateId} updated by user {User}", guid, user.Name);
+
+            return new
+            {
+                id = updated.Id,
+                name = updated.Name,
+                path = updated.Path,
+                sensorType = updated.GetSensorType()?.ToString() ?? "AnyType",
+                folderId = updated.FolderId,
+                message = "Alert template updated successfully"
+            };
+        }
+
+        public async Task<object> DeleteAlertTemplate(User user, Dictionary<string, object> args)
+        {
+            var templateId = args?["templateId"]?.ToString();
+            if (string.IsNullOrEmpty(templateId))
+                return new { error = "templateId is required" };
+
+            if (!Guid.TryParse(templateId, out var guid))
+                return new { error = "Invalid templateId format" };
+
+            var existing = _cache.GetAlertTemplate(guid);
+            if (existing == null)
+                return new { error = "Alert template not found" };
+
+            if (!HasAccessToFolder(user, existing.FolderId))
+                return new { error = "Access denied" };
+
+            await _cache.RemoveAlertTemplateAsync(guid, CancellationToken.None);
+
+            _logger.LogInformation("MCP: Alert template {TemplateId} deleted by user {User}", guid, user.Name);
+
+            return new { message = "Alert template deleted successfully" };
+        }
+
+
+        private static bool HasAccessToFolder(User user, Guid folderId)
+        {
+            if (user == null)
+                return false;
+
+            return user.IsFolderAvailable(folderId);
+        }
+
+        private static byte ParseSensorType(string sensorTypeStr)
+        {
+            if (string.IsNullOrEmpty(sensorTypeStr))
+                return AlertTemplateModel.AnyType;
+
+            if (byte.TryParse(sensorTypeStr, out var byteVal))
+                return byteVal;
+
+            return sensorTypeStr.ToLower() switch
+            {
+                "any" or "anytype" => AlertTemplateModel.AnyType,
+                "boolean" or "bool" => (byte)SensorType.Boolean,
+                "integer" or "int" => (byte)SensorType.Integer,
+                "double" => (byte)SensorType.Double,
+                "string" or "str" => (byte)SensorType.String,
+                "integerbar" or "intbar" => (byte)SensorType.IntegerBar,
+                "doublebar" => (byte)SensorType.DoubleBar,
+                "file" => (byte)SensorType.File,
+                _ => AlertTemplateModel.AnyType
+            };
         }
 
 

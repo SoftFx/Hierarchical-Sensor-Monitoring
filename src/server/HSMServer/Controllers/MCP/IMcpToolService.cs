@@ -23,6 +23,12 @@ namespace HSMServer.Controllers.MCP
         Task<object> UpdateAlert(User user, Dictionary<string, object> args);
         Task<object> DeleteAlert(User user, Dictionary<string, object> args);
 
+        object ListAlertTemplates(User user, Dictionary<string, object> args);
+        object GetAlertTemplate(User user, Dictionary<string, object> args);
+        Task<object> CreateAlertTemplate(User user, Dictionary<string, object> args);
+        Task<object> UpdateAlertTemplate(User user, Dictionary<string, object> args);
+        Task<object> DeleteAlertTemplate(User user, Dictionary<string, object> args);
+
         object ExecuteTool(string toolName, User user, Dictionary<string, object> args);
         Task<object> ExecuteToolAsync(string toolName, User user, Dictionary<string, object> args);
 
