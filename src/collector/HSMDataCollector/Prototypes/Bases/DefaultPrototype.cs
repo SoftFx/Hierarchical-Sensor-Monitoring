@@ -24,7 +24,7 @@ namespace HSMDataCollector.Prototypes
                 Path = defaultOptions.Path,
                 Type = defaultOptions.Type,
 
-                TtlAlert = customOptions?.TtlAlert ?? defaultOptions.TtlAlert,
+                TtlAlerts = customOptions?.TtlAlerts ?? defaultOptions.TtlAlerts,
 
                 Description = customOptions?.Description ?? defaultOptions.Description,
                 SensorUnit = customOptions?.SensorUnit ?? defaultOptions.SensorUnit,
@@ -33,7 +33,7 @@ namespace HSMDataCollector.Prototypes
 
                 KeepHistory = customOptions?.KeepHistory ?? defaultOptions.KeepHistory,
                 SelfDestroy = customOptions?.SelfDestroy ?? defaultOptions.SelfDestroy,
-                TTL = customOptions?.TTL ?? defaultOptions.TTL,
+                TTLs = customOptions?.TTLs ?? defaultOptions.TTLs,
 
                 EnableForGrafana = customOptions?.EnableForGrafana ?? defaultOptions.EnableForGrafana,
 

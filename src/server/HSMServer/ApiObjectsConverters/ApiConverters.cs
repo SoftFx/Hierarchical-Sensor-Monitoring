@@ -287,6 +287,16 @@ namespace HSMServer.ApiObjectsConverters
         {
             var initiator = InitiatorInfo.AsCollector(keyName, request.IsForceUpdate);
 
+            // Map single TtlAlert from API to TTLPolicies list.
+            // TODO: After updating HSMSensorDataObjects NuGet package to match src/api/,
+            //       replace this with iteration over request.TtlAlerts paired with request.TTLs.
+            List<PolicyUpdate> ttlPolicies = null;
+            if (request.TtlAlert != null)
+            {
+                var ttlUpdate = request.TtlAlert.Convert(initiator) with { TTL = request.TTL };
+                ttlPolicies = [ttlUpdate];
+            }
+
             return new()
             {
                 Id = sensorId,
@@ -299,9 +309,8 @@ namespace HSMServer.ApiObjectsConverters
 
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
-                TTL = request.TTL.ToTimeInterval(),
 
-                TTLPolicy = request.TtlAlert?.Convert(initiator),
+                TTLPolicies = ttlPolicies,
                 Policies = request.Alerts?.Select(policy => policy.Convert(initiator)).ToList(),
                 DefaultAlertsOptions = (Core.Model.DefaultAlertsOptions)request.DefaultAlertsOptions,
                 Initiator = initiator,

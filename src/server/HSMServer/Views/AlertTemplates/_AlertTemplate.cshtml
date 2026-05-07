@@ -77,7 +77,7 @@
                 <i class="fa-solid fa-plus"></i> Add
             </a>
 
-            <a id="addTtlAlert" href="javascript:addDataAlert('@true', '@Model.EncodedId');" class="btn btn-link p-0 m-0 ms-2 @(Model.HasTimeToLive ? "disabled" : string.Empty)">
+            <a id="addTtlAlert" href="javascript:addDataAlert('@true', '@Model.EncodedId');" class="btn btn-link p-0 m-0 ms-2">
                 <i class="fa-solid fa-plus"></i> Add TTL
             </a>
         </div>
@@ -88,7 +88,10 @@
         <div id="dataAlertsList_@ttlType">
             @if (Model.HasTimeToLive && Model.DataAlerts.TryGetValue(ttlType, out var ttlAlerts) && ttlAlerts.Count > 0)
             {
-                @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", ttlAlerts[0])
+                @foreach (var ttlAlert in ttlAlerts)
+                {
+                    @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", ttlAlert)
+                }
             }
         </div>
         @if (Model.DataAlerts.Count > 0)

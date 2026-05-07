@@ -1,4 +1,4 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
@@ -6,13 +6,15 @@ using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace HSMServer.Core.Model
 {
     public abstract class BaseNodeModel : IChangesEntity
     {
-        private readonly PolicyEntity _ttlEntity;
+        private readonly List<PolicyEntity> _ttlEntities;
 
 
         internal ChangeInfoTable ChangeTable { get; }
@@ -57,6 +59,8 @@ namespace HSMServer.Core.Model
 
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
+
+            _ttlEntities = [];
         }
 
         protected BaseNodeModel(string name, Guid? authorId) : this()
@@ -67,7 +71,10 @@ namespace HSMServer.Core.Model
 
         protected BaseNodeModel(BaseNodeEntity entity) : this()
         {
-            _ttlEntity = entity.TTLPolicy;
+            // Migration: handle both old single TTLPolicy and new TTLPolicies list
+            _ttlEntities = entity.TTLPolicies?.Count > 0
+                ? entity.TTLPolicies
+                : entity.TTLPolicy != null ? [entity.TTLPolicy] : [];
 
             Id = Guid.Parse(entity.Id);
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : Guid.Empty;
@@ -82,7 +89,7 @@ namespace HSMServer.Core.Model
 
         internal abstract bool CheckTimeout();
 
-        protected abstract void UpdateTTL(PolicyUpdate update);
+        protected abstract void UpdateTTLs(List<PolicyUpdate> updates);
 
 
         internal BaseNodeModel AddParent(ProductModel parent)
@@ -90,7 +97,7 @@ namespace HSMServer.Core.Model
             Parent = parent;
 
             Settings.SetParentSettings(parent.Settings);
-            Policies.BuildDefault(this, _ttlEntity); //need for correct calculating $product and $path properties
+            Policies.BuildDefault(this, _ttlEntities); //need for correct calculating $product and $path properties
 
             return this;
         }
@@ -101,10 +108,26 @@ namespace HSMServer.Core.Model
 
             Settings.Update(update, ChangeTable);
 
-            if (update.TTLPolicy is not null && ChangeTable.TtlPolicy.CanChange(update.Initiator))
+            if (update.TTLPolicies is not null)
             {
-                UpdateTTL(update.TTLPolicy);
-                ChangeTable.TtlPolicy.SetUpdate(update.Initiator);
+                var canChange = true;
+                foreach (var ttlUpdate in update.TTLPolicies)
+                {
+                    var key = ttlUpdate.Id.ToString();
+                    if (ttlUpdate.Id != Guid.Empty && !ChangeTable.TtlPolicies[key].CanChange(update.Initiator))
+                    {
+                        canChange = false;
+                        break;
+                    }
+                }
+
+                if (canChange)
+                {
+                    UpdateTTLs(update.TTLPolicies);
+                    foreach (var ttlUpdate in update.TTLPolicies)
+                        if (ttlUpdate.Id != Guid.Empty)
+                            ChangeTable.TtlPolicies[ttlUpdate.Id.ToString()].SetUpdate(update.Initiator);
+                }
             }
 
             CheckTimeout();

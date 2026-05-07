@@ -120,7 +120,7 @@ namespace HSMServer.Controllers
                     viewModel = sensor;
                     var schedulesList = GetAlertSchedulesSelectList();
                     StoredUser.History.ConnectSensor(_treeValuesCache.GetSensor(id));
-                    sensor.TTLAlert.Schedules = schedulesList;
+                    sensor.TTLAlerts.ForEach(a => a.Schedules = schedulesList);
                     foreach (var (key, alerts) in sensor.DataAlerts)
                         foreach (var alert in alerts)
                         {
@@ -668,7 +668,7 @@ namespace HSMServer.Controllers
 
             var availableChats = sensor.GetAvailableChats(_telegramChatsManager);
 
-            var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+            newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var ttlAlertList);
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
                 ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
 
@@ -677,8 +677,10 @@ namespace HSMServer.Controllers
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
-                TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
+                TTLPolicies = ttlAlertList?.Select(t => t.ToTimeToLiveUpdate(CurrentInitiator, availableChats) with
+                {
+                    TTL = t.Conditions is { Count: > 0 } ? t.Conditions[0].TimeToLive.ToModel()?.Ticks : null
+                }).ToList() ?? [],
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
@@ -905,13 +907,15 @@ namespace HSMServer.Controllers
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
 
             var availableChats = product.GetAvailableChats(_telegramChatsManager);
-            var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+            newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var ttlAlerts);
 
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
+                TTLPolicies = ttlAlerts?.Select(t => t.ToTimeToLiveUpdate(CurrentInitiator, availableChats) with
+                {
+                    TTL = t.Conditions is { Count: > 0 } ? t.Conditions[0].TimeToLive.ToModel(product.TTL)?.Ticks : null
+                }).ToList() ?? [],
                 DefaultChats = newModel.DefaultChats?.ToUpdate(product, _telegramChatsManager, _folderManager),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
