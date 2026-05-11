@@ -287,10 +287,14 @@ namespace HSMServer.ApiObjectsConverters
         {
             var initiator = InitiatorInfo.AsCollector(keyName, request.IsForceUpdate);
 
-            // Map TtlAlerts from API to TTLPolicies list, paired with TTLs by index.
             List<PolicyUpdate> ttlPolicies = null;
             if (request.TtlAlerts is { Count: > 0 })
             {
+                if (request.TTLs is { Count: > 0 } && request.TTLs.Count > request.TtlAlerts.Count)
+                    throw new ArgumentException(
+                        $"TTLs count ({request.TTLs.Count}) exceeds TtlAlerts count ({request.TtlAlerts.Count}). " +
+                        "Each TTL must have a corresponding TtlAlert.");
+
                 ttlPolicies = new List<PolicyUpdate>(request.TtlAlerts.Count);
                 for (var i = 0; i < request.TtlAlerts.Count; i++)
                 {

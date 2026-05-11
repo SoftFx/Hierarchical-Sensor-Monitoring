@@ -57,13 +57,11 @@ namespace HSMServer.Core.Model.Policies
                 .ToDictionary(g => g.Key, g => g.Last());
             var newPolicyUpdates = updates.Where(u => u.Id == Guid.Empty).ToList();
 
-            (string oldValue, TTLPolicy policy, PolicyUpdate update, bool isParent)[] journalEntries;
+            var journalEntries = new List<(string oldValue, TTLPolicy policy, PolicyUpdate update, bool isParent)>();
 
             lock (_ttlLock)
             {
-                journalEntries = new (string, TTLPolicy, PolicyUpdate, bool)[_ttlPolicies.Count + newPolicyUpdates.Count + updatesDict.Count];
-                var newList = new List<TTLPolicy>(journalEntries.Length);
-                var idx = 0;
+                var newList = new List<TTLPolicy>(_ttlPolicies.Count + newPolicyUpdates.Count);
 
                 foreach (var policy in _ttlPolicies)
                 {
@@ -75,7 +73,7 @@ namespace HSMServer.Core.Model.Policies
                         if (!update.TTL.HasValue && _model?.Settings?.TTL != null)
                             policy.SetTTLParent(_model.Settings.TTL);
 
-                        journalEntries[idx++] = (oldValue, policy, update, update.IsParentRequest);
+                        journalEntries.Add((oldValue, policy, update, update.IsParentRequest));
                         newList.Add(policy);
                         updatesDict.Remove(update.Id);
                     }
@@ -89,13 +87,11 @@ namespace HSMServer.Core.Model.Policies
                     if (!update.TTL.HasValue && _model?.Settings?.TTL != null)
                         policy.SetTTLParent(_model.Settings.TTL);
 
-                    journalEntries[idx++] = (string.Empty, policy, update, false);
+                    journalEntries.Add((string.Empty, policy, update, false));
                     newList.Add(policy);
                 }
 
                 _ttlPolicies = newList;
-                if (idx < journalEntries.Length)
-                    Array.Resize(ref journalEntries, idx);
             }
 
             foreach (var (oldValue, policy, update, isParent) in journalEntries)

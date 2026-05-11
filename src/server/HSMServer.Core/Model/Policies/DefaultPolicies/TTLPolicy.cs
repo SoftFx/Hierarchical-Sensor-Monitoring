@@ -50,7 +50,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal TTLPolicy(BaseNodeModel node, PolicyEntity entity)
         {
-            if (entity?.TTL.HasValue == true && entity.TTL.Value != long.MaxValue)
+            if (entity?.TTL is not null and not long.MaxValue)
                 _ttl.TrySetValue(new TimeIntervalModel(entity.TTL.Value));
             else if (node?.Settings?.TTL != null)
                 _ttl.SetParent(node.Settings.TTL);

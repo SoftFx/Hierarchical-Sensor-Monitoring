@@ -1183,6 +1183,8 @@ namespace HSMServer.Core.Cache
                         ? alertTemplateModel.TTLs[i]
                         : null;
 
+                    // When TTL is inherited from parent (IsFromParent=true) or not set (null), pass null
+                    // so the policy falls back to the parent's TTL.
                     long? ttlTicks = ttlInterval?.IsFromParent == false && ttlInterval.Ticks != long.MaxValue
                         ? ttlInterval.Ticks
                         : null;

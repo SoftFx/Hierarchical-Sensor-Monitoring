@@ -53,8 +53,10 @@ namespace HSMServer.Core.TableOfChanges
             if (!TtlPolicies.TryGetValue("0", out var legacyEntry))
                 return;
 
+            var entity = legacyEntry.ToEntity();
+
             foreach (var id in policyIds)
-                TtlPolicies.TryAdd(id.ToString(), legacyEntry);
+                TtlPolicies.TryAdd(id.ToString(), new ChangeInfo(entity));
 
             TtlPolicies.TryRemove("0", out _);
         }
