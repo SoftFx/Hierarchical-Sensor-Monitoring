@@ -1179,8 +1179,12 @@ namespace HSMServer.Core.Cache
                 for (int i = 0; i < alertTemplateModel.TTLPolicies.Count; i++)
                 {
                     var ttlPolicy = alertTemplateModel.TTLPolicies[i];
-                    var ttlTicks = alertTemplateModel.TTLs != null && i < alertTemplateModel.TTLs.Count
-                        ? alertTemplateModel.TTLs[i]?.Ticks
+                    var ttlInterval = alertTemplateModel.TTLs != null && i < alertTemplateModel.TTLs.Count
+                        ? alertTemplateModel.TTLs[i]
+                        : null;
+
+                    long? ttlTicks = ttlInterval?.IsFromParent == false && ttlInterval.Ticks != long.MaxValue
+                        ? ttlInterval.Ticks
                         : null;
 
                     ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, InitiatorInfo.AlertTemplate)
@@ -1354,13 +1358,17 @@ namespace HSMServer.Core.Cache
 
         private void RemoveChatsFromPolicies(ProductModel product, HashSet<Guid> chats, InitiatorInfo initiator)
         {
-            var productTtlUpdates = new List<PolicyUpdate>();
-            foreach (var ttl in product.Policies.TTLPolicies)
-                if (TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
-                    productTtlUpdates.Add(ttlUpdate);
-
-            if (productTtlUpdates.Count > 0)
+            if (product.Policies.TTLPolicies.Any(t => CanRemoveChatsFromPolicy(t.Destination, chats)))
             {
+                var productTtlUpdates = new List<PolicyUpdate>();
+                foreach (var ttl in product.Policies.TTLPolicies)
+                {
+                    if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
+                        ttlUpdate = new PolicyUpdate(ttl, initiator);
+
+                    productTtlUpdates.Add(ttlUpdate);
+                }
+
                 var update = new ProductUpdate()
                 {
                     Id = product.Id,
@@ -1373,10 +1381,19 @@ namespace HSMServer.Core.Cache
 
             foreach (var (_, sensor) in product.Sensors)
             {
-                var sensorTtlUpdates = new List<PolicyUpdate>();
-                foreach (var ttl in sensor.Policies.TTLPolicies)
-                    if (TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
+                List<PolicyUpdate> sensorTtlUpdates = null;
+                if (sensor.Policies.TTLPolicies.Any(t => CanRemoveChatsFromPolicy(t.Destination, chats)))
+                {
+                    sensorTtlUpdates = new List<PolicyUpdate>(sensor.Policies.TTLPolicies.Count);
+
+                    foreach (var ttl in sensor.Policies.TTLPolicies)
+                    {
+                        if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
+                            ttlUpdate = new PolicyUpdate(ttl, initiator);
+
                         sensorTtlUpdates.Add(ttlUpdate);
+                    }
+                }
 
                 List<PolicyUpdate> policiesUpdate = null;
                 if (sensor.Policies.Any(p => CanRemoveChatsFromPolicy(p.Destination, chats)))
@@ -1392,7 +1409,7 @@ namespace HSMServer.Core.Cache
                     }
                 }
 
-                if (policiesUpdate is not null || sensorTtlUpdates.Count > 0)
+                if (policiesUpdate is not null || sensorTtlUpdates is not null)
                 {
                     var update = new SensorUpdate()
                     {

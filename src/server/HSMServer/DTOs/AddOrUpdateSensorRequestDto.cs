@@ -21,7 +21,7 @@ namespace HSMServer.DTOs
         public AlertUpdateRequest TtlAlert
         {
             get => null;
-            set { if (value != null) TtlAlerts = [value]; }
+            set { if (value != null && TtlAlerts is null) TtlAlerts = [value]; }
         }
 
         public SensorType? SensorType { get; set; }
@@ -42,7 +42,7 @@ namespace HSMServer.DTOs
         public long? TTL
         {
             get => null;
-            set { if (value.HasValue) TTLs = [value]; }
+            set { if (value.HasValue && TTLs is null) TTLs = [value]; }
         }
 
         public StatisticsOptions? Statistics { get; set; }

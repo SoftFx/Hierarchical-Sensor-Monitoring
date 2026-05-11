@@ -17,9 +17,9 @@ namespace HSMServer.Core.Model.Policies
         private readonly object _ttlLock = new();
         private List<TTLPolicy> _ttlPolicies = [];
 
-        public List<TTLPolicy> TTLPolicies
+        public IReadOnlyList<TTLPolicy> TTLPolicies
         {
-            get { lock (_ttlLock) return _ttlPolicies.ToList(); }
+            get { lock (_ttlLock) return _ttlPolicies; }
         }
 
 
@@ -55,31 +55,51 @@ namespace HSMServer.Core.Model.Policies
                 .Where(u => u.Id != Guid.Empty)
                 .GroupBy(u => u.Id)
                 .ToDictionary(g => g.Key, g => g.Last());
-            var newPolicies = updates.Where(u => u.Id == Guid.Empty).ToList();
+            var newPolicyUpdates = updates.Where(u => u.Id == Guid.Empty).ToList();
 
-            List<TTLPolicy> currentPolicies;
+            (string oldValue, TTLPolicy policy, PolicyUpdate update, bool isParent)[] journalEntries;
+
             lock (_ttlLock)
-                currentPolicies = _ttlPolicies.ToList();
-
-            // Update existing policies
-            foreach (var policy in currentPolicies)
             {
-                if (updatesDict.TryGetValue(policy.Id, out var update))
+                journalEntries = new (string, TTLPolicy, PolicyUpdate, bool)[_ttlPolicies.Count + newPolicyUpdates.Count + updatesDict.Count];
+                var newList = new List<TTLPolicy>(journalEntries.Length);
+                var idx = 0;
+
+                foreach (var policy in _ttlPolicies)
                 {
-                    var oldValue = policy.ToString();
-                    policy.FullUpdate(update);
-                    CallJournal(update.Id, oldValue, policy.ToString(), update.Initiator, update.IsParentRequest);
-                    updatesDict.Remove(policy.Id);
+                    if (updatesDict.TryGetValue(policy.Id, out var update))
+                    {
+                        var oldValue = policy.ToString();
+                        policy.FullUpdate(update);
+
+                        if (!update.TTL.HasValue && _model?.Settings?.TTL != null)
+                            policy.SetTTLParent(_model.Settings.TTL);
+
+                        journalEntries[idx++] = (oldValue, policy, update, update.IsParentRequest);
+                        newList.Add(policy);
+                        updatesDict.Remove(update.Id);
+                    }
                 }
-                else
+
+                foreach (var update in newPolicyUpdates.Concat(updatesDict.Values))
                 {
-                    RemoveTTLPolicy(policy.Id);
+                    var policy = new TTLPolicy();
+                    policy.FullUpdate(update, _model as BaseSensorModel);
+
+                    if (!update.TTL.HasValue && _model?.Settings?.TTL != null)
+                        policy.SetTTLParent(_model.Settings.TTL);
+
+                    journalEntries[idx++] = (string.Empty, policy, update, false);
+                    newList.Add(policy);
                 }
+
+                _ttlPolicies = newList;
+                if (idx < journalEntries.Length)
+                    Array.Resize(ref journalEntries, idx);
             }
 
-            // Add new policies
-            foreach (var update in newPolicies.Concat(updatesDict.Values))
-                AddTTLPolicy(update);
+            foreach (var (oldValue, policy, update, isParent) in journalEntries)
+                CallJournal(update.Id, oldValue, policy.ToString(), update.Initiator, isParent);
         }
 
 
@@ -88,25 +108,35 @@ namespace HSMServer.Core.Model.Policies
             var policy = new TTLPolicy();
             policy.FullUpdate(update, _model as BaseSensorModel);
 
+            if (!update.TTL.HasValue && _model?.Settings?.TTL != null)
+                policy.SetTTLParent(_model.Settings.TTL);
+
             lock (_ttlLock)
-                _ttlPolicies.Add(policy);
+                _ttlPolicies = [.._ttlPolicies, policy];
 
             CallJournal(update.Id, string.Empty, policy.ToString(), update.Initiator);
         }
 
         internal void AddTTLPolicy(TTLPolicy policy)
         {
+            if (policy.IsTTLFromParent && _model?.Settings?.TTL != null)
+                policy.SetTTLParent(_model.Settings.TTL);
+
             lock (_ttlLock)
-                _ttlPolicies.Add(policy);
+                _ttlPolicies = [.._ttlPolicies, policy];
         }
 
         internal void RemoveTTLPolicy(Guid id)
         {
             lock (_ttlLock)
             {
-                var policy = _ttlPolicies.FirstOrDefault(p => p.Id == id);
-                if (policy != null)
-                    _ttlPolicies.Remove(policy);
+                var newList = new List<TTLPolicy>(_ttlPolicies.Count);
+                foreach (var p in _ttlPolicies)
+                    if (p.Id != id)
+                        newList.Add(p);
+
+                if (newList.Count != _ttlPolicies.Count)
+                    _ttlPolicies = newList;
             }
         }
 

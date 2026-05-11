@@ -98,6 +98,7 @@ namespace HSMServer.Core.Model
 
             Settings.SetParentSettings(parent.Settings);
             Policies.BuildDefault(this, _ttlEntities); //need for correct calculating $product and $path properties
+            ChangeTable.MigrateLegacyTtlKey(Policies.TTLPolicies.Select(p => p.Id).ToList());
 
             return this;
         }
@@ -123,6 +124,15 @@ namespace HSMServer.Core.Model
 
                 if (canChange)
                 {
+                    var updateIds = new HashSet<string>(
+                        update.TTLPolicies
+                            .Where(u => u.Id != Guid.Empty)
+                            .Select(u => u.Id.ToString()));
+
+                    foreach (var existing in Policies.TTLPolicies)
+                        if (!updateIds.Contains(existing.Id.ToString()))
+                            ChangeTable.TtlPolicies[existing.Id.ToString()].SetUpdate(update.Initiator);
+
                     UpdateTTLs(update.TTLPolicies);
                     foreach (var ttlUpdate in update.TTLPolicies)
                         if (ttlUpdate.Id != Guid.Empty)

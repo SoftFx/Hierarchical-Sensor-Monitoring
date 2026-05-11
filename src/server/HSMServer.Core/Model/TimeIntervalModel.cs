@@ -65,7 +65,7 @@ namespace HSMServer.Core.Model
 
         public TimeIntervalModel() : this(TimeInterval.FromParent) { }
 
-        public TimeIntervalModel(long ticks) : this(TimeInterval.Ticks, ticks) { }
+        public TimeIntervalModel(long ticks) : this(ticks == long.MaxValue ? TimeInterval.None : TimeInterval.Ticks, ticks) { }
 
         public TimeIntervalModel(TimeInterval interval) : this(interval, 0L) { }
 

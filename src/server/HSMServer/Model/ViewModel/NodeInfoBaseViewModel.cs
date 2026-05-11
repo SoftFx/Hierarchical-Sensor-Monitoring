@@ -25,7 +25,6 @@ namespace HSMServer.Model.ViewModel
 
         public SensorStatus Status { get; set; }
 
-        [Obsolete("Remove after adding TTL constructor for Folder")]
         [Display(Name = "Time to live interval")]
         [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }

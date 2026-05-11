@@ -88,7 +88,7 @@ namespace HSMSensorDataObjects.SensorRequests
         public AlertUpdateRequest TtlAlert
         {
             get => null;
-            set { if (value != null) TtlAlerts = new List<AlertUpdateRequest> { value }; }
+            set { if (value != null && TtlAlerts is null) TtlAlerts = new List<AlertUpdateRequest> { value }; }
         }
 
 
@@ -111,7 +111,7 @@ namespace HSMSensorDataObjects.SensorRequests
         public long? TTL
         {
             get => null;
-            set { if (value.HasValue) TTLs = new List<long?> { value }; }
+            set { if (value.HasValue && TTLs is null) TTLs = new List<long?> { value }; }
         }
 
 

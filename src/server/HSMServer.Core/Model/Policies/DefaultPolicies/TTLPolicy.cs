@@ -26,7 +26,11 @@ namespace HSMServer.Core.Model.Policies
 
         internal long? TTLTicks => _ttl.IsEmpty ? null : _ttl.Value?.Ticks;
 
-        public TimeIntervalModel TTLInterval => _ttl.CurValue;
+        public TimeIntervalModel TTLInterval => _ttl.Value;
+
+        public bool IsTTLFromParent => !_ttl.IsSet;
+
+        internal void SetTTLParent(TimeIntervalSettingProperty parent) => _ttl.SetParent(parent);
 
 
         internal PolicyResult Ok
@@ -46,10 +50,10 @@ namespace HSMServer.Core.Model.Policies
 
         internal TTLPolicy(BaseNodeModel node, PolicyEntity entity)
         {
-            if (entity?.TTL.HasValue == true)
+            if (entity?.TTL.HasValue == true && entity.TTL.Value != long.MaxValue)
                 _ttl.TrySetValue(new TimeIntervalModel(entity.TTL.Value));
-            else if (node?.Settings?.TTL?.Value != null)
-                _ttl.TrySetValue(node.Settings.TTL.Value);
+            else if (node?.Settings?.TTL != null)
+                _ttl.SetParent(node.Settings.TTL);
 
             Apply(entity ?? new PolicyEntity
             {
@@ -91,7 +95,7 @@ namespace HSMServer.Core.Model.Policies
             Icon = Icon,
             TemplateId = TemplateId.HasValue ? TemplateId.Value.ToByteArray() : [],
             ScheduleId = ScheduleId.HasValue ? ScheduleId.Value.ToByteArray() : [],
-            TTL = TTLTicks,
+            TTL = IsTTLFromParent ? null : TTLTicks,
         };
 
         internal void ApplyParent(TTLPolicy parent, bool disable = false)
@@ -103,7 +107,7 @@ namespace HSMServer.Core.Model.Policies
                 Template = parent.Template,
                 Icon = parent.Icon,
                 IsDisabled = disable,
-                TTL = parent.TTLTicks,
+                TTL = parent.IsTTLFromParent || parent.TTLTicks == long.MaxValue ? null : parent.TTLTicks,
             };
 
             FullUpdate(update, Sensor);
@@ -111,8 +115,10 @@ namespace HSMServer.Core.Model.Policies
 
         public void FullUpdate(PolicyUpdate update, BaseSensorModel sensor = null)
         {
-            if (update.TTL.HasValue)
+            if (update.TTL.HasValue && update.TTL.Value != long.MaxValue)
                 _ttl.TrySetValue(new TimeIntervalModel(update.TTL.Value));
+            else
+                _ttl.TrySetValue(new TimeIntervalModel());
 
             TryUpdate(update, out _, sensor);
 
@@ -158,7 +164,7 @@ namespace HSMServer.Core.Model.Policies
 
         public override string ToString()
         {
-            var sb = new StringBuilder($"If Inactivity period = {_ttl.CurValue}");
+            var sb = new StringBuilder($"If Inactivity period = {_ttl.Value}");
 
             return ActionsToString(sb).ToString();
         }

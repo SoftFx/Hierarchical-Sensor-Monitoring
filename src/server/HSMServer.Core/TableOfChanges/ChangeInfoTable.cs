@@ -48,6 +48,18 @@ namespace HSMServer.Core.TableOfChanges
                     : new();
         }
 
+        internal void MigrateLegacyTtlKey(List<Guid> policyIds)
+        {
+            if (!TtlPolicies.TryGetValue("0", out var legacyEntry))
+                return;
+
+            foreach (var id in policyIds)
+                TtlPolicies.TryAdd(id.ToString(), legacyEntry);
+
+            TtlPolicies.TryRemove("0", out _);
+        }
+
+
         public ChangeInfoTableEntity ToEntity() =>
             new()
             {

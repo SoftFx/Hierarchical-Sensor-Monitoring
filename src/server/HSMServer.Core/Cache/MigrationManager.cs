@@ -398,6 +398,7 @@ namespace HSMServer.Core.Cache
                 Template = policy.Template,
                 IsDisabled = policy.IsDisabled,
                 Icon = policy.Icon,
+                ScheduleId = policy.ScheduleId,
 
                 Initiator = _forceMigrator,
             };

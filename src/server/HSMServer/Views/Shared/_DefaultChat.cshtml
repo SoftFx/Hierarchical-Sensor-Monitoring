@@ -17,7 +17,7 @@
 <span class="@(Model.IsModify ? "col-2" : "meta-info-label")">Telegram chat(s)</span>
 
 <span id="labelDefaultChat" class="@(Model.IsModify ? "d-none" : "meta-info-value")">@displayName</span>
-<div id="defaultChatControl" class="@(Model.IsModify ? "col-auto ms-1" : "d-none meta-info-interval")">
+<div id="defaultChatControl" class="@(Model.IsModify ? "col-auto ms-1 mx-2" : "d-none meta-info-interval mx-2")">
     <select name="SelectedChats" class="default-chat selectpicker" multiple data-live-search="true" data-placeholder="Default telegram chat(s)" required>
         <option value="@DefaultChatMode.FromParent" selected="@Model.IsSelectedMode(DefaultChatMode.FromParent)">@parentChats</option>
         <option value="@DefaultChatMode.NotInitialized" selected="@Model.IsSelectedMode(DefaultChatMode.NotInitialized)">@DefaultChatMode.NotInitialized.GetDisplayName()</option>

@@ -35,8 +35,21 @@ namespace HSMServer.Model.DataAlerts
 
         public TimeToLiveAlertViewModel(TTLPolicy policy, NodeViewModel node) : base(policy, node)
         {
-            var interval = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true };
-            interval.FromModel(policy.TTLInterval, PredefinedIntervals.ForTimeout);
+            TimeIntervalViewModel interval;
+
+            if (policy.IsTTLFromParent && node != null)
+            {
+                interval = new TimeIntervalViewModel(
+                    PredefinedIntervals.ForTimeout,
+                    () => (node.Parent?.TTL, node.ParentIsFolder)) { IsAlertBlock = true };
+                interval.Interval = TimeInterval.FromParent;
+            }
+            else
+            {
+                interval = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true };
+                interval.FromModel(policy.TTLInterval, PredefinedIntervals.ForTimeout);
+            }
+
             FillConditions(interval);
         }
 
