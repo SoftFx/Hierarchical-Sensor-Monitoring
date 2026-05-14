@@ -16,9 +16,7 @@ namespace HSMServer.Core.Model
 
         private PathTemplateConverter _pathTemplateConverter = new PathTemplateConverter();
 
-        public List<TimeIntervalModel> TTLs { get; set; } = [];
-
-        public List<TTLPolicy> TTLPolicies { get; set; } = [];
+        public List<TtlEntry> TtlEntries { get; set; } = [];
 
         public List<Policy> Policies { get; set; } = [];
 
@@ -46,8 +44,7 @@ namespace HSMServer.Core.Model
             SensorType = entity.SensorType;
             FolderId = entity.FolderId;
 
-            TTLPolicies = [];
-            TTLs = [];
+            TtlEntries = [];
 
             // Migration: handle both old single TTLPolicy and new TTLPolicies list
             var ttlEntities = entity.TTLPolicies?.Count > 0
@@ -71,8 +68,7 @@ namespace HSMServer.Core.Model
                     if (interval != null)
                         ttl.TrySetValue(new TimeIntervalModel(interval));
 
-                    TTLPolicies.Add(new TTLPolicy(ttl, ttlEntity));
-                    TTLs.Add(ttl.Value ?? TimeIntervalModel.None);
+                    TtlEntries.Add(new TtlEntry(new TTLPolicy(ttl, ttlEntity), ttl.Value ?? TimeIntervalModel.None));
                 }
             }
 
@@ -102,8 +98,8 @@ namespace HSMServer.Core.Model
                 Id = Id.ToByteArray(),
                 Name = Name,
                 Path = Path,
-                TTLPolicies = TTLPolicies?.Select(x => x.ToEntity()).ToList() ?? [],
-                TTLs = TTLs?.Select(x => x?.ToEntity()).ToList() ?? [],
+                TTLPolicies = TtlEntries?.Select(e => e.Policy.ToEntity()).ToList() ?? [],
+                TTLs = TtlEntries?.Select(e => e.Interval?.ToEntity()).ToList() ?? [],
                 Policies = Policies?.Select(x => x.ToEntity()).ToList() ?? [],
                 SensorType = SensorType,
                 FolderId = FolderId,

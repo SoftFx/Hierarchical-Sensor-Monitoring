@@ -2,7 +2,7 @@
 {
     public abstract class SettingPropertyBase<T> where T : class, new()
     {
-        private SettingPropertyBase<T> _parent;
+        protected SettingPropertyBase<T> _parent;
 
 
         protected abstract T EmptyValue { get; }
@@ -13,7 +13,7 @@
         public T CurValue { get; private set; } = new T();
 
 
-        public T Value => IsSet ? CurValue : _parent?.Value ?? EmptyValue;
+        public virtual T Value => IsSet ? CurValue : _parent?.Value ?? EmptyValue;
 
         public bool IsEmpty => Value is null;
 

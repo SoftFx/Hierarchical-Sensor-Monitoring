@@ -64,16 +64,14 @@ namespace HSMServer.Model.DataAlertTemplates
 
             DataAlerts = [];
 
-            if (model.TTLPolicies?.Count > 0)
+            if (model.TtlEntries?.Count > 0)
             {
                 var ttlAlerts = new List<DataAlertViewModelBase>();
-                for (int i = 0; i < model.TTLPolicies.Count; i++)
+                foreach (var entry in model.TtlEntries)
                 {
-                    var ttlInterval = model.TTLs != null && i < model.TTLs.Count
-                        ? model.TTLs[i]
-                        : TimeIntervalModel.None;
+                    var ttlInterval = entry.Interval ?? TimeIntervalModel.None;
                     var interval = new TimeIntervalViewModel().FromModel(ttlInterval, PredefinedIntervals.ForTimeout);
-                    var ttl = new TimeToLiveAlertViewModel(model.TTLPolicies[i], interval) { IsModify = true };
+                    var ttl = new TimeToLiveAlertViewModel(entry.Policy, interval) { IsModify = true };
                     ttlAlerts.Add(ttl);
                 }
                 DataAlerts[TimeToLiveAlertViewModel.AlertKey] = ttlAlerts;
@@ -121,8 +119,7 @@ namespace HSMServer.Model.DataAlertTemplates
                     var interval = ttl.Conditions is { Count: > 0 } ? ttl.Conditions[0].TimeToLive.ToModel() : TimeIntervalModel.None;
                     update = update with { TTL = interval?.Ticks };
                     ttlPolicy.FullUpdate(update);
-                    result.TTLPolicies.Add(ttlPolicy);
-                    result.TTLs.Add(interval ?? TimeIntervalModel.None);
+                    result.TtlEntries.Add(new TtlEntry(ttlPolicy, interval ?? TimeIntervalModel.None));
                 }
             }
 

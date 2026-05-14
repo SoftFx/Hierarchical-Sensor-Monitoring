@@ -75,6 +75,8 @@ namespace HSMServer.Core.Model.Policies
             base.Attach(sensor);
 
             _sensor = (BaseSensorModel)_model;
+            _sensor.Settings.TTL.SetIsSetOverride(() => TTLPolicies.Count > 0);
+
             _typePolicy = new CorrectTypePolicy<T>(_sensor);
 
             NotificationResult = new();

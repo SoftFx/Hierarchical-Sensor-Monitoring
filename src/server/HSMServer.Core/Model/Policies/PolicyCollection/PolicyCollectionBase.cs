@@ -70,7 +70,7 @@ namespace HSMServer.Core.Model.Policies
                         var oldValue = policy.ToString();
                         policy.FullUpdate(update);
 
-                        if (!update.TTL.HasValue && _model?.Settings?.TTL != null)
+                        if (!update.TTL.HasValue)
                             policy.SetTTLParent(_model.Settings.TTL);
 
                         journalEntries.Add((oldValue, policy, update, update.IsParentRequest));
@@ -84,7 +84,7 @@ namespace HSMServer.Core.Model.Policies
                     var policy = new TTLPolicy();
                     policy.FullUpdate(update, _model as BaseSensorModel);
 
-                    if (!update.TTL.HasValue && _model?.Settings?.TTL != null)
+                    if (!update.TTL.HasValue)
                         policy.SetTTLParent(_model.Settings.TTL);
 
                     journalEntries.Add((string.Empty, policy, update, false));
@@ -104,7 +104,7 @@ namespace HSMServer.Core.Model.Policies
             var policy = new TTLPolicy();
             policy.FullUpdate(update, _model as BaseSensorModel);
 
-            if (!update.TTL.HasValue && _model?.Settings?.TTL != null)
+            if (!update.TTL.HasValue)
                 policy.SetTTLParent(_model.Settings.TTL);
 
             lock (_ttlLock)
@@ -115,7 +115,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal void AddTTLPolicy(TTLPolicy policy)
         {
-            if (policy.IsTTLFromParent && _model?.Settings?.TTL != null)
+            if (policy.IsTTLFromParent)
                 policy.SetTTLParent(_model.Settings.TTL);
 
             lock (_ttlLock)

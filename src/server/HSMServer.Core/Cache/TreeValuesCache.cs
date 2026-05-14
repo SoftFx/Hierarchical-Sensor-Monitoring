@@ -1174,14 +1174,12 @@ namespace HSMServer.Core.Cache
             List<PolicyUpdate> ttlPolicyUpdates = [];
             List<PolicyUpdate> policyUpdates = [];
 
-            if (alertTemplateModel.TTLPolicies is not null)
+            if (alertTemplateModel.TtlEntries is not null)
             {
-                for (int i = 0; i < alertTemplateModel.TTLPolicies.Count; i++)
+                foreach (var entry in alertTemplateModel.TtlEntries)
                 {
-                    var ttlPolicy = alertTemplateModel.TTLPolicies[i];
-                    var ttlInterval = alertTemplateModel.TTLs != null && i < alertTemplateModel.TTLs.Count
-                        ? alertTemplateModel.TTLs[i]
-                        : null;
+                    var ttlPolicy = entry.Policy;
+                    var ttlInterval = entry.Interval;
 
                     // When TTL is inherited from parent (IsFromParent=true) or not set (null), pass null
                     // so the policy falls back to the parent's TTL.
