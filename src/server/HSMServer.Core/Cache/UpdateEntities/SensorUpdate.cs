@@ -84,6 +84,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public Guid? ScheduleId { get; init; }
 
+        public long? TTL { get; init; }
+
         public PolicyUpdate() { }
 
         public PolicyUpdate (Policy policy, InitiatorInfo initiator = null)

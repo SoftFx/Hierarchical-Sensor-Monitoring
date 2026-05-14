@@ -1,8 +1,10 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
 using HSMServer.Core.TableOfChanges;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -12,8 +14,13 @@ namespace HSMServer.Core.Model.Policies
 
         private protected ChangeCollection AlertChangeTable => _model.ChangeTable.Policies;
 
+        private readonly object _ttlLock = new();
+        private List<TTLPolicy> _ttlPolicies = [];
 
-        public TTLPolicy TimeToLive { get; private set; }
+        public IReadOnlyList<TTLPolicy> TTLPolicies
+        {
+            get { lock (_ttlLock) return _ttlPolicies; }
+        }
 
 
         public event Action<JournalRecordModel> ChangesHandler;
@@ -21,16 +28,112 @@ namespace HSMServer.Core.Model.Policies
 
         internal virtual void Attach(BaseNodeModel model) => _model = model;
 
-        internal virtual void BuildDefault(BaseNodeModel node, PolicyEntity entity = null) => TimeToLive = new TTLPolicy(node, entity);
-
-
-        internal void UpdateTTL(PolicyUpdate update)
+        internal virtual void BuildDefault(BaseNodeModel node, PolicyEntity entity = null)
         {
-            var oldValue = TimeToLive.ToString();
+            lock (_ttlLock)
+            {
+                if (entity != null)
+                    _ttlPolicies = [new TTLPolicy(node, entity)];
+                else
+                    _ttlPolicies = [];
+            }
+        }
 
-            TimeToLive.FullUpdate(update);
+        internal void BuildDefault(BaseNodeModel node, List<PolicyEntity> entities)
+        {
+            lock (_ttlLock)
+                _ttlPolicies = entities?.Select(e => new TTLPolicy(node, e)).ToList() ?? [];
+        }
 
-            CallJournal(update.Id, update.Id == Guid.Empty ? string.Empty : oldValue, TimeToLive.ToString(), update.Initiator, update.IsParentRequest);
+
+        internal void UpdateTTLs(List<PolicyUpdate> updates)
+        {
+            if (updates == null)
+                return;
+
+            var updatesDict = updates
+                .Where(u => u.Id != Guid.Empty)
+                .GroupBy(u => u.Id)
+                .ToDictionary(g => g.Key, g => g.Last());
+            var newPolicyUpdates = updates.Where(u => u.Id == Guid.Empty).ToList();
+
+            var journalEntries = new List<(string oldValue, TTLPolicy policy, PolicyUpdate update, bool isParent)>();
+
+            lock (_ttlLock)
+            {
+                var newList = new List<TTLPolicy>(_ttlPolicies.Count + newPolicyUpdates.Count);
+
+                foreach (var policy in _ttlPolicies)
+                {
+                    if (updatesDict.TryGetValue(policy.Id, out var update))
+                    {
+                        var oldValue = policy.ToString();
+                        policy.FullUpdate(update);
+
+                        if (!update.TTL.HasValue)
+                            policy.SetTTLParent(_model.Settings.TTL);
+
+                        journalEntries.Add((oldValue, policy, update, update.IsParentRequest));
+                        newList.Add(policy);
+                        updatesDict.Remove(update.Id);
+                    }
+                }
+
+                foreach (var update in newPolicyUpdates.Concat(updatesDict.Values))
+                {
+                    var policy = new TTLPolicy();
+                    policy.FullUpdate(update, _model as BaseSensorModel);
+
+                    if (!update.TTL.HasValue)
+                        policy.SetTTLParent(_model.Settings.TTL);
+
+                    journalEntries.Add((string.Empty, policy, update, false));
+                    newList.Add(policy);
+                }
+
+                _ttlPolicies = newList;
+            }
+
+            foreach (var (oldValue, policy, update, isParent) in journalEntries)
+                CallJournal(update.Id, oldValue, policy.ToString(), update.Initiator, isParent);
+        }
+
+
+        internal void AddTTLPolicy(PolicyUpdate update)
+        {
+            var policy = new TTLPolicy();
+            policy.FullUpdate(update, _model as BaseSensorModel);
+
+            if (!update.TTL.HasValue)
+                policy.SetTTLParent(_model.Settings.TTL);
+
+            lock (_ttlLock)
+                _ttlPolicies = [.._ttlPolicies, policy];
+
+            CallJournal(update.Id, string.Empty, policy.ToString(), update.Initiator);
+        }
+
+        internal void AddTTLPolicy(TTLPolicy policy)
+        {
+            if (policy.IsTTLFromParent)
+                policy.SetTTLParent(_model.Settings.TTL);
+
+            lock (_ttlLock)
+                _ttlPolicies = [.._ttlPolicies, policy];
+        }
+
+        internal void RemoveTTLPolicy(Guid id)
+        {
+            lock (_ttlLock)
+            {
+                var newList = new List<TTLPolicy>(_ttlPolicies.Count);
+                foreach (var p in _ttlPolicies)
+                    if (p.Id != id)
+                        newList.Add(p);
+
+                if (newList.Count != _ttlPolicies.Count)
+                    _ttlPolicies = newList;
+            }
         }
 
 

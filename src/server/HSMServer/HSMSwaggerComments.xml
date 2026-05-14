@@ -144,6 +144,12 @@
             <param name="sensorCommands"></param>
             <returns>Dictionary that contains commands error. Key is path to sensor, Value is error</returns>
         </member>
+        <member name="P:HSMServer.DTOs.AddOrUpdateSensorRequestDto.TtlAlert">
+            <summary>Backward compat: maps single TtlAlert to TtlAlerts list.</summary>
+        </member>
+        <member name="P:HSMServer.DTOs.AddOrUpdateSensorRequestDto.TTL">
+            <summary>Backward compat: maps single TTL to TTLs list.</summary>
+        </member>
         <member name="M:HSMServer.Extensions.ColorExtensions.GetDefaultColor(System.Int32)">
             <summary>
             Get specified color in HTML format #RRGGBB for numbers from 0 to 8

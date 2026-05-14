@@ -1,10 +1,11 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -55,7 +56,7 @@ namespace HSMServer.Core.Model
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
 
             Policies.Attach(this);
-            Policies.BuildDefault(this, entity.TTLPolicy);
+            Policies.BuildDefault(this, entity.TTLPolicies);
         }
 
 
@@ -131,32 +132,14 @@ namespace HSMServer.Core.Model
             CreationDate = CreationDate.Ticks,
             DefaultChatsSettings = Settings.DefaultChats.ToEntity(),
             Settings = Settings.ToEntity(),
-            TTLPolicy = Policies.TimeToLive?.ToEntity(),
+            TTLPolicies = Policies.TTLPolicies.Select(p => p.ToEntity()).ToList(),
             ChangeTable = ChangeTable.ToEntity(),
         };
 
 
-        protected override void UpdateTTL(PolicyUpdate update)
+        protected override void UpdateTTLs(List<PolicyUpdate> updates)
         {
-            var parentRequest = update with { IsParentRequest = true };
-
-            void UpdateTTLPolicy(ProductModel model)
-            {
-                model.Policies.UpdateTTL(model == this ? update : parentRequest);
-
-                foreach (var (_, subProduct) in model.SubProducts)
-                    if (!subProduct.Settings.TTL.IsSet)
-                        UpdateTTLPolicy(subProduct);
-
-                foreach (var (_, sensor) in model.Sensors)
-                    if (!sensor.Settings.TTL.IsSet)
-                    {
-                        sensor.Policies.UpdateTTL(parentRequest);
-                        sensor.UpdateFromParentSettings?.Invoke(sensor.ToEntity());
-                    }
-            }
-
-            UpdateTTLPolicy(this);
+            Policies.UpdateTTLs(updates);
         }
     }
 }

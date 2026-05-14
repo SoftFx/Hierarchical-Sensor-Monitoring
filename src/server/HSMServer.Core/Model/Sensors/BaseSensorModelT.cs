@@ -147,7 +147,8 @@ namespace HSMServer.Core.Model
                                 Storage.AddValue((T)value);
 
                             IsExpired = true;
-                            Policies.TimeToLive.InitLastTtlTime(last.Time);
+                            foreach (var ttl in Policies.TTLPolicies)
+                                ttl.InitLastTtlTime(last.Time);
                         }
 
                         if (last.IsTimeout || Policies.TryValidate(last, out _))

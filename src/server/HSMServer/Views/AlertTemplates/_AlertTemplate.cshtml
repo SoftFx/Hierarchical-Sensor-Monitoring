@@ -73,11 +73,11 @@
         <div class="d-flex align-items-center">
             <label class="col-form-label fw-bold">Alerts:</label>
 
-            <a id="addDataAlert" href="javascript:addDataAlert('@false', '@Model.EncodedId');" class="btn btn-link p-0 m-0 ms-2">
+            <a id="addDataAlert" href="javascript:addDataAlert('@false', '@Model.EncodedId');" class="btn btn-link p-0 m-0 ms-2@(sensorType == DataAlertTemplateViewModel.AnyType ? " disabled" : null)">
                 <i class="fa-solid fa-plus"></i> Add
             </a>
 
-            <a id="addTtlAlert" href="javascript:addDataAlert('@true', '@Model.EncodedId');" class="btn btn-link p-0 m-0 ms-2 @(Model.HasTimeToLive ? "disabled" : string.Empty)">
+            <a id="addTtlAlert" href="javascript:addDataAlert('@true', '@Model.EncodedId');" class="btn btn-link p-0 m-0 ms-2">
                 <i class="fa-solid fa-plus"></i> Add TTL
             </a>
         </div>
@@ -88,9 +88,15 @@
         <div id="dataAlertsList_@ttlType">
             @if (Model.HasTimeToLive && Model.DataAlerts.TryGetValue(ttlType, out var ttlAlerts) && ttlAlerts.Count > 0)
             {
-                @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", ttlAlerts[0])
+                @foreach (var ttlAlert in ttlAlerts)
+                {
+                    @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", ttlAlert)
+                }
             }
         </div>
+        @{
+            bool hasNonTtlAlerts = false;
+        }
         @if (Model.DataAlerts.Count > 0)
         {
             @foreach (var (type, alerts) in Model.DataAlerts)
@@ -98,6 +104,7 @@
                 if (type == ttlType)
                     continue;
 
+                hasNonTtlAlerts = true;
                 <div id="dataAlertsList_@type">
                     @foreach (var alert in alerts)
                     {
@@ -106,7 +113,7 @@
                 </div>
             }
         }
-        else
+        @if (!hasNonTtlAlerts)
         {
             <div id="dataAlertsList_@sensorType">
             </div>

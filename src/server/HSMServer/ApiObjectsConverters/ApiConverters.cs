@@ -287,6 +287,22 @@ namespace HSMServer.ApiObjectsConverters
         {
             var initiator = InitiatorInfo.AsCollector(keyName, request.IsForceUpdate);
 
+            List<PolicyUpdate> ttlPolicies = null;
+            if (request.TtlAlerts is { Count: > 0 })
+            {
+                if (request.TTLs is { Count: > 0 } && request.TTLs.Count > request.TtlAlerts.Count)
+                    throw new ArgumentException(
+                        $"TTLs count ({request.TTLs.Count}) exceeds TtlAlerts count ({request.TtlAlerts.Count}). " +
+                        "Each TTL must have a corresponding TtlAlert.");
+
+                ttlPolicies = new List<PolicyUpdate>(request.TtlAlerts.Count);
+                for (var i = 0; i < request.TtlAlerts.Count; i++)
+                {
+                    var ttl = i < request.TTLs?.Count ? request.TTLs[i] : null;
+                    ttlPolicies.Add(request.TtlAlerts[i].Convert(initiator) with { TTL = ttl });
+                }
+            }
+
             return new()
             {
                 Id = sensorId,
@@ -299,9 +315,9 @@ namespace HSMServer.ApiObjectsConverters
 
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
-                TTL = request.TTL.ToTimeInterval(),
 
-                TTLPolicy = request.TtlAlert?.Convert(initiator),
+                TTL = request.TTL.ToTimeInterval(),
+                TTLPolicies = ttlPolicies,
                 Policies = request.Alerts?.Select(policy => policy.Convert(initiator)).ToList(),
                 DefaultAlertsOptions = (Core.Model.DefaultAlertsOptions)request.DefaultAlertsOptions,
                 Initiator = initiator,

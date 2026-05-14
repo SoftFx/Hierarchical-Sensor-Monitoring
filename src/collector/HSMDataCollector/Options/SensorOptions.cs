@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using HSMDataCollector.Alerts;
 using HSMDataCollector.Converters;
@@ -35,7 +36,10 @@ namespace HSMDataCollector.Options
 
         public bool IsPrioritySensor { get; set; } // data sends in separate request
 
-        public SpecialAlertTemplate TtlAlert { get; set; }
+        public List<SpecialAlertTemplate> TtlAlerts { get; set; }
+
+        // Convenience: single TTL alert (adds to TtlAlerts)
+        public SpecialAlertTemplate TtlAlert { get => TtlAlerts?.FirstOrDefault(); set => TtlAlerts = value != null ? new List<SpecialAlertTemplate> { value } : null; }
 
         public string Description { get; set; }
 
@@ -49,7 +53,10 @@ namespace HSMDataCollector.Options
 
         public TimeSpan? SelfDestroy { get; set; }
 
-        public TimeSpan? TTL { get; set; }
+        public List<TimeSpan?> TTLs { get; set; }
+
+        // Convenience: single TTL interval
+        public TimeSpan? TTL { get => TTLs?.FirstOrDefault(); set => TTLs = value != null ? new List<TimeSpan?> { value } : null; }
 
         public StatisticsOptions Statistics { get; set; }
 

@@ -3,6 +3,7 @@ using HSMServer.Helpers;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using System;
+using System.Linq;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -62,7 +63,7 @@ namespace HSMServer.Model.TreeViewModel
             KeepHistory.FromModel(model.Settings.KeepHistory.CurValue, PredefinedIntervals.ForKeepHistory);
             SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue, PredefinedIntervals.ForSelfDestory);
 
-            TTLAlert = new TimeToLiveAlertViewModel(model.Policies.TimeToLive, this);
+            TTLAlerts = model.Policies.TTLPolicies.Select(p => new TimeToLiveAlertViewModel(p, this)).ToList();
         }
     }
 }

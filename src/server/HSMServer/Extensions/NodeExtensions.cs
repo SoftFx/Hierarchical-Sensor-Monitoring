@@ -62,7 +62,7 @@ namespace HSMServer.Extensions
 
 
             return sensor.HasData && sensor.State is not Core.Model.SensorState.Muted &&
-                   (sensor.DataAlerts.Values.Any(d => d.Any(a => IsUnconfigured(a))) || (!sensor.TTL.IsIntervalNone && IsUnconfigured(sensor.TTLAlert)));
+                   (sensor.DataAlerts.Values.Any(d => d.Any(a => IsUnconfigured(a))) || (!sensor.TTL.IsIntervalNone && sensor.TTLAlerts.Any(a => IsUnconfigured(a))));
         }
 
 

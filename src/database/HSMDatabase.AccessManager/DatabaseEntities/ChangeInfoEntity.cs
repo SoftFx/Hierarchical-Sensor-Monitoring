@@ -12,7 +12,10 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public Dictionary<string, ChangeInfoEntity> Policies { get; init; } = new();
 
 
-        public ChangeInfoEntity TTLPolicy { get; init; } = new();
+        public Dictionary<string, ChangeInfoEntity> TTLPolicies { get; init; } = new();
+
+        // Legacy field for backward-compatible deserialization
+        public ChangeInfoEntity TTLPolicy { get; init; }
     }
 
 

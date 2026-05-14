@@ -1171,28 +1171,41 @@ namespace HSMServer.Core.Cache
 
         private void AddAlertFromTemplate(BaseSensorModel sensor, AlertTemplateModel alertTemplateModel)
         {
-            PolicyUpdate ttlPolicyUpdate = null;
+            List<PolicyUpdate> ttlPolicyUpdates = [];
             List<PolicyUpdate> policyUpdates = [];
-            TimeIntervalModel ttl = null;
 
-            if (alertTemplateModel.TTLPolicy is not null)
+            if (alertTemplateModel.TtlEntries is not null)
             {
-                ttlPolicyUpdate = new PolicyUpdate(alertTemplateModel.TTLPolicy, InitiatorInfo.AlertTemplate) { TemplateId = alertTemplateModel.Id };
-                ttl = alertTemplateModel.TTL;
+                foreach (var entry in alertTemplateModel.TtlEntries)
+                {
+                    var ttlPolicy = entry.Policy;
+                    var ttlInterval = entry.Interval;
+
+                    // When TTL is inherited from parent (IsFromParent=true) or not set (null), pass null
+                    // so the policy falls back to the parent's TTL.
+                    long? ttlTicks = ttlInterval?.IsFromParent == false && ttlInterval.Ticks != long.MaxValue
+                        ? ttlInterval.Ticks
+                        : null;
+
+                    ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, InitiatorInfo.AlertTemplate)
+                    {
+                        TemplateId = alertTemplateModel.Id,
+                        TTL = ttlTicks,
+                    });
+                }
             }
 
             foreach (var policy in alertTemplateModel.Policies)
                 policyUpdates.Add(new PolicyUpdate(policy, InitiatorInfo.AlertTemplate) { TemplateId = alertTemplateModel.Id });
 
-            if (ttlPolicyUpdate != null || policyUpdates.Count > 0)
+            if (ttlPolicyUpdates.Count > 0 || policyUpdates.Count > 0)
             {
 
                 var update = new SensorUpdate()
                 {
                     Id = sensor.Id,
                     Policies = policyUpdates,
-                    TTLPolicy = ttlPolicyUpdate,
-                    TTL = ttl,
+                    TTLPolicies = ttlPolicyUpdates,
                     Initiator = InitiatorInfo.AlertTemplate
                 };
 
@@ -1316,13 +1329,17 @@ namespace HSMServer.Core.Cache
                 return;
 
             foreach (var sensor in product.GetAllSensors())
-                if (sensor.Policies.TimeToLive.TemplateId == request.Id || sensor.Policies.Any(x => x.TemplateId == request.Id))
+            {
+                var sensorTtls = sensor.Policies.TTLPolicies;
+                var hasTemplateTtl = sensorTtls.Any(t => t.TemplateId == request.Id);
+
+                if (hasTemplateTtl || sensor.Policies.Any(x => x.TemplateId == request.Id))
                 {
                     foreach (var policy in sensor.Policies.Where(x => x.TemplateId == request.Id))
                         sensor.Policies.RemovePolicy(policy.Id, InitiatorInfo.AlertTemplate);
 
-                    if (sensor.Policies.TimeToLive.TemplateId == request.Id)
-                        sensor.Policies.UpdateTTL(new PolicyUpdate() { Initiator = InitiatorInfo.AlertTemplate });
+                    foreach (var ttl in sensorTtls.Where(t => t.TemplateId == request.Id).ToList())
+                        sensor.Policies.RemoveTTLPolicy(ttl.Id);
 
                     _database.UpdateSensor(sensor.ToEntity());
 
@@ -1330,6 +1347,7 @@ namespace HSMServer.Core.Cache
 
                     SensorUpdateView(sensor);
                 }
+            }
 
             if (request.IsPrimary)
             {
@@ -1340,12 +1358,21 @@ namespace HSMServer.Core.Cache
 
         private void RemoveChatsFromPolicies(ProductModel product, HashSet<Guid> chats, InitiatorInfo initiator)
         {
-            if (TryGetPolicyUpdate(product.Policies.TimeToLive, chats, initiator, out var productTtlUpdate))
+            if (product.Policies.TTLPolicies.Any(t => CanRemoveChatsFromPolicy(t.Destination, chats)))
             {
+                var productTtlUpdates = new List<PolicyUpdate>();
+                foreach (var ttl in product.Policies.TTLPolicies)
+                {
+                    if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
+                        ttlUpdate = new PolicyUpdate(ttl, initiator);
+
+                    productTtlUpdates.Add(ttlUpdate);
+                }
+
                 var update = new ProductUpdate()
                 {
                     Id = product.Id,
-                    TTLPolicy = productTtlUpdate,
+                    TTLPolicies = productTtlUpdates,
                     Initiator = initiator,
                 };
 
@@ -1354,7 +1381,19 @@ namespace HSMServer.Core.Cache
 
             foreach (var (_, sensor) in product.Sensors)
             {
-                TryGetPolicyUpdate(sensor.Policies.TimeToLive, chats, initiator, out var sensorTtlUpdate);
+                List<PolicyUpdate> sensorTtlUpdates = null;
+                if (sensor.Policies.TTLPolicies.Any(t => CanRemoveChatsFromPolicy(t.Destination, chats)))
+                {
+                    sensorTtlUpdates = new List<PolicyUpdate>(sensor.Policies.TTLPolicies.Count);
+
+                    foreach (var ttl in sensor.Policies.TTLPolicies)
+                    {
+                        if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
+                            ttlUpdate = new PolicyUpdate(ttl, initiator);
+
+                        sensorTtlUpdates.Add(ttlUpdate);
+                    }
+                }
 
                 List<PolicyUpdate> policiesUpdate = null;
                 if (sensor.Policies.Any(p => CanRemoveChatsFromPolicy(p.Destination, chats)))
@@ -1370,13 +1409,13 @@ namespace HSMServer.Core.Cache
                     }
                 }
 
-                if (policiesUpdate is not null || sensorTtlUpdate is not null)
+                if (policiesUpdate is not null || sensorTtlUpdates is not null)
                 {
                     var update = new SensorUpdate()
                     {
                         Id = sensor.Id,
                         Policies = policiesUpdate,
-                        TTLPolicy = sensorTtlUpdate,
+                        TTLPolicies = sensorTtlUpdates,
                         Initiator = initiator,
                     };
 
@@ -1909,7 +1948,12 @@ namespace HSMServer.Core.Cache
 
                     parentProduct.AddSubProduct(subProduct);
                     if (!subProduct.Settings.TTL.IsSet)
-                        subProduct.Policies.TimeToLive.ApplyParent(parentProduct.Policies.TimeToLive);
+                        foreach (var parentTtl in parentProduct.Policies.TTLPolicies)
+                        {
+                            var childTtl = new TTLPolicy();
+                            childTtl.ApplyParent(parentTtl);
+                            subProduct.Policies.AddTTLPolicy(childTtl);
+                        }
 
                     AddProduct(subProduct);
                     UpdateProduct(parentProduct);
@@ -1987,8 +2031,12 @@ namespace HSMServer.Core.Cache
                 parentProduct.AddSensor(sensor);
 
                 if (!sensor.Settings.TTL.IsSet)
-                    sensor.Policies.TimeToLive.ApplyParent(parentProduct.Policies.TimeToLive,
-                        options.HasFlag(DefaultAlertsOptions.DisableTtl));
+                    foreach (var parentTtl in parentProduct.Policies.TTLPolicies)
+                    {
+                        var childTtl = new TTLPolicy();
+                        childTtl.ApplyParent(parentTtl, options.HasFlag(DefaultAlertsOptions.DisableTtl));
+                        sensor.Policies.AddTTLPolicy(childTtl);
+                    }
 
                 SubscribeSensorToPolicyUpdate(sensor);
 
@@ -2213,10 +2261,12 @@ namespace HSMServer.Core.Cache
             foreach (var sensor in product.GetAllSensors())
             {
                 var timeout = sensor.CheckTimeout();
-                var ttl = sensor.Policies.TimeToLive;
 
-                if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
-                    SendNotification(sensor.Id, ttl.GetNotification(true));
+                foreach (var ttl in sensor.Policies.TTLPolicies)
+                {
+                    if (sensor.HasData && ttl.ResendNotification(sensor.LastValue.LastUpdateTime))
+                        SendNotification(sensor.Id, ttl.GetNotification(true));
+                }
             }
         }
 
@@ -2224,7 +2274,6 @@ namespace HSMServer.Core.Cache
         {
             if (sensor.IsExpired != timeout)
             {
-                var ttl = sensor.Policies.TimeToLive;
                 sensor.IsExpired = timeout;
 
                 if (timeout && sensor.HasData)
@@ -2236,7 +2285,9 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                SendNotification(sensor.Id, ttl.GetNotification(timeout));
+                var ttlSnapshot = sensor.Policies.TTLPolicies;
+                foreach (var ttl in ttlSnapshot)
+                    SendNotification(sensor.Id, ttl.GetNotification(timeout));
             }
 
             SensorUpdateView(sensor);
@@ -2315,7 +2366,7 @@ namespace HSMServer.Core.Cache
 
             foreach (var sensor in _sensorsById.Values)
             {
-                if (sensor.Policies.TimeToLive?.ScheduleId == id)
+                if (sensor.Policies.TTLPolicies.Any(t => t.ScheduleId == id))
                 {
                     result.Add(sensor);
                     continue;

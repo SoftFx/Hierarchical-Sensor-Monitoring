@@ -7,6 +7,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -24,7 +25,6 @@ namespace HSMServer.Model.ViewModel
 
         public SensorStatus Status { get; set; }
 
-        [Obsolete("Remove after adding TTL constructor for Folder")]
         [Display(Name = "Time to live interval")]
         [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
@@ -83,10 +83,10 @@ namespace HSMServer.Model.ViewModel
             DefaultChats = new(model, isModify: false);
 
             AlertIcons = model.AlertIcons;
-            HasTimeToLive = model.TTL.TimeInterval is not TimeInterval.None;
+            HasTimeToLive = model.TTL.TimeInterval is not TimeInterval.None || model.TTLAlerts.Count > 0;
             DataAlerts = new(model.DataAlerts);
-            if (model.TTLAlert is not null)
-                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = [model.TTLAlert.FromInterval(model.TTL)];
+            if (model.TTLAlerts.Count > 0)
+                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = model.TTLAlerts.Select(a => (DataAlertViewModelBase)a).ToList();
         }
     }
 }

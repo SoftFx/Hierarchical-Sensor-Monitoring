@@ -112,6 +112,11 @@ namespace HSMServer.Controllers
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 {
                     viewModel = node;
+                    var schedulesList = GetAlertSchedulesSelectList();
+                    node.TTLAlerts.ForEach(a => a.Schedules = schedulesList);
+                    foreach (var (_, alerts) in node.DataAlerts)
+                        foreach (var alert in alerts)
+                            alert.Schedules = schedulesList;
                     StoredUser.SelectedNode.ConnectNode(node);
                     CurrentUser.Tree.AddOpenedNode(id);
                 }
@@ -120,7 +125,7 @@ namespace HSMServer.Controllers
                     viewModel = sensor;
                     var schedulesList = GetAlertSchedulesSelectList();
                     StoredUser.History.ConnectSensor(_treeValuesCache.GetSensor(id));
-                    sensor.TTLAlert.Schedules = schedulesList;
+                    sensor.TTLAlerts.ForEach(a => a.Schedules = schedulesList);
                     foreach (var (key, alerts) in sensor.DataAlerts)
                         foreach (var alert in alerts)
                         {
@@ -590,7 +595,9 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor))
                 return _emptyResult;
 
-            return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
+            var model = new SensorInfoViewModel(sensor);
+            PopulateAlertSchedules(model);
+            return PartialView("_MetaInfo", model);
         }
 
 
@@ -664,21 +671,34 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
             if (!ModelState.IsValid)
-                return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
+            {
+                var invalidModel = new SensorInfoViewModel(sensor);
+                PopulateAlertSchedules(invalidModel);
+                return PartialView("_MetaInfo", invalidModel);
+            }
 
             var availableChats = sensor.GetAvailableChats(_telegramChatsManager);
 
-            var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+            newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var ttlAlertList);
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list)
                 ? list.Select(a => a.ToUpdate(availableChats)).ToList() : [];
 
+
+            var ttlPolicies = ttlAlertList?.Select(t =>
+            {
+                var interval = t.Conditions is { Count: > 0 } ? t.Conditions[0].TimeToLive : null;
+                var fromParent = interval?.TimeInterval.IsParent() ?? false;
+                return t.ToTimeToLiveUpdate(CurrentInitiator, availableChats) with
+                {
+                    TTL = fromParent ? null : interval?.ToModel()?.Ticks
+                };
+            }).ToList() ?? [];
 
             var update = new SensorUpdate
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
-                TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
+                TTLPolicies = ttlPolicies,
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
@@ -892,7 +912,9 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var product))
                 return _emptyResult;
 
-            return PartialView("_MetaInfo", new ProductInfoViewModel(product));
+            var model = new ProductInfoViewModel(product);
+            PopulateAlertSchedules(model);
+            return PartialView("_MetaInfo", model);
         }
 
         [HttpPost]
@@ -902,16 +924,30 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
             if (!ModelState.IsValid)
-                return PartialView("_MetaInfo", new ProductInfoViewModel(product));
+            {
+                var invalidModel = new ProductInfoViewModel(product);
+                PopulateAlertSchedules(invalidModel);
+                return PartialView("_MetaInfo", invalidModel);
+            }
 
             var availableChats = product.GetAvailableChats(_telegramChatsManager);
-            var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+            newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var ttlAlerts);
+
+            var ttlPolicies = ttlAlerts?.Select(t =>
+            {
+                var interval = t.Conditions is { Count: > 0 } ? t.Conditions[0].TimeToLive : null;
+                var fromParent = interval?.TimeInterval.IsParent() ?? false;
+                return t.ToTimeToLiveUpdate(CurrentInitiator, availableChats) with
+                {
+                    TTL = fromParent ? null : interval?.ToModel(product.TTL)?.Ticks
+                };
+            }).ToList() ?? [];
 
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
+                TTLPolicies = ttlPolicies,
+                TTL = newModel.ExpectedUpdateInterval.ToModel(product.TTL),
                 DefaultChats = newModel.DefaultChats?.ToUpdate(product, _telegramChatsManager, _folderManager),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
@@ -921,7 +957,9 @@ namespace HSMServer.Controllers
 
             await _treeValuesCache.UpdateProductAsync(update);
 
-            return PartialView("_MetaInfo", new ProductInfoViewModel(product.RecalculateCharacteristics()));
+            var model = new ProductInfoViewModel(product.RecalculateCharacteristics());
+            PopulateAlertSchedules(model);
+            return PartialView("_MetaInfo", model);
         }
 
         [HttpGet]
@@ -1001,6 +1039,14 @@ namespace HSMServer.Controllers
                 Value = tz.Id.ToString(),
                 Text = $"{tz.Name}"
             })];
+        }
+
+        private void PopulateAlertSchedules(NodeInfoBaseViewModel model)
+        {
+            var schedulesList = GetAlertSchedulesSelectList();
+            foreach (var (_, alerts) in model.DataAlerts)
+                foreach (var alert in alerts)
+                    alert.Schedules = schedulesList;
         }
     }
 }

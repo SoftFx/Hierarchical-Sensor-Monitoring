@@ -75,6 +75,8 @@ namespace HSMServer.Core.Model.Policies
             base.Attach(sensor);
 
             _sensor = (BaseSensorModel)_model;
+            _sensor.Settings.TTL.SetIsSetOverride(() => TTLPolicies.Count > 0);
+
             _typePolicy = new CorrectTypePolicy<T>(_sensor);
 
             NotificationResult = new();
@@ -87,7 +89,9 @@ namespace HSMServer.Core.Model.Policies
         {
             base.BuildDefault(node, entity);
 
-            _typePolicy.Destination = node.Policies.TimeToLive.Destination;
+            var firstTtl = node.Policies.TTLPolicies.FirstOrDefault();
+            if (firstTtl != null)
+                _typePolicy.Destination = firstTtl.Destination;
             _typePolicy.RebuildState();
         }
 
@@ -102,33 +106,36 @@ namespace HSMServer.Core.Model.Policies
             if (value is null || value.Status.IsOfftime())
                 return false;
 
-            RemoveAlert(TimeToLive);
+            var ttlSnapshot = TTLPolicies;
 
-            var timeout = false;
+            foreach (var ttlPolicy in ttlSnapshot)
+                RemoveAlert(ttlPolicy);
 
-            if (TimeToLive is not null && !TimeToLive.IsDisabled)
+            var anyTimeout = false;
+
+            foreach (var ttlPolicy in ttlSnapshot)
             {
+                if (ttlPolicy is null || ttlPolicy.IsDisabled)
+                    continue;
+
                 bool schedulePassed = true;
-                if (TimeToLive.ScheduleId.HasValue)
-                {
-                    schedulePassed = _scheduleProvider.IsWorkingTime(TimeToLive.ScheduleId.Value, value.LastUpdateTime);
-                }
+                if (ttlPolicy.ScheduleId.HasValue)
+                    schedulePassed = _scheduleProvider.IsWorkingTime(ttlPolicy.ScheduleId.Value, value.LastUpdateTime);
 
                 if (!schedulePassed)
-                    return false;
+                    continue;
 
-                timeout = TimeToLive.HasTimeout(value.LastUpdateTime);
-
-                if (timeout)
+                if (ttlPolicy.HasTimeout(value.LastUpdateTime))
                 {
-                    PolicyResult.AddSingleAlert(TimeToLive);
-                    SensorResult += TimeToLive.SensorResult;
+                    anyTimeout = true;
+                    PolicyResult.AddAlert(ttlPolicy);
+                    SensorResult += ttlPolicy.SensorResult;
                 }
             }
 
-            SensorExpired?.Invoke(_sensor, timeout);
+            SensorExpired?.Invoke(_sensor, anyTimeout);
 
-            return timeout;
+            return anyTimeout;
         }
 
         private void RemoveAlert(Policy policy)

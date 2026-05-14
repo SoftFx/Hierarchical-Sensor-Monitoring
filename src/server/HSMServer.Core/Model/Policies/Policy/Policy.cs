@@ -267,7 +267,7 @@ namespace HSMServer.Core.Model.Policies
             UpdateConditions(entity.Conditions, Update);
         }
 
-        public PolicyEntity ToEntity() => new()
+        public virtual PolicyEntity ToEntity() => new()
         {
             Id = Id.ToByteArray(),
 

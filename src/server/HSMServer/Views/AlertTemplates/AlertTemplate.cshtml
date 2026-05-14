@@ -65,6 +65,11 @@
 
         var val = $('#Type').val();
 
+        if (val == @DataAlertTemplateViewModel.AnyType)
+            $('#addDataAlert').addClass('disabled');
+        else
+            $('#addDataAlert').removeClass('disabled');
+
         $("[id^='dataAlertsList_']").each(function () {
             var type = $(this).attr('id').replace('dataAlertsList_', '');
             if (type != @ttlType && type != val) {
@@ -75,6 +80,11 @@
     }
 
     function addDataAlert(isTtl, entityId) {
+        if (!isTtl || isTtl === 'False') {
+            if ($('#addDataAlert').hasClass('disabled'))
+                return;
+        }
+
         var type = @ttlType;
 
         if (isTtl === 'False')
@@ -89,9 +99,6 @@
             url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${sendType}&entityId=${entityId}&folderId=${$('#FolderId').val()}`,
             cache: false
         }).done(function (viewData) {
-            if (type == '@ttlType') {
-                $('#addTtlAlert').addClass('disabled');
-            }
             $(`#dataAlertsList_${type}`).append(viewData);
         });
     }

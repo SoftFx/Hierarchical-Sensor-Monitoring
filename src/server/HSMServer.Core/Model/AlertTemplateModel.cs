@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMCommon.Model;
@@ -16,9 +16,7 @@ namespace HSMServer.Core.Model
 
         private PathTemplateConverter _pathTemplateConverter = new PathTemplateConverter();
 
-        public TimeIntervalModel TTL { get; set; } = TimeIntervalModel.None;
-
-        public TTLPolicy TTLPolicy { get; set; }
+        public List<TtlEntry> TtlEntries { get; set; } = [];
 
         public List<Policy> Policies { get; set; } = [];
 
@@ -46,11 +44,32 @@ namespace HSMServer.Core.Model
             SensorType = entity.SensorType;
             FolderId = entity.FolderId;
 
-            if (entity.TTLPolicy != null)
+            TtlEntries = [];
+
+            // Migration: handle both old single TTLPolicy and new TTLPolicies list
+            var ttlEntities = entity.TTLPolicies?.Count > 0
+                ? entity.TTLPolicies
+                : entity.TTLPolicy != null ? [entity.TTLPolicy] : null;
+
+            if (ttlEntities != null)
             {
-                TimeIntervalSettingProperty ttl = new TimeIntervalSettingProperty();
-                ttl.TrySetValue(new TimeIntervalModel(entity.TTL));
-                TTLPolicy = new TTLPolicy(ttl, entity.TTLPolicy);
+                var ttlIntervals = entity.TTLs?.Count > 0
+                    ? entity.TTLs
+                    : entity.TTL != null ? [entity.TTL] : null;
+
+                for (int i = 0; i < ttlEntities.Count; i++)
+                {
+                    var ttlEntity = ttlEntities[i];
+                    var interval = ttlIntervals != null && i < ttlIntervals.Count
+                        ? ttlIntervals[i]
+                        : null;
+
+                    TimeIntervalSettingProperty ttl = new TimeIntervalSettingProperty();
+                    if (interval != null)
+                        ttl.TrySetValue(new TimeIntervalModel(interval));
+
+                    TtlEntries.Add(new TtlEntry(new TTLPolicy(ttl, ttlEntity), ttl.Value ?? TimeIntervalModel.None));
+                }
             }
 
             if (entity.Policies != null)
@@ -72,15 +91,15 @@ namespace HSMServer.Core.Model
             return _pathTemplateConverter.ApplyNewTemplate(path, out error);
         }
 
-        public AlertTemplateEntity ToEntity() 
+        public AlertTemplateEntity ToEntity()
         {
             return new AlertTemplateEntity()
             {
                 Id = Id.ToByteArray(),
                 Name = Name,
                 Path = Path,
-                TTLPolicy = TTLPolicy?.ToEntity(),
-                TTL = TTL?.ToEntity(),
+                TTLPolicies = TtlEntries?.Select(e => e.Policy.ToEntity()).ToList() ?? [],
+                TTLs = TtlEntries?.Select(e => e.Interval?.ToEntity()).ToList() ?? [],
                 Policies = Policies?.Select(x => x.ToEntity()).ToList() ?? [],
                 SensorType = SensorType,
                 FolderId = FolderId,
