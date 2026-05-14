@@ -71,5 +71,9 @@ export const testData = {
   templatePath: 'BetaTTS/BetaTTS/UpdateService/.module/Service alive',
   duplicateError: 'The name must be unique.',
   templateName: 'Test',
-  templateName2: 'Test2'
+  templateName2: 'Test2',
+  testFolderName: '_1TestFolder',
+  testFolderDescription: 'Test folder for alert template',
+  testFolderColor: '#ff5733',
+  testTemplatePath: 'aaa/bbb',
 };

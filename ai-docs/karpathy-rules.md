@@ -66,9 +66,20 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## 5. Git Safety
 
-**Never commit if the intended commit fails. Stop and report.**
+**Never commit or push to master directly. Always ask for confirmation on any Git action.**
 
+- Never commit, push, or merge to the `master` (or `main`) branch — always use a separate branch.
+- Before executing any Git operation (commit, push, branch creation, merge, etc.), ask the user for explicit confirmation.
 - If a git command fails (wrong branch, merge conflict, etc.), do NOT fall back to committing to the current branch.
 - Stop immediately and report the error to the user.
 - Ask the user for clarification before retrying.
 - Never assume which branch to use — if unsure, ask.
+
+## 6. Version Bumping
+
+**Always bump the last segment of the project version when committing changes.**
+
+- The project version is defined in `src/server/HSMServer/HSMServer.csproj` as `<Version>X.XX.XX</Version>`.
+- Before committing, always increment the last number (patch version) by 1.
+- Example: `3.40.29` → `3.40.30`.
+- Apply this rule to every commit that includes code or configuration changes.
