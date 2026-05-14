@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Xunit;
 using HSMCommon.Model;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.Tests.Infrastructure;
@@ -135,7 +136,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorType in Enum.GetValues<SensorType>()[..^1])
             {
                 var sensor = BuildSensorModel(sensorType);
-                sensor.Settings.TTL.TrySetValue(new TimeIntervalModel(ticks));
+                AddTTLPolicy(sensor, ticks);
 
                 var baseValue = SensorValuesFactory.BuildValue(sensorType) with
                 { Time = new DateTime(DateTime.UtcNow.Ticks - ticks) };
@@ -181,7 +182,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorType in Enum.GetValues<SensorType>()[..^1])
             {
                 var sensor = BuildSensorModel(sensorType);
-                sensor.Settings.TTL.TrySetValue(new TimeIntervalModel(TestTicks));
+                AddTTLPolicy(sensor, TestTicks);
 
                 var baseValue = SensorValuesFactory.BuildValue(sensorType) with
                 {
@@ -308,6 +309,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             };
 
             return SensorModelFactory.Build(entity);
+        }
+
+        private static void AddTTLPolicy(BaseSensorModel sensor, long ticks)
+        {
+            var update = new PolicyUpdate { TTL = ticks };
+            sensor.Policies.AddTTLPolicy(update);
         }
 
         private static string GetBadValueTypeMessage(SensorType sensorType)
