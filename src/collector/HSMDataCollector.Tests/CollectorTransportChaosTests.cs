@@ -54,6 +54,80 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task Server_socket_is_open_but_never_accepts_while_values_are_added_does_not_hang_or_leak()
+        {
+            using (var server = NoAcceptTcpServer.Start())
+            {
+                var before = TransportResourceSnapshot.Capture(new[] { server.Port });
+
+                using (var collector = CreateCollector(
+                    server.Port,
+                    TimeSpan.FromMilliseconds(300),
+                    1,
+                    50000,
+                    "no-accept-server"))
+                {
+                    var sensors = Enumerable.Range(0, 16)
+                        .Select(i => collector.CreateDoubleSensor("transport/no-accept/double/" + i.ToString(CultureInfo.InvariantCulture)))
+                        .ToArray();
+
+                    collector.Initialize(false);
+
+                    var addValueCalls = 0;
+                    var producers = Enumerable.Range(0, 8)
+                        .Select(worker => Task.Run(() =>
+                        {
+                            for (var value = 0; value < 2000; value++)
+                            {
+                                sensors[(worker + value) % sensors.Length].AddValue(value);
+                                Interlocked.Increment(ref addValueCalls);
+                            }
+                        }))
+                        .ToArray();
+
+                    await Task.WhenAll(producers).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+
+                    await DisposeWithinAsync(collector, TimeSpan.FromSeconds(7)).ConfigureAwait(false);
+
+                    _output.WriteLine("scenario=no-accept-server; addValues={0}; port={1}", addValueCalls, server.Port);
+
+                    Assert.Equal(16000, addValueCalls);
+                }
+
+                server.Dispose();
+
+                await AssertNoEstablishedConnectionsAsync(new[] { server.Port }, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                var after = TransportResourceSnapshot.Capture(new[] { server.Port });
+
+                _output.WriteLine(
+                    "scenario=no-accept-server-resources; handles={0}->{1}; threads={2}->{3}; managedGc={4}->{5}; private={6}->{7}; workingSet={8}->{9}; tcpEstablished={10}; tcpTimeWait={11}",
+                    before.HandleCount,
+                    after.HandleCount,
+                    before.ThreadCount,
+                    after.ThreadCount,
+                    before.ManagedAfterFullGc,
+                    after.ManagedAfterFullGc,
+                    before.PrivateBytes,
+                    after.PrivateBytes,
+                    before.WorkingSet,
+                    after.WorkingSet,
+                    after.TcpEstablished,
+                    after.TcpTimeWait);
+
+                Assert.True(after.TcpEstablished == 0, "No ESTABLISHED TCP connections should remain when the server socket never accepts.");
+                Assert.True(after.ThreadCount - before.ThreadCount < 80, "Thread count should stay bounded when the server socket never accepts.");
+                Assert.True(after.ManagedAfterFullGc - before.ManagedAfterFullGc < 128L * 1024 * 1024, "Managed memory should stay bounded when the server socket never accepts.");
+                Assert.True(after.PrivateBytes - before.PrivateBytes < 256L * 1024 * 1024, "Private bytes should stay bounded when the server socket never accepts.");
+                Assert.True(after.WorkingSet - before.WorkingSet < 256L * 1024 * 1024, "Working set should stay bounded when the server socket never accepts.");
+
+                if (before.HandleCount >= 0 && after.HandleCount >= 0)
+                    Assert.True(after.HandleCount - before.HandleCount < 500, "Handle count should stay bounded when the server socket never accepts.");
+            }
+        }
+
+        [Fact]
         public async Task Server_reads_request_body_slowly_does_not_block_dispose()
         {
             var stats = await RunSingleCollectorScenarioAsync(
@@ -991,6 +1065,34 @@ namespace HSMDataCollector.Tests
                 {
                     return new TcpCounts(0, 0, 0);
                 }
+            }
+        }
+
+        private sealed class NoAcceptTcpServer : IDisposable
+        {
+            private readonly TcpListener _listener;
+            private int _disposed;
+
+            private NoAcceptTcpServer(int port)
+            {
+                Port = port;
+                _listener = new TcpListener(IPAddress.Loopback, port);
+                _listener.Start(backlog: 1);
+            }
+
+            public int Port { get; }
+
+            public static NoAcceptTcpServer Start()
+            {
+                return new NoAcceptTcpServer(GetFreePort());
+            }
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                    return;
+
+                _listener.Stop();
             }
         }
 

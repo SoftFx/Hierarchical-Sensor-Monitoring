@@ -2,7 +2,7 @@
 
 Дата прогона: 2026-05-26.
 
-Коротко: добавлен быстрый test suite из 15 транспортных chaos-сценариев и отдельный gated soak-тест. Быстрые тесты ломают соединение ниже уровня `HttpListener`: принимают TCP и закрывают, принимают и молчат, медленно читают body, отдают битый HTTP, сбрасывают соединение во время request body, подвешивают только `/commands` или только data endpoint, запускают много collectors и шлют большие payload/file payload. Gated soak повторяет mixed transport suite на одном сервере 30+ секунд и смотрит реальные accepted TCP connections и ресурсный тренд.
+Коротко: добавлен быстрый test suite из 16 транспортных chaos-сценариев и отдельный gated soak-тест. Быстрые тесты ломают соединение ниже уровня `HttpListener`: принимают TCP и закрывают, принимают и молчат, держат открытый порт без application-level accept, медленно читают body, отдают битый HTTP, сбрасывают соединение во время request body, подвешивают только `/commands` или только data endpoint, запускают много collectors и шлют большие payload/file payload. Gated soak повторяет mixed transport suite на одном сервере 30+ секунд и смотрит реальные accepted TCP connections и ресурсный тренд.
 
 Код тестов:
 
@@ -72,11 +72,11 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Transport-chaos suite:
 
 ```text
-Total tests: 16
-Passed: 15
+Total tests: 17
+Passed: 16
 Skipped: 1
 Failed: 0
-Total time: 25.2327 seconds
+Total time: ~27 seconds
 ```
 
 Полный быстрый test run:
@@ -132,7 +132,7 @@ Post-warm-up trend:
   threads: 64 -> 64
 ```
 
-## 15 сценариев по шагам
+## 16 сценариев по шагам
 
 ### 1. Accept and drop
 
@@ -177,7 +177,38 @@ requests=4; commands=2; data=2; dropped=4
 requests=3; commands=1; data=2; hung=3
 ```
 
-### 3. Slow request-body read
+### 3. Open socket, no accept
+
+Тест:
+
+`Server_socket_is_open_but_never_accepts_while_values_are_added_does_not_hang_or_leak`
+
+Шаги:
+
+1. Поднять `TcpListener` на `127.0.0.1` с backlog `1`.
+2. Не вызывать `AcceptTcpClientAsync()` вообще.
+3. Создать collector с коротким `RequestTimeout=300 ms`.
+4. Создать 16 double-сенсоров.
+5. Параллельно вызвать `AddValue()` 16000 раз.
+6. Подождать 2 секунды, чтобы sender попытался отправлять в открытый, но не принимающий сервер.
+7. Вызвать `Dispose()`.
+8. Остановить listener.
+9. Проверить, что не осталось TCP `ESTABLISHED`, а handles/threads/memory bounded.
+
+Локальный счетчик:
+
+```text
+addValues=16000
+handles=599->859
+threads=23->44
+managedGc=2125760->5506456
+private=42909696->56283136
+workingSet=68313088->82972672
+tcpEstablished=0
+tcpTimeWait=0
+```
+
+### 4. Slow request-body read
 
 Тест:
 
@@ -197,7 +228,7 @@ requests=3; commands=1; data=2; hung=3
 requests=4; commands=2; data=2; slowReads=4; bytes=107
 ```
 
-### 4. Headers sent, body never completes
+### 5. Headers sent, body never completes
 
 Тест:
 
@@ -217,7 +248,7 @@ requests=4; commands=2; data=2; slowReads=4; bytes=107
 requests=4; commands=2; data=2; headerOnly=4; bytes=38740
 ```
 
-### 5. Malformed HTTP
+### 6. Malformed HTTP
 
 Тест:
 
@@ -237,7 +268,7 @@ requests=4; commands=2; data=2; headerOnly=4; bytes=38740
 requests=4; commands=2; data=2; malformed=4
 ```
 
-### 6. Reset during request body
+### 7. Reset during request body
 
 Тест:
 
@@ -256,7 +287,7 @@ requests=4; commands=2; data=2; malformed=4
 requests=2; commands=1; data=1; resets=2; bytes=256
 ```
 
-### 7. Command endpoint hangs, data endpoint works
+### 8. Command endpoint hangs, data endpoint works
 
 Тест:
 
@@ -276,7 +307,7 @@ requests=2; commands=1; data=1; resets=2; bytes=256
 requests=8; commands=1; data=7; ok=7; hung=1; bytes=110007
 ```
 
-### 8. Data endpoint hangs, command endpoint works
+### 9. Data endpoint hangs, command endpoint works
 
 Тест:
 
@@ -295,7 +326,7 @@ requests=8; commands=1; data=7; ok=7; hung=1; bytes=110007
 requests=3; commands=1; data=2; ok=1; hung=2; bytes=3497
 ```
 
-### 9. Server starts after connection refused
+### 10. Server starts after connection refused
 
 Тест:
 
@@ -310,7 +341,7 @@ requests=3; commands=1; data=2; ok=1; hung=2; bytes=3497
 5. Отправить еще значения.
 6. Проверить, что collector восстановился и сервер получил request-ы.
 
-### 10. Many collectors to one flaky server
+### 11. Many collectors to one flaky server
 
 Тест:
 
@@ -325,7 +356,7 @@ requests=3; commands=1; data=2; ok=1; hung=2; bytes=3497
 5. Все collectors dispose-ятся.
 6. Проверить `ESTABLISHED=0`.
 
-### 11. Many collectors on many flaky ports
+### 12. Many collectors on many flaky ports
 
 Тест:
 
@@ -346,7 +377,7 @@ requests=3; commands=1; data=2; ok=1; hung=2; bytes=3497
 5 servers x requests=4; resets=2 per server
 ```
 
-### 12. Huge string and comment payload
+### 13. Huge string and comment payload
 
 Тест:
 
@@ -367,7 +398,7 @@ requests=3; commands=1; data=2; ok=1; hung=2; bytes=3497
 requests=3; data=2; dropped=1; bytes=1334938
 ```
 
-### 13. File sensor flood
+### 14. File sensor flood
 
 Тест:
 
@@ -388,7 +419,7 @@ requests=3; data=2; dropped=1; bytes=1334938
 requests=6; data=5; dropped=3; bytes=467736
 ```
 
-### 14. Dispose while HTTP request is mid-flight
+### 15. Dispose while HTTP request is mid-flight
 
 Тест:
 
@@ -401,7 +432,7 @@ requests=6; data=5; dropped=3; bytes=467736
 3. Пока сервер молчит, тест вызывает `Dispose()`.
 4. Проверить, что `Dispose()` завершился и `ESTABLISHED=0`.
 
-### 15. Constant disconnect retry storm
+### 16. Constant disconnect retry storm
 
 Тест:
 
@@ -425,7 +456,7 @@ requests=8; dropped=8; retryStormCpuMs=31.25
 
 Новый transport suite специально сделан коротким:
 
-- 15 сценариев;
+- 16 сценариев;
 - raw TCP chaos вместо долгого внешнего сервера;
 - короткие `RequestTimeout` в пределах `500-800 ms`;
 - весь suite проходит примерно за `25` секунд;
