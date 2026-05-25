@@ -359,6 +359,7 @@ namespace HSMDataCollector.Tests
         public async Task Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded()
         {
             var duration = GetTransportSoakDuration();
+            var maxDuration = GetTransportSoakMaxDuration();
             var collectorsPerPhase = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_COLLECTORS", 8);
             var valuesPerCollector = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_VALUES", 250);
             var minConnections = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_MIN_CONNECTIONS", 200);
@@ -379,6 +380,7 @@ namespace HSMDataCollector.Tests
             var phaseResults = new List<TransportSoakPhaseResult>();
             TransportResourceSnapshot trendBaseline = null;
             TransportResourceSnapshot trendLast = null;
+            var stopwatch = Stopwatch.StartNew();
 
             using (var server = RawChaosServer.Start((request, number) =>
                 CreateSoakResponse((TransportSoakScenario)Volatile.Read(ref currentScenario), request, number)))
@@ -420,6 +422,7 @@ namespace HSMDataCollector.Tests
                             trendBaseline = trendSnapshot;
 
                         trendLast = trendSnapshot;
+                        AssertWithinTransportSoakMax(stopwatch, maxDuration);
                     }
                 }
 
@@ -432,8 +435,10 @@ namespace HSMDataCollector.Tests
             var after = TransportResourceSnapshot.Capture(new[] { port });
 
             _output.WriteLine(
-                "transportSoakTotals; durationSeconds={0}; cycles={1}; accepted={2}; requests={3}; dropped={4}; hung={5}; slowReads={6}; headerOnly={7}; malformed={8}; resets={9}; tcpEstablished={10}; tcpTimeWait={11}; handles={12}->{13}; threads={14}->{15}; managedGc={16}->{17}; private={18}->{19}; workingSet={20}->{21}",
+                "transportSoakTotals; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; accepted={4}; requests={5}; dropped={6}; hung={7}; slowReads={8}; headerOnly={9}; malformed={10}; resets={11}; tcpEstablished={12}; tcpTimeWait={13}; handles={14}->{15}; threads={16}->{17}; managedGc={18}->{19}; private={20}->{21}; workingSet={22}->{23}",
                 duration.TotalSeconds,
+                maxDuration.TotalSeconds,
+                stopwatch.Elapsed.TotalSeconds,
                 cycles,
                 stats.AcceptedConnections,
                 stats.TotalRequests,
@@ -649,6 +654,23 @@ namespace HSMDataCollector.Tests
                 return TimeSpan.FromSeconds(seconds);
 
             return TimeSpan.FromSeconds(30);
+        }
+
+        private static TimeSpan GetTransportSoakMaxDuration()
+        {
+            var rawSeconds = Environment.GetEnvironmentVariable("HSM_COLLECTOR_TRANSPORT_SOAK_MAX_SECONDS")
+                ?? Environment.GetEnvironmentVariable("HSM_COLLECTOR_SUITE_SOAK_MAX_SECONDS");
+
+            if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+                return TimeSpan.FromSeconds(seconds);
+
+            return TimeSpan.FromMinutes(2);
+        }
+
+        private static void AssertWithinTransportSoakMax(Stopwatch stopwatch, TimeSpan maxDuration)
+        {
+            Assert.True(stopwatch.Elapsed <= maxDuration,
+                $"Transport soak exceeded hard limit {maxDuration}. Target duration is soft, but exceeding the hard limit means the suite likely hung.");
         }
 
         private static async Task DisposeWithinAsync(DataCollector collector, TimeSpan timeout)

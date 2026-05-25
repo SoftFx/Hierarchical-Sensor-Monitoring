@@ -70,6 +70,7 @@ namespace HSMDataCollector.Tests
                 return;
 
             var duration = GetSuiteSoakDuration();
+            var maxDuration = GetSuiteSoakMaxDuration();
             var stopwatch = Stopwatch.StartNew();
             var cycles = 0;
             var resourceCycles = 0;
@@ -88,9 +89,10 @@ namespace HSMDataCollector.Tests
 
                 AssertResourceTrends(results, maxManagedGrowthBytes: 64L * 1024 * 1024);
                 resourceCycles += results.Count;
+                AssertWithinSuiteSoakMax(stopwatch, maxDuration);
             }
 
-            _output.WriteLine("resourceLeakSuiteSoak; durationSeconds={0}; suiteCycles={1}; resourceCycles={2}", duration.TotalSeconds, cycles, resourceCycles);
+            _output.WriteLine("resourceLeakSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; suiteCycles={3}; resourceCycles={4}", duration.TotalSeconds, maxDuration.TotalSeconds, stopwatch.Elapsed.TotalSeconds, cycles, resourceCycles);
 
             Assert.True(cycles > 0, "The resource leak suite soak should complete at least one suite cycle.");
             Assert.True(resourceCycles >= 5, "The resource leak suite soak should execute at least one full resource cycle set.");
@@ -272,6 +274,22 @@ namespace HSMDataCollector.Tests
                 return TimeSpan.FromSeconds(seconds);
 
             return TimeSpan.FromSeconds(30);
+        }
+
+        private static TimeSpan GetSuiteSoakMaxDuration()
+        {
+            var rawSeconds = Environment.GetEnvironmentVariable("HSM_COLLECTOR_SUITE_SOAK_MAX_SECONDS");
+
+            if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+                return TimeSpan.FromSeconds(seconds);
+
+            return TimeSpan.FromMinutes(2);
+        }
+
+        private static void AssertWithinSuiteSoakMax(Stopwatch stopwatch, TimeSpan maxDuration)
+        {
+            Assert.True(stopwatch.Elapsed <= maxDuration,
+                $"Suite soak exceeded hard limit {maxDuration}. Target duration is soft, but exceeding the hard limit means the suite likely hung.");
         }
 
         private sealed class SuiteSoakFactAttribute : FactAttribute

@@ -49,6 +49,7 @@ Single-server transport soak на 30 секунд:
 ```powershell
 $env:HSM_COLLECTOR_RUN_TRANSPORT_SOAK="1" # или HSM_COLLECTOR_RUN_SUITE_SOAK="1"
 $env:HSM_COLLECTOR_TRANSPORT_SOAK_SECONDS="30" # или общий HSM_COLLECTOR_SUITE_SOAK_SECONDS="30"
+$env:HSM_COLLECTOR_TRANSPORT_SOAK_MAX_SECONDS="120" # или общий HSM_COLLECTOR_SUITE_SOAK_MAX_SECONDS="120"
 dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded" --logger "console;verbosity=detailed"
 ```
 
@@ -60,6 +61,8 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 | `HSM_COLLECTOR_RUN_SUITE_SOAK` | off | Включает все gated suite repeat-тесты, включая transport soak |
 | `HSM_COLLECTOR_TRANSPORT_SOAK_SECONDS` | 30 | Длительность mixed suite |
 | `HSM_COLLECTOR_SUITE_SOAK_SECONDS` | 30 | Общая длительность suite repeat, используется transport soak если transport-specific переменная не задана |
+| `HSM_COLLECTOR_TRANSPORT_SOAK_MAX_SECONDS` | 120 | Hard safety limit для transport soak |
+| `HSM_COLLECTOR_SUITE_SOAK_MAX_SECONDS` | 120 | Общий hard safety limit для suite repeat |
 | `HSM_COLLECTOR_TRANSPORT_SOAK_COLLECTORS` | 8 | Сколько collectors одновременно создается на фазу |
 | `HSM_COLLECTOR_TRANSPORT_SOAK_VALUES` | 250 | Сколько `AddValue()` вызывает каждый collector на фазу |
 | `HSM_COLLECTOR_TRANSPORT_SOAK_MIN_CONNECTIONS` | 200 | Минимум accepted TCP connections, ниже тест считается слишком слабым |

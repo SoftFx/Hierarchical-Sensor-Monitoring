@@ -48,6 +48,7 @@ namespace HSMDataCollector.Tests
         public void Default_sensor_smoke_suite_repeated_for_duration()
         {
             var duration = GetSuiteSoakDuration();
+            var maxDuration = GetSuiteSoakMaxDuration();
             var stopwatch = Stopwatch.StartNew();
             var cycles = 0;
             var scenarioRuns = 0;
@@ -63,9 +64,10 @@ namespace HSMDataCollector.Tests
                 scenarioRuns++;
 
                 Thread.Sleep(1);
+                AssertWithinSuiteSoakMax(stopwatch, maxDuration);
             }
 
-            _output.WriteLine("defaultSensorSmokeSuiteSoak; durationSeconds={0}; cycles={1}; scenarioRuns={2}", duration.TotalSeconds, cycles, scenarioRuns);
+            _output.WriteLine("defaultSensorSmokeSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}", duration.TotalSeconds, maxDuration.TotalSeconds, stopwatch.Elapsed.TotalSeconds, cycles, scenarioRuns);
 
             Assert.True(cycles > 0, "The default sensor smoke suite soak should complete at least one suite cycle.");
         }
@@ -80,6 +82,22 @@ namespace HSMDataCollector.Tests
                 return TimeSpan.FromSeconds(seconds);
 
             return TimeSpan.FromSeconds(30);
+        }
+
+        private static TimeSpan GetSuiteSoakMaxDuration()
+        {
+            var rawSeconds = Environment.GetEnvironmentVariable("HSM_COLLECTOR_SUITE_SOAK_MAX_SECONDS");
+
+            if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+                return TimeSpan.FromSeconds(seconds);
+
+            return TimeSpan.FromMinutes(2);
+        }
+
+        private static void AssertWithinSuiteSoakMax(Stopwatch stopwatch, TimeSpan maxDuration)
+        {
+            Assert.True(stopwatch.Elapsed <= maxDuration,
+                $"Suite soak exceeded hard limit {maxDuration}. Target duration is soft, but exceeding the hard limit means the suite likely hung.");
         }
 
         private sealed class SuiteSoakFactAttribute : FactAttribute
