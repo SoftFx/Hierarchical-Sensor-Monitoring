@@ -2,7 +2,7 @@
 
 Дата прогона: 2026-05-26.
 
-Коротко: добавлен быстрый test suite из 16 транспортных chaos-сценариев и отдельный gated soak-тест. Быстрые тесты ломают соединение ниже уровня `HttpListener`: принимают TCP и закрывают, принимают и молчат, держат открытый порт без application-level accept, медленно читают body, отдают битый HTTP, сбрасывают соединение во время request body, подвешивают только `/commands` или только data endpoint, запускают много collectors и шлют большие payload/file payload. Gated soak повторяет mixed transport suite на одном сервере 30+ секунд и смотрит реальные accepted TCP connections и ресурсный тренд.
+Коротко: добавлен быстрый test suite из 18 транспортных chaos-сценариев и отдельный gated soak-тест. Быстрые тесты ломают соединение ниже уровня `HttpListener`: принимают TCP и закрывают, принимают и молчат, держат открытый порт без application-level accept, принимают request headers и не читают body, медленно отвечают, медленно читают body, отдают битый HTTP, сбрасывают соединение во время request body, подвешивают только `/commands` или только data endpoint, запускают много collectors и шлют большие payload/file payload. Gated soak повторяет mixed transport suite на одном сервере 30+ секунд и смотрит реальные accepted TCP connections и ресурсный тренд.
 
 Код тестов:
 
@@ -72,21 +72,21 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Transport-chaos suite:
 
 ```text
-Total tests: 17
-Passed: 16
+Total tests: 19
+Passed: 18
 Skipped: 1
 Failed: 0
-Total time: ~27 seconds
+Total time: ~35 seconds
 ```
 
 Полный быстрый test run:
 
 ```text
-Passed: 29
+Passed: 32
 Skipped: 7
 Failed: 0
-Total: 36
-Duration: 33 seconds
+Total: 39
+Duration: 42 seconds
 ```
 
 Skipped тесты - это намеренно длинные stress/soak проверки, которые включаются через env-переменные.
@@ -132,7 +132,7 @@ Post-warm-up trend:
   threads: 64 -> 64
 ```
 
-## 16 сценариев по шагам
+## 18 сценариев по шагам
 
 ### 1. Accept and drop
 
@@ -188,9 +188,9 @@ requests=3; commands=1; data=2; hung=3
 1. Поднять `TcpListener` на `127.0.0.1` с backlog `1`.
 2. Не вызывать `AcceptTcpClientAsync()` вообще.
 3. Создать collector с коротким `RequestTimeout=300 ms`.
-4. Создать 16 double-сенсоров.
-5. Параллельно вызвать `AddValue()` 16000 раз.
-6. Подождать 2 секунды, чтобы sender попытался отправлять в открытый, но не принимающий сервер.
+4. Создать mixed-набор сенсоров: instant `bool/int/double/string/version/time/enum`, last-value `bool/int/double/string/version/time`, bar `int/double`, rate, file.
+5. Параллельно вызвать `AddValue()` 100000 раз.
+6. Подождать 3 секунды, чтобы sender пытался отправлять в открытый, но не принимающий сервер.
 7. Вызвать `Dispose()`.
 8. Остановить listener.
 9. Проверить, что не осталось TCP `ESTABLISHED`, а handles/threads/memory bounded.
@@ -198,17 +198,84 @@ requests=3; commands=1; data=2; hung=3
 Локальный счетчик:
 
 ```text
-addValues=16000
-handles=599->859
-threads=23->44
-managedGc=2125760->5506456
-private=42909696->56283136
-workingSet=68313088->82972672
+addValues=100000
+types=instantBool=5883, instantInt=5883, instantDouble=5883, instantString=5883, instantVersion=5883, instantTime=5883, instantEnum=5882, lastBool=5882, lastInt=5882, lastDouble=5882, lastString=5882, lastVersion=5882, lastTime=5882, barInt=5882, barDouble=5882, rate=5882, file=5882
+handles=938->942
+threads=53->53
+managedGc=9581360->9710832
+private=65265664->67661824
+workingSet=92135424->94601216
 tcpEstablished=0
 tcpTimeWait=0
 ```
 
-### 4. Slow request-body read
+### 4. Accept headers, never read body, never respond, high-volume mixed values
+
+Тест:
+
+`Server_accepts_but_never_reads_body_or_responds_while_mixed_values_are_generated_stays_bounded`
+
+Шаги:
+
+1. Поднять raw TCP chaos-server.
+2. Сервер принимает TCP connection.
+3. Сервер читает только HTTP headers.
+4. Сервер не читает request body и не отправляет response.
+5. Создать mixed-набор сенсоров всех основных публичных типов.
+6. Параллельно вызвать `AddValue()` 100000 раз.
+7. Подождать 3 секунды, чтобы sender продолжал пытаться отправлять.
+8. Вызвать `Dispose()`.
+9. Проверить, что нет `ESTABLISHED`, а handles/threads/memory bounded.
+
+Локальный счетчик:
+
+```text
+addValues=100000
+types=instantBool=5883, instantInt=5883, instantDouble=5883, instantString=5883, instantVersion=5883, instantTime=5883, instantEnum=5882, lastBool=5882, lastInt=5882, lastDouble=5882, lastString=5882, lastVersion=5882, lastTime=5882, barInt=5882, barDouble=5882, rate=5882, file=5882
+requests=30; commands=10; data=20; hung=30; bytes=0
+handles=943->967
+threads=53->54
+managedGc=9760240->9781520
+private=67670016->68562944
+workingSet=94629888->95526912
+tcpEstablished=0
+tcpTimeWait=12
+```
+
+### 5. Accept and reply slowly, high-volume mixed values
+
+Тест:
+
+`Server_accepts_and_replies_slowly_while_mixed_values_are_generated_stays_bounded`
+
+Шаги:
+
+1. Поднять raw TCP chaos-server.
+2. Сервер принимает TCP connection.
+3. Сервер читает request body.
+4. Перед `200 OK` ждет `400 ms`.
+5. Создать mixed-набор сенсоров всех основных публичных типов.
+6. Параллельно вызвать `AddValue()` 100000 раз.
+7. Подождать 3 секунды.
+8. Вызвать `Dispose()`.
+9. Проверить, что часть delayed responses реально прошла, request body bytes приняты, нет `ESTABLISHED`, ресурсы bounded.
+
+Локальный счетчик:
+
+```text
+addValues=100000
+types=instantBool=5883, instantInt=5883, instantDouble=5883, instantString=5883, instantVersion=5883, instantTime=5883, instantEnum=5882, lastBool=5882, lastInt=5882, lastDouble=5882, lastString=5882, lastVersion=5882, lastTime=5882, barInt=5882, barDouble=5882, rate=5882, file=5882
+requests=18; commands=6; data=12; ok=15; bytes=5426
+handles=603->942
+threads=23->53
+managedGc=2182480->9550224
+private=43184128->65118208
+workingSet=68714496->91914240
+tcpEstablished=0
+tcpTimeWait=15
+```
+
+### 6. Slow request-body read
 
 Тест:
 
@@ -228,7 +295,7 @@ tcpTimeWait=0
 requests=4; commands=2; data=2; slowReads=4; bytes=107
 ```
 
-### 5. Headers sent, body never completes
+### 7. Headers sent, body never completes
 
 Тест:
 
@@ -248,7 +315,7 @@ requests=4; commands=2; data=2; slowReads=4; bytes=107
 requests=4; commands=2; data=2; headerOnly=4; bytes=38740
 ```
 
-### 6. Malformed HTTP
+### 8. Malformed HTTP
 
 Тест:
 
@@ -268,7 +335,7 @@ requests=4; commands=2; data=2; headerOnly=4; bytes=38740
 requests=4; commands=2; data=2; malformed=4
 ```
 
-### 7. Reset during request body
+### 9. Reset during request body
 
 Тест:
 
@@ -287,7 +354,7 @@ requests=4; commands=2; data=2; malformed=4
 requests=2; commands=1; data=1; resets=2; bytes=256
 ```
 
-### 8. Command endpoint hangs, data endpoint works
+### 10. Command endpoint hangs, data endpoint works
 
 Тест:
 
@@ -307,7 +374,7 @@ requests=2; commands=1; data=1; resets=2; bytes=256
 requests=8; commands=1; data=7; ok=7; hung=1; bytes=110007
 ```
 
-### 9. Data endpoint hangs, command endpoint works
+### 11. Data endpoint hangs, command endpoint works
 
 Тест:
 
@@ -326,7 +393,7 @@ requests=8; commands=1; data=7; ok=7; hung=1; bytes=110007
 requests=3; commands=1; data=2; ok=1; hung=2; bytes=3497
 ```
 
-### 10. Server starts after connection refused
+### 12. Server starts after connection refused
 
 Тест:
 
@@ -341,7 +408,7 @@ requests=3; commands=1; data=2; ok=1; hung=2; bytes=3497
 5. Отправить еще значения.
 6. Проверить, что collector восстановился и сервер получил request-ы.
 
-### 11. Many collectors to one flaky server
+### 13. Many collectors to one flaky server
 
 Тест:
 
@@ -356,7 +423,7 @@ requests=3; commands=1; data=2; ok=1; hung=2; bytes=3497
 5. Все collectors dispose-ятся.
 6. Проверить `ESTABLISHED=0`.
 
-### 12. Many collectors on many flaky ports
+### 14. Many collectors on many flaky ports
 
 Тест:
 
@@ -377,7 +444,7 @@ requests=3; commands=1; data=2; ok=1; hung=2; bytes=3497
 5 servers x requests=4; resets=2 per server
 ```
 
-### 13. Huge string and comment payload
+### 15. Huge string and comment payload
 
 Тест:
 
@@ -398,7 +465,7 @@ requests=3; commands=1; data=2; ok=1; hung=2; bytes=3497
 requests=3; data=2; dropped=1; bytes=1334938
 ```
 
-### 14. File sensor flood
+### 16. File sensor flood
 
 Тест:
 
@@ -419,7 +486,7 @@ requests=3; data=2; dropped=1; bytes=1334938
 requests=6; data=5; dropped=3; bytes=467736
 ```
 
-### 15. Dispose while HTTP request is mid-flight
+### 17. Dispose while HTTP request is mid-flight
 
 Тест:
 
@@ -432,7 +499,7 @@ requests=6; data=5; dropped=3; bytes=467736
 3. Пока сервер молчит, тест вызывает `Dispose()`.
 4. Проверить, что `Dispose()` завершился и `ESTABLISHED=0`.
 
-### 16. Constant disconnect retry storm
+### 18. Constant disconnect retry storm
 
 Тест:
 
@@ -456,7 +523,7 @@ requests=8; dropped=8; retryStormCpuMs=31.25
 
 Новый transport suite специально сделан коротким:
 
-- 16 сценариев;
+- 18 сценариев;
 - raw TCP chaos вместо долгого внешнего сервера;
 - короткие `RequestTimeout` в пределах `500-800 ms`;
 - весь suite проходит примерно за `25` секунд;

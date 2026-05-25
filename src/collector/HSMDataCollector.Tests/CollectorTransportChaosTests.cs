@@ -1,4 +1,5 @@
 using HSMDataCollector.Core;
+using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using System;
@@ -22,6 +23,7 @@ namespace HSMDataCollector.Tests
     public sealed class CollectorTransportChaosTests
     {
         private readonly ITestOutputHelper _output;
+        private const int HighVolumeMixedValueCount = 100000;
 
         public CollectorTransportChaosTests(ITestOutputHelper output)
         {
@@ -67,32 +69,21 @@ namespace HSMDataCollector.Tests
                     50000,
                     "no-accept-server"))
                 {
-                    var sensors = Enumerable.Range(0, 16)
-                        .Select(i => collector.CreateDoubleSensor("transport/no-accept/double/" + i.ToString(CultureInfo.InvariantCulture)))
-                        .ToArray();
-
                     collector.Initialize(false);
 
-                    var addValueCalls = 0;
-                    var producers = Enumerable.Range(0, 8)
-                        .Select(worker => Task.Run(() =>
-                        {
-                            for (var value = 0; value < 2000; value++)
-                            {
-                                sensors[(worker + value) % sensors.Length].AddValue(value);
-                                Interlocked.Increment(ref addValueCalls);
-                            }
-                        }))
-                        .ToArray();
-
-                    await Task.WhenAll(producers).ConfigureAwait(false);
-                    await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                    var flood = await ProduceMixedSensorLoadAsync(
+                        collector,
+                        "transport/no-accept",
+                        HighVolumeMixedValueCount).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
 
                     await DisposeWithinAsync(collector, TimeSpan.FromSeconds(7)).ConfigureAwait(false);
 
-                    _output.WriteLine("scenario=no-accept-server; addValues={0}; port={1}", addValueCalls, server.Port);
+                    WriteMixedFloodStats("no-accept-server", flood);
+                    _output.WriteLine("scenario=no-accept-server; addValues={0}; port={1}", flood.TotalAddValueCalls, server.Port);
 
-                    Assert.Equal(16000, addValueCalls);
+                    Assert.Equal(HighVolumeMixedValueCount, flood.TotalAddValueCalls);
+                    Assert.True(flood.AllWritersUsed, "The high-volume no-accept scenario should send all configured sensor value types.");
                 }
 
                 server.Dispose();
@@ -116,14 +107,118 @@ namespace HSMDataCollector.Tests
                     after.TcpEstablished,
                     after.TcpTimeWait);
 
-                Assert.True(after.TcpEstablished == 0, "No ESTABLISHED TCP connections should remain when the server socket never accepts.");
-                Assert.True(after.ThreadCount - before.ThreadCount < 80, "Thread count should stay bounded when the server socket never accepts.");
-                Assert.True(after.ManagedAfterFullGc - before.ManagedAfterFullGc < 128L * 1024 * 1024, "Managed memory should stay bounded when the server socket never accepts.");
-                Assert.True(after.PrivateBytes - before.PrivateBytes < 256L * 1024 * 1024, "Private bytes should stay bounded when the server socket never accepts.");
-                Assert.True(after.WorkingSet - before.WorkingSet < 256L * 1024 * 1024, "Working set should stay bounded when the server socket never accepts.");
+                AssertHighVolumeBadServerResourcesStayBounded(before, after, "no-accept server");
+            }
+        }
 
-                if (before.HandleCount >= 0 && after.HandleCount >= 0)
-                    Assert.True(after.HandleCount - before.HandleCount < 500, "Handle count should stay bounded when the server socket never accepts.");
+        [Fact]
+        public async Task Server_accepts_but_never_reads_body_or_responds_while_mixed_values_are_generated_stays_bounded()
+        {
+            using (var server = RawChaosServer.Start((request, number) => ChaosResponse.NeverRespond(TimeSpan.FromSeconds(2))))
+            {
+                var before = TransportResourceSnapshot.Capture(new[] { server.Port });
+
+                using (var collector = CreateCollector(
+                    server.Port,
+                    TimeSpan.FromMilliseconds(300),
+                    1,
+                    50000,
+                    "accept-no-body-server"))
+                {
+                    collector.Initialize(false);
+
+                    var flood = await ProduceMixedSensorLoadAsync(
+                        collector,
+                        "transport/accept-no-body",
+                        HighVolumeMixedValueCount).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+
+                    await DisposeWithinAsync(collector, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+                    WriteMixedFloodStats("accept-no-body-server", flood);
+                    WriteStats("accept-no-body-server", server.Stats);
+
+                    Assert.Equal(HighVolumeMixedValueCount, flood.TotalAddValueCalls);
+                    Assert.True(flood.AllWritersUsed, "The high-volume accept/no-body scenario should send all configured sensor value types.");
+                }
+
+                await AssertNoEstablishedConnectionsAsync(new[] { server.Port }, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                var after = TransportResourceSnapshot.Capture(new[] { server.Port });
+
+                _output.WriteLine(
+                    "scenario=accept-no-body-server-resources; handles={0}->{1}; threads={2}->{3}; managedGc={4}->{5}; private={6}->{7}; workingSet={8}->{9}; tcpEstablished={10}; tcpTimeWait={11}",
+                    before.HandleCount,
+                    after.HandleCount,
+                    before.ThreadCount,
+                    after.ThreadCount,
+                    before.ManagedAfterFullGc,
+                    after.ManagedAfterFullGc,
+                    before.PrivateBytes,
+                    after.PrivateBytes,
+                    before.WorkingSet,
+                    after.WorkingSet,
+                    after.TcpEstablished,
+                    after.TcpTimeWait);
+
+                Assert.True(server.Stats.HungConnections > 0, "The accept/no-body server should accept requests and keep them hanging.");
+                AssertHighVolumeBadServerResourcesStayBounded(before, after, "accept/no-body server");
+            }
+        }
+
+        [Fact]
+        public async Task Server_accepts_and_replies_slowly_while_mixed_values_are_generated_stays_bounded()
+        {
+            using (var server = RawChaosServer.Start((request, number) => ChaosResponse.DelayedOk(TimeSpan.FromMilliseconds(400))))
+            {
+                var before = TransportResourceSnapshot.Capture(new[] { server.Port });
+
+                using (var collector = CreateCollector(
+                    server.Port,
+                    TimeSpan.FromMilliseconds(900),
+                    1,
+                    50000,
+                    "slow-reply-server"))
+                {
+                    collector.Initialize(false);
+
+                    var flood = await ProduceMixedSensorLoadAsync(
+                        collector,
+                        "transport/slow-reply",
+                        HighVolumeMixedValueCount).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+
+                    await DisposeWithinAsync(collector, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+                    WriteMixedFloodStats("slow-reply-server", flood);
+                    WriteStats("slow-reply-server", server.Stats);
+
+                    Assert.Equal(HighVolumeMixedValueCount, flood.TotalAddValueCalls);
+                    Assert.True(flood.AllWritersUsed, "The high-volume slow-reply scenario should send all configured sensor value types.");
+                }
+
+                await AssertNoEstablishedConnectionsAsync(new[] { server.Port }, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                var after = TransportResourceSnapshot.Capture(new[] { server.Port });
+
+                _output.WriteLine(
+                    "scenario=slow-reply-server-resources; handles={0}->{1}; threads={2}->{3}; managedGc={4}->{5}; private={6}->{7}; workingSet={8}->{9}; tcpEstablished={10}; tcpTimeWait={11}",
+                    before.HandleCount,
+                    after.HandleCount,
+                    before.ThreadCount,
+                    after.ThreadCount,
+                    before.ManagedAfterFullGc,
+                    after.ManagedAfterFullGc,
+                    before.PrivateBytes,
+                    after.PrivateBytes,
+                    before.WorkingSet,
+                    after.WorkingSet,
+                    after.TcpEstablished,
+                    after.TcpTimeWait);
+
+                Assert.True(server.Stats.OkResponses > 0, "The slow-reply server should eventually send delayed OK responses.");
+                Assert.True(server.Stats.RequestBytes > 0, "The slow-reply server should receive request bodies.");
+                AssertHighVolumeBadServerResourcesStayBounded(before, after, "slow-reply server");
             }
         }
 
@@ -716,6 +811,97 @@ namespace HSMDataCollector.Tests
             });
         }
 
+        private static async Task<MixedValueFloodResult> ProduceMixedSensorLoadAsync(DataCollector collector, string pathPrefix, int totalValues)
+        {
+            var writers = CreateMixedValueWriters(collector, pathPrefix);
+            var counts = new long[writers.Count];
+            var workerCount = 8;
+            var valuesPerWorker = totalValues / workerCount;
+            var remainder = totalValues % workerCount;
+
+            var producers = Enumerable.Range(0, workerCount)
+                .Select(worker => Task.Run(() =>
+                {
+                    var start = worker * valuesPerWorker + Math.Min(worker, remainder);
+                    var count = valuesPerWorker + (worker < remainder ? 1 : 0);
+
+                    for (var offset = 0; offset < count; offset++)
+                    {
+                        var value = start + offset;
+                        var writerIndex = value % writers.Count;
+                        writers[writerIndex].AddValue(value);
+                        Interlocked.Increment(ref counts[writerIndex]);
+                    }
+                }))
+                .ToArray();
+
+            await Task.WhenAll(producers).ConfigureAwait(false);
+
+            return new MixedValueFloodResult(writers.Select(w => w.Name).ToArray(), counts);
+        }
+
+        private static IReadOnlyList<MixedValueWriter> CreateMixedValueWriters(DataCollector collector, string pathPrefix)
+        {
+            var boolSensor = collector.CreateBoolSensor(pathPrefix + "/instant/bool");
+            var intSensor = collector.CreateIntSensor(pathPrefix + "/instant/int");
+            var doubleSensor = collector.CreateDoubleSensor(pathPrefix + "/instant/double");
+            var stringSensor = collector.CreateStringSensor(pathPrefix + "/instant/string");
+            var versionSensor = collector.CreateVersionSensor(pathPrefix + "/instant/version");
+            var timeSensor = collector.CreateTimeSensor(pathPrefix + "/instant/time");
+            var enumSensor = collector.CreateEnumSensor(pathPrefix + "/instant/enum");
+            var lastBoolSensor = collector.CreateLastValueBoolSensor(pathPrefix + "/last/bool", false);
+            var lastIntSensor = collector.CreateLastValueIntSensor(pathPrefix + "/last/int", 0);
+            var lastDoubleSensor = collector.CreateLastValueDoubleSensor(pathPrefix + "/last/double", 0);
+            var lastStringSensor = collector.CreateLastValueStringSensor(pathPrefix + "/last/string", string.Empty);
+            var lastVersionSensor = collector.CreateLastValueVersionSensor(pathPrefix + "/last/version", new Version(1, 0));
+            var lastTimeSensor = collector.CreateLastValueTimeSpanSensor(pathPrefix + "/last/time", TimeSpan.Zero);
+            var intBarSensor = collector.CreateIntBarSensor(pathPrefix + "/bar/int", barPeriod: 1000, postPeriod: 200);
+            var doubleBarSensor = collector.CreateDoubleBarSensor(pathPrefix + "/bar/double", barPeriod: 1000, postPeriod: 200);
+            var rateSensor = collector.CreateRateSensor(pathPrefix + "/rate", new RateSensorOptions
+            {
+                PostDataPeriod = TimeSpan.FromMilliseconds(200)
+            });
+            var fileSensor = collector.CreateFileSensor(pathPrefix + "/file", "mixed", "txt");
+
+            return new[]
+            {
+                new MixedValueWriter("instantBool", value => boolSensor.AddValue((value & 1) == 0, SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("instantInt", value => intSensor.AddValue(value, SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("instantDouble", value => doubleSensor.AddValue(value + 0.25, SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("instantString", value => stringSensor.AddValue("value-" + value.ToString(CultureInfo.InvariantCulture), SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("instantVersion", value => versionSensor.AddValue(CreateVersionValue(value), SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("instantTime", value => timeSensor.AddValue(TimeSpan.FromMilliseconds(value), SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("instantEnum", value => enumSensor.AddValue(value % 4, SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("lastBool", value => lastBoolSensor.AddValue((value & 1) == 0, SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("lastInt", value => lastIntSensor.AddValue(value, SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("lastDouble", value => lastDoubleSensor.AddValue(value + 0.5, SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("lastString", value => lastStringSensor.AddValue("last-" + value.ToString(CultureInfo.InvariantCulture), SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("lastVersion", value => lastVersionSensor.AddValue(CreateVersionValue(value), SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("lastTime", value => lastTimeSensor.AddValue(TimeSpan.FromTicks(value), SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("barInt", value => intBarSensor.AddValue(value)),
+                new MixedValueWriter("barDouble", value => doubleBarSensor.AddValue(value + 0.75)),
+                new MixedValueWriter("rate", value => rateSensor.AddValue(value + 1.0, SensorStatus.Ok, "mixed")),
+                new MixedValueWriter("file", value => fileSensor.AddValue("file-payload-" + value.ToString(CultureInfo.InvariantCulture), SensorStatus.Ok, "mixed"))
+            };
+        }
+
+        private static Version CreateVersionValue(int value)
+        {
+            return new Version(1, value % 100, value % 1000);
+        }
+
+        private static void AssertHighVolumeBadServerResourcesStayBounded(TransportResourceSnapshot before, TransportResourceSnapshot after, string scenario)
+        {
+            Assert.True(after.TcpEstablished == 0, "No ESTABLISHED TCP connections should remain when the " + scenario + " is unhealthy.");
+            Assert.True(after.ThreadCount - before.ThreadCount < 80, "Thread count should stay bounded when the " + scenario + " is unhealthy.");
+            Assert.True(after.ManagedAfterFullGc - before.ManagedAfterFullGc < 128L * 1024 * 1024, "Managed memory should stay bounded when the " + scenario + " is unhealthy.");
+            Assert.True(after.PrivateBytes - before.PrivateBytes < 256L * 1024 * 1024, "Private bytes should stay bounded when the " + scenario + " is unhealthy.");
+            Assert.True(after.WorkingSet - before.WorkingSet < 256L * 1024 * 1024, "Working set should stay bounded when the " + scenario + " is unhealthy.");
+
+            if (before.HandleCount >= 0 && after.HandleCount >= 0)
+                Assert.True(after.HandleCount - before.HandleCount < 500, "Handle count should stay bounded when the " + scenario + " is unhealthy.");
+        }
+
         private static int GetPositiveIntEnvironment(string variableName, int defaultValue)
         {
             var rawValue = Environment.GetEnvironmentVariable(variableName);
@@ -829,6 +1015,15 @@ namespace HSMDataCollector.Tests
                 stats.MalformedResponses,
                 stats.ResetConnections,
                 stats.RequestBytes);
+        }
+
+        private void WriteMixedFloodStats(string scenario, MixedValueFloodResult flood)
+        {
+            _output.WriteLine(
+                "scenario={0}-mixed-values; totalAddValues={1}; types={2}",
+                scenario,
+                flood.TotalAddValueCalls,
+                flood.ToSummary());
         }
 
         private void WriteSoakPhase(TransportSoakPhaseResult result)
@@ -1030,6 +1225,43 @@ namespace HSMDataCollector.Tests
                 {
                     return -1;
                 }
+            }
+        }
+
+        private sealed class MixedValueWriter
+        {
+            public MixedValueWriter(string name, Action<int> addValue)
+            {
+                Name = name;
+                AddValue = addValue;
+            }
+
+            public string Name { get; }
+
+            public Action<int> AddValue { get; }
+        }
+
+        private sealed class MixedValueFloodResult
+        {
+            public MixedValueFloodResult(IReadOnlyList<string> names, IReadOnlyList<long> counts)
+            {
+                Names = names;
+                Counts = counts;
+            }
+
+            public IReadOnlyList<string> Names { get; }
+
+            public IReadOnlyList<long> Counts { get; }
+
+            public long TotalAddValueCalls => Counts.Sum();
+
+            public bool AllWritersUsed => Counts.All(count => count > 0);
+
+            public string ToSummary()
+            {
+                return string.Join(
+                    ",",
+                    Names.Select((name, index) => name + "=" + Counts[index].ToString(CultureInfo.InvariantCulture)));
             }
         }
 
@@ -1265,6 +1497,13 @@ namespace HSMDataCollector.Tests
                         Interlocked.Increment(ref _okResponses);
                         break;
 
+                    case ChaosResponseKind.DelayedOk:
+                        await DrainBodyAsync(stream, request, token).ConfigureAwait(false);
+                        await Task.Delay(response.Delay, token).ConfigureAwait(false);
+                        await WriteOkAsync(stream, request).ConfigureAwait(false);
+                        Interlocked.Increment(ref _okResponses);
+                        break;
+
                     case ChaosResponseKind.DropAfter:
                         Interlocked.Increment(ref _droppedConnections);
                         if (response.Delay > TimeSpan.Zero)
@@ -1486,6 +1725,11 @@ namespace HSMDataCollector.Tests
                 return new ChaosResponse(ChaosResponseKind.Ok, TimeSpan.Zero, 0);
             }
 
+            public static ChaosResponse DelayedOk(TimeSpan delay)
+            {
+                return new ChaosResponse(ChaosResponseKind.DelayedOk, delay, 0);
+            }
+
             public static ChaosResponse DropAfter(TimeSpan delay)
             {
                 return new ChaosResponse(ChaosResponseKind.DropAfter, delay, 0);
@@ -1530,6 +1774,7 @@ namespace HSMDataCollector.Tests
         private enum ChaosResponseKind
         {
             Ok,
+            DelayedOk,
             DropAfter,
             NeverRespond,
             SlowReadBody,

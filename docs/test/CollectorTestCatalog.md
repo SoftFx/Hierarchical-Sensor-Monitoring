@@ -10,7 +10,7 @@
 
 | Группа | Быстрых тестов | Оценка покрытия | Длительность | Код | Подробное описание |
 | --- | ---: | ---: | --- | --- | --- |
-| Transport chaos | 16 fast + 1 gated | 87% | ~27 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
+| Transport chaos | 18 fast + 1 gated | 90% | ~35 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Resource leaks | 1 fast + 1 gated repeat | 70% | ~4 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Adversarial lifecycle | 10 fast + 1 gated repeat | 75% | ~1-2 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Flaky server stress | 1 fast + 1 gated repeat | 75% | ~3-4 sec быстрый; gated suite repeat 30 sec default; long gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
@@ -19,11 +19,11 @@
 Текущий быстрый прогон:
 
 ```text
-Passed: 29
+Passed: 32
 Skipped: 7
 Failed: 0
-Total: 36
-Duration: ~33 seconds
+Total: 39
+Duration: ~42 seconds
 ```
 
 30-секундный repeat-прогон всех suite: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md). `30 sec` - soft target; hard safety limit по умолчанию `120 sec`.
@@ -38,21 +38,23 @@ Duration: ~33 seconds
 | --- | ---: | ---: | --- | --- | --- | --- |
 | Сервер принимает соединение и сразу закрывает | 1 | 75% | ~1 sec | `Server_accepts_and_disconnects_repeatedly_does_not_leak_sockets` | `CollectorTransportChaosTests.cs:32` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `1. Accept and drop` |
 | Сервер принимает соединение и никогда не отвечает | 1 | 80% | ~1 sec | `Server_accepts_and_never_responds_dispose_cancels_requests` | `CollectorTransportChaosTests.cs:44` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `2. Accept and never respond` |
-| Порт открыт, но серверное приложение вообще не делает accept | 1 | 70% | ~2 sec | `Server_socket_is_open_but_never_accepts_while_values_are_added_does_not_hang_or_leak` | `CollectorTransportChaosTests.cs:57` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `3. Open socket, no accept` |
-| Сервер очень медленно читает request body | 1 | 65% | ~1 sec | `Server_reads_request_body_slowly_does_not_block_dispose` | `CollectorTransportChaosTests.cs:125` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `4. Slow request-body read` |
-| Сервер отправляет headers, но body не заканчивает | 1 | 75% | ~1 sec | `Server_sends_headers_and_never_completes_body_does_not_hang_dispose` | `CollectorTransportChaosTests.cs:137` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `5. Headers sent, body never completes` |
-| Сервер возвращает malformed HTTP | 1 | 70% | ~1 sec | `Server_returns_malformed_http_does_not_leak_connections` | `CollectorTransportChaosTests.cs:150` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `6. Malformed HTTP` |
-| TCP reset во время request body | 1 | 70% | ~1 sec | `Server_resets_connection_during_request_body_does_not_leak_connections` | `CollectorTransportChaosTests.cs:162` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `7. Reset during request body` |
-| `/commands` зависает, data endpoint работает | 1 | 75% | ~1 sec | `Command_endpoint_hangs_data_endpoint_still_disposes` | `CollectorTransportChaosTests.cs:174` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `8. Command endpoint hangs, data endpoint works` |
-| Data endpoint зависает, `/commands` работает | 1 | 75% | ~1 sec | `Data_endpoint_hangs_command_endpoint_still_disposes` | `CollectorTransportChaosTests.cs:189` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `9. Data endpoint hangs, command endpoint works` |
-| Сервер сначала недоступен, потом появляется | 1 | 60% | ~3 sec | `Server_starts_after_connection_refused_collector_recovers` | `CollectorTransportChaosTests.cs:204` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `10. Server starts after connection refused` |
-| Много collectors на один flaky server | 1 | 65% | ~2 sec | `Many_collectors_to_one_flaky_server_do_not_exhaust_resources` | `CollectorTransportChaosTests.cs:244` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `11. Many collectors to one flaky server` |
-| Много collectors на много flaky ports | 1 | 65% | ~2 sec | `Many_collectors_on_many_flaky_ports_do_not_leave_connections` | `CollectorTransportChaosTests.cs:280` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `12. Many collectors on many flaky ports` |
-| Большой string/comment payload под disconnects | 1 | 60% | ~1 sec | `Huge_string_and_comment_payload_under_disconnects_stays_bounded` | `CollectorTransportChaosTests.cs:322` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `13. Huge string and comment payload` |
-| File sensor flood под disconnects | 1 | 55% | ~2 sec | `File_sensor_flood_under_disconnects_releases_files_and_sockets` | `CollectorTransportChaosTests.cs:344` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `14. File sensor flood` |
-| `Dispose()` во время in-flight HTTP request | 1 | 85% | <1 sec | `Dispose_while_http_request_is_mid_flight_closes_connection` | `CollectorTransportChaosTests.cs:376` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `15. Dispose while HTTP request is mid-flight` |
-| Retry storm при постоянном disconnect | 1 | 70% | ~3 sec | `Constant_disconnect_retry_storm_stays_bounded` | `CollectorTransportChaosTests.cs:404` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `16. Constant disconnect retry storm` |
-| Mixed transport suite на одном сервере по кругу | 1 gated | 85% | gated; 30 sec default | `Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded` | `CollectorTransportChaosTests.cs:427` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `Single-server transport soak` |
+| Порт открыт, но серверное приложение вообще не делает accept; 100k mixed values | 1 | 85% | ~3 sec | `Server_socket_is_open_but_never_accepts_while_values_are_added_does_not_hang_or_leak` | `CollectorTransportChaosTests.cs:57` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `3. Open socket, no accept` |
+| Сервер принял headers, но не читает body и не отвечает; 100k mixed values | 1 | 85% | ~3 sec | `Server_accepts_but_never_reads_body_or_responds_while_mixed_values_are_generated_stays_bounded` | `CollectorTransportChaosTests.cs:113` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `4. Accept headers, never read body, never respond, high-volume mixed values` |
+| Сервер медленно отвечает; 100k mixed values | 1 | 80% | ~3 sec | `Server_accepts_and_replies_slowly_while_mixed_values_are_generated_stays_bounded` | `CollectorTransportChaosTests.cs:168` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `5. Accept and reply slowly, high-volume mixed values` |
+| Сервер очень медленно читает request body | 1 | 65% | ~1 sec | `Server_reads_request_body_slowly_does_not_block_dispose` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `6. Slow request-body read` |
+| Сервер отправляет headers, но body не заканчивает | 1 | 75% | ~1 sec | `Server_sends_headers_and_never_completes_body_does_not_hang_dispose` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `7. Headers sent, body never completes` |
+| Сервер возвращает malformed HTTP | 1 | 70% | ~1 sec | `Server_returns_malformed_http_does_not_leak_connections` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `8. Malformed HTTP` |
+| TCP reset во время request body | 1 | 70% | ~1 sec | `Server_resets_connection_during_request_body_does_not_leak_connections` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `9. Reset during request body` |
+| `/commands` зависает, data endpoint работает | 1 | 75% | ~1 sec | `Command_endpoint_hangs_data_endpoint_still_disposes` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `10. Command endpoint hangs, data endpoint works` |
+| Data endpoint зависает, `/commands` работает | 1 | 75% | ~1 sec | `Data_endpoint_hangs_command_endpoint_still_disposes` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `11. Data endpoint hangs, command endpoint works` |
+| Сервер сначала недоступен, потом появляется | 1 | 60% | ~3 sec | `Server_starts_after_connection_refused_collector_recovers` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `12. Server starts after connection refused` |
+| Много collectors на один flaky server | 1 | 65% | ~2 sec | `Many_collectors_to_one_flaky_server_do_not_exhaust_resources` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `13. Many collectors to one flaky server` |
+| Много collectors на много flaky ports | 1 | 65% | ~2 sec | `Many_collectors_on_many_flaky_ports_do_not_leave_connections` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `14. Many collectors on many flaky ports` |
+| Большой string/comment payload под disconnects | 1 | 60% | ~1 sec | `Huge_string_and_comment_payload_under_disconnects_stays_bounded` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `15. Huge string and comment payload` |
+| File sensor flood под disconnects | 1 | 55% | ~2 sec | `File_sensor_flood_under_disconnects_releases_files_and_sockets` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `16. File sensor flood` |
+| `Dispose()` во время in-flight HTTP request | 1 | 85% | <1 sec | `Dispose_while_http_request_is_mid_flight_closes_connection` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `17. Dispose while HTTP request is mid-flight` |
+| Retry storm при постоянном disconnect | 1 | 70% | ~3 sec | `Constant_disconnect_retry_storm_stays_bounded` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `18. Constant disconnect retry storm` |
+| Mixed transport suite на одном сервере по кругу | 1 gated | 85% | gated; 30 sec default | `Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded` | `CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `Single-server transport soak` |
 
 ## Resource Leaks
 
