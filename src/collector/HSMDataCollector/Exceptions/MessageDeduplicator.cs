@@ -12,6 +12,7 @@ namespace HSMDataCollector.Exceptions
     {
         private readonly Dictionary<string, (DateTime ExpireTime, int Count)> _messageCache;
         private readonly TimeSpan _deduplicationWindow;
+        private readonly int _maxMessages;
         private readonly Action<string> _action;
 
         private readonly ScheduledTask _task;
@@ -19,11 +20,15 @@ namespace HSMDataCollector.Exceptions
 
         private readonly List<string> _messagesToDelete = new List<string>();
 
-        public MessageDeduplicator(Action<string> action, TimeSpan window)
+        public MessageDeduplicator(Action<string> action, TimeSpan window, int maxMessages)
         {
+            if (maxMessages <= 0)
+                throw new ArgumentOutOfRangeException(nameof(maxMessages), "Max messages must be greater than zero.");
+
             _action = action;
             _messageCache = new Dictionary<string, (DateTime, int)>();
             _deduplicationWindow = window;
+            _maxMessages = maxMessages;
 
             if (window != TimeSpan.Zero)
             {
@@ -60,6 +65,9 @@ namespace HSMDataCollector.Exceptions
                 }
                 else
                 {
+                    RemoveExpiredMessages(now);
+                    EvictOldestMessageIfFull();
+
                     value = new ValueTuple<DateTime, int> (expiryTime, 0);
                     _messageCache.Add(message, value);
                     _action?.Invoke(message);
@@ -78,22 +86,48 @@ namespace HSMDataCollector.Exceptions
             var now = DateTime.UtcNow;
             lock (_lock)
             {
-                foreach (var item in _messageCache)
-                {
-                    if (item.Value.ExpireTime < now)
-                    {
-                        if (item.Value.Count != 0)
-                        {
-                            _action?.Invoke(BuildMessage(item.Key, item.Value.Count));
-                        }
-
-                        _messagesToDelete.Add(item.Key);
-                    }
-                }
-
-                foreach (var key in _messagesToDelete)
-                    _messageCache.Remove(key);
+                RemoveExpiredMessages(now);
             }
+        }
+
+        private void RemoveExpiredMessages(DateTime now)
+        {
+            _messagesToDelete.Clear();
+
+            foreach (var item in _messageCache)
+            {
+                if (item.Value.ExpireTime < now)
+                {
+                    if (item.Value.Count != 0)
+                        _action?.Invoke(BuildMessage(item.Key, item.Value.Count));
+
+                    _messagesToDelete.Add(item.Key);
+                }
+            }
+
+            foreach (var key in _messagesToDelete)
+                _messageCache.Remove(key);
+        }
+
+        private void EvictOldestMessageIfFull()
+        {
+            if (_messageCache.Count < _maxMessages)
+                return;
+
+            string oldestKey = null;
+            DateTime oldestExpiry = DateTime.MaxValue;
+
+            foreach (var item in _messageCache)
+            {
+                if (item.Value.ExpireTime < oldestExpiry)
+                {
+                    oldestKey = item.Key;
+                    oldestExpiry = item.Value.ExpireTime;
+                }
+            }
+
+            if (oldestKey != null)
+                _messageCache.Remove(oldestKey);
         }
 
         private static string BuildMessage(string message, int count)

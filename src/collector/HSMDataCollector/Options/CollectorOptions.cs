@@ -36,6 +36,8 @@ namespace HSMDataCollector.Core
 
         public TimeSpan ExceptionDeduplicatorWindow { get; set; } = TimeSpan.FromHours(1);
 
+        public int MaxDeduplicatedMessages { get; set; } = 1000;
+
         internal void Validate()
         {
             if (MaxQueueSize <= 0)
@@ -49,6 +51,9 @@ namespace HSMDataCollector.Core
 
             if (ExceptionDeduplicatorWindow < TimeSpan.Zero)
                 throw new ArgumentOutOfRangeException(nameof(ExceptionDeduplicatorWindow), "Exception deduplicator window cannot be negative.");
+
+            if (MaxDeduplicatedMessages <= 0)
+                throw new ArgumentOutOfRangeException(nameof(MaxDeduplicatedMessages), "Max deduplicated messages must be greater than zero.");
         }
     }
 }
