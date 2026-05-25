@@ -2,7 +2,7 @@
 
 Дата прогона: 2026-05-26.
 
-Коротко: добавлен быстрый test suite из 15 транспортных chaos-сценариев. Он ломает соединение ниже уровня `HttpListener`: принимает TCP и закрывает, принимает и молчит, медленно читает body, отдает битый HTTP, сбрасывает соединение во время request body, подвешивает только `/commands` или только data endpoint, запускает много collectors и шлет большие payload/file payload.
+Коротко: добавлен быстрый test suite из 15 транспортных chaos-сценариев и отдельный gated soak-тест. Быстрые тесты ломают соединение ниже уровня `HttpListener`: принимают TCP и закрывают, принимают и молчат, медленно читают body, отдают битый HTTP, сбрасывают соединение во время request body, подвешивают только `/commands` или только data endpoint, запускают много collectors и шлют большие payload/file payload. Gated soak повторяет mixed transport suite на одном сервере 30+ секунд и смотрит реальные accepted TCP connections и ресурсный тренд.
 
 Код тестов:
 
@@ -24,6 +24,8 @@
 - retry storm не превращается в неограниченную лавину запросов;
 - тяжелые payload/file сценарии доходят до реальной отправки и не оставляют открытых соединений.
 
+Важно: отдельные быстрые сценарии - это smoke/regression проверки, а не доказательство отсутствия socket leak. Из-за batching и retry delay один быстрый сценарий может дать всего несколько HTTP request-ов. Для проверки утечки сокетов добавлен gated-тест `Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded`: он держит один raw TCP server, по очереди переключает chaos-сценарии и повторяет этот mini-suite до истечения заданного времени.
+
 Для ресурсных трендов по памяти, handles, threads, private bytes и working set используется отдельный suite:
 
 `docs/test/CollectorResourceLeakTests.md`
@@ -42,13 +44,32 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --logger "console;verbosity=minimal"
 ```
 
+Single-server transport soak на 30 секунд:
+
+```powershell
+$env:HSM_COLLECTOR_RUN_TRANSPORT_SOAK="1"
+$env:HSM_COLLECTOR_TRANSPORT_SOAK_SECONDS="30"
+dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded" --logger "console;verbosity=detailed"
+```
+
+Параметры soak-теста:
+
+| Переменная | Default | Что меняет |
+| --- | ---: | --- |
+| `HSM_COLLECTOR_RUN_TRANSPORT_SOAK` | off | Включает gated soak-тест |
+| `HSM_COLLECTOR_TRANSPORT_SOAK_SECONDS` | 30 | Длительность mixed suite |
+| `HSM_COLLECTOR_TRANSPORT_SOAK_COLLECTORS` | 8 | Сколько collectors одновременно создается на фазу |
+| `HSM_COLLECTOR_TRANSPORT_SOAK_VALUES` | 250 | Сколько `AddValue()` вызывает каждый collector на фазу |
+| `HSM_COLLECTOR_TRANSPORT_SOAK_MIN_CONNECTIONS` | 200 | Минимум accepted TCP connections, ниже тест считается слишком слабым |
+
 ## Результат локального прогона
 
 Transport-chaos suite:
 
 ```text
-Total tests: 15
+Total tests: 16
 Passed: 15
+Skipped: 1
 Failed: 0
 Total time: 25.2327 seconds
 ```
@@ -63,7 +84,27 @@ Total: 31
 Duration: 28 seconds
 ```
 
-Два skipped теста - это намеренно длинные stress/soak проверки, которые включаются через env-переменные.
+Три skipped теста - это намеренно длинные stress/soak проверки, которые включаются через env-переменные.
+
+Single-server transport soak, 30 секунд:
+
+```text
+Total tests: 1
+Passed: 1
+Accepted TCP connections: 659
+Requests: 659
+Dropped: 151
+Hung: 128
+Slow reads: 128
+Headers-only: 96
+Malformed HTTP: 60
+TCP resets: 96
+ESTABLISHED after settle: 0
+TIME_WAIT after settle: 440
+Post-warm-up trend:
+  handles: 1294 -> 1297
+  threads: 108 -> 105
+```
 
 ## 15 сценариев по шагам
 
@@ -364,4 +405,10 @@ requests=8; dropped=8; retryStormCpuMs=31.25
 - весь suite проходит примерно за `25` секунд;
 - полный обычный test run с уже существующими тестами проходит примерно за `28` секунд.
 
-Длинные soak-проверки остаются отдельными и включаются явно через env-переменные, чтобы обычная проверка не занимала 5-10 минут без необходимости.
+Gated soak-проверка сделана отдельно:
+
+- один raw TCP server и один порт;
+- сценарии идут последовательно: accept/drop, never respond, slow body read, headers-only, malformed HTTP, TCP reset;
+- mini-suite повторяется по кругу `30` секунд по умолчанию;
+- проверяется интегральный результат: нет ли socket/resource leak после смеси проблем;
+- если этот тест падает, дальше можно временно убрать сценарии из списка и найти виновника бинарным поиском.
