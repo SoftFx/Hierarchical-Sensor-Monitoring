@@ -28,6 +28,7 @@ namespace HSMDataCollector.Client
         private readonly ICollectorLogger _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
+        private bool _disposed;
 
         internal HsmHttpsClient(CollectorOptions options, ICollectorLogger logger)
         {
@@ -53,11 +54,19 @@ namespace HSMDataCollector.Client
 
         public void Dispose()
         {
+            if (_disposed)
+                return;
+
             _tokenSource.Cancel();
 
             _commandsHandler.Dispose();
             _dataHandler.Dispose();
+            _priorityDataHandler.Dispose();
+            _fileHandler.Dispose();
+
+            _tokenSource.Dispose();
             _client.Dispose();
+            _disposed = true;
         }
 
         public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
