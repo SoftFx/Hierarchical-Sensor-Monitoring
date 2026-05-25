@@ -32,6 +32,8 @@ namespace HSMDataCollector.Core
 
         internal string ServerUrl => ServerAddress.TrimEnd('/');
 
+        public bool AllowUntrustedServerCertificate { get; set; }
+
         public TimeSpan ExceptionDeduplicatorWindow { get; set; } = TimeSpan.FromHours(1);
 
         internal void Validate()

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -35,13 +34,12 @@ namespace HSMDataCollector.Client
             _endpoints = new Endpoints(options);
             _logger = logger;
 
-            ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, error) => true;
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+            var httpHandler = new HttpClientHandler();
 
-            _client = new HttpClient(new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true
-            });
+            if (options.AllowUntrustedServerCertificate)
+                httpHandler.ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true;
+
+            _client = new HttpClient(httpHandler);
 
             _client.DefaultRequestHeaders.Add(HeaderClientName, options.ClientName);
             _client.DefaultRequestHeaders.Add(HeaderAccessKey, options.AccessKey);
