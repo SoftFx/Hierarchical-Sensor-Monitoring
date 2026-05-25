@@ -26,7 +26,7 @@ Total: 36
 Duration: ~33 seconds
 ```
 
-30-секундный repeat-прогон всех suite: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md).
+30-секундный repeat-прогон всех suite: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md). `30 sec` - soft target; hard safety limit по умолчанию `120 sec`.
 
 ## Transport Chaos
 

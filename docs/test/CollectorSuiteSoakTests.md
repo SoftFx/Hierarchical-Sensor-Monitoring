@@ -11,8 +11,13 @@
 ```powershell
 $env:HSM_COLLECTOR_RUN_SUITE_SOAK="1"
 $env:HSM_COLLECTOR_SUITE_SOAK_SECONDS="30"
+$env:HSM_COLLECTOR_SUITE_SOAK_MAX_SECONDS="120"
 dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~suite_repeated" --logger "console;verbosity=detailed"
 ```
+
+`HSM_COLLECTOR_SUITE_SOAK_SECONDS` - soft target. Suite не обязан оборваться ровно на 30-й секунде: если цикл уже начался, он корректно дорабатывает.
+
+`HSM_COLLECTOR_SUITE_SOAK_MAX_SECONDS` - hard safety limit. Default: `120` секунд. После каждого suite cycle или transport phase тест проверяет elapsed time; если hard limit превышен, тест падает как зависший.
 
 ## Итог
 
