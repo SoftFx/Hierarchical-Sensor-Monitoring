@@ -1,6 +1,6 @@
 # Collector stress tests
 
-Дата подготовки отчета: 2026-05-25.
+Дата подготовки отчета: 2026-05-26.
 
 Документ описывает стресс-тесты для `HSMDataCollector`, которые проверяют поведение коллектора под высокой параллельной нагрузкой и при проблемах на стороне HSM-сервера: медленные ответы, HTTP 500, обрывы соединения и последующее восстановление.
 
@@ -199,10 +199,23 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Локальный результат:
 
 ```text
-Passed! - Failed: 0, Passed: 3, Skipped: 1, Total: 4, Duration: 3 s
+Passed! - Failed: 0, Passed: 29, Skipped: 7, Total: 36, Duration: 33 s
 ```
 
-Пропущенный тест - это ожидаемый 10-минутный стресс-тест. Он запускается только при `HSM_COLLECTOR_RUN_LONG_STRESS=1`.
+Пропущенные тесты - это ожидаемые gated stress/soak проверки. Они запускаются только через env-переменные.
+
+## 30-секундный suite soak
+
+Быстрый stress-сценарий также включен в общий suite soak. Он повторяет обычный stress-тест по кругу, снимает ресурсы до/после suite и считает объем нагрузки. Подробный общий отчет: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md).
+
+Последний запуск:
+
+```text
+flakyStressSuiteSoakResources; handles=840->1068; threads=57->63; managedGc=34827184->5438824; private=155578368->73297920; workingSet=182468608->100483072; tcpEstablished=0->0; tcpTimeWait=0->3; tcpTotal=0->3
+flakyStressSuiteSoak; durationSeconds=30; maxSeconds=120; elapsedSeconds=30.5594716; cycles=10; addValues=192000; requests=825; commands=15; data=810; failures=110; aborts=40; slow=70; bytes=33253204; maxConcurrent=2
+```
+
+`commands` здесь означает command/registration requests, а не отдельный login endpoint.
 
 ## Проверка сборки библиотеки
 

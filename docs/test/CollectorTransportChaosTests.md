@@ -83,13 +83,13 @@ Total time: 25.2327 seconds
 
 ```text
 Passed: 29
-Skipped: 2
+Skipped: 7
 Failed: 0
-Total: 31
-Duration: 28 seconds
+Total: 36
+Duration: 33 seconds
 ```
 
-Три skipped теста - это намеренно длинные stress/soak проверки, которые включаются через env-переменные.
+Skipped тесты - это намеренно длинные stress/soak проверки, которые включаются через env-переменные.
 
 Single-server transport soak, 30 секунд:
 
@@ -114,19 +114,22 @@ Post-warm-up trend:
 Последний общий repeat-прогон всех suite на 30 секунд дал для transport:
 
 ```text
-Accepted TCP connections: 1093
-Requests: 1091
-Dropped: 303
-Hung: 161
-Slow reads: 157
-Headers-only: 154
-Malformed HTTP: 157
-TCP resets: 159
+AddValue calls: 244000
+Accepted TCP connections: 1150
+Requests: 1148
+Command/registration requests: 1125
+Data requests: 19
+Dropped: 321
+Hung: 171
+Slow reads: 164
+Headers-only: 166
+Malformed HTTP: 166
+TCP resets: 160
 ESTABLISHED after settle: 0
-TIME_WAIT after settle: 734
+TIME_WAIT after settle: 820
 Post-warm-up trend:
-  handles: 1095 -> 1091
-  threads: 68 -> 66
+  handles: 1097 -> 1107
+  threads: 64 -> 64
 ```
 
 ## 15 сценариев по шагам

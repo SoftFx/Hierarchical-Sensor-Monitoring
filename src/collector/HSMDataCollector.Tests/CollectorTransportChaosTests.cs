@@ -381,6 +381,7 @@ namespace HSMDataCollector.Tests
             TransportResourceSnapshot trendBaseline = null;
             TransportResourceSnapshot trendLast = null;
             var stopwatch = Stopwatch.StartNew();
+            long addValueCalls = 0;
 
             using (var server = RawChaosServer.Start((request, number) =>
                 CreateSoakResponse((TransportSoakScenario)Volatile.Read(ref currentScenario), request, number)))
@@ -409,6 +410,7 @@ namespace HSMDataCollector.Tests
                             cycles,
                             collectorsPerPhase,
                             valuesPerCollector).ConfigureAwait(false);
+                        addValueCalls += collectorsPerPhase * (long)valuesPerCollector;
 
                         await AssertNoEstablishedConnectionsAsync(new[] { server.Port }, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
@@ -435,19 +437,24 @@ namespace HSMDataCollector.Tests
             var after = TransportResourceSnapshot.Capture(new[] { port });
 
             _output.WriteLine(
-                "transportSoakTotals; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; accepted={4}; requests={5}; dropped={6}; hung={7}; slowReads={8}; headerOnly={9}; malformed={10}; resets={11}; tcpEstablished={12}; tcpTimeWait={13}; handles={14}->{15}; threads={16}->{17}; managedGc={18}->{19}; private={20}->{21}; workingSet={22}->{23}",
+                "transportSoakTotals; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; addValues={4}; accepted={5}; requests={6}; commands={7}; data={8}; ok={9}; dropped={10}; hung={11}; slowReads={12}; headerOnly={13}; malformed={14}; resets={15}; bytes={16}; tcpEstablished={17}; tcpTimeWait={18}; handles={19}->{20}; threads={21}->{22}; managedGc={23}->{24}; private={25}->{26}; workingSet={27}->{28}",
                 duration.TotalSeconds,
                 maxDuration.TotalSeconds,
                 stopwatch.Elapsed.TotalSeconds,
                 cycles,
+                addValueCalls,
                 stats.AcceptedConnections,
                 stats.TotalRequests,
+                stats.CommandRequests,
+                stats.DataRequests,
+                stats.OkResponses,
                 stats.DroppedConnections,
                 stats.HungConnections,
                 stats.SlowReads,
                 stats.HeaderOnlyResponses,
                 stats.MalformedResponses,
                 stats.ResetConnections,
+                stats.RequestBytes,
                 after.TcpEstablished,
                 after.TcpTimeWait,
                 before.HandleCount,

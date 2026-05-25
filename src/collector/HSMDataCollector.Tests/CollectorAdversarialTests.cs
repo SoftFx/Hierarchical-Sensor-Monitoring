@@ -258,9 +258,14 @@ namespace HSMDataCollector.Tests
         {
             var duration = GetSuiteSoakDuration();
             var maxDuration = GetSuiteSoakMaxDuration();
+            var before = SuiteSoakResourceSnapshot.Capture();
             var stopwatch = Stopwatch.StartNew();
             var cycles = 0;
             var scenarioRuns = 0;
+            long addValueCalls = 0;
+            long sensorCreateCalls = 0;
+            long dataFailureBursts = 0;
+            long commandFailureBursts = 0;
 
             while (stopwatch.Elapsed < duration)
             {
@@ -268,41 +273,74 @@ namespace HSMDataCollector.Tests
 
                 await Rate_sensor_nan_value_does_not_spin_forever().ConfigureAwait(false);
                 scenarioRuns++;
+                addValueCalls += 2;
 
                 await Stop_after_initialize_stops_data_delivery().ConfigureAwait(false);
                 scenarioRuns++;
+                addValueCalls += 2;
+                sensorCreateCalls++;
 
                 await Stop_while_start_is_pending_does_not_leave_collector_running().ConfigureAwait(false);
                 scenarioRuns++;
+                sensorCreateCalls++;
 
                 await Dispose_cancels_blocked_data_sender().ConfigureAwait(false);
                 scenarioRuns++;
+                addValueCalls++;
+                sensorCreateCalls++;
 
                 await Permanent_data_sender_failures_do_not_block_dispose().ConfigureAwait(false);
                 scenarioRuns++;
+                addValueCalls += 1000;
+                sensorCreateCalls++;
+                dataFailureBursts++;
 
                 await Permanent_command_sender_failures_do_not_block_dispose().ConfigureAwait(false);
                 scenarioRuns++;
+                sensorCreateCalls += 100;
+                commandFailureBursts++;
 
                 await Creating_sensors_after_initialize_under_command_failures_does_not_hang().ConfigureAwait(false);
                 scenarioRuns++;
+                sensorCreateCalls += 100;
+                commandFailureBursts++;
 
                 await Concurrent_add_value_during_dispose_does_not_throw_to_callers().ConfigureAwait(false);
                 scenarioRuns++;
+                addValueCalls += 8 * 2000;
+                sensorCreateCalls++;
 
                 await Queue_overflow_under_flood_keeps_collector_responsive().ConfigureAwait(false);
                 scenarioRuns++;
+                addValueCalls += 10000;
+                sensorCreateCalls++;
 
                 await Repeated_start_stop_cycles_do_not_leave_sender_active().ConfigureAwait(false);
                 scenarioRuns++;
+                addValueCalls += 6;
+                sensorCreateCalls++;
 
                 AssertWithinSuiteSoakMax(stopwatch, maxDuration);
             }
 
+            var after = SuiteSoakResourceSnapshot.Capture();
+            SuiteSoakResourceSnapshot.WriteDelta(_output, "adversarialSuiteSoak", before, after);
+            SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
+
             Assert.True(cycles > 0, "The adversarial suite soak should complete at least one suite cycle.");
             Assert.True(scenarioRuns >= 10, "The adversarial suite soak should execute the full scenario list at least once.");
 
-            _output.WriteLine("adversarialSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}", duration.TotalSeconds, maxDuration.TotalSeconds, stopwatch.Elapsed.TotalSeconds, cycles, scenarioRuns);
+            _output.WriteLine(
+                "adversarialSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}; addValues={5}; sensorCreates={6}; dataFailureBursts={7}; commandFailureBursts={8}",
+                duration.TotalSeconds,
+                maxDuration.TotalSeconds,
+                stopwatch.Elapsed.TotalSeconds,
+                cycles,
+                scenarioRuns,
+                addValueCalls,
+                sensorCreateCalls,
+                dataFailureBursts,
+                commandFailureBursts);
         }
 
         private static DataCollector CreateCollector(ProbeDataSender sender, int maxQueueSize = 1000)

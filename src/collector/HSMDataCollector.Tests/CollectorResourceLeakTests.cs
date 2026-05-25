@@ -71,9 +71,19 @@ namespace HSMDataCollector.Tests
 
             var duration = GetSuiteSoakDuration();
             var maxDuration = GetSuiteSoakMaxDuration();
+            var before = SuiteSoakResourceSnapshot.Capture();
             var stopwatch = Stopwatch.StartNew();
             var cycles = 0;
             var resourceCycles = 0;
+            long addValueCalls = 0;
+            long totalRequests = 0;
+            long dataRequests = 0;
+            long commandRequests = 0;
+            long abortedConnections = 0;
+            long failedResponses = 0;
+            long slowResponses = 0;
+            long requestBytes = 0;
+            var observedPorts = new HashSet<int>();
 
             while (stopwatch.Elapsed < duration)
             {
@@ -89,10 +99,39 @@ namespace HSMDataCollector.Tests
 
                 AssertResourceTrends(results, maxManagedGrowthBytes: 64L * 1024 * 1024);
                 resourceCycles += results.Count;
+                addValueCalls += results.Count * 8L * 600L;
+                totalRequests += results.Sum(r => r.Server.TotalRequests);
+                dataRequests += results.Sum(r => r.Server.DataRequests);
+                commandRequests += results.Sum(r => r.Server.CommandRequests);
+                abortedConnections += results.Sum(r => r.Server.AbortedConnections);
+                failedResponses += results.Sum(r => r.Server.FailedResponses);
+                slowResponses += results.Sum(r => r.Server.SlowResponses);
+                requestBytes += results.Sum(r => r.Server.RequestBytes);
+                foreach (var port in results.Select(r => r.Port).Where(p => p > 0))
+                    observedPorts.Add(port);
                 AssertWithinSuiteSoakMax(stopwatch, maxDuration);
             }
 
-            _output.WriteLine("resourceLeakSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; suiteCycles={3}; resourceCycles={4}", duration.TotalSeconds, maxDuration.TotalSeconds, stopwatch.Elapsed.TotalSeconds, cycles, resourceCycles);
+            var after = SuiteSoakResourceSnapshot.Capture(observedPorts);
+            SuiteSoakResourceSnapshot.WriteDelta(_output, "resourceLeakSuiteSoak", before, after);
+            SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
+            SuiteSoakResourceSnapshot.AssertNoEstablishedConnections(after);
+
+            _output.WriteLine(
+                "resourceLeakSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; suiteCycles={3}; resourceCycles={4}; addValues={5}; requests={6}; commands={7}; data={8}; aborts={9}; failures={10}; slow={11}; bytes={12}",
+                duration.TotalSeconds,
+                maxDuration.TotalSeconds,
+                stopwatch.Elapsed.TotalSeconds,
+                cycles,
+                resourceCycles,
+                addValueCalls,
+                totalRequests,
+                commandRequests,
+                dataRequests,
+                abortedConnections,
+                failedResponses,
+                slowResponses,
+                requestBytes);
 
             Assert.True(cycles > 0, "The resource leak suite soak should complete at least one suite cycle.");
             Assert.True(resourceCycles >= 5, "The resource leak suite soak should execute at least one full resource cycle set.");
@@ -114,6 +153,7 @@ namespace HSMDataCollector.Tests
                 var before = ResourceSnapshot.Capture(observedPorts);
                 ResourceSnapshot after;
                 ResourceHsmServer server = null;
+                var port = 0;
 
                 try
                 {
@@ -127,6 +167,7 @@ namespace HSMDataCollector.Tests
                     });
 
                     observedPorts.Add(server.Port);
+                    port = server.Port;
 
                     using (var collector = CreateCollector(server.Port, valuesPerPackage, maxQueueSize))
                     {
@@ -149,7 +190,7 @@ namespace HSMDataCollector.Tests
 
                 after = ResourceSnapshot.Capture(observedPorts);
 
-                var result = new ResourceCycleResult(cycle, before, after, server?.Stats ?? ResourceHsmServerStats.Empty);
+                var result = new ResourceCycleResult(cycle, port, before, after, server?.Stats ?? ResourceHsmServerStats.Empty);
                 results.Add(result);
 
                 WriteCycle(result);
@@ -350,15 +391,18 @@ namespace HSMDataCollector.Tests
 
         private sealed class ResourceCycleResult
         {
-            public ResourceCycleResult(int cycle, ResourceSnapshot before, ResourceSnapshot after, ResourceHsmServerStats server)
+            public ResourceCycleResult(int cycle, int port, ResourceSnapshot before, ResourceSnapshot after, ResourceHsmServerStats server)
             {
                 Cycle = cycle;
+                Port = port;
                 Before = before;
                 After = after;
                 Server = server;
             }
 
             public int Cycle { get; }
+
+            public int Port { get; }
 
             public ResourceSnapshot Before { get; }
 

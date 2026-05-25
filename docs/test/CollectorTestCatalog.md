@@ -10,11 +10,11 @@
 
 | Группа | Быстрых тестов | Оценка покрытия | Длительность | Код | Подробное описание |
 | --- | ---: | ---: | --- | --- | --- |
-| Transport chaos | 15 fast + 1 gated | 85% | ~25 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md) |
-| Resource leaks | 1 fast + 1 gated repeat | 65% | ~4 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md) |
-| Adversarial lifecycle | 10 fast + 1 gated repeat | 75% | ~1-2 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md) |
-| Flaky server stress | 1 fast + 1 gated repeat | 70% | ~3-4 sec быстрый; gated suite repeat 30 sec default; long gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md) |
-| Default sensor smoke | 2 fast + 1 gated repeat | 5% | <1 sec fast; gated suite repeat 30 sec default, но без assertions | `src/collector/HSMDataCollector.Tests/DefaultSensorsTests.cs` | Нет полноценного описания; тесты сейчас фактически пустые |
+| Transport chaos | 15 fast + 1 gated | 85% | ~25 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
+| Resource leaks | 1 fast + 1 gated repeat | 70% | ~4 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
+| Adversarial lifecycle | 10 fast + 1 gated repeat | 75% | ~1-2 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
+| Flaky server stress | 1 fast + 1 gated repeat | 75% | ~3-4 sec быстрый; gated suite repeat 30 sec default; long gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
+| Default sensor smoke | 2 fast + 1 gated repeat | 5% | <1 sec fast; gated suite repeat 30 sec default, но без assertions | `src/collector/HSMDataCollector.Tests/DefaultSensorsTests.cs` | [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md); полноценного описания нет, тесты сейчас фактически пустые |
 
 Текущий быстрый прогон:
 
@@ -27,6 +27,8 @@ Duration: ~33 seconds
 ```
 
 30-секундный repeat-прогон всех suite: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md). `30 sec` - soft target; hard safety limit по умолчанию `120 sec`.
+
+Каждый gated suite теперь сам снимает ресурсный snapshot до/после suite и пишет объем нагрузки. Для transport/stress/resource suite TCP `ESTABLISHED` и `TIME_WAIT` считаются по тестовым портам. `commands` в отчетах - это command/registration requests коллектора; отдельного login endpoint в тестовом протоколе нет.
 
 ## Transport Chaos
 

@@ -32,6 +32,11 @@ namespace HSMDataCollector.Tests
             if (!HttpListener.IsSupported)
                 return;
 
+            await RunTransientServerFailuresUnderParallelLoadAsync(writeStats: true).ConfigureAwait(false);
+        }
+
+        private async Task<FlakyStressRunResult> RunTransientServerFailuresUnderParallelLoadAsync(bool writeStats)
+        {
             var serverOptions = new FakeHsmServerOptions
             {
                 AlwaysSucceedFirstRequests = 3,
@@ -44,16 +49,20 @@ namespace HSMDataCollector.Tests
             using (var server = FakeHsmServer.Start(serverOptions))
             using (var collector = CreateCollector(server.Port, TimeSpan.FromSeconds(2), maxQueueSize: 30000))
             {
-                var sensors = CreateSensors(collector, 48);
+                const int sensorCount = 48;
+                const int workerCount = 24;
+                const int valuesPerWorker = 800;
+                var sensors = CreateSensors(collector, sensorCount);
 
                 collector.Initialize(false);
 
-                await ProduceConcurrentLoadAsync(sensors, workerCount: 24, valuesPerWorker: 800).ConfigureAwait(false);
+                await ProduceConcurrentLoadAsync(sensors, workerCount: workerCount, valuesPerWorker: valuesPerWorker).ConfigureAwait(false);
                 await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
 
                 await DisposeWithinAsync(collector, TimeSpan.FromSeconds(20)).ConfigureAwait(false);
 
-                WriteServerStats(server);
+                if (writeStats)
+                    WriteServerStats(server);
 
                 Assert.True(server.TotalRequests > 0, "The fake HSM server should receive collector requests.");
                 Assert.True(server.CommandRequests > 0, "The collector should register sensors via command requests.");
@@ -61,6 +70,18 @@ namespace HSMDataCollector.Tests
                 Assert.True(server.FailedResponses > 0, "The stress server should exercise HTTP 500 responses.");
                 Assert.True(server.AbortedConnections > 0, "The stress server should exercise broken connections.");
                 Assert.True(server.SlowResponses > 0, "The stress server should exercise slow responses.");
+
+                return new FlakyStressRunResult(
+                    port: server.Port,
+                    addValueCalls: workerCount * valuesPerWorker,
+                    totalRequests: server.TotalRequests,
+                    commandRequests: server.CommandRequests,
+                    dataRequests: server.DataRequests,
+                    failedResponses: server.FailedResponses,
+                    abortedConnections: server.AbortedConnections,
+                    slowResponses: server.SlowResponses,
+                    requestBytes: server.RequestBytes,
+                    maxConcurrentRequests: server.MaxConcurrentRequests);
             }
         }
 
@@ -116,17 +137,41 @@ namespace HSMDataCollector.Tests
 
             var duration = GetSuiteSoakDuration();
             var maxDuration = GetSuiteSoakMaxDuration();
+            var before = SuiteSoakResourceSnapshot.Capture();
             var stopwatch = Stopwatch.StartNew();
             var cycles = 0;
+            var totals = FlakyStressRunResult.Empty;
+            var observedPorts = new HashSet<int>();
 
             while (stopwatch.Elapsed < duration)
             {
                 cycles++;
-                await Collector_survives_transient_server_failures_under_parallel_load().ConfigureAwait(false);
+                var result = await RunTransientServerFailuresUnderParallelLoadAsync(writeStats: true).ConfigureAwait(false);
+                totals = totals.Add(result);
+                observedPorts.Add(result.Port);
                 AssertWithinSuiteSoakMax(stopwatch, maxDuration);
             }
 
-            _output.WriteLine("flakyStressSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}", duration.TotalSeconds, maxDuration.TotalSeconds, stopwatch.Elapsed.TotalSeconds, cycles);
+            var after = SuiteSoakResourceSnapshot.Capture(observedPorts);
+            SuiteSoakResourceSnapshot.WriteDelta(_output, "flakyStressSuiteSoak", before, after);
+            SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
+            SuiteSoakResourceSnapshot.AssertNoEstablishedConnections(after);
+
+            _output.WriteLine(
+                "flakyStressSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; addValues={4}; requests={5}; commands={6}; data={7}; failures={8}; aborts={9}; slow={10}; bytes={11}; maxConcurrent={12}",
+                duration.TotalSeconds,
+                maxDuration.TotalSeconds,
+                stopwatch.Elapsed.TotalSeconds,
+                cycles,
+                totals.AddValueCalls,
+                totals.TotalRequests,
+                totals.CommandRequests,
+                totals.DataRequests,
+                totals.FailedResponses,
+                totals.AbortedConnections,
+                totals.SlowResponses,
+                totals.RequestBytes,
+                totals.MaxConcurrentRequests);
 
             Assert.True(cycles > 0, "The flaky server stress suite soak should complete at least one suite cycle.");
         }
@@ -272,6 +317,70 @@ namespace HSMDataCollector.Tests
             {
                 if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_SUITE_SOAK"), "1", StringComparison.Ordinal))
                     Skip = "Set HSM_COLLECTOR_RUN_SUITE_SOAK=1 to run repeated suite soak tests.";
+            }
+        }
+
+        private sealed class FlakyStressRunResult
+        {
+            public static readonly FlakyStressRunResult Empty = new FlakyStressRunResult(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+            public FlakyStressRunResult(
+                int port,
+                long addValueCalls,
+                long totalRequests,
+                long commandRequests,
+                long dataRequests,
+                long failedResponses,
+                long abortedConnections,
+                long slowResponses,
+                long requestBytes,
+                int maxConcurrentRequests)
+            {
+                Port = port;
+                AddValueCalls = addValueCalls;
+                TotalRequests = totalRequests;
+                CommandRequests = commandRequests;
+                DataRequests = dataRequests;
+                FailedResponses = failedResponses;
+                AbortedConnections = abortedConnections;
+                SlowResponses = slowResponses;
+                RequestBytes = requestBytes;
+                MaxConcurrentRequests = maxConcurrentRequests;
+            }
+
+            public int Port { get; }
+
+            public long AddValueCalls { get; }
+
+            public long TotalRequests { get; }
+
+            public long CommandRequests { get; }
+
+            public long DataRequests { get; }
+
+            public long FailedResponses { get; }
+
+            public long AbortedConnections { get; }
+
+            public long SlowResponses { get; }
+
+            public long RequestBytes { get; }
+
+            public int MaxConcurrentRequests { get; }
+
+            public FlakyStressRunResult Add(FlakyStressRunResult other)
+            {
+                return new FlakyStressRunResult(
+                    other.Port,
+                    AddValueCalls + other.AddValueCalls,
+                    TotalRequests + other.TotalRequests,
+                    CommandRequests + other.CommandRequests,
+                    DataRequests + other.DataRequests,
+                    FailedResponses + other.FailedResponses,
+                    AbortedConnections + other.AbortedConnections,
+                    SlowResponses + other.SlowResponses,
+                    RequestBytes + other.RequestBytes,
+                    Math.Max(MaxConcurrentRequests, other.MaxConcurrentRequests));
             }
         }
 

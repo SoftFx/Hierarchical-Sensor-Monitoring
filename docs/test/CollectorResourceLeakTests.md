@@ -1,6 +1,6 @@
 # Collector resource leak tests
 
-Дата прогона: 2026-05-25.
+Дата прогона: 2026-05-26.
 
 Коротко: добавлены ресурсные adversarial-тесты, которые гоняют `HSMDataCollector` против локального flaky HTTP-сервера и после каждого цикла проверяют, что не остаются активные TCP-соединения, не растут без ограничения handles, threads, managed memory после GC, private bytes и working set.
 
@@ -229,3 +229,16 @@ Duration: 4 s
 Эти тесты проверяют утечки на стороне collector/testhost процесса и TCP-соединения к локальным тестовым портам. Они не доказывают отсутствие утечек внутри реального HSM-сервера.
 
 Если нужен максимально жесткий soak, стоит запускать long resource leak stress на 30-100 циклов и сохранять detailed output в CI artifact.
+
+## Suite-level leak check
+
+Помимо отдельного resource leak suite, общий 30-секундный suite soak теперь проверяет ресурсы вокруг каждого обычного suite. Подробный общий отчет: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md).
+
+Последний `Resource_leak_suite_repeated_for_duration_stays_bounded`:
+
+```text
+resourceLeakSuiteSoakResources; handles=1068->1016; threads=63->52; managedGc=5119800->5823000; private=73334784->73433088; workingSet=100524032->100904960; tcpEstablished=0->0; tcpTimeWait=0->0; tcpTotal=0->0
+resourceLeakSuiteSoak; durationSeconds=30; maxSeconds=120; elapsedSeconds=32.5019163; suiteCycles=8; resourceCycles=40; addValues=192000; requests=1120; commands=53; data=1067; aborts=120; failures=200; slow=160; bytes=19045314
+```
+
+`commands` здесь означает command/registration requests, а не отдельный login endpoint.

@@ -49,6 +49,7 @@ namespace HSMDataCollector.Tests
         {
             var duration = GetSuiteSoakDuration();
             var maxDuration = GetSuiteSoakMaxDuration();
+            var before = SuiteSoakResourceSnapshot.Capture();
             var stopwatch = Stopwatch.StartNew();
             var cycles = 0;
             var scenarioRuns = 0;
@@ -67,7 +68,17 @@ namespace HSMDataCollector.Tests
                 AssertWithinSuiteSoakMax(stopwatch, maxDuration);
             }
 
-            _output.WriteLine("defaultSensorSmokeSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}", duration.TotalSeconds, maxDuration.TotalSeconds, stopwatch.Elapsed.TotalSeconds, cycles, scenarioRuns);
+            var after = SuiteSoakResourceSnapshot.Capture();
+            SuiteSoakResourceSnapshot.WriteDelta(_output, "defaultSensorSmokeSuiteSoak", before, after);
+            SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
+
+            _output.WriteLine(
+                "defaultSensorSmokeSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}; addValues=0; requests=0; bytes=0",
+                duration.TotalSeconds,
+                maxDuration.TotalSeconds,
+                stopwatch.Elapsed.TotalSeconds,
+                cycles,
+                scenarioRuns);
 
             Assert.True(cycles > 0, "The default sensor smoke suite soak should complete at least one suite cycle.");
         }
