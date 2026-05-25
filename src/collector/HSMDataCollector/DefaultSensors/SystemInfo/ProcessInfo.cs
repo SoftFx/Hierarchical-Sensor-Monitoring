@@ -18,6 +18,7 @@ namespace HSMDataCollector.DefaultSensors
                     FileName = "/bin/bash",
                     Arguments = $"-c \"{args.Replace("\"", "\\\"")}\"",
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 }
@@ -33,6 +34,7 @@ namespace HSMDataCollector.DefaultSensors
                     FileName = "powershell.exe",
                     Arguments = args.Replace("\"", "\\\""),
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 }
