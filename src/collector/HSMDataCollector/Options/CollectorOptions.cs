@@ -28,6 +28,8 @@ namespace HSMDataCollector.Core
 
         public TimeSpan PackageCollectPeriod { get; set; } = TimeSpan.FromSeconds(15);
 
+        public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
         public IDataSender DataSender { get; set; }
 
         internal string ServerUrl => ServerAddress.TrimEnd('/');
@@ -48,6 +50,9 @@ namespace HSMDataCollector.Core
 
             if (PackageCollectPeriod <= TimeSpan.Zero)
                 throw new ArgumentOutOfRangeException(nameof(PackageCollectPeriod), "Package collect period must be greater than zero.");
+
+            if (RequestTimeout <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(RequestTimeout), "Request timeout must be greater than zero.");
 
             if (ExceptionDeduplicatorWindow < TimeSpan.Zero)
                 throw new ArgumentOutOfRangeException(nameof(ExceptionDeduplicatorWindow), "Exception deduplicator window cannot be negative.");
