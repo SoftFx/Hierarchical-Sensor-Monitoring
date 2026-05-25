@@ -65,7 +65,7 @@ namespace HSMDataCollector.Client.HttpsClient
                 _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Code = {args.Outcome.Result.StatusCode}");
 
             else if (args.Outcome.Exception != null)
-                    _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Exception = {args.Outcome.Exception.Message} Inner = {args.Outcome.Exception.InnerException.Message}");
+                    _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Exception = {args.Outcome.Exception.Message} Inner = {args.Outcome.Exception.InnerException?.Message}");
 
             return default;
         }
@@ -83,7 +83,7 @@ namespace HSMDataCollector.Client.HttpsClient
             }
             catch (Exception ex)
             {
-                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Data = {request.Content}");
+                LogSendFailure(ex, request);
                 return new PackageSendingInfo(request.Length, null, exception: ex.Message);
             }
         }
@@ -101,9 +101,15 @@ namespace HSMDataCollector.Client.HttpsClient
             }
             catch (Exception ex)
             {
-                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Data = {request.Content}");
+                LogSendFailure(ex, request);
                 return new PackageSendingInfo(request.Length, null, exception: ex.Message);
             }
+        }
+
+
+        private void LogSendFailure(Exception ex, HttpRequest<T> request)
+        {
+            _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
         }
 
 
