@@ -5,15 +5,25 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace HSMDataCollector.Tests
 {
     public sealed class CollectorAdversarialTests
     {
+        private readonly ITestOutputHelper _output;
+
+        public CollectorAdversarialTests(ITestOutputHelper output)
+        {
+            _output = output;
+        }
+
         [Fact]
         public async Task Rate_sensor_nan_value_does_not_spin_forever()
         {
@@ -243,6 +253,55 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        [SuiteSoakFact]
+        public async Task Adversarial_suite_repeated_for_duration_stays_green()
+        {
+            var duration = GetSuiteSoakDuration();
+            var stopwatch = Stopwatch.StartNew();
+            var cycles = 0;
+            var scenarioRuns = 0;
+
+            while (stopwatch.Elapsed < duration)
+            {
+                cycles++;
+
+                await Rate_sensor_nan_value_does_not_spin_forever().ConfigureAwait(false);
+                scenarioRuns++;
+
+                await Stop_after_initialize_stops_data_delivery().ConfigureAwait(false);
+                scenarioRuns++;
+
+                await Stop_while_start_is_pending_does_not_leave_collector_running().ConfigureAwait(false);
+                scenarioRuns++;
+
+                await Dispose_cancels_blocked_data_sender().ConfigureAwait(false);
+                scenarioRuns++;
+
+                await Permanent_data_sender_failures_do_not_block_dispose().ConfigureAwait(false);
+                scenarioRuns++;
+
+                await Permanent_command_sender_failures_do_not_block_dispose().ConfigureAwait(false);
+                scenarioRuns++;
+
+                await Creating_sensors_after_initialize_under_command_failures_does_not_hang().ConfigureAwait(false);
+                scenarioRuns++;
+
+                await Concurrent_add_value_during_dispose_does_not_throw_to_callers().ConfigureAwait(false);
+                scenarioRuns++;
+
+                await Queue_overflow_under_flood_keeps_collector_responsive().ConfigureAwait(false);
+                scenarioRuns++;
+
+                await Repeated_start_stop_cycles_do_not_leave_sender_active().ConfigureAwait(false);
+                scenarioRuns++;
+            }
+
+            Assert.True(cycles > 0, "The adversarial suite soak should complete at least one suite cycle.");
+            Assert.True(scenarioRuns >= 10, "The adversarial suite soak should execute the full scenario list at least once.");
+
+            _output.WriteLine("adversarialSuiteSoak; durationSeconds={0}; cycles={1}; scenarioRuns={2}", duration.TotalSeconds, cycles, scenarioRuns);
+        }
+
         private static DataCollector CreateCollector(ProbeDataSender sender, int maxQueueSize = 1000)
         {
             return new DataCollector(new CollectorOptions
@@ -259,6 +318,25 @@ namespace HSMDataCollector.Tests
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
                 MaxDeduplicatedMessages = 100
             });
+        }
+
+        private static TimeSpan GetSuiteSoakDuration()
+        {
+            var rawSeconds = Environment.GetEnvironmentVariable("HSM_COLLECTOR_SUITE_SOAK_SECONDS");
+
+            if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+                return TimeSpan.FromSeconds(seconds);
+
+            return TimeSpan.FromSeconds(30);
+        }
+
+        private sealed class SuiteSoakFactAttribute : FactAttribute
+        {
+            public SuiteSoakFactAttribute()
+            {
+                if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_SUITE_SOAK"), "1", StringComparison.Ordinal))
+                    Skip = "Set HSM_COLLECTOR_RUN_SUITE_SOAK=1 to run repeated suite soak tests.";
+            }
         }
 
         private sealed class ProbeDataSender : IDataSender

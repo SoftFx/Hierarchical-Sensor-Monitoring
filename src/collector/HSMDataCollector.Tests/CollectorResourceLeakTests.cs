@@ -63,6 +63,39 @@ namespace HSMDataCollector.Tests
             AssertResourceTrends(results, maxManagedGrowthBytes: 128L * 1024 * 1024);
         }
 
+        [SuiteSoakFact]
+        public async Task Resource_leak_suite_repeated_for_duration_stays_bounded()
+        {
+            if (!HttpListener.IsSupported)
+                return;
+
+            var duration = GetSuiteSoakDuration();
+            var stopwatch = Stopwatch.StartNew();
+            var cycles = 0;
+            var resourceCycles = 0;
+
+            while (stopwatch.Elapsed < duration)
+            {
+                cycles++;
+
+                var results = await RunResourceLeakScenarioAsync(
+                    cycles: 5,
+                    sensorCount: 24,
+                    workerCount: 8,
+                    valuesPerWorker: 600,
+                    valuesPerPackage: 100,
+                    maxQueueSize: 20000).ConfigureAwait(false);
+
+                AssertResourceTrends(results, maxManagedGrowthBytes: 64L * 1024 * 1024);
+                resourceCycles += results.Count;
+            }
+
+            _output.WriteLine("resourceLeakSuiteSoak; durationSeconds={0}; suiteCycles={1}; resourceCycles={2}", duration.TotalSeconds, cycles, resourceCycles);
+
+            Assert.True(cycles > 0, "The resource leak suite soak should complete at least one suite cycle.");
+            Assert.True(resourceCycles >= 5, "The resource leak suite soak should execute at least one full resource cycle set.");
+        }
+
         private async Task<IReadOnlyList<ResourceCycleResult>> RunResourceLeakScenarioAsync(
             int cycles,
             int sensorCount,
@@ -229,6 +262,25 @@ namespace HSMDataCollector.Tests
                 return value;
 
             return defaultValue;
+        }
+
+        private static TimeSpan GetSuiteSoakDuration()
+        {
+            var rawSeconds = Environment.GetEnvironmentVariable("HSM_COLLECTOR_SUITE_SOAK_SECONDS");
+
+            if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+                return TimeSpan.FromSeconds(seconds);
+
+            return TimeSpan.FromSeconds(30);
+        }
+
+        private sealed class SuiteSoakFactAttribute : FactAttribute
+        {
+            public SuiteSoakFactAttribute()
+            {
+                if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_SUITE_SOAK"), "1", StringComparison.Ordinal))
+                    Skip = "Set HSM_COLLECTOR_RUN_SUITE_SOAK=1 to run repeated suite soak tests.";
+            }
         }
 
         private void WriteCycle(ResourceCycleResult result)

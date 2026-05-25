@@ -358,7 +358,7 @@ namespace HSMDataCollector.Tests
         [TransportChaosSoakFact]
         public async Task Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded()
         {
-            var duration = TimeSpan.FromSeconds(GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_SECONDS", 30));
+            var duration = GetTransportSoakDuration();
             var collectorsPerPhase = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_COLLECTORS", 8);
             var valuesPerCollector = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_VALUES", 250);
             var minConnections = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_MIN_CONNECTIONS", 200);
@@ -401,7 +401,8 @@ namespace HSMDataCollector.Tests
                         var phaseBefore = server.Stats;
 
                         await RunTransportSoakPhaseAsync(
-                            server.Port,
+                            server,
+                            phaseBefore.AcceptedConnections,
                             scenario,
                             cycles,
                             collectorsPerPhase,
@@ -536,7 +537,8 @@ namespace HSMDataCollector.Tests
         }
 
         private static async Task RunTransportSoakPhaseAsync(
-            int port,
+            RawChaosServer server,
+            long acceptedConnectionsBeforePhase,
             TransportSoakScenario scenario,
             int cycle,
             int collectorsPerPhase,
@@ -550,8 +552,8 @@ namespace HSMDataCollector.Tests
                 for (var collectorIndex = 0; collectorIndex < collectorsPerPhase; collectorIndex++)
                 {
                     var collector = CreateCollector(
-                        port,
-                        TimeSpan.FromMilliseconds(350),
+                        server.Port,
+                        TimeSpan.FromMilliseconds(200),
                         1,
                         Math.Max(20000, collectorsPerPhase * valuesPerCollector * 2),
                         "soak-" + scenario + "-" + cycle.ToString(CultureInfo.InvariantCulture) + "-" + collectorIndex.ToString(CultureInfo.InvariantCulture));
@@ -569,7 +571,11 @@ namespace HSMDataCollector.Tests
                 })).ToArray();
 
                 await Task.WhenAll(producers).ConfigureAwait(false);
-                await Task.Delay(TimeSpan.FromMilliseconds(900)).ConfigureAwait(false);
+                await WaitForAcceptedConnectionsAsync(
+                    server,
+                    acceptedConnectionsBeforePhase,
+                    Math.Max(1, Math.Min(collectorsPerPhase, 4)),
+                    TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             }
             finally
             {
@@ -586,13 +592,13 @@ namespace HSMDataCollector.Tests
                     return ChaosResponse.DropAfter(TimeSpan.Zero);
 
                 case TransportSoakScenario.NeverRespond:
-                    return ChaosResponse.NeverRespond(TimeSpan.FromSeconds(2));
+                    return ChaosResponse.NeverRespond(TimeSpan.FromMilliseconds(500));
 
                 case TransportSoakScenario.SlowReadBody:
                     return ChaosResponse.SlowReadBody(TimeSpan.FromMilliseconds(1));
 
                 case TransportSoakScenario.HeadersOnly:
-                    return ChaosResponse.HeadersOnly(TimeSpan.FromSeconds(2));
+                    return ChaosResponse.HeadersOnly(TimeSpan.FromMilliseconds(500));
 
                 case TransportSoakScenario.MalformedHttp:
                     return ChaosResponse.MalformedHttp();
@@ -634,6 +640,17 @@ namespace HSMDataCollector.Tests
             return defaultValue;
         }
 
+        private static TimeSpan GetTransportSoakDuration()
+        {
+            var rawSeconds = Environment.GetEnvironmentVariable("HSM_COLLECTOR_TRANSPORT_SOAK_SECONDS")
+                ?? Environment.GetEnvironmentVariable("HSM_COLLECTOR_SUITE_SOAK_SECONDS");
+
+            if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+                return TimeSpan.FromSeconds(seconds);
+
+            return TimeSpan.FromSeconds(30);
+        }
+
         private static async Task DisposeWithinAsync(DataCollector collector, TimeSpan timeout)
         {
             var disposeTask = Task.Run(() => collector.Dispose());
@@ -661,6 +678,19 @@ namespace HSMDataCollector.Tests
             while (DateTime.UtcNow < deadline);
 
             Assert.True(counts.Established == 0, "No ESTABLISHED TCP connections to chaos server ports should remain after dispose.");
+        }
+
+        private static async Task WaitForAcceptedConnectionsAsync(RawChaosServer server, long before, int minAcceptedDelta, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow + timeout;
+
+            while (DateTime.UtcNow < deadline)
+            {
+                if (server.Stats.AcceptedConnections - before >= minAcceptedDelta)
+                    return;
+
+                await Task.Delay(TimeSpan.FromMilliseconds(25)).ConfigureAwait(false);
+            }
         }
 
         private static async Task WaitForTransportSoakSettleAsync(IReadOnlyCollection<int> ports, TimeSpan timeout)
@@ -746,7 +776,10 @@ namespace HSMDataCollector.Tests
         {
             public TransportChaosSoakFactAttribute()
             {
-                if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_TRANSPORT_SOAK"), "1", StringComparison.Ordinal))
+                var enabled = string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_TRANSPORT_SOAK"), "1", StringComparison.Ordinal)
+                    || string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_SUITE_SOAK"), "1", StringComparison.Ordinal);
+
+                if (!enabled)
                     Skip = "Set HSM_COLLECTOR_RUN_TRANSPORT_SOAK=1 to run the repeated single-server transport soak test.";
             }
         }

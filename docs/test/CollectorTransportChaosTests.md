@@ -47,8 +47,8 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Single-server transport soak на 30 секунд:
 
 ```powershell
-$env:HSM_COLLECTOR_RUN_TRANSPORT_SOAK="1"
-$env:HSM_COLLECTOR_TRANSPORT_SOAK_SECONDS="30"
+$env:HSM_COLLECTOR_RUN_TRANSPORT_SOAK="1" # или HSM_COLLECTOR_RUN_SUITE_SOAK="1"
+$env:HSM_COLLECTOR_TRANSPORT_SOAK_SECONDS="30" # или общий HSM_COLLECTOR_SUITE_SOAK_SECONDS="30"
 dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded" --logger "console;verbosity=detailed"
 ```
 
@@ -57,7 +57,9 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 | Переменная | Default | Что меняет |
 | --- | ---: | --- |
 | `HSM_COLLECTOR_RUN_TRANSPORT_SOAK` | off | Включает gated soak-тест |
+| `HSM_COLLECTOR_RUN_SUITE_SOAK` | off | Включает все gated suite repeat-тесты, включая transport soak |
 | `HSM_COLLECTOR_TRANSPORT_SOAK_SECONDS` | 30 | Длительность mixed suite |
+| `HSM_COLLECTOR_SUITE_SOAK_SECONDS` | 30 | Общая длительность suite repeat, используется transport soak если transport-specific переменная не задана |
 | `HSM_COLLECTOR_TRANSPORT_SOAK_COLLECTORS` | 8 | Сколько collectors одновременно создается на фазу |
 | `HSM_COLLECTOR_TRANSPORT_SOAK_VALUES` | 250 | Сколько `AddValue()` вызывает каждый collector на фазу |
 | `HSM_COLLECTOR_TRANSPORT_SOAK_MIN_CONNECTIONS` | 200 | Минимум accepted TCP connections, ниже тест считается слишком слабым |
@@ -104,6 +106,24 @@ TIME_WAIT after settle: 440
 Post-warm-up trend:
   handles: 1294 -> 1297
   threads: 108 -> 105
+```
+
+Последний общий repeat-прогон всех suite на 30 секунд дал для transport:
+
+```text
+Accepted TCP connections: 1093
+Requests: 1091
+Dropped: 303
+Hung: 161
+Slow reads: 157
+Headers-only: 154
+Malformed HTTP: 157
+TCP resets: 159
+ESTABLISHED after settle: 0
+TIME_WAIT after settle: 734
+Post-warm-up trend:
+  handles: 1095 -> 1091
+  threads: 68 -> 66
 ```
 
 ## 15 сценариев по шагам
