@@ -355,6 +355,143 @@ namespace HSMDataCollector.Tests
             Assert.True(cpu < TimeSpan.FromSeconds(15), "Retry storm should not burn excessive CPU in the test process.");
         }
 
+        [TransportChaosSoakFact]
+        public async Task Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded()
+        {
+            var duration = TimeSpan.FromSeconds(GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_SECONDS", 30));
+            var collectorsPerPhase = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_COLLECTORS", 8);
+            var valuesPerCollector = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_VALUES", 250);
+            var minConnections = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_MIN_CONNECTIONS", 200);
+            var currentScenario = (int)TransportSoakScenario.AcceptDrop;
+            var scenarios = new[]
+            {
+                TransportSoakScenario.AcceptDrop,
+                TransportSoakScenario.NeverRespond,
+                TransportSoakScenario.SlowReadBody,
+                TransportSoakScenario.HeadersOnly,
+                TransportSoakScenario.MalformedHttp,
+                TransportSoakScenario.ResetDuringBody
+            };
+            var before = TransportResourceSnapshot.Capture(Array.Empty<int>());
+            var port = 0;
+            ChaosServerStats stats;
+            int cycles;
+            var phaseResults = new List<TransportSoakPhaseResult>();
+            TransportResourceSnapshot trendBaseline = null;
+            TransportResourceSnapshot trendLast = null;
+
+            using (var server = RawChaosServer.Start((request, number) =>
+                CreateSoakResponse((TransportSoakScenario)Volatile.Read(ref currentScenario), request, number)))
+            {
+                port = server.Port;
+                var deadline = DateTime.UtcNow + duration;
+                cycles = 0;
+
+                while (DateTime.UtcNow < deadline)
+                {
+                    cycles++;
+
+                    foreach (var scenario in scenarios)
+                    {
+                        if (DateTime.UtcNow >= deadline)
+                            break;
+
+                        Volatile.Write(ref currentScenario, (int)scenario);
+
+                        var phaseBefore = server.Stats;
+
+                        await RunTransportSoakPhaseAsync(
+                            server.Port,
+                            scenario,
+                            cycles,
+                            collectorsPerPhase,
+                            valuesPerCollector).ConfigureAwait(false);
+
+                        await AssertNoEstablishedConnectionsAsync(new[] { server.Port }, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                        var phaseAfter = server.Stats;
+                        var result = TransportSoakPhaseResult.FromDelta(cycles, scenario, phaseBefore, phaseAfter);
+                        phaseResults.Add(result);
+                        WriteSoakPhase(result);
+
+                        var trendSnapshot = TransportResourceSnapshot.Capture(new[] { server.Port });
+                        if (trendBaseline == null && phaseResults.Count >= scenarios.Length)
+                            trendBaseline = trendSnapshot;
+
+                        trendLast = trendSnapshot;
+                    }
+                }
+
+                await AssertNoEstablishedConnectionsAsync(new[] { server.Port }, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                stats = server.Stats;
+            }
+
+            await WaitForTransportSoakSettleAsync(new[] { port }, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+            var after = TransportResourceSnapshot.Capture(new[] { port });
+
+            _output.WriteLine(
+                "transportSoakTotals; durationSeconds={0}; cycles={1}; accepted={2}; requests={3}; dropped={4}; hung={5}; slowReads={6}; headerOnly={7}; malformed={8}; resets={9}; tcpEstablished={10}; tcpTimeWait={11}; handles={12}->{13}; threads={14}->{15}; managedGc={16}->{17}; private={18}->{19}; workingSet={20}->{21}",
+                duration.TotalSeconds,
+                cycles,
+                stats.AcceptedConnections,
+                stats.TotalRequests,
+                stats.DroppedConnections,
+                stats.HungConnections,
+                stats.SlowReads,
+                stats.HeaderOnlyResponses,
+                stats.MalformedResponses,
+                stats.ResetConnections,
+                after.TcpEstablished,
+                after.TcpTimeWait,
+                before.HandleCount,
+                after.HandleCount,
+                before.ThreadCount,
+                after.ThreadCount,
+                before.ManagedAfterFullGc,
+                after.ManagedAfterFullGc,
+                before.PrivateBytes,
+                after.PrivateBytes,
+                before.WorkingSet,
+                after.WorkingSet);
+
+            Assert.True(cycles > 0, "The repeated transport suite should run at least one full or partial cycle.");
+            Assert.True(phaseResults.Count > 0, "The repeated transport suite should record phase results.");
+            Assert.NotNull(trendBaseline);
+            Assert.NotNull(trendLast);
+
+            _output.WriteLine(
+                "transportSoakTrendAfterWarmup; handles={0}->{1}; threads={2}->{3}; managedGc={4}->{5}; private={6}->{7}; workingSet={8}->{9}",
+                trendBaseline.HandleCount,
+                trendLast.HandleCount,
+                trendBaseline.ThreadCount,
+                trendLast.ThreadCount,
+                trendBaseline.ManagedAfterFullGc,
+                trendLast.ManagedAfterFullGc,
+                trendBaseline.PrivateBytes,
+                trendLast.PrivateBytes,
+                trendBaseline.WorkingSet,
+                trendLast.WorkingSet);
+
+            Assert.True(stats.AcceptedConnections >= minConnections, "The transport soak should create enough real TCP connections to make socket leaks visible.");
+            Assert.True(stats.DroppedConnections > 0, "Accept/drop scenario should run.");
+            Assert.True(stats.HungConnections > 0, "Never-respond scenario should run.");
+            Assert.True(stats.SlowReads > 0, "Slow request-body read scenario should run.");
+            Assert.True(stats.HeaderOnlyResponses > 0, "Headers-only scenario should run.");
+            Assert.True(stats.MalformedResponses > 0, "Malformed HTTP scenario should run.");
+            Assert.True(stats.ResetConnections > 0, "Reset-during-body scenario should run.");
+            Assert.True(after.TcpEstablished == 0, "No ESTABLISHED TCP connections to the single chaos server should remain after the repeated suite.");
+            Assert.True(after.TcpTimeWait < 1000, "TIME_WAIT connections to the single chaos server should stay bounded.");
+            Assert.True(trendLast.ThreadCount - trendBaseline.ThreadCount < 40, "Thread count should stay bounded between post-GC transport soak cycles after warm-up.");
+            Assert.True(trendLast.ManagedAfterFullGc - trendBaseline.ManagedAfterFullGc < 128L * 1024 * 1024, "Managed memory after full GC should stay bounded between transport soak cycles after warm-up.");
+
+            if (trendBaseline.HandleCount >= 0 && trendLast.HandleCount >= 0)
+                Assert.True(trendLast.HandleCount - trendBaseline.HandleCount < 250, "Process handle count should stay bounded between transport soak cycles after warm-up.");
+
+            Assert.True(trendLast.PrivateBytes - trendBaseline.PrivateBytes < 256L * 1024 * 1024, "Private bytes should stay bounded between transport soak cycles after warm-up.");
+            Assert.True(trendLast.WorkingSet - trendBaseline.WorkingSet < 256L * 1024 * 1024, "Working set should stay bounded between transport soak cycles after warm-up.");
+        }
+
         private async Task<ChaosServerStats> RunSingleCollectorScenarioAsync(
             string name,
             Func<ChaosRequest, long, ChaosResponse> behavior,
@@ -398,6 +535,76 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        private static async Task RunTransportSoakPhaseAsync(
+            int port,
+            TransportSoakScenario scenario,
+            int cycle,
+            int collectorsPerPhase,
+            int valuesPerCollector)
+        {
+            var collectors = new List<DataCollector>();
+            var sensors = new List<IInstantValueSensor<double>>();
+
+            try
+            {
+                for (var collectorIndex = 0; collectorIndex < collectorsPerPhase; collectorIndex++)
+                {
+                    var collector = CreateCollector(
+                        port,
+                        TimeSpan.FromMilliseconds(350),
+                        1,
+                        Math.Max(20000, collectorsPerPhase * valuesPerCollector * 2),
+                        "soak-" + scenario + "-" + cycle.ToString(CultureInfo.InvariantCulture) + "-" + collectorIndex.ToString(CultureInfo.InvariantCulture));
+
+                    collectors.Add(collector);
+                    collector.Initialize(false);
+                    sensors.Add(collector.CreateDoubleSensor(
+                        "transport/soak/" + scenario + "/" + cycle.ToString(CultureInfo.InvariantCulture) + "/" + collectorIndex.ToString(CultureInfo.InvariantCulture)));
+                }
+
+                var producers = sensors.Select((sensor, sensorIndex) => Task.Run(() =>
+                {
+                    for (var value = 0; value < valuesPerCollector; value++)
+                        sensor.AddValue(sensorIndex * valuesPerCollector + value);
+                })).ToArray();
+
+                await Task.WhenAll(producers).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(900)).ConfigureAwait(false);
+            }
+            finally
+            {
+                foreach (var collector in collectors)
+                    await DisposeWithinAsync(collector, TimeSpan.FromSeconds(7)).ConfigureAwait(false);
+            }
+        }
+
+        private static ChaosResponse CreateSoakResponse(TransportSoakScenario scenario, ChaosRequest request, long number)
+        {
+            switch (scenario)
+            {
+                case TransportSoakScenario.AcceptDrop:
+                    return ChaosResponse.DropAfter(TimeSpan.Zero);
+
+                case TransportSoakScenario.NeverRespond:
+                    return ChaosResponse.NeverRespond(TimeSpan.FromSeconds(2));
+
+                case TransportSoakScenario.SlowReadBody:
+                    return ChaosResponse.SlowReadBody(TimeSpan.FromMilliseconds(1));
+
+                case TransportSoakScenario.HeadersOnly:
+                    return ChaosResponse.HeadersOnly(TimeSpan.FromSeconds(2));
+
+                case TransportSoakScenario.MalformedHttp:
+                    return ChaosResponse.MalformedHttp();
+
+                case TransportSoakScenario.ResetDuringBody:
+                    return ChaosResponse.ResetDuringBody(bytesToReadBeforeReset: 32);
+
+                default:
+                    return ChaosResponse.Ok();
+            }
+        }
+
         private static DataCollector CreateCollector(int port, TimeSpan requestTimeout, int valuesPerPackage, int maxQueueSize, string module)
         {
             return new DataCollector(new CollectorOptions
@@ -415,6 +622,16 @@ namespace HSMDataCollector.Tests
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(200),
                 MaxDeduplicatedMessages = 500
             });
+        }
+
+        private static int GetPositiveIntEnvironment(string variableName, int defaultValue)
+        {
+            var rawValue = Environment.GetEnvironmentVariable(variableName);
+
+            if (int.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0)
+                return value;
+
+            return defaultValue;
         }
 
         private static async Task DisposeWithinAsync(DataCollector collector, TimeSpan timeout)
@@ -446,6 +663,23 @@ namespace HSMDataCollector.Tests
             Assert.True(counts.Established == 0, "No ESTABLISHED TCP connections to chaos server ports should remain after dispose.");
         }
 
+        private static async Task WaitForTransportSoakSettleAsync(IReadOnlyCollection<int> ports, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow + timeout;
+
+            while (DateTime.UtcNow < deadline)
+            {
+                var counts = TcpCounts.Capture(ports);
+
+                if (counts.Established == 0)
+                    break;
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+        }
+
         private void WriteStats(string scenario, ChaosServerStats stats)
         {
             _output.WriteLine(
@@ -462,6 +696,23 @@ namespace HSMDataCollector.Tests
                 stats.MalformedResponses,
                 stats.ResetConnections,
                 stats.RequestBytes);
+        }
+
+        private void WriteSoakPhase(TransportSoakPhaseResult result)
+        {
+            _output.WriteLine(
+                "transportSoakPhase; cycle={0}; scenario={1}; accepted={2}; requests={3}; dropped={4}; hung={5}; slowReads={6}; headerOnly={7}; malformed={8}; resets={9}; bytes={10}",
+                result.Cycle,
+                result.Scenario,
+                result.AcceptedConnections,
+                result.TotalRequests,
+                result.DroppedConnections,
+                result.HungConnections,
+                result.SlowReads,
+                result.HeaderOnlyResponses,
+                result.MalformedResponses,
+                result.ResetConnections,
+                result.RequestBytes);
         }
 
         private static string[] CreateTempFiles(int count, int sizeBytes)
@@ -488,6 +739,161 @@ namespace HSMDataCollector.Tests
             finally
             {
                 listener.Stop();
+            }
+        }
+
+        private sealed class TransportChaosSoakFactAttribute : FactAttribute
+        {
+            public TransportChaosSoakFactAttribute()
+            {
+                if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_TRANSPORT_SOAK"), "1", StringComparison.Ordinal))
+                    Skip = "Set HSM_COLLECTOR_RUN_TRANSPORT_SOAK=1 to run the repeated single-server transport soak test.";
+            }
+        }
+
+        private enum TransportSoakScenario
+        {
+            AcceptDrop,
+            NeverRespond,
+            SlowReadBody,
+            HeadersOnly,
+            MalformedHttp,
+            ResetDuringBody
+        }
+
+        private sealed class TransportSoakPhaseResult
+        {
+            private TransportSoakPhaseResult(
+                int cycle,
+                TransportSoakScenario scenario,
+                long acceptedConnections,
+                long totalRequests,
+                long droppedConnections,
+                long hungConnections,
+                long slowReads,
+                long headerOnlyResponses,
+                long malformedResponses,
+                long resetConnections,
+                long requestBytes)
+            {
+                Cycle = cycle;
+                Scenario = scenario;
+                AcceptedConnections = acceptedConnections;
+                TotalRequests = totalRequests;
+                DroppedConnections = droppedConnections;
+                HungConnections = hungConnections;
+                SlowReads = slowReads;
+                HeaderOnlyResponses = headerOnlyResponses;
+                MalformedResponses = malformedResponses;
+                ResetConnections = resetConnections;
+                RequestBytes = requestBytes;
+            }
+
+            public int Cycle { get; }
+
+            public TransportSoakScenario Scenario { get; }
+
+            public long AcceptedConnections { get; }
+
+            public long TotalRequests { get; }
+
+            public long DroppedConnections { get; }
+
+            public long HungConnections { get; }
+
+            public long SlowReads { get; }
+
+            public long HeaderOnlyResponses { get; }
+
+            public long MalformedResponses { get; }
+
+            public long ResetConnections { get; }
+
+            public long RequestBytes { get; }
+
+            public static TransportSoakPhaseResult FromDelta(int cycle, TransportSoakScenario scenario, ChaosServerStats before, ChaosServerStats after)
+            {
+                return new TransportSoakPhaseResult(
+                    cycle,
+                    scenario,
+                    after.AcceptedConnections - before.AcceptedConnections,
+                    after.TotalRequests - before.TotalRequests,
+                    after.DroppedConnections - before.DroppedConnections,
+                    after.HungConnections - before.HungConnections,
+                    after.SlowReads - before.SlowReads,
+                    after.HeaderOnlyResponses - before.HeaderOnlyResponses,
+                    after.MalformedResponses - before.MalformedResponses,
+                    after.ResetConnections - before.ResetConnections,
+                    after.RequestBytes - before.RequestBytes);
+            }
+        }
+
+        private sealed class TransportResourceSnapshot
+        {
+            private TransportResourceSnapshot(
+                long managedAfterFullGc,
+                long privateBytes,
+                long workingSet,
+                int handleCount,
+                int threadCount,
+                int tcpEstablished,
+                int tcpTimeWait)
+            {
+                ManagedAfterFullGc = managedAfterFullGc;
+                PrivateBytes = privateBytes;
+                WorkingSet = workingSet;
+                HandleCount = handleCount;
+                ThreadCount = threadCount;
+                TcpEstablished = tcpEstablished;
+                TcpTimeWait = tcpTimeWait;
+            }
+
+            public long ManagedAfterFullGc { get; }
+
+            public long PrivateBytes { get; }
+
+            public long WorkingSet { get; }
+
+            public int HandleCount { get; }
+
+            public int ThreadCount { get; }
+
+            public int TcpEstablished { get; }
+
+            public int TcpTimeWait { get; }
+
+            public static TransportResourceSnapshot Capture(IReadOnlyCollection<int> ports)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+
+                using (var process = Process.GetCurrentProcess())
+                {
+                    process.Refresh();
+                    var tcpCounts = TcpCounts.Capture(ports);
+
+                    return new TransportResourceSnapshot(
+                        GC.GetTotalMemory(forceFullCollection: false),
+                        process.PrivateMemorySize64,
+                        process.WorkingSet64,
+                        GetHandleCount(process),
+                        process.Threads.Count,
+                        tcpCounts.Established,
+                        tcpCounts.TimeWait);
+                }
+            }
+
+            private static int GetHandleCount(Process process)
+            {
+                try
+                {
+                    return process.HandleCount;
+                }
+                catch
+                {
+                    return -1;
+                }
             }
         }
 
@@ -644,7 +1050,10 @@ namespace HSMDataCollector.Tests
                     var task = Task.Run(() => HandleClientAsync(client, token), token);
 
                     lock (_clientTasksLock)
+                    {
+                        _clientTasks.RemoveAll(t => t.IsCompleted);
                         _clientTasks.Add(task);
+                    }
                 }
             }
 
@@ -700,7 +1109,7 @@ namespace HSMDataCollector.Tests
 
                     case ChaosResponseKind.NeverRespond:
                         Interlocked.Increment(ref _hungConnections);
-                        await Task.Delay(TimeSpan.FromSeconds(30), token).ConfigureAwait(false);
+                        await Task.Delay(response.Delay, token).ConfigureAwait(false);
                         break;
 
                     case ChaosResponseKind.SlowReadBody:
@@ -714,7 +1123,7 @@ namespace HSMDataCollector.Tests
                         Interlocked.Increment(ref _headerOnlyResponses);
                         await DrainBodyAsync(stream, request, token).ConfigureAwait(false);
                         await WriteHeadersOnlyAsync(stream).ConfigureAwait(false);
-                        await Task.Delay(TimeSpan.FromSeconds(30), token).ConfigureAwait(false);
+                        await Task.Delay(response.Delay, token).ConfigureAwait(false);
                         break;
 
                     case ChaosResponseKind.MalformedHttp:
@@ -920,7 +1329,12 @@ namespace HSMDataCollector.Tests
 
             public static ChaosResponse NeverRespond()
             {
-                return new ChaosResponse(ChaosResponseKind.NeverRespond, TimeSpan.Zero, 0);
+                return NeverRespond(TimeSpan.FromSeconds(30));
+            }
+
+            public static ChaosResponse NeverRespond(TimeSpan holdFor)
+            {
+                return new ChaosResponse(ChaosResponseKind.NeverRespond, holdFor, 0);
             }
 
             public static ChaosResponse SlowReadBody(TimeSpan delay)
@@ -930,7 +1344,12 @@ namespace HSMDataCollector.Tests
 
             public static ChaosResponse HeadersOnly()
             {
-                return new ChaosResponse(ChaosResponseKind.HeadersOnly, TimeSpan.Zero, 0);
+                return HeadersOnly(TimeSpan.FromSeconds(30));
+            }
+
+            public static ChaosResponse HeadersOnly(TimeSpan holdFor)
+            {
+                return new ChaosResponse(ChaosResponseKind.HeadersOnly, holdFor, 0);
             }
 
             public static ChaosResponse MalformedHttp()

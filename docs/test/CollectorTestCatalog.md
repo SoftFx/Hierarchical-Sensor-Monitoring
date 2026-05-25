@@ -10,7 +10,7 @@
 
 | Группа | Быстрых тестов | Оценка покрытия | Длительность | Код | Подробное описание |
 | --- | ---: | ---: | --- | --- | --- |
-| Transport chaos | 15 | 80% | ~25 sec весь suite | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md) |
+| Transport chaos | 15 fast + 1 gated | 85% | ~25 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md) |
 | Resource leaks | 1 | 65% | ~4 sec быстрый, gated 10+ sec/30 cycles | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md) |
 | Adversarial lifecycle | 10 | 75% | ~1-2 sec весь suite | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md) |
 | Flaky server stress | 1 | 70% | ~3-4 sec быстрый, gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md) |
@@ -20,9 +20,9 @@
 
 ```text
 Passed: 29
-Skipped: 2
+Skipped: 3
 Failed: 0
-Total: 31
+Total: 32
 Duration: ~28 seconds
 ```
 
@@ -47,6 +47,7 @@ Duration: ~28 seconds
 | File sensor flood под disconnects | 1 | 55% | ~2 sec | `File_sensor_flood_under_disconnects_releases_files_and_sockets` | `CollectorTransportChaosTests.cs:276` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `13. File sensor flood` |
 | `Dispose()` во время in-flight HTTP request | 1 | 85% | <1 sec | `Dispose_while_http_request_is_mid_flight_closes_connection` | `CollectorTransportChaosTests.cs:308` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `14. Dispose while HTTP request is mid-flight` |
 | Retry storm при постоянном disconnect | 1 | 70% | ~3 sec | `Constant_disconnect_retry_storm_stays_bounded` | `CollectorTransportChaosTests.cs:336` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `15. Constant disconnect retry storm` |
+| Mixed transport suite на одном сервере по кругу | 1 gated | 85% | gated; 30 sec default | `Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded` | `CollectorTransportChaosTests.cs:359` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), раздел `Single-server transport soak` |
 
 ## Resource Leaks
 
