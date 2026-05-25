@@ -34,7 +34,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         _queueManager.AddPackageSendingInfo(sendingInfo);
                         _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                     }
-                    while (_queue.Count >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
+                    while (QueueCount >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception ex)

@@ -26,7 +26,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                     while (!_queue.IsEmpty && !token.IsCancellationRequested)
                     {
-                        if (_queue.TryDequeue(out QueueItem<FileSensorValue> item))
+                        if (TryDequeue(out QueueItem<FileSensorValue> item))
                             await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
                     }
                 }
