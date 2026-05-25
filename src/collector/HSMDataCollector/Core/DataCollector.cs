@@ -33,6 +33,7 @@ namespace HSMDataCollector.Core
         private readonly IDataSender _dataSender;
         private readonly DataProcessor _dataProcessor;
 
+        private bool _disposed;
 
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
@@ -187,18 +188,27 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
-            if (!Status.IsRunning())
+            if (_disposed)
                 return;
 
-            ChangeStatus(CollectorStatus.Stopping);
+            _disposed = true;
 
-            _dataProcessor.Dispose();
+            try
+            {
+                if (!Status.IsStopped())
+                    ChangeStatus(CollectorStatus.Stopping);
 
-            _dataSender.Dispose();
+                _dataProcessor.Dispose();
 
-            AppDomain.CurrentDomain.UnhandledException -= UnhandledExceptionHandler;
+                _dataSender.Dispose();
+            }
+            finally
+            {
+                AppDomain.CurrentDomain.UnhandledException -= UnhandledExceptionHandler;
 
-            ChangeStatus(CollectorStatus.Stopped);
+                if (!Status.IsStopped())
+                    ChangeStatus(CollectorStatus.Stopped);
+            }
         }
 
 
