@@ -121,16 +121,13 @@ namespace HSMDataCollector.Core
             if (useLogging)
                 AddNLog();
 
-            _logger.Info("Initialize timer...");
-            _dataProcessor.Start();
-            _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+            InitializeProcessor();
         }
 
         [Obsolete("Use Initialize(bool, string, string)")]
         public void Initialize()
         {
-            _dataProcessor.Start();
-            _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+            InitializeProcessor();
         }
 
 
@@ -146,8 +143,15 @@ namespace HSMDataCollector.Core
                 _dataProcessor.Start();
                 ChangeStatus(CollectorStatus.Starting);
 
-                _ = customStartingTask.ContinueWith(_ => _dataProcessor.InitAsync())
-                                      .ContinueWith(_ => ChangeStatus(CollectorStatus.Running));
+                await customStartingTask.ConfigureAwait(false);
+
+                if (!Status.IsStartingOrRunning())
+                    return;
+
+                await _dataProcessor.InitAsync().ConfigureAwait(false);
+
+                if (Status == CollectorStatus.Starting)
+                    ChangeStatus(CollectorStatus.Running);
 
             }
             catch (Exception ex)
@@ -167,7 +171,7 @@ namespace HSMDataCollector.Core
         {
             try
             {
-                if (!Status.IsRunning())
+                if (!Status.IsStartingOrRunning())
                     return;
 
                 ChangeStatus(CollectorStatus.Stopping);
@@ -183,6 +187,32 @@ namespace HSMDataCollector.Core
                 ChangeStatus(CollectorStatus.Stopped);
             }
 
+        }
+
+        private void InitializeProcessor()
+        {
+            try
+            {
+                if (!Status.IsStopped())
+                    return;
+
+                _logger.Info("Initialize timer...");
+
+                _dataProcessor.Start();
+                ChangeStatus(CollectorStatus.Starting);
+
+                _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+
+                ChangeStatus(CollectorStatus.Running);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"DataCollector initialization error: {ex}");
+
+                _dataProcessor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+
+                ChangeStatus(CollectorStatus.Stopped);
+            }
         }
 
 
