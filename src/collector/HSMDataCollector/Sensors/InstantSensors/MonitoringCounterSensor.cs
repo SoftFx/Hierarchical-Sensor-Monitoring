@@ -22,9 +22,8 @@ namespace HSMDataCollector.Sensors
         protected override double GetValue()
         {
             var sec = PostTimePeriod.TotalSeconds;
-            var value = sec > 0 ? _sum / sec : 0;
-
-            Interlocked.Exchange(ref _sum, 0d);
+            var sum = Interlocked.Exchange(ref _sum, 0d);
+            var value = sec > 0 ? sum / sec : 0;
 
             return value;
         }
@@ -43,12 +42,25 @@ namespace HSMDataCollector.Sensors
         {
             try
             {
-                Interlocked.Exchange(ref _sum, _sum + value);
+                AddToSum(value);
 
                 _lastComment = comment;
                 _lastStatus = status;
             }
             catch (Exception ex) { HandleException(ex); }
+        }
+
+        private void AddToSum(double value)
+        {
+            double current;
+            double updated;
+
+            do
+            {
+                current = _sum;
+                updated = current + value;
+            }
+            while (Interlocked.CompareExchange(ref _sum, updated, current) != current);
         }
     }
 }
