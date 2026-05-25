@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -19,7 +20,7 @@ namespace HSMDataCollector.Threading
                 return;
             }
 
-            long nextActionTime = Environment.TickCount64;
+            long nextActionTime = GetTickCountMilliseconds();
 
             nextActionTime += interval;
 
@@ -33,12 +34,12 @@ namespace HSMDataCollector.Threading
             {
                 try
                 {
-                    long wait = nextActionTime - Environment.TickCount64;
+                    long wait = nextActionTime - GetTickCountMilliseconds();
 
                     while (wait <= 0)
                     {
                         nextActionTime += interval;
-                        wait = nextActionTime - Environment.TickCount64;
+                        wait = nextActionTime - GetTickCountMilliseconds();
                     }
 
                     await Task.Delay(TimeSpan.FromMilliseconds(wait), cancellationToken).ConfigureAwait(false);
@@ -68,7 +69,7 @@ namespace HSMDataCollector.Threading
                 return;
             }
 
-            long nextActionTime = Environment.TickCount64;
+            long nextActionTime = GetTickCountMilliseconds();
 
             nextActionTime += interval;
 
@@ -82,12 +83,12 @@ namespace HSMDataCollector.Threading
             {
                 try
                 {
-                    long wait = nextActionTime - Environment.TickCount64;
+                    long wait = nextActionTime - GetTickCountMilliseconds();
 
                     while (wait <= 0)
                     {
                         nextActionTime += interval;
-                        wait = nextActionTime - Environment.TickCount64;
+                        wait = nextActionTime - GetTickCountMilliseconds();
                     }
 
                     await Task.Delay(TimeSpan.FromMilliseconds(wait), cancellationToken).ConfigureAwait(false);
@@ -127,6 +128,8 @@ namespace HSMDataCollector.Threading
                 onError?.Invoke(ex);
             }
         }
+
+        private static long GetTickCountMilliseconds() => Stopwatch.GetTimestamp() * 1000L / Stopwatch.Frequency;
 
     }
 }
