@@ -60,7 +60,7 @@ namespace HSMDataCollector.Sensors
                 current = _sum;
                 updated = current + value;
             }
-            while (Interlocked.CompareExchange(ref _sum, updated, current) != current);
+            while (!Interlocked.CompareExchange(ref _sum, updated, current).Equals(current));
         }
     }
 }
