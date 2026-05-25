@@ -75,9 +75,11 @@ namespace HSMDataCollector.Client.HttpsClient
             HttpRequest<T> request = new HttpRequest<T>(values, GetUri(values));
             try
             {
-                var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false);
-                await HandleRequestResultAsync(response, values, token).ConfigureAwait(false);
-                return new PackageSendingInfo(request.Length, response);
+                using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
+                {
+                    await HandleRequestResultAsync(response, values, token).ConfigureAwait(false);
+                    return new PackageSendingInfo(request.Length, response);
+                }
             }
             catch (Exception ex)
             {
@@ -91,9 +93,11 @@ namespace HSMDataCollector.Client.HttpsClient
             HttpRequest<T> request = new HttpRequest<T>(value, GetUri(value));
             try
             {
-                var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false);
-                await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
-                return new PackageSendingInfo(request.Length, response);
+                using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
+                {
+                    await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
+                    return new PackageSendingInfo(request.Length, response);
+                }
             }
             catch (Exception ex)
             {
@@ -103,8 +107,13 @@ namespace HSMDataCollector.Client.HttpsClient
         }
 
 
-        private ValueTask<HttpResponseMessage> ExecutePipelineAsync(HttpRequest<T> request, CancellationToken token) =>
-            _client.SendRequestAsync(request.Uri, request.GetContent(), token);
+        private async ValueTask<HttpResponseMessage> ExecutePipelineAsync(HttpRequest<T> request, CancellationToken token)
+        {
+            using (var content = request.GetContent())
+            {
+                return await _client.SendRequestAsync(request.Uri, content, token).ConfigureAwait(false);
+            }
+        }
 
 
         public void Dispose()
