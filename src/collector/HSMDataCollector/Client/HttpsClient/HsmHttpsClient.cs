@@ -41,6 +41,7 @@ namespace HSMDataCollector.Client
                 httpHandler.ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true;
 
             _client = new HttpClient(httpHandler);
+            _client.Timeout = options.RequestTimeout;
 
             _client.DefaultRequestHeaders.Add(HeaderClientName, options.ClientName);
             _client.DefaultRequestHeaders.Add(HeaderAccessKey, options.AccessKey);
