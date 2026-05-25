@@ -13,8 +13,7 @@ namespace HSMDataCollector.DefaultSensors
     public abstract class MonitoringSensorBase<T, TDisplayUnit> : SensorBase<T, TDisplayUnit> where TDisplayUnit : struct, Enum
     {
         private readonly IMonitoringOptions _options;
-        private CancellationTokenSource _cancellationTokenSource;
-        private Task _sendTask;
+        private ScheduledTask _sendTask;
 
         private readonly object _lock = new object();
 
@@ -96,23 +95,20 @@ namespace HSMDataCollector.DefaultSensors
 
         private async ValueTask StopInternalAsync()
         {
-            Task taskToAwait = null;
+            ScheduledTask taskToAwait = null;
 
             lock (_lock)
             {
                 if (_sendTask != null)
                 {
-                    _cancellationTokenSource?.Cancel();
                     taskToAwait = _sendTask;
                     _sendTask = null;
-                    _cancellationTokenSource?.Dispose();
                 }
             }
 
             if (taskToAwait != null)
             {
-                await taskToAwait.ConfigureAwait(false);
-                taskToAwait.Dispose();
+                await taskToAwait.StopAsync().ConfigureAwait(false);
             }
         }
 
@@ -122,8 +118,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (_sendTask == null)
                 {
-                    _cancellationTokenSource = new CancellationTokenSource();
-                    _sendTask = PeriodicTask.Run(SendValueAction, TimerDueTime, PostTimePeriod, _cancellationTokenSource.Token, HandleException);
+                    _sendTask = CollectorScheduler.Schedule(SendValueAction, TimerDueTime, PostTimePeriod, HandleException);
                 }
             }
         }
