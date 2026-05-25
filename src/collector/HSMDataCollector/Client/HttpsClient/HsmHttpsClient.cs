@@ -89,14 +89,16 @@ namespace HSMDataCollector.Client
         {
             try
             {
-                var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token).ConfigureAwait(false);
+                using (var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token).ConfigureAwait(false))
+                {
 
-                if (connect.IsSuccessStatusCode)
-                    return ConnectionResult.Ok;
+                    if (connect.IsSuccessStatusCode)
+                        return ConnectionResult.Ok;
 
-                var error = await connect.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    var error = await connect.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-                return new ConnectionResult(connect.StatusCode, $"{connect.ReasonPhrase} ({error})");
+                    return new ConnectionResult(connect.StatusCode, $"{connect.ReasonPhrase} ({error})");
+                }
             }
             catch (Exception ex)
             {
