@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.ServiceProcess;
 using System.Threading.Tasks;
 using HSMDataCollector.Options;
@@ -73,6 +72,10 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
                 HandleException(ex);
                 throw;
             }
+            finally
+            {
+                DisposeService();
+            }
         }
 
 
@@ -85,8 +88,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
                     if (_nextServiceResolveTime > DateTime.UtcNow)
                         return;
 
-                    _service = ServiceController.GetServices()
-                                                .FirstOrDefault(s => string.Equals(s.ServiceName, _serviceName, StringComparison.OrdinalIgnoreCase));
+                    _service = ResolveService();
 
                     if (_service is null)
                     {
@@ -117,6 +119,40 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
                 _service?.Dispose();
                 _service = null;
             }
+        }
+
+        private ServiceController ResolveService()
+        {
+            var services = ServiceController.GetServices();
+            ServiceController matchedService = null;
+
+            try
+            {
+                foreach (var service in services)
+                {
+                    if (string.Equals(service.ServiceName, _serviceName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchedService = service;
+                        return matchedService;
+                    }
+                }
+
+                return null;
+            }
+            finally
+            {
+                foreach (var service in services)
+                {
+                    if (!ReferenceEquals(service, matchedService))
+                        service.Dispose();
+                }
+            }
+        }
+
+        private void DisposeService()
+        {
+            _service?.Dispose();
+            _service = null;
         }
 
     }
