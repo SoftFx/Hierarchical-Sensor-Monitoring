@@ -11,20 +11,22 @@
 | Группа | Быстрых тестов | Оценка покрытия | Длительность | Код | Подробное описание |
 | --- | ---: | ---: | --- | --- | --- |
 | Transport chaos | 15 fast + 1 gated | 85% | ~25 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md) |
-| Resource leaks | 1 | 65% | ~4 sec быстрый, gated 10+ sec/30 cycles | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md) |
-| Adversarial lifecycle | 10 | 75% | ~1-2 sec весь suite | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md) |
-| Flaky server stress | 1 | 70% | ~3-4 sec быстрый, gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md) |
-| Default sensor smoke | 2 | 5% | <1 sec, но без assertions | `src/collector/HSMDataCollector.Tests/DefaultSensorsTests.cs` | Нет полноценного описания; тесты сейчас фактически пустые |
+| Resource leaks | 1 fast + 1 gated repeat | 65% | ~4 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md) |
+| Adversarial lifecycle | 10 fast + 1 gated repeat | 75% | ~1-2 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md) |
+| Flaky server stress | 1 fast + 1 gated repeat | 70% | ~3-4 sec быстрый; gated suite repeat 30 sec default; long gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md) |
+| Default sensor smoke | 2 fast + 1 gated repeat | 5% | <1 sec fast; gated suite repeat 30 sec default, но без assertions | `src/collector/HSMDataCollector.Tests/DefaultSensorsTests.cs` | Нет полноценного описания; тесты сейчас фактически пустые |
 
 Текущий быстрый прогон:
 
 ```text
 Passed: 29
-Skipped: 3
+Skipped: 7
 Failed: 0
-Total: 32
-Duration: ~28 seconds
+Total: 36
+Duration: ~33 seconds
 ```
+
+30-секундный repeat-прогон всех suite: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md).
 
 ## Transport Chaos
 

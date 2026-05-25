@@ -108,6 +108,27 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        [SuiteSoakFact]
+        public async Task Flaky_server_stress_suite_repeated_for_duration_stays_green()
+        {
+            if (!HttpListener.IsSupported)
+                return;
+
+            var duration = GetSuiteSoakDuration();
+            var stopwatch = Stopwatch.StartNew();
+            var cycles = 0;
+
+            while (stopwatch.Elapsed < duration)
+            {
+                cycles++;
+                await Collector_survives_transient_server_failures_under_parallel_load().ConfigureAwait(false);
+            }
+
+            _output.WriteLine("flakyStressSuiteSoak; durationSeconds={0}; cycles={1}", duration.TotalSeconds, cycles);
+
+            Assert.True(cycles > 0, "The flaky server stress suite soak should complete at least one suite cycle.");
+        }
+
         private static DataCollector CreateCollector(int port, TimeSpan requestTimeout, int maxQueueSize)
         {
             return new DataCollector(new CollectorOptions
@@ -196,6 +217,16 @@ namespace HSMDataCollector.Tests
             return TimeSpan.FromMinutes(10);
         }
 
+        private static TimeSpan GetSuiteSoakDuration()
+        {
+            var rawSeconds = Environment.GetEnvironmentVariable("HSM_COLLECTOR_SUITE_SOAK_SECONDS");
+
+            if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+                return TimeSpan.FromSeconds(seconds);
+
+            return TimeSpan.FromSeconds(30);
+        }
+
         private void WriteServerStats(FakeHsmServer server)
         {
             _output.WriteLine("Requests: {0}", server.TotalRequests);
@@ -214,6 +245,15 @@ namespace HSMDataCollector.Tests
             {
                 if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_LONG_STRESS"), "1", StringComparison.Ordinal))
                     Skip = "Set HSM_COLLECTOR_RUN_LONG_STRESS=1 to run the 10-minute collector stress test.";
+            }
+        }
+
+        private sealed class SuiteSoakFactAttribute : FactAttribute
+        {
+            public SuiteSoakFactAttribute()
+            {
+                if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_SUITE_SOAK"), "1", StringComparison.Ordinal))
+                    Skip = "Set HSM_COLLECTOR_RUN_SUITE_SOAK=1 to run repeated suite soak tests.";
             }
         }
 
