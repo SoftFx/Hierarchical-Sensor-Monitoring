@@ -33,5 +33,20 @@ namespace HSMDataCollector.Core
         internal string ServerUrl => ServerAddress.TrimEnd('/');
 
         public TimeSpan ExceptionDeduplicatorWindow { get; set; } = TimeSpan.FromHours(1);
+
+        internal void Validate()
+        {
+            if (MaxQueueSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(MaxQueueSize), "Max queue size must be greater than zero.");
+
+            if (MaxValuesInPackage <= 0)
+                throw new ArgumentOutOfRangeException(nameof(MaxValuesInPackage), "Max values in package must be greater than zero.");
+
+            if (PackageCollectPeriod <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(PackageCollectPeriod), "Package collect period must be greater than zero.");
+
+            if (ExceptionDeduplicatorWindow < TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(ExceptionDeduplicatorWindow), "Exception deduplicator window cannot be negative.");
+        }
     }
 }

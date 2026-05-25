@@ -67,7 +67,8 @@ namespace HSMDataCollector.Core
         /// <param name="options">Common options for datacollector</param>
         public DataCollector(CollectorOptions options)
         {
-            _options = options;
+            _options = options ?? throw new ArgumentNullException(nameof(options));
+            _options.Validate();
 
             options.DataSender = options.DataSender ?? new HsmHttpsClient(options, _logger);
 

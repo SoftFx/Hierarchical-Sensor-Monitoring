@@ -28,6 +28,9 @@ namespace HSMDataCollector.DefaultSensors
                 _options = monitoringOptions;
             else
                 throw new ArgumentNullException(nameof(monitoringOptions));
+
+            if (_options.PostDataPeriod <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(_options.PostDataPeriod), "Post data period must be greater than zero.");
         }
 
         public override ValueTask<bool> InitAsync()
@@ -77,6 +80,9 @@ namespace HSMDataCollector.DefaultSensors
             try
             {
                 await StopInternalAsync().ConfigureAwait(false);
+
+                if (newPostPeriod <= TimeSpan.Zero)
+                    throw new ArgumentOutOfRangeException(nameof(newPostPeriod), "Post data period must be greater than zero.");
 
                 _options.PostDataPeriod = newPostPeriod;
 

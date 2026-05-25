@@ -32,6 +32,12 @@ namespace HSMDataCollector.DefaultSensors
 
         protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)
         {
+            if (options.BarTickPeriod <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(options.BarTickPeriod), "Bar tick period must be greater than zero.");
+
+            if (options.BarPeriod <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(options.BarPeriod), "Bar period must be greater than zero.");
+
             _collectBarPeriod = options.BarTickPeriod;
             _barPeriod = options.BarPeriod;
             _precision = options.Precision;
