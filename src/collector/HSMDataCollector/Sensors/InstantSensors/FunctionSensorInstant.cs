@@ -56,6 +56,9 @@ namespace HSMDataCollector.Sensors
 
         public ValuesFunctionSensorInstant(Func<List<U>, T> getValue, ValuesFunctionSensorOptions options) : base(options)
         {
+            if (options.MaxCacheSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(options.MaxCacheSize), "Max cache size must be greater than zero.");
+
             _cacheSize = options.MaxCacheSize;
             _getValue = CheckFunc(getValue);
         }
