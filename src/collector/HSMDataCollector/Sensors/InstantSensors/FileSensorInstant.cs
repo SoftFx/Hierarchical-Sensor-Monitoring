@@ -49,17 +49,25 @@ namespace HSMDataCollector.Sensors
                 var fileName = Path.GetFileNameWithoutExtension(fileInfo.FullName);
                 var extensions = fileInfo.Extension.TrimStart('.');
 
-                using (var file = File.Open(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                {
-                    using (var stream = new StreamReader(file))
-                    {
-                        var bytes = Encoding.UTF8.GetBytes(await stream.ReadToEndAsync().ConfigureAwait(false)).ToList();
-                        var value = ApplyCustomFileProperties(GetSensorValue(bytes), fileName, extensions).Complete(comment, status);
+                if (_options.MaxFileSizeBytes <= 0)
+                    throw new ArgumentOutOfRangeException(nameof(_options.MaxFileSizeBytes), "Max file size must be greater than zero.");
 
-                        SendValue(value);
-                    }
+                if (fileInfo.Length > _options.MaxFileSizeBytes)
+                {
+                    _logger.Error($"{SensorPath} - {filePath} file size {fileInfo.Length} bytes exceeds limit {_options.MaxFileSizeBytes} bytes.");
+                    return false;
                 }
 
+                if (fileInfo.Length > int.MaxValue)
+                {
+                    _logger.Error($"{SensorPath} - {filePath} file size {fileInfo.Length} bytes exceeds maximum supported size {int.MaxValue} bytes.");
+                    return false;
+                }
+
+                var bytes = (await ReadAllBytesAsync(fileInfo).ConfigureAwait(false)).ToList();
+                var value = ApplyCustomFileProperties(GetSensorValue(bytes), fileName, extensions).Complete(comment, status);
+
+                SendValue(value);
                 _logger.Info($"File: {filePath} has been send");
             }
             catch (Exception ex)
@@ -69,6 +77,35 @@ namespace HSMDataCollector.Sensors
             }
 
             return true;
+        }
+
+
+        private static async Task<byte[]> ReadAllBytesAsync(FileInfo fileInfo)
+        {
+            using (var file = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, true))
+            {
+                var length = file.Length;
+                if (length > int.MaxValue)
+                    throw new IOException($"File is too large: {length} bytes.");
+
+                var bytes = new byte[(int)length];
+                int offset = 0;
+
+                while (offset < bytes.Length)
+                {
+                    int read = await file.ReadAsync(bytes, offset, bytes.Length - offset).ConfigureAwait(false);
+                    if (read == 0)
+                        break;
+
+                    offset += read;
+                }
+
+                if (offset == bytes.Length)
+                    return bytes;
+
+                Array.Resize(ref bytes, offset);
+                return bytes;
+            }
         }
 
 
