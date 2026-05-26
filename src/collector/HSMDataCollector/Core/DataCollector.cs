@@ -228,9 +228,9 @@ namespace HSMDataCollector.Core
                 if (!Status.IsStopped())
                     ChangeStatus(CollectorStatus.Stopping);
 
-                _dataProcessor.Dispose();
+                DisposeComponent(_dataProcessor.Dispose, nameof(_dataProcessor));
 
-                _dataSender.Dispose();
+                DisposeComponent(_dataSender.Dispose, nameof(_dataSender));
             }
             finally
             {
@@ -280,6 +280,18 @@ namespace HSMDataCollector.Core
                 {
                     _logger.Error($"DataCollector {eventName} event handler error: {ex}");
                 }
+            }
+        }
+
+        private void DisposeComponent(Action dispose, string componentName)
+        {
+            try
+            {
+                dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"DataCollector {componentName} dispose error: {ex}");
             }
         }
 

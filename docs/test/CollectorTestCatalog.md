@@ -12,7 +12,7 @@
 | --- | ---: | ---: | --- | --- | --- |
 | Transport chaos | 18 fast + 1 gated | 90% | ~35 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Resource leaks | 1 fast + 1 gated repeat | 70% | ~4 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
-| Adversarial lifecycle | 12 fast + 1 gated repeat | 82% | ~2-3 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), [CollectorBreakCandidates.md](CollectorBreakCandidates.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
+| Adversarial lifecycle | 13 fast + 1 gated repeat | 84% | ~2-3 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), [CollectorBreakCandidates.md](CollectorBreakCandidates.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Timer stress | 2 fast | 75% | ~3-4 sec fast | `src/collector/HSMDataCollector.Tests/CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md) |
 | Flaky server stress | 1 fast + 1 gated repeat | 75% | ~3-4 sec быстрый; gated suite repeat 30 sec default; long gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Default sensor smoke | 2 fast + 1 gated repeat | 5% | <1 sec fast; gated suite repeat 30 sec default, но без assertions | `src/collector/HSMDataCollector.Tests/DefaultSensorsTests.cs` | [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md); полноценного описания нет, тесты сейчас фактически пустые |
@@ -20,11 +20,11 @@
 Текущий быстрый прогон:
 
 ```text
-Passed: 36
+Passed: 37
 Skipped: 7
 Failed: 0
-Total: 43
-Duration: ~46 seconds
+Total: 44
+Duration: ~45 seconds
 ```
 
 30-секундный repeat-прогон всех suite: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md). `30 sec` - soft target; hard safety limit по умолчанию `120 sec`.
