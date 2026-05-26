@@ -13,7 +13,7 @@
 | Transport chaos | 19 fast + 1 gated | 91% | ~35 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Cross-suite resource gates | встроено в gated suites | 75% | каждый gated suite: 30 sec default | `SuiteSoakResourceSnapshot.cs` + suite tests | [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Focused resource leak load | 1 fast + 2 gated focused checks | 70% | ~4 sec быстрый; focused repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md) |
-| Adversarial lifecycle | 23 fast + 1 gated repeat | 95% | ~3-4 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), [CollectorBreakCandidates.md](CollectorBreakCandidates.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
+| Adversarial lifecycle | 25 fast + 1 gated repeat | 96% | ~3-4 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), [CollectorBreakCandidates.md](CollectorBreakCandidates.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Timer stress | 3 fast | 85% | ~7-8 sec fast | `src/collector/HSMDataCollector.Tests/CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md) |
 | Flaky server stress | 1 fast + 1 gated repeat | 75% | ~3-4 sec быстрый; gated suite repeat 30 sec default; long gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Default sensor smoke | 2 fast + 1 gated repeat | 5% | <1 sec fast; gated suite repeat 30 sec default, но без assertions | `src/collector/HSMDataCollector.Tests/DefaultSensorsTests.cs` | [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md); полноценного описания нет, тесты сейчас фактически пустые |
@@ -21,10 +21,10 @@
 Текущий быстрый прогон:
 
 ```text
-Passed: 49
+Passed: 51
 Skipped: 7
 Failed: 0
-Total: 56
+Total: 58
 Duration: ~65 seconds
 ```
 
@@ -118,6 +118,8 @@ Exploratory tests, которые уже сломали collector, и их ст�
 | Queue flush не зависит от lazy `IEnumerable` enumeration в sender-е | 1 | 85% | <1 sec | `Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
 | `Stop()` с медленным data sender не запускает параллельный flush | 1 | 80% | ~1 sec | `Stop_during_slow_data_sends_completes_without_parallel_flush` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
 | Параллельные `Start()` инициализируют collector один раз | 1 | 75% | <1 sec | `Concurrent_start_calls_initialize_collector_once` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
+| Sensor cardinality cap до старта | 1 | 80% | <1 sec | `Sensor_count_limit_rejects_excess_bar_sensors_before_start` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются`; [CollectorBreakCandidates.md](CollectorBreakCandidates.md), раздел `Детали кандидата с sensor cardinality` |
+| Sensor cardinality cap после старта | 1 | 80% | <1 sec | `Sensor_count_limit_is_enforced_after_collector_start` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются`; [CollectorBreakCandidates.md](CollectorBreakCandidates.md), раздел `Детали кандидата с sensor cardinality` |
 | `Start()` после `Dispose()` | 1 | 85% | <1 sec | `Start_after_dispose_does_not_resurrect_collector` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
 | Legacy `Initialize(false)` после `Dispose()` | 1 | 85% | <1 sec | `Initialize_after_dispose_does_not_resurrect_collector` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
 

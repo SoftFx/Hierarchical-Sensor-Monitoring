@@ -460,6 +460,51 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public void Sensor_count_limit_rejects_excess_bar_sensors_before_start()
+        {
+            using (var collector = CreateCollector(new ProbeDataSender(), maxSensors: 3))
+            {
+                for (var i = 0; i < 3; i++)
+                {
+                    collector.CreateDoubleBarSensor(
+                        "adversarial/sensor-limit/bar/" + i,
+                        new BarSensorOptions
+                        {
+                            BarPeriod = TimeSpan.FromMinutes(1),
+                            PostDataPeriod = TimeSpan.FromSeconds(1)
+                        });
+                }
+
+                var exception = Assert.Throws<InvalidOperationException>(() =>
+                    collector.CreateDoubleBarSensor(
+                        "adversarial/sensor-limit/bar/overflow",
+                        new BarSensorOptions
+                        {
+                            BarPeriod = TimeSpan.FromMinutes(1),
+                            PostDataPeriod = TimeSpan.FromSeconds(1)
+                        }));
+
+                Assert.Contains("Maximum sensor count", exception.Message);
+            }
+        }
+
+        [Fact]
+        public async Task Sensor_count_limit_is_enforced_after_collector_start()
+        {
+            using (var collector = CreateCollector(new ProbeDataSender(), maxSensors: 1))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                collector.CreateDoubleSensor("adversarial/sensor-limit/running/0");
+
+                var exception = Assert.Throws<InvalidOperationException>(() =>
+                    collector.CreateDoubleSensor("adversarial/sensor-limit/running/overflow"));
+
+                Assert.Contains("Maximum sensor count", exception.Message);
+            }
+        }
+
+        [Fact]
         public async Task Blocked_function_timer_callback_does_not_block_collector_stop()
         {
             var sender = new ProbeDataSender();
@@ -678,6 +723,14 @@ namespace HSMDataCollector.Tests
                 scenarioRuns++;
                 sensorCreateCalls++;
 
+                Sensor_count_limit_rejects_excess_bar_sensors_before_start();
+                scenarioRuns++;
+                sensorCreateCalls += 4;
+
+                await Sensor_count_limit_is_enforced_after_collector_start().ConfigureAwait(false);
+                scenarioRuns++;
+                sensorCreateCalls += 2;
+
                 await Start_after_dispose_does_not_resurrect_collector().ConfigureAwait(false);
                 scenarioRuns++;
                 sensorCreateCalls++;
@@ -694,7 +747,7 @@ namespace HSMDataCollector.Tests
             SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
 
             Assert.True(cycles > 0, "The adversarial suite soak should complete at least one suite cycle.");
-            Assert.True(scenarioRuns >= 20, "The adversarial suite soak should execute the full scenario list at least once.");
+            Assert.True(scenarioRuns >= 22, "The adversarial suite soak should execute the full scenario list at least once.");
 
             _output.WriteLine(
                 "adversarialSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}; addValues={5}; sensorCreates={6}; dataFailureBursts={7}; commandFailureBursts={8}",
@@ -709,7 +762,7 @@ namespace HSMDataCollector.Tests
                 commandFailureBursts);
         }
 
-        private static DataCollector CreateCollector(ProbeDataSender sender, int maxQueueSize = 1000, TimeSpan? requestTimeout = null)
+        private static DataCollector CreateCollector(ProbeDataSender sender, int maxQueueSize = 1000, TimeSpan? requestTimeout = null, int maxSensors = 100000)
         {
             return new DataCollector(new CollectorOptions
             {
@@ -723,7 +776,8 @@ namespace HSMDataCollector.Tests
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(50),
                 RequestTimeout = requestTimeout ?? TimeSpan.FromSeconds(1),
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
-                MaxDeduplicatedMessages = 100
+                MaxDeduplicatedMessages = 100,
+                MaxSensors = maxSensors
             });
         }
 

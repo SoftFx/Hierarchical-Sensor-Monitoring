@@ -21,6 +21,7 @@
 | Fixed, persistent regression | `Concurrent_start_calls_initialize_collector_once` | 50 параллельных `Start()` на одном collector-е | Lifecycle transition `Stopped -> Starting` не был атомарно защищен | Повторный старт не должен плодить initialization/queue activity |
 | Fixed, persistent regression | `Stop_with_data_sender_that_ignores_cancellation_does_not_hang` | Пользовательский `IDataSender` зависает в `SendDataAsync` и игнорирует `CancellationToken` | `Collector.Stop()` не завершался за `2 sec`, пока sender не был вручную отпущен | Внешняя реализация sender-а не должна навсегда подвешивать сервис при остановке collector-а |
 | Fixed, persistent regression | `Stop_with_uncancellable_data_sender_and_backlog_does_not_hang` | Первый data send зависает и игнорирует cancellation, в очереди остается backlog | После timeout остановки worker-а `Collector.Stop()` входил в flush и снова зависал за `2 sec` | Даже при backlog-е stop path не должен создавать второй зависший send path |
+| Fixed, persistent regression | `Sensor_count_limit_rejects_excess_bar_sensors_before_start` / `Sensor_count_limit_is_enforced_after_collector_start` | Очень большое количество уникальных sensor path-ов, особенно bar/function/rate sensors | До фикса upper bound отсутствовал: storage рос до исчерпания памяти, а monitoring sensors могли плодить scheduled tasks | Библиотека должна иметь явный configurable cap, чтобы misuse не превращался в OOM/CPU storm |
 
 Текущий persistent test находится в `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs`.
 
@@ -82,3 +83,23 @@
 - `QueueProcessorBase.StopAsync()` возвращает `bool`: действительно ли worker остановился;
 - `DataProcessor.StopAsync()` выполняет bounded flush только для очередей, worker которых реально остановлен;
 - если worker не остановился, backlog очищается в cleanup path, но не отправляется через уже зависший sender.
+
+## Детали кандидата с sensor cardinality
+
+Сценарий:
+
+1. Создать collector с маленьким `CollectorOptions.MaxSensors`.
+2. Создать допустимое количество уникальных sensor path-ов.
+3. Попробовать создать еще один bar sensor до старта collector-а.
+4. Повторить проверку после `Start()`, где sensor registration запускает async init/start path.
+
+Ожидаемое production-safe поведение: превышение лимита должно падать синхронно и быстро через `InvalidOperationException`, без роста очередей, timers и памяти.
+
+Поведение до фикса: жесткого лимита не было, поэтому уникальные sensor path-ы добавлялись в `SensorsStorage` до упора в память процесса; для monitoring/bar/function sensors после start это также означало рост scheduled tasks.
+
+Фикс:
+
+- добавлен `CollectorOptions.MaxSensors`, default `100000`;
+- `SensorsStorage` считает успешно зарегистрированные sensors через `Interlocked`;
+- при превышении лимита новый sensor удаляется из storage, dispose-ится и caller получает `InvalidOperationException`;
+- sensor creation после `Start()` сначала синхронно регистрирует sensor и только затем запускает async init/start, чтобы cap violation не терялся в fire-and-forget task.

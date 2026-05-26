@@ -36,11 +36,13 @@
 | 16 | `Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items` | Queue flush не должен зависеть от того, перечисляет ли пользовательский `IDataSender` переданный `IEnumerable` |
 | 17 | `Stop_during_slow_data_sends_completes_without_parallel_flush` | `Stop()` не должен запускать flush параллельно обычному data processing loop, когда sender медленный |
 | 18 | `Concurrent_start_calls_initialize_collector_once` | Массовые параллельные `Start()` не должны повторно инициализировать sensor commands |
-| 19 | `Blocked_function_timer_callback_does_not_block_collector_stop` | Зависший пользовательский function callback не должен блокировать `Collector.Stop()` |
-| 20 | `Lifecycle_event_handler_exception_does_not_escape_collector_stop` | Исключение из пользовательского lifecycle event handler не должно вылетать наружу из `Collector.Stop()` |
-| 21 | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Исключение из пользовательского `IDataSender.Dispose()` не должно вылетать наружу из `DataCollector.Dispose()` |
-| 22 | `Start_after_dispose_does_not_resurrect_collector` | `Start()` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
-| 23 | `Initialize_after_dispose_does_not_resurrect_collector` | Legacy `Initialize(false)` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
+| 19 | `Sensor_count_limit_rejects_excess_bar_sensors_before_start` | Злоупотребление cardinality: слишком много bar sensors до старта должно падать быстро, а не идти к OOM |
+| 20 | `Sensor_count_limit_is_enforced_after_collector_start` | Тот же лимит после `Start()`, когда новые сенсоры сразу инициализируются и стартуют |
+| 21 | `Blocked_function_timer_callback_does_not_block_collector_stop` | Зависший пользовательский function callback не должен блокировать `Collector.Stop()` |
+| 22 | `Lifecycle_event_handler_exception_does_not_escape_collector_stop` | Исключение из пользовательского lifecycle event handler не должно вылетать наружу из `Collector.Stop()` |
+| 23 | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Исключение из пользовательского `IDataSender.Dispose()` не должно вылетать наружу из `DataCollector.Dispose()` |
+| 24 | `Start_after_dispose_does_not_resurrect_collector` | `Start()` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
+| 25 | `Initialize_after_dispose_does_not_resurrect_collector` | Legacy `Initialize(false)` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
 
 ## Что эти тесты уже нашли
 
@@ -70,6 +72,7 @@
 | Параллельные `Start()` не были атомарны | несколько callers могли пройти проверку `Stopped` до перехода в `Starting` | lifecycle transition защищен lock-ом, а `DataProcessor.Start()` стал идемпотентным |
 | `Stop()` мог зависнуть на sender-е, который игнорирует cancellation | пользовательский `IDataSender` вошел в `SendDataAsync` и не реагировал на отмену; `Collector.Stop()` не завершался за 2 секунды | ожидание остановки queue worker-а ограничено `RequestTimeout`; новый worker не стартует поверх старого зависшего |
 | Stop-flush мог снова зависнуть после timeout остановки worker-а | первый send завис и игнорировал cancellation, а backlog остался в очереди; после timeout `Stop()` входил в flush и зависал на втором send path | queue stop возвращает признак реальной остановки worker-а; flush выполняется только если worker действительно остановлен |
+| Количество сенсоров не было ограничено | пользователь мог создать очень много уникальных sensor path-ов; для bar/function/rate sensors это ведет к росту памяти, command queue и scheduled tasks | добавлен `CollectorOptions.MaxSensors`; превышение лимита бросает `InvalidOperationException` до старта и после старта |
 
 ## Длинный локальный прогон
 
@@ -110,7 +113,7 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Ожидаемый результат:
 
 ```text
-Passed: 23
+Passed: 25
 Failed: 0
 Skipped: 1
 ```
@@ -151,6 +154,7 @@ Write-Host "Failures: $failures"
 - `Stop()` запускает flush параллельно обычной отправке data queue;
 - `Stop()` зависает на пользовательском `IDataSender`, который игнорирует `CancellationToken`;
 - `Stop()` после timeout остановки worker-а снова зависает на flush backlog-а;
+- слишком много уникальных сенсоров создается без явного upper bound;
 - параллельные `Start()` повторно инициализируют collector или command packages;
 - `Start()` или `Initialize()` переводят disposed collector обратно в `Running`;
 - исключения вылетают наружу из параллельных `AddValue()`.
