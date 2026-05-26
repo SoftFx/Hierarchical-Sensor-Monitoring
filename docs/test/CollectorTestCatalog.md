@@ -13,18 +13,18 @@
 | Transport chaos | 18 fast + 1 gated | 90% | ~35 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Resource leaks | 1 fast + 1 gated repeat | 70% | ~4 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Adversarial lifecycle | 13 fast + 1 gated repeat | 84% | ~2-3 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), [CollectorBreakCandidates.md](CollectorBreakCandidates.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
-| Timer stress | 2 fast | 75% | ~3-4 sec fast | `src/collector/HSMDataCollector.Tests/CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md) |
+| Timer stress | 3 fast | 85% | ~7-8 sec fast | `src/collector/HSMDataCollector.Tests/CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md) |
 | Flaky server stress | 1 fast + 1 gated repeat | 75% | ~3-4 sec быстрый; gated suite repeat 30 sec default; long gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Default sensor smoke | 2 fast + 1 gated repeat | 5% | <1 sec fast; gated suite repeat 30 sec default, но без assertions | `src/collector/HSMDataCollector.Tests/DefaultSensorsTests.cs` | [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md); полноценного описания нет, тесты сейчас фактически пустые |
 
 Текущий быстрый прогон:
 
 ```text
-Passed: 37
+Passed: 38
 Skipped: 7
 Failed: 0
-Total: 44
-Duration: ~45 seconds
+Total: 45
+Duration: ~49 seconds
 ```
 
 30-секундный repeat-прогон всех suite: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md). `30 sec` - soft target; hard safety limit по умолчанию `120 sec`.
@@ -105,6 +105,7 @@ Exploratory tests, которые уже сломали collector, и их ст�
 | --- | ---: | ---: | --- | --- | --- | --- |
 | Function sensors с разными периодами `40-500 ms` | 1 | 75% | ~2 sec | `Function_sensors_with_varied_timer_periods_fire_without_cpu_spin` | `CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md), раздел `Что проверяется` |
 | Restart function timer с `100 ms` на `25 ms`, callback длится `40 ms` | 1 | 80% | ~1 sec | `Restarting_function_timer_under_load_changes_rate_without_callback_overlap` | `CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md), раздел `Что проверяется` |
+| 1000 periodic function sensor timers с периодом `100 ms` | 1 | 85% | ~3 sec | `Thousand_function_sensor_timers_do_not_burn_cpu_or_threads` | `CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md), раздел `Что проверяется` |
 
 ## Flaky Server Stress
 
