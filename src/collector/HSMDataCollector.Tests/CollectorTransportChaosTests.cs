@@ -75,15 +75,19 @@ namespace HSMDataCollector.Tests
                         collector,
                         "transport/no-accept",
                         HighVolumeMixedValueCount).ConfigureAwait(false);
+                    var badServerCpuStart = CpuUsageSnapshot.Capture();
                     await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+                    var badServerCpu = CpuUsageSnapshot.Capture().Subtract(badServerCpuStart);
 
                     await DisposeWithinAsync(collector, TimeSpan.FromSeconds(7)).ConfigureAwait(false);
 
                     WriteMixedFloodStats("no-accept-server", flood);
+                    WriteCpuStats("no-accept-server", badServerCpu);
                     _output.WriteLine("scenario=no-accept-server; addValues={0}; port={1}", flood.TotalAddValueCalls, server.Port);
 
                     Assert.Equal(HighVolumeMixedValueCount, flood.TotalAddValueCalls);
                     Assert.True(flood.AllWritersUsed, "The high-volume no-accept scenario should send all configured sensor value types.");
+                    AssertCpuBudget(badServerCpu, TimeSpan.FromSeconds(6), "no-accept server");
                 }
 
                 server.Dispose();
@@ -131,15 +135,19 @@ namespace HSMDataCollector.Tests
                         collector,
                         "transport/accept-no-body",
                         HighVolumeMixedValueCount).ConfigureAwait(false);
+                    var badServerCpuStart = CpuUsageSnapshot.Capture();
                     await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+                    var badServerCpu = CpuUsageSnapshot.Capture().Subtract(badServerCpuStart);
 
                     await DisposeWithinAsync(collector, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 
                     WriteMixedFloodStats("accept-no-body-server", flood);
+                    WriteCpuStats("accept-no-body-server", badServerCpu);
                     WriteStats("accept-no-body-server", server.Stats);
 
                     Assert.Equal(HighVolumeMixedValueCount, flood.TotalAddValueCalls);
                     Assert.True(flood.AllWritersUsed, "The high-volume accept/no-body scenario should send all configured sensor value types.");
+                    AssertCpuBudget(badServerCpu, TimeSpan.FromSeconds(6), "accept/no-body server");
                 }
 
                 await AssertNoEstablishedConnectionsAsync(new[] { server.Port }, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
@@ -186,15 +194,19 @@ namespace HSMDataCollector.Tests
                         collector,
                         "transport/slow-reply",
                         HighVolumeMixedValueCount).ConfigureAwait(false);
+                    var badServerCpuStart = CpuUsageSnapshot.Capture();
                     await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+                    var badServerCpu = CpuUsageSnapshot.Capture().Subtract(badServerCpuStart);
 
                     await DisposeWithinAsync(collector, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 
                     WriteMixedFloodStats("slow-reply-server", flood);
+                    WriteCpuStats("slow-reply-server", badServerCpu);
                     WriteStats("slow-reply-server", server.Stats);
 
                     Assert.Equal(HighVolumeMixedValueCount, flood.TotalAddValueCalls);
                     Assert.True(flood.AllWritersUsed, "The high-volume slow-reply scenario should send all configured sensor value types.");
+                    AssertCpuBudget(badServerCpu, TimeSpan.FromSeconds(6), "slow-reply server");
                 }
 
                 await AssertNoEstablishedConnectionsAsync(new[] { server.Port }, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
@@ -902,6 +914,12 @@ namespace HSMDataCollector.Tests
                 Assert.True(after.HandleCount - before.HandleCount < 500, "Handle count should stay bounded when the " + scenario + " is unhealthy.");
         }
 
+        private static void AssertCpuBudget(CpuUsageSnapshot cpu, TimeSpan maxCpu, string scenario)
+        {
+            Assert.True(cpu.Cpu <= maxCpu,
+                $"{scenario} should not burn excessive CPU while the server is unhealthy. CPU={cpu.Cpu}, wall={cpu.Wall}.");
+        }
+
         private static int GetPositiveIntEnvironment(string variableName, int defaultValue)
         {
             var rawValue = Environment.GetEnvironmentVariable(variableName);
@@ -1024,6 +1042,16 @@ namespace HSMDataCollector.Tests
                 scenario,
                 flood.TotalAddValueCalls,
                 flood.ToSummary());
+        }
+
+        private void WriteCpuStats(string scenario, CpuUsageSnapshot cpu)
+        {
+            _output.WriteLine(
+                "scenario={0}-cpu; wallMs={1}; cpuMs={2}; cpuCores={3:F3}",
+                scenario,
+                cpu.Wall.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture),
+                cpu.Cpu.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture),
+                cpu.CpuCores);
         }
 
         private void WriteSoakPhase(TransportSoakPhaseResult result)
@@ -1262,6 +1290,48 @@ namespace HSMDataCollector.Tests
                 return string.Join(
                     ",",
                     Names.Select((name, index) => name + "=" + Counts[index].ToString(CultureInfo.InvariantCulture)));
+            }
+        }
+
+        private sealed class CpuUsageSnapshot
+        {
+            private CpuUsageSnapshot(TimeSpan cpu, long timestamp, TimeSpan wall)
+            {
+                Cpu = cpu;
+                Timestamp = timestamp;
+                Wall = wall;
+            }
+
+            public TimeSpan Cpu { get; }
+
+            private long Timestamp { get; }
+
+            public TimeSpan Wall { get; }
+
+            public double CpuCores => Wall.TotalMilliseconds <= 0
+                ? 0
+                : Cpu.TotalMilliseconds / Wall.TotalMilliseconds;
+
+            public static CpuUsageSnapshot Capture()
+            {
+                using (var process = Process.GetCurrentProcess())
+                {
+                    process.Refresh();
+                    return new CpuUsageSnapshot(process.TotalProcessorTime, Stopwatch.GetTimestamp(), TimeSpan.Zero);
+                }
+            }
+
+            public CpuUsageSnapshot Subtract(CpuUsageSnapshot before)
+            {
+                var cpu = Cpu - before.Cpu;
+                var wall = StopwatchTicksToTimeSpan(Timestamp - before.Timestamp);
+
+                return new CpuUsageSnapshot(cpu, 0, wall);
+            }
+
+            private static TimeSpan StopwatchTicksToTimeSpan(long stopwatchTicks)
+            {
+                return TimeSpan.FromSeconds(stopwatchTicks / (double)Stopwatch.Frequency);
             }
         }
 
