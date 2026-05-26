@@ -323,6 +323,18 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        [Fact]
+        public void Data_sender_dispose_exception_does_not_escape_collector_dispose()
+        {
+            var sender = new ProbeDataSender { ThrowOnDispose = true };
+            var collector = CreateCollector(sender);
+
+            var exception = Record.Exception(() => collector.Dispose());
+
+            Assert.Null(exception);
+            Assert.Equal(CollectorStatus.Stopped, collector.Status);
+        }
+
         [SuiteSoakFact]
         public async Task Adversarial_suite_repeated_for_duration_stays_green()
         {
@@ -480,12 +492,16 @@ namespace HSMDataCollector.Tests
 
             public bool ThrowOnCommand { get; set; }
 
+            public bool ThrowOnDispose { get; set; }
+
             public int DataPackages => Volatile.Read(ref _dataPackages);
 
             public int CommandPackages => Volatile.Read(ref _commandPackages);
 
             public void Dispose()
             {
+                if (ThrowOnDispose)
+                    throw new InvalidOperationException("Injected data sender dispose failure.");
             }
 
             public ValueTask<ConnectionResult> TestConnectionAsync()

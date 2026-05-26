@@ -10,6 +10,7 @@
 | --- | --- | --- | --- | --- |
 | Fixed, persistent regression | `Blocked_function_timer_callback_does_not_block_collector_stop` | Function sensor callback зависает и не возвращает управление | `Collector.Stop()` не завершался за `2 sec`, пока callback не был отпущен | Если пользовательский timer callback завис на внешнем API/локе/IO, остановка сервиса может зависнуть |
 | Fixed, persistent regression | `Lifecycle_event_handler_exception_does_not_escape_collector_stop` | Пользовательский `ToStopped` handler кидает exception | `Collector.Stop()` возвращал наружу `InvalidOperationException` из event handler | Внешний обработчик lifecycle-события не должен ронять приложение через collector API |
+| Fixed, persistent regression | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Пользовательский `IDataSender.Dispose()` кидает exception | `DataCollector.Dispose()` возвращал наружу `InvalidOperationException` из sender cleanup | Ошибка cleanup-а внешнего sender-а не должна ронять приложение при освобождении collector-а |
 
 Текущий persistent test находится в `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs`.
 
