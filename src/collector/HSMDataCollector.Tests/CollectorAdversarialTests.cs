@@ -317,6 +317,64 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task Stop_during_slow_data_sends_completes_without_parallel_flush()
+        {
+            var sender = new ProbeDataSender { DataSendDelay = TimeSpan.FromMilliseconds(200) };
+
+            using (var collector = CreateCollector(sender))
+            {
+                var sensor = collector.CreateDoubleSensor("adversarial/slow-stop/data");
+                await collector.Start().ConfigureAwait(false);
+
+                for (var i = 0; i < 500; i++)
+                    sensor.AddValue(i);
+
+                Assert.True(await sender.WaitForDataPackagesAsync(2, TimeSpan.FromSeconds(3)).ConfigureAwait(false),
+                    "The test should observe at least two data packages to detect parallel queue processors.");
+
+                await collector.Stop().ConfigureAwait(false);
+
+                var stopTask = collector.Stop();
+                var stopCompleted = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(false);
+                Assert.True(stopCompleted == stopTask, "Collector.Stop() should complete while data sender is slow.");
+                await stopTask.ConfigureAwait(false);
+
+                Assert.True(sender.MaxConcurrentDataSends <= 1,
+                    $"Stop flush should not run in parallel with the regular data processing loop, actual max concurrent sends: {sender.MaxConcurrentDataSends}.");
+            }
+        }
+
+        [Fact]
+        public async Task Concurrent_start_calls_initialize_collector_once()
+        {
+            var sender = new ProbeDataSender();
+            var startGate = new TaskCompletionSource<bool>();
+
+            using (var collector = CreateCollector(sender))
+            {
+                collector.CreateDoubleSensor("adversarial/concurrent-start/data");
+
+                var startTasks = Enumerable.Range(0, 50)
+                    .Select(_ => Task.Run(async () =>
+                    {
+                        await startGate.Task.ConfigureAwait(false);
+                        await collector.Start().ConfigureAwait(false);
+                    }))
+                    .ToArray();
+
+                startGate.SetResult(true);
+                await Task.WhenAll(startTasks).ConfigureAwait(false);
+
+                Assert.True(await sender.WaitForCommandPackagesAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "The collector should initialize the sensor once.");
+
+                await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
+
+                Assert.Equal(1, sender.CommandPackages);
+            }
+        }
+
+        [Fact]
         public async Task Blocked_function_timer_callback_does_not_block_collector_stop()
         {
             var sender = new ProbeDataSender();
@@ -509,6 +567,15 @@ namespace HSMDataCollector.Tests
                 addValueCalls++;
                 sensorCreateCalls++;
 
+                await Stop_during_slow_data_sends_completes_without_parallel_flush().ConfigureAwait(false);
+                scenarioRuns++;
+                addValueCalls += 500;
+                sensorCreateCalls++;
+
+                await Concurrent_start_calls_initialize_collector_once().ConfigureAwait(false);
+                scenarioRuns++;
+                sensorCreateCalls++;
+
                 await Start_after_dispose_does_not_resurrect_collector().ConfigureAwait(false);
                 scenarioRuns++;
                 sensorCreateCalls++;
@@ -525,7 +592,7 @@ namespace HSMDataCollector.Tests
             SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
 
             Assert.True(cycles > 0, "The adversarial suite soak should complete at least one suite cycle.");
-            Assert.True(scenarioRuns >= 15, "The adversarial suite soak should execute the full scenario list at least once.");
+            Assert.True(scenarioRuns >= 17, "The adversarial suite soak should execute the full scenario list at least once.");
 
             _output.WriteLine(
                 "adversarialSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}; addValues={5}; sensorCreates={6}; dataFailureBursts={7}; commandFailureBursts={8}",
@@ -600,6 +667,8 @@ namespace HSMDataCollector.Tests
 
             private int _dataPackages;
             private int _commandPackages;
+            private int _currentDataSends;
+            private int _maxConcurrentDataSends;
 
             public bool BlockDataUntilCanceled { get; set; }
 
@@ -609,9 +678,13 @@ namespace HSMDataCollector.Tests
 
             public bool ThrowOnDispose { get; set; }
 
+            public TimeSpan DataSendDelay { get; set; }
+
             public int DataPackages => Volatile.Read(ref _dataPackages);
 
             public int CommandPackages => Volatile.Read(ref _commandPackages);
+
+            public int MaxConcurrentDataSends => Volatile.Read(ref _maxConcurrentDataSends);
 
             public void Dispose()
             {
@@ -626,16 +699,29 @@ namespace HSMDataCollector.Tests
 
             public async ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
             {
-                Interlocked.Increment(ref _dataPackages);
-                _dataPackageReceived.TrySetResult(true);
+                var concurrent = Interlocked.Increment(ref _currentDataSends);
+                UpdateMaxConcurrentDataSends(concurrent);
 
-                if (BlockDataUntilCanceled)
-                    await WaitUntilCanceledAsync(token).ConfigureAwait(false);
+                try
+                {
+                    Interlocked.Increment(ref _dataPackages);
+                    _dataPackageReceived.TrySetResult(true);
 
-                if (ThrowOnData)
-                    throw new InvalidOperationException("Injected data sender failure.");
+                    if (BlockDataUntilCanceled)
+                        await WaitUntilCanceledAsync(token).ConfigureAwait(false);
 
-                return default;
+                    if (DataSendDelay > TimeSpan.Zero)
+                        await Task.Delay(DataSendDelay, token).ConfigureAwait(false);
+
+                    if (ThrowOnData)
+                        throw new InvalidOperationException("Injected data sender failure.");
+
+                    return default;
+                }
+                finally
+                {
+                    Interlocked.Decrement(ref _currentDataSends);
+                }
             }
 
             public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
@@ -679,14 +765,21 @@ namespace HSMDataCollector.Tests
 
                 while (DateTime.UtcNow < deadline)
                 {
-                    var remaining = deadline - DateTime.UtcNow;
-                    var completed = await Task.WhenAny(signal, Task.Delay(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero)).ConfigureAwait(false);
-
                     if (condition())
                         return true;
 
-                    if (completed != signal)
-                        return false;
+                    var remaining = deadline - DateTime.UtcNow;
+                    if (remaining <= TimeSpan.Zero)
+                        break;
+
+                    var delay = remaining < TimeSpan.FromMilliseconds(25)
+                        ? remaining
+                        : TimeSpan.FromMilliseconds(25);
+
+                    if (signal != null && !signal.IsCompleted)
+                        await Task.WhenAny(signal, Task.Delay(delay)).ConfigureAwait(false);
+                    else
+                        await Task.Delay(delay).ConfigureAwait(false);
                 }
 
                 return condition();
@@ -699,6 +792,18 @@ namespace HSMDataCollector.Tests
                 token.Register(() => source.TrySetCanceled());
 
                 return source.Task;
+            }
+
+            private void UpdateMaxConcurrentDataSends(int value)
+            {
+                int current;
+                do
+                {
+                    current = Volatile.Read(ref _maxConcurrentDataSends);
+                    if (value <= current)
+                        return;
+                }
+                while (Interlocked.CompareExchange(ref _maxConcurrentDataSends, value, current) != current);
             }
         }
     }

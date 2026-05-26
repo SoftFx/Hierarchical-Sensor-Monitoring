@@ -43,12 +43,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
         }
 
-        internal async ValueTask StopAsync()
+        internal async ValueTask StopAsync(bool clearQueue = true)
         {
             try
             {
                 if (_task is null)
+                {
+                    if (clearQueue)
+                        ClearQueue();
+
                     return;
+                }
 
                 _cancellationTokenSource?.Cancel();
 
@@ -64,7 +69,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     _cancellationTokenSource?.Dispose();
                     _cancellationTokenSource = null;
 
-                    ClearQueue();
+                    if (clearQueue)
+                        ClearQueue();
                 }
             }
             catch (OperationCanceledException) { }

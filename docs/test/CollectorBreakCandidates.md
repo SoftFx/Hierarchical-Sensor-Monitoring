@@ -16,6 +16,8 @@
 | Fixed, persistent regression | `Values_added_while_stopped_are_not_sent_after_restart` | После `Stop()` пользователь продолжает писать в sensor, потом вызывает `Start()` | Stopped collector копил значения и отправлял stale payload после restart | Значения и хвосты очередей не должны переживать `Stop()` |
 | Fixed, persistent regression | `Last_value_sensor_flushes_latest_value_on_stop` | `LastValueSensor` получил значение, затем collector остановили | Последнее значение не отправлялось на `Stop()` | Финальное значение должно уходить до остановки очередей; flush должен быть bounded |
 | Fixed, persistent regression | `Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items` | Пользовательский `IDataSender` не перечисляет `IEnumerable` items, переданный из очереди | Один queued value на `Stop()` вызвал 3 852 549 повторных `SendDataAsync` за 1 секунду | Очередь не должна зависеть от реализации sender-а; иначе возможен CPU spike и повторная отправка одного payload |
+| Fixed, persistent regression | `Stop_during_slow_data_sends_completes_without_parallel_flush` | Медленный `IDataSender` во время `Stop()` | Flush мог конкурировать с обычным data processing loop за sender и очередь | Остановка должна иметь один контролируемый send path и bounded cleanup |
+| Fixed, persistent regression | `Concurrent_start_calls_initialize_collector_once` | 50 параллельных `Start()` на одном collector-е | Lifecycle transition `Stopped -> Starting` не был атомарно защищен | Повторный старт не должен плодить initialization/queue activity |
 
 Текущий persistent test находится в `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs`.
 

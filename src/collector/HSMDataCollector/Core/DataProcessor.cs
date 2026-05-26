@@ -55,7 +55,9 @@ namespace HSMDataCollector.Core
 
         public void Start()
         {
-            Volatile.Write(ref _isStarted, 1);
+            if (Interlocked.Exchange(ref _isStarted, 1) == 1)
+                return;
+
             _dataQueue.Start();
             _priorityQueue.Start();
             _fileQueue.Start();
@@ -71,6 +73,10 @@ namespace HSMDataCollector.Core
         public async Task StopAsync()
         {
             await SensorStorage.StopAsync().ConfigureAwait(false);
+            Volatile.Write(ref _isStarted, 0);
+
+            await _dataQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
+            await _priorityQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
 
             using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
             {
@@ -78,7 +84,6 @@ namespace HSMDataCollector.Core
                 await _dataQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
             }
 
-            Volatile.Write(ref _isStarted, 0);
             await _dataQueue.StopAsync().ConfigureAwait(false);
             await _priorityQueue.StopAsync().ConfigureAwait(false);
             await _fileQueue.StopAsync().ConfigureAwait(false);
