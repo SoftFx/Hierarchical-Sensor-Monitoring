@@ -103,7 +103,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         internal DataPackage<T> GetPackage()
         {
             var result = new DataPackage<T>();
-            result.Items = Elements().Take(_options.MaxValuesInPackage).Where(Validate);
+            result.Items = Elements().Take(_options.MaxValuesInPackage).Where(Validate).ToList();
 
             IEnumerable<T> Elements()
             {

@@ -12,7 +12,7 @@
 | --- | ---: | ---: | --- | --- | --- |
 | Transport chaos | 18 fast + 1 gated | 90% | ~35 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Resource leaks | 1 fast + 1 gated repeat | 70% | ~4 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
-| Adversarial lifecycle | 17 fast + 1 gated repeat | 88% | ~2-3 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), [CollectorBreakCandidates.md](CollectorBreakCandidates.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
+| Adversarial lifecycle | 18 fast + 1 gated repeat | 90% | ~2-3 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), [CollectorBreakCandidates.md](CollectorBreakCandidates.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Timer stress | 3 fast | 85% | ~7-8 sec fast | `src/collector/HSMDataCollector.Tests/CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md) |
 | Flaky server stress | 1 fast + 1 gated repeat | 75% | ~3-4 sec быстрый; gated suite repeat 30 sec default; long gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Default sensor smoke | 2 fast + 1 gated repeat | 5% | <1 sec fast; gated suite repeat 30 sec default, но без assertions | `src/collector/HSMDataCollector.Tests/DefaultSensorsTests.cs` | [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md); полноценного описания нет, тесты сейчас фактически пустые |
@@ -20,10 +20,10 @@
 Текущий быстрый прогон:
 
 ```text
-Passed: 42
+Passed: 43
 Skipped: 7
 Failed: 0
-Total: 49
+Total: 50
 Duration: ~57 seconds
 ```
 
@@ -98,6 +98,7 @@ Exploratory tests, которые уже сломали collector, и их ст�
 | Повторные `Start()` / `Stop()` циклы | 1 | 75% | <1 sec | `Repeated_start_stop_cycles_do_not_leave_sender_active` | `CollectorAdversarialTests.cs:222` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
 | Значения после `Stop()` не переживают restart | 1 | 85% | <1 sec | `Values_added_while_stopped_are_not_sent_after_restart` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
 | `LastValueSensor` flush на `Stop()` | 1 | 80% | <1 sec | `Last_value_sensor_flushes_latest_value_on_stop` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
+| Queue flush не зависит от lazy `IEnumerable` enumeration в sender-е | 1 | 85% | <1 sec | `Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
 | `Start()` после `Dispose()` | 1 | 85% | <1 sec | `Start_after_dispose_does_not_resurrect_collector` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
 | Legacy `Initialize(false)` после `Dispose()` | 1 | 85% | <1 sec | `Initialize_after_dispose_does_not_resurrect_collector` | `CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
 

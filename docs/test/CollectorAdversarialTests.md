@@ -30,11 +30,12 @@
 | 10 | `Repeated_start_stop_cycles_do_not_leave_sender_active` | Несколько циклов `Start()` / `Stop()` подряд |
 | 11 | `Values_added_while_stopped_are_not_sent_after_restart` | Значения, добавленные после `Stop()`, не должны копиться в очередях и уезжать после следующего `Start()` |
 | 12 | `Last_value_sensor_flushes_latest_value_on_stop` | `LastValueSensor` должен отправить последнее значение при `Stop()` без ожидания полного `PackageCollectPeriod` |
-| 13 | `Blocked_function_timer_callback_does_not_block_collector_stop` | Зависший пользовательский function callback не должен блокировать `Collector.Stop()` |
-| 14 | `Lifecycle_event_handler_exception_does_not_escape_collector_stop` | Исключение из пользовательского lifecycle event handler не должно вылетать наружу из `Collector.Stop()` |
-| 15 | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Исключение из пользовательского `IDataSender.Dispose()` не должно вылетать наружу из `DataCollector.Dispose()` |
-| 16 | `Start_after_dispose_does_not_resurrect_collector` | `Start()` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
-| 17 | `Initialize_after_dispose_does_not_resurrect_collector` | Legacy `Initialize(false)` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
+| 13 | `Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items` | Queue flush не должен зависеть от того, перечисляет ли пользовательский `IDataSender` переданный `IEnumerable` |
+| 14 | `Blocked_function_timer_callback_does_not_block_collector_stop` | Зависший пользовательский function callback не должен блокировать `Collector.Stop()` |
+| 15 | `Lifecycle_event_handler_exception_does_not_escape_collector_stop` | Исключение из пользовательского lifecycle event handler не должно вылетать наружу из `Collector.Stop()` |
+| 16 | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Исключение из пользовательского `IDataSender.Dispose()` не должно вылетать наружу из `DataCollector.Dispose()` |
+| 17 | `Start_after_dispose_does_not_resurrect_collector` | `Start()` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
+| 18 | `Initialize_after_dispose_does_not_resurrect_collector` | Legacy `Initialize(false)` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
 
 ## Что эти тесты уже нашли
 
@@ -58,6 +59,7 @@
 | `Start()` / `Initialize(false)` после `Dispose()` оживляли collector | статус становился `Running` после того, как ресурсы уже были освобождены | `Start()` и legacy `Initialize()` теперь no-op после dispose |
 | Значения, добавленные после `Stop()`, отправлялись после следующего `Start()` | stopped collector копил payload в очередях; после restart уходили stale values и хвосты diagnostic package values | enqueue закрыт, когда collector не started; очереди очищаются на `Stop()` |
 | `LastValueSensor` не отправлял последнее значение на `Stop()` | `Stop()` завершался без data package, хотя `LastValueSensor.StopAsync()` вызывает `SendValue()` | сенсоры останавливаются до остановки очередей; data/priority queues делают bounded flush |
+| Queue flush зависел от ленивого `IEnumerable` | один last-value при `Stop()` вызвал 3 852 549 повторных `SendDataAsync`, если `IDataSender` не перечисляет items | очередь материализует package items до вызова sender-а, поэтому dequeue и package stats не зависят от внешнего sender-а |
 
 ## Длинный локальный прогон
 
@@ -79,7 +81,7 @@ while ((Get-Date) -lt $deadline) {
 $elapsed = (Get-Date) - $start
 ```
 
-Результат 10-минутного прогона:
+Результат 10-минутного прогона до добавления lazy-enumeration regression:
 
 ```text
 Iterations: 126
@@ -98,7 +100,7 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Ожидаемый результат:
 
 ```text
-Passed: 17
+Passed: 18
 Failed: 0
 Skipped: 1
 ```
@@ -134,6 +136,7 @@ Write-Host "Failures: $failures"
 - статус коллектора остается `Starting` или `Running` после остановки;
 - значение, добавленное после `Stop()`, отправляется после следующего `Start()`;
 - `LastValueSensor` не отправляет последнее значение при `Stop()`;
+- один queued value вызывает повторные отправки одного и того же package из-за ленивого sender enumeration;
 - `Start()` или `Initialize()` переводят disposed collector обратно в `Running`;
 - исключения вылетают наружу из параллельных `AddValue()`.
 
