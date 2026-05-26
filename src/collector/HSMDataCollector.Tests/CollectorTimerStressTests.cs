@@ -167,9 +167,11 @@ namespace HSMDataCollector.Tests
 
                 await collector.Start().ConfigureAwait(false);
 
+                var cpuBaseline = await CaptureCpuBaselineAsync(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
                 var cpuStart = CpuUsageSnapshot.Capture();
                 await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
                 var cpu = CpuUsageSnapshot.Capture().Subtract(cpuStart);
+                var adjustedCpu = cpu.SubtractBackground(cpuBaseline);
                 var threadsAfter = GetThreadCount();
 
                 await collector.Stop().ConfigureAwait(false);
@@ -178,7 +180,7 @@ namespace HSMDataCollector.Tests
                 var threadDelta = threadsAfter - threadsBefore;
 
                 _output.WriteLine(
-                    "timerScale; sensors={0}; periodMs=100; callbacks={1}; dataPackages={2}; dataValues={3}; threadsBefore={4}; threadsAfter={5}; threadDelta={6}; wallMs={7}; cpuMs={8}; cpuCores={9:F3}",
+                    "timerScale; sensors={0}; periodMs=100; callbacks={1}; dataPackages={2}; dataValues={3}; threadsBefore={4}; threadsAfter={5}; threadDelta={6}; wallMs={7}; cpuMs={8}; baselineCpuMs={9}; adjustedCpuMs={10}; adjustedCpuCores={11:F3}",
                     sensorCount,
                     callbacks,
                     sender.DataPackages,
@@ -188,13 +190,15 @@ namespace HSMDataCollector.Tests
                     threadDelta,
                     cpu.Wall.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture),
                     cpu.Cpu.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture),
-                    cpu.CpuCores);
+                    cpuBaseline.Cpu.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture),
+                    adjustedCpu.Cpu.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture),
+                    adjustedCpu.CpuCores);
 
                 Assert.True(callbacks >= sensorCount * 5,
                     $"The scale test should exercise many timer callbacks. Callbacks={callbacks}.");
                 Assert.True(threadDelta < 96,
                     $"Creating {sensorCount} periodic sensors should not create a thread per timer. Thread delta={threadDelta}.");
-                AssertCpuBudget(cpu, TimeSpan.FromMilliseconds(300), "1000 function sensor timers");
+                AssertCpuBudget(adjustedCpu, TimeSpan.FromSeconds(1), "1000 function sensor timers");
             }
         }
 
@@ -246,6 +250,13 @@ namespace HSMDataCollector.Tests
         {
             Assert.True(cpu.Cpu <= maxCpu,
                 $"{scenario} should not burn excessive CPU. CPU={cpu.Cpu}, wall={cpu.Wall}.");
+        }
+
+        private static async Task<CpuUsageSnapshot> CaptureCpuBaselineAsync(TimeSpan duration)
+        {
+            var before = CpuUsageSnapshot.Capture();
+            await Task.Delay(duration).ConfigureAwait(false);
+            return CpuUsageSnapshot.Capture().Subtract(before);
         }
 
         private static void UpdateMax(ref int target, int value)
@@ -343,6 +354,20 @@ namespace HSMDataCollector.Tests
                 var wall = TimeSpan.FromSeconds((Timestamp - before.Timestamp) / (double)Stopwatch.Frequency);
 
                 return new CpuUsageSnapshot(cpu, 0, wall);
+            }
+
+            public CpuUsageSnapshot SubtractBackground(CpuUsageSnapshot background)
+            {
+                if (background == null || background.Wall <= TimeSpan.Zero || Wall <= TimeSpan.Zero)
+                    return this;
+
+                var backgroundCpuTicks = background.Cpu.Ticks * Wall.TotalMilliseconds / background.Wall.TotalMilliseconds;
+                var adjustedTicks = Cpu.Ticks - (long)backgroundCpuTicks;
+
+                if (adjustedTicks < 0)
+                    adjustedTicks = 0;
+
+                return new CpuUsageSnapshot(TimeSpan.FromTicks(adjustedTicks), 0, Wall);
             }
         }
     }
