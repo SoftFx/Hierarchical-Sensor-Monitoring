@@ -307,6 +307,22 @@ namespace HSMDataCollector.Tests
             Assert.True(stopCompletedBeforeRelease, "Collector.Stop() should not wait forever for a blocked function sensor callback.");
         }
 
+        [Fact]
+        public async Task Lifecycle_event_handler_exception_does_not_escape_collector_stop()
+        {
+            using (var collector = CreateCollector(new ProbeDataSender()))
+            {
+                collector.ToStopped += () => throw new InvalidOperationException("Injected lifecycle event failure.");
+
+                await collector.Start().ConfigureAwait(false);
+
+                var exception = await Record.ExceptionAsync(() => collector.Stop()).ConfigureAwait(false);
+
+                Assert.Null(exception);
+                Assert.Equal(CollectorStatus.Stopped, collector.Status);
+            }
+        }
+
         [SuiteSoakFact]
         public async Task Adversarial_suite_repeated_for_duration_stays_green()
         {
