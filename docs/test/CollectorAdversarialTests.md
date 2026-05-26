@@ -29,6 +29,7 @@
 | 9 | `Queue_overflow_under_flood_keeps_collector_responsive` | Очень маленькая очередь и сильный поток значений |
 | 10 | `Repeated_start_stop_cycles_do_not_leave_sender_active` | Несколько циклов `Start()` / `Stop()` подряд |
 | 11 | `Blocked_function_timer_callback_does_not_block_collector_stop` | Зависший пользовательский function callback не должен блокировать `Collector.Stop()` |
+| 12 | `Lifecycle_event_handler_exception_does_not_escape_collector_stop` | Исключение из пользовательского lifecycle event handler не должно вылетать наружу из `Collector.Stop()` |
 
 ## Что эти тесты уже нашли
 
@@ -47,6 +48,7 @@
 | Дефект | Симптом | Исправление |
 | --- | --- | --- |
 | `Stop()` ждал зависший function timer callback | `Collector.Stop()` не завершался за 2 секунды, пока callback не был отпущен | `5b5856873 Prevent blocked timer callbacks from hanging stop` |
+| Exception из lifecycle event handler вылетал наружу из `Stop()` | пользовательский `ToStopped` handler мог кинуть exception, который возвращался вызывающему приложению | `Isolate lifecycle event handler failures` |
 
 ## Длинный локальный прогон
 
@@ -87,7 +89,7 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Ожидаемый результат:
 
 ```text
-Passed: 11
+Passed: 12
 Failed: 0
 Skipped: 1
 ```

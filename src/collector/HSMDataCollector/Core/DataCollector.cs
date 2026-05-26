@@ -251,17 +251,35 @@ namespace HSMDataCollector.Core
             switch (newStatus)
             {
                 case CollectorStatus.Starting:
-                    ToStarting?.Invoke();
+                    RaiseLifecycleEvent(ToStarting, nameof(ToStarting));
                     break;
                 case CollectorStatus.Running:
-                    ToRunning?.Invoke();
+                    RaiseLifecycleEvent(ToRunning, nameof(ToRunning));
                     break;
                 case CollectorStatus.Stopping:
-                    ToStopping?.Invoke();
+                    RaiseLifecycleEvent(ToStopping, nameof(ToStopping));
                     break;
                 case CollectorStatus.Stopped:
-                    ToStopped?.Invoke();
+                    RaiseLifecycleEvent(ToStopped, nameof(ToStopped));
                     break;
+            }
+        }
+
+        private void RaiseLifecycleEvent(Action lifecycleEvent, string eventName)
+        {
+            if (lifecycleEvent == null)
+                return;
+
+            foreach (Action handler in lifecycleEvent.GetInvocationList())
+            {
+                try
+                {
+                    handler();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"DataCollector {eventName} event handler error: {ex}");
+                }
             }
         }
 
