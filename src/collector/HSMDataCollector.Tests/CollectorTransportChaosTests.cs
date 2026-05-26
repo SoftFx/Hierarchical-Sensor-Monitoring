@@ -12,6 +12,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -311,6 +312,59 @@ namespace HSMDataCollector.Tests
             Assert.True(stats.CommandRequests > 0);
             Assert.True(stats.DataRequests > 0);
             Assert.True(stats.HungConnections > 0);
+        }
+
+        [Fact]
+        public async Task Double_bar_payload_survives_data_endpoint_disconnect_retries()
+        {
+            if (!HttpListener.IsSupported)
+                return;
+
+            var values = new[] { 1.111, 2.222, 3.333, 4.444 };
+            var expectedMean = Math.Round(values.Average(), 2, MidpointRounding.AwayFromZero);
+            var expectedFirst = Math.Round(values.First(), 2, MidpointRounding.AwayFromZero);
+            var expectedLast = Math.Round(values.Last(), 2, MidpointRounding.AwayFromZero);
+            var barPeriod = TimeSpan.FromSeconds(30);
+
+            using (var server = SemanticBarCaptureServer.Start(dataDisconnectsBeforeSuccess: 2))
+            using (var collector = CreateCollector(
+                server.Port,
+                TimeSpan.FromMilliseconds(800),
+                valuesPerPackage: 10,
+                maxQueueSize: 1000,
+                module: "semantic-bar-retry"))
+            {
+                var sensor = collector.CreateDoubleBarSensor(
+                    "transport/semantic-bar-retry/double-bar",
+                    new BarSensorOptions
+                    {
+                        BarPeriod = barPeriod,
+                        BarTickPeriod = TimeSpan.FromSeconds(5),
+                        PostDataPeriod = TimeSpan.FromMilliseconds(100),
+                        Precision = 2
+                    });
+
+                foreach (var value in values)
+                    sensor.AddValue(value);
+
+                await collector.Start().ConfigureAwait(false);
+
+                var body = await server.WaitForSuccessfulDataBodyAsync(TimeSpan.FromSeconds(8)).ConfigureAwait(false);
+                var bar = FindDoubleBarValue(body, expectedCount: values.Length);
+
+                Assert.NotNull(bar);
+                Assert.Equal("transport-chaos-host/semantic-bar-retry/transport/semantic-bar-retry/double-bar", bar.Path);
+                Assert.Equal(values.Length, bar.Count);
+                Assert.Equal(Math.Round(values.Min(), 2, MidpointRounding.AwayFromZero), bar.Min);
+                Assert.Equal(Math.Round(values.Max(), 2, MidpointRounding.AwayFromZero), bar.Max);
+                Assert.Equal(expectedMean, bar.Mean);
+                Assert.Equal(expectedFirst, bar.FirstValue);
+                Assert.Equal(expectedLast, bar.LastValue);
+                Assert.Equal(barPeriod, bar.CloseTime - bar.OpenTime);
+                Assert.True(server.DataRequests >= 3, "The test should exercise disconnected data attempts before the successful retry.");
+
+                await DisposeWithinAsync(collector, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            }
         }
 
         [Fact]
@@ -823,6 +877,69 @@ namespace HSMDataCollector.Tests
             });
         }
 
+        private static CapturedDoubleBar FindDoubleBarValue(string body, int expectedCount)
+        {
+            using (var document = JsonDocument.Parse(body))
+            {
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    return null;
+
+                foreach (var item in document.RootElement.EnumerateArray())
+                {
+                    if (!TryGetInt32(item, "Count", out var count) || count != expectedCount)
+                        continue;
+
+                    if (!TryGetString(item, "Path", out var path)
+                        || !TryGetDouble(item, "Min", out var min)
+                        || !TryGetDouble(item, "Max", out var max)
+                        || !TryGetDouble(item, "Mean", out var mean)
+                        || !TryGetDouble(item, "FirstValue", out var first)
+                        || !TryGetDouble(item, "LastValue", out var last)
+                        || !TryGetDateTime(item, "OpenTime", out var openTime)
+                        || !TryGetDateTime(item, "CloseTime", out var closeTime))
+                    {
+                        continue;
+                    }
+
+                    return new CapturedDoubleBar(path, count, min, max, mean, first, last, openTime, closeTime);
+                }
+            }
+
+            return null;
+        }
+
+        private static bool TryGetString(JsonElement item, string name, out string value)
+        {
+            value = null;
+            return item.TryGetProperty(name, out var property)
+                && property.ValueKind == JsonValueKind.String
+                && (value = property.GetString()) != null;
+        }
+
+        private static bool TryGetInt32(JsonElement item, string name, out int value)
+        {
+            value = default;
+            return item.TryGetProperty(name, out var property)
+                && property.ValueKind == JsonValueKind.Number
+                && property.TryGetInt32(out value);
+        }
+
+        private static bool TryGetDouble(JsonElement item, string name, out double value)
+        {
+            value = default;
+            return item.TryGetProperty(name, out var property)
+                && property.ValueKind == JsonValueKind.Number
+                && property.TryGetDouble(out value);
+        }
+
+        private static bool TryGetDateTime(JsonElement item, string name, out DateTime value)
+        {
+            value = default;
+            return item.TryGetProperty(name, out var property)
+                && property.ValueKind == JsonValueKind.String
+                && property.TryGetDateTime(out value);
+        }
+
         private static async Task<MixedValueFloodResult> ProduceMixedSensorLoadAsync(DataCollector collector, string pathPrefix, int totalValues)
         {
             var writers = CreateMixedValueWriters(collector, pathPrefix);
@@ -1184,6 +1301,226 @@ namespace HSMDataCollector.Tests
                     after.MalformedResponses - before.MalformedResponses,
                     after.ResetConnections - before.ResetConnections,
                     after.RequestBytes - before.RequestBytes);
+            }
+        }
+
+        private sealed class CapturedDoubleBar
+        {
+            public CapturedDoubleBar(
+                string path,
+                int count,
+                double min,
+                double max,
+                double mean,
+                double firstValue,
+                double lastValue,
+                DateTime openTime,
+                DateTime closeTime)
+            {
+                Path = path;
+                Count = count;
+                Min = min;
+                Max = max;
+                Mean = mean;
+                FirstValue = firstValue;
+                LastValue = lastValue;
+                OpenTime = openTime;
+                CloseTime = closeTime;
+            }
+
+            public string Path { get; }
+
+            public int Count { get; }
+
+            public double Min { get; }
+
+            public double Max { get; }
+
+            public double Mean { get; }
+
+            public double FirstValue { get; }
+
+            public double LastValue { get; }
+
+            public DateTime OpenTime { get; }
+
+            public DateTime CloseTime { get; }
+        }
+
+        private sealed class SemanticBarCaptureServer : IDisposable
+        {
+            private readonly HttpListener _listener = new HttpListener();
+            private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
+            private readonly TaskCompletionSource<string> _successfulDataBody =
+                new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly Task _listenTask;
+            private readonly int _dataDisconnectsBeforeSuccess;
+
+            private long _dataRequests;
+            private int _disposed;
+
+            private SemanticBarCaptureServer(int dataDisconnectsBeforeSuccess)
+            {
+                _dataDisconnectsBeforeSuccess = dataDisconnectsBeforeSuccess;
+                Port = GetFreePort();
+
+                _listener.Prefixes.Add("http://127.0.0.1:" + Port.ToString(CultureInfo.InvariantCulture) + "/");
+                _listener.Start();
+                _listenTask = Task.Run(() => ListenAsync(_tokenSource.Token));
+            }
+
+            public int Port { get; }
+
+            public long DataRequests => Interlocked.Read(ref _dataRequests);
+
+            public static SemanticBarCaptureServer Start(int dataDisconnectsBeforeSuccess)
+            {
+                return new SemanticBarCaptureServer(dataDisconnectsBeforeSuccess);
+            }
+
+            public async Task<string> WaitForSuccessfulDataBodyAsync(TimeSpan timeout)
+            {
+                var completed = await Task.WhenAny(_successfulDataBody.Task, Task.Delay(timeout)).ConfigureAwait(false);
+
+                Assert.True(completed == _successfulDataBody.Task, "The semantic capture server should receive a successful data request.");
+
+                return await _successfulDataBody.Task.ConfigureAwait(false);
+            }
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                    return;
+
+                _tokenSource.Cancel();
+
+                try
+                {
+                    _listener.Stop();
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+
+                try
+                {
+                    _listenTask.Wait(TimeSpan.FromSeconds(3));
+                }
+                catch (AggregateException)
+                {
+                }
+
+                _listener.Close();
+                _tokenSource.Dispose();
+            }
+
+            private async Task ListenAsync(CancellationToken token)
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    HttpListenerContext context;
+
+                    try
+                    {
+                        context = await _listener.GetContextAsync().ConfigureAwait(false);
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        break;
+                    }
+                    catch (HttpListenerException)
+                    {
+                        break;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        break;
+                    }
+
+                    _ = Task.Run(() => HandleAsync(context, token), token);
+                }
+            }
+
+            private async Task HandleAsync(HttpListenerContext context, CancellationToken token)
+            {
+                try
+                {
+                    var rawUrl = context.Request.RawUrl ?? string.Empty;
+
+                    if (rawUrl.EndsWith("/testConnection", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await WriteJsonAsync(context.Response, HttpStatusCode.OK, "\"ok\"").ConfigureAwait(false);
+                        return;
+                    }
+
+                    if (IsCommandRequest(rawUrl))
+                    {
+                        await ReadRequestBodyAsync(context.Request).ConfigureAwait(false);
+                        await WriteJsonAsync(context.Response, HttpStatusCode.OK, "{}").ConfigureAwait(false);
+                        return;
+                    }
+
+                    if (IsDataRequest(rawUrl))
+                    {
+                        var dataRequest = Interlocked.Increment(ref _dataRequests);
+
+                        if (dataRequest <= _dataDisconnectsBeforeSuccess)
+                        {
+                            context.Response.Abort();
+                            return;
+                        }
+
+                        var body = await ReadRequestBodyAsync(context.Request).ConfigureAwait(false);
+                        _successfulDataBody.TrySetResult(body);
+
+                        await WriteJsonAsync(context.Response, HttpStatusCode.OK, "\"ok\"").ConfigureAwait(false);
+                        return;
+                    }
+
+                    await WriteJsonAsync(context.Response, HttpStatusCode.NotFound, "\"not found\"").ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (HttpListenerException)
+                {
+                }
+                catch (IOException)
+                {
+                }
+            }
+
+            private static async Task<string> ReadRequestBodyAsync(HttpListenerRequest request)
+            {
+                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding ?? Encoding.UTF8))
+                {
+                    return await reader.ReadToEndAsync().ConfigureAwait(false);
+                }
+            }
+
+            private static async Task WriteJsonAsync(HttpListenerResponse response, HttpStatusCode statusCode, string body)
+            {
+                var bytes = Encoding.UTF8.GetBytes(body);
+
+                response.StatusCode = (int)statusCode;
+                response.ContentType = "application/json";
+                response.ContentLength64 = bytes.Length;
+
+                await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+                response.Close();
+            }
+
+            private static bool IsCommandRequest(string rawUrl)
+            {
+                return rawUrl.EndsWith("/commands", StringComparison.OrdinalIgnoreCase)
+                    || rawUrl.EndsWith("/addOrUpdate", StringComparison.OrdinalIgnoreCase);
+            }
+
+            private static bool IsDataRequest(string rawUrl)
+            {
+                return rawUrl.IndexOf("/api/sensors/", StringComparison.OrdinalIgnoreCase) >= 0
+                    && !IsCommandRequest(rawUrl)
+                    && !rawUrl.EndsWith("/testConnection", StringComparison.OrdinalIgnoreCase);
             }
         }
 
