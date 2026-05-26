@@ -63,8 +63,8 @@ namespace HSMDataCollector.Tests
             AssertResourceTrends(results, maxManagedGrowthBytes: 128L * 1024 * 1024);
         }
 
-        [SuiteSoakFact]
-        public async Task Resource_leak_suite_repeated_for_duration_stays_bounded()
+        [ResourceLeakSoakFact]
+        public async Task Focused_resource_leak_load_repeated_for_duration_stays_bounded()
         {
             if (!HttpListener.IsSupported)
                 return;
@@ -113,12 +113,12 @@ namespace HSMDataCollector.Tests
             }
 
             var after = SuiteSoakResourceSnapshot.Capture(observedPorts);
-            SuiteSoakResourceSnapshot.WriteDelta(_output, "resourceLeakSuiteSoak", before, after);
+            SuiteSoakResourceSnapshot.WriteDelta(_output, "focusedResourceLeakLoad", before, after);
             SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
             SuiteSoakResourceSnapshot.AssertNoEstablishedConnections(after);
 
             _output.WriteLine(
-                "resourceLeakSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; suiteCycles={3}; resourceCycles={4}; addValues={5}; requests={6}; commands={7}; data={8}; aborts={9}; failures={10}; slow={11}; bytes={12}",
+                "focusedResourceLeakLoad; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; loadCycles={3}; resourceCycles={4}; addValues={5}; requests={6}; commands={7}; data={8}; aborts={9}; failures={10}; slow={11}; bytes={12}",
                 duration.TotalSeconds,
                 maxDuration.TotalSeconds,
                 stopwatch.Elapsed.TotalSeconds,
@@ -133,8 +133,8 @@ namespace HSMDataCollector.Tests
                 slowResponses,
                 requestBytes);
 
-            Assert.True(cycles > 0, "The resource leak suite soak should complete at least one suite cycle.");
-            Assert.True(resourceCycles >= 5, "The resource leak suite soak should execute at least one full resource cycle set.");
+            Assert.True(cycles > 0, "The focused resource leak load should complete at least one load cycle.");
+            Assert.True(resourceCycles >= 5, "The focused resource leak load should execute at least one full resource cycle set.");
         }
 
         private async Task<IReadOnlyList<ResourceCycleResult>> RunResourceLeakScenarioAsync(
@@ -333,12 +333,12 @@ namespace HSMDataCollector.Tests
                 $"Suite soak exceeded hard limit {maxDuration}. Target duration is soft, but exceeding the hard limit means the suite likely hung.");
         }
 
-        private sealed class SuiteSoakFactAttribute : FactAttribute
+        private sealed class ResourceLeakSoakFactAttribute : FactAttribute
         {
-            public SuiteSoakFactAttribute()
+            public ResourceLeakSoakFactAttribute()
             {
-                if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_SUITE_SOAK"), "1", StringComparison.Ordinal))
-                    Skip = "Set HSM_COLLECTOR_RUN_SUITE_SOAK=1 to run repeated suite soak tests.";
+                if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_RESOURCE_LEAK_SOAK"), "1", StringComparison.Ordinal))
+                    Skip = "Set HSM_COLLECTOR_RUN_RESOURCE_LEAK_SOAK=1 to run the focused resource leak soak test.";
             }
         }
 
