@@ -28,6 +28,7 @@
 | 8 | `Concurrent_add_value_during_dispose_does_not_throw_to_callers` | Одновременные `AddValue()` и `Dispose()` |
 | 9 | `Queue_overflow_under_flood_keeps_collector_responsive` | Очень маленькая очередь и сильный поток значений |
 | 10 | `Repeated_start_stop_cycles_do_not_leave_sender_active` | Несколько циклов `Start()` / `Stop()` подряд |
+| 11 | `Blocked_function_timer_callback_does_not_block_collector_stop` | Зависший пользовательский function callback не должен блокировать `Collector.Stop()` |
 
 ## Что эти тесты уже нашли
 
@@ -40,6 +41,12 @@
 | `Stop()` во время pending `Start(...)` оставлял статус `Starting` | ожидался `Stopped`, фактически был `Starting` | `4c2375a5e Fix collector lifecycle stop states` |
 
 После исправлений весь adversarial-набор стал зеленым.
+
+Позже отдельный exploratory test нашел еще один lifecycle-дефект:
+
+| Дефект | Симптом | Исправление |
+| --- | --- | --- |
+| `Stop()` ждал зависший function timer callback | `Collector.Stop()` не завершался за 2 секунды, пока callback не был отпущен | `5b5856873 Prevent blocked timer callbacks from hanging stop` |
 
 ## Длинный локальный прогон
 
@@ -80,9 +87,9 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Ожидаемый результат:
 
 ```text
-Passed: 10
+Passed: 11
 Failed: 0
-Skipped: 0
+Skipped: 1
 ```
 
 ## Как запустить на 10 минут

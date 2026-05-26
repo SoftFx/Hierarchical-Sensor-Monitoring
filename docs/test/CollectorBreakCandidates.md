@@ -10,6 +10,8 @@
 | --- | --- | --- | --- | --- |
 | Fixed, persistent regression | `Blocked_function_timer_callback_does_not_block_collector_stop` | Function sensor callback зависает и не возвращает управление | `Collector.Stop()` не завершался за `2 sec`, пока callback не был отпущен | Если пользовательский timer callback завис на внешнем API/локе/IO, остановка сервиса может зависнуть |
 
+Текущий persistent test находится в `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs`.
+
 ## Детали первого кандидата
 
 Сценарий:

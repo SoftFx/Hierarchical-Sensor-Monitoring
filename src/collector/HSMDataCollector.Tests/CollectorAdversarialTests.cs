@@ -1,4 +1,5 @@
 using HSMDataCollector.Core;
+using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
@@ -251,6 +252,59 @@ namespace HSMDataCollector.Tests
 
                 Assert.Equal(packagesAfterStop, sender.DataPackages);
             }
+        }
+
+        [Fact]
+        public async Task Blocked_function_timer_callback_does_not_block_collector_stop()
+        {
+            var sender = new ProbeDataSender();
+            var callbackEntered = new TaskCompletionSource<bool>();
+            var releaseCallback = new ManualResetEventSlim(false);
+            var collector = CreateCollector(sender);
+            Task stopTask = null;
+            var stopCompletedBeforeRelease = false;
+
+            try
+            {
+                collector.CreateFunctionSensor(
+                    "adversarial/blocked-function-timer",
+                    () =>
+                    {
+                        callbackEntered.TrySetResult(true);
+                        releaseCallback.Wait();
+                        return 1;
+                    },
+                    new FunctionSensorOptions
+                    {
+                        PostDataPeriod = TimeSpan.FromMilliseconds(50)
+                    });
+
+                await collector.Start().ConfigureAwait(false);
+
+                var entered = await Task.WhenAny(callbackEntered.Task, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+                Assert.True(entered == callbackEntered.Task, "The blocking function callback should start before stop is tested.");
+
+                stopTask = Task.Run(() => collector.Stop());
+                var completed = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+                stopCompletedBeforeRelease = completed == stopTask;
+            }
+            finally
+            {
+                releaseCallback.Set();
+
+                if (stopTask != null)
+                {
+                    var completedAfterRelease = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+
+                    if (completedAfterRelease == stopTask)
+                        await stopTask.ConfigureAwait(false);
+                }
+
+                collector.Dispose();
+                releaseCallback.Dispose();
+            }
+
+            Assert.True(stopCompletedBeforeRelease, "Collector.Stop() should not wait forever for a blocked function sensor callback.");
         }
 
         [SuiteSoakFact]
