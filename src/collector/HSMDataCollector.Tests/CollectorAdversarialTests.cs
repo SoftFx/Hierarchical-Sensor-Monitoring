@@ -299,6 +299,23 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task Last_value_sensor_flushes_latest_value_on_dispose()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+
+            var sensor = collector.CreateLastValueDoubleSensor("adversarial/last-value-dispose/data", 0);
+
+            await collector.Start().ConfigureAwait(false);
+            sensor.AddValue(42);
+
+            collector.Dispose();
+
+            Assert.True(await sender.WaitForDataPackagesAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                "Last-value sensor should flush the latest value when the collector is disposed.");
+        }
+
+        [Fact]
         public async Task Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items()
         {
             var sender = new ProbeDataSender();
@@ -562,6 +579,11 @@ namespace HSMDataCollector.Tests
                 addValueCalls++;
                 sensorCreateCalls++;
 
+                await Last_value_sensor_flushes_latest_value_on_dispose().ConfigureAwait(false);
+                scenarioRuns++;
+                addValueCalls++;
+                sensorCreateCalls++;
+
                 await Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items().ConfigureAwait(false);
                 scenarioRuns++;
                 addValueCalls++;
@@ -592,7 +614,7 @@ namespace HSMDataCollector.Tests
             SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
 
             Assert.True(cycles > 0, "The adversarial suite soak should complete at least one suite cycle.");
-            Assert.True(scenarioRuns >= 17, "The adversarial suite soak should execute the full scenario list at least once.");
+            Assert.True(scenarioRuns >= 18, "The adversarial suite soak should execute the full scenario list at least once.");
 
             _output.WriteLine(
                 "adversarialSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}; addValues={5}; sensorCreates={6}; dataFailureBursts={7}; commandFailureBursts={8}",

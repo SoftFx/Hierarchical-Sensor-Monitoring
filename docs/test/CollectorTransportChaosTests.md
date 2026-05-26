@@ -2,7 +2,7 @@
 
 Дата прогона: 2026-05-26.
 
-Коротко: добавлен быстрый test suite из 18 транспортных chaos-сценариев и отдельный gated soak-тест. Быстрые тесты ломают соединение ниже уровня `HttpListener`: принимают TCP и закрывают, принимают и молчат, держат открытый порт без application-level accept, принимают request headers и не читают body, медленно отвечают, медленно читают body, отдают битый HTTP, сбрасывают соединение во время request body, подвешивают только `/commands` или только data endpoint, запускают много collectors и шлют большие payload/file payload. Gated soak повторяет mixed transport suite на одном сервере 30+ секунд и смотрит реальные accepted TCP connections и ресурсный тренд.
+Коротко: добавлен быстрый test suite из 19 транспортных chaos-сценариев и отдельный gated soak-тест. Быстрые тесты ломают соединение ниже уровня `HttpListener`: принимают TCP и закрывают, принимают и молчат, держат открытый порт без application-level accept, принимают request headers и не читают body, медленно отвечают, медленно читают body, отдают битый HTTP, сбрасывают соединение во время request body, подвешивают только `/commands` или только data endpoint, запускают много collectors и шлют большие payload/file payload. Отдельный semantic-regression тест проверяет, что `DoubleBar` payload сохраняет поля после disconnect retries. Gated soak повторяет mixed transport suite на одном сервере 30+ секунд и смотрит реальные accepted TCP connections и ресурсный тренд.
 
 Код тестов:
 
@@ -73,8 +73,8 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Transport-chaos suite:
 
 ```text
-Total tests: 19
-Passed: 18
+Total tests: 20
+Passed: 19
 Skipped: 1
 Failed: 0
 Total time: ~35 seconds
@@ -83,11 +83,11 @@ Total time: ~35 seconds
 Полный быстрый test run:
 
 ```text
-Passed: 34
+Passed: 47
 Skipped: 7
 Failed: 0
-Total: 41
-Duration: 47 seconds
+Total: 54
+Duration: 65 seconds
 ```
 
 Skipped тесты - это намеренно длинные stress/soak проверки, которые включаются через env-переменные.
@@ -133,7 +133,7 @@ Post-warm-up trend:
   threads: 64 -> 64
 ```
 
-## 18 сценариев по шагам
+## 19 сценариев по шагам
 
 ### 1. Accept and drop
 
@@ -523,15 +523,39 @@ requests=6; data=5; dropped=3; bytes=467736
 requests=8; dropped=8; retryStormCpuMs=31.25
 ```
 
+### 19. Double bar semantic retry
+
+Тест:
+
+`Double_bar_payload_survives_data_endpoint_disconnect_retries`
+
+Шаги:
+
+1. Поднять semantic capture server.
+2. Первые 2 data request-а закрыть без успешного response.
+3. Создать `DoubleBarSensor` с `Precision=2`.
+4. Добавить значения `1.111`, `2.222`, `3.333`, `4.444`.
+5. Дождаться успешного retry.
+6. Распарсить JSON body успешного data request-а.
+7. Проверить `Path`, `Count`, `Min`, `Max`, `Mean`, `FirstValue`, `LastValue`, `OpenTime/CloseTime`.
+
+Локальная проверка:
+
+```text
+dataRequests>=3
+count=4
+mean=2.78
+```
+
 ## Золотая середина по времени
 
 Новый transport suite специально сделан коротким:
 
-- 18 сценариев;
+- 19 сценариев;
 - raw TCP chaos вместо долгого внешнего сервера;
 - короткие `RequestTimeout` в пределах `500-800 ms`;
-- весь suite проходит примерно за `25` секунд;
-- полный обычный test run с уже существующими тестами проходит примерно за `28` секунд.
+- весь suite проходит примерно за `35` секунд;
+- полный обычный test run с уже существующими тестами проходит примерно за `65` секунд.
 
 Gated soak-проверка сделана отдельно:
 
