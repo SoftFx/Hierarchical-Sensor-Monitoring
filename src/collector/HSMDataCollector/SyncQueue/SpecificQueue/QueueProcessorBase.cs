@@ -63,6 +63,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                     _cancellationTokenSource?.Dispose();
                     _cancellationTokenSource = null;
+
+                    ClearQueue();
                 }
             }
             catch (OperationCanceledException) { }
@@ -141,6 +143,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             Interlocked.Decrement(ref _queueCount);
             return true;
+        }
+
+        private void ClearQueue()
+        {
+            while (TryDequeue(out _)) { }
         }
 
         public void Dispose()

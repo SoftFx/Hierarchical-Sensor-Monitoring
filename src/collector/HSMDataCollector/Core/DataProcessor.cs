@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.DefaultSensors.Diagnostic;
@@ -28,7 +29,9 @@ namespace HSMDataCollector.Core
 
         internal SensorsStorage SensorStorage { get; }
 
-        public bool IsStarted { get; private set; } = false;
+        private int _isStarted;
+
+        public bool IsStarted => Volatile.Read(ref _isStarted) == 1;
 
         public DataProcessor(CollectorOptions options, LoggerManager logger)
         {
@@ -48,7 +51,7 @@ namespace HSMDataCollector.Core
 
         public void Start()
         {
-            IsStarted = true;
+            Volatile.Write(ref _isStarted, 1);
             _dataQueue.Start();
             _priorityQueue.Start();
             _fileQueue.Start();
@@ -63,7 +66,7 @@ namespace HSMDataCollector.Core
 
         public async Task StopAsync()
         {
-            IsStarted = false;
+            Volatile.Write(ref _isStarted, 0);
             await _dataQueue.StopAsync().ConfigureAwait(false);
             await _priorityQueue.StopAsync().ConfigureAwait(false);
             await _fileQueue.StopAsync().ConfigureAwait(false);
@@ -81,19 +84,61 @@ namespace HSMDataCollector.Core
             SensorStorage?.Dispose();
         }
 
-        public void AddData(ISensor sender, SensorValueBase data) => SendQueueOverflow(sender, _dataQueue.Enqeue(data), _dataQueue.QueueName);
+        public void AddData(ISensor sender, SensorValueBase data)
+        {
+            if (!IsStarted)
+                return;
 
-        public void AddData(ISensor sender, IEnumerable<SensorValueBase> items) => SendQueueOverflow(sender, _dataQueue.Enqeue(items), _dataQueue.QueueName);
+            SendQueueOverflow(sender, _dataQueue.Enqeue(data), _dataQueue.QueueName);
+        }
 
-        public void AddPriorityData(ISensor sender, SensorValueBase data) => SendQueueOverflow(sender, _priorityQueue.Enqeue(data), _priorityQueue.QueueName);
+        public void AddData(ISensor sender, IEnumerable<SensorValueBase> items)
+        {
+            if (!IsStarted)
+                return;
 
-        public void AddPriorityData(ISensor sender, IEnumerable<SensorValueBase> items) => SendQueueOverflow(sender, _priorityQueue.Enqeue(items), _priorityQueue.QueueName);
+            SendQueueOverflow(sender, _dataQueue.Enqeue(items), _dataQueue.QueueName);
+        }
 
-        public void AddCommand(ISensor sender, CommandRequestBase command) => SendQueueOverflow(sender, _commandQueue.Enqeue(command), _commandQueue.QueueName);
+        public void AddPriorityData(ISensor sender, SensorValueBase data)
+        {
+            if (!IsStarted)
+                return;
 
-        public void AddCommand(ISensor sender, IEnumerable<CommandRequestBase> commands) => SendQueueOverflow(sender, _commandQueue.Enqeue(commands), _commandQueue.QueueName);
+            SendQueueOverflow(sender, _priorityQueue.Enqeue(data), _priorityQueue.QueueName);
+        }
 
-        public void AddFile(ISensor sender, FileSensorValue file) => SendQueueOverflow(sender, _fileQueue.Enqeue(file), _fileQueue.QueueName);
+        public void AddPriorityData(ISensor sender, IEnumerable<SensorValueBase> items)
+        {
+            if (!IsStarted)
+                return;
+
+            SendQueueOverflow(sender, _priorityQueue.Enqeue(items), _priorityQueue.QueueName);
+        }
+
+        public void AddCommand(ISensor sender, CommandRequestBase command)
+        {
+            if (!IsStarted)
+                return;
+
+            SendQueueOverflow(sender, _commandQueue.Enqeue(command), _commandQueue.QueueName);
+        }
+
+        public void AddCommand(ISensor sender, IEnumerable<CommandRequestBase> commands)
+        {
+            if (!IsStarted)
+                return;
+
+            SendQueueOverflow(sender, _commandQueue.Enqeue(commands), _commandQueue.QueueName);
+        }
+
+        public void AddFile(ISensor sender, FileSensorValue file)
+        {
+            if (!IsStarted)
+                return;
+
+            SendQueueOverflow(sender, _fileQueue.Enqeue(file), _fileQueue.QueueName);
+        }
 
         public void AddException(string sensorPath, Exception ex)
         {

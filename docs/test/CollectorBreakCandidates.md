@@ -13,6 +13,7 @@
 | Fixed, persistent regression | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Пользовательский `IDataSender.Dispose()` кидает exception | `DataCollector.Dispose()` возвращал наружу `InvalidOperationException` из sender cleanup | Ошибка cleanup-а внешнего sender-а не должна ронять приложение при освобождении collector-а |
 | Fixed, persistent regression | `Start_after_dispose_does_not_resurrect_collector` | После `Dispose()` вызывается `Start()` | Disposed collector переходил обратно в `Running` поверх закрытых ресурсов | Disposed collector должен оставаться `Stopped`; повторный старт после dispose является no-op |
 | Fixed, persistent regression | `Initialize_after_dispose_does_not_resurrect_collector` | После `Dispose()` вызывается legacy `Initialize(false)` | Disposed collector переходил обратно в `Running` через старый API | Legacy initialize после dispose должен быть no-op |
+| Fixed, persistent regression | `Values_added_while_stopped_are_not_sent_after_restart` | После `Stop()` пользователь продолжает писать в sensor, потом вызывает `Start()` | Stopped collector копил значения и отправлял stale payload после restart | Значения и хвосты очередей не должны переживать `Stop()` |
 
 Текущий persistent test находится в `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs`.
 

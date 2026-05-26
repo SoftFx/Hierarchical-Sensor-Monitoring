@@ -255,6 +255,31 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task Values_added_while_stopped_are_not_sent_after_restart()
+        {
+            var sender = new ProbeDataSender();
+
+            using (var collector = CreateCollector(sender))
+            {
+                var sensor = collector.CreateDoubleSensor("adversarial/stopped-values/data");
+
+                await collector.Start().ConfigureAwait(false);
+                sensor.AddValue(1);
+                Assert.True(await sender.WaitForDataPackagesAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false));
+
+                await collector.Stop().ConfigureAwait(false);
+
+                var packagesAfterStop = sender.DataPackages;
+                sensor.AddValue(2);
+
+                await collector.Start().ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(300)).ConfigureAwait(false);
+
+                Assert.Equal(packagesAfterStop, sender.DataPackages);
+            }
+        }
+
+        [Fact]
         public async Task Blocked_function_timer_callback_does_not_block_collector_stop()
         {
             var sender = new ProbeDataSender();
@@ -432,6 +457,11 @@ namespace HSMDataCollector.Tests
                 addValueCalls += 6;
                 sensorCreateCalls++;
 
+                await Values_added_while_stopped_are_not_sent_after_restart().ConfigureAwait(false);
+                scenarioRuns++;
+                addValueCalls += 2;
+                sensorCreateCalls++;
+
                 await Start_after_dispose_does_not_resurrect_collector().ConfigureAwait(false);
                 scenarioRuns++;
                 sensorCreateCalls++;
@@ -448,7 +478,7 @@ namespace HSMDataCollector.Tests
             SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
 
             Assert.True(cycles > 0, "The adversarial suite soak should complete at least one suite cycle.");
-            Assert.True(scenarioRuns >= 12, "The adversarial suite soak should execute the full scenario list at least once.");
+            Assert.True(scenarioRuns >= 13, "The adversarial suite soak should execute the full scenario list at least once.");
 
             _output.WriteLine(
                 "adversarialSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}; addValues={5}; sensorCreates={6}; dataFailureBursts={7}; commandFailureBursts={8}",
