@@ -17,7 +17,7 @@
 | --- | --- | --- | ---: | --- |
 | Быстрый smoke | `High_cardinality_mixed_sensors_register_quickly_without_resource_spike` | Создает `5000` mixed sensors без `Start()`, проверяет скорость, threads и managed memory after GC | ~0.1-1 sec | Да |
 | Boundary stress | `Default_max_sensors_allows_configured_boundary_and_rejects_next` | Создает `100000` mixed sensors, затем проверяет, что следующий sensor падает с `InvalidOperationException` | ~0.5-2 sec локально | Нет, нужен env |
-| Nightly repeat | `Cardinality_registration_repeated_for_duration_stays_bounded` | Повторяет full boundary cycle по времени, после каждого цикла освобождает collector и проверяет ресурсный тренд после GC | 30 sec default; можно 8 часов | Нет, нужен env |
+| Nightly repeat | `Cardinality_registration_repeated_for_duration_stays_bounded` | Повторяет full boundary cycle по времени, после каждого цикла освобождает collector и проверяет ресурсный тренд после GC | 8 hours default; hard limit 8.5 hours | Нет, нужен env |
 
 ## Что именно создается
 
@@ -61,7 +61,7 @@ $env:HSM_COLLECTOR_RUN_CARDINALITY_STRESS="1"
 dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-build --filter "FullyQualifiedName~Default_max_sensors_allows_configured_boundary_and_rejects_next" --logger "console;verbosity=normal"
 ```
 
-30-секундный repeated профиль:
+Короткий локальный smoke ночного профиля:
 
 ```powershell
 $env:HSM_COLLECTOR_RUN_CARDINALITY_NIGHTLY="1"
@@ -70,12 +70,20 @@ $env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_MAX_SECONDS="120"
 dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-build --filter "FullyQualifiedName~Cardinality_registration_repeated_for_duration_stays_bounded" --logger "trx;LogFileName=cardinality-nightly.trx"
 ```
 
-Ночной профиль:
+Ночной профиль с default duration:
+
+```powershell
+$env:HSM_COLLECTOR_RUN_CARDINALITY_NIGHTLY="1"
+$env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_SENSORS="100000"
+dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-build --filter "FullyQualifiedName~Cardinality_registration_repeated_for_duration_stays_bounded" --logger "trx;LogFileName=cardinality-nightly.trx"
+```
+
+Ночной профиль с явным duration:
 
 ```powershell
 $env:HSM_COLLECTOR_RUN_CARDINALITY_NIGHTLY="1"
 $env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_SECONDS="28800"
-$env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_MAX_SECONDS="28920"
+$env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_MAX_SECONDS="30600"
 $env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_SENSORS="100000"
 dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-build --filter "FullyQualifiedName~Cardinality_registration_repeated_for_duration_stays_bounded" --logger "trx;LogFileName=cardinality-nightly.trx"
 ```

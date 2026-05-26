@@ -73,8 +73,8 @@ namespace HSMDataCollector.Tests
             var sensorCount = GetPositiveIntEnvironment(
                 "HSM_COLLECTOR_CARDINALITY_NIGHTLY_SENSORS",
                 new CollectorOptions().MaxSensors);
-            var duration = GetDurationEnvironment("HSM_COLLECTOR_CARDINALITY_NIGHTLY_SECONDS", TimeSpan.FromSeconds(30));
-            var maxDuration = GetDurationEnvironment("HSM_COLLECTOR_CARDINALITY_NIGHTLY_MAX_SECONDS", TimeSpan.FromMinutes(2));
+            var duration = GetDurationEnvironment("HSM_COLLECTOR_CARDINALITY_NIGHTLY_SECONDS", TimeSpan.FromHours(8));
+            var maxDuration = GetDurationEnvironment("HSM_COLLECTOR_CARDINALITY_NIGHTLY_MAX_SECONDS", TimeSpan.FromHours(8.5));
 
             var before = SuiteSoakResourceSnapshot.Capture();
             SuiteSoakResourceSnapshot firstAfterCycle = null;
