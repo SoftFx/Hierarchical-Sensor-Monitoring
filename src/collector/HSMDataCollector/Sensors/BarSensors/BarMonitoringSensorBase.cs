@@ -75,7 +75,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (taskToWait != null)
                 {
-                    await taskToWait.StopAsync().ConfigureAwait(false);
+                    await taskToWait.StopAsync(waitForCurrentRun: false).ConfigureAwait(false);
                 }
 
                 await base.StopAsync().ConfigureAwait(false);

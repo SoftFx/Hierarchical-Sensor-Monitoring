@@ -62,7 +62,7 @@ namespace HSMDataCollector.Threading
             }
         }
 
-        internal async ValueTask StopAsync()
+        internal async ValueTask StopAsync(bool waitForCurrentRun = true)
         {
             Task taskToWait;
             lock (_lock)
@@ -72,10 +72,11 @@ namespace HSMDataCollector.Threading
                 taskToWait = _currentRun;
             }
 
-            await taskToWait.ConfigureAwait(false);
+            if (waitForCurrentRun)
+                await taskToWait.ConfigureAwait(false);
         }
 
-        public void Dispose() => StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+        public void Dispose() => StopAsync(waitForCurrentRun: false).ConfigureAwait(false).GetAwaiter().GetResult();
 
         private async Task ExecuteAsync()
         {
