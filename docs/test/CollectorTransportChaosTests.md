@@ -22,6 +22,7 @@
 - после `Dispose()` нет зависших TCP `ESTABLISHED` соединений к портам chaos-серверов;
 - тестовый сервер реально получил запросы и выполнил нужный chaos-сценарий;
 - retry storm не превращается в неограниченную лавину запросов;
+- CPU в окне плохого сервера остается bounded, чтобы retry/timeout path не превращался в spin loop;
 - тяжелые payload/file сценарии доходят до реальной отправки и не оставляют открытых соединений.
 
 Важно: отдельные быстрые сценарии - это smoke/regression проверки, а не доказательство отсутствия socket leak. Из-за batching и retry delay один быстрый сценарий может дать всего несколько HTTP request-ов. Для проверки утечки сокетов добавлен gated-тест `Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded`: он держит один raw TCP server, по очереди переключает chaos-сценарии и повторяет этот mini-suite до истечения заданного времени.
@@ -82,11 +83,11 @@ Total time: ~35 seconds
 Полный быстрый test run:
 
 ```text
-Passed: 32
+Passed: 34
 Skipped: 7
 Failed: 0
-Total: 39
-Duration: 42 seconds
+Total: 41
+Duration: 47 seconds
 ```
 
 Skipped тесты - это намеренно длинные stress/soak проверки, которые включаются через env-переменные.
@@ -200,6 +201,7 @@ requests=3; commands=1; data=2; hung=3
 ```text
 addValues=100000
 types=instantBool=5883, instantInt=5883, instantDouble=5883, instantString=5883, instantVersion=5883, instantTime=5883, instantEnum=5882, lastBool=5882, lastInt=5882, lastDouble=5882, lastString=5882, lastVersion=5882, lastTime=5882, barInt=5882, barDouble=5882, rate=5882, file=5882
+cpu: wallMs=3019; cpuMs=63; cpuCores=0.021
 handles=938->942
 threads=53->53
 managedGc=9581360->9710832
@@ -233,6 +235,7 @@ tcpTimeWait=0
 addValues=100000
 types=instantBool=5883, instantInt=5883, instantDouble=5883, instantString=5883, instantVersion=5883, instantTime=5883, instantEnum=5882, lastBool=5882, lastInt=5882, lastDouble=5882, lastString=5882, lastVersion=5882, lastTime=5882, barInt=5882, barDouble=5882, rate=5882, file=5882
 requests=30; commands=10; data=20; hung=30; bytes=0
+cpu: wallMs=3011; cpuMs=63; cpuCores=0.021
 handles=943->967
 threads=53->54
 managedGc=9760240->9781520
@@ -266,6 +269,7 @@ tcpTimeWait=12
 addValues=100000
 types=instantBool=5883, instantInt=5883, instantDouble=5883, instantString=5883, instantVersion=5883, instantTime=5883, instantEnum=5882, lastBool=5882, lastInt=5882, lastDouble=5882, lastString=5882, lastVersion=5882, lastTime=5882, barInt=5882, barDouble=5882, rate=5882, file=5882
 requests=18; commands=6; data=12; ok=15; bytes=5426
+cpu: wallMs=3002; cpuMs=1125; cpuCores=0.375
 handles=603->942
 threads=23->53
 managedGc=2182480->9550224

@@ -13,17 +13,18 @@
 | Transport chaos | 18 fast + 1 gated | 90% | ~35 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Resource leaks | 1 fast + 1 gated repeat | 70% | ~4 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Adversarial lifecycle | 10 fast + 1 gated repeat | 75% | ~1-2 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
+| Timer stress | 2 fast | 75% | ~3-4 sec | `src/collector/HSMDataCollector.Tests/CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md) |
 | Flaky server stress | 1 fast + 1 gated repeat | 75% | ~3-4 sec быстрый; gated suite repeat 30 sec default; long gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Default sensor smoke | 2 fast + 1 gated repeat | 5% | <1 sec fast; gated suite repeat 30 sec default, но без assertions | `src/collector/HSMDataCollector.Tests/DefaultSensorsTests.cs` | [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md); полноценного описания нет, тесты сейчас фактически пустые |
 
 Текущий быстрый прогон:
 
 ```text
-Passed: 32
+Passed: 34
 Skipped: 7
 Failed: 0
-Total: 39
-Duration: ~42 seconds
+Total: 41
+Duration: ~47 seconds
 ```
 
 30-секундный repeat-прогон всех suite: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md). `30 sec` - soft target; hard safety limit по умолчанию `120 sec`.
@@ -93,6 +94,15 @@ Duration: ~42 seconds
 | Параллельный `AddValue()` во время `Dispose()` | 1 | 70% | <1 sec | `Concurrent_add_value_during_dispose_does_not_throw_to_callers` | `CollectorAdversarialTests.cs:164` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
 | Overflow маленькой очереди | 1 | 70% | <1 sec | `Queue_overflow_under_flood_keeps_collector_responsive` | `CollectorAdversarialTests.cs:201` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
 | Повторные `Start()` / `Stop()` циклы | 1 | 75% | <1 sec | `Repeated_start_stop_cycles_do_not_leave_sender_active` | `CollectorAdversarialTests.cs:222` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), таблица `Какие сценарии проверяются` |
+
+## Timer Stress
+
+Назначение: проверить общий timer/scheduler слой, разные `PostDataPeriod`, restart timer-а и CPU-budget.
+
+| Что покрывает | Тестов | Покрытие | Длительность | Тесты | Где код | Где описание сценария |
+| --- | ---: | ---: | --- | --- | --- | --- |
+| Function sensors с разными периодами `40-500 ms` | 1 | 75% | ~2 sec | `Function_sensors_with_varied_timer_periods_fire_without_cpu_spin` | `CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md), раздел `Что проверяется` |
+| Restart function timer с `100 ms` на `25 ms`, callback длится `40 ms` | 1 | 80% | ~1 sec | `Restarting_function_timer_under_load_changes_rate_without_callback_overlap` | `CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md), раздел `Что проверяется` |
 
 ## Flaky Server Stress
 
