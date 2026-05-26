@@ -51,7 +51,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                await StopInternalAsync();
+                await StopInternalAsync(waitForCurrentRun: false);
 
                 await base.StopAsync();
             }
@@ -78,7 +78,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                await StopInternalAsync().ConfigureAwait(false);
+                await StopInternalAsync(waitForCurrentRun: true).ConfigureAwait(false);
 
                 if (newPostPeriod <= TimeSpan.Zero)
                     throw new ArgumentOutOfRangeException(nameof(newPostPeriod), "Post data period must be greater than zero.");
@@ -93,7 +93,7 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        private async ValueTask StopInternalAsync()
+        private async ValueTask StopInternalAsync(bool waitForCurrentRun)
         {
             ScheduledTask taskToAwait = null;
 
@@ -108,7 +108,7 @@ namespace HSMDataCollector.DefaultSensors
 
             if (taskToAwait != null)
             {
-                await taskToAwait.StopAsync().ConfigureAwait(false);
+                await taskToAwait.StopAsync(waitForCurrentRun).ConfigureAwait(false);
             }
         }
 

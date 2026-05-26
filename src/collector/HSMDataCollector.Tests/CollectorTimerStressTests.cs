@@ -136,8 +136,8 @@ namespace HSMDataCollector.Tests
             }
         }
 
-        [BreakCandidateFact]
-        public async Task Exploratory_blocked_function_timer_callback_does_not_block_collector_stop()
+        [Fact]
+        public async Task Blocked_function_timer_callback_does_not_block_collector_stop()
         {
             var sender = new CountingDataSender();
             var callbackEntered = new TaskCompletionSource<bool>();
@@ -282,15 +282,6 @@ namespace HSMDataCollector.Tests
             public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
             {
                 return new ValueTask<PackageSendingInfo>(default(PackageSendingInfo));
-            }
-        }
-
-        private sealed class BreakCandidateFactAttribute : FactAttribute
-        {
-            public BreakCandidateFactAttribute()
-            {
-                if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_BREAK_CANDIDATES"), "1", StringComparison.Ordinal))
-                    Skip = "Break candidate: set HSM_COLLECTOR_RUN_BREAK_CANDIDATES=1 to reproduce the known blocked function timer callback stop issue.";
             }
         }
 

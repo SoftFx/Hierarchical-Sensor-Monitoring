@@ -13,25 +13,25 @@
 | Transport chaos | 18 fast + 1 gated | 90% | ~35 sec fast suite; gated single-server soak 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorTransportChaosTests.cs` | [CollectorTransportChaosTests.md](CollectorTransportChaosTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Resource leaks | 1 fast + 1 gated repeat | 70% | ~4 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorResourceLeakTests.cs` | [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Adversarial lifecycle | 10 fast + 1 gated repeat | 75% | ~1-2 sec быстрый; gated suite repeat 30 sec default | `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs` | [CollectorAdversarialTests.md](CollectorAdversarialTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
-| Timer stress | 2 fast + 1 break candidate | 80% | ~3-4 sec fast; break candidate gated | `src/collector/HSMDataCollector.Tests/CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md), [CollectorBreakCandidates.md](CollectorBreakCandidates.md) |
+| Timer stress | 3 fast | 85% | ~3-4 sec fast | `src/collector/HSMDataCollector.Tests/CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md), [CollectorBreakCandidates.md](CollectorBreakCandidates.md) |
 | Flaky server stress | 1 fast + 1 gated repeat | 75% | ~3-4 sec быстрый; gated suite repeat 30 sec default; long gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Default sensor smoke | 2 fast + 1 gated repeat | 5% | <1 sec fast; gated suite repeat 30 sec default, но без assertions | `src/collector/HSMDataCollector.Tests/DefaultSensorsTests.cs` | [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md); полноценного описания нет, тесты сейчас фактически пустые |
 
 Текущий быстрый прогон:
 
 ```text
-Passed: 34
-Skipped: 8
+Passed: 35
+Skipped: 7
 Failed: 0
 Total: 42
-Duration: ~46 seconds
+Duration: ~45 seconds
 ```
 
 30-секундный repeat-прогон всех suite: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md). `30 sec` - soft target; hard safety limit по умолчанию `120 sec`.
 
 Каждый gated suite теперь сам снимает ресурсный snapshot до/после suite и пишет объем нагрузки. Для transport/stress/resource suite TCP `ESTABLISHED` и `TIME_WAIT` считаются по тестовым портам. `commands` в отчетах - это command/registration requests коллектора; отдельного login endpoint в тестовом протоколе нет.
 
-Exploratory tests, которые уже сломали collector и пока не включены как persistent regression, перечислены здесь: [CollectorBreakCandidates.md](CollectorBreakCandidates.md).
+Exploratory tests, которые уже сломали collector, и их статус persistent regression перечислены здесь: [CollectorBreakCandidates.md](CollectorBreakCandidates.md).
 
 ## Transport Chaos
 

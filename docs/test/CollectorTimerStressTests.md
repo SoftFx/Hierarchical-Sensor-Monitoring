@@ -14,7 +14,7 @@
 | --- | --- | --- | --- |
 | Разные timer periods | `Function_sensors_with_varied_timer_periods_fire_without_cpu_spin` | 7 function sensors с периодами `40/60/90/130/200/300/500 ms` работают одновременно | каждый timer сработал; быстрый timer дал больше callbacks, чем медленный; data packages дошли до sender; CPU за окно меньше `4 sec` |
 | Restart timer под нагрузкой | `Restarting_function_timer_under_load_changes_rate_without_callback_overlap` | function callback спит `40 ms`, timer перезапускается с `100 ms` на `25 ms` | после restart callback rate вырос; `maxConcurrent=1`; CPU за окно меньше `4 sec` |
-| Break candidate: blocked callback | `Exploratory_blocked_function_timer_callback_does_not_block_collector_stop` | function callback зависает и не возвращает управление | сейчас воспроизводит проблему: `Collector.Stop()` не завершается за `2 sec`; обычный прогон пропускает тест |
+| Persistent regression: blocked callback | `Blocked_function_timer_callback_does_not_block_collector_stop` | function callback зависает и не возвращает управление | `Collector.Stop()` завершается, пока callback остается заблокированным; после проверки тест отпускает callback для cleanup |
 
 ## Локальный результат
 
@@ -40,4 +40,4 @@ timerRestart; beforeRestartCallbacks=7; afterRestartCallbacks=15; maxConcurrent=
 - Restart на более короткий период реально увеличивает callback rate.
 - Callback-и не накладываются друг на друга даже когда выполнение (`40 ms`) дольше нового периода (`25 ms`).
 - CPU в timer stress окнах остается низким.
-- Найден break candidate: зависший пользовательский function callback блокирует `Collector.Stop()`. Подробно: [CollectorBreakCandidates.md](CollectorBreakCandidates.md).
+- Зависший пользовательский function callback больше не блокирует `Collector.Stop()`. История найденного break-candidate: [CollectorBreakCandidates.md](CollectorBreakCandidates.md).

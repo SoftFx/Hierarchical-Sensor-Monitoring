@@ -2,19 +2,13 @@
 
 Дата: 2026-05-26.
 
-Это список exploratory tests, которые уже смогли сломать `DataCollector`, но пока не включены как persistent regression tests в обычный прогон. Их можно запускать отдельно через:
-
-```powershell
-$env:HSM_COLLECTOR_RUN_BREAK_CANDIDATES="1"
-dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~Exploratory_" --logger "console;verbosity=detailed"
-Remove-Item Env:\HSM_COLLECTOR_RUN_BREAK_CANDIDATES
-```
+Это история exploratory tests, которые смогли сломать `DataCollector`. После фикса удачные кандидаты переводятся в persistent regression tests и входят в обычный прогон.
 
 ## Найденные кандидаты
 
-| Статус | Тест | Что ломает | Фактический результат | Почему важно |
+| Статус | Тест | Что ломало | Фактический результат до фикса | Почему важно |
 | --- | --- | --- | --- | --- |
-| Breaks collector stop | `Exploratory_blocked_function_timer_callback_does_not_block_collector_stop` | Function sensor callback зависает и не возвращает управление | `Collector.Stop()` не завершился за `2 sec`, пока callback не был отпущен | Если пользовательский timer callback завис на внешнем API/локе/IO, остановка сервиса может зависнуть |
+| Fixed, persistent regression | `Blocked_function_timer_callback_does_not_block_collector_stop` | Function sensor callback зависает и не возвращает управление | `Collector.Stop()` не завершался за `2 sec`, пока callback не был отпущен | Если пользовательский timer callback завис на внешнем API/локе/IO, остановка сервиса может зависнуть |
 
 ## Детали первого кандидата
 
@@ -28,9 +22,10 @@ Remove-Item Env:\HSM_COLLECTOR_RUN_BREAK_CANDIDATES
 
 Ожидаемое production-safe поведение: `Stop()` не должен ждать бесконечно пользовательский callback.
 
-Текущее поведение: `Stop()` ждет текущий `ScheduledTask` callback, поэтому зависает до отпускания callback.
+Поведение до фикса: `Stop()` ждал текущий `ScheduledTask` callback, поэтому зависал до отпускания callback.
 
-Кандидат на будущий persistent regression после фикса:
+Фикс:
 
-- сделать stop/dispose scheduler-а неблокирующим или ограниченным timeout-ом;
-- после фикса убрать `BreakCandidateFact` и включить тест в обычный прогон.
+- `Stop/Dispose` scheduled task снимает задачу с расписания, но не ждет зависший текущий callback;
+- `RestartTimer` продолжает ждать текущий callback, чтобы сохранить защиту от callback overlap;
+- тест включен в обычный persistent-прогон.
