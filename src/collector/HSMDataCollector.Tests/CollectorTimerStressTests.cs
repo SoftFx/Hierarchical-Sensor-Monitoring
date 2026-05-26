@@ -136,6 +136,53 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        [BreakCandidateFact]
+        public async Task Exploratory_blocked_function_timer_callback_does_not_block_collector_stop()
+        {
+            var sender = new CountingDataSender();
+            var callbackEntered = new TaskCompletionSource<bool>();
+            var releaseCallback = new ManualResetEventSlim(false);
+            var collector = CreateCollector(sender, "timer-blocked-callback");
+
+            collector.CreateFunctionSensor(
+                "timer/blocked/function",
+                () =>
+                {
+                    callbackEntered.TrySetResult(true);
+                    releaseCallback.Wait();
+                    return 1;
+                },
+                new FunctionSensorOptions
+                {
+                    PostDataPeriod = TimeSpan.FromMilliseconds(50)
+                });
+
+            await collector.Start().ConfigureAwait(false);
+
+            var entered = await Task.WhenAny(callbackEntered.Task, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+            Assert.True(entered == callbackEntered.Task, "The blocking function callback should start before stop is tested.");
+
+            var stopTask = Task.Run(() => collector.Stop());
+            var completed = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+            var stopCompletedBeforeRelease = completed == stopTask;
+
+            releaseCallback.Set();
+            await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+
+            try
+            {
+                if (stopTask.IsCompleted)
+                    await stopTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                collector.Dispose();
+                releaseCallback.Dispose();
+            }
+
+            Assert.True(stopCompletedBeforeRelease, "Collector.Stop() should not wait forever for a blocked function sensor callback.");
+        }
+
         private static DataCollector CreateCollector(CountingDataSender sender, string module)
         {
             return new DataCollector(new CollectorOptions
@@ -235,6 +282,15 @@ namespace HSMDataCollector.Tests
             public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
             {
                 return new ValueTask<PackageSendingInfo>(default(PackageSendingInfo));
+            }
+        }
+
+        private sealed class BreakCandidateFactAttribute : FactAttribute
+        {
+            public BreakCandidateFactAttribute()
+            {
+                if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_BREAK_CANDIDATES"), "1", StringComparison.Ordinal))
+                    Skip = "Break candidate: set HSM_COLLECTOR_RUN_BREAK_CANDIDATES=1 to reproduce the known blocked function timer callback stop issue.";
             }
         }
 
