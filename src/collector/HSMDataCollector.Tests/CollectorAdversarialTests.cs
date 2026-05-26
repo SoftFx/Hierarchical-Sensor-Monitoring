@@ -280,6 +280,25 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task Last_value_sensor_flushes_latest_value_on_stop()
+        {
+            var sender = new ProbeDataSender();
+
+            using (var collector = CreateCollector(sender))
+            {
+                var sensor = collector.CreateLastValueDoubleSensor("adversarial/last-value-stop/data", 0);
+
+                await collector.Start().ConfigureAwait(false);
+                sensor.AddValue(42);
+
+                await collector.Stop().ConfigureAwait(false);
+
+                Assert.True(await sender.WaitForDataPackagesAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "Last-value sensor should flush the latest value when the collector stops.");
+            }
+        }
+
+        [Fact]
         public async Task Blocked_function_timer_callback_does_not_block_collector_stop()
         {
             var sender = new ProbeDataSender();
@@ -462,6 +481,11 @@ namespace HSMDataCollector.Tests
                 addValueCalls += 2;
                 sensorCreateCalls++;
 
+                await Last_value_sensor_flushes_latest_value_on_stop().ConfigureAwait(false);
+                scenarioRuns++;
+                addValueCalls++;
+                sensorCreateCalls++;
+
                 await Start_after_dispose_does_not_resurrect_collector().ConfigureAwait(false);
                 scenarioRuns++;
                 sensorCreateCalls++;
@@ -478,7 +502,7 @@ namespace HSMDataCollector.Tests
             SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
 
             Assert.True(cycles > 0, "The adversarial suite soak should complete at least one suite cycle.");
-            Assert.True(scenarioRuns >= 13, "The adversarial suite soak should execute the full scenario list at least once.");
+            Assert.True(scenarioRuns >= 14, "The adversarial suite soak should execute the full scenario list at least once.");
 
             _output.WriteLine(
                 "adversarialSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}; addValues={5}; sensorCreates={6}; dataFailureBursts={7}; commandFailureBursts={8}",

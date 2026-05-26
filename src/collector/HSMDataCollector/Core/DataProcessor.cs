@@ -24,6 +24,7 @@ namespace HSMDataCollector.Core
         private readonly CommandQueueProcessor _commandQueue;
         private readonly LoggerManager _logger;
         private readonly MessageDeduplicator _messageDeduplicator;
+        private readonly TimeSpan _stopFlushTimeout;
 
         private DefaultSensorsCollection DefaultSensors => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? (DefaultSensorsCollection)SensorStorage.Windows : (DefaultSensorsCollection)SensorStorage.Unix;
 
@@ -36,6 +37,9 @@ namespace HSMDataCollector.Core
         public DataProcessor(CollectorOptions options, LoggerManager logger)
         {
             _logger = logger;
+            _stopFlushTimeout = options.RequestTimeout < TimeSpan.FromSeconds(1)
+                ? options.RequestTimeout
+                : TimeSpan.FromSeconds(1);
 
             SensorStorage  = new SensorsStorage(options, this, logger);
 
@@ -66,12 +70,19 @@ namespace HSMDataCollector.Core
 
         public async Task StopAsync()
         {
+            await SensorStorage.StopAsync().ConfigureAwait(false);
+
+            using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
+            {
+                await _priorityQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+                await _dataQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+            }
+
             Volatile.Write(ref _isStarted, 0);
             await _dataQueue.StopAsync().ConfigureAwait(false);
             await _priorityQueue.StopAsync().ConfigureAwait(false);
             await _fileQueue.StopAsync().ConfigureAwait(false);
             await _commandQueue.StopAsync().ConfigureAwait(false);
-            await SensorStorage.StopAsync().ConfigureAwait(false);
         }
 
         public void Dispose()

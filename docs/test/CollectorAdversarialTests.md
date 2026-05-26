@@ -29,11 +29,12 @@
 | 9 | `Queue_overflow_under_flood_keeps_collector_responsive` | Очень маленькая очередь и сильный поток значений |
 | 10 | `Repeated_start_stop_cycles_do_not_leave_sender_active` | Несколько циклов `Start()` / `Stop()` подряд |
 | 11 | `Values_added_while_stopped_are_not_sent_after_restart` | Значения, добавленные после `Stop()`, не должны копиться в очередях и уезжать после следующего `Start()` |
-| 12 | `Blocked_function_timer_callback_does_not_block_collector_stop` | Зависший пользовательский function callback не должен блокировать `Collector.Stop()` |
-| 13 | `Lifecycle_event_handler_exception_does_not_escape_collector_stop` | Исключение из пользовательского lifecycle event handler не должно вылетать наружу из `Collector.Stop()` |
-| 14 | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Исключение из пользовательского `IDataSender.Dispose()` не должно вылетать наружу из `DataCollector.Dispose()` |
-| 15 | `Start_after_dispose_does_not_resurrect_collector` | `Start()` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
-| 16 | `Initialize_after_dispose_does_not_resurrect_collector` | Legacy `Initialize(false)` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
+| 12 | `Last_value_sensor_flushes_latest_value_on_stop` | `LastValueSensor` должен отправить последнее значение при `Stop()` без ожидания полного `PackageCollectPeriod` |
+| 13 | `Blocked_function_timer_callback_does_not_block_collector_stop` | Зависший пользовательский function callback не должен блокировать `Collector.Stop()` |
+| 14 | `Lifecycle_event_handler_exception_does_not_escape_collector_stop` | Исключение из пользовательского lifecycle event handler не должно вылетать наружу из `Collector.Stop()` |
+| 15 | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Исключение из пользовательского `IDataSender.Dispose()` не должно вылетать наружу из `DataCollector.Dispose()` |
+| 16 | `Start_after_dispose_does_not_resurrect_collector` | `Start()` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
+| 17 | `Initialize_after_dispose_does_not_resurrect_collector` | Legacy `Initialize(false)` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
 
 ## Что эти тесты уже нашли
 
@@ -56,6 +57,7 @@
 | Exception из пользовательского `IDataSender.Dispose()` вылетал наружу из `DataCollector.Dispose()` | приложение могло получить exception во время штатного cleanup collector-а | `Isolate data sender dispose failures` |
 | `Start()` / `Initialize(false)` после `Dispose()` оживляли collector | статус становился `Running` после того, как ресурсы уже были освобождены | `Start()` и legacy `Initialize()` теперь no-op после dispose |
 | Значения, добавленные после `Stop()`, отправлялись после следующего `Start()` | stopped collector копил payload в очередях; после restart уходили stale values и хвосты diagnostic package values | enqueue закрыт, когда collector не started; очереди очищаются на `Stop()` |
+| `LastValueSensor` не отправлял последнее значение на `Stop()` | `Stop()` завершался без data package, хотя `LastValueSensor.StopAsync()` вызывает `SendValue()` | сенсоры останавливаются до остановки очередей; data/priority queues делают bounded flush |
 
 ## Длинный локальный прогон
 
@@ -81,8 +83,8 @@ $elapsed = (Get-Date) - $start
 
 ```text
 Iterations: 126
-Test cases per iteration: 16
-Total test case executions: 2016
+Test cases per iteration: 17
+Total test case executions: 2142
 Failures: 0
 Elapsed: 00:10:03.1475314
 ```
@@ -96,7 +98,7 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Ожидаемый результат:
 
 ```text
-Passed: 16
+Passed: 17
 Failed: 0
 Skipped: 1
 ```
@@ -131,6 +133,7 @@ Write-Host "Failures: $failures"
 - `RateSensor.AddValue(...)` не возвращает управление после `NaN`;
 - статус коллектора остается `Starting` или `Running` после остановки;
 - значение, добавленное после `Stop()`, отправляется после следующего `Start()`;
+- `LastValueSensor` не отправляет последнее значение при `Stop()`;
 - `Start()` или `Initialize()` переводят disposed collector обратно в `Running`;
 - исключения вылетают наружу из параллельных `AddValue()`.
 

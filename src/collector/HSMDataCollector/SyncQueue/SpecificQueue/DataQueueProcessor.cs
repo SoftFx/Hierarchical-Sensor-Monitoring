@@ -15,6 +15,25 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         public DataQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
+        internal async Task FlushAsync(CancellationToken token)
+        {
+            try
+            {
+                while (QueueCount > 0 && !token.IsCancellationRequested)
+                {
+                    var package = GetPackage();
+                    var sendingInfo = await _sender.SendDataAsync(package.Items, token).ConfigureAwait(false);
+                    _queueManager.AddPackageSendingInfo(sendingInfo);
+                    _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
+            }
+        }
+
         protected override async Task ProcessingLoop(CancellationToken token)
         {
             DataPackage<SensorValueBase> package;
