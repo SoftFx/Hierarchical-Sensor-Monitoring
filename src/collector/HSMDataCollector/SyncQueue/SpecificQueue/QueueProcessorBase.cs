@@ -26,6 +26,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected readonly DataProcessor _queueManager;
 
         protected int _queueCount;
+        private int _stopTimedOut;
 
         public abstract string QueueName { get; }
 
@@ -39,6 +40,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         internal void Start()
         {
+            if (_task != null)
+            {
+                if (_task.IsCompleted)
+                    CompleteStoppedTask(_task, _cancellationTokenSource, clearQueue: false);
+                else
+                {
+                    _logger.Error($"{QueueName} queue processor is still stopping and cannot be started again yet.");
+                    return;
+                }
+            }
+
             _cancellationTokenSource = new CancellationTokenSource();
             _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
         }
@@ -55,22 +67,35 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     return;
                 }
 
-                _cancellationTokenSource?.Cancel();
+                var taskToWait = _task;
+                var tokenSourceToDispose = _cancellationTokenSource;
 
                 try
                 {
-                    await _task.ConfigureAwait(false);
+                    tokenSourceToDispose?.Cancel();
+
+                    if (!taskToWait.IsCompleted)
+                    {
+                        var completedTask = await Task.WhenAny(taskToWait, Task.Delay(_options.RequestTimeout)).ConfigureAwait(false);
+
+                        if (completedTask != taskToWait)
+                        {
+                            if (Interlocked.Exchange(ref _stopTimedOut, 1) == 0)
+                                _logger.Error($"{QueueName} queue processor did not stop within {_options.RequestTimeout}. IDataSender may ignore cancellation.");
+
+                            if (clearQueue)
+                                ClearQueue();
+
+                            return;
+                        }
+                    }
+
+                    await taskToWait.ConfigureAwait(false);
                 }
                 finally
                 {
-                    _task.Dispose();
-                    _task = null;
-
-                    _cancellationTokenSource?.Dispose();
-                    _cancellationTokenSource = null;
-
-                    if (clearQueue)
-                        ClearQueue();
+                    if (taskToWait.IsCompleted)
+                        CompleteStoppedTask(taskToWait, tokenSourceToDispose, clearQueue);
                 }
             }
             catch (OperationCanceledException) { }
@@ -149,6 +174,25 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             Interlocked.Decrement(ref _queueCount);
             return true;
+        }
+
+        private void CompleteStoppedTask(Task task, CancellationTokenSource tokenSource, bool clearQueue)
+        {
+            if (!ReferenceEquals(_task, task))
+                return;
+
+            task.Dispose();
+            _task = null;
+
+            tokenSource?.Dispose();
+
+            if (ReferenceEquals(_cancellationTokenSource, tokenSource))
+                _cancellationTokenSource = null;
+
+            if (clearQueue)
+                ClearQueue();
+
+            Interlocked.Exchange(ref _stopTimedOut, 0);
         }
 
         private void ClearQueue()

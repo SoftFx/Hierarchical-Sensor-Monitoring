@@ -19,6 +19,7 @@
 | Fixed, persistent regression | `Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items` | Пользовательский `IDataSender` не перечисляет `IEnumerable` items, переданный из очереди | Один queued value на `Stop()` вызвал 3 852 549 повторных `SendDataAsync` за 1 секунду | Очередь не должна зависеть от реализации sender-а; иначе возможен CPU spike и повторная отправка одного payload |
 | Fixed, persistent regression | `Stop_during_slow_data_sends_completes_without_parallel_flush` | Медленный `IDataSender` во время `Stop()` | Flush мог конкурировать с обычным data processing loop за sender и очередь | Остановка должна иметь один контролируемый send path и bounded cleanup |
 | Fixed, persistent regression | `Concurrent_start_calls_initialize_collector_once` | 50 параллельных `Start()` на одном collector-е | Lifecycle transition `Stopped -> Starting` не был атомарно защищен | Повторный старт не должен плодить initialization/queue activity |
+| Fixed, persistent regression | `Stop_with_data_sender_that_ignores_cancellation_does_not_hang` | Пользовательский `IDataSender` зависает в `SendDataAsync` и игнорирует `CancellationToken` | `Collector.Stop()` не завершался за `2 sec`, пока sender не был вручную отпущен | Внешняя реализация sender-а не должна навсегда подвешивать сервис при остановке collector-а |
 
 Текущий persistent test находится в `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs`.
 
@@ -41,3 +42,23 @@
 - `Stop/Dispose` scheduled task снимает задачу с расписания, но не ждет зависший текущий callback;
 - `RestartTimer` продолжает ждать текущий callback, чтобы сохранить защиту от callback overlap;
 - тест включен в обычный persistent-прогон.
+
+## Детали кандидата с sender cancellation
+
+Сценарий:
+
+1. Создать collector с `RequestTimeout=100 ms`.
+2. Подставить тестовый `IDataSender`, который входит в `SendDataAsync`, фиксирует прием пакета и затем ждет внешний сигнал, полностью игнорируя `CancellationToken`.
+3. Запустить collector и отправить одно значение.
+4. Убедиться, что sender реально вошел в отправку.
+5. Вызвать `collector.Stop()` и ожидать максимум `2 sec`.
+
+Ожидаемое production-safe поведение: `Stop()` должен завершиться в bounded-время, даже если кастомный sender некорректно игнорирует cancellation.
+
+Поведение до фикса: queue processor отменял token и затем бесконечно ждал свою worker-задачу.
+
+Фикс:
+
+- ожидание остановки queue worker-а ограничено `CollectorOptions.RequestTimeout`;
+- при timeout очередь может быть очищена, но зависший worker не считается остановленным;
+- повторный `Start()` не запускает второй worker поверх старого зависшего worker-а.
