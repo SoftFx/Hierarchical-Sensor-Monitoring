@@ -137,6 +137,9 @@ namespace HSMDataCollector.Core
         {
             try
             {
+                if (_disposed)
+                    return;
+
                 if (!Status.IsStopped())
                     return;
 
@@ -193,6 +196,9 @@ namespace HSMDataCollector.Core
         {
             try
             {
+                if (_disposed)
+                    return;
+
                 if (!Status.IsStopped())
                     return;
 

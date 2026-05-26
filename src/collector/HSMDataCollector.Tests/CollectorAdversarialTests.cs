@@ -335,6 +335,36 @@ namespace HSMDataCollector.Tests
             Assert.Equal(CollectorStatus.Stopped, collector.Status);
         }
 
+        [Fact]
+        public async Task Start_after_dispose_does_not_resurrect_collector()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+
+            collector.CreateDoubleSensor("adversarial/start-after-dispose/data");
+            collector.Dispose();
+
+            var exception = await Record.ExceptionAsync(() => collector.Start()).ConfigureAwait(false);
+
+            Assert.Null(exception);
+            Assert.Equal(CollectorStatus.Stopped, collector.Status);
+        }
+
+        [Fact]
+        public void Initialize_after_dispose_does_not_resurrect_collector()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+
+            collector.CreateDoubleSensor("adversarial/initialize-after-dispose/data");
+            collector.Dispose();
+
+            var exception = Record.Exception(() => collector.Initialize(false));
+
+            Assert.Null(exception);
+            Assert.Equal(CollectorStatus.Stopped, collector.Status);
+        }
+
         [SuiteSoakFact]
         public async Task Adversarial_suite_repeated_for_duration_stays_green()
         {
@@ -402,6 +432,14 @@ namespace HSMDataCollector.Tests
                 addValueCalls += 6;
                 sensorCreateCalls++;
 
+                await Start_after_dispose_does_not_resurrect_collector().ConfigureAwait(false);
+                scenarioRuns++;
+                sensorCreateCalls++;
+
+                Initialize_after_dispose_does_not_resurrect_collector();
+                scenarioRuns++;
+                sensorCreateCalls++;
+
                 AssertWithinSuiteSoakMax(stopwatch, maxDuration);
             }
 
@@ -410,7 +448,7 @@ namespace HSMDataCollector.Tests
             SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
 
             Assert.True(cycles > 0, "The adversarial suite soak should complete at least one suite cycle.");
-            Assert.True(scenarioRuns >= 10, "The adversarial suite soak should execute the full scenario list at least once.");
+            Assert.True(scenarioRuns >= 12, "The adversarial suite soak should execute the full scenario list at least once.");
 
             _output.WriteLine(
                 "adversarialSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}; addValues={5}; sensorCreates={6}; dataFailureBursts={7}; commandFailureBursts={8}",

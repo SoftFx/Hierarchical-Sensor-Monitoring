@@ -31,6 +31,8 @@
 | 11 | `Blocked_function_timer_callback_does_not_block_collector_stop` | Зависший пользовательский function callback не должен блокировать `Collector.Stop()` |
 | 12 | `Lifecycle_event_handler_exception_does_not_escape_collector_stop` | Исключение из пользовательского lifecycle event handler не должно вылетать наружу из `Collector.Stop()` |
 | 13 | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Исключение из пользовательского `IDataSender.Dispose()` не должно вылетать наружу из `DataCollector.Dispose()` |
+| 14 | `Start_after_dispose_does_not_resurrect_collector` | `Start()` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
+| 15 | `Initialize_after_dispose_does_not_resurrect_collector` | Legacy `Initialize(false)` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
 
 ## Что эти тесты уже нашли
 
@@ -51,6 +53,7 @@
 | `Stop()` ждал зависший function timer callback | `Collector.Stop()` не завершался за 2 секунды, пока callback не был отпущен | `5b5856873 Prevent blocked timer callbacks from hanging stop` |
 | Exception из lifecycle event handler вылетал наружу из `Stop()` | пользовательский `ToStopped` handler мог кинуть exception, который возвращался вызывающему приложению | `Isolate lifecycle event handler failures` |
 | Exception из пользовательского `IDataSender.Dispose()` вылетал наружу из `DataCollector.Dispose()` | приложение могло получить exception во время штатного cleanup collector-а | `Isolate data sender dispose failures` |
+| `Start()` / `Initialize(false)` после `Dispose()` оживляли collector | статус становился `Running` после того, как ресурсы уже были освобождены | `Start()` и legacy `Initialize()` теперь no-op после dispose |
 
 ## Длинный локальный прогон
 
@@ -76,8 +79,8 @@ $elapsed = (Get-Date) - $start
 
 ```text
 Iterations: 126
-Test cases per iteration: 10
-Total test case executions: 1260
+Test cases per iteration: 15
+Total test case executions: 1890
 Failures: 0
 Elapsed: 00:10:03.1475314
 ```
@@ -91,7 +94,7 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Ожидаемый результат:
 
 ```text
-Passed: 13
+Passed: 15
 Failed: 0
 Skipped: 1
 ```
@@ -125,6 +128,7 @@ Write-Host "Failures: $failures"
 - после `Stop()` продолжается отправка новых пакетов;
 - `RateSensor.AddValue(...)` не возвращает управление после `NaN`;
 - статус коллектора остается `Starting` или `Running` после остановки;
+- `Start()` или `Initialize()` переводят disposed collector обратно в `Running`;
 - исключения вылетают наружу из параллельных `AddValue()`.
 
 ## Связанные документы
