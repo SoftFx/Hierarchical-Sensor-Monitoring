@@ -163,6 +163,41 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task Stop_with_uncancellable_data_sender_and_backlog_does_not_hang()
+        {
+            var sender = new ProbeDataSender { BlockDataIgnoringCancellation = true };
+            var collector = CreateCollector(sender, requestTimeout: TimeSpan.FromMilliseconds(100));
+            Task stopTask = null;
+
+            try
+            {
+                var sensor = collector.CreateDoubleSensor("adversarial/uncancellable-data-sender-backlog/data");
+
+                await collector.Start().ConfigureAwait(false);
+
+                for (var i = 0; i < 100; i++)
+                    sensor.AddValue(i);
+
+                Assert.True(await sender.WaitForDataPackagesAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false));
+
+                stopTask = collector.Stop();
+                var completed = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+
+                Assert.True(completed == stopTask, "Collector.Stop() should not hang on flush when IDataSender ignores cancellation and backlog remains.");
+                await stopTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                sender.ReleaseBlockedData();
+
+                if (stopTask != null)
+                    await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
+
+                collector.Dispose();
+            }
+        }
+
+        [Fact]
         public async Task Permanent_command_sender_failures_do_not_block_dispose()
         {
             var sender = new ProbeDataSender { ThrowOnCommand = true };
@@ -583,6 +618,12 @@ namespace HSMDataCollector.Tests
                 sensorCreateCalls++;
                 dataFailureBursts++;
 
+                await Stop_with_uncancellable_data_sender_and_backlog_does_not_hang().ConfigureAwait(false);
+                scenarioRuns++;
+                addValueCalls += 100;
+                sensorCreateCalls++;
+                dataFailureBursts++;
+
                 await Permanent_command_sender_failures_do_not_block_dispose().ConfigureAwait(false);
                 scenarioRuns++;
                 sensorCreateCalls += 100;
@@ -653,7 +694,7 @@ namespace HSMDataCollector.Tests
             SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
 
             Assert.True(cycles > 0, "The adversarial suite soak should complete at least one suite cycle.");
-            Assert.True(scenarioRuns >= 19, "The adversarial suite soak should execute the full scenario list at least once.");
+            Assert.True(scenarioRuns >= 20, "The adversarial suite soak should execute the full scenario list at least once.");
 
             _output.WriteLine(
                 "adversarialSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}; addValues={5}; sensorCreates={6}; dataFailureBursts={7}; commandFailureBursts={8}",

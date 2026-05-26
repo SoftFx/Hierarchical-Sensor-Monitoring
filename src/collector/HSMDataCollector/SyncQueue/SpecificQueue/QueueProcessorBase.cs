@@ -55,7 +55,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
         }
 
-        internal async ValueTask StopAsync(bool clearQueue = true)
+        internal async ValueTask<bool> StopAsync(bool clearQueue = true)
         {
             try
             {
@@ -64,7 +64,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     if (clearQueue)
                         ClearQueue();
 
-                    return;
+                    return true;
                 }
 
                 var taskToWait = _task;
@@ -86,11 +86,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                             if (clearQueue)
                                 ClearQueue();
 
-                            return;
+                            return false;
                         }
                     }
 
                     await taskToWait.ConfigureAwait(false);
+                    return true;
                 }
                 finally
                 {
@@ -98,10 +99,14 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         CompleteStoppedTask(taskToWait, tokenSourceToDispose, clearQueue);
                 }
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException)
+            {
+                return true;
+            }
             catch (Exception ex)
             {
                 _logger.Error(ex);
+                return true;
             }
         }
 

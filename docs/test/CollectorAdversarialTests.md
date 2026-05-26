@@ -24,22 +24,23 @@
 | 4 | `Dispose_cancels_blocked_data_sender` | Зависший data sender, который отпускается только отменой токена |
 | 5 | `Permanent_data_sender_failures_do_not_block_dispose` | Постоянные исключения при отправке data-пакетов |
 | 6 | `Stop_with_data_sender_that_ignores_cancellation_does_not_hang` | Пользовательский `IDataSender` зависает и игнорирует `CancellationToken`; `Stop()` должен иметь верхний предел ожидания |
-| 7 | `Permanent_command_sender_failures_do_not_block_dispose` | Постоянные исключения при регистрации сенсоров |
-| 8 | `Creating_sensors_after_initialize_under_command_failures_does_not_hang` | Массовое создание сенсоров после старта, когда command sender падает |
-| 9 | `Concurrent_add_value_during_dispose_does_not_throw_to_callers` | Одновременные `AddValue()` и `Dispose()` |
-| 10 | `Queue_overflow_under_flood_keeps_collector_responsive` | Очень маленькая очередь и сильный поток значений |
-| 11 | `Repeated_start_stop_cycles_do_not_leave_sender_active` | Несколько циклов `Start()` / `Stop()` подряд |
-| 12 | `Values_added_while_stopped_are_not_sent_after_restart` | Значения, добавленные после `Stop()`, не должны копиться в очередях и уезжать после следующего `Start()` |
-| 13 | `Last_value_sensor_flushes_latest_value_on_stop` | `LastValueSensor` должен отправить последнее значение при `Stop()` без ожидания полного `PackageCollectPeriod` |
-| 14 | `Last_value_sensor_flushes_latest_value_on_dispose` | `Dispose()` активного collector-а должен выполнить bounded shutdown/flush и не потерять последнее значение |
-| 15 | `Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items` | Queue flush не должен зависеть от того, перечисляет ли пользовательский `IDataSender` переданный `IEnumerable` |
-| 16 | `Stop_during_slow_data_sends_completes_without_parallel_flush` | `Stop()` не должен запускать flush параллельно обычному data processing loop, когда sender медленный |
-| 17 | `Concurrent_start_calls_initialize_collector_once` | Массовые параллельные `Start()` не должны повторно инициализировать sensor commands |
-| 18 | `Blocked_function_timer_callback_does_not_block_collector_stop` | Зависший пользовательский function callback не должен блокировать `Collector.Stop()` |
-| 19 | `Lifecycle_event_handler_exception_does_not_escape_collector_stop` | Исключение из пользовательского lifecycle event handler не должно вылетать наружу из `Collector.Stop()` |
-| 20 | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Исключение из пользовательского `IDataSender.Dispose()` не должно вылетать наружу из `DataCollector.Dispose()` |
-| 21 | `Start_after_dispose_does_not_resurrect_collector` | `Start()` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
-| 22 | `Initialize_after_dispose_does_not_resurrect_collector` | Legacy `Initialize(false)` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
+| 7 | `Stop_with_uncancellable_data_sender_and_backlog_does_not_hang` | Пользовательский `IDataSender` зависает на первом пакете, а в очереди остается backlog; stop-flush не должен зависнуть вторым send path |
+| 8 | `Permanent_command_sender_failures_do_not_block_dispose` | Постоянные исключения при регистрации сенсоров |
+| 9 | `Creating_sensors_after_initialize_under_command_failures_does_not_hang` | Массовое создание сенсоров после старта, когда command sender падает |
+| 10 | `Concurrent_add_value_during_dispose_does_not_throw_to_callers` | Одновременные `AddValue()` и `Dispose()` |
+| 11 | `Queue_overflow_under_flood_keeps_collector_responsive` | Очень маленькая очередь и сильный поток значений |
+| 12 | `Repeated_start_stop_cycles_do_not_leave_sender_active` | Несколько циклов `Start()` / `Stop()` подряд |
+| 13 | `Values_added_while_stopped_are_not_sent_after_restart` | Значения, добавленные после `Stop()`, не должны копиться в очередях и уезжать после следующего `Start()` |
+| 14 | `Last_value_sensor_flushes_latest_value_on_stop` | `LastValueSensor` должен отправить последнее значение при `Stop()` без ожидания полного `PackageCollectPeriod` |
+| 15 | `Last_value_sensor_flushes_latest_value_on_dispose` | `Dispose()` активного collector-а должен выполнить bounded shutdown/flush и не потерять последнее значение |
+| 16 | `Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items` | Queue flush не должен зависеть от того, перечисляет ли пользовательский `IDataSender` переданный `IEnumerable` |
+| 17 | `Stop_during_slow_data_sends_completes_without_parallel_flush` | `Stop()` не должен запускать flush параллельно обычному data processing loop, когда sender медленный |
+| 18 | `Concurrent_start_calls_initialize_collector_once` | Массовые параллельные `Start()` не должны повторно инициализировать sensor commands |
+| 19 | `Blocked_function_timer_callback_does_not_block_collector_stop` | Зависший пользовательский function callback не должен блокировать `Collector.Stop()` |
+| 20 | `Lifecycle_event_handler_exception_does_not_escape_collector_stop` | Исключение из пользовательского lifecycle event handler не должно вылетать наружу из `Collector.Stop()` |
+| 21 | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Исключение из пользовательского `IDataSender.Dispose()` не должно вылетать наружу из `DataCollector.Dispose()` |
+| 22 | `Start_after_dispose_does_not_resurrect_collector` | `Start()` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
+| 23 | `Initialize_after_dispose_does_not_resurrect_collector` | Legacy `Initialize(false)` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
 
 ## Что эти тесты уже нашли
 
@@ -68,6 +69,7 @@
 | `Stop()` мог пересекать bounded flush с обычным processing loop | медленный sender позволял двум data send paths работать одновременно во время остановки | data/priority processing loops сначала останавливаются без очистки очереди, затем выполняется bounded flush и cleanup |
 | Параллельные `Start()` не были атомарны | несколько callers могли пройти проверку `Stopped` до перехода в `Starting` | lifecycle transition защищен lock-ом, а `DataProcessor.Start()` стал идемпотентным |
 | `Stop()` мог зависнуть на sender-е, который игнорирует cancellation | пользовательский `IDataSender` вошел в `SendDataAsync` и не реагировал на отмену; `Collector.Stop()` не завершался за 2 секунды | ожидание остановки queue worker-а ограничено `RequestTimeout`; новый worker не стартует поверх старого зависшего |
+| Stop-flush мог снова зависнуть после timeout остановки worker-а | первый send завис и игнорировал cancellation, а backlog остался в очереди; после timeout `Stop()` входил в flush и зависал на втором send path | queue stop возвращает признак реальной остановки worker-а; flush выполняется только если worker действительно остановлен |
 
 ## Длинный локальный прогон
 
@@ -108,7 +110,7 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 Ожидаемый результат:
 
 ```text
-Passed: 22
+Passed: 23
 Failed: 0
 Skipped: 1
 ```
@@ -148,6 +150,7 @@ Write-Host "Failures: $failures"
 - один queued value вызывает повторные отправки одного и того же package из-за ленивого sender enumeration;
 - `Stop()` запускает flush параллельно обычной отправке data queue;
 - `Stop()` зависает на пользовательском `IDataSender`, который игнорирует `CancellationToken`;
+- `Stop()` после timeout остановки worker-а снова зависает на flush backlog-а;
 - параллельные `Start()` повторно инициализируют collector или command packages;
 - `Start()` или `Initialize()` переводят disposed collector обратно в `Running`;
 - исключения вылетают наружу из параллельных `AddValue()`.

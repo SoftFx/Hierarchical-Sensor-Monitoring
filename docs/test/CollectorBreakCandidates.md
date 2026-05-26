@@ -20,6 +20,7 @@
 | Fixed, persistent regression | `Stop_during_slow_data_sends_completes_without_parallel_flush` | Медленный `IDataSender` во время `Stop()` | Flush мог конкурировать с обычным data processing loop за sender и очередь | Остановка должна иметь один контролируемый send path и bounded cleanup |
 | Fixed, persistent regression | `Concurrent_start_calls_initialize_collector_once` | 50 параллельных `Start()` на одном collector-е | Lifecycle transition `Stopped -> Starting` не был атомарно защищен | Повторный старт не должен плодить initialization/queue activity |
 | Fixed, persistent regression | `Stop_with_data_sender_that_ignores_cancellation_does_not_hang` | Пользовательский `IDataSender` зависает в `SendDataAsync` и игнорирует `CancellationToken` | `Collector.Stop()` не завершался за `2 sec`, пока sender не был вручную отпущен | Внешняя реализация sender-а не должна навсегда подвешивать сервис при остановке collector-а |
+| Fixed, persistent regression | `Stop_with_uncancellable_data_sender_and_backlog_does_not_hang` | Первый data send зависает и игнорирует cancellation, в очереди остается backlog | После timeout остановки worker-а `Collector.Stop()` входил в flush и снова зависал за `2 sec` | Даже при backlog-е stop path не должен создавать второй зависший send path |
 
 Текущий persistent test находится в `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs`.
 
@@ -62,3 +63,22 @@
 - ожидание остановки queue worker-а ограничено `CollectorOptions.RequestTimeout`;
 - при timeout очередь может быть очищена, но зависший worker не считается остановленным;
 - повторный `Start()` не запускает второй worker поверх старого зависшего worker-а.
+
+## Детали кандидата с uncancellable sender backlog
+
+Сценарий:
+
+1. Создать collector с `MaxValuesInPackage=50` и `RequestTimeout=100 ms`.
+2. Подставить `IDataSender`, который зависает в первом `SendDataAsync` и игнорирует cancellation.
+3. Отправить `100` values, чтобы первый пакет ушел в зависший sender, а часть данных осталась backlog-ом в очереди.
+4. Вызвать `collector.Stop()` и ожидать максимум `2 sec`.
+
+Ожидаемое production-safe поведение: после timeout остановки worker-а collector не должен входить в flush через тот же проблемный sender.
+
+Поведение до фикса: worker stop timeout срабатывал, но затем `DataProcessor.StopAsync()` вызывал `FlushAsync()`, который снова заходил в `SendDataAsync` и подвешивал `Stop()`.
+
+Фикс:
+
+- `QueueProcessorBase.StopAsync()` возвращает `bool`: действительно ли worker остановился;
+- `DataProcessor.StopAsync()` выполняет bounded flush только для очередей, worker которых реально остановлен;
+- если worker не остановился, backlog очищается в cleanup path, но не отправляется через уже зависший sender.
