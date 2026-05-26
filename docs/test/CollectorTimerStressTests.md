@@ -8,6 +8,8 @@
 
 `src/collector/HSMDataCollector.Tests/CollectorTimerStressTests.cs`
 
+Timer stress suite помечен xUnit collection `Collector CPU-sensitive tests` с `DisableParallelization = true`, потому что CPU-budget считается через `Process.TotalProcessorTime`. В полном test run это защищает тест от чужой параллельной нагрузки из соседних test classes.
+
 ## Что проверяется
 
 | Сценарий | Тест | Что ломаем | Критерии успеха |

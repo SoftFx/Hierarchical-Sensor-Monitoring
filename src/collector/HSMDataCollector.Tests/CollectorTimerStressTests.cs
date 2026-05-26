@@ -17,6 +17,13 @@ using Xunit.Abstractions;
 
 namespace HSMDataCollector.Tests
 {
+    [CollectionDefinition(CollectionName, DisableParallelization = true)]
+    public sealed class CollectorCpuSensitiveCollectionDefinition
+    {
+        public const string CollectionName = "Collector CPU-sensitive tests";
+    }
+
+    [Collection(CollectorCpuSensitiveCollectionDefinition.CollectionName)]
     public sealed class CollectorTimerStressTests
     {
         private readonly ITestOutputHelper _output;
