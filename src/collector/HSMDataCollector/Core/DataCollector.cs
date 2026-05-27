@@ -242,6 +242,8 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
+            var shouldStopProcessor = false;
+
             try
             {
                 lock (_lifecycleLock)
@@ -252,8 +254,14 @@ namespace HSMDataCollector.Core
                     _disposed = true;
 
                     if (!Status.IsStopped())
+                    {
+                        shouldStopProcessor = true;
                         ChangeStatus(CollectorStatus.Stopping);
+                    }
                 }
+
+                if (shouldStopProcessor)
+                    DisposeComponent(() => _dataProcessor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
 
                 DisposeComponent(_dataProcessor.Dispose, nameof(_dataProcessor));
 

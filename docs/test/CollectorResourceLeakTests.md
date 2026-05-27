@@ -2,7 +2,9 @@
 
 Дата прогона: 2026-05-26.
 
-Коротко: добавлены ресурсные adversarial-тесты, которые гоняют `HSMDataCollector` против локального flaky HTTP-сервера и после каждого цикла проверяют, что не остаются активные TCP-соединения, не растут без ограничения handles, threads, managed memory после GC, private bytes и working set.
+Коротко: добавлены focused ресурсные adversarial-тесты, которые гоняют `HSMDataCollector` против локального flaky HTTP-сервера и после каждого цикла проверяют, что не остаются активные TCP-соединения, не растут без ограничения handles, threads, managed memory после GC, private bytes и working set.
+
+Важно: это не единственная resource leak проверка и не замена suite-level gate. Каждый gated suite сам снимает ресурсы до/после своего прогона; этот файл нужен как отдельная focused HTTP/resource нагрузка.
 
 Подробный код тестов:
 
@@ -230,15 +232,35 @@ Duration: 4 s
 
 Если нужен максимально жесткий soak, стоит запускать long resource leak stress на 30-100 циклов и сохранять detailed output в CI artifact.
 
-## Suite-level leak check
+## Focused repeat
 
-Помимо отдельного resource leak suite, общий 30-секундный suite soak теперь проверяет ресурсы вокруг каждого обычного suite. Подробный общий отчет: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md).
+Тест:
 
-Последний `Resource_leak_suite_repeated_for_duration_stays_bounded`:
+`Focused_resource_leak_load_repeated_for_duration_stays_bounded`
+
+Это focused повторялка resource-load сценария. Она не считается обычным suite: обычные suite сами делают resource snapshot вокруг своих сценариев.
+
+Запуск:
+
+```powershell
+$env:HSM_COLLECTOR_RUN_RESOURCE_LEAK_SOAK='1'
+$env:HSM_COLLECTOR_SUITE_SOAK_SECONDS='30'
+$env:HSM_COLLECTOR_SUITE_SOAK_MAX_SECONDS='120'
+dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~Focused_resource_leak_load_repeated_for_duration_stays_bounded" --logger "console;verbosity=detailed"
+Remove-Item Env:\HSM_COLLECTOR_RUN_RESOURCE_LEAK_SOAK
+Remove-Item Env:\HSM_COLLECTOR_SUITE_SOAK_SECONDS
+Remove-Item Env:\HSM_COLLECTOR_SUITE_SOAK_MAX_SECONDS
+```
+
+Пример последнего 30-секундного запуска:
 
 ```text
-resourceLeakSuiteSoakResources; handles=1068->1016; threads=63->52; managedGc=5119800->5823000; private=73334784->73433088; workingSet=100524032->100904960; tcpEstablished=0->0; tcpTimeWait=0->0; tcpTotal=0->0
-resourceLeakSuiteSoak; durationSeconds=30; maxSeconds=120; elapsedSeconds=32.5019163; suiteCycles=8; resourceCycles=40; addValues=192000; requests=1120; commands=53; data=1067; aborts=120; failures=200; slow=160; bytes=19045314
+focusedResourceLeakLoadResources; handles=1068->1016; threads=63->52; managedGc=5119800->5823000; private=73334784->73433088; workingSet=100524032->100904960; tcpEstablished=0->0; tcpTimeWait=0->0; tcpTotal=0->0
+focusedResourceLeakLoad; durationSeconds=30; maxSeconds=120; elapsedSeconds=32.5019163; loadCycles=8; resourceCycles=40; addValues=192000; requests=1120; commands=53; data=1067; aborts=120; failures=200; slow=160; bytes=19045314
 ```
 
 `commands` здесь означает command/registration requests, а не отдельный login endpoint.
+
+## Suite-level leak check
+
+Общий 30-секундный suite soak проверяет ресурсы вокруг каждого обычного suite. Подробный общий отчет: [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md).

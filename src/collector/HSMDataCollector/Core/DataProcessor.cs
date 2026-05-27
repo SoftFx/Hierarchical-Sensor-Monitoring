@@ -75,13 +75,16 @@ namespace HSMDataCollector.Core
             await SensorStorage.StopAsync().ConfigureAwait(false);
             Volatile.Write(ref _isStarted, 0);
 
-            await _dataQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
-            await _priorityQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
+            var dataQueueStopped = await _dataQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
+            var priorityQueueStopped = await _priorityQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
 
             using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
             {
-                await _priorityQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
-                await _dataQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+                if (priorityQueueStopped)
+                    await _priorityQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+
+                if (dataQueueStopped)
+                    await _dataQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
             }
 
             await _dataQueue.StopAsync().ConfigureAwait(false);

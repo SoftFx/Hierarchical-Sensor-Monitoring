@@ -11,6 +11,7 @@ using HSMDataCollector.Sensors;
 using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
+using System.Threading;
 
 
 namespace HSMDataCollector.Core
@@ -22,6 +23,7 @@ namespace HSMDataCollector.Core
         private readonly DataProcessor _dataProcessor;
 
         private readonly PrototypesCollection _prototypes;
+        private int _sensorCount;
 
         public IWindowsCollection Windows { get; }
 
@@ -139,21 +141,18 @@ namespace HSMDataCollector.Core
 
             if (_dataProcessor.IsStarted)
             {
-                _ = AddAndStart(sensor).ContinueWith(t =>
-                {
-                    if (t.IsFaulted)
-                        Logger.Error($"Sensor start failed for {sensor.SensorPath}: {t.Exception?.InnerException}");
-                }, TaskContinuationOptions.OnlyOnFaulted);
-                return sensor;
+                var addedSensor = AddSensor(sensor);
+                _ = InitAndStart(addedSensor);
+                return addedSensor;
             }
             else
                 return AddSensor(sensor);
         }
 
 
-        private async Task<ISensor> AddAndStart(ISensor sensor)
+        private async Task<ISensor> InitAndStart(ISensor sensor)
         {
-            if (!await AddSensor(sensor).InitAsync().ConfigureAwait(false))
+            if (!await sensor.InitAsync().ConfigureAwait(false))
                 Logger.Error($"Failed to init {sensor.SensorPath}");
             else if (!await sensor.StartAsync().ConfigureAwait(false))
                 Logger.Error($"Failed to start {sensor.SensorPath}");
@@ -167,6 +166,16 @@ namespace HSMDataCollector.Core
 
             if (TryAdd(path, sensor))
             {
+                var count = Interlocked.Increment(ref _sensorCount);
+                if (count > _options.MaxSensors)
+                {
+                    if (TryRemove(path, out _))
+                        Interlocked.Decrement(ref _sensorCount);
+
+                    sensor.Dispose();
+                    throw new InvalidOperationException($"Maximum sensor count {_options.MaxSensors} has been reached.");
+                }
+
                 Logger.Info($"New sensor has been added {path}");
 
                 return sensor;

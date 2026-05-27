@@ -28,6 +28,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected readonly ICollectorLogger _logger;
         protected readonly DataProcessor _queueManager;
 
+        private int _stopTimedOut;
         public abstract string QueueName { get; }
 
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
@@ -46,11 +47,22 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         internal void Start()
         {
+            if (_task != null)
+            {
+                if (_task.IsCompleted)
+                    CompleteStoppedTask(_task, _cancellationTokenSource, clearQueue: false);
+                else
+                {
+                    _logger.Error($"{QueueName} queue processor is still stopping and cannot be started again yet.");
+                    return;
+                }
+            }
+
             _cancellationTokenSource = new CancellationTokenSource();
             _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
         }
 
-        internal async ValueTask StopAsync(bool clearQueue = true)
+        internal async ValueTask<bool> StopAsync(bool clearQueue = true)
         {
             try
             {
@@ -59,31 +71,49 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     if (clearQueue)
                         ClearQueue();
 
-                    return;
+                    return true;
                 }
 
-                _cancellationTokenSource?.Cancel();
+                var taskToWait = _task;
+                var tokenSourceToDispose = _cancellationTokenSource;
 
                 try
                 {
-                    await _task.ConfigureAwait(false);
+                    tokenSourceToDispose?.Cancel();
+
+                    if (!taskToWait.IsCompleted)
+                    {
+                        var completedTask = await Task.WhenAny(taskToWait, Task.Delay(_options.RequestTimeout)).ConfigureAwait(false);
+
+                        if (completedTask != taskToWait)
+                        {
+                            if (Interlocked.Exchange(ref _stopTimedOut, 1) == 0)
+                                _logger.Error($"{QueueName} queue processor did not stop within {_options.RequestTimeout}. IDataSender may ignore cancellation.");
+
+                            if (clearQueue)
+                                ClearQueue();
+
+                            return false;
+                        }
+                    }
+
+                    await taskToWait.ConfigureAwait(false);
+                    return true;
                 }
                 finally
                 {
-                    _task.Dispose();
-                    _task = null;
-
-                    _cancellationTokenSource?.Dispose();
-                    _cancellationTokenSource = null;
-
-                    if (clearQueue)
-                        ClearQueue();
+                    if (taskToWait.IsCompleted)
+                        CompleteStoppedTask(taskToWait, tokenSourceToDispose, clearQueue);
                 }
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException)
+            {
+                return true;
+            }
             catch (Exception ex)
             {
                 _logger.Error(ex);
+                return true;
             }
         }
 
@@ -156,6 +186,25 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             Interlocked.Decrement(ref _itemCount);
             return true;
+        }
+
+        private void CompleteStoppedTask(Task task, CancellationTokenSource tokenSource, bool clearQueue)
+        {
+            if (!ReferenceEquals(_task, task))
+                return;
+
+            task.Dispose();
+            _task = null;
+
+            tokenSource?.Dispose();
+
+            if (ReferenceEquals(_cancellationTokenSource, tokenSource))
+                _cancellationTokenSource = null;
+
+            if (clearQueue)
+                ClearQueue();
+
+            Interlocked.Exchange(ref _stopTimedOut, 0);
         }
 
         private bool TryDequeueCore(out QueueItem<T> item) => Reader.TryRead(out item);

@@ -130,6 +130,74 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task Stop_with_data_sender_that_ignores_cancellation_does_not_hang()
+        {
+            var sender = new ProbeDataSender { BlockDataIgnoringCancellation = true };
+            var collector = CreateCollector(sender, requestTimeout: TimeSpan.FromMilliseconds(100));
+            Task stopTask = null;
+
+            try
+            {
+                var sensor = collector.CreateDoubleSensor("adversarial/uncancellable-data-sender/data");
+
+                await collector.Start().ConfigureAwait(false);
+                sensor.AddValue(1);
+
+                Assert.True(await sender.WaitForDataPackagesAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false));
+
+                stopTask = collector.Stop();
+                var completed = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+
+                Assert.True(completed == stopTask, "Collector.Stop() should not hang forever when IDataSender ignores cancellation.");
+                await stopTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                sender.ReleaseBlockedData();
+
+                if (stopTask != null)
+                    await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
+
+                collector.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task Stop_with_uncancellable_data_sender_and_backlog_does_not_hang()
+        {
+            var sender = new ProbeDataSender { BlockDataIgnoringCancellation = true };
+            var collector = CreateCollector(sender, requestTimeout: TimeSpan.FromMilliseconds(100));
+            Task stopTask = null;
+
+            try
+            {
+                var sensor = collector.CreateDoubleSensor("adversarial/uncancellable-data-sender-backlog/data");
+
+                await collector.Start().ConfigureAwait(false);
+
+                for (var i = 0; i < 100; i++)
+                    sensor.AddValue(i);
+
+                Assert.True(await sender.WaitForDataPackagesAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false));
+
+                stopTask = collector.Stop();
+                var completed = await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+
+                Assert.True(completed == stopTask, "Collector.Stop() should not hang on flush when IDataSender ignores cancellation and backlog remains.");
+                await stopTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                sender.ReleaseBlockedData();
+
+                if (stopTask != null)
+                    await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
+
+                collector.Dispose();
+            }
+        }
+
+        [Fact]
         public async Task Permanent_command_sender_failures_do_not_block_dispose()
         {
             var sender = new ProbeDataSender { ThrowOnCommand = true };
@@ -299,6 +367,23 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task Last_value_sensor_flushes_latest_value_on_dispose()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+
+            var sensor = collector.CreateLastValueDoubleSensor("adversarial/last-value-dispose/data", 0);
+
+            await collector.Start().ConfigureAwait(false);
+            sensor.AddValue(42);
+
+            collector.Dispose();
+
+            Assert.True(await sender.WaitForDataPackagesAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                "Last-value sensor should flush the latest value when the collector is disposed.");
+        }
+
+        [Fact]
         public async Task Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items()
         {
             var sender = new ProbeDataSender();
@@ -371,6 +456,51 @@ namespace HSMDataCollector.Tests
                 await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
 
                 Assert.Equal(1, sender.CommandPackages);
+            }
+        }
+
+        [Fact]
+        public void Sensor_count_limit_rejects_excess_bar_sensors_before_start()
+        {
+            using (var collector = CreateCollector(new ProbeDataSender(), maxSensors: 3))
+            {
+                for (var i = 0; i < 3; i++)
+                {
+                    collector.CreateDoubleBarSensor(
+                        "adversarial/sensor-limit/bar/" + i,
+                        new BarSensorOptions
+                        {
+                            BarPeriod = TimeSpan.FromMinutes(1),
+                            PostDataPeriod = TimeSpan.FromSeconds(1)
+                        });
+                }
+
+                var exception = Assert.Throws<InvalidOperationException>(() =>
+                    collector.CreateDoubleBarSensor(
+                        "adversarial/sensor-limit/bar/overflow",
+                        new BarSensorOptions
+                        {
+                            BarPeriod = TimeSpan.FromMinutes(1),
+                            PostDataPeriod = TimeSpan.FromSeconds(1)
+                        }));
+
+                Assert.Contains("Maximum sensor count", exception.Message);
+            }
+        }
+
+        [Fact]
+        public async Task Sensor_count_limit_is_enforced_after_collector_start()
+        {
+            using (var collector = CreateCollector(new ProbeDataSender(), maxSensors: 1))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                collector.CreateDoubleSensor("adversarial/sensor-limit/running/0");
+
+                var exception = Assert.Throws<InvalidOperationException>(() =>
+                    collector.CreateDoubleSensor("adversarial/sensor-limit/running/overflow"));
+
+                Assert.Contains("Maximum sensor count", exception.Message);
             }
         }
 
@@ -527,6 +657,18 @@ namespace HSMDataCollector.Tests
                 sensorCreateCalls++;
                 dataFailureBursts++;
 
+                await Stop_with_data_sender_that_ignores_cancellation_does_not_hang().ConfigureAwait(false);
+                scenarioRuns++;
+                addValueCalls++;
+                sensorCreateCalls++;
+                dataFailureBursts++;
+
+                await Stop_with_uncancellable_data_sender_and_backlog_does_not_hang().ConfigureAwait(false);
+                scenarioRuns++;
+                addValueCalls += 100;
+                sensorCreateCalls++;
+                dataFailureBursts++;
+
                 await Permanent_command_sender_failures_do_not_block_dispose().ConfigureAwait(false);
                 scenarioRuns++;
                 sensorCreateCalls += 100;
@@ -562,6 +704,11 @@ namespace HSMDataCollector.Tests
                 addValueCalls++;
                 sensorCreateCalls++;
 
+                await Last_value_sensor_flushes_latest_value_on_dispose().ConfigureAwait(false);
+                scenarioRuns++;
+                addValueCalls++;
+                sensorCreateCalls++;
+
                 await Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items().ConfigureAwait(false);
                 scenarioRuns++;
                 addValueCalls++;
@@ -575,6 +722,14 @@ namespace HSMDataCollector.Tests
                 await Concurrent_start_calls_initialize_collector_once().ConfigureAwait(false);
                 scenarioRuns++;
                 sensorCreateCalls++;
+
+                Sensor_count_limit_rejects_excess_bar_sensors_before_start();
+                scenarioRuns++;
+                sensorCreateCalls += 4;
+
+                await Sensor_count_limit_is_enforced_after_collector_start().ConfigureAwait(false);
+                scenarioRuns++;
+                sensorCreateCalls += 2;
 
                 await Start_after_dispose_does_not_resurrect_collector().ConfigureAwait(false);
                 scenarioRuns++;
@@ -592,7 +747,7 @@ namespace HSMDataCollector.Tests
             SuiteSoakResourceSnapshot.AssertNoCriticalGrowth(before, after);
 
             Assert.True(cycles > 0, "The adversarial suite soak should complete at least one suite cycle.");
-            Assert.True(scenarioRuns >= 17, "The adversarial suite soak should execute the full scenario list at least once.");
+            Assert.True(scenarioRuns >= 22, "The adversarial suite soak should execute the full scenario list at least once.");
 
             _output.WriteLine(
                 "adversarialSuiteSoak; durationSeconds={0}; maxSeconds={1}; elapsedSeconds={2}; cycles={3}; scenarioRuns={4}; addValues={5}; sensorCreates={6}; dataFailureBursts={7}; commandFailureBursts={8}",
@@ -607,7 +762,7 @@ namespace HSMDataCollector.Tests
                 commandFailureBursts);
         }
 
-        private static DataCollector CreateCollector(ProbeDataSender sender, int maxQueueSize = 1000)
+        private static DataCollector CreateCollector(ProbeDataSender sender, int maxQueueSize = 1000, TimeSpan? requestTimeout = null, int maxSensors = 100000)
         {
             return new DataCollector(new CollectorOptions
             {
@@ -619,9 +774,10 @@ namespace HSMDataCollector.Tests
                 MaxQueueSize = maxQueueSize,
                 MaxValuesInPackage = 50,
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(50),
-                RequestTimeout = TimeSpan.FromSeconds(1),
+                RequestTimeout = requestTimeout ?? TimeSpan.FromSeconds(1),
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
-                MaxDeduplicatedMessages = 100
+                MaxDeduplicatedMessages = 100,
+                MaxSensors = maxSensors
             });
         }
 
@@ -669,8 +825,11 @@ namespace HSMDataCollector.Tests
             private int _commandPackages;
             private int _currentDataSends;
             private int _maxConcurrentDataSends;
+            private readonly ManualResetEventSlim _blockedDataRelease = new ManualResetEventSlim(false);
 
             public bool BlockDataUntilCanceled { get; set; }
+
+            public bool BlockDataIgnoringCancellation { get; set; }
 
             public bool ThrowOnData { get; set; }
 
@@ -709,6 +868,9 @@ namespace HSMDataCollector.Tests
 
                     if (BlockDataUntilCanceled)
                         await WaitUntilCanceledAsync(token).ConfigureAwait(false);
+
+                    if (BlockDataIgnoringCancellation)
+                        await Task.Run(() => _blockedDataRelease.Wait()).ConfigureAwait(false);
 
                     if (DataSendDelay > TimeSpan.Zero)
                         await Task.Delay(DataSendDelay, token).ConfigureAwait(false);
@@ -754,6 +916,11 @@ namespace HSMDataCollector.Tests
             public async Task<bool> WaitForCommandPackagesAsync(int count, TimeSpan timeout)
             {
                 return await WaitForPackagesAsync(() => CommandPackages >= count, _commandPackageReceived.Task, timeout).ConfigureAwait(false);
+            }
+
+            public void ReleaseBlockedData()
+            {
+                _blockedDataRelease.Set();
             }
 
             private static async Task<bool> WaitForPackagesAsync(Func<bool> condition, Task signal, TimeSpan timeout)

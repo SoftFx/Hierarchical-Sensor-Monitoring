@@ -15,9 +15,13 @@
 | Fixed, persistent regression | `Initialize_after_dispose_does_not_resurrect_collector` | После `Dispose()` вызывается legacy `Initialize(false)` | Disposed collector переходил обратно в `Running` через старый API | Legacy initialize после dispose должен быть no-op |
 | Fixed, persistent regression | `Values_added_while_stopped_are_not_sent_after_restart` | После `Stop()` пользователь продолжает писать в sensor, потом вызывает `Start()` | Stopped collector копил значения и отправлял stale payload после restart | Значения и хвосты очередей не должны переживать `Stop()` |
 | Fixed, persistent regression | `Last_value_sensor_flushes_latest_value_on_stop` | `LastValueSensor` получил значение, затем collector остановили | Последнее значение не отправлялось на `Stop()` | Финальное значение должно уходить до остановки очередей; flush должен быть bounded |
+| Fixed, persistent regression | `Last_value_sensor_flushes_latest_value_on_dispose` | `LastValueSensor` получил значение, затем активный collector освобождается через `Dispose()` | Последнее значение не отправлялось на `Dispose()` | Многие приложения закрывают collector через `Dispose()`; cleanup не должен терять финальное состояние |
 | Fixed, persistent regression | `Stop_flush_does_not_resend_same_value_when_sender_does_not_enumerate_items` | Пользовательский `IDataSender` не перечисляет `IEnumerable` items, переданный из очереди | Один queued value на `Stop()` вызвал 3 852 549 повторных `SendDataAsync` за 1 секунду | Очередь не должна зависеть от реализации sender-а; иначе возможен CPU spike и повторная отправка одного payload |
 | Fixed, persistent regression | `Stop_during_slow_data_sends_completes_without_parallel_flush` | Медленный `IDataSender` во время `Stop()` | Flush мог конкурировать с обычным data processing loop за sender и очередь | Остановка должна иметь один контролируемый send path и bounded cleanup |
 | Fixed, persistent regression | `Concurrent_start_calls_initialize_collector_once` | 50 параллельных `Start()` на одном collector-е | Lifecycle transition `Stopped -> Starting` не был атомарно защищен | Повторный старт не должен плодить initialization/queue activity |
+| Fixed, persistent regression | `Stop_with_data_sender_that_ignores_cancellation_does_not_hang` | Пользовательский `IDataSender` зависает в `SendDataAsync` и игнорирует `CancellationToken` | `Collector.Stop()` не завершался за `2 sec`, пока sender не был вручную отпущен | Внешняя реализация sender-а не должна навсегда подвешивать сервис при остановке collector-а |
+| Fixed, persistent regression | `Stop_with_uncancellable_data_sender_and_backlog_does_not_hang` | Первый data send зависает и игнорирует cancellation, в очереди остается backlog | После timeout остановки worker-а `Collector.Stop()` входил в flush и снова зависал за `2 sec` | Даже при backlog-е stop path не должен создавать второй зависший send path |
+| Fixed, persistent regression | `Sensor_count_limit_rejects_excess_bar_sensors_before_start` / `Sensor_count_limit_is_enforced_after_collector_start` | Очень большое количество уникальных sensor path-ов, особенно bar/function/rate sensors | До фикса upper bound отсутствовал: storage рос до исчерпания памяти, а monitoring sensors могли плодить scheduled tasks | Библиотека должна иметь явный configurable cap, чтобы misuse не превращался в OOM/CPU storm |
 
 Текущий persistent test находится в `src/collector/HSMDataCollector.Tests/CollectorAdversarialTests.cs`.
 
@@ -40,3 +44,62 @@
 - `Stop/Dispose` scheduled task снимает задачу с расписания, но не ждет зависший текущий callback;
 - `RestartTimer` продолжает ждать текущий callback, чтобы сохранить защиту от callback overlap;
 - тест включен в обычный persistent-прогон.
+
+## Детали кандидата с sender cancellation
+
+Сценарий:
+
+1. Создать collector с `RequestTimeout=100 ms`.
+2. Подставить тестовый `IDataSender`, который входит в `SendDataAsync`, фиксирует прием пакета и затем ждет внешний сигнал, полностью игнорируя `CancellationToken`.
+3. Запустить collector и отправить одно значение.
+4. Убедиться, что sender реально вошел в отправку.
+5. Вызвать `collector.Stop()` и ожидать максимум `2 sec`.
+
+Ожидаемое production-safe поведение: `Stop()` должен завершиться в bounded-время, даже если кастомный sender некорректно игнорирует cancellation.
+
+Поведение до фикса: queue processor отменял token и затем бесконечно ждал свою worker-задачу.
+
+Фикс:
+
+- ожидание остановки queue worker-а ограничено `CollectorOptions.RequestTimeout`;
+- при timeout очередь может быть очищена, но зависший worker не считается остановленным;
+- повторный `Start()` не запускает второй worker поверх старого зависшего worker-а.
+
+## Детали кандидата с uncancellable sender backlog
+
+Сценарий:
+
+1. Создать collector с `MaxValuesInPackage=50` и `RequestTimeout=100 ms`.
+2. Подставить `IDataSender`, который зависает в первом `SendDataAsync` и игнорирует cancellation.
+3. Отправить `100` values, чтобы первый пакет ушел в зависший sender, а часть данных осталась backlog-ом в очереди.
+4. Вызвать `collector.Stop()` и ожидать максимум `2 sec`.
+
+Ожидаемое production-safe поведение: после timeout остановки worker-а collector не должен входить в flush через тот же проблемный sender.
+
+Поведение до фикса: worker stop timeout срабатывал, но затем `DataProcessor.StopAsync()` вызывал `FlushAsync()`, который снова заходил в `SendDataAsync` и подвешивал `Stop()`.
+
+Фикс:
+
+- `QueueProcessorBase.StopAsync()` возвращает `bool`: действительно ли worker остановился;
+- `DataProcessor.StopAsync()` выполняет bounded flush только для очередей, worker которых реально остановлен;
+- если worker не остановился, backlog очищается в cleanup path, но не отправляется через уже зависший sender.
+
+## Детали кандидата с sensor cardinality
+
+Сценарий:
+
+1. Создать collector с маленьким `CollectorOptions.MaxSensors`.
+2. Создать допустимое количество уникальных sensor path-ов.
+3. Попробовать создать еще один bar sensor до старта collector-а.
+4. Повторить проверку после `Start()`, где sensor registration запускает async init/start path.
+
+Ожидаемое production-safe поведение: превышение лимита должно падать синхронно и быстро через `InvalidOperationException`, без роста очередей, timers и памяти.
+
+Поведение до фикса: жесткого лимита не было, поэтому уникальные sensor path-ы добавлялись в `SensorsStorage` до упора в память процесса; для monitoring/bar/function sensors после start это также означало рост scheduled tasks.
+
+Фикс:
+
+- добавлен `CollectorOptions.MaxSensors`, default `100000`;
+- `SensorsStorage` считает успешно зарегистрированные sensors через `Interlocked`;
+- при превышении лимита новый sensor удаляется из storage, dispose-ится и caller получает `InvalidOperationException`;
+- sensor creation после `Start()` сначала синхронно регистрирует sensor и только затем запускает async init/start, чтобы cap violation не терялся в fire-and-forget task.

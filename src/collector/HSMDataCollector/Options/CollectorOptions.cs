@@ -40,6 +40,8 @@ namespace HSMDataCollector.Core
 
         public int MaxDeduplicatedMessages { get; set; } = 1000;
 
+        public int MaxSensors { get; set; } = 100000;
+
         internal void Validate()
         {
             if (MaxQueueSize <= 0)
@@ -59,6 +61,9 @@ namespace HSMDataCollector.Core
 
             if (MaxDeduplicatedMessages <= 0)
                 throw new ArgumentOutOfRangeException(nameof(MaxDeduplicatedMessages), "Max deduplicated messages must be greater than zero.");
+
+            if (MaxSensors <= 0)
+                throw new ArgumentOutOfRangeException(nameof(MaxSensors), "Max sensors must be greater than zero.");
         }
     }
 }

@@ -4,7 +4,7 @@
 
 Цель: прогнать каждую группу тестов не один раз, а повторять весь suite по кругу в течение заданного времени. На текущий момент default duration - `30` секунд на suite.
 
-Важно: `Resource leak` больше не трактуется как отдельный единственный suite. Каждый обычный suite сам делает ресурсный контроль:
+Важно: `Resource leak` не трактуется как отдельный единственный suite. Каждый обычный suite сам делает ресурсный контроль:
 
 1. снимает baseline ресурсов перед началом suite;
 2. гоняет свои сценарии по кругу до soft target;
@@ -45,10 +45,10 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 ## Итог
 
 ```text
-Total tests: 5
-Passed: 5
+Total tests: 4
+Passed: 4
 Failed: 0
-Total time: 2.6340 minutes
+Total time: ~2 minutes
 ```
 
 ## Результаты по suite
@@ -58,7 +58,6 @@ Total time: 2.6340 minutes
 | Default sensor smoke | `Default_sensor_smoke_suite_repeated_for_duration` | 30 sec | 1922 cycles / 3844 scenario runs | `addValues=0`, `requests=0`, smoke-only | handles `683->680`, threads `30->29`, managed GC `3604480->3999960` | Passed |
 | Adversarial lifecycle | `Adversarial_suite_repeated_for_duration_stays_green` | 30 sec | 16 cycles / 160 scenario runs | `addValues=432176`, `sensorCreates=3312`, `dataFailureBursts=16`, `commandFailureBursts=32` | handles `679->838`, threads `29->57`, managed GC `4043624->34809320` | Passed |
 | Flaky server stress | `Flaky_server_stress_suite_repeated_for_duration_stays_green` | 30 sec | 10 cycles | `addValues=192000`, `requests=825`, `commands=15`, `data=810`, `failures=110`, `aborts=40`, `slow=70`, `bytes=33253204` | handles `840->1068`, threads `57->63`, `tcpEstablished=0`, `tcpTimeWait=3` | Passed |
-| Resource leak load | `Resource_leak_suite_repeated_for_duration_stays_bounded` | 30 sec | 8 suite cycles / 40 resource cycles | `addValues=192000`, `requests=1120`, `commands=53`, `data=1067`, `aborts=120`, `failures=200`, `slow=160`, `bytes=19045314` | handles `1068->1016`, threads `63->52`, `tcpEstablished=0`, `tcpTimeWait=0` | Passed |
 | Transport chaos | `Mixed_transport_chaos_suite_repeated_on_one_server_stays_bounded` | 30 sec | 21 mixed cycles | `addValues=244000`, `accepted=1150`, `requests=1148`, `commands=1125`, `data=19`, `dropped=321`, `hung=171`, `resets=160` | handles `1016->1097`, threads `52->64`, `tcpEstablished=0`, `tcpTimeWait=820` | Passed |
 
 ## Detailed Output Highlights
@@ -79,11 +78,6 @@ flakyStressSuiteSoak; durationSeconds=30; maxSeconds=120; elapsedSeconds=30.5594
 ```
 
 ```text
-resourceLeakSuiteSoakResources; handles=1068->1016; threads=63->52; managedGc=5119800->5823000; private=73334784->73433088; workingSet=100524032->100904960; tcpEstablished=0->0; tcpTimeWait=0->0; tcpTotal=0->0
-resourceLeakSuiteSoak; durationSeconds=30; maxSeconds=120; elapsedSeconds=32.5019163; suiteCycles=8; resourceCycles=40; addValues=192000; requests=1120; commands=53; data=1067; aborts=120; failures=200; slow=160; bytes=19045314
-```
-
-```text
 transportSoakTotals; durationSeconds=30; maxSeconds=120; elapsedSeconds=32.2717285; cycles=21; addValues=244000; accepted=1150; requests=1148; commands=1125; data=19; ok=164; dropped=321; hung=171; slowReads=164; headerOnly=166; malformed=166; resets=160; bytes=0; tcpEstablished=0; tcpTimeWait=820; handles=1016->1097; threads=52->64; managedGc=5549528->6086584; private=73469952->75767808; workingSet=100966400->103202816
 transportSoakTrendAfterWarmup; handles=1097->1107; threads=64->64; managedGc=6059344->6264712; private=74702848->75763712; workingSet=101957632->103198720
 ```
@@ -99,4 +93,5 @@ transportSoakTrendAfterWarmup; handles=1097->1107; threads=64->64; managedGc=605
 
 - `Default sensor smoke` пока не является полноценной проверкой default sensors: тесты выполняются, но assertions внутри них закомментированы.
 - `Transport chaos` intentionally имеет `bytes=0` в mixed soak, потому что многие raw TCP сценарии закрывают/ломают соединение до чтения body. Проверка ценна именно как socket/retry/dispose chaos.
-- `Resource leak load` и `Flaky server stress` лучше показывают объем реально принятых HTTP body bytes.
+- `Focused resource leak load` вынесен в [CollectorResourceLeakTests.md](CollectorResourceLeakTests.md): это отдельный focused HTTP/resource сценарий, а не замена ресурсным проверкам каждого suite.
+- `Flaky server stress` лучше показывает объем реально принятых HTTP body bytes, чем raw transport chaos.
