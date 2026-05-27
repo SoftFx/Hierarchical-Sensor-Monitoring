@@ -75,9 +75,22 @@ Key rules:
 
 `CanAcceptData` returns true during `Starting`, `Running`, and `Stopping` states. This allows sensors to flush pending values during stop. `CanStartNewSensors` returns true only during `Starting` and `Running` (and not when disposed).
 
+Note the asymmetry between `Status` and `CanAcceptData` after `Dispose()`:
+- `Status` reports `Disposed` immediately when `Dispose()` is entered.
+- `CanAcceptData` is computed from the *internal* (pre-dispose) status. While the stop is still in flight it returns true so sensors can flush final values. Once `CompleteStop` fires (`internal _status = Stopped`), `CanAcceptData` returns false.
+- Values enqueued after the sender is disposed are unreachable. The window is small (between `_lifecycle.CompleteStop()` and `_dataSender.Dispose()`); sensors should not call `SendValue` after subscribing to `ToStopped`.
+
+### Lifecycle event ordering
+
+`DataCollector` serializes the `(state-transition, lifecycle-event-raise)` pair under `_opLock` so that subscribers observe events in the same order as the underlying status changes. Subscribers should not block in handlers — `_opLock` is held while handlers run, which can stall concurrent `Start`/`Stop`/`Dispose` calls.
+
+### Dispose racing Stop
+
+If `Dispose()` is called while a `Stop()` is in flight, the disposer captures the in-flight task (`_currentStopTask`) and awaits it instead of issuing a duplicate `StopAsync`. The original `Stop()` is responsible for firing `ToStopped` and calling `CompleteStop`. `_dataSender.Dispose()` is only invoked after the in-flight stop completes, preventing `ObjectDisposedException` in queue processors that are still draining.
+
 ### Queue state machine
 
-Each `QueueProcessorBase` maintains its own `QueueState` (Stopped/Running/Stopping). If `StopAsync` times out (IDataSender ignores cancellation), the queue stays in `Stopping` and blocks subsequent `Start()` until the background task completes.
+Each `QueueProcessorBase` maintains its own `QueueState` (Stopped/Running/Stopping). If `StopAsync` times out (IDataSender ignores cancellation), the queue stays in `Stopping` and blocks subsequent `Start()` until the background task completes. As a defensive measure, `Start()` will reset and restart a queue whose `_task` exited unexpectedly while `_state` is still `Running` — this only fires if a subclass overrides `ProcessingLoop` and breaks the "loop until cancellation" contract.
 
 ## Features
 

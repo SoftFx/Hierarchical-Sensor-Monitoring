@@ -66,7 +66,24 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 }
 
                 if (_state == QueueState.Running)
-                    return true;
+                {
+                    // Defensive: ProcessingLoop should never exit on its own (it loops until cancellation),
+                    // but if a subclass override breaks that contract, recover by treating the queue as stopped.
+                    if (_task == null || _task.IsCompleted)
+                    {
+                        _logger.Error($"{QueueName} queue processor task exited unexpectedly; restarting.");
+                        _task?.Dispose();
+                        _task = null;
+                        _cancellationTokenSource?.Dispose();
+                        _cancellationTokenSource = null;
+                        _state = QueueState.Stopped;
+                        Interlocked.Exchange(ref _cleanupContinuationRegistered, 0);
+                    }
+                    else
+                    {
+                        return true;
+                    }
+                }
 
                 _cancellationTokenSource = new CancellationTokenSource();
                 _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);

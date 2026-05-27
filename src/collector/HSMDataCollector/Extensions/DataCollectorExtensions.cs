@@ -31,15 +31,5 @@ namespace HSMDataCollector.Extensions
         {
             return status == CollectorStatus.Running;
         }
-
-        public static bool IsDisposed(this CollectorStatus status)
-        {
-            return status == CollectorStatus.Disposed;
-        }
-
-        public static bool IsStoppedOrDisposed(this CollectorStatus status)
-        {
-            return status == CollectorStatus.Stopped || status == CollectorStatus.Disposed;
-        }
     }
 }

@@ -965,6 +965,69 @@ namespace HSMDataCollector.Tests
             Assert.Equal(CollectorStatus.Disposed, collector.Status);
         }
 
+        [Fact]
+        public async Task Dispose_concurrent_with_stop_fires_ToStopped_exactly_once()
+        {
+            for (var iteration = 0; iteration < 25; iteration++)
+            {
+                var sender = new ProbeDataSender();
+                var collector = CreateCollector(sender);
+
+                await collector.Start().ConfigureAwait(false);
+
+                var stoppingCount = 0;
+                var stoppedCount = 0;
+                collector.ToStopping += () => Interlocked.Increment(ref stoppingCount);
+                collector.ToStopped += () => Interlocked.Increment(ref stoppedCount);
+
+                // Start the Stop and let it begin draining before Dispose joins
+                var stopTask = collector.Stop();
+                collector.Dispose();
+
+                await stopTask.ConfigureAwait(false);
+
+                Assert.Equal(CollectorStatus.Disposed, collector.Status);
+                Assert.Equal(1, stoppingCount);
+                Assert.Equal(1, stoppedCount);
+            }
+        }
+
+        [Fact]
+        public async Task Concurrent_start_and_stop_keeps_event_order_consistent_with_status()
+        {
+            // Regression test for the event-ordering race: when Start and Stop race, subscribers
+            // must see events in an order consistent with the underlying state machine
+            // (no Stopping before Starting).
+            for (var iteration = 0; iteration < 50; iteration++)
+            {
+                var sender = new ProbeDataSender();
+                using (var collector = CreateCollector(sender))
+                {
+                    var events = new ConcurrentQueue<CollectorStatus>();
+                    collector.ToStarting += () => events.Enqueue(CollectorStatus.Starting);
+                    collector.ToRunning  += () => events.Enqueue(CollectorStatus.Running);
+                    collector.ToStopping += () => events.Enqueue(CollectorStatus.Stopping);
+                    collector.ToStopped  += () => events.Enqueue(CollectorStatus.Stopped);
+
+                    var startTask = Task.Run(() => collector.Start());
+                    var stopTask  = Task.Run(() => collector.Stop());
+
+                    await Task.WhenAll(startTask, stopTask).ConfigureAwait(false);
+
+                    var observed = events.ToArray();
+                    // Stopping must not appear before Starting
+                    var startingIdx = Array.IndexOf(observed, CollectorStatus.Starting);
+                    var stoppingIdx = Array.IndexOf(observed, CollectorStatus.Stopping);
+
+                    if (startingIdx >= 0 && stoppingIdx >= 0)
+                    {
+                        Assert.True(stoppingIdx > startingIdx,
+                            $"Iteration {iteration}: Stopping fired before Starting. Events: [{string.Join(", ", observed)}]");
+                    }
+                }
+            }
+        }
+
         [SuiteSoakFact]
         public async Task Adversarial_suite_repeated_for_duration_stays_green()
         {
