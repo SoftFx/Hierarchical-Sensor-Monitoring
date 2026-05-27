@@ -37,7 +37,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             {
                 if (_statusWatcher == null)
                 {
-                    _statusWatcher = CollectorScheduler.Schedule(CheckServiceStatus, _scanPeriod, _scanPeriod, HandleException);
+                    _statusWatcher = _dataProcessor.Scheduler.Schedule(CheckServiceStatus, _scanPeriod, _scanPeriod, HandleException);
                 }
             }
 

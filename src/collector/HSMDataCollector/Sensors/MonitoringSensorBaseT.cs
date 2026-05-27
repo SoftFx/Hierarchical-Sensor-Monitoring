@@ -118,7 +118,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (_sendTask == null)
                 {
-                    _sendTask = CollectorScheduler.Schedule(SendValueAction, TimerDueTime, PostTimePeriod, HandleException);
+                    _sendTask = _dataProcessor.Scheduler.Schedule(SendValueAction, TimerDueTime, PostTimePeriod, HandleException);
                 }
             }
         }

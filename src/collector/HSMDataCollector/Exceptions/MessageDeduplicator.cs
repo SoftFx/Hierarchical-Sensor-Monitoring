@@ -13,10 +13,25 @@ namespace HSMDataCollector.Exceptions
         private readonly TimeSpan _deduplicationWindow;
         private readonly int _maxMessages;
         private readonly Action<string> _action;
+        private readonly ICollectorScheduler _ownedScheduler;
 
         private readonly ScheduledTask _task;
 
+        /// <summary>
+        /// Compatibility constructor that creates and owns its own scheduler instance.
+        /// Prefer the internal overload that accepts a shared <see cref="ICollectorScheduler"/>.
+        /// </summary>
         public MessageDeduplicator(Action<string> action, TimeSpan window, int maxMessages)
+            : this(action, window, maxMessages, scheduler: null, ownsScheduler: true)
+        {
+        }
+
+        internal MessageDeduplicator(ICollectorScheduler scheduler, Action<string> action, TimeSpan window, int maxMessages)
+            : this(action, window, maxMessages, scheduler ?? throw new ArgumentNullException(nameof(scheduler)), ownsScheduler: false)
+        {
+        }
+
+        private MessageDeduplicator(Action<string> action, TimeSpan window, int maxMessages, ICollectorScheduler scheduler, bool ownsScheduler)
         {
             if (maxMessages <= 0)
                 throw new ArgumentOutOfRangeException(nameof(maxMessages), "Max messages must be greater than zero.");
@@ -26,11 +41,15 @@ namespace HSMDataCollector.Exceptions
             _deduplicationWindow = window;
             _maxMessages = maxMessages;
 
+            if (ownsScheduler)
+                _ownedScheduler = scheduler ?? new CollectorScheduler();
+            var effectiveScheduler = scheduler ?? _ownedScheduler;
+
             if (window != TimeSpan.Zero)
             {
                 var now = DateTime.UtcNow;
 
-                _task = CollectorScheduler.Schedule(Cleanup, now.Ceil(window) - now, window, ex => _action?.Invoke(ex.ToString()));
+                _task = effectiveScheduler.Schedule(Cleanup, now.Ceil(window) - now, window, ex => _action?.Invoke(ex.ToString()));
             }
         }
 
@@ -83,6 +102,7 @@ namespace HSMDataCollector.Exceptions
         public void Dispose()
         {
             _task?.Dispose();
+            _ownedScheduler?.Dispose();
         }
 
         private void Cleanup()

@@ -10,6 +10,7 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.Threading;
 using HSMSensorDataObjects;
 
 
@@ -34,6 +35,7 @@ namespace HSMDataCollector.Core
         private readonly IDataSender _dataSender;
         private readonly DataProcessor _dataProcessor;
         private readonly CollectorLifecycle _lifecycle = new CollectorLifecycle();
+        private readonly ICollectorScheduler _scheduler;
 
         // Serializes lifecycle state transitions with their lifecycle event raise so that
         // concurrent Start/Stop/Dispose cannot reorder events (e.g. ToStopping before ToStarting).
@@ -89,7 +91,9 @@ namespace HSMDataCollector.Core
 
             _dataSender = options.DataSender;
 
-            _dataProcessor = new DataProcessor(options, _lifecycle, _logger);
+            _scheduler = new CollectorScheduler();
+
+            _dataProcessor = new DataProcessor(options, _lifecycle, _scheduler, _logger);
 
             _sensorsStorage = _dataProcessor.SensorStorage;
 
@@ -430,6 +434,8 @@ namespace HSMDataCollector.Core
                 DisposeComponent(_dataProcessor.Dispose, nameof(_dataProcessor));
 
                 DisposeComponent(_dataSender.Dispose, nameof(_dataSender));
+
+                DisposeComponent(_scheduler.Dispose, nameof(_scheduler));
             }
             finally
             {

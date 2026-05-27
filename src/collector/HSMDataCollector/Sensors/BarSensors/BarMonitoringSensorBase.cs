@@ -51,7 +51,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (_collectTask == null)
                 {
-                    _collectTask = CollectorScheduler.Schedule(CollectBar, _collectBarPeriod, _collectBarPeriod, HandleException);
+                    _collectTask = _dataProcessor.Scheduler.Schedule(CollectBar, _collectBarPeriod, _collectBarPeriod, HandleException);
                 }
             }
 

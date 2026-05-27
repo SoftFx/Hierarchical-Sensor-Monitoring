@@ -10,6 +10,7 @@ using HSMDataCollector.Exceptions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMDataCollector.SyncQueue.SpecificQueue;
+using HSMDataCollector.Threading;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 
@@ -31,12 +32,19 @@ namespace HSMDataCollector.Core
 
         internal SensorsStorage SensorStorage { get; }
 
+        /// <summary>
+        /// Per-collector scheduler used by sensors and the message deduplicator. Owned by the
+        /// outer <see cref="DataCollector"/>; disposed there.
+        /// </summary>
+        internal ICollectorScheduler Scheduler { get; }
+
         internal bool CanStartNewSensors => _lifecycle.CanStartNewSensors;
 
-        public DataProcessor(CollectorOptions options, CollectorLifecycle lifecycle, LoggerManager logger)
+        public DataProcessor(CollectorOptions options, CollectorLifecycle lifecycle, ICollectorScheduler scheduler, LoggerManager logger)
         {
             _logger = logger;
             _lifecycle = lifecycle;
+            Scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
             _stopFlushTimeout = TimeSpan.FromTicks(Math.Min(Math.Max(options.RequestTimeout.Ticks, TimeSpan.FromSeconds(1).Ticks),
                                                             TimeSpan.FromSeconds(5).Ticks));
 
@@ -46,7 +54,8 @@ namespace HSMDataCollector.Core
             _priorityQueue = new PriorityDataQueueProcessor(options, this, logger);
             _fileQueue     = new FileQueueProcessor(options, this, logger);
             _commandQueue  = new CommandQueueProcessor(options, this, logger);
-            _messageDeduplicator = new MessageDeduplicator((msg) => { _logger.Error(msg);
+            _messageDeduplicator = new MessageDeduplicator(scheduler,
+                                                           (msg) => { _logger.Error(msg);
                                                                       DefaultSensors?.CollectorErrors?.SendCollectorError(msg);
                                                                     }, options.ExceptionDeduplicatorWindow, options.MaxDeduplicatedMessages);
         }

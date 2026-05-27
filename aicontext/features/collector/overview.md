@@ -28,7 +28,7 @@ DataCollector (public API)
     |       +-- CommandQueueProcessor (server commands)
     |       +-- MessageDeduplicator (error deduplication)
     |
-    +-- CollectorScheduler (static timer wheel)
+    +-- ICollectorScheduler (per-collector instance, bucketed timer wheel)
     |       |
     |       +-- ScheduledTask (per-sensor periodic action)
     |
@@ -94,6 +94,10 @@ If `Stop()` or `Dispose()` races with `Start()` while sensor initialization is a
 
 Each `QueueProcessorBase` maintains its own `QueueState` (Stopped/Running/Stopping). If `StopAsync` times out (IDataSender ignores cancellation), the queue stays in `Stopping` and blocks subsequent `Start()` until the background task completes. As a defensive measure, `Start()` will reset and restart a queue whose `_task` exited unexpectedly while `_state` is still `Running` — this only fires if a subclass overrides `ProcessingLoop` and breaks the "loop until cancellation" contract.
 
+### Scheduler ownership
+
+Each `DataCollector` owns its own `CollectorScheduler` instance (implementing `ICollectorScheduler`). The scheduler is constructed in `DataCollector`'s constructor, threaded through `DataProcessor.Scheduler`, and disposed at the end of `Dispose()` after `_dataProcessor` and `_dataSender`. Sensors and `MessageDeduplicator` schedule periodic work through this injected instance — there is no process-global scheduler. Two collectors in the same process have independent timer wheels and worker tasks.
+
 ## Features
 
 | Feature | Folder | Description |
@@ -108,7 +112,7 @@ Each `QueueProcessorBase` maintains its own `QueueState` (Stopped/Running/Stoppi
 ## Thread Safety Model
 
 - All public sensor methods (`AddValue`, `SendValue`) can be called from any thread
-- `CollectorScheduler` fires callbacks on ThreadPool threads
+- `CollectorScheduler` (per-collector instance) fires callbacks on ThreadPool threads
 - `CollectorLifecycle` uses a single `lock` for atomic state transitions (shared by DataCollector and DataProcessor)
 - `QueueProcessorBase` uses its own `lock` for queue lifecycle (Start/Stop) + `Interlocked` for queue count
 - Shared mutable state uses: `Interlocked` (counters, flags), `Volatile` (reads/writes), `lock` (complex operations)
