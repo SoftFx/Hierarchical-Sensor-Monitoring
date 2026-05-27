@@ -185,6 +185,7 @@ namespace HSMDataCollector.Tests
                 ComputerName = "stress-test-host",
                 Module = "stress-test-module",
                 ServerAddress = "http://127.0.0.1",
+                AllowPlaintextTransport = true,
                 Port = port,
                 MaxQueueSize = maxQueueSize,
                 MaxValuesInPackage = 250,

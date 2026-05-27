@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -10,7 +9,7 @@ using HSMSensorDataObjects;
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
-    internal sealed class CommandQueueProcessor : EventedQueueProcessorBase<CommandRequestBase>
+    internal sealed class CommandQueueProcessor : QueueProcessorBase<CommandRequestBase>
     {
         public override string QueueName => "Command"; 
 
@@ -23,13 +22,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 try
                 {
-                    _event.Wait(token);
-                    _event.Reset();
+                    await WaitToReadAsync(token).ConfigureAwait(false);
 
-                    while (!_queue.IsEmpty && !token.IsCancellationRequested)
+                    while (!IsEmpty && !token.IsCancellationRequested)
                     {
                         package = GetPackage();
-                        var sendingInfo =  await _sender.SendCommandAsync(package.Items.ToList(), token).ConfigureAwait(false);
+                        var sendingInfo =  await _sender.SendCommandAsync(package.Items, token).ConfigureAwait(false);
                         _queueManager.AddPackageSendingInfo(sendingInfo);
                         _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                     }

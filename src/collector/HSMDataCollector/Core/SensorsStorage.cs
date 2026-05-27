@@ -59,6 +59,15 @@ namespace HSMDataCollector.Core
 
         internal Task StopAsync() => Task.WhenAll(Values.Select(async s => await s.StopAsync().ConfigureAwait(false)));
 
+        public new bool TryRemove(string key, out ISensor value)
+        {
+            if (!base.TryRemove(key, out value))
+                return false;
+
+            Interlocked.Decrement(ref _sensorCount);
+            return true;
+        }
+
 
         internal MonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options)
         {
@@ -139,7 +148,7 @@ namespace HSMDataCollector.Core
             if (TryGetValue(path, out var oldSensor))
                 return oldSensor;
 
-            if (_dataProcessor.IsStarted)
+            if (_dataProcessor.CanStartNewSensors)
             {
                 var addedSensor = AddSensor(sensor);
                 _ = InitAndStart(addedSensor);
@@ -169,9 +178,7 @@ namespace HSMDataCollector.Core
                 var count = Interlocked.Increment(ref _sensorCount);
                 if (count > _options.MaxSensors)
                 {
-                    if (TryRemove(path, out _))
-                        Interlocked.Decrement(ref _sensorCount);
-
+                    TryRemove(path, out _);
                     sensor.Dispose();
                     throw new InvalidOperationException($"Maximum sensor count {_options.MaxSensors} has been reached.");
                 }
@@ -179,6 +186,12 @@ namespace HSMDataCollector.Core
                 Logger.Info($"New sensor has been added {path}");
 
                 return sensor;
+            }
+
+            if (TryGetValue(path, out var existingSensor))
+            {
+                sensor.Dispose();
+                return existingSensor;
             }
 
             throw new Exception($"Sensor with path {path} already exists");

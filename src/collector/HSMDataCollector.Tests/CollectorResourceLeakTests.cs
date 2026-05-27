@@ -210,6 +210,7 @@ namespace HSMDataCollector.Tests
                 ComputerName = "resource-leak-test-host",
                 Module = "resource-leak-test-module",
                 ServerAddress = "http://127.0.0.1",
+                AllowPlaintextTransport = true,
                 Port = port,
                 MaxQueueSize = maxQueueSize,
                 MaxValuesInPackage = valuesPerPackage,

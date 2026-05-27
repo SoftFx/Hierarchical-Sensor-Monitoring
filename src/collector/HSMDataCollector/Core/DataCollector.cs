@@ -146,7 +146,9 @@ namespace HSMDataCollector.Core
                     if (!Status.IsStopped())
                         return;
 
-                    _dataProcessor.Start();
+                    if (!_dataProcessor.Start())
+                        return;
+
                     ChangeStatus(CollectorStatus.Starting);
                 }
 
@@ -219,7 +221,9 @@ namespace HSMDataCollector.Core
 
                     _logger.Info("Initialize timer...");
 
-                    _dataProcessor.Start();
+                    if (!_dataProcessor.Start())
+                        return;
+
                     ChangeStatus(CollectorStatus.Starting);
                 }
 

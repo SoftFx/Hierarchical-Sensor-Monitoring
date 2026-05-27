@@ -19,14 +19,19 @@ namespace HSMDataCollector.Extensions
                 if (!process.WaitForExit((int)DefaultTimeout.TotalMilliseconds))
                 {
                     TryKill(process);
+                    ObserveReadTasks(outputTask, errorTask);
                     throw new TimeoutException($"Bash command timed out after {DefaultTimeout.TotalSeconds} seconds: {command}");
                 }
 
-                var error = errorTask.GetAwaiter().GetResult();
+                process.WaitForExit();
+
+                var output = outputTask.GetAwaiter().GetResult();
+                var error  = errorTask.GetAwaiter().GetResult();
+
                 if (process.ExitCode != 0)
                     throw new InvalidOperationException($"Bash command failed with exit code {process.ExitCode}: {error}");
 
-                return outputTask.GetAwaiter().GetResult();
+                return output;
             }
         }
 
@@ -36,6 +41,25 @@ namespace HSMDataCollector.Extensions
             {
                 if (!process.HasExited)
                     process.Kill();
+            }
+            catch
+            {
+            }
+        }
+
+        private static void ObserveReadTasks(params System.Threading.Tasks.Task[] tasks)
+        {
+            foreach (var task in tasks)
+            {
+                task.ContinueWith(t => { var _ = t.Exception; },
+                                  System.Threading.CancellationToken.None,
+                                  System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted | System.Threading.Tasks.TaskContinuationOptions.ExecuteSynchronously,
+                                  System.Threading.Tasks.TaskScheduler.Default);
+            }
+
+            try
+            {
+                System.Threading.Tasks.Task.WaitAll(tasks, TimeSpan.FromSeconds(1));
             }
             catch
             {

@@ -58,7 +58,8 @@ Full boundary на `100000`:
 
 ```powershell
 $env:HSM_COLLECTOR_RUN_CARDINALITY_STRESS="1"
-dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-build --filter "FullyQualifiedName~Default_max_sensors_allows_configured_boundary_and_rejects_next" --logger "console;verbosity=normal"
+$env:HSM_COLLECTOR_CARDINALITY_STRESS_SENSORS="100000"
+dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~Default_max_sensors_allows_configured_boundary_and_rejects_next" --logger "console;verbosity=normal"
 ```
 
 Короткий локальный smoke ночного профиля:
@@ -67,7 +68,7 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 $env:HSM_COLLECTOR_RUN_CARDINALITY_NIGHTLY="1"
 $env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_SECONDS="30"
 $env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_MAX_SECONDS="120"
-dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-build --filter "FullyQualifiedName~Cardinality_registration_repeated_for_duration_stays_bounded" --logger "trx;LogFileName=cardinality-nightly.trx"
+dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~Cardinality_registration_repeated_for_duration_stays_bounded" --logger "trx;LogFileName=cardinality-nightly.trx"
 ```
 
 Ночной профиль с default duration одной итерации:
@@ -75,7 +76,7 @@ dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj
 ```powershell
 $env:HSM_COLLECTOR_RUN_CARDINALITY_NIGHTLY="1"
 $env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_SENSORS="100000"
-dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-build --filter "FullyQualifiedName~Cardinality_registration_repeated_for_duration_stays_bounded" --logger "trx;LogFileName=cardinality-nightly.trx"
+dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~Cardinality_registration_repeated_for_duration_stays_bounded" --logger "trx;LogFileName=cardinality-nightly.trx"
 ```
 
 Default одной test iteration: `5` минут, hard safety limit: `6` минут. Если нужно крутить всю ночь, внешний runner/CI должен повторять эту команду по кругу и сохранять TRX/log artifacts по каждой итерации.
@@ -87,7 +88,7 @@ $env:HSM_COLLECTOR_RUN_CARDINALITY_NIGHTLY="1"
 $env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_SECONDS="300"
 $env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_MAX_SECONDS="360"
 $env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_SENSORS="100000"
-dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-build --filter "FullyQualifiedName~Cardinality_registration_repeated_for_duration_stays_bounded" --logger "trx;LogFileName=cardinality-nightly.trx"
+dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~Cardinality_registration_repeated_for_duration_stays_bounded" --logger "trx;LogFileName=cardinality-nightly.trx"
 ```
 
 Пример внешнего overnight loop:
@@ -99,7 +100,7 @@ $env:HSM_COLLECTOR_RUN_CARDINALITY_NIGHTLY="1"
 $env:HSM_COLLECTOR_CARDINALITY_NIGHTLY_SENSORS="100000"
 while ((Get-Date) -lt $deadline) {
     $iteration++
-    dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-build --filter "FullyQualifiedName~Cardinality_registration_repeated_for_duration_stays_bounded" --logger "trx;LogFileName=cardinality-nightly-$iteration.trx"
+    dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~Cardinality_registration_repeated_for_duration_stays_bounded" --logger "trx;LogFileName=cardinality-nightly-$iteration.trx"
     if ($LASTEXITCODE -ne 0) { break }
 }
 ```

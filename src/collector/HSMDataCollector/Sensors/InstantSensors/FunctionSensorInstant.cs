@@ -68,8 +68,8 @@ namespace HSMDataCollector.Sensors
 
         public void AddValue(U value)
         {
-            _cache.Enqueue(value);
             Interlocked.Increment(ref _cacheCount);
+            _cache.Enqueue(value);
 
             while (Volatile.Read(ref _cacheCount) > _cacheSize)
             {
@@ -83,7 +83,10 @@ namespace HSMDataCollector.Sensors
 
         public Func<List<U>, T> GetFunc() => _getValue;
 
-        protected override T GetValue() => _getValue.Invoke(_cache.ToList());
+        protected override T GetValue()
+        {
+            return _getValue.Invoke(_cache.ToList());
+        }
 
 
     }

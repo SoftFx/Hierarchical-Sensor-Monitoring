@@ -31,15 +31,17 @@ namespace HSMDataCollector.Core
         internal SensorsStorage SensorStorage { get; }
 
         private int _isStarted;
+        private int _isStopping;
 
         public bool IsStarted => Volatile.Read(ref _isStarted) == 1;
+
+        internal bool CanStartNewSensors => IsStarted && Volatile.Read(ref _isStopping) == 0;
 
         public DataProcessor(CollectorOptions options, LoggerManager logger)
         {
             _logger = logger;
-            _stopFlushTimeout = options.RequestTimeout < TimeSpan.FromSeconds(1)
-                ? options.RequestTimeout
-                : TimeSpan.FromSeconds(1);
+            _stopFlushTimeout = TimeSpan.FromTicks(Math.Min(Math.Max(options.RequestTimeout.Ticks, TimeSpan.FromSeconds(1).Ticks),
+                                                            TimeSpan.FromSeconds(5).Ticks));
 
             SensorStorage  = new SensorsStorage(options, this, logger);
 
@@ -53,15 +55,26 @@ namespace HSMDataCollector.Core
         }
 
 
-        public void Start()
+        public bool Start()
         {
-            if (Interlocked.Exchange(ref _isStarted, 1) == 1)
-                return;
+            if (IsStarted)
+                return true;
 
-            _dataQueue.Start();
-            _priorityQueue.Start();
-            _fileQueue.Start();
-            _commandQueue.Start();
+            Volatile.Write(ref _isStopping, 0);
+
+            var dataStarted = _dataQueue.Start();
+            var priorityStarted = dataStarted && _priorityQueue.Start();
+            var fileStarted = priorityStarted && _fileQueue.Start();
+            var commandStarted = fileStarted && _commandQueue.Start();
+
+            if (!commandStarted)
+            {
+                StopStartedQueues(dataStarted, priorityStarted, fileStarted, commandStarted);
+                return false;
+            }
+
+            Volatile.Write(ref _isStarted, 1);
+            return true;
         }
 
         public async Task InitAsync()
@@ -72,25 +85,39 @@ namespace HSMDataCollector.Core
 
         public async Task StopAsync()
         {
-            await SensorStorage.StopAsync().ConfigureAwait(false);
-            Volatile.Write(ref _isStarted, 0);
-
-            var dataQueueStopped = await _dataQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
-            var priorityQueueStopped = await _priorityQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
-
-            using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
+            Volatile.Write(ref _isStopping, 1);
+            try
             {
+                await SensorStorage.StopAsync().ConfigureAwait(false);
+                Volatile.Write(ref _isStarted, 0);
+
+                var dataQueueStopped = await _dataQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
+                var priorityQueueStopped = await _priorityQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
+
                 if (priorityQueueStopped)
-                    await _priorityQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+                {
+                    using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
+                        await _priorityQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+
+                    LogDiscardedItems(_priorityQueue.ClearQueue(), _priorityQueue.QueueName);
+                }
 
                 if (dataQueueStopped)
-                    await _dataQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
-            }
+                {
+                    using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
+                        await _dataQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
 
-            await _dataQueue.StopAsync().ConfigureAwait(false);
-            await _priorityQueue.StopAsync().ConfigureAwait(false);
-            await _fileQueue.StopAsync().ConfigureAwait(false);
-            await _commandQueue.StopAsync().ConfigureAwait(false);
+                    LogDiscardedItems(_dataQueue.ClearQueue(), _dataQueue.QueueName);
+                }
+
+                await _fileQueue.StopAsync().ConfigureAwait(false);
+                await _commandQueue.StopAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                Volatile.Write(ref _isStarted, 0);
+                Volatile.Write(ref _isStopping, 0);
+            }
         }
 
         public void Dispose()
@@ -188,6 +215,27 @@ namespace HSMDataCollector.Core
 
             if (overflow > 0)
                 DefaultSensors.QueueOverflowSensor?.AddValue(queueName, overflow);
+        }
+
+        private void LogDiscardedItems(int count, string queueName)
+        {
+            if (count > 0)
+                _logger.Error($"{queueName} queue discarded {count} item(s) during collector shutdown.");
+        }
+
+        private void StopStartedQueues(bool dataStarted, bool priorityStarted, bool fileStarted, bool commandStarted)
+        {
+            if (commandStarted)
+                _commandQueue.StopAsync(clearQueue: false).ConfigureAwait(false).GetAwaiter().GetResult();
+
+            if (fileStarted)
+                _fileQueue.StopAsync(clearQueue: false).ConfigureAwait(false).GetAwaiter().GetResult();
+
+            if (priorityStarted)
+                _priorityQueue.StopAsync(clearQueue: false).ConfigureAwait(false).GetAwaiter().GetResult();
+
+            if (dataStarted)
+                _dataQueue.StopAsync(clearQueue: false).ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
     }

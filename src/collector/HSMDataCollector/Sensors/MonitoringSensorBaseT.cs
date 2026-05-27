@@ -51,7 +51,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                await StopInternalAsync(waitForCurrentRun: false);
+                await StopInternalAsync(waitForCurrentRun: true);
 
                 await base.StopAsync();
             }

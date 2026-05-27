@@ -867,6 +867,7 @@ namespace HSMDataCollector.Tests
                 ComputerName = "transport-chaos-host",
                 Module = module,
                 ServerAddress = "http://127.0.0.1",
+                AllowPlaintextTransport = true,
                 Port = port,
                 MaxQueueSize = maxQueueSize,
                 MaxValuesInPackage = valuesPerPackage,
