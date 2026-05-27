@@ -144,8 +144,9 @@ namespace HSMDataCollector.Core
             {
                 if (!_dataProcessor.Start())
                 {
-                    _lifecycle.AbortStart();
-                    LogAndRaise(CollectorStatus.Stopped);
+                    if (_lifecycle.AbortStart())
+                        LogAndRaise(CollectorStatus.Stopped);
+
                     return;
                 }
 
@@ -165,8 +166,8 @@ namespace HSMDataCollector.Core
 
                 await _dataProcessor.StopAsync();
 
-                _lifecycle.AbortStart();
-                LogAndRaise(CollectorStatus.Stopped);
+                if (_lifecycle.AbortStart())
+                    LogAndRaise(CollectorStatus.Stopped);
             }
         }
 
@@ -206,8 +207,9 @@ namespace HSMDataCollector.Core
 
                 if (!_dataProcessor.Start())
                 {
-                    _lifecycle.AbortStart();
-                    LogAndRaise(CollectorStatus.Stopped);
+                    if (_lifecycle.AbortStart())
+                        LogAndRaise(CollectorStatus.Stopped);
+
                     return;
                 }
 
@@ -222,8 +224,8 @@ namespace HSMDataCollector.Core
 
                 _dataProcessor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
 
-                _lifecycle.AbortStart();
-                LogAndRaise(CollectorStatus.Stopped);
+                if (_lifecycle.AbortStart())
+                    LogAndRaise(CollectorStatus.Stopped);
             }
         }
 
@@ -237,18 +239,15 @@ namespace HSMDataCollector.Core
 
             try
             {
-                if (previousStatus.IsStartingOrRunning())
-                {
-                    _lifecycle.TryStop();
+                if (previousStatus.IsStartingOrRunning() && _lifecycle.TryStop())
                     RaiseLifecycleEvent(ToStopping, nameof(ToStopping));
-                }
 
                 if (previousStatus != CollectorStatus.Stopped)
                 {
                     DisposeComponent(() => _dataProcessor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
 
-                    _lifecycle.CompleteStop();
-                    RaiseLifecycleEvent(ToStopped, nameof(ToStopped));
+                    if (_lifecycle.CompleteStop())
+                        RaiseLifecycleEvent(ToStopped, nameof(ToStopped));
                 }
 
                 DisposeComponent(_dataProcessor.Dispose, nameof(_dataProcessor));
