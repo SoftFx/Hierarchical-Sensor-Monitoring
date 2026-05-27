@@ -40,6 +40,10 @@ namespace HSMDataCollector.Core
         // Always acquired before any _lifecycle method that mutates state.
         private readonly object _opLock = new object();
 
+        // Tracks the in-flight SensorStorage init/start phase so Stop/Dispose do not dispose
+        // queues or sensors while Start() is still touching them.
+        private Task _currentStartInitTask;
+
         // Tracks the in-flight processor StopAsync task so that a racing Dispose() can wait for it
         // instead of issuing a duplicate StopAsync (which would no-op against queues already in Stopping
         // and then fire ToStopped while the original Stop is still draining).
@@ -184,24 +188,35 @@ namespace HSMDataCollector.Core
             {
                 await customStartingTask.ConfigureAwait(false);
 
-                if (!Status.IsStartingOrRunning())
-                {
-                    await SafeStopProcessor().ConfigureAwait(false);
-                    return;
-                }
-
-                await _dataProcessor.InitAsync().ConfigureAwait(false);
-
-                bool completed;
+                Task initTask;
                 lock (_opLock)
                 {
-                    completed = _lifecycle.CompleteStart();
-                    if (completed)
-                        LogAndRaise(CollectorStatus.Running);
+                    if (!Status.IsStartingOrRunning())
+                        return;
+
+                    initTask = _dataProcessor.InitAsync();
+                    _currentStartInitTask = initTask;
                 }
 
-                if (!completed)
-                    await SafeStopProcessor().ConfigureAwait(false);
+                try
+                {
+                    await initTask.ConfigureAwait(false);
+                }
+                finally
+                {
+                    lock (_opLock)
+                    {
+                        if (ReferenceEquals(_currentStartInitTask, initTask))
+                            _currentStartInitTask = null;
+                    }
+                }
+
+                lock (_opLock)
+                {
+                    if (_lifecycle.CompleteStart())
+                        LogAndRaise(CollectorStatus.Running);
+                    return;
+                }
             }
             catch (Exception ex)
             {
@@ -215,6 +230,23 @@ namespace HSMDataCollector.Core
                         LogAndRaise(CollectorStatus.Stopped);
                 }
             }
+        }
+
+        private async Task WaitForStartInitThenStopProcessor(Task startInitTask)
+        {
+            if (startInitTask != null)
+            {
+                try
+                {
+                    await startInitTask.ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"DataCollector waiting for in-flight start initialization failed: {ex}");
+                }
+            }
+
+            await _dataProcessor.StopAsync().ConfigureAwait(false);
         }
 
         private async Task SafeStopProcessor()
@@ -232,8 +264,9 @@ namespace HSMDataCollector.Core
 
         public Task Stop() => Stop(Task.CompletedTask);
 
-        public async Task Stop(Task customStartingTask)
+        public async Task Stop(Task customStoppingTask)
         {
+            Task startInitTask;
             Task processorStopTask;
             Task stopTask;
 
@@ -244,8 +277,9 @@ namespace HSMDataCollector.Core
 
                 LogAndRaise(CollectorStatus.Stopping);
 
-                processorStopTask = _dataProcessor.StopAsync();
-                stopTask = Task.WhenAll(processorStopTask, customStartingTask);
+                startInitTask = _currentStartInitTask;
+                processorStopTask = WaitForStartInitThenStopProcessor(startInitTask);
+                stopTask = Task.WhenAll(processorStopTask, customStoppingTask);
                 _currentProcessorStopTask = processorStopTask;
             }
 
@@ -334,6 +368,7 @@ namespace HSMDataCollector.Core
         {
             CollectorStatus previousStatus;
             Task inFlightStop;
+            Task inFlightStartInit;
             bool ownsStop;
 
             lock (_opLock)
@@ -346,6 +381,7 @@ namespace HSMDataCollector.Core
                 // If another thread is already stopping, do not issue a duplicate StopAsync —
                 // wait for its task. Otherwise take the Starting/Running -> Stopping transition ourselves.
                 inFlightStop = _currentProcessorStopTask;
+                inFlightStartInit = _currentStartInitTask;
                 ownsStop = inFlightStop == null
                     && previousStatus.IsStartingOrRunning()
                     && _lifecycle.TryStop();
@@ -382,7 +418,7 @@ namespace HSMDataCollector.Core
                 }
                 else if (ownsStop)
                 {
-                    DisposeComponent(() => _dataProcessor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
+                    DisposeComponent(() => WaitForStartInitThenStopProcessor(inFlightStartInit).ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
 
                     lock (_opLock)
                     {

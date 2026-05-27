@@ -1,9 +1,11 @@
 using HSMDataCollector.Core;
+using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Concurrent;
@@ -1049,6 +1051,44 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        [Fact]
+        public async Task Dispose_during_start_init_waits_for_init_before_disposing_components()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+            var initEntered = new TaskCompletionSource<bool>();
+            var releaseInit = new TaskCompletionSource<bool>();
+            var blockingSensor = RegisterBlockingInitSensor(collector, "adversarial/dispose-during-start-init", initEntered, releaseInit);
+
+            try
+            {
+                var startTask = collector.Start();
+
+                Assert.True(await WaitOrTimeoutAsync(initEntered.Task, TimeSpan.FromSeconds(1)).ConfigureAwait(false),
+                    "Start should enter sensor InitAsync before Dispose joins it.");
+
+                var disposeTask = Task.Run(() => collector.Dispose());
+                var completedBeforeRelease = await Task.WhenAny(disposeTask, Task.Delay(TimeSpan.FromMilliseconds(250))).ConfigureAwait(false);
+
+                Assert.NotSame(disposeTask, completedBeforeRelease);
+                Assert.Equal(0, blockingSensor.StopCalls);
+
+                releaseInit.SetResult(true);
+
+                Assert.True(await WaitOrTimeoutAsync(disposeTask, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "Dispose should complete after the in-flight start initialization finishes.");
+                await startTask.ConfigureAwait(false);
+
+                Assert.Equal(CollectorStatus.Disposed, collector.Status);
+                Assert.True(blockingSensor.StopCalls > 0);
+            }
+            finally
+            {
+                releaseInit.TrySetResult(true);
+                collector.Dispose();
+            }
+        }
+
 
         [Fact]
         public async Task Concurrent_start_and_stop_does_not_leave_queues_running_after_status_stopped()
@@ -1303,6 +1343,37 @@ namespace HSMDataCollector.Tests
             });
         }
 
+        private static BlockingInitSensor RegisterBlockingInitSensor(
+            DataCollector collector,
+            string path,
+            TaskCompletionSource<bool> initEntered,
+            TaskCompletionSource<bool> releaseInit)
+        {
+            var dataProcessor = (DataProcessor)typeof(DataCollector)
+                .GetField("_dataProcessor", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(collector);
+            var sensorsStorage = (SensorsStorage)typeof(DataCollector)
+                .GetField("_sensorsStorage", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(collector);
+
+            var sensor = new BlockingInitSensor(new InstantSensorOptions
+            {
+                ComputerName = collector.ComputerName,
+                Module = collector.Module,
+                Path = path,
+                DataProcessor = dataProcessor,
+            }, initEntered, releaseInit);
+
+            sensorsStorage.Register(sensor);
+            return sensor;
+        }
+
+        private static async Task<bool> WaitOrTimeoutAsync(Task task, TimeSpan timeout)
+        {
+            var completed = await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false);
+            return ReferenceEquals(completed, task);
+        }
+
         private static TimeSpan GetSuiteSoakDuration()
         {
             var rawSeconds = Environment.GetEnvironmentVariable("HSM_COLLECTOR_SUITE_SOAK_SECONDS");
@@ -1335,6 +1406,37 @@ namespace HSMDataCollector.Tests
             {
                 if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_SUITE_SOAK"), "1", StringComparison.Ordinal))
                     Skip = "Set HSM_COLLECTOR_RUN_SUITE_SOAK=1 to run repeated suite soak tests.";
+            }
+        }
+
+        private sealed class BlockingInitSensor : SensorBase<NoDisplayUnit>
+        {
+            private readonly TaskCompletionSource<bool> _initEntered;
+            private readonly TaskCompletionSource<bool> _releaseInit;
+            private int _stopCalls;
+
+            internal BlockingInitSensor(
+                InstantSensorOptions options,
+                TaskCompletionSource<bool> initEntered,
+                TaskCompletionSource<bool> releaseInit) : base(options)
+            {
+                _initEntered = initEntered;
+                _releaseInit = releaseInit;
+            }
+
+            internal int StopCalls => Volatile.Read(ref _stopCalls);
+
+            public override async ValueTask<bool> InitAsync()
+            {
+                _initEntered.TrySetResult(true);
+                await _releaseInit.Task.ConfigureAwait(false);
+                return true;
+            }
+
+            public override ValueTask StopAsync()
+            {
+                Interlocked.Increment(ref _stopCalls);
+                return default;
             }
         }
 

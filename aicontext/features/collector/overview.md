@@ -86,7 +86,9 @@ Note the asymmetry between `Status` and `CanAcceptData` after `Dispose()`:
 
 ### Dispose racing Stop
 
-If `Dispose()` is called while a `Stop()` is in flight, the disposer captures the in-flight task (`_currentStopTask`) and awaits it instead of issuing a duplicate `StopAsync`. The original `Stop()` is responsible for firing `ToStopped` and calling `CompleteStop`. `_dataSender.Dispose()` is only invoked after the in-flight stop completes, preventing `ObjectDisposedException` in queue processors that are still draining.
+If `Dispose()` is called while a `Stop()` is in flight, the disposer captures the in-flight processor stop task (`_currentProcessorStopTask`) and awaits it instead of issuing a duplicate `StopAsync`. The original `Stop()` is responsible for firing `ToStopped` and calling `CompleteStop`. `_dataSender.Dispose()` is only invoked after the in-flight stop completes, preventing `ObjectDisposedException` in queue processors that are still draining.
+
+If `Stop()` or `Dispose()` races with `Start()` while sensor initialization is already in flight, the stopping path waits for `_currentStartInitTask` before stopping and disposing components. It does not wait for the user-supplied pre-init `customStartingTask`; if stop/dispose happens while that task is pending, the later `Start()` continuation observes that lifecycle is no longer starting/running and exits without entering initialization.
 
 ### Queue state machine
 
