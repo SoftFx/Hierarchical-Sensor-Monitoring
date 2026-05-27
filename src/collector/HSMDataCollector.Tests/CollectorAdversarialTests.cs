@@ -966,6 +966,30 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task ToStarting_handler_dispose_does_not_start_queues_after_dispose()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+            var neverComplete = new TaskCompletionSource<bool>();
+
+            collector.ToStarting += collector.Dispose;
+
+            try
+            {
+                var startTask = collector.Start(neverComplete.Task);
+                var completed = await Task.WhenAny(startTask, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
+
+                Assert.Same(startTask, completed);
+                Assert.Equal(CollectorStatus.Disposed, collector.Status);
+            }
+            finally
+            {
+                neverComplete.TrySetResult(true);
+                collector.Dispose();
+            }
+        }
+
+        [Fact]
         public async Task Dispose_concurrent_with_stop_fires_ToStopped_exactly_once()
         {
             for (var iteration = 0; iteration < 25; iteration++)
@@ -994,6 +1018,34 @@ namespace HSMDataCollector.Tests
                 Assert.Equal(CollectorStatus.Disposed, collector.Status);
                 Assert.Equal(1, stoppingCount);
                 Assert.Equal(1, stoppedCount);
+            }
+        }
+
+        [Fact]
+        public async Task Dispose_concurrent_with_stop_custom_task_does_not_wait_for_custom_task()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+            var neverComplete = new TaskCompletionSource<bool>();
+
+            try
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                var stopTask = collector.Stop(neverComplete.Task);
+                var disposeTask = Task.Run(() => collector.Dispose());
+                var completed = await Task.WhenAny(disposeTask, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
+
+                Assert.Same(disposeTask, completed);
+                Assert.Equal(CollectorStatus.Disposed, collector.Status);
+
+                neverComplete.SetResult(true);
+                await stopTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                neverComplete.TrySetResult(true);
+                collector.Dispose();
             }
         }
 

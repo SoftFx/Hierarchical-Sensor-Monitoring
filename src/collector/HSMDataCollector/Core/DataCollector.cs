@@ -40,10 +40,10 @@ namespace HSMDataCollector.Core
         // Always acquired before any _lifecycle method that mutates state.
         private readonly object _opLock = new object();
 
-        // Tracks the in-flight Stop() task so that a racing Dispose() can wait for it
+        // Tracks the in-flight processor StopAsync task so that a racing Dispose() can wait for it
         // instead of issuing a duplicate StopAsync (which would no-op against queues already in Stopping
         // and then fire ToStopped while the original Stop is still draining).
-        private Task _currentStopTask;
+        private Task _currentProcessorStopTask;
 
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
@@ -157,6 +157,9 @@ namespace HSMDataCollector.Core
 
                 LogAndRaise(CollectorStatus.Starting);
 
+                if (!Status.IsStartingOrRunning())
+                    return;
+
                 try
                 {
                     processorStarted = _dataProcessor.Start();
@@ -231,7 +234,9 @@ namespace HSMDataCollector.Core
 
         public async Task Stop(Task customStartingTask)
         {
+            Task processorStopTask;
             Task stopTask;
+
             lock (_opLock)
             {
                 if (!_lifecycle.TryStop())
@@ -239,8 +244,9 @@ namespace HSMDataCollector.Core
 
                 LogAndRaise(CollectorStatus.Stopping);
 
-                stopTask = Task.WhenAll(_dataProcessor.StopAsync(), customStartingTask);
-                _currentStopTask = stopTask;
+                processorStopTask = _dataProcessor.StopAsync();
+                stopTask = Task.WhenAll(processorStopTask, customStartingTask);
+                _currentProcessorStopTask = processorStopTask;
             }
 
             try
@@ -255,8 +261,8 @@ namespace HSMDataCollector.Core
             lock (_opLock)
             {
                 // Clear only if still pointing to our task — Dispose may have overwritten with its own.
-                if (ReferenceEquals(_currentStopTask, stopTask))
-                    _currentStopTask = null;
+                if (ReferenceEquals(_currentProcessorStopTask, processorStopTask))
+                    _currentProcessorStopTask = null;
 
                 if (_lifecycle.CompleteStop())
                     LogAndRaise(CollectorStatus.Stopped);
@@ -339,7 +345,7 @@ namespace HSMDataCollector.Core
 
                 // If another thread is already stopping, do not issue a duplicate StopAsync —
                 // wait for its task. Otherwise take the Starting/Running -> Stopping transition ourselves.
-                inFlightStop = _currentStopTask;
+                inFlightStop = _currentProcessorStopTask;
                 ownsStop = inFlightStop == null
                     && previousStatus.IsStartingOrRunning()
                     && _lifecycle.TryStop();

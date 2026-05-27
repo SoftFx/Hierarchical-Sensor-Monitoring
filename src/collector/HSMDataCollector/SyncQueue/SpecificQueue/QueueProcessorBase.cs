@@ -59,6 +59,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         {
             lock (_lifecycleLock)
             {
+                if (_disposed)
+                {
+                    _logger.Error($"{QueueName} queue processor is disposed and cannot be started.");
+                    return false;
+                }
+
                 if (_state == QueueState.Stopping)
                 {
                     _logger.Error($"{QueueName} queue processor is still stopping and cannot be started again yet.");
