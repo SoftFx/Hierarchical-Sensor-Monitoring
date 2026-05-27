@@ -21,6 +21,9 @@
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="HSMDataCollector.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <Content Include="collector.nlog.config">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <PackageCopyToOutput>true</PackageCopyToOutput>

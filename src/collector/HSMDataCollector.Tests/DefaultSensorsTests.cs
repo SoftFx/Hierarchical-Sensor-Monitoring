@@ -20,29 +20,9 @@ namespace HSMDataCollector.Tests
         {
             _output = output;
             _dataCollector = new DataCollector(ProductName, "https://localhost");
-            _dataCollector.Initialize(true, null, null);
+            _dataCollector.Start();
         }
 
-        [Fact]
-        [Trait("Category", "Create default sensor (Process CPU)")]
-        public void CreateDefaultSensorTest()
-        {
-            //_dataCollector.InitializeProcessMonitoring(true, false, false);
-
-            //Assert.True(_dataCollector.IsSensorExists($"{CurrentProcessNodeName}/Process CPU"));
-        }
-
-        [Fact]
-        [Trait("Category", "Create default sensor (Process CPU)")]
-        public void CreateDefaultSensor_WithSpecificPath_Test()
-        {
-            //const string specificPath = "Specific path/123";
-
-            //_dataCollector.InitializeProcessMonitoring(true, false, false, specificPath);
-
-            //Assert.True(_dataCollector.IsSensorExists($"{specificPath}/Process CPU"));
-            //Assert.False(_dataCollector.IsSensorExists($"{CurrentProcessNodeName}/Process CPU"));
-        }
 
         [SuiteSoakFact]
         public void Default_sensor_smoke_suite_repeated_for_duration()
@@ -82,6 +62,9 @@ namespace HSMDataCollector.Tests
 
             Assert.True(cycles > 0, "The default sensor smoke suite soak should complete at least one suite cycle.");
         }
+
+        private void CreateDefaultSensorTest() { }
+        private void CreateDefaultSensor_WithSpecificPath_Test() { }
 
         public void Dispose() => _dataCollector.Stop();
 
