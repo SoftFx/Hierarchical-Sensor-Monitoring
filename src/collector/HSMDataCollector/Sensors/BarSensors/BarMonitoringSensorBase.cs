@@ -21,8 +21,7 @@ namespace HSMDataCollector.DefaultSensors
 
         private readonly object _locker = new object();
 
-        private Task _collectTask;
-        private CancellationTokenSource _cancellationTokenSource;
+        private ScheduledTask _collectTask;
         protected BarType _internalBar;
 
         public override BarType Current => (BarType)_internalBar.Copy().Complete();
@@ -32,6 +31,12 @@ namespace HSMDataCollector.DefaultSensors
 
         protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)
         {
+            if (options.BarTickPeriod <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(options.BarTickPeriod), "Bar tick period must be greater than zero.");
+
+            if (options.BarPeriod <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(options.BarPeriod), "Bar period must be greater than zero.");
+
             _collectBarPeriod = options.BarTickPeriod;
             _barPeriod = options.BarPeriod;
             _precision = options.Precision;
@@ -46,8 +51,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (_collectTask == null)
                 {
-                    _cancellationTokenSource = new CancellationTokenSource();
-                    _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token, HandleException);
+                    _collectTask = CollectorScheduler.Schedule(CollectBar, _collectBarPeriod, _collectBarPeriod, HandleException);
                 }
             }
 
@@ -56,20 +60,14 @@ namespace HSMDataCollector.DefaultSensors
 
         public override async ValueTask StopAsync()
         {
-            Task taskToWait = null;
-            CancellationTokenSource cts = null;
+            ScheduledTask taskToWait = null;
 
             lock (_locker)
             {
                 if (_collectTask != null)
                 {
-                    cts = _cancellationTokenSource;
-                    _cancellationTokenSource = null;
-
                     taskToWait = _collectTask;
                     _collectTask = null;
-
-                    cts?.Cancel();
                 }
             }
 
@@ -77,14 +75,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (taskToWait != null)
                 {
-                    try
-                    {
-                        await taskToWait.ConfigureAwait(false);
-                    }
-                    finally
-                    {
-                        taskToWait.Dispose();
-                    }
+                    await taskToWait.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
                 }
 
                 await base.StopAsync().ConfigureAwait(false);
@@ -93,10 +84,6 @@ namespace HSMDataCollector.DefaultSensors
             catch (Exception ex)
             {
                 HandleException(ex);
-            }
-            finally
-            {
-                cts?.Dispose();
             }
         }
 

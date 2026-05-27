@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -9,11 +10,45 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
-    internal sealed class PriorityDataQueueProcessor : EventedQueueProcessorBase<SensorValueBase>
+    internal sealed class PriorityDataQueueProcessor : QueueProcessorBase<SensorValueBase>
     {
         public override string QueueName => "Priority data";
 
         public PriorityDataQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
+
+        internal async Task FlushAsync(CancellationToken token)
+        {
+            try
+            {
+                while (QueueCount > 0 && !token.IsCancellationRequested)
+                {
+                    var package = GetPackage();
+
+                    if (!package.Items.Any())
+                        continue;
+
+                    try
+                    {
+                        var sendingInfo = await _sender.SendPriorityDataAsync(package.Items, token).ConfigureAwait(false);
+                        _queueManager.AddPackageSendingInfo(sendingInfo);
+                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch
+                    {
+                        foreach (var item in package.Items)
+                            Enqeue(item);
+
+                        throw;
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
+            }
+        }
 
         protected override async Task ProcessingLoop(CancellationToken token)
         {
@@ -22,24 +57,38 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 try
                 {
-                    _event.Wait(token);
-                    _event.Reset();
+                    await WaitToReadAsync(token).ConfigureAwait(false);
 
-                    while (!_queue.IsEmpty && !token.IsCancellationRequested)
+                    while (!IsEmpty && !token.IsCancellationRequested)
                     {
                         package = GetPackage();
-                        var sendingInfo = await _sender.SendPriorityDataAsync(package.Items, token).ConfigureAwait(false);
-                        _queueManager.AddPackageSendingInfo(sendingInfo);
-                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+
+                        if (!package.Items.Any())
+                            continue;
+
+                        try
+                        {
+                            var sendingInfo = await _sender.SendPriorityDataAsync(package.Items, token).ConfigureAwait(false);
+                            _queueManager.AddPackageSendingInfo(sendingInfo);
+                            _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                        }
+                        catch (OperationCanceledException) { throw; }
+                        catch
+                        {
+                            foreach (var item in package.Items)
+                                Enqeue(item);
+
+                            throw;
+                        }
                     }
                 }
-                catch (OperationCanceledException) {}
+                catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
                     _logger.Error(ex);
+                    await DelayAfterFailureAsync(token).ConfigureAwait(false);
                 }
             }
         }
-
     }
 }

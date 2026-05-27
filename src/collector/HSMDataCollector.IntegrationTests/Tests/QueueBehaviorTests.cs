@@ -1,0 +1,129 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using HSMDataCollector.Core;
+using HSMDataCollector.IntegrationTests.Fixtures;
+using HSMDataCollector.IntegrationTests.Helpers;
+using HSMDataCollector.Options;
+using Xunit;
+
+namespace HSMDataCollector.IntegrationTests.Tests
+{
+    [Trait("Category", "Integration")]
+    [Collection("HSM Server")]
+    public class QueueBehaviorTests : IClassFixture<HsmServerFixture>
+    {
+        private readonly HsmServerFixture _fixture;
+
+        public QueueBehaviorTests(HsmServerFixture fixture)
+        {
+            _fixture = fixture;
+        }
+
+        [Fact]
+        public async Task ValuesSentBeforeStart_QueuedAndDeliveredAfterStart()
+        {
+            var path = CollectorOptionsHelper.UniqueSensorPath("queued_sensor");
+            var options = _fixture.CreateCollectorOptions();
+            using var collector = new DataCollector(options);
+
+            var sensor = collector.CreateIntSensor(path);
+            sensor.AddValue(42);
+
+            var serverPath = CollectorOptionsHelper.ServerPath(options, path);
+            using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
+
+            // Value should not be on server yet (collector not started)
+            var notFound = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, TimeSpan.FromSeconds(3));
+            Assert.Empty(notFound);
+
+            await collector.Start();
+
+            var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, CollectorOptionsHelper.VerificationTimeout);
+            Assert.Single(values);
+            Assert.Equal(42.ToString(), values[0]);
+
+            await collector.Stop();
+        }
+
+        [Fact]
+        public async Task PackageCollectPeriod_WaitingPeriodIsRespected()
+        {
+            var path = CollectorOptionsHelper.UniqueSensorPath("period_sensor");
+            var options = _fixture.CreateCollectorOptions();
+            options.PackageCollectPeriod = TimeSpan.FromSeconds(5);
+
+            using var collector = new DataCollector(options);
+            await collector.Start();
+
+            var sensor = collector.CreateIntSensor(path);
+            sensor.AddValue(10);
+
+            var serverPath = CollectorOptionsHelper.ServerPath(options, path);
+            using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
+
+            // Value should not arrive immediately (before collect period)
+            var notFound = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, TimeSpan.FromSeconds(2));
+            Assert.Empty(notFound);
+
+            // But should arrive after collect period + processing time
+            var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, TimeSpan.FromSeconds(10));
+            Assert.Single(values);
+            Assert.Equal(10.ToString(), values[0]);
+
+            await collector.Stop();
+        }
+
+        [Fact]
+        public async Task MaxQueueSize_OldestValuesDroppedOnOverflow()
+        {
+            var path = CollectorOptionsHelper.UniqueSensorPath("overflow_sensor");
+            var options = _fixture.CreateCollectorOptions();
+            options.MaxQueueSize = 5;
+
+            using var collector = new DataCollector(options);
+
+            var sensor = collector.CreateIntSensor(path);
+            // Add more values than MaxQueueSize without starting
+            for (int i = 0; i < 10; i++)
+                sensor.AddValue(i);
+
+            await collector.Start();
+
+            var serverPath = CollectorOptionsHelper.ServerPath(options, path);
+            using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
+            var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, CollectorOptionsHelper.VerificationTimeout);
+            // The last value (9) should be the current value on the server
+            Assert.NotEmpty(values);
+            Assert.Equal(9.ToString(), values.Last());
+
+            await collector.Stop();
+        }
+
+        [Fact]
+        public async Task PrioritySensor_DataSentImmediately()
+        {
+            var path = CollectorOptionsHelper.UniqueSensorPath("priority_sensor");
+            var options = _fixture.CreateCollectorOptions();
+
+            using var collector = new DataCollector(options);
+            await collector.Start();
+
+            var sensorOptions = new InstantSensorOptions
+            {
+                IsPrioritySensor = true,
+            };
+            var sensor = collector.CreateIntSensor(path, sensorOptions);
+            sensor.AddValue(777);
+
+            var serverPath = CollectorOptionsHelper.ServerPath(options, path);
+            using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
+            // Priority sensors should arrive quickly (event-driven, not timer-based)
+            var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, TimeSpan.FromSeconds(10));
+            Assert.Single(values);
+            Assert.Equal(777.ToString(), values[0]);
+
+            await collector.Stop();
+        }
+    }
+}

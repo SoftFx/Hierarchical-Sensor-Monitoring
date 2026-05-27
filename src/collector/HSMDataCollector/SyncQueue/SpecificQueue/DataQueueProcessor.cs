@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -15,6 +16,40 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         public DataQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
+        internal async Task FlushAsync(CancellationToken token)
+        {
+            try
+            {
+                while (QueueCount > 0 && !token.IsCancellationRequested)
+                {
+                    var package = GetPackage();
+
+                    if (!package.Items.Any())
+                        continue;
+
+                    try
+                    {
+                        var sendingInfo = await _sender.SendDataAsync(package.Items, token).ConfigureAwait(false);
+                        _queueManager.AddPackageSendingInfo(sendingInfo);
+                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch
+                    {
+                        foreach (var item in package.Items)
+                            Enqeue(item);
+
+                        throw;
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
+            }
+        }
+
         protected override async Task ProcessingLoop(CancellationToken token)
         {
             DataPackage<SensorValueBase> package;
@@ -24,17 +59,32 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 {
                     await Task.Delay(_options.PackageCollectPeriod, token).ConfigureAwait(false);
 
-                    if (_queue.IsEmpty)
+                    if (IsEmpty)
                         continue;
 
                     do
                     {
                         package = GetPackage();
-                        var sendingInfo = await _sender.SendDataAsync(package.Items, _cancellationTokenSource.Token).ConfigureAwait(false);
-                        _queueManager.AddPackageSendingInfo(sendingInfo);
-                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+
+                        if (!package.Items.Any())
+                            continue;
+
+                        try
+                        {
+                            var sendingInfo = await _sender.SendDataAsync(package.Items, token).ConfigureAwait(false);
+                            _queueManager.AddPackageSendingInfo(sendingInfo);
+                            _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                        }
+                        catch (OperationCanceledException) { throw; }
+                        catch
+                        {
+                            foreach (var item in package.Items)
+                                Enqeue(item);
+
+                            throw;
+                        }
                     }
-                    while (_queue.Count >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
+                    while (QueueCount >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
@@ -43,6 +93,5 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 }
             }
         }
-
     }
 }
