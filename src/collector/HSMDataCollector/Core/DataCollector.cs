@@ -145,53 +145,84 @@ namespace HSMDataCollector.Core
 
         public async Task Start(Task customStartingTask)
         {
+            bool processorStarted;
+
+            // Take _opLock through the physical processor start. Otherwise a concurrent Stop could
+            // run StopAsync against queues that have not been started yet, then this method would
+            // bring them up afterwards — leaving live background tasks while public Status == Stopped.
             lock (_opLock)
             {
                 if (!_lifecycle.TryStart())
                     return;
 
                 LogAndRaise(CollectorStatus.Starting);
-            }
 
-            try
-            {
-                if (_dataProcessor.Start())
+                try
                 {
-                    await customStartingTask.ConfigureAwait(false);
+                    processorStarted = _dataProcessor.Start();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"DataCollector starting error during processor start: {ex}");
+                    processorStarted = false;
+                }
 
-                    if (!Status.IsStartingOrRunning())
-                        return;
-
-                    await _dataProcessor.InitAsync().ConfigureAwait(false);
-
-                    lock (_opLock)
-                    {
-                        if (_lifecycle.CompleteStart())
-                            LogAndRaise(CollectorStatus.Running);
-                    }
-
+                if (!processorStarted)
+                {
+                    if (_lifecycle.AbortStart())
+                        LogAndRaise(CollectorStatus.Stopped);
                     return;
                 }
+            }
+
+            // Queues are now running. Any exit path from here must roll them back if the lifecycle
+            // was cancelled by a concurrent Stop/Dispose, or background processors will outlive Status.
+            try
+            {
+                await customStartingTask.ConfigureAwait(false);
+
+                if (!Status.IsStartingOrRunning())
+                {
+                    await SafeStopProcessor().ConfigureAwait(false);
+                    return;
+                }
+
+                await _dataProcessor.InitAsync().ConfigureAwait(false);
+
+                bool completed;
+                lock (_opLock)
+                {
+                    completed = _lifecycle.CompleteStart();
+                    if (completed)
+                        LogAndRaise(CollectorStatus.Running);
+                }
+
+                if (!completed)
+                    await SafeStopProcessor().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 _logger.Error($"DataCollector starting error: {ex}");
 
-                try
+                await SafeStopProcessor().ConfigureAwait(false);
+
+                lock (_opLock)
                 {
-                    await _dataProcessor.StopAsync().ConfigureAwait(false);
-                }
-                catch (Exception stopEx)
-                {
-                    _logger.Error($"DataCollector start-rollback stop error: {stopEx}");
+                    if (_lifecycle.AbortStart())
+                        LogAndRaise(CollectorStatus.Stopped);
                 }
             }
+        }
 
-            // Abort path: reached when _dataProcessor.Start() returned false or an exception was caught.
-            lock (_opLock)
+        private async Task SafeStopProcessor()
+        {
+            try
             {
-                if (_lifecycle.AbortStart())
-                    LogAndRaise(CollectorStatus.Stopped);
+                await _dataProcessor.StopAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"DataCollector start-rollback stop error: {ex}");
             }
         }
 
@@ -234,49 +265,55 @@ namespace HSMDataCollector.Core
 
         private void InitializeProcessor()
         {
+            bool processorStarted;
+
             lock (_opLock)
             {
                 if (!_lifecycle.TryStart())
                     return;
 
                 LogAndRaise(CollectorStatus.Starting);
+
+                _logger.Info("Initialize timer...");
+
+                try
+                {
+                    processorStarted = _dataProcessor.Start();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"DataCollector initialization error during processor start: {ex}");
+                    processorStarted = false;
+                }
+
+                if (!processorStarted)
+                {
+                    if (_lifecycle.AbortStart())
+                        LogAndRaise(CollectorStatus.Stopped);
+                    return;
+                }
             }
 
             try
             {
-                _logger.Info("Initialize timer...");
-
-                if (!_dataProcessor.Start())
-                {
-                    lock (_opLock)
-                    {
-                        if (_lifecycle.AbortStart())
-                            LogAndRaise(CollectorStatus.Stopped);
-                    }
-
-                    return;
-                }
-
                 _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
 
+                bool completed;
                 lock (_opLock)
                 {
-                    if (_lifecycle.CompleteStart())
+                    completed = _lifecycle.CompleteStart();
+                    if (completed)
                         LogAndRaise(CollectorStatus.Running);
                 }
+
+                if (!completed)
+                    SafeStopProcessor().ConfigureAwait(false).GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
                 _logger.Error($"DataCollector initialization error: {ex}");
 
-                try
-                {
-                    _dataProcessor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
-                }
-                catch (Exception stopEx)
-                {
-                    _logger.Error($"DataCollector init-rollback stop error: {stopEx}");
-                }
+                SafeStopProcessor().ConfigureAwait(false).GetAwaiter().GetResult();
 
                 lock (_opLock)
                 {

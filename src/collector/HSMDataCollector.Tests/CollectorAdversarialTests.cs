@@ -999,6 +999,57 @@ namespace HSMDataCollector.Tests
 
 
         [Fact]
+        public async Task Concurrent_start_and_stop_does_not_leave_queues_running_after_status_stopped()
+        {
+            // Regression test for the start/stop ordering bug: if Stop runs StopAsync against queues
+            // that haven't been spawned yet (because Start released _opLock between TryStart and
+            // _dataProcessor.Start()), and Start then spawned them anyway and bailed without rollback,
+            // background queue processors would stay alive while public Status reads Stopped.
+            //
+            // To make the leak observable, after the race we actively try to push data: create a
+            // sensor and call AddValue. If the data queue is still alive despite Status == Stopped,
+            // SendDataAsync will eventually be invoked on the sender and DataPackages will tick.
+            for (var iteration = 0; iteration < 50; iteration++)
+            {
+                var sender = new ProbeDataSender();
+                var collector = CreateCollector(sender);
+
+                var startTask = Task.Run(() => collector.Start());
+                var stopTask = Task.Run(() => collector.Stop());
+
+                await Task.WhenAll(startTask, stopTask).ConfigureAwait(false);
+
+                var status = collector.Status;
+                Assert.True(
+                    status == CollectorStatus.Stopped ||
+                    status == CollectorStatus.Running ||
+                    status == CollectorStatus.Starting,
+                    $"Iteration {iteration}: unexpected status {status}");
+
+                if (status == CollectorStatus.Stopped)
+                {
+                    var sendsBefore = sender.DataPackages;
+
+                    // Provoke any zombie queue: a live queue will accept and forward this value.
+                    // A properly stopped queue will reject (or drop) it.
+                    var probe = collector.CreateIntSensor("adversarial/start-stop-race/probe");
+                    for (var i = 0; i < 5; i++)
+                        probe.AddValue(i);
+
+                    // Wait at least one PackageCollectPeriod so a live worker would flush.
+                    await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+
+                    var sendsAfter = sender.DataPackages;
+
+                    Assert.True(sendsAfter == sendsBefore,
+                        $"Iteration {iteration}: queue processors continued sending after Status == Stopped (before={sendsBefore}, after={sendsAfter}).");
+                }
+
+                collector.Dispose();
+            }
+        }
+
+        [Fact]
         public async Task Concurrent_start_and_stop_keeps_event_order_consistent_with_status()
         {
             // Regression test for the event-ordering race: when Start and Stop race, subscribers

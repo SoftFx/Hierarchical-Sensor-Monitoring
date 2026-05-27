@@ -99,7 +99,9 @@ namespace HSMDataCollector.IntegrationTests.Tests
 
             collector.Dispose();
 
-            Assert.Equal(CollectorStatus.Stopped, collector.Status);
+            // After Dispose, status is the terminal Disposed state (new in 3.40.32). Sensors and
+            // queues are stopped and disposed; the collector cannot be restarted.
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
         }
     }
 }
