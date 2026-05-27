@@ -16,8 +16,16 @@ using System.Threading;
 
 namespace HSMDataCollector.Core
 {
-    internal sealed class SensorsStorage : ConcurrentDictionary<string, ISensor>, IDisposable
+    /// <summary>
+    /// Owns the set of registered sensors and orchestrates their lifecycle. Uses a private
+    /// <see cref="ConcurrentDictionary{TKey, TValue}"/> for storage rather than inheriting from it,
+    /// so the public surface is limited to the operations the collector actually needs.
+    /// Sensor identity is the (full) sensor path.
+    /// </summary>
+    internal sealed class SensorsStorage : IDisposable
     {
+        private readonly ConcurrentDictionary<string, ISensor> _sensors = new ConcurrentDictionary<string, ISensor>();
+
         private readonly CollectorOptions _options;
 
         private readonly DataProcessor _dataProcessor;
@@ -30,6 +38,20 @@ namespace HSMDataCollector.Core
         public IUnixCollection Unix { get; }
 
         internal ICollectorLogger Logger { get; }
+
+        /// <summary>
+        /// Snapshot of currently-registered sensors. Safe to enumerate during concurrent
+        /// register/unregister; the underlying dictionary is concurrent.
+        /// </summary>
+        public IEnumerable<ISensor> Values => _sensors.Values;
+
+        /// <summary>
+        /// Approximate number of currently-registered sensors. Tracked via <see cref="Interlocked"/>
+        /// for O(1) reads. Exposed for diagnostics — the cardinality cap is enforced internally
+        /// using the increment result inside <see cref="AddSensor"/>, not via this property.
+        /// May briefly disagree with the underlying dictionary count during concurrent registration.
+        /// </summary>
+        public int Count => Volatile.Read(ref _sensorCount);
 
 
         internal SensorsStorage(CollectorOptions options, DataProcessor dataProcessor, ICollectorLogger logger)
@@ -47,26 +69,28 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
-            foreach (var sensor in Values)
+            foreach (var sensor in _sensors.Values)
             {
                 sensor.Dispose();
             }
         }
 
-        internal Task InitAsync() => Task.WhenAll(Values.Select(async s => await s.InitAsync().ConfigureAwait(false)));
+        internal Task InitAsync() => Task.WhenAll(_sensors.Values.Select(async s => await s.InitAsync().ConfigureAwait(false)));
 
-        internal Task StartAsync() => Task.WhenAll(Values.Select(async s => await s.StartAsync().ConfigureAwait(false)));
+        internal Task StartAsync() => Task.WhenAll(_sensors.Values.Select(async s => await s.StartAsync().ConfigureAwait(false)));
 
-        internal Task StopAsync() => Task.WhenAll(Values.Select(async s => await s.StopAsync().ConfigureAwait(false)));
+        internal Task StopAsync() => Task.WhenAll(_sensors.Values.Select(async s => await s.StopAsync().ConfigureAwait(false)));
 
-        public new bool TryRemove(string key, out ISensor value)
+        public bool TryRemove(string key, out ISensor value)
         {
-            if (!base.TryRemove(key, out value))
+            if (!_sensors.TryRemove(key, out value))
                 return false;
 
             Interlocked.Decrement(ref _sensorCount);
             return true;
         }
+
+        public bool TryGetValue(string key, out ISensor value) => _sensors.TryGetValue(key, out value);
 
 
         internal MonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options)
@@ -145,7 +169,7 @@ namespace HSMDataCollector.Core
         {
             var path = sensor.SensorPath;
 
-            if (TryGetValue(path, out var oldSensor))
+            if (_sensors.TryGetValue(path, out var oldSensor))
                 return oldSensor;
 
             if (_dataProcessor.CanStartNewSensors)
@@ -173,7 +197,7 @@ namespace HSMDataCollector.Core
         {
             var path = sensor.SensorPath;
 
-            if (TryAdd(path, sensor))
+            if (_sensors.TryAdd(path, sensor))
             {
                 var count = Interlocked.Increment(ref _sensorCount);
                 if (count > _options.MaxSensors)
@@ -188,7 +212,7 @@ namespace HSMDataCollector.Core
                 return sensor;
             }
 
-            if (TryGetValue(path, out var existingSensor))
+            if (_sensors.TryGetValue(path, out var existingSensor))
             {
                 sensor.Dispose();
                 return existingSensor;
