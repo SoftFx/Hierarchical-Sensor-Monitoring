@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -9,7 +9,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
-    internal sealed class FileQueueProcessor: EventedQueueProcessorBase<FileSensorValue>
+    internal sealed class FileQueueProcessor: QueueProcessorBase<FileSensorValue>
     {
         public override string QueueName => "File";
 
@@ -21,10 +21,9 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 try
                 {
-                    _event.Wait(token);
-                    _event.Reset();
+                    await Reader.WaitToReadAsync(token).ConfigureAwait(false);
 
-                    while (!_queue.IsEmpty && !token.IsCancellationRequested)
+                    while (!IsEmpty && !token.IsCancellationRequested)
                     {
                         if (TryDequeue(out QueueItem<FileSensorValue> item))
                             await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);

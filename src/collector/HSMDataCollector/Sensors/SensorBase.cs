@@ -9,14 +9,6 @@ using HSMSensorDataObjects.SensorValueRequests;
 namespace HSMDataCollector.DefaultSensors
 {
 
-    public interface ISensor : IDisposable
-    {
-        string SensorPath { get; }
-        ValueTask<bool> InitAsync();
-        ValueTask<bool> StartAsync();
-        ValueTask StopAsync();
-    }
-
     public abstract class SensorBase<TDisplayUnit> : ISensor where TDisplayUnit : struct, Enum
     {
         internal const string DefaultTimeFormat = "dd/MM/yyyy HH:mm:ss";

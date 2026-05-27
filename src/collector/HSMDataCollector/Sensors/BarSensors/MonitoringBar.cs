@@ -154,7 +154,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected override double CountAvr(double first, double second) => first + second / 2;
+        protected override double CountAvr(double first, double second) => (first + second) / 2;
 
         protected override double CountMean() => _totalSum / Count;
 

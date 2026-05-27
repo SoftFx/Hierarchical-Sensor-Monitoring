@@ -45,21 +45,59 @@ namespace HSMDataCollector.Threading
             while (NextRunMilliseconds <= nowMilliseconds);
         }
 
-        internal void TryRun()
+        internal bool TryMarkRunning()
         {
             if (_disposed || Interlocked.Exchange(ref _isRunning, 1) == 1)
-                return;
+                return false;
 
             lock (_lock)
             {
                 if (_disposed)
                 {
                     Interlocked.Exchange(ref _isRunning, 0);
-                    return;
+                    return false;
                 }
 
-                _currentRun = Task.Run(ExecuteAsync);
+                return true;
             }
+        }
+
+        internal void ExecuteAndComplete()
+        {
+            try
+            {
+                _action().ConfigureAwait(false).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                _onError?.Invoke(ex);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _isRunning, 0);
+
+                if (_period == Timeout.InfiniteTimeSpan)
+                {
+                    _disposed = true;
+                    CollectorScheduler.Remove(this);
+                }
+            }
+        }
+
+        internal void SetCurrentRun(Task task)
+        {
+            lock (_lock)
+            {
+                _currentRun = task;
+            }
+        }
+
+        internal void TryRun()
+        {
+            if (!TryMarkRunning())
+                return;
+
+            SetCurrentRun(Task.Run(ExecuteAndComplete));
         }
 
         internal async ValueTask StopAsync(bool waitForCurrentRun = true)
@@ -77,28 +115,6 @@ namespace HSMDataCollector.Threading
         }
 
         public void Dispose() => StopAsync(waitForCurrentRun: false).ConfigureAwait(false).GetAwaiter().GetResult();
-
-        private async Task ExecuteAsync()
-        {
-            try
-            {
-                await _action().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _onError?.Invoke(ex);
-            }
-            finally
-            {
-                Interlocked.Exchange(ref _isRunning, 0);
-
-                if (_period == Timeout.InfiniteTimeSpan)
-                {
-                    _disposed = true;
-                    CollectorScheduler.Remove(this);
-                }
-            }
-        }
     }
 
     internal static class CollectorScheduler
@@ -150,48 +166,50 @@ namespace HSMDataCollector.Threading
         {
             while (!_cancellation.IsCancellationRequested)
             {
-                List<ScheduledTask> dueTasks = null;
-                var waitMilliseconds = Timeout.Infinite;
-                var now = GetTickCountMilliseconds();
-
-                lock (_lock)
-                {
-                    for (int i = _tasks.Count - 1; i >= 0; i--)
-                    {
-                        var task = _tasks[i];
-
-                        if (task.IsDisposed)
-                        {
-                            _tasks.RemoveAt(i);
-                            continue;
-                        }
-
-                        if (task.NextRunMilliseconds <= now)
-                        {
-                            dueTasks = dueTasks ?? new List<ScheduledTask>();
-                            dueTasks.Add(task);
-                            task.Advance(now);
-                        }
-                        else
-                        {
-                            var nextWait = task.NextRunMilliseconds - now;
-                            waitMilliseconds = waitMilliseconds == Timeout.Infinite
-                                ? ToIntWait(nextWait)
-                                : Math.Min(waitMilliseconds, ToIntWait(nextWait));
-                        }
-                    }
-                }
-
-                if (dueTasks != null)
-                {
-                    foreach (var task in dueTasks)
-                        task.TryRun();
-
-                    continue;
-                }
-
                 try
                 {
+                    List<ScheduledTask> dueTasks = null;
+                    var waitMilliseconds = Timeout.Infinite;
+                    var now = GetTickCountMilliseconds();
+
+                    lock (_lock)
+                    {
+                        for (int i = _tasks.Count - 1; i >= 0; i--)
+                        {
+                            var task = _tasks[i];
+
+                            if (task.IsDisposed)
+                            {
+                                _tasks.RemoveAt(i);
+                                continue;
+                            }
+
+                            if (task.NextRunMilliseconds <= now)
+                            {
+                                dueTasks = dueTasks ?? new List<ScheduledTask>();
+                                dueTasks.Add(task);
+                                task.Advance(now);
+                            }
+                            else
+                            {
+                                var nextWait = task.NextRunMilliseconds - now;
+                                waitMilliseconds = waitMilliseconds == Timeout.Infinite
+                                    ? ToIntWait(nextWait)
+                                    : Math.Min(waitMilliseconds, ToIntWait(nextWait));
+                            }
+                        }
+                    }
+
+                    if (dueTasks != null)
+                    {
+                        DispatchBatch(dueTasks);
+
+                        _signal.Wait(1, _cancellation.Token);
+                        _signal.Reset();
+
+                        continue;
+                    }
+
                     _signal.Wait(waitMilliseconds, _cancellation.Token);
                     _signal.Reset();
                 }
@@ -199,7 +217,35 @@ namespace HSMDataCollector.Threading
                 {
                     return;
                 }
+                catch
+                {
+                    // Prevent unexpected exceptions from killing the scheduler loop.
+                }
             }
+        }
+
+        private static void DispatchBatch(List<ScheduledTask> dueTasks)
+        {
+            var ready = new List<ScheduledTask>(dueTasks.Count);
+
+            foreach (var task in dueTasks)
+            {
+                if (task.TryMarkRunning())
+                    ready.Add(task);
+            }
+
+            if (ready.Count == 0)
+                return;
+
+            var batch = ready;
+            var batchTask = Task.Run(() =>
+            {
+                for (int i = 0; i < batch.Count; i++)
+                    batch[i].ExecuteAndComplete();
+            });
+
+            for (int i = 0; i < ready.Count; i++)
+                ready[i].SetCurrentRun(batchTask);
         }
 
         private static int ToIntWait(long waitMilliseconds)

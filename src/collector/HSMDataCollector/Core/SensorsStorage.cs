@@ -139,7 +139,11 @@ namespace HSMDataCollector.Core
 
             if (_dataProcessor.IsStarted)
             {
-                _ = AddAndStart(sensor);
+                _ = AddAndStart(sensor).ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                        Logger.Error($"Sensor start failed for {sensor.SensorPath}: {t.Exception?.InnerException}");
+                }, TaskContinuationOptions.OnlyOnFaulted);
                 return sensor;
             }
             else

@@ -1,0 +1,30 @@
+name: DataCollector Integration Tests
+
+on:
+  push:
+    branches: [master, develop]
+    paths:
+      - 'src/collector/**'
+      - 'src/api/**'
+      - 'src/tests/HSMDataCollector.IntegrationTests/**'
+  pull_request:
+    paths:
+      - 'src/collector/**'
+      - 'src/api/**'
+      - 'src/tests/HSMDataCollector.IntegrationTests/**'
+  workflow_dispatch:
+  schedule:
+    - cron: '3 6 * * 1-5'
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Run Integration Tests
+        run: dotnet test src/tests/HSMDataCollector.IntegrationTests --logger "console;verbosity=detailed"

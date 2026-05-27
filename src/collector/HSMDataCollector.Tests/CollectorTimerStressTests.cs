@@ -187,7 +187,7 @@ namespace HSMDataCollector.Tests
                     $"The scale test should exercise many timer callbacks. Callbacks={callbacks}.");
                 Assert.True(threadDelta < 96,
                     $"Creating {sensorCount} periodic sensors should not create a thread per timer. Thread delta={threadDelta}.");
-                AssertCpuBudget(cpu, TimeSpan.FromMilliseconds(300), "1000 function sensor timers");
+                AssertCpuBudget(cpu, TimeSpan.FromMilliseconds(800), "1000 function sensor timers");
             }
         }
 

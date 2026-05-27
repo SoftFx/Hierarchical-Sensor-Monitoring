@@ -1,13 +1,12 @@
-﻿using HSMDataCollector.Core;
+using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 
@@ -17,15 +16,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
     {
         private Task _task;
         private bool _disposed;
+        private int _itemCount;
 
-        protected readonly ConcurrentQueue<QueueItem<T>> _queue = new ConcurrentQueue<QueueItem<T>>();
+        private readonly Channel<QueueItem<T>> _channel;
+        protected ChannelReader<QueueItem<T>> Reader => _channel.Reader;
+        protected ChannelWriter<QueueItem<T>> Writer => _channel.Writer;
+
         protected readonly IDataSender _sender;
         protected readonly CollectorOptions _options;
         protected CancellationTokenSource _cancellationTokenSource;
         protected readonly ICollectorLogger _logger;
         protected readonly DataProcessor _queueManager;
-
-        protected int _queueCount;
 
         public abstract string QueueName { get; }
 
@@ -35,6 +36,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             _sender  = options.DataSender ?? throw new ArgumentNullException(nameof(options.DataSender));
             _queueManager = queueManager;
             _logger = logger;
+
+            _channel = Channel.CreateUnbounded<QueueItem<T>>(new UnboundedChannelOptions
+            {
+                SingleWriter = false,
+                SingleReader = true,
+            });
         }
 
         internal void Start()
@@ -82,13 +89,13 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         internal virtual int Enqeue(T item)
         {
-            _queue.Enqueue(new QueueItem<T>(item));
-            Interlocked.Increment(ref _queueCount);
+            Writer.TryWrite(new QueueItem<T>(item));
+            Interlocked.Increment(ref _itemCount);
 
             int result = 0;
-            while (Volatile.Read(ref _queueCount) > _options.MaxQueueSize)
+            while (Volatile.Read(ref _itemCount) > _options.MaxQueueSize)
             {
-                if (!TryDequeue(out _))
+                if (!TryDequeueCore(out _))
                     break;
                 result++;
             }
@@ -140,16 +147,20 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         protected abstract Task ProcessingLoop(CancellationToken token);
 
-        protected int QueueCount => Volatile.Read(ref _queueCount);
+        protected int QueueCount => Volatile.Read(ref _itemCount);
 
         protected bool TryDequeue(out QueueItem<T> item)
         {
-            if (!_queue.TryDequeue(out item))
+            if (!TryDequeueCore(out item))
                 return false;
 
-            Interlocked.Decrement(ref _queueCount);
+            Interlocked.Decrement(ref _itemCount);
             return true;
         }
+
+        private bool TryDequeueCore(out QueueItem<T> item) => Reader.TryRead(out item);
+
+        protected bool IsEmpty => Volatile.Read(ref _itemCount) == 0;
 
         private void ClearQueue()
         {
