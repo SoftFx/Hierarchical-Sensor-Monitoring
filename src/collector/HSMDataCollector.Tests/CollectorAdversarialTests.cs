@@ -881,7 +881,7 @@ namespace HSMDataCollector.Tests
             var exception = Record.Exception(() => collector.Dispose());
 
             Assert.Null(exception);
-            Assert.Equal(CollectorStatus.Stopped, collector.Status);
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
         }
 
         [Fact]
@@ -896,7 +896,7 @@ namespace HSMDataCollector.Tests
             var exception = await Record.ExceptionAsync(() => collector.Start()).ConfigureAwait(false);
 
             Assert.Null(exception);
-            Assert.Equal(CollectorStatus.Stopped, collector.Status);
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
         }
 
         [Fact]
@@ -911,7 +911,58 @@ namespace HSMDataCollector.Tests
             var exception = Record.Exception(() => collector.Initialize(false));
 
             Assert.Null(exception);
-            Assert.Equal(CollectorStatus.Stopped, collector.Status);
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
+        }
+
+        [Fact]
+        public async Task Dispose_from_running_fires_stopping_and_stopped_events()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+
+            var stoppingFired = false;
+            var stoppedFired = false;
+
+            collector.ToStopping += () => stoppingFired = true;
+            collector.ToStopped += () => stoppedFired = true;
+
+            await collector.Start().ConfigureAwait(false);
+            Assert.Equal(CollectorStatus.Running, collector.Status);
+
+            collector.Dispose();
+
+            Assert.True(stoppingFired, "ToStopping should fire during Dispose from Running.");
+            Assert.True(stoppedFired, "ToStopped should fire during Dispose from Running.");
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
+        }
+
+        [Fact]
+        public void Double_dispose_does_not_throw()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+
+            collector.Dispose();
+
+            var exception = Record.Exception(() => collector.Dispose());
+
+            Assert.Null(exception);
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
+        }
+
+        [Fact]
+        public async Task Stop_after_dispose_is_noop()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+
+            await collector.Start().ConfigureAwait(false);
+            collector.Dispose();
+
+            var exception = await Record.ExceptionAsync(() => collector.Stop()).ConfigureAwait(false);
+
+            Assert.Null(exception);
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
         }
 
         [SuiteSoakFact]

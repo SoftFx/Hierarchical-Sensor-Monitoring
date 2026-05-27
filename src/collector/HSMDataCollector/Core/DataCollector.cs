@@ -21,6 +21,7 @@ namespace HSMDataCollector.Core
         Running,
         Stopping,
         Stopped,
+        Disposed,
     }
 
 
@@ -32,9 +33,7 @@ namespace HSMDataCollector.Core
         private readonly CollectorOptions _options;
         private readonly IDataSender _dataSender;
         private readonly DataProcessor _dataProcessor;
-        private readonly object _lifecycleLock = new object();
-
-        private bool _disposed;
+        private readonly CollectorLifecycle _lifecycle = new CollectorLifecycle();
 
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
@@ -43,7 +42,7 @@ namespace HSMDataCollector.Core
         public IUnixCollection Unix => _sensorsStorage.Unix;
 
 
-        public CollectorStatus Status { get; private set; } = CollectorStatus.Stopped;
+        public CollectorStatus Status => _lifecycle.Status;
 
         public string ComputerName => _options?.ComputerName;
 
@@ -76,7 +75,7 @@ namespace HSMDataCollector.Core
 
             _dataSender = options.DataSender;
 
-            _dataProcessor = new DataProcessor(options, _logger);
+            _dataProcessor = new DataProcessor(options, _lifecycle, _logger);
 
             _sensorsStorage = _dataProcessor.SensorStorage;
 
@@ -136,20 +135,18 @@ namespace HSMDataCollector.Core
 
         public async Task Start(Task customStartingTask)
         {
+            if (!_lifecycle.TryStart())
+                return;
+
+            LogAndRaise(CollectorStatus.Starting);
+
             try
             {
-                lock (_lifecycleLock)
+                if (!_dataProcessor.Start())
                 {
-                    if (_disposed)
-                        return;
-
-                    if (!Status.IsStopped())
-                        return;
-
-                    if (!_dataProcessor.Start())
-                        return;
-
-                    ChangeStatus(CollectorStatus.Starting);
+                    _lifecycle.AbortStart();
+                    LogAndRaise(CollectorStatus.Stopped);
+                    return;
                 }
 
                 await customStartingTask.ConfigureAwait(false);
@@ -159,21 +156,17 @@ namespace HSMDataCollector.Core
 
                 await _dataProcessor.InitAsync().ConfigureAwait(false);
 
-                lock (_lifecycleLock)
-                {
-                    if (Status == CollectorStatus.Starting)
-                        ChangeStatus(CollectorStatus.Running);
-                }
-
+                if (_lifecycle.CompleteStart())
+                    LogAndRaise(CollectorStatus.Running);
             }
             catch (Exception ex)
             {
-                _logger.Error($"DataCollector starting error: {ex}" );
+                _logger.Error($"DataCollector starting error: {ex}");
 
                 await _dataProcessor.StopAsync();
 
-                lock (_lifecycleLock)
-                    ChangeStatus(CollectorStatus.Stopped);
+                _lifecycle.AbortStart();
+                LogAndRaise(CollectorStatus.Stopped);
             }
         }
 
@@ -182,55 +175,46 @@ namespace HSMDataCollector.Core
 
         public async Task Stop(Task customStartingTask)
         {
+            if (!_lifecycle.TryStop())
+                return;
+
+            LogAndRaise(CollectorStatus.Stopping);
+
             try
             {
-                lock (_lifecycleLock)
-                {
-                    if (!Status.IsStartingOrRunning())
-                        return;
-
-                    ChangeStatus(CollectorStatus.Stopping);
-                }
-
                 await Task.WhenAll(_dataProcessor.StopAsync(), customStartingTask).ConfigureAwait(false);
-
-                lock (_lifecycleLock)
-                    ChangeStatus(CollectorStatus.Stopped);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex);
-
-                lock (_lifecycleLock)
-                    ChangeStatus(CollectorStatus.Stopped);
             }
 
+            if (_lifecycle.CompleteStop())
+                LogAndRaise(CollectorStatus.Stopped);
         }
 
         private void InitializeProcessor()
         {
+            if (!_lifecycle.TryStart())
+                return;
+
+            LogAndRaise(CollectorStatus.Starting);
+
             try
             {
-                lock (_lifecycleLock)
+                _logger.Info("Initialize timer...");
+
+                if (!_dataProcessor.Start())
                 {
-                    if (_disposed)
-                        return;
-
-                    if (!Status.IsStopped())
-                        return;
-
-                    _logger.Info("Initialize timer...");
-
-                    if (!_dataProcessor.Start())
-                        return;
-
-                    ChangeStatus(CollectorStatus.Starting);
+                    _lifecycle.AbortStart();
+                    LogAndRaise(CollectorStatus.Stopped);
+                    return;
                 }
 
                 _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
 
-                lock (_lifecycleLock)
-                    ChangeStatus(CollectorStatus.Running);
+                if (_lifecycle.CompleteStart())
+                    LogAndRaise(CollectorStatus.Running);
             }
             catch (Exception ex)
             {
@@ -238,34 +222,34 @@ namespace HSMDataCollector.Core
 
                 _dataProcessor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
 
-                lock (_lifecycleLock)
-                    ChangeStatus(CollectorStatus.Stopped);
+                _lifecycle.AbortStart();
+                LogAndRaise(CollectorStatus.Stopped);
             }
         }
 
 
         public void Dispose()
         {
-            var shouldStopProcessor = false;
+            var previousStatus = _lifecycle.TryDispose();
+
+            if (previousStatus == CollectorStatus.Disposed)
+                return;
 
             try
             {
-                lock (_lifecycleLock)
+                if (previousStatus.IsStartingOrRunning())
                 {
-                    if (_disposed)
-                        return;
-
-                    _disposed = true;
-
-                    if (!Status.IsStopped())
-                    {
-                        shouldStopProcessor = true;
-                        ChangeStatus(CollectorStatus.Stopping);
-                    }
+                    _lifecycle.TryStop();
+                    RaiseLifecycleEvent(ToStopping, nameof(ToStopping));
                 }
 
-                if (shouldStopProcessor)
+                if (previousStatus != CollectorStatus.Stopped)
+                {
                     DisposeComponent(() => _dataProcessor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
+
+                    _lifecycle.CompleteStop();
+                    RaiseLifecycleEvent(ToStopped, nameof(ToStopped));
+                }
 
                 DisposeComponent(_dataProcessor.Dispose, nameof(_dataProcessor));
 
@@ -274,23 +258,15 @@ namespace HSMDataCollector.Core
             finally
             {
                 AppDomain.CurrentDomain.UnhandledException -= UnhandledExceptionHandler;
-
-                lock (_lifecycleLock)
-                {
-                    if (!Status.IsStopped())
-                        ChangeStatus(CollectorStatus.Stopped);
-                }
             }
         }
 
 
-        private void ChangeStatus(CollectorStatus newStatus)
+        private void LogAndRaise(CollectorStatus status)
         {
-            Status = newStatus;
+            _logger.Info($"DataCollector (v. {DataCollectorExtensions.Version}) -> {status}");
 
-            _logger.Info($"DataCollector (v. {DataCollectorExtensions.Version}) -> {newStatus}");
-
-            switch (newStatus)
+            switch (status)
             {
                 case CollectorStatus.Starting:
                     RaiseLifecycleEvent(ToStarting, nameof(ToStarting));
