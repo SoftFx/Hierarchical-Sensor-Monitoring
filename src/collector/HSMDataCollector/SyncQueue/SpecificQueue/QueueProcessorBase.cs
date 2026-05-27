@@ -69,10 +69,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 {
                     // Defensive: ProcessingLoop should never exit on its own (it loops until cancellation),
                     // but if a subclass override breaks that contract, recover by treating the queue as stopped.
+                    // We do NOT call Task.Dispose on a possibly-faulted task — let the GC handle it to avoid
+                    // surfacing unobserved exceptions on the finalizer thread.
                     if (_task == null || _task.IsCompleted)
                     {
                         _logger.Error($"{QueueName} queue processor task exited unexpectedly; restarting.");
-                        _task?.Dispose();
                         _task = null;
                         _cancellationTokenSource?.Dispose();
                         _cancellationTokenSource = null;

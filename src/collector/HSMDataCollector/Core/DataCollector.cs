@@ -218,7 +218,7 @@ namespace HSMDataCollector.Core
             }
             catch (Exception ex)
             {
-                _logger.Error(ex);
+                _logger.Error($"DataCollector Stop error: {ex}");
             }
 
             lock (_opLock)
@@ -315,8 +315,10 @@ namespace HSMDataCollector.Core
             {
                 if (inFlightStop != null)
                 {
-                    // Concurrent Stop() is responsible for firing ToStopped and CompleteStop;
-                    // we just wait so we do not tear down the sender while queues still drain.
+                    // Concurrent Stop() is responsible for firing ToStopped — but its continuation runs on
+                    // the threadpool after the inner stop task completes, with no ordering guarantee relative
+                    // to GetAwaiter().GetResult() returning here. Without coordination, Stop's continuation
+                    // could fire ToStopped after Dispose has already torn down components.
                     try
                     {
                         inFlightStop.ConfigureAwait(false).GetAwaiter().GetResult();
@@ -324,6 +326,15 @@ namespace HSMDataCollector.Core
                     catch (Exception ex)
                     {
                         _logger.Error($"DataCollector waiting for in-flight stop failed: {ex}");
+                    }
+
+                    // Race the continuation: whichever path acquires _opLock first calls CompleteStop;
+                    // the other finds the transition already done and no-ops. Either way ToStopped fires
+                    // exactly once, and always before component disposal below.
+                    lock (_opLock)
+                    {
+                        if (_lifecycle.CompleteStop())
+                            LogAndRaise(CollectorStatus.Stopped);
                     }
                 }
                 else if (ownsStop)

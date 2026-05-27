@@ -984,6 +984,11 @@ namespace HSMDataCollector.Tests
                 var stopTask = collector.Stop();
                 collector.Dispose();
 
+                // ToStopped must have been raised before Dispose() returned — Dispose either drove
+                // CompleteStop itself or waited for Stop's continuation to do it. Either way, no event
+                // may fire on a half-disposed collector.
+                Assert.Equal(1, stoppedCount);
+
                 await stopTask.ConfigureAwait(false);
 
                 Assert.Equal(CollectorStatus.Disposed, collector.Status);
@@ -991,6 +996,7 @@ namespace HSMDataCollector.Tests
                 Assert.Equal(1, stoppedCount);
             }
         }
+
 
         [Fact]
         public async Task Concurrent_start_and_stop_keeps_event_order_consistent_with_status()
