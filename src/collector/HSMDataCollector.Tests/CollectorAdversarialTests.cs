@@ -1,9 +1,11 @@
 using HSMDataCollector.Core;
+using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Concurrent;
@@ -881,7 +883,7 @@ namespace HSMDataCollector.Tests
             var exception = Record.Exception(() => collector.Dispose());
 
             Assert.Null(exception);
-            Assert.Equal(CollectorStatus.Stopped, collector.Status);
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
         }
 
         [Fact]
@@ -896,7 +898,7 @@ namespace HSMDataCollector.Tests
             var exception = await Record.ExceptionAsync(() => collector.Start()).ConfigureAwait(false);
 
             Assert.Null(exception);
-            Assert.Equal(CollectorStatus.Stopped, collector.Status);
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
         }
 
         [Fact]
@@ -911,7 +913,268 @@ namespace HSMDataCollector.Tests
             var exception = Record.Exception(() => collector.Initialize(false));
 
             Assert.Null(exception);
-            Assert.Equal(CollectorStatus.Stopped, collector.Status);
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
+        }
+
+        [Fact]
+        public async Task Dispose_from_running_fires_stopping_and_stopped_events()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+
+            var stoppingFired = false;
+            var stoppedFired = false;
+
+            collector.ToStopping += () => stoppingFired = true;
+            collector.ToStopped += () => stoppedFired = true;
+
+            await collector.Start().ConfigureAwait(false);
+            Assert.Equal(CollectorStatus.Running, collector.Status);
+
+            collector.Dispose();
+
+            Assert.True(stoppingFired, "ToStopping should fire during Dispose from Running.");
+            Assert.True(stoppedFired, "ToStopped should fire during Dispose from Running.");
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
+        }
+
+        [Fact]
+        public void Double_dispose_does_not_throw()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+
+            collector.Dispose();
+
+            var exception = Record.Exception(() => collector.Dispose());
+
+            Assert.Null(exception);
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
+        }
+
+        [Fact]
+        public async Task Stop_after_dispose_is_noop()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+
+            await collector.Start().ConfigureAwait(false);
+            collector.Dispose();
+
+            var exception = await Record.ExceptionAsync(() => collector.Stop()).ConfigureAwait(false);
+
+            Assert.Null(exception);
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
+        }
+
+        [Fact]
+        public async Task ToStarting_handler_dispose_does_not_start_queues_after_dispose()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+            var neverComplete = new TaskCompletionSource<bool>();
+
+            collector.ToStarting += collector.Dispose;
+
+            try
+            {
+                var startTask = collector.Start(neverComplete.Task);
+                var completed = await Task.WhenAny(startTask, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
+
+                Assert.Same(startTask, completed);
+                Assert.Equal(CollectorStatus.Disposed, collector.Status);
+            }
+            finally
+            {
+                neverComplete.TrySetResult(true);
+                collector.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task Dispose_concurrent_with_stop_fires_ToStopped_exactly_once()
+        {
+            for (var iteration = 0; iteration < 25; iteration++)
+            {
+                var sender = new ProbeDataSender();
+                var collector = CreateCollector(sender);
+
+                await collector.Start().ConfigureAwait(false);
+
+                var stoppingCount = 0;
+                var stoppedCount = 0;
+                collector.ToStopping += () => Interlocked.Increment(ref stoppingCount);
+                collector.ToStopped += () => Interlocked.Increment(ref stoppedCount);
+
+                // Start the Stop and let it begin draining before Dispose joins
+                var stopTask = collector.Stop();
+                collector.Dispose();
+
+                // ToStopped must have been raised before Dispose() returned — Dispose either drove
+                // CompleteStop itself or waited for Stop's continuation to do it. Either way, no event
+                // may fire on a half-disposed collector.
+                Assert.Equal(1, stoppedCount);
+
+                await stopTask.ConfigureAwait(false);
+
+                Assert.Equal(CollectorStatus.Disposed, collector.Status);
+                Assert.Equal(1, stoppingCount);
+                Assert.Equal(1, stoppedCount);
+            }
+        }
+
+        [Fact]
+        public async Task Dispose_concurrent_with_stop_custom_task_does_not_wait_for_custom_task()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+            var neverComplete = new TaskCompletionSource<bool>();
+
+            try
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                var stopTask = collector.Stop(neverComplete.Task);
+                var disposeTask = Task.Run(() => collector.Dispose());
+                var completed = await Task.WhenAny(disposeTask, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
+
+                Assert.Same(disposeTask, completed);
+                Assert.Equal(CollectorStatus.Disposed, collector.Status);
+
+                neverComplete.SetResult(true);
+                await stopTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                neverComplete.TrySetResult(true);
+                collector.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task Dispose_during_start_init_waits_for_init_before_disposing_components()
+        {
+            var sender = new ProbeDataSender();
+            var collector = CreateCollector(sender);
+            var initEntered = new TaskCompletionSource<bool>();
+            var releaseInit = new TaskCompletionSource<bool>();
+            var blockingSensor = RegisterBlockingInitSensor(collector, "adversarial/dispose-during-start-init", initEntered, releaseInit);
+
+            try
+            {
+                var startTask = collector.Start();
+
+                Assert.True(await WaitOrTimeoutAsync(initEntered.Task, TimeSpan.FromSeconds(1)).ConfigureAwait(false),
+                    "Start should enter sensor InitAsync before Dispose joins it.");
+
+                var disposeTask = Task.Run(() => collector.Dispose());
+                var completedBeforeRelease = await Task.WhenAny(disposeTask, Task.Delay(TimeSpan.FromMilliseconds(250))).ConfigureAwait(false);
+
+                Assert.NotSame(disposeTask, completedBeforeRelease);
+                Assert.Equal(0, blockingSensor.StopCalls);
+
+                releaseInit.SetResult(true);
+
+                Assert.True(await WaitOrTimeoutAsync(disposeTask, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "Dispose should complete after the in-flight start initialization finishes.");
+                await startTask.ConfigureAwait(false);
+
+                Assert.Equal(CollectorStatus.Disposed, collector.Status);
+                Assert.True(blockingSensor.StopCalls > 0);
+            }
+            finally
+            {
+                releaseInit.TrySetResult(true);
+                collector.Dispose();
+            }
+        }
+
+
+        [Fact]
+        public async Task Concurrent_start_and_stop_does_not_leave_queues_running_after_status_stopped()
+        {
+            // Regression test for the start/stop ordering bug: if Stop runs StopAsync against queues
+            // that haven't been spawned yet (because Start released _opLock between TryStart and
+            // _dataProcessor.Start()), and Start then spawned them anyway and bailed without rollback,
+            // background queue processors would stay alive while public Status reads Stopped.
+            //
+            // To make the leak observable, after the race we actively try to push data: create a
+            // sensor and call AddValue. If the data queue is still alive despite Status == Stopped,
+            // SendDataAsync will eventually be invoked on the sender and DataPackages will tick.
+            for (var iteration = 0; iteration < 50; iteration++)
+            {
+                var sender = new ProbeDataSender();
+                var collector = CreateCollector(sender);
+
+                var startTask = Task.Run(() => collector.Start());
+                var stopTask = Task.Run(() => collector.Stop());
+
+                await Task.WhenAll(startTask, stopTask).ConfigureAwait(false);
+
+                var status = collector.Status;
+                Assert.True(
+                    status == CollectorStatus.Stopped ||
+                    status == CollectorStatus.Running ||
+                    status == CollectorStatus.Starting,
+                    $"Iteration {iteration}: unexpected status {status}");
+
+                if (status == CollectorStatus.Stopped)
+                {
+                    var sendsBefore = sender.DataPackages;
+
+                    // Provoke any zombie queue: a live queue will accept and forward this value.
+                    // A properly stopped queue will reject (or drop) it.
+                    var probe = collector.CreateIntSensor("adversarial/start-stop-race/probe");
+                    for (var i = 0; i < 5; i++)
+                        probe.AddValue(i);
+
+                    // Wait at least one PackageCollectPeriod so a live worker would flush.
+                    await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+
+                    var sendsAfter = sender.DataPackages;
+
+                    Assert.True(sendsAfter == sendsBefore,
+                        $"Iteration {iteration}: queue processors continued sending after Status == Stopped (before={sendsBefore}, after={sendsAfter}).");
+                }
+
+                collector.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task Concurrent_start_and_stop_keeps_event_order_consistent_with_status()
+        {
+            // Regression test for the event-ordering race: when Start and Stop race, subscribers
+            // must see events in an order consistent with the underlying state machine
+            // (no Stopping before Starting).
+            for (var iteration = 0; iteration < 50; iteration++)
+            {
+                var sender = new ProbeDataSender();
+                using (var collector = CreateCollector(sender))
+                {
+                    var events = new ConcurrentQueue<CollectorStatus>();
+                    collector.ToStarting += () => events.Enqueue(CollectorStatus.Starting);
+                    collector.ToRunning  += () => events.Enqueue(CollectorStatus.Running);
+                    collector.ToStopping += () => events.Enqueue(CollectorStatus.Stopping);
+                    collector.ToStopped  += () => events.Enqueue(CollectorStatus.Stopped);
+
+                    var startTask = Task.Run(() => collector.Start());
+                    var stopTask  = Task.Run(() => collector.Stop());
+
+                    await Task.WhenAll(startTask, stopTask).ConfigureAwait(false);
+
+                    var observed = events.ToArray();
+                    // Stopping must not appear before Starting
+                    var startingIdx = Array.IndexOf(observed, CollectorStatus.Starting);
+                    var stoppingIdx = Array.IndexOf(observed, CollectorStatus.Stopping);
+
+                    if (startingIdx >= 0 && stoppingIdx >= 0)
+                    {
+                        Assert.True(stoppingIdx > startingIdx,
+                            $"Iteration {iteration}: Stopping fired before Starting. Events: [{string.Join(", ", observed)}]");
+                    }
+                }
+            }
         }
 
         [SuiteSoakFact]
@@ -1080,6 +1343,37 @@ namespace HSMDataCollector.Tests
             });
         }
 
+        private static BlockingInitSensor RegisterBlockingInitSensor(
+            DataCollector collector,
+            string path,
+            TaskCompletionSource<bool> initEntered,
+            TaskCompletionSource<bool> releaseInit)
+        {
+            var dataProcessor = (DataProcessor)typeof(DataCollector)
+                .GetField("_dataProcessor", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(collector);
+            var sensorsStorage = (SensorsStorage)typeof(DataCollector)
+                .GetField("_sensorsStorage", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(collector);
+
+            var sensor = new BlockingInitSensor(new InstantSensorOptions
+            {
+                ComputerName = collector.ComputerName,
+                Module = collector.Module,
+                Path = path,
+                DataProcessor = dataProcessor,
+            }, initEntered, releaseInit);
+
+            sensorsStorage.Register(sensor);
+            return sensor;
+        }
+
+        private static async Task<bool> WaitOrTimeoutAsync(Task task, TimeSpan timeout)
+        {
+            var completed = await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false);
+            return ReferenceEquals(completed, task);
+        }
+
         private static TimeSpan GetSuiteSoakDuration()
         {
             var rawSeconds = Environment.GetEnvironmentVariable("HSM_COLLECTOR_SUITE_SOAK_SECONDS");
@@ -1112,6 +1406,37 @@ namespace HSMDataCollector.Tests
             {
                 if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_SUITE_SOAK"), "1", StringComparison.Ordinal))
                     Skip = "Set HSM_COLLECTOR_RUN_SUITE_SOAK=1 to run repeated suite soak tests.";
+            }
+        }
+
+        private sealed class BlockingInitSensor : SensorBase<NoDisplayUnit>
+        {
+            private readonly TaskCompletionSource<bool> _initEntered;
+            private readonly TaskCompletionSource<bool> _releaseInit;
+            private int _stopCalls;
+
+            internal BlockingInitSensor(
+                InstantSensorOptions options,
+                TaskCompletionSource<bool> initEntered,
+                TaskCompletionSource<bool> releaseInit) : base(options)
+            {
+                _initEntered = initEntered;
+                _releaseInit = releaseInit;
+            }
+
+            internal int StopCalls => Volatile.Read(ref _stopCalls);
+
+            public override async ValueTask<bool> InitAsync()
+            {
+                _initEntered.TrySetResult(true);
+                await _releaseInit.Task.ConfigureAwait(false);
+                return true;
+            }
+
+            public override ValueTask StopAsync()
+            {
+                Interlocked.Increment(ref _stopCalls);
+                return default;
             }
         }
 

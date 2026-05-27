@@ -24,22 +24,19 @@ namespace HSMDataCollector.Core
         private readonly CommandQueueProcessor _commandQueue;
         private readonly LoggerManager _logger;
         private readonly MessageDeduplicator _messageDeduplicator;
+        private readonly CollectorLifecycle _lifecycle;
         private readonly TimeSpan _stopFlushTimeout;
 
         private DefaultSensorsCollection DefaultSensors => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? (DefaultSensorsCollection)SensorStorage.Windows : (DefaultSensorsCollection)SensorStorage.Unix;
 
         internal SensorsStorage SensorStorage { get; }
 
-        private int _isStarted;
-        private int _isStopping;
+        internal bool CanStartNewSensors => _lifecycle.CanStartNewSensors;
 
-        public bool IsStarted => Volatile.Read(ref _isStarted) == 1;
-
-        internal bool CanStartNewSensors => IsStarted && Volatile.Read(ref _isStopping) == 0;
-
-        public DataProcessor(CollectorOptions options, LoggerManager logger)
+        public DataProcessor(CollectorOptions options, CollectorLifecycle lifecycle, LoggerManager logger)
         {
             _logger = logger;
+            _lifecycle = lifecycle;
             _stopFlushTimeout = TimeSpan.FromTicks(Math.Min(Math.Max(options.RequestTimeout.Ticks, TimeSpan.FromSeconds(1).Ticks),
                                                             TimeSpan.FromSeconds(5).Ticks));
 
@@ -57,11 +54,6 @@ namespace HSMDataCollector.Core
 
         public bool Start()
         {
-            if (IsStarted)
-                return true;
-
-            Volatile.Write(ref _isStopping, 0);
-
             var dataStarted = _dataQueue.Start();
             var priorityStarted = dataStarted && _priorityQueue.Start();
             var fileStarted = priorityStarted && _fileQueue.Start();
@@ -73,7 +65,6 @@ namespace HSMDataCollector.Core
                 return false;
             }
 
-            Volatile.Write(ref _isStarted, 1);
             return true;
         }
 
@@ -85,38 +76,64 @@ namespace HSMDataCollector.Core
 
         public async Task StopAsync()
         {
-            Volatile.Write(ref _isStopping, 1);
-            try
+            // Collect failures across phases so a single phase exception does not leave background queues running.
+            // After all phases attempt to stop, rethrow as AggregateException so the caller knows the stop was degraded.
+            var failures = new List<Exception>();
+
+            await TryStopPhase(() => SensorStorage.StopAsync(), failures).ConfigureAwait(false);
+
+            var dataQueueStopped = false;
+            var priorityQueueStopped = false;
+
+            await TryStopPhase(async () =>
             {
-                await SensorStorage.StopAsync().ConfigureAwait(false);
-                Volatile.Write(ref _isStarted, 0);
+                dataQueueStopped = await _dataQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
+            }, failures).ConfigureAwait(false);
 
-                var dataQueueStopped = await _dataQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
-                var priorityQueueStopped = await _priorityQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
+            await TryStopPhase(async () =>
+            {
+                priorityQueueStopped = await _priorityQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
+            }, failures).ConfigureAwait(false);
 
-                if (priorityQueueStopped)
+            if (priorityQueueStopped)
+            {
+                await TryStopPhase(async () =>
                 {
                     using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
                         await _priorityQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
 
                     LogDiscardedItems(_priorityQueue.ClearQueue(), _priorityQueue.QueueName);
-                }
+                }, failures).ConfigureAwait(false);
+            }
 
-                if (dataQueueStopped)
+            if (dataQueueStopped)
+            {
+                await TryStopPhase(async () =>
                 {
                     using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
                         await _dataQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
 
                     LogDiscardedItems(_dataQueue.ClearQueue(), _dataQueue.QueueName);
-                }
-
-                await _fileQueue.StopAsync().ConfigureAwait(false);
-                await _commandQueue.StopAsync().ConfigureAwait(false);
+                }, failures).ConfigureAwait(false);
             }
-            finally
+
+            await TryStopPhase(() => _fileQueue.StopAsync().AsTask(), failures).ConfigureAwait(false);
+            await TryStopPhase(() => _commandQueue.StopAsync().AsTask(), failures).ConfigureAwait(false);
+
+            if (failures.Count > 0)
+                throw new AggregateException("One or more phases of DataProcessor.StopAsync failed; remaining phases completed.", failures);
+        }
+
+        private async Task TryStopPhase(Func<Task> phase, List<Exception> failures)
+        {
+            try
             {
-                Volatile.Write(ref _isStarted, 0);
-                Volatile.Write(ref _isStopping, 0);
+                await phase().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"DataProcessor stop phase failed: {ex}");
+                failures.Add(ex);
             }
         }
 
@@ -132,7 +149,7 @@ namespace HSMDataCollector.Core
 
         public void AddData(ISensor sender, SensorValueBase data)
         {
-            if (!IsStarted)
+            if (!_lifecycle.CanAcceptData)
                 return;
 
             SendQueueOverflow(sender, _dataQueue.Enqeue(data), _dataQueue.QueueName);
@@ -140,7 +157,7 @@ namespace HSMDataCollector.Core
 
         public void AddData(ISensor sender, IEnumerable<SensorValueBase> items)
         {
-            if (!IsStarted)
+            if (!_lifecycle.CanAcceptData)
                 return;
 
             SendQueueOverflow(sender, _dataQueue.Enqeue(items), _dataQueue.QueueName);
@@ -148,7 +165,7 @@ namespace HSMDataCollector.Core
 
         public void AddPriorityData(ISensor sender, SensorValueBase data)
         {
-            if (!IsStarted)
+            if (!_lifecycle.CanAcceptData)
                 return;
 
             SendQueueOverflow(sender, _priorityQueue.Enqeue(data), _priorityQueue.QueueName);
@@ -156,7 +173,7 @@ namespace HSMDataCollector.Core
 
         public void AddPriorityData(ISensor sender, IEnumerable<SensorValueBase> items)
         {
-            if (!IsStarted)
+            if (!_lifecycle.CanAcceptData)
                 return;
 
             SendQueueOverflow(sender, _priorityQueue.Enqeue(items), _priorityQueue.QueueName);
@@ -164,7 +181,7 @@ namespace HSMDataCollector.Core
 
         public void AddCommand(ISensor sender, CommandRequestBase command)
         {
-            if (!IsStarted)
+            if (!_lifecycle.CanAcceptData)
                 return;
 
             SendQueueOverflow(sender, _commandQueue.Enqeue(command), _commandQueue.QueueName);
@@ -172,7 +189,7 @@ namespace HSMDataCollector.Core
 
         public void AddCommand(ISensor sender, IEnumerable<CommandRequestBase> commands)
         {
-            if (!IsStarted)
+            if (!_lifecycle.CanAcceptData)
                 return;
 
             SendQueueOverflow(sender, _commandQueue.Enqeue(commands), _commandQueue.QueueName);
@@ -180,7 +197,7 @@ namespace HSMDataCollector.Core
 
         public void AddFile(ISensor sender, FileSensorValue file)
         {
-            if (!IsStarted)
+            if (!_lifecycle.CanAcceptData)
                 return;
 
             SendQueueOverflow(sender, _fileQueue.Enqeue(file), _fileQueue.QueueName);

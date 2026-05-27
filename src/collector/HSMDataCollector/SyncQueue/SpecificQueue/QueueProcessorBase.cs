@@ -1,4 +1,4 @@
-﻿using HSMDataCollector.Core;
+using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -11,10 +11,19 @@ using System.Threading.Tasks;
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
+    internal enum QueueState : byte
+    {
+        Stopped,
+        Running,
+        Stopping,
+    }
+
+
     internal abstract class QueueProcessorBase<T> : IDisposable
     {
         private Task _task;
         private bool _disposed;
+        private QueueState _state;
         private readonly Channel<QueueItem<T>> _channel;
 
         protected ChannelReader<QueueItem<T>> Reader => _channel.Reader;
@@ -27,7 +36,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         private readonly object _lifecycleLock = new object();
         protected int _queueCount;
-        private int _stopTimedOut;
         private int _cleanupContinuationRegistered;
 
         public abstract string QueueName { get; }
@@ -51,19 +59,42 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         {
             lock (_lifecycleLock)
             {
-                if (_task != null)
+                if (_disposed)
                 {
-                    if (_task.IsCompleted)
-                        CompleteStoppedTask(_task, _cancellationTokenSource, clearQueue: false);
+                    _logger.Error($"{QueueName} queue processor is disposed and cannot be started.");
+                    return false;
+                }
+
+                if (_state == QueueState.Stopping)
+                {
+                    _logger.Error($"{QueueName} queue processor is still stopping and cannot be started again yet.");
+                    return false;
+                }
+
+                if (_state == QueueState.Running)
+                {
+                    // Defensive: ProcessingLoop should never exit on its own (it loops until cancellation),
+                    // but if a subclass override breaks that contract, recover by treating the queue as stopped.
+                    // We do NOT call Task.Dispose on a possibly-faulted task — let the GC handle it to avoid
+                    // surfacing unobserved exceptions on the finalizer thread.
+                    if (_task == null || _task.IsCompleted)
+                    {
+                        _logger.Error($"{QueueName} queue processor task exited unexpectedly; restarting.");
+                        _task = null;
+                        _cancellationTokenSource?.Dispose();
+                        _cancellationTokenSource = null;
+                        _state = QueueState.Stopped;
+                        Interlocked.Exchange(ref _cleanupContinuationRegistered, 0);
+                    }
                     else
                     {
-                        _logger.Error($"{QueueName} queue processor is still stopping and cannot be started again yet.");
-                        return false;
+                        return true;
                     }
                 }
 
                 _cancellationTokenSource = new CancellationTokenSource();
                 _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
+                _state = QueueState.Running;
                 Interlocked.Exchange(ref _cleanupContinuationRegistered, 0);
             }
 
@@ -79,7 +110,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                 lock (_lifecycleLock)
                 {
-                    if (_task is null)
+                    if (_state == QueueState.Stopped)
                     {
                         if (clearQueue)
                             ClearQueue();
@@ -87,6 +118,15 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         return true;
                     }
 
+                    if (_state == QueueState.Stopping)
+                    {
+                        if (clearQueue)
+                            ClearQueue();
+
+                        return false;
+                    }
+
+                    _state = QueueState.Stopping;
                     taskToWait = _task;
                     tokenSourceToDispose = _cancellationTokenSource;
                 }
@@ -106,8 +146,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                             {
                                 RegisterCompletionCleanup(taskToWait, tokenSourceToDispose);
 
-                                if (Interlocked.Exchange(ref _stopTimedOut, 1) == 0)
-                                    _logger.Error($"{QueueName} queue processor did not stop within {_options.RequestTimeout}. IDataSender may ignore cancellation.");
+                                _logger.Error($"{QueueName} queue processor did not stop within {_options.RequestTimeout}. IDataSender may ignore cancellation.");
 
                                 if (clearQueue)
                                     ClearQueue();
@@ -262,7 +301,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 if (clearQueue)
                     ClearQueue();
 
-                Interlocked.Exchange(ref _stopTimedOut, 0);
+                _state = QueueState.Stopped;
                 Interlocked.Exchange(ref _cleanupContinuationRegistered, 0);
             }
         }
