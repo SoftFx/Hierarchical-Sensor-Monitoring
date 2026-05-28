@@ -71,6 +71,23 @@ Key rules:
 - Lifecycle events (`ToStarting`, `ToRunning`, etc.) isolate subscriber exceptions
 - `Dispose()` from active states fires `ToStopping`/`ToStopped` for backward compatibility
 
+### Sensor registration (two-phase contract)
+
+Sensor registration is gated by `CollectorLifecycle.CanRegisterSensors` and follows two phases:
+
+| Phase | Status | `CanRegisterSensors` | Behavior of `Register` |
+|---|---|---|---|
+| Configuration | Stopped | true | Sensor is **queued**. It is initialized and started by `SensorsStorage.InitAsync`/`StartAsync` on the next `Start()`. |
+| Operational | Starting / Running | true | Sensor is added and **started immediately** (fire-and-forget `InitAndStart`). |
+| Shutdown | Stopping | false | **Rejected** — logged, disposed, not added. |
+| Terminal | Disposed | false | **Rejected** — logged, disposed, not added. |
+
+`CanRegisterSensors` = `!disposed && status != Stopping` (i.e. the union of configuration and operational phases). `CanStartNewSensors` = `!disposed && (Starting || Running)` — the narrower gate that decides immediate start vs. deferred queueing.
+
+Rejection is non-throwing: the rejected sensor is disposed and returned inert, so late `collector.CreateXxxSensor(...)` / `collector.Windows.AddXxx(...)` calls during shutdown do not crash the host. Consumers can pre-check `IDataCollector.IsAcceptingRegistrations` (which mirrors `CanRegisterSensors`).
+
+Registration is idempotent on path: registering a path that already exists returns the existing sensor without starting a duplicate.
+
 ### Data gating
 
 `CanAcceptData` returns true during `Starting`, `Running`, and `Stopping` states. This allows sensors to flush pending values during stop. `CanStartNewSensors` returns true only during `Starting` and `Running` (and not when disposed).

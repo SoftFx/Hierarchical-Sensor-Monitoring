@@ -60,6 +60,8 @@ namespace HSMDataCollector.Core
 
         public CollectorStatus Status => _lifecycle.Status;
 
+        public bool IsAcceptingRegistrations => _lifecycle.CanRegisterSensors;
+
         public string ComputerName => _options?.ComputerName;
 
         public string Module => _options?.Module;

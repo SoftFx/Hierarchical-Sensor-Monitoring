@@ -172,14 +172,32 @@ namespace HSMDataCollector.Core
             if (_sensors.TryGetValue(path, out var oldSensor))
                 return oldSensor;
 
+            // Shutdown phase (Stopping) or terminal (Disposed): reject. Adding here would either
+            // leak the sensor into storage that is being torn down, or register a sensor that can
+            // never be started. Dispose the rejected sensor so it does not leak, and return it
+            // inert rather than throwing (keeps the public AddXxx API non-throwing for late calls).
+            if (!_dataProcessor.CanRegisterSensors)
+            {
+                Logger.Error($"Cannot register sensor '{path}' — collector is stopping or disposed. The sensor was not added.");
+                sensor.Dispose();
+                return sensor;
+            }
+
+            // Operational phase (Starting/Running): add and start immediately.
             if (_dataProcessor.CanStartNewSensors)
             {
                 var addedSensor = AddSensor(sensor);
-                _ = InitAndStart(addedSensor);
+
+                // If the sensor was deduplicated against an existing one, don't start the duplicate.
+                if (ReferenceEquals(addedSensor, sensor))
+                    _ = InitAndStart(addedSensor);
+
                 return addedSensor;
             }
-            else
-                return AddSensor(sensor);
+
+            // Configuration phase (Stopped): queue the sensor; it will be initialized and started
+            // by SensorsStorage.InitAsync/StartAsync when the collector next starts.
+            return AddSensor(sensor);
         }
 
 

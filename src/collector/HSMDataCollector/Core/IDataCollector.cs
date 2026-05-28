@@ -19,6 +19,15 @@ namespace HSMDataCollector.Core
 
         CollectorStatus Status { get; }
 
+        /// <summary>
+        /// True while new sensors may be registered: during the configuration phase (collector
+        /// Stopped — sensors are queued and started on the next <see cref="Start()"/>) and the
+        /// operational phase (Starting/Running — sensors start immediately). False while the
+        /// collector is Stopping or after it has been disposed; registration attempts in those
+        /// states are rejected (logged, the sensor is not added).
+        /// </summary>
+        bool IsAcceptingRegistrations { get; }
+
         string ComputerName { get; }
 
         string Module { get; }

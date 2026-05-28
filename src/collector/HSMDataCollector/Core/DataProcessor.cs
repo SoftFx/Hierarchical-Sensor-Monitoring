@@ -40,6 +40,8 @@ namespace HSMDataCollector.Core
 
         internal bool CanStartNewSensors => _lifecycle.CanStartNewSensors;
 
+        internal bool CanRegisterSensors => _lifecycle.CanRegisterSensors;
+
         public DataProcessor(CollectorOptions options, CollectorLifecycle lifecycle, ICollectorScheduler scheduler, LoggerManager logger)
         {
             _logger = logger;
