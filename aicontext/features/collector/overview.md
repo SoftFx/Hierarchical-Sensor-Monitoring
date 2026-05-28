@@ -135,7 +135,13 @@ Sensors do not own scheduling boilerplate inline. The "schedule one periodic act
 
 The Windows-only `System.Diagnostics.PerformanceCounter` API is isolated behind `IPerformanceCounterFactory` / `IPerformanceCounter`. `WindowsSensorBase` (CPU/RAM/disk bars) and `BaseSocketsSensor` (TCP connection counts) depend on the factory via an `internal virtual PerformanceCounterFactory` seam that defaults to `WindowsPerformanceCounterFactory` (the only place real `PerformanceCounter`/`PerformanceCounterCategory` calls live). Tests substitute a fake factory, so these sensors are now unit-testable on any OS.
 
-Linux default sensors still read metrics by shelling out to `top`/`free` via `BashCommandExtension.BashExecute()`; migrating them to direct `/proc` reads behind the same kind of seam is tracked separately (issue #1065).
+Linux default sensors read metrics from the kernel directly — no external process spawning:
+- `UnixTotalCpu` → `/proc/stat` (busy % from the idle/total delta across collect ticks, via `ProcStatCpuUsage`).
+- `UnixFreeRamMemory` → `/proc/meminfo` (`MemAvailable`, via `ProcMeminfo`).
+- `UnixDiskInfo` → managed `DriveInfo("/").AvailableFreeSpace` (statvfs) instead of `df`.
+- Process sensors (`UnixProcessCpu`/`Memory`/`ThreadCount`) already used the managed `System.Diagnostics.Process` API.
+
+The parsing logic (`ProcStat`, `ProcMeminfo`) is split from file I/O so it is unit-tested with sample text on any OS. The old `top`/`free`/`df` bash-shelling (`BashCommandExtension`) has been removed.
 
 ## Features
 
