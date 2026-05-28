@@ -1,4 +1,4 @@
-name: DataCollector Integration Tests
+name: Linux Proc Sensor Integration Tests
 
 on:
   push:
@@ -20,7 +20,7 @@ on:
     - cron: '3 6 * * 1-5'
 
 jobs:
-  integration-tests:
+  linux-proc-sensor-tests:
     # Skip on draft PRs only. Non-PR events (push/schedule/workflow_dispatch) have no
     # pull_request payload, so they must still run — hence the event_name guard.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -32,5 +32,5 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Run Integration Tests
-        run: dotnet test src/collector/HSMDataCollector.IntegrationTests/HSMDataCollector.IntegrationTests.csproj --logger "console;verbosity=detailed"
+      - name: Run Linux Proc Sensor Tests
+        run: dotnet test src/collector/HSMDataCollector.IntegrationTests/HSMDataCollector.IntegrationTests.csproj --filter FullyQualifiedName~LinuxProcSensorTests --logger "console;verbosity=detailed"

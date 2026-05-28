@@ -244,23 +244,17 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
 
             Directory.CreateDirectory(tempDir);
 
-            if (Directory.Exists(sourceConfigDir))
-            {
-                foreach (var file in Directory.GetFiles(sourceConfigDir))
-                    File.Copy(file, Path.Combine(tempDir, Path.GetFileName(file)));
-            }
+            foreach (var file in Directory.GetFiles(sourceConfigDir))
+                File.Copy(file, Path.Combine(tempDir, Path.GetFileName(file)));
 
             var targetSettings = Path.Combine(tempDir, "appsettings.json");
-            var developmentSettings = Path.Combine(tempDir, "appsettings.Development.json");
-            if (!File.Exists(targetSettings) && File.Exists(developmentSettings))
-                File.Copy(developmentSettings, targetSettings);
+            if (!File.Exists(targetSettings))
+                File.Copy(Path.Combine(tempDir, "appsettings.Development.json"), targetSettings);
 
             File.WriteAllText(Path.Combine(tempDir, "Dockerfile"),
                 "FROM hsmonitoring/hierarchical_sensor_monitoring:latest\n" +
                 "USER root\n" +
-                (File.Exists(targetSettings) || File.Exists(developmentSettings)
-                    ? "COPY appsettings*.json /app/Config/\n"
-                    : string.Empty));
+                "COPY appsettings*.json /app/Config/\n");
 
             return tempDir;
         }

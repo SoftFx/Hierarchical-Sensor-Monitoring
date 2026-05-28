@@ -52,7 +52,7 @@ namespace HSMDataCollector.DefaultSensors.Unix.SystemInfo
 
             // Expect the aggregate line, which starts with "cpu" followed by whitespace
             // (the per-core lines are "cpu0", "cpu1", ... and must not match).
-            var parts = firstLine.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = firstLine.Split(new[] { ' ', '\t', '\r' }, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length <= IdleFieldIndex || !string.Equals(parts[0], "cpu", StringComparison.Ordinal))
                 return null;
 

@@ -40,6 +40,18 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public void ProcStat_handles_crlf()
+        {
+            const string sample = "cpu  100 0 50 1000 20 0 5 0 0 0\r\n";
+
+            var times = ProcStat.ParseCpuTimes(sample);
+
+            Assert.NotNull(times);
+            Assert.Equal(1000.0, times.Value.Idle);
+            Assert.Equal(1175.0, times.Value.Total);
+        }
+
+        [Fact]
         public void CpuUsage_counts_iowait_as_busy()
         {
             // Matches the previous top-based sensor (top's "id" excludes iowait).
