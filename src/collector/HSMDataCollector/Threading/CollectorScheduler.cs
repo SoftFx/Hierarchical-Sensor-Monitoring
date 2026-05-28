@@ -193,12 +193,7 @@ namespace HSMDataCollector.Threading
             lock (_lock)
             {
                 if (Volatile.Read(ref _disposed) == 1)
-                {
-                    // Keep the unreturned task in a terminal state if Dispose wins the race
-                    // after allocation but before the authoritative locked add.
-                    task.Dispose();
                     throw new ObjectDisposedException(nameof(CollectorScheduler));
-                }
 
                 AddTask(task);
             }
@@ -263,6 +258,10 @@ namespace HSMDataCollector.Threading
             {
                 Trace.TraceError($"{nameof(CollectorScheduler)} cancellation callback failed: {ex}");
             }
+            catch (Exception ex)
+            {
+                Trace.TraceError($"{nameof(CollectorScheduler)} cancellation failed while stopping: {ex}");
+            }
 
             try
             {
@@ -281,6 +280,10 @@ namespace HSMDataCollector.Threading
             catch (AggregateException ex)
             {
                 Trace.TraceError($"{nameof(CollectorScheduler)} worker faulted while stopping: {ex}");
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceError($"{nameof(CollectorScheduler)} worker wait failed while stopping: {ex}");
             }
 
             if (!workerExited)

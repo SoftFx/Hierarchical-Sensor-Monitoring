@@ -12,7 +12,8 @@ namespace HSMDataCollector.Threading
     ///
     /// Start and StopAsync are individually thread-safe and idempotent. Concurrent Start/StopAsync
     /// on the same handle may end in either state depending on which call runs last; callers needing
-    /// a known final state must serialize externally.
+    /// a known final state must serialize externally (for example, sensor lifecycle paths are
+    /// serialized by <see cref="Core.DataProcessor.LifecycleGate"/>).
     /// </summary>
     internal sealed class ScheduledTaskHandle
     {
