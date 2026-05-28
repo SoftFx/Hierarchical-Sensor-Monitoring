@@ -245,9 +245,15 @@ namespace HSMDataCollector.Threading
             {
                 _cancellation.Cancel();
             }
-            catch
+            catch (ObjectDisposedException)
             {
-                // Cancellation token source may have been disposed concurrently; ignore.
+                // Expected if the token source was disposed concurrently; nothing to cancel.
+            }
+            catch (Exception ex)
+            {
+                // Cancel() raises AggregateException if a registered cancellation callback throws.
+                // Dispose must not throw, but the failure should be visible rather than silently lost.
+                Trace.TraceError($"{nameof(CollectorScheduler)} cancellation error: {ex}");
             }
 
             try
@@ -264,9 +270,11 @@ namespace HSMDataCollector.Threading
             {
                 workerExited = _worker.Wait(WorkerStopTimeout);
             }
-            catch
+            catch (Exception ex)
             {
-                // Worker exceptions are surfaced via per-task onError; ignore here.
+                // Per-task callback errors surface via their onError; a fault here (e.g. the worker
+                // task itself) is unexpected — log it rather than swallow it silently.
+                Trace.TraceError($"{nameof(CollectorScheduler)} worker wait error: {ex}");
             }
 
             if (!workerExited)

@@ -103,6 +103,14 @@ namespace HSMDataCollector.Exceptions
             SendMessages(messagesToSend);
         }
 
+        /// <summary>
+        /// Releases the cleanup task and, for the compatibility constructor, the owned scheduler.
+        /// Like most disposable types, this assumes construction has completed: it must not be called
+        /// concurrently with the constructor. (<c>_task</c>/<c>_ownedScheduler</c> are <c>readonly</c>,
+        /// so they cannot be marked <c>volatile</c>; the constructor never leaks <c>this</c> to another
+        /// thread before they are assigned — the scheduled <see cref="Cleanup"/> callback is delayed and
+        /// reads neither field — so no publication barrier is required in practice.)
+        /// </summary>
         public void Dispose()
         {
             _task?.Dispose();

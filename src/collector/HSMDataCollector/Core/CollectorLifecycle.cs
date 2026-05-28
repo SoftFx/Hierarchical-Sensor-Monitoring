@@ -2,6 +2,9 @@ namespace HSMDataCollector.Core
 {
     internal sealed class CollectorLifecycle
     {
+        // INNERMOST lock. When a caller holds DataProcessor.LifecycleGate (DataCollector._opLock),
+        // it may then take this lock (gate -> _lock), never the reverse. Every method here takes only
+        // this lock and calls no external code while holding it, so it cannot invert the order.
         private readonly object _lock = new object();
         private CollectorStatus _status = CollectorStatus.Stopped;
         private bool _disposed;
