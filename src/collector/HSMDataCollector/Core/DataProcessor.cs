@@ -43,6 +43,8 @@ namespace HSMDataCollector.Core
 
         internal bool CanRegisterSensors => _lifecycle.CanRegisterSensors;
 
+        // Lock ordering invariant: code paths that need both locks must take LifecycleGate
+        // before querying or mutating CollectorLifecycle, which uses its own internal lock.
         internal object LifecycleGate => _lifecycleGate;
 
         public DataProcessor(CollectorOptions options, CollectorLifecycle lifecycle, object lifecycleGate, ICollectorScheduler scheduler, LoggerManager logger)

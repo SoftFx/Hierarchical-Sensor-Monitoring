@@ -193,7 +193,10 @@ namespace HSMDataCollector.Threading
             lock (_lock)
             {
                 if (Volatile.Read(ref _disposed) == 1)
+                {
+                    task.Dispose();
                     throw new ObjectDisposedException(nameof(CollectorScheduler));
+                }
 
                 AddTask(task);
             }
@@ -238,16 +241,25 @@ namespace HSMDataCollector.Threading
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _disposed, 1) == 1)
-                return;
+            lock (_lock)
+            {
+                if (Volatile.Read(ref _disposed) == 1)
+                    return;
+
+                Volatile.Write(ref _disposed, 1);
+            }
 
             try
             {
                 _cancellation.Cancel();
             }
-            catch
+            catch (ObjectDisposedException)
             {
                 // Cancellation token source may have been disposed concurrently; ignore.
+            }
+            catch (AggregateException ex)
+            {
+                Trace.TraceError($"{nameof(CollectorScheduler)} cancellation callback failed: {ex}");
             }
 
             try
@@ -264,9 +276,9 @@ namespace HSMDataCollector.Threading
             {
                 workerExited = _worker.Wait(WorkerStopTimeout);
             }
-            catch
+            catch (AggregateException ex)
             {
-                // Worker exceptions are surfaced via per-task onError; ignore here.
+                Trace.TraceError($"{nameof(CollectorScheduler)} worker faulted while stopping: {ex}");
             }
 
             if (!workerExited)
