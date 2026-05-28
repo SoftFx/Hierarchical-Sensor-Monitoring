@@ -13,9 +13,10 @@ namespace HSMDataCollector.DefaultSensors
     public abstract class MonitoringSensorBase<T, TDisplayUnit> : SensorBase<T, TDisplayUnit> where TDisplayUnit : struct, Enum
     {
         private readonly IMonitoringOptions _options;
-        private ScheduledTask _sendTask;
 
-        private readonly object _lock = new object();
+        // Composed scheduling lifecycle for the periodic send loop (replaces a hand-rolled
+        // ScheduledTask field + lock). The bar sensor composes a second handle for its collect loop.
+        private readonly ScheduledTaskHandle _sendHandle;
 
         protected virtual TimeSpan TimerDueTime => TimeSpan.Zero;
 
@@ -30,6 +31,8 @@ namespace HSMDataCollector.DefaultSensors
 
             if (_options.PostDataPeriod <= TimeSpan.Zero)
                 throw new ArgumentOutOfRangeException(nameof(_options.PostDataPeriod), "Post data period must be greater than zero.");
+
+            _sendHandle = new ScheduledTaskHandle(_dataProcessor.Scheduler);
         }
 
         public override ValueTask<bool> InitAsync()
@@ -93,35 +96,9 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        private async ValueTask StopInternalAsync(bool waitForCurrentRun)
-        {
-            ScheduledTask taskToAwait = null;
+        private ValueTask StopInternalAsync(bool waitForCurrentRun) => _sendHandle.StopAsync(waitForCurrentRun);
 
-            lock (_lock)
-            {
-                if (_sendTask != null)
-                {
-                    taskToAwait = _sendTask;
-                    _sendTask = null;
-                }
-            }
-
-            if (taskToAwait != null)
-            {
-                await taskToAwait.StopAsync(waitForCurrentRun).ConfigureAwait(false);
-            }
-        }
-
-        private void StartSendTask()
-        {
-            lock (_lock)
-            {
-                if (_sendTask == null)
-                {
-                    _sendTask = _dataProcessor.Scheduler.Schedule(SendValueAction, TimerDueTime, PostTimePeriod, HandleException);
-                }
-            }
-        }
+        private void StartSendTask() => _sendHandle.Start(SendValueAction, TimerDueTime, PostTimePeriod, HandleException);
 
         private SensorValueBase BuildSensorValue()
         {

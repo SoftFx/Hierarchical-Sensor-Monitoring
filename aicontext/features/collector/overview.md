@@ -122,6 +122,15 @@ Each `QueueProcessorBase` maintains its own `QueueState` (Stopped/Running/Stoppi
 
 Each `DataCollector` owns its own `CollectorScheduler` instance (implementing `ICollectorScheduler`). The scheduler is constructed in `DataCollector`'s constructor, threaded through `DataProcessor.Scheduler`, and disposed at the end of `Dispose()` after `_dataProcessor` and `_dataSender`. Sensors and `MessageDeduplicator` schedule periodic work through this injected instance — there is no process-global scheduler. Two collectors in the same process have independent timer wheels and worker tasks.
 
+### Sensor scheduling via composition
+
+Sensors do not own scheduling boilerplate inline. The "schedule one periodic action; start/stop/restart it once" lifecycle is extracted into `ScheduledTaskHandle` (a composable wrapper over a single `ScheduledTask`). Sensors *compose* one handle per periodic action rather than inheriting the timer plumbing:
+- `MonitoringSensorBase` composes a send-loop handle (the periodic `SendValueAction`).
+- `BarMonitoringSensorBase` composes a second handle for the bar-collect loop, on top of the inherited send handle.
+- `FreeDiskSpacePredictionBase` composes a handle for its disk-speed sampling loop.
+
+`ScheduledTaskHandle.Start` and `StopAsync` are idempotent and thread-safe. `WindowsServiceStatusSensor` deliberately keeps a raw `ScheduledTask` because it needs `ScheduledTask.CurrentRun`/`IsRunning` to defer `ServiceController` disposal until the in-flight run completes — a specialization the simple handle intentionally does not expose.
+
 ## Features
 
 | Feature | Folder | Description |
