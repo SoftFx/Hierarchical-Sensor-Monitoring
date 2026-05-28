@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Security;
 using HSMDataCollector.DefaultSensors.Unix.SystemInfo;
 using HSMDataCollector.Options;
 
@@ -28,10 +29,18 @@ namespace HSMDataCollector.DefaultSensors.Unix
             {
                 return File.ReadAllText(ProcStatPath);
             }
-            catch
+            catch (IOException)
             {
                 // /proc/stat unavailable (non-Linux host, sandbox) — the parser turns null into a
                 // skipped bar rather than a fault.
+                return null;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
+            catch (SecurityException)
+            {
                 return null;
             }
         }

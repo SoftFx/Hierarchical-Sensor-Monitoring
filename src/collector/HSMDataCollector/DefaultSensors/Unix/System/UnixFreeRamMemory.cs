@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Security;
 using HSMDataCollector.DefaultSensors.Unix.SystemInfo;
 using HSMDataCollector.Options;
 
@@ -27,7 +28,15 @@ namespace HSMDataCollector.DefaultSensors.Unix
             {
                 return File.ReadAllText(ProcMeminfoPath);
             }
-            catch
+            catch (IOException)
+            {
+                return null;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
+            catch (SecurityException)
             {
                 return null;
             }
