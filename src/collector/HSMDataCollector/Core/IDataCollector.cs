@@ -38,6 +38,15 @@ namespace HSMDataCollector.Core
         event Action ToStopping;
         event Action ToStopped;
 
+        /// <summary>
+        /// Registers an observer notified on each lifecycle transition. This is the portable
+        /// equivalent of the ToStarting/ToRunning/ToStopping/ToStopped events — prefer it for new
+        /// code. The listener is invoked under the same lock as the events; handlers must not block.
+        /// Only transitions occurring after registration are delivered (the current state is not
+        /// replayed). Returns this collector for chaining. A null listener is ignored.
+        /// </summary>
+        IDataCollector AddLifecycleListener(ILifecycleListener listener);
+
         IEnumerable<ISensor> DefaultSensors { get; }
 
         /// <summary>

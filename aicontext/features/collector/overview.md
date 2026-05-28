@@ -88,6 +88,13 @@ Rejection is non-throwing: the rejected sensor is disposed and returned inert, s
 
 Registration is idempotent on path: registering a path that already exists returns the existing sensor without starting a duplicate.
 
+### Public API surface (portability-oriented)
+
+Two additive, portable-friendly APIs sit alongside the legacy surface (nothing removed):
+
+- **`ILifecycleListener`** — observer interface (`OnStarting`/`OnRunning`/`OnStopping`/`OnStopped`) registered via `IDataCollector.AddLifecycleListener(...)`. This is the portable equivalent of the `ToStarting`/`ToRunning`/`ToStopping`/`ToStopped` C# events (which still fire). Listeners are invoked from `LogAndRaise` under `_opLock` with per-listener exception isolation; only transitions after registration are delivered (no replay).
+- **Fluent sensor builders** — `collector.InstantSensor<T>(path)`, `BarSensor<T>(path)`, `RateSensor(path)` extension methods returning fluent builders whose `Build()` dispatches to the existing options-based `CreateXxx(path, options)` factory methods. Implemented as extension methods, so the `IDataCollector` interface is unchanged; the legacy per-type overloads remain. The builders give ports a single `path → type → kind → options → Build` mental model instead of 100+ overloads.
+
 ### Data gating
 
 `CanAcceptData` returns true during `Starting`, `Running`, and `Stopping` states. This allows sensors to flush pending values during stop. `CanStartNewSensors` returns true only during `Starting` and `Running` (and not when disposed).

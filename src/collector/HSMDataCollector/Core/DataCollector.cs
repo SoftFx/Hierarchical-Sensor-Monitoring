@@ -51,6 +51,11 @@ namespace HSMDataCollector.Core
         // and then fire ToStopped while the original Stop is still draining).
         private Task _currentProcessorStopTask;
 
+        // Observer-pattern lifecycle listeners (portable alternative to the C# events). Guarded by
+        // its own lock; notified from LogAndRaise alongside the events.
+        private readonly object _listenersLock = new object();
+        private readonly List<ILifecycleListener> _lifecycleListeners = new List<ILifecycleListener>();
+
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
         public IWindowsCollection Windows => _sensorsStorage.Windows;
@@ -131,6 +136,17 @@ namespace HSMDataCollector.Core
         public IDataCollector AddCustomLogger(ICollectorLogger logger)
         {
             _logger.AddLogger(logger);
+
+            return this;
+        }
+
+        public IDataCollector AddLifecycleListener(ILifecycleListener listener)
+        {
+            if (listener == null)
+                return this;
+
+            lock (_listenersLock)
+                _lifecycleListeners.Add(listener);
 
             return this;
         }
@@ -464,6 +480,46 @@ namespace HSMDataCollector.Core
                 case CollectorStatus.Stopped:
                     RaiseLifecycleEvent(ToStopped, nameof(ToStopped));
                     break;
+            }
+
+            NotifyLifecycleListeners(status);
+        }
+
+        private void NotifyLifecycleListeners(CollectorStatus status)
+        {
+            ILifecycleListener[] snapshot;
+            lock (_listenersLock)
+            {
+                if (_lifecycleListeners.Count == 0)
+                    return;
+
+                snapshot = _lifecycleListeners.ToArray();
+            }
+
+            foreach (var listener in snapshot)
+            {
+                try
+                {
+                    switch (status)
+                    {
+                        case CollectorStatus.Starting:
+                            listener.OnStarting();
+                            break;
+                        case CollectorStatus.Running:
+                            listener.OnRunning();
+                            break;
+                        case CollectorStatus.Stopping:
+                            listener.OnStopping();
+                            break;
+                        case CollectorStatus.Stopped:
+                            listener.OnStopped();
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"DataCollector lifecycle listener error on {status}: {ex}");
+                }
             }
         }
 
