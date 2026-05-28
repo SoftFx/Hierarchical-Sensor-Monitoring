@@ -18,8 +18,9 @@ namespace HSMDataCollector.Exceptions
         private readonly ScheduledTask _task;
 
         /// <summary>
-        /// Compatibility constructor that creates and owns its own scheduler instance.
-        /// Prefer the internal overload that accepts a shared <see cref="ICollectorScheduler"/>.
+        /// Compatibility constructor. For non-zero windows this instance creates and owns a
+        /// dedicated scheduler worker; zero-window instances do not schedule cleanup work.
+        /// Prefer the internal overload when a shared <see cref="ICollectorScheduler"/> is available.
         /// </summary>
         public MessageDeduplicator(Action<string> action, TimeSpan window, int maxMessages)
             : this(action, window, maxMessages, scheduler: null, ownsScheduler: true)

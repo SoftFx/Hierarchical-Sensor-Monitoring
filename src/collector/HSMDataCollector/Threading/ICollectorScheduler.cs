@@ -11,10 +11,16 @@ namespace HSMDataCollector.Threading
     /// </summary>
     internal interface ICollectorScheduler : IDisposable
     {
+        /// <exception cref="ObjectDisposedException">The scheduler has already been disposed.</exception>
         ScheduledTask Schedule(Action action, TimeSpan delay, TimeSpan period, Action<Exception> onError = null);
 
+        /// <exception cref="ObjectDisposedException">The scheduler has already been disposed.</exception>
         ScheduledTask Schedule(Func<Task> action, TimeSpan delay, TimeSpan period, Action<Exception> onError = null);
 
+        /// <summary>
+        /// Removes a scheduled task if it is still queued. Implementations should no-op when the
+        /// task is null, already removed, or the scheduler has already been disposed.
+        /// </summary>
         void Remove(ScheduledTask task);
     }
 }

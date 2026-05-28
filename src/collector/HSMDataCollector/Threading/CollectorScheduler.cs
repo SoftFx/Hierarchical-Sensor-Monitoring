@@ -154,6 +154,7 @@ namespace HSMDataCollector.Threading
         private readonly ManualResetEventSlim _signal = new ManualResetEventSlim(false);
         private readonly CancellationTokenSource _cancellation = new CancellationTokenSource();
         private readonly Task _worker;
+        private static readonly TimeSpan WorkerStopTimeout = TimeSpan.FromSeconds(5);
         private int _disposed;
 
         public CollectorScheduler()
@@ -190,7 +191,12 @@ namespace HSMDataCollector.Threading
             var task = new ScheduledTask(this, action, delay, period, onError);
 
             lock (_lock)
+            {
+                if (Volatile.Read(ref _disposed) == 1)
+                    throw new ObjectDisposedException(nameof(CollectorScheduler));
+
                 AddTask(task);
+            }
 
             // Mirrors Remove(): if Dispose() races past the _disposed guard above and
             // disposes _signal before this Set runs, swallow the ObjectDisposedException —
@@ -211,9 +217,9 @@ namespace HSMDataCollector.Threading
             if (task == null)
                 return;
 
-            // A ScheduledTask can outlive its scheduler if cleanup happens out of order
-            // (e.g. a sensor's StopAsync running after the scheduler is disposed). Guard
-            // both the dictionary mutation and the signal so we never touch disposed state.
+            // A ScheduledTask can outlive its scheduler's Dispose if cleanup happens out
+            // of order (e.g. a sensor's StopAsync running after the scheduler is disposed).
+            // Guard both the dictionary mutation and the signal so we never touch disposed state.
             if (Volatile.Read(ref _disposed) == 1)
                 return;
 
@@ -256,11 +262,18 @@ namespace HSMDataCollector.Threading
             var workerExited = false;
             try
             {
-                workerExited = _worker.Wait(TimeSpan.FromSeconds(5));
+                workerExited = _worker.Wait(WorkerStopTimeout);
             }
             catch
             {
                 // Worker exceptions are surfaced via per-task onError; ignore here.
+            }
+
+            if (!workerExited)
+            {
+                Trace.TraceError(
+                    $"{nameof(CollectorScheduler)} worker did not stop within {WorkerStopTimeout}. " +
+                    "Scheduler handles were left undisposed to avoid faulting the worker task.");
             }
 
             // Only dispose the cancellation source and the signal if the worker has actually exited.
