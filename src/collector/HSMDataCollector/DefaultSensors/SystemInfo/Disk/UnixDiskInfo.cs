@@ -13,17 +13,7 @@ namespace HSMDataCollector.DefaultSensors.SystemInfo
         // hood) instead of shelling out to `df` — no external process, no locale-dependent text parsing.
         public long FreeSpace
         {
-            get
-            {
-                try
-                {
-                    return new DriveInfo(RootMount).AvailableFreeSpace / 1024L;
-                }
-                catch
-                {
-                    return 0L;
-                }
-            }
+            get { return new DriveInfo(RootMount).AvailableFreeSpace / 1024L; }
         }
 
         public long FreeSpaceMb => FreeSpace.KilobytesToMegabytes();

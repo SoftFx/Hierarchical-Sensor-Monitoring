@@ -27,6 +27,19 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public void ProcStat_excludes_guest_fields_from_total()
+        {
+            // Linux includes guest in user and guest_nice in nice, so summing them again skews total.
+            const string sample = "cpu  100 20 50 1000 20 0 5 0 30 10\n";
+
+            var times = ProcStat.ParseCpuTimes(sample);
+
+            Assert.NotNull(times);
+            Assert.Equal(1000.0, times.Value.Idle);
+            Assert.Equal(1195.0, times.Value.Total);
+        }
+
+        [Fact]
         public void CpuUsage_counts_iowait_as_busy()
         {
             // Matches the previous top-based sensor (top's "id" excludes iowait).
@@ -153,12 +166,36 @@ namespace HSMDataCollector.Tests
             Assert.Equal(500L, ProcMeminfo.ParseAvailableKb(sample));
         }
 
+        [Fact]
+        public void ProcMeminfo_estimates_available_when_mem_available_is_absent()
+        {
+            const string sample =
+                "MemTotal:       16384000 kB\n" +
+                "MemFree:         1000000 kB\n" +
+                "Buffers:          200000 kB\n" +
+                "Cached:          3000000 kB\n" +
+                "SReclaimable:     400000 kB\n" +
+                "Shmem:            100000 kB\n";
+
+            Assert.Equal(4500000L, ProcMeminfo.ParseAvailableKb(sample));
+        }
+
+        [Fact]
+        public void ProcMeminfo_estimate_is_never_negative()
+        {
+            const string sample =
+                "MemFree: 10 kB\n" +
+                "Shmem:   20 kB\n";
+
+            Assert.Equal(0L, ProcMeminfo.ParseAvailableKb(sample));
+        }
+
         [Theory]
         [InlineData(null)]
         [InlineData("")]
-        [InlineData("MemTotal: 16384000 kB\n")] // no MemAvailable line
         [InlineData("MemAvailable:    notanumber kB\n")]
-        public void ProcMeminfo_returns_null_when_absent_or_unparseable(string content)
+        [InlineData("MemTotal: 16384000 kB\n")]
+        public void ProcMeminfo_returns_null_when_unparseable_or_no_available_fields(string content)
         {
             Assert.Null(ProcMeminfo.ParseAvailableKb(content));
         }

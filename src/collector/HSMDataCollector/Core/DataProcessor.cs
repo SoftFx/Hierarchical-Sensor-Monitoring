@@ -166,11 +166,11 @@ namespace HSMDataCollector.Core
         public void Dispose()
         {
             _messageDeduplicator?.Dispose();
+            SensorStorage?.Dispose();
             _dataQueue?.Dispose();
             _priorityQueue?.Dispose();
             _fileQueue?.Dispose();
             _commandQueue?.Dispose();
-            SensorStorage?.Dispose();
         }
 
         public void AddData(ISensor sender, SensorValueBase data)

@@ -32,12 +32,15 @@ namespace HSMDataCollector.DefaultSensors.Unix.SystemInfo
     ///   cpu  user nice system idle iowait irq softirq steal guest guest_nice
     /// (counts in USER_HZ jiffies). Busy fraction over an interval is
     ///   1 - (idleDelta / totalDelta), where idle is the "idle" field only (iowait counts as busy).
+    /// The guest fields are already included in user/nice by Linux and are excluded from total.
     /// </summary>
     internal static class ProcStat
     {
         // Index of the "idle" field within the split tokens: parts[0]="cpu", parts[1]=user,
         // parts[2]=nice, parts[3]=system, parts[4]=idle, parts[5]=iowait, ...
         private const int IdleFieldIndex = 4;
+        private const int GuestFieldIndex = 9;
+        private const int GuestNiceFieldIndex = 10;
 
         internal static CpuTimes? ParseCpuTimes(string procStatContent)
         {
@@ -61,7 +64,8 @@ namespace HSMDataCollector.DefaultSensors.Unix.SystemInfo
                 if (!double.TryParse(parts[i], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
                     return null;
 
-                total += value;
+                if (i != GuestFieldIndex && i != GuestNiceFieldIndex)
+                    total += value;
 
                 if (i == IdleFieldIndex) // idle field only; iowait is deliberately left in "busy"
                     idle += value;

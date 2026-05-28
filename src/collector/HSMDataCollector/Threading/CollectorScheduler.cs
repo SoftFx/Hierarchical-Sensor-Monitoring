@@ -238,8 +238,13 @@ namespace HSMDataCollector.Threading
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _disposed, 1) == 1)
-                return;
+            lock (_lock)
+            {
+                if (Volatile.Read(ref _disposed) == 1)
+                    return;
+
+                Volatile.Write(ref _disposed, 1);
+            }
 
             try
             {
@@ -247,13 +252,15 @@ namespace HSMDataCollector.Threading
             }
             catch (ObjectDisposedException)
             {
-                // Expected if the token source was disposed concurrently; nothing to cancel.
+                // Cancellation token source may have been disposed concurrently; ignore.
+            }
+            catch (AggregateException ex)
+            {
+                Trace.TraceError($"{nameof(CollectorScheduler)} cancellation callback failed: {ex}");
             }
             catch (Exception ex)
             {
-                // Cancel() raises AggregateException if a registered cancellation callback throws.
-                // Dispose must not throw, but the failure should be visible rather than silently lost.
-                Trace.TraceError($"{nameof(CollectorScheduler)} cancellation error: {ex}");
+                Trace.TraceError($"{nameof(CollectorScheduler)} cancellation failed while stopping: {ex}");
             }
 
             try
@@ -270,11 +277,13 @@ namespace HSMDataCollector.Threading
             {
                 workerExited = _worker.Wait(WorkerStopTimeout);
             }
+            catch (AggregateException ex)
+            {
+                Trace.TraceError($"{nameof(CollectorScheduler)} worker faulted while stopping: {ex}");
+            }
             catch (Exception ex)
             {
-                // Per-task callback errors surface via their onError; a fault here (e.g. the worker
-                // task itself) is unexpected — log it rather than swallow it silently.
-                Trace.TraceError($"{nameof(CollectorScheduler)} worker wait error: {ex}");
+                Trace.TraceError($"{nameof(CollectorScheduler)} worker wait failed while stopping: {ex}");
             }
 
             if (!workerExited)
