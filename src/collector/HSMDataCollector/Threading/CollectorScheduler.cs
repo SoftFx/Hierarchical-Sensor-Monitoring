@@ -12,6 +12,7 @@ namespace HSMDataCollector.Threading
         private readonly Action<Exception> _onError;
         private readonly TimeSpan _period;
         private readonly object _lock = new object();
+        private readonly ICollectorScheduler _scheduler;
         private static readonly TimeSpan CurrentRunStopTimeout = TimeSpan.FromSeconds(1);
 
         private Task _currentRun = Task.CompletedTask;
@@ -24,7 +25,7 @@ namespace HSMDataCollector.Threading
 
         internal LinkedListNode<ScheduledTask> BucketNode { get; set; }
 
-        internal bool IsDisposed => _disposed;
+        internal bool IsDisposed => Volatile.Read(ref _disposed);
 
         internal bool IsRunning => Volatile.Read(ref _isRunning) == 1;
 
@@ -37,8 +38,9 @@ namespace HSMDataCollector.Threading
             }
         }
 
-        internal ScheduledTask(Func<Task> action, TimeSpan delay, TimeSpan period, Action<Exception> onError)
+        internal ScheduledTask(ICollectorScheduler scheduler, Func<Task> action, TimeSpan delay, TimeSpan period, Action<Exception> onError)
         {
+            _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
             _action = action ?? throw new ArgumentNullException(nameof(action));
             _period = period;
             _onError = onError;
@@ -79,8 +81,8 @@ namespace HSMDataCollector.Threading
             Task taskToWait;
             lock (_lock)
             {
-                _disposed = true;
-                CollectorScheduler.Remove(this);
+                Volatile.Write(ref _disposed, true);
+                _scheduler.Remove(this);
                 taskToWait = _currentRun;
             }
 
@@ -92,8 +94,8 @@ namespace HSMDataCollector.Threading
         {
             lock (_lock)
             {
-                _disposed = true;
-                CollectorScheduler.Remove(this);
+                Volatile.Write(ref _disposed, true);
+                _scheduler.Remove(this);
             }
         }
 
@@ -111,10 +113,16 @@ namespace HSMDataCollector.Threading
             {
                 Interlocked.Exchange(ref _isRunning, 0);
 
+                // One-shot task self-disposes once its single run completes. Write under the lock so
+                // concurrent IsDisposed readers (e.g. CollectorScheduler.Loop's pre-dispatch check)
+                // observe a consistent value with every other writer of _disposed.
                 if (_period == Timeout.InfiniteTimeSpan)
                 {
-                    _disposed = true;
-                    CollectorScheduler.Remove(this);
+                    lock (_lock)
+                    {
+                        Volatile.Write(ref _disposed, true);
+                        _scheduler.Remove(this);
+                    }
                 }
             }
         }
@@ -134,16 +142,31 @@ namespace HSMDataCollector.Threading
         }
     }
 
-    internal static class CollectorScheduler
+    /// <summary>
+    /// Bucketed timer-wheel scheduler. Owns a single worker task that dispatches due actions onto
+    /// the threadpool. Construct one per <see cref="Core.DataCollector"/>; sharing across collectors
+    /// is allowed but not required.
+    /// </summary>
+    internal sealed class CollectorScheduler : ICollectorScheduler
     {
-        private static readonly object _lock = new object();
-        private static readonly SortedDictionary<long, LinkedList<ScheduledTask>> _tasks = new SortedDictionary<long, LinkedList<ScheduledTask>>();
-        private static readonly ManualResetEventSlim _signal = new ManualResetEventSlim(false);
-        private static readonly CancellationTokenSource _cancellation = new CancellationTokenSource();
-        private static readonly Task _worker = Task.Run(Loop);
+        private readonly object _lock = new object();
+        private readonly SortedDictionary<long, LinkedList<ScheduledTask>> _tasks = new SortedDictionary<long, LinkedList<ScheduledTask>>();
+        private readonly ManualResetEventSlim _signal = new ManualResetEventSlim(false);
+        private readonly CancellationTokenSource _cancellation = new CancellationTokenSource();
+        private readonly Task _worker;
+        private static readonly TimeSpan WorkerStopTimeout = TimeSpan.FromSeconds(5);
+        private int _disposed;
 
-        internal static ScheduledTask Schedule(Action action, TimeSpan delay, TimeSpan period, Action<Exception> onError = null)
+        public CollectorScheduler()
         {
+            _worker = Task.Run(Loop);
+        }
+
+        public ScheduledTask Schedule(Action action, TimeSpan delay, TimeSpan period, Action<Exception> onError = null)
+        {
+            if (action == null)
+                throw new ArgumentNullException(nameof(action));
+
             return Schedule(() =>
             {
                 action();
@@ -151,36 +174,123 @@ namespace HSMDataCollector.Threading
             }, delay, period, onError);
         }
 
-        internal static ScheduledTask Schedule(Func<Task> action, TimeSpan delay, TimeSpan period, Action<Exception> onError = null)
+        public ScheduledTask Schedule(Func<Task> action, TimeSpan delay, TimeSpan period, Action<Exception> onError = null)
         {
+            if (action == null)
+                throw new ArgumentNullException(nameof(action));
+
             if (period != Timeout.InfiniteTimeSpan && period <= TimeSpan.Zero)
                 throw new ArgumentOutOfRangeException(nameof(period), "Period must be greater than zero.");
 
             if (delay < TimeSpan.Zero)
                 throw new ArgumentOutOfRangeException(nameof(delay), "Delay cannot be negative.");
 
-            var task = new ScheduledTask(action, delay, period, onError);
+            if (Volatile.Read(ref _disposed) == 1)
+                throw new ObjectDisposedException(nameof(CollectorScheduler));
+
+            var task = new ScheduledTask(this, action, delay, period, onError);
 
             lock (_lock)
-                AddTask(task);
+            {
+                if (Volatile.Read(ref _disposed) == 1)
+                    throw new ObjectDisposedException(nameof(CollectorScheduler));
 
-            _signal.Set();
+                AddTask(task);
+            }
+
+            // Mirrors Remove(): if Dispose() races past the _disposed guard above and
+            // disposes _signal before this Set runs, swallow the ObjectDisposedException —
+            // the worker is already shut down so there is nothing to wake.
+            try
+            {
+                _signal.Set();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
 
             return task;
         }
 
-        internal static void Remove(ScheduledTask task)
+        public void Remove(ScheduledTask task)
         {
+            if (task == null)
+                return;
+
+            // A ScheduledTask can outlive its scheduler's Dispose if cleanup happens out
+            // of order (e.g. a sensor's StopAsync running after the scheduler is disposed).
+            // Guard both the dictionary mutation and the signal so we never touch disposed state.
+            if (Volatile.Read(ref _disposed) == 1)
+                return;
+
             lock (_lock)
                 RemoveTask(task);
 
-            _signal.Set();
+            try
+            {
+                _signal.Set();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Lost the race with Dispose; nothing to wake.
+            }
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 1)
+                return;
+
+            try
+            {
+                _cancellation.Cancel();
+            }
+            catch
+            {
+                // Cancellation token source may have been disposed concurrently; ignore.
+            }
+
+            try
+            {
+                _signal.Set();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already disposed by a concurrent path; ignore.
+            }
+
+            var workerExited = false;
+            try
+            {
+                workerExited = _worker.Wait(WorkerStopTimeout);
+            }
+            catch
+            {
+                // Worker exceptions are surfaced via per-task onError; ignore here.
+            }
+
+            if (!workerExited)
+            {
+                Trace.TraceError(
+                    $"{nameof(CollectorScheduler)} worker did not stop within {WorkerStopTimeout}. " +
+                    "Scheduler handles were left undisposed to avoid faulting the worker task.");
+            }
+
+            // Only dispose the cancellation source and the signal if the worker has actually exited.
+            // If we time out and the worker later wakes from _signal.Wait, it will read
+            // _cancellation.Token (which throws ObjectDisposedException on a disposed CTS) and the
+            // worker task would fault unobserved. Both objects are GC-collectable when unreachable.
+            if (workerExited)
+            {
+                _cancellation.Dispose();
+                _signal.Dispose();
+            }
         }
 
         internal static long GetTickCountMilliseconds() =>
             (long)(Stopwatch.GetTimestamp() * (1000.0 / Stopwatch.Frequency));
 
-        private static void Loop()
+        private void Loop()
         {
             while (!_cancellation.IsCancellationRequested)
             {
@@ -269,7 +379,7 @@ namespace HSMDataCollector.Threading
             }
         }
 
-        private static void AddTask(ScheduledTask task)
+        private void AddTask(ScheduledTask task)
         {
             var key = task.NextRunMilliseconds;
             if (!_tasks.TryGetValue(key, out var bucket))
@@ -282,7 +392,7 @@ namespace HSMDataCollector.Threading
             task.BucketNode = bucket.AddLast(task);
         }
 
-        private static void RemoveTask(ScheduledTask task)
+        private void RemoveTask(ScheduledTask task)
         {
             var node = task.BucketNode;
             if (node == null)
@@ -300,7 +410,7 @@ namespace HSMDataCollector.Threading
             task.BucketKey = long.MinValue;
         }
 
-        private static void GetFirstBucket(out long key, out LinkedList<ScheduledTask> bucket)
+        private void GetFirstBucket(out long key, out LinkedList<ScheduledTask> bucket)
         {
             using (var enumerator = _tasks.GetEnumerator())
             {

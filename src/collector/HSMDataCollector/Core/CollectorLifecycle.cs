@@ -28,6 +28,26 @@ namespace HSMDataCollector.Core
             }
         }
 
+        /// <summary>
+        /// True while new sensors may be *registered*. This is the union of the configuration phase
+        /// (Stopped — sensors are queued and started on the next Start) and the operational phase
+        /// (Starting/Running — sensors are started immediately). Registration is rejected during
+        /// Stopping (the collector is shutting down) and after Dispose (terminal).
+        /// </summary>
+        internal bool CanRegisterSensors
+        {
+            get
+            {
+                lock (_lock)
+                    return !_disposed && _status != CollectorStatus.Stopping;
+            }
+        }
+
+        /// <summary>
+        /// True while a newly-registered sensor should be started immediately (operational phase).
+        /// In the configuration phase (Stopped) registration is allowed but the sensor is only
+        /// queued — <see cref="CanRegisterSensors"/> is true but this is false.
+        /// </summary>
         internal bool CanStartNewSensors
         {
             get

@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
-using System.Linq;
 using System.Threading.Tasks;
 using HSMDataCollector.Options;
 
@@ -11,7 +9,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
     {
         protected const string TotalInstance = "_Total";
 
-        private PerformanceCounter _performanceCounter;
+        private IPerformanceCounter _performanceCounter;
 
 
         protected abstract string CategoryName { get; }
@@ -19,6 +17,11 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected abstract string CounterName { get; }
 
         protected virtual string InstanceName { get; }
+
+        // Source of performance counters. Defaults to the real Windows API; overridden in tests with a
+        // fake so these sensors can be exercised on any OS. Internal-virtual so only same-assembly /
+        // friend-assembly (test) subclasses can substitute it.
+        internal virtual IPerformanceCounterFactory PerformanceCounterFactory => WindowsPerformanceCounterFactory.Instance;
 
 
         internal WindowsSensorBase(BarSensorOptions options) : base(options) { }
@@ -28,21 +31,13 @@ namespace HSMDataCollector.DefaultSensors.Windows
         {
             try
             {
-                if (string.IsNullOrEmpty(InstanceName))
-                    _performanceCounter = new PerformanceCounter(CategoryName, CounterName);
-                else
+                _performanceCounter = PerformanceCounterFactory.Create(CategoryName, CounterName, InstanceName);
+
+                if (_performanceCounter == null)
                 {
-                    var category = new PerformanceCounterCategory(CategoryName);
-                    var instantName = category.GetInstanceNames().FirstOrDefault(u => u.Contains(InstanceName));
+                    HandleException(new ArgumentNullException($"Performance counter: {CategoryName}/{CounterName} instance {InstanceName} not found"));
 
-                    if (instantName == null)
-                    {
-                        HandleException(new ArgumentNullException($"Performance counter: {CategoryName}/{CounterName} instance {InstanceName} not found"));
-
-                        return new ValueTask<bool>(false);
-                    }
-
-                    _performanceCounter = new PerformanceCounter(CategoryName, CounterName, instantName);
+                    return new ValueTask<bool>(false);
                 }
             }
             catch (Exception ex)

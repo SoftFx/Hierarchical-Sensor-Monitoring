@@ -13,10 +13,26 @@ namespace HSMDataCollector.Exceptions
         private readonly TimeSpan _deduplicationWindow;
         private readonly int _maxMessages;
         private readonly Action<string> _action;
+        private readonly ICollectorScheduler _ownedScheduler;
 
         private readonly ScheduledTask _task;
 
+        /// <summary>
+        /// Compatibility constructor. For non-zero windows this instance creates and owns a
+        /// dedicated scheduler worker; zero-window instances do not schedule cleanup work.
+        /// Prefer the internal overload when a shared <see cref="ICollectorScheduler"/> is available.
+        /// </summary>
         public MessageDeduplicator(Action<string> action, TimeSpan window, int maxMessages)
+            : this(action, window, maxMessages, scheduler: null, ownsScheduler: true)
+        {
+        }
+
+        internal MessageDeduplicator(ICollectorScheduler scheduler, Action<string> action, TimeSpan window, int maxMessages)
+            : this(action, window, maxMessages, scheduler ?? throw new ArgumentNullException(nameof(scheduler)), ownsScheduler: false)
+        {
+        }
+
+        private MessageDeduplicator(Action<string> action, TimeSpan window, int maxMessages, ICollectorScheduler scheduler, bool ownsScheduler)
         {
             if (maxMessages <= 0)
                 throw new ArgumentOutOfRangeException(nameof(maxMessages), "Max messages must be greater than zero.");
@@ -26,12 +42,19 @@ namespace HSMDataCollector.Exceptions
             _deduplicationWindow = window;
             _maxMessages = maxMessages;
 
-            if (window != TimeSpan.Zero)
-            {
-                var now = DateTime.UtcNow;
+            // No periodic cleanup runs when window is Zero (AddMessage short-circuits to direct
+            // invocation). Avoid spinning up a worker scheduler in that case — it would just idle
+            // until Dispose, holding a thread for nothing.
+            if (window == TimeSpan.Zero)
+                return;
 
-                _task = CollectorScheduler.Schedule(Cleanup, now.Ceil(window) - now, window, ex => _action?.Invoke(ex.ToString()));
-            }
+            if (ownsScheduler)
+                _ownedScheduler = scheduler ?? new CollectorScheduler();
+
+            var effectiveScheduler = scheduler ?? _ownedScheduler;
+
+            var now = DateTime.UtcNow;
+            _task = effectiveScheduler.Schedule(Cleanup, now.Ceil(window) - now, window, ex => _action?.Invoke(ex.ToString()));
         }
 
 
@@ -83,6 +106,7 @@ namespace HSMDataCollector.Exceptions
         public void Dispose()
         {
             _task?.Dispose();
+            _ownedScheduler?.Dispose();
         }
 
         private void Cleanup()

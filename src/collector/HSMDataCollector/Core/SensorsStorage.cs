@@ -16,13 +16,23 @@ using System.Threading;
 
 namespace HSMDataCollector.Core
 {
-    internal sealed class SensorsStorage : ConcurrentDictionary<string, ISensor>, IDisposable
+    /// <summary>
+    /// Owns the set of registered sensors and orchestrates their lifecycle. Uses a private
+    /// <see cref="ConcurrentDictionary{TKey, TValue}"/> for storage rather than inheriting from it,
+    /// so the public surface is limited to the operations the collector actually needs.
+    /// Sensor identity is the (full) sensor path.
+    /// </summary>
+    internal sealed class SensorsStorage : IDisposable
     {
+        private readonly ConcurrentDictionary<string, ISensor> _sensors = new ConcurrentDictionary<string, ISensor>();
+
         private readonly CollectorOptions _options;
 
         private readonly DataProcessor _dataProcessor;
 
         private readonly PrototypesCollection _prototypes;
+        private readonly object _dynamicStartTasksLock = new object();
+        private readonly List<Task> _dynamicStartTasks = new List<Task>();
         private int _sensorCount;
 
         public IWindowsCollection Windows { get; }
@@ -30,6 +40,20 @@ namespace HSMDataCollector.Core
         public IUnixCollection Unix { get; }
 
         internal ICollectorLogger Logger { get; }
+
+        /// <summary>
+        /// Snapshot of currently-registered sensors. Safe to enumerate during concurrent
+        /// register/unregister; the underlying dictionary is concurrent.
+        /// </summary>
+        public IEnumerable<ISensor> Values => _sensors.Values;
+
+        /// <summary>
+        /// Approximate number of currently-registered sensors. Tracked via <see cref="Interlocked"/>
+        /// for O(1) reads. Exposed for diagnostics — the cardinality cap is enforced internally
+        /// using the increment result inside <see cref="AddSensor"/>, not via this property.
+        /// May briefly disagree with the underlying dictionary count during concurrent registration.
+        /// </summary>
+        public int Count => Volatile.Read(ref _sensorCount);
 
 
         internal SensorsStorage(CollectorOptions options, DataProcessor dataProcessor, ICollectorLogger logger)
@@ -47,26 +71,38 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
-            foreach (var sensor in Values)
+            foreach (var sensor in _sensors.Values)
             {
                 sensor.Dispose();
             }
         }
 
-        internal Task InitAsync() => Task.WhenAll(Values.Select(async s => await s.InitAsync().ConfigureAwait(false)));
+        internal Task InitAsync() => Task.WhenAll(_sensors.Values.Select(async s => await s.InitAsync().ConfigureAwait(false)));
 
-        internal Task StartAsync() => Task.WhenAll(Values.Select(async s => await s.StartAsync().ConfigureAwait(false)));
+        internal Task StartAsync() => Task.WhenAll(_sensors.Values.Select(async s => await s.StartAsync().ConfigureAwait(false)));
 
-        internal Task StopAsync() => Task.WhenAll(Values.Select(async s => await s.StopAsync().ConfigureAwait(false)));
+        internal Task StopAsync() => Task.WhenAll(_sensors.Values.Select(async s => await s.StopAsync().ConfigureAwait(false)));
 
-        public new bool TryRemove(string key, out ISensor value)
+        internal Task WaitForDynamicStartTasksAsync()
         {
-            if (!base.TryRemove(key, out value))
+            Task[] tasks;
+
+            lock (_dynamicStartTasksLock)
+                tasks = _dynamicStartTasks.ToArray();
+
+            return tasks.Length == 0 ? Task.CompletedTask : Task.WhenAll(tasks);
+        }
+
+        public bool TryRemove(string key, out ISensor value)
+        {
+            if (!_sensors.TryRemove(key, out value))
                 return false;
 
             Interlocked.Decrement(ref _sensorCount);
             return true;
         }
+
+        public bool TryGetValue(string key, out ISensor value) => _sensors.TryGetValue(key, out value);
 
 
         internal MonitoringRateSensor CreateRateSensor(string path, RateSensorOptions options)
@@ -145,17 +181,40 @@ namespace HSMDataCollector.Core
         {
             var path = sensor.SensorPath;
 
-            if (TryGetValue(path, out var oldSensor))
+            if (_sensors.TryGetValue(path, out var oldSensor))
                 return oldSensor;
 
-            if (_dataProcessor.CanStartNewSensors)
+            lock (_dataProcessor.LifecycleGate)
             {
-                var addedSensor = AddSensor(sensor);
-                _ = InitAndStart(addedSensor);
-                return addedSensor;
-            }
-            else
+                // Shutdown phase (Stopping) or terminal (Disposed): reject. Adding here would either
+                // leak the sensor into storage that is being torn down, or register a sensor that can
+                // never be started. Dispose the rejected sensor so it does not leak, and return it
+                // inert rather than throwing (keeps the public AddXxx API non-throwing for late calls).
+                if (!_dataProcessor.CanRegisterSensors)
+                {
+                    Logger.Error($"Cannot register sensor '{path}' - collector is stopping or disposed. The sensor was not added.");
+                    sensor.Dispose();
+                    return sensor;
+                }
+
+                // Operational phase (Starting/Running): add and start immediately. The lifecycle
+                // gate serializes this decision with Stop/Dispose, and StopAsync waits for tracked
+                // dynamic starts before stopping sensors.
+                if (_dataProcessor.CanStartNewSensors)
+                {
+                    var addedSensor = AddSensor(sensor);
+
+                    // If the sensor was deduplicated against an existing one, don't start the duplicate.
+                    if (ReferenceEquals(addedSensor, sensor))
+                        TrackDynamicStart(InitAndStart(addedSensor));
+
+                    return addedSensor;
+                }
+
+                // Configuration phase (Stopped): queue the sensor; it will be initialized and started
+                // by SensorsStorage.InitAsync/StartAsync when the collector next starts.
                 return AddSensor(sensor);
+            }
         }
 
 
@@ -163,17 +222,32 @@ namespace HSMDataCollector.Core
         {
             if (!await sensor.InitAsync().ConfigureAwait(false))
                 Logger.Error($"Failed to init {sensor.SensorPath}");
-            else if (!await sensor.StartAsync().ConfigureAwait(false))
+            else if (_dataProcessor.CanStartNewSensors && !await sensor.StartAsync().ConfigureAwait(false))
                 Logger.Error($"Failed to start {sensor.SensorPath}");
 
             return sensor;
+        }
+
+        private void TrackDynamicStart(Task task)
+        {
+            lock (_dynamicStartTasksLock)
+                _dynamicStartTasks.Add(task);
+
+            task.ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                    Logger.Error($"Dynamic sensor start failed: {t.Exception}");
+
+                lock (_dynamicStartTasksLock)
+                    _dynamicStartTasks.Remove(t);
+            }, TaskScheduler.Default);
         }
 
         private ISensor AddSensor(ISensor sensor)
         {
             var path = sensor.SensorPath;
 
-            if (TryAdd(path, sensor))
+            if (_sensors.TryAdd(path, sensor))
             {
                 var count = Interlocked.Increment(ref _sensorCount);
                 if (count > _options.MaxSensors)
@@ -188,13 +262,13 @@ namespace HSMDataCollector.Core
                 return sensor;
             }
 
-            if (TryGetValue(path, out var existingSensor))
+            if (_sensors.TryGetValue(path, out var existingSensor))
             {
                 sensor.Dispose();
                 return existingSensor;
             }
 
-            throw new Exception($"Sensor with path {path} already exists");
+            throw new InvalidOperationException($"Sensor with path {path} already exists");
         }
 
         private T FillOptions<T, TDisplayUnit>(string path, SensorType type, T options)

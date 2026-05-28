@@ -27,7 +27,9 @@ namespace HSMDataCollector.DefaultSensors
         private long _requestsCount;
         private bool _isOffTime;
 
-        private ScheduledTask _workTask;
+        // Composed scheduling lifecycle for the disk-speed sampling loop (replaces a hand-rolled
+        // ScheduledTask + lock). The base MonitoringSensorBase owns its own send-loop handle.
+        private readonly ScheduledTaskHandle _workHandle;
 
         private bool IsCalibration => _requestsCount <= _calibrationRequests;
 
@@ -40,14 +42,18 @@ namespace HSMDataCollector.DefaultSensors
             _calculateSpeedDelay = TimeSpan.FromSeconds(DefaultSpaceCheckPeriodInSec);
             _calibrationRequests = options.CalibrationRequests;
             _diskInfo = diskInfo;
+
+            _workHandle = new ScheduledTaskHandle(_dataProcessor.Scheduler);
         }
 
 
         public override ValueTask<bool> StartAsync()
         {
+            // Guard the per-start state reset so a repeated StartAsync does not re-zero the running
+            // sampler. _locker still serializes the reset; the handle owns the schedule lifecycle.
             lock (_locker)
             {
-                if (_workTask == null)
+                if (!_workHandle.IsScheduled)
                 {
                     _lastSpeedCheckTime = DateTime.UtcNow;
                     _lastAvailableSpace = FreeSpace;
@@ -55,7 +61,7 @@ namespace HSMDataCollector.DefaultSensors
                     _currentChangeSpeed = 0.0;
                     _requestsCount = 0;
 
-                    _workTask = CollectorScheduler.Schedule(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, HandleException);
+                    _workHandle.Start(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, HandleException);
                 }
             }
 
@@ -66,20 +72,8 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                ScheduledTask taskToWait = null;
-                lock (_locker)
-                {
-                    if (_workTask != null)
-                    {
-                        taskToWait = _workTask;
-                        _workTask = null;
-                    }
-                }
+                await _workHandle.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
 
-                if (taskToWait != null)
-                {
-                    await taskToWait.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
-                }
                 await base.StopAsync();
             }
             catch (OperationCanceledException) { }
