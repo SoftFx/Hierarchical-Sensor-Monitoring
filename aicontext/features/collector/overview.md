@@ -131,6 +131,12 @@ Sensors do not own scheduling boilerplate inline. The "schedule one periodic act
 
 `ScheduledTaskHandle.Start` and `StopAsync` are idempotent and thread-safe. `WindowsServiceStatusSensor` deliberately keeps a raw `ScheduledTask` because it needs `ScheduledTask.CurrentRun`/`IsRunning` to defer `ServiceController` disposal until the in-flight run completes — a specialization the simple handle intentionally does not expose.
 
+### Platform metric sources
+
+The Windows-only `System.Diagnostics.PerformanceCounter` API is isolated behind `IPerformanceCounterFactory` / `IPerformanceCounter`. `WindowsSensorBase` (CPU/RAM/disk bars) and `BaseSocketsSensor` (TCP connection counts) depend on the factory via an `internal virtual PerformanceCounterFactory` seam that defaults to `WindowsPerformanceCounterFactory` (the only place real `PerformanceCounter`/`PerformanceCounterCategory` calls live). Tests substitute a fake factory, so these sensors are now unit-testable on any OS.
+
+Linux default sensors still read metrics by shelling out to `top`/`free` via `BashCommandExtension.BashExecute()`; migrating them to direct `/proc` reads behind the same kind of seam is tracked separately (issue #1065).
+
 ## Features
 
 | Feature | Folder | Description |

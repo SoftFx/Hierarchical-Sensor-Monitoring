@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Threading.Tasks;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects.SensorRequests;
@@ -12,11 +11,15 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         private const string CategoryTcp4 = "TCPv4";
         private const string CategoryTcp6 = "TCPv6";
 
-        private PerformanceCounter _counterTCPv4;
-        private PerformanceCounter _counterTCPv6;
+        private IPerformanceCounter _counterTCPv4;
+        private IPerformanceCounter _counterTCPv6;
 
 
         protected abstract string CounterName { get; }
+
+        // Source of performance counters. Defaults to the real Windows API; overridden in tests with a
+        // fake. Internal-virtual so only same-assembly / friend-assembly (test) subclasses can substitute it.
+        internal virtual IPerformanceCounterFactory PerformanceCounterFactory => WindowsPerformanceCounterFactory.Instance;
 
 
         protected internal BaseSocketsSensor(MonitoringInstantSensorOptions options) : base(options) { }
@@ -26,8 +29,8 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
         {
             try
             {
-                _counterTCPv4 = new PerformanceCounter(CategoryTcp4, CounterName);
-                _counterTCPv6 = new PerformanceCounter(CategoryTcp6, CounterName);
+                _counterTCPv4 = PerformanceCounterFactory.Create(CategoryTcp4, CounterName);
+                _counterTCPv6 = PerformanceCounterFactory.Create(CategoryTcp6, CounterName);
             }
             catch (Exception ex)
             {
