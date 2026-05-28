@@ -25,7 +25,7 @@ namespace HSMDataCollector.Threading
 
         internal LinkedListNode<ScheduledTask> BucketNode { get; set; }
 
-        internal bool IsDisposed => _disposed;
+        internal bool IsDisposed => Volatile.Read(ref _disposed);
 
         internal bool IsRunning => Volatile.Read(ref _isRunning) == 1;
 
@@ -81,7 +81,7 @@ namespace HSMDataCollector.Threading
             Task taskToWait;
             lock (_lock)
             {
-                _disposed = true;
+                Volatile.Write(ref _disposed, true);
                 _scheduler.Remove(this);
                 taskToWait = _currentRun;
             }
@@ -94,7 +94,7 @@ namespace HSMDataCollector.Threading
         {
             lock (_lock)
             {
-                _disposed = true;
+                Volatile.Write(ref _disposed, true);
                 _scheduler.Remove(this);
             }
         }
@@ -113,10 +113,16 @@ namespace HSMDataCollector.Threading
             {
                 Interlocked.Exchange(ref _isRunning, 0);
 
+                // One-shot task self-disposes once its single run completes. Write under the lock so
+                // concurrent IsDisposed readers (e.g. CollectorScheduler.Loop's pre-dispatch check)
+                // observe a consistent value with every other writer of _disposed.
                 if (_period == Timeout.InfiniteTimeSpan)
                 {
-                    _disposed = true;
-                    _scheduler.Remove(this);
+                    lock (_lock)
+                    {
+                        Volatile.Write(ref _disposed, true);
+                        _scheduler.Remove(this);
+                    }
                 }
             }
         }
@@ -186,7 +192,16 @@ namespace HSMDataCollector.Threading
             lock (_lock)
                 AddTask(task);
 
-            _signal.Set();
+            // Mirrors Remove(): if Dispose() races past the _disposed guard above and
+            // disposes _signal before this Set runs, swallow the ObjectDisposedException —
+            // the worker is already shut down so there is nothing to wake.
+            try
+            {
+                _signal.Set();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
 
             return task;
         }
@@ -248,13 +263,15 @@ namespace HSMDataCollector.Threading
                 // Worker exceptions are surfaced via per-task onError; ignore here.
             }
 
-            _cancellation.Dispose();
-
-            // Only dispose _signal if the worker has actually exited. Otherwise the worker may still
-            // be inside _signal.Wait, and disposing here would throw ObjectDisposedException out of it.
-            // The signal is GC-collectable once unreachable.
+            // Only dispose the cancellation source and the signal if the worker has actually exited.
+            // If we time out and the worker later wakes from _signal.Wait, it will read
+            // _cancellation.Token (which throws ObjectDisposedException on a disposed CTS) and the
+            // worker task would fault unobserved. Both objects are GC-collectable when unreachable.
             if (workerExited)
+            {
+                _cancellation.Dispose();
                 _signal.Dispose();
+            }
         }
 
         internal static long GetTickCountMilliseconds() =>

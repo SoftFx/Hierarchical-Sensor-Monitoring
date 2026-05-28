@@ -41,16 +41,19 @@ namespace HSMDataCollector.Exceptions
             _deduplicationWindow = window;
             _maxMessages = maxMessages;
 
+            // No periodic cleanup runs when window is Zero (AddMessage short-circuits to direct
+            // invocation). Avoid spinning up a worker scheduler in that case — it would just idle
+            // until Dispose, holding a thread for nothing.
+            if (window == TimeSpan.Zero)
+                return;
+
             if (ownsScheduler)
                 _ownedScheduler = scheduler ?? new CollectorScheduler();
+
             var effectiveScheduler = scheduler ?? _ownedScheduler;
 
-            if (window != TimeSpan.Zero)
-            {
-                var now = DateTime.UtcNow;
-
-                _task = effectiveScheduler.Schedule(Cleanup, now.Ceil(window) - now, window, ex => _action?.Invoke(ex.ToString()));
-            }
+            var now = DateTime.UtcNow;
+            _task = effectiveScheduler.Schedule(Cleanup, now.Ceil(window) - now, window, ex => _action?.Invoke(ex.ToString()));
         }
 
 

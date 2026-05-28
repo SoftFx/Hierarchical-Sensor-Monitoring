@@ -218,7 +218,7 @@ namespace HSMDataCollector.Core
                 return existingSensor;
             }
 
-            throw new Exception($"Sensor with path {path} already exists");
+            throw new InvalidOperationException($"Sensor with path {path} already exists");
         }
 
         private T FillOptions<T, TDisplayUnit>(string path, SensorType type, T options)
