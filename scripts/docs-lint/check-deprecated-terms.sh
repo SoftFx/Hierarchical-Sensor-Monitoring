@@ -29,7 +29,6 @@ for rule in "${RULES[@]}"; do
     skip=0
     for ex in "${ex_arr[@]}"; do
       [ "$file" = "$ex" ] && skip=1 && break
-      [ "$(basename "$file")" = "$(basename "$ex")" ] && skip=1 && break
     done
     [ "$skip" -eq 1 ] && continue
 

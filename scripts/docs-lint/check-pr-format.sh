@@ -57,7 +57,7 @@ for section in "Summary" "What Changed" "Tests" "Risks / Follow-Up"; do
   require_header "$section"
 done
 
-for section in "Summary" "Tests"; do
+for section in "Summary" "What Changed" "Tests" "Risks / Follow-Up"; do
   if is_block_empty "$section"; then
     echo "::error::'## ${section}' is empty"
     err=$((err + 1))

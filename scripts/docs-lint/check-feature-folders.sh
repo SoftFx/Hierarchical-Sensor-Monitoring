@@ -24,7 +24,7 @@ for area in "${AREAS[@]}"; do
     name="$(basename "$d")"
     [[ "$name" == _* ]] && continue
 
-    if ! grep -q "$name" "$overview"; then
+    if ! grep -Eq "\`$name/\`|\]\($name/|\]\(\./$name/" "$overview"; then
       echo "NOT-IN-OVERVIEW   $d/  (missing from $overview)"
       missing_from_overview=$((missing_from_overview + 1))
     fi

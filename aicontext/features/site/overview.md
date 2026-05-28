@@ -15,3 +15,5 @@ registration/account screens.
 - `registration/` - registration and user/account UI.
 
 Create folders from `../_TEMPLATE_feature.md` as work lands.
+
+For screen-level behavior, start from `../../screens/site/_TEMPLATE_screen.md`.

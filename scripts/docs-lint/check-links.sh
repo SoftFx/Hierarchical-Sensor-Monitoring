@@ -16,6 +16,37 @@ mapfile -t FILES < <(
 broken=0
 total=0
 
+exact_case_exists() {
+  local path="$1"
+  local rel current part entry found
+
+  rel="$(realpath -m --relative-to="$REPO_ROOT" "$path" 2>/dev/null || true)"
+  [ -z "$rel" ] && return 1
+  [[ "$rel" == ..* ]] && return 0
+
+  current="$REPO_ROOT"
+  IFS='/' read -ra parts <<< "$rel"
+
+  shopt -s nullglob dotglob
+  for part in "${parts[@]}"; do
+    [ -z "$part" ] || [ "$part" = "." ] && continue
+    found=""
+    for entry in "$current"/*; do
+      if [ "$(basename "$entry")" = "$part" ]; then
+        found="$entry"
+        break
+      fi
+    done
+    if [ -z "$found" ]; then
+      shopt -u nullglob dotglob
+      return 1
+    fi
+    current="$found"
+  done
+  shopt -u nullglob dotglob
+  return 0
+}
+
 for f in "${FILES[@]}"; do
   [ -f "$f" ] || continue
   base="$(basename "$f")"
@@ -35,6 +66,9 @@ for f in "${FILES[@]}"; do
     resolved="$(cd "$dir" && realpath -m "$clean" 2>/dev/null || true)"
     if [ ! -e "$resolved" ]; then
       echo "BROKEN  $f  ->  $target"
+      broken=$((broken + 1))
+    elif ! exact_case_exists "$resolved"; then
+      echo "CASE-MISMATCH  $f  ->  $target"
       broken=$((broken + 1))
     fi
   done < <(perl -ne 'while (/\]\(([^)]+)\)/g) { print "$1\n"; }' "$f")

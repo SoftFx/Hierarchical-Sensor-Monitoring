@@ -14,7 +14,7 @@ Must read:
 
 - changed files under `src/collector/HSMDataCollector/Core`, `Sensors`, `SyncQueue`, `Threading`, `Client`, and `Exceptions`;
 - changed collector tests under `src/collector/HSMDataCollector.Tests`;
-- public interfaces under `PublicInterface`, `PublicAPI`, options, and DTO usage when touched;
+- public interfaces under `PublicAPI`, `Core/IDataCollector.cs`, `Core/DataCollector.cs`, options, and DTO usage when touched;
 - relevant docs under `docs/test`, `ai-docs`, `wiki-draft`, or `aicontext/features/collector` when present.
 
 Output:

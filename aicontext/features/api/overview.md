@@ -11,7 +11,7 @@ The API area owns public contracts shared by HSM Server, DataCollector,
 |---|---|---|
 | Sensor DTOs | `src/api/HSMSensorDataObjects` | Serialization compatibility matters. |
 | Server controllers | `src/server/HSMServer/Controllers` | Keep request/response docs aligned. |
-| Collector public API | `src/collector/HSMDataCollector/PublicInterface` and options | Breaking changes affect integrators. |
+| Collector public API | `src/collector/HSMDataCollector/PublicAPI`, `Core/IDataCollector.cs`, `Core/DataCollector.cs`, and `Options` | Breaking changes affect integrators. |
 | C++ wrapper headers | `src/wrapper/include` | Keep parity with collector public API. |
 
 ## Feature Folders To Add Here

@@ -1,6 +1,6 @@
 ---
 name: dev-review-fix-loop
-description: Run a development review/fix loop for an existing branch, PR, or MR by launching role-based subagents, applying blocker fixes, rerunning focused review when useful, updating docs/tests, and preparing a final handoff. Use when the user asks for review/fix loop, subagent review pack, repeated code review, PR/MR hardening, or "review and fix until ready".
+description: Run a development review/fix loop for an existing branch or PR by launching role-based subagents, applying blocker fixes, rerunning focused review when useful, updating docs/tests, and preparing a final handoff. Use when the user asks for review/fix loop, subagent review pack, repeated code review, PR hardening, or "review and fix until ready".
 ---
 
 # Dev Review Fix Loop
@@ -13,10 +13,10 @@ be focused by the orchestrator and should not automatically rerun every subagent
 
 Determine:
 
-- target: current branch, PR/MR number, or explicit commit range;
+- target: current branch, PR number, or explicit commit range;
 - repository root and clean/dirty worktree state;
 - available review roles under `aicontext/architecture/development_lifecycle/review_roles/`;
-- changed files, PR/MR comments, review threads, and failing checks when available.
+- changed files, PR comments, review threads, and failing checks when available.
 
 If the target is ambiguous and cannot be inferred from branch or PR metadata, ask one
 short clarification.
@@ -52,7 +52,7 @@ Run independent reviewers in parallel when possible.
 
 ## Main Loop
 
-1. Snapshot status: branch, upstream, dirty files, changed files, existing PR/MR comments, and checks.
+1. Snapshot status: branch, upstream, dirty files, changed files, existing PR comments, and checks.
 2. Launch selected review subagents.
 3. While reviewers run, do non-overlapping local inspection: build/test failures, obvious docs gaps, and current diff sanity.
 4. Merge findings into one blocker list:
