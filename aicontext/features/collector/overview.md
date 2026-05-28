@@ -143,6 +143,17 @@ Linux default sensors read metrics from the kernel directly — no external proc
 
 The parsing logic (`ProcStat`, `ProcMeminfo`) is split from file I/O so it is unit-tested with sample text on any OS. The old `top`/`free`/`df` bash-shelling (`BashCommandExtension`) has been removed.
 
+#### Verifying the platform sensors
+
+Two complementary layers:
+
+1. **Parser unit tests** — `HSMDataCollector.Tests/ProcParsersTests.cs` (Windows-targeted net48 suite) and `PerformanceCounterIsolationTests.cs` feed sample text / fake counters. These prove the parsing and the counter-factory wiring on any OS, but do not touch real `/proc`.
+2. **Linux-gated real-read test** — `HSMDataCollector.IntegrationTests/Tests/LinuxProcSensorTests.cs` (net8.0) runs the actual `ProcStatCpuUsage` / `ProcMeminfo` parsers against the real `/proc` plus `DriveInfo("/")`, asserting sane ranges. It is a no-op off Linux and runs for real on the ubuntu CI runner (the integration-tests workflow). This requires `InternalsVisibleTo("HSMDataCollector.IntegrationTests")`.
+
+Manual one-off check on a dev box without Linux: run the net8 parsers against live `/proc` in a container, e.g.
+`docker run --rm -v "<repo>:/repo" -w /repo mcr.microsoft.com/dotnet/sdk:8.0 dotnet test src/collector/HSMDataCollector.IntegrationTests/HSMDataCollector.IntegrationTests.csproj --filter FullyQualifiedName~LinuxProcSensorTests`.
+Cross-checking against `df -k /` and `grep MemAvailable /proc/meminfo` confirms the values match (disk matches `df` avail to ~1 MiB).
+
 ## Features
 
 | Feature | Folder | Description |
