@@ -131,6 +131,8 @@ Sensors do not own scheduling boilerplate inline. The "schedule one periodic act
 
 `ScheduledTaskHandle.Start` and `StopAsync` are idempotent and thread-safe. `WindowsServiceStatusSensor` deliberately keeps a raw `ScheduledTask` because it needs `ScheduledTask.CurrentRun`/`IsRunning` to defer `ServiceController` disposal until the in-flight run completes — a specialization the simple handle intentionally does not expose.
 
+Disk free-space read failures are sensor errors, not lifecycle failures. The regular free-space sensor emits an `Error` value with the exception message, while disk prediction startup and sampling report the exception through the normal collector error path, keep the sensor started, and allow later scheduled samples to recover if the OS metric becomes readable again.
+
 ### Platform metric sources
 
 The Windows-only `System.Diagnostics.PerformanceCounter` API is isolated behind `IPerformanceCounterFactory` / `IPerformanceCounter`. `WindowsSensorBase` (CPU/RAM/disk bars) and `BaseSocketsSensor` (TCP connection counts) depend on the factory via an `internal virtual PerformanceCounterFactory` seam that defaults to `WindowsPerformanceCounterFactory` (the only place real `PerformanceCounter`/`PerformanceCounterCategory` calls live). Tests substitute a fake factory, so these sensors are now unit-testable on any OS.

@@ -55,13 +55,15 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (!_workHandle.IsScheduled)
                 {
-                    _lastSpeedCheckTime = DateTime.UtcNow;
-                    _lastAvailableSpace = FreeSpace;
+                    var utc = DateTime.UtcNow;
+
+                    _lastSpeedCheckTime = utc;
+                    _lastAvailableSpace = TryReadFreeSpace(out var freeSpace) ? freeSpace : 0L;
 
                     _currentChangeSpeed = 0.0;
                     _requestsCount = 0;
 
-                    _workHandle.Start(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, HandleException);
+                    _workHandle.Start(UpdateDiskSpeed, utc.Ceil(_calculateSpeedDelay) - utc, _calculateSpeedDelay, HandleException);
                 }
             }
 
@@ -125,8 +127,10 @@ namespace HSMDataCollector.DefaultSensors
 
         private void UpdateDiskSpeed()
         {
+            if (!TryReadFreeSpace(out var curSpace))
+                return;
+
             var utc = DateTime.UtcNow;
-            var curSpace = FreeSpace;
 
             var curSpeed = (_lastAvailableSpace - curSpace) / (utc - _lastSpeedCheckTime).TotalSeconds;
 
@@ -137,6 +141,21 @@ namespace HSMDataCollector.DefaultSensors
 
             _lastAvailableSpace = curSpace;
             _lastSpeedCheckTime = utc;
+        }
+
+        private bool TryReadFreeSpace(out long freeSpace)
+        {
+            try
+            {
+                freeSpace = FreeSpace;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                freeSpace = 0L;
+                HandleException(ex);
+                return false;
+            }
         }
     }
 }
