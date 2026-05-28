@@ -19,15 +19,6 @@ namespace HSMDataCollector.Core
 
         CollectorStatus Status { get; }
 
-        /// <summary>
-        /// True while new sensors may be registered: during the configuration phase (collector
-        /// Stopped — sensors are queued and started on the next <see cref="Start()"/>) and the
-        /// operational phase (Starting/Running — sensors start immediately). False while the
-        /// collector is Stopping or after it has been disposed; registration attempts in those
-        /// states are rejected (logged, the sensor is not added).
-        /// </summary>
-        bool IsAcceptingRegistrations { get; }
-
         string ComputerName { get; }
 
         string Module { get; }
@@ -37,15 +28,6 @@ namespace HSMDataCollector.Core
         event Action ToRunning;
         event Action ToStopping;
         event Action ToStopped;
-
-        /// <summary>
-        /// Registers an observer notified on each lifecycle transition. This is the portable
-        /// equivalent of the ToStarting/ToRunning/ToStopping/ToStopped events — prefer it for new
-        /// code. The listener is invoked under the same lock as the events; handlers must not block.
-        /// Only transitions occurring after registration are delivered (the current state is not
-        /// replayed). Returns this collector for chaining. A null listener is ignored.
-        /// </summary>
-        IDataCollector AddLifecycleListener(ILifecycleListener listener);
 
         IEnumerable<ISensor> DefaultSensors { get; }
 

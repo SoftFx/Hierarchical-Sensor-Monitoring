@@ -1,6 +1,7 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.DefaultSensors.Windows;
+using HSMDataCollector.DefaultSensors.Windows.Network;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -78,6 +79,44 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        [Fact]
+        public async Task BaseSocketsSensor_reads_tcp4_and_tcp6_through_injected_factory()
+        {
+            using (var collector = CreateCollector())
+            {
+                var dataProcessor = GetDataProcessor(collector);
+                var factory = new SocketFakeFactory(("TCPv4", 2), ("TCPv6", 3));
+                var options = InstantOptions(dataProcessor, "perf/iso/sockets");
+
+                var sensor = new TestSocketsSensor(options, factory);
+
+                Assert.True(await sensor.CallInitAsync().ConfigureAwait(false));
+
+                Assert.Equal(new[] { "TCPv4:TestSocketCounter", "TCPv6:TestSocketCounter" }, factory.Requests);
+                Assert.Equal(5, sensor.CallGetValue());
+
+                await sensor.CallStopAsync().ConfigureAwait(false);
+                Assert.All(factory.CreatedCounters, c => Assert.True(c.Disposed, "Socket counters should be disposed on stop."));
+            }
+        }
+
+        [Fact]
+        public async Task BaseSocketsSensor_disposes_first_counter_when_second_counter_init_fails()
+        {
+            using (var collector = CreateCollector())
+            {
+                var dataProcessor = GetDataProcessor(collector);
+                var factory = new SocketFakeFactory(("TCPv4", 2)) { ThrowOnCategory = "TCPv6" };
+                var options = InstantOptions(dataProcessor, "perf/iso/sockets-failure");
+
+                var sensor = new TestSocketsSensor(options, factory);
+
+                Assert.False(await sensor.CallInitAsync().ConfigureAwait(false));
+                Assert.Single(factory.CreatedCounters);
+                Assert.True(factory.CreatedCounters[0].Disposed, "The first counter should be disposed when socket initialization fails part-way.");
+            }
+        }
+
         // --- helpers ---
 
         private static DataCollector CreateCollector()
@@ -113,6 +152,14 @@ namespace HSMDataCollector.Tests
                 BarPeriod = TimeSpan.FromMilliseconds(200),
             };
 
+        private static MonitoringInstantSensorOptions InstantOptions(DataProcessor dataProcessor, string path) =>
+            new MonitoringInstantSensorOptions
+            {
+                Path = path,
+                DataProcessor = dataProcessor,
+                PostDataPeriod = TimeSpan.FromMilliseconds(100),
+            };
+
         private sealed class FakeFactory : IPerformanceCounterFactory
         {
             public FakeFactory(double sampleValue) => CreatedCounter = new FakeCounter(sampleValue);
@@ -139,6 +186,35 @@ namespace HSMDataCollector.Tests
             public bool Disposed { get; private set; }
             public double NextValue() => _value;
             public void Dispose() => Disposed = true;
+        }
+
+        private sealed class SocketFakeFactory : IPerformanceCounterFactory
+        {
+            private readonly Dictionary<string, double> _values = new Dictionary<string, double>();
+
+            public SocketFakeFactory(params (string Category, double Value)[] values)
+            {
+                foreach (var value in values)
+                    _values[value.Category] = value.Value;
+            }
+
+            public string ThrowOnCategory { get; set; }
+
+            public List<string> Requests { get; } = new List<string>();
+
+            public List<FakeCounter> CreatedCounters { get; } = new List<FakeCounter>();
+
+            public IPerformanceCounter Create(string category, string counter, string instanceFilter = null)
+            {
+                Requests.Add($"{category}:{counter}");
+
+                if (string.Equals(category, ThrowOnCategory, StringComparison.Ordinal))
+                    throw new InvalidOperationException($"Cannot create {category}");
+
+                var created = new FakeCounter(_values[category]);
+                CreatedCounters.Add(created);
+                return created;
+            }
         }
 
         private sealed class TestWindowsSensor : WindowsSensorBase
@@ -170,6 +246,23 @@ namespace HSMDataCollector.Tests
             protected override string CounterName => "Y";
 
             public IPerformanceCounterFactory ExposedFactory => PerformanceCounterFactory;
+        }
+
+        private sealed class TestSocketsSensor : BaseSocketsSensor
+        {
+            private readonly IPerformanceCounterFactory _factory;
+
+            public TestSocketsSensor(MonitoringInstantSensorOptions options, IPerformanceCounterFactory factory) : base(options)
+            {
+                _factory = factory;
+            }
+
+            internal override IPerformanceCounterFactory PerformanceCounterFactory => _factory;
+            protected override string CounterName => "TestSocketCounter";
+
+            public ValueTask<bool> CallInitAsync() => InitAsync();
+            public ValueTask CallStopAsync() => StopAsync();
+            public int? CallGetValue() => GetValue();
         }
 
         private sealed class NoopSender : IDataSender

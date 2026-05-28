@@ -82,9 +82,9 @@ Sensor registration is gated by `CollectorLifecycle.CanRegisterSensors` and foll
 | Shutdown | Stopping | false | **Rejected** — logged, disposed, not added. |
 | Terminal | Disposed | false | **Rejected** — logged, disposed, not added. |
 
-`CanRegisterSensors` = `!disposed && status != Stopping` (i.e. the union of configuration and operational phases). `CanStartNewSensors` = `!disposed && (Starting || Running)` — the narrower gate that decides immediate start vs. deferred queueing.
+`CanRegisterSensors` = `!disposed && status != Stopping` (i.e. the union of configuration and operational phases). `CanStartNewSensors` = `!disposed && (Starting || Running)` — the narrower gate that decides immediate start vs. deferred queueing. The registration decision is serialized with collector stop/dispose transitions, and dynamically started sensors are tracked so shutdown waits for their init/start path before stopping sensor storage.
 
-Rejection is non-throwing: the rejected sensor is disposed and returned inert, so late `collector.CreateXxxSensor(...)` / `collector.Windows.AddXxx(...)` calls during shutdown do not crash the host. Consumers can pre-check `IDataCollector.IsAcceptingRegistrations` (which mirrors `CanRegisterSensors`).
+Rejection is non-throwing: the rejected sensor is disposed and returned inert, so late `collector.CreateXxxSensor(...)` / `collector.Windows.AddXxx(...)` calls during shutdown do not crash the host. Consumers can pre-check `DataCollector.IsAcceptingRegistrations` (or the optional `ICollectorRegistrationState` capability), which mirrors `CanRegisterSensors`.
 
 Registration is idempotent on path: registering a path that already exists returns the existing sensor without starting a duplicate.
 
@@ -92,7 +92,7 @@ Registration is idempotent on path: registering a path that already exists retur
 
 Two additive, portable-friendly APIs sit alongside the legacy surface (nothing removed):
 
-- **`ILifecycleListener`** — observer interface (`OnStarting`/`OnRunning`/`OnStopping`/`OnStopped`) registered via `IDataCollector.AddLifecycleListener(...)`. This is the portable equivalent of the `ToStarting`/`ToRunning`/`ToStopping`/`ToStopped` C# events (which still fire). Listeners are invoked from `LogAndRaise` under `_opLock` with per-listener exception isolation; only transitions after registration are delivered (no replay).
+- **`ILifecycleListener`** — observer interface (`OnStarting`/`OnRunning`/`OnStopping`/`OnStopped`) registered via `DataCollector.AddLifecycleListener(...)`, the `IDataCollector` extension method, or the optional `ILifecycleObservableCollector` capability. The extension delegates only when the collector exposes that optional capability; custom `IDataCollector` implementations without it are left unchanged. This is the portable equivalent of the `ToStarting`/`ToRunning`/`ToStopping`/`ToStopped` C# events (which still fire). Listeners are invoked from `LogAndRaise` under `_opLock` with per-listener exception isolation; only transitions after registration are delivered (no replay).
 - **Fluent sensor builders** — `collector.InstantSensor<T>(path)`, `BarSensor<T>(path)`, `RateSensor(path)` extension methods returning fluent builders whose `Build()` dispatches to the existing options-based `CreateXxx(path, options)` factory methods. Implemented as extension methods, so the `IDataCollector` interface is unchanged; the legacy per-type overloads remain. The builders give ports a single `path → type → kind → options → Build` mental model instead of 100+ overloads.
 
 ### Data gating

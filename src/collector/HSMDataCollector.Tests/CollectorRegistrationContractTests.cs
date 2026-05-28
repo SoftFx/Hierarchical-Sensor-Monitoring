@@ -1,11 +1,14 @@
 using HSMDataCollector.Core;
+using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -49,7 +52,17 @@ namespace HSMDataCollector.Tests
             {
                 Assert.Equal(CollectorStatus.Stopped, collector.Status);
                 Assert.True(collector.IsAcceptingRegistrations);
+                Assert.True(((ICollectorRegistrationState)collector).IsAcceptingRegistrations);
             }
+        }
+
+        [Fact]
+        public void Registration_state_and_lifecycle_listener_do_not_extend_IDataCollector_contract()
+        {
+            Assert.Empty(typeof(IDataCollector).GetMember(nameof(DataCollector.IsAcceptingRegistrations)));
+            Assert.Empty(typeof(IDataCollector).GetMethods().Where(m => m.Name == nameof(DataCollector.AddLifecycleListener)));
+            Assert.True(typeof(ICollectorRegistrationState).IsAssignableFrom(typeof(DataCollector)));
+            Assert.True(typeof(ILifecycleObservableCollector).IsAssignableFrom(typeof(DataCollector)));
         }
 
         [Fact]
@@ -216,6 +229,66 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        [Fact]
+        public async Task Stop_waits_for_dynamic_sensor_init_before_stopping_storage()
+        {
+            using (var collector = CreateCollector(new CountingSender()))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                var initEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var releaseInit = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var sensor = RegisterBlockingInitSensor(collector, "contract/dynamic-stop-race/0", initEntered, releaseInit);
+
+                Assert.True(await WaitForTaskAsync(initEntered.Task, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "The dynamically registered sensor should enter InitAsync.");
+
+                var stopTask = collector.Stop();
+
+                Assert.False(await WaitForTaskAsync(stopTask, TimeSpan.FromMilliseconds(150)).ConfigureAwait(false),
+                    "Stop must wait for the in-flight dynamic InitAsync before stopping storage.");
+                Assert.Equal(0, sensor.StopCalls);
+
+                releaseInit.SetResult(true);
+                await stopTask.ConfigureAwait(false);
+
+                Assert.Equal(CollectorStatus.Stopped, collector.Status);
+                Assert.Equal(0, sensor.StartCalls);
+                Assert.Equal(1, sensor.StopCalls);
+            }
+        }
+
+        private static BlockingInitSensor RegisterBlockingInitSensor(
+            DataCollector collector,
+            string path,
+            TaskCompletionSource<bool> initEntered,
+            TaskCompletionSource<bool> releaseInit)
+        {
+            var dataProcessor = (DataProcessor)typeof(DataCollector)
+                .GetField("_dataProcessor", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(collector);
+            var sensorsStorage = (SensorsStorage)typeof(DataCollector)
+                .GetField("_sensorsStorage", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(collector);
+
+            var sensor = new BlockingInitSensor(new InstantSensorOptions
+            {
+                ComputerName = collector.ComputerName,
+                Module = collector.Module,
+                Path = path,
+                DataProcessor = dataProcessor,
+            }, initEntered, releaseInit);
+
+            sensorsStorage.Register(sensor);
+            return sensor;
+        }
+
+        private static async Task<bool> WaitForTaskAsync(Task task, TimeSpan timeout)
+        {
+            var completed = await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false);
+            return ReferenceEquals(completed, task);
+        }
+
         private sealed class CountingSender : IDataSender
         {
             private int _dataPackages;
@@ -247,6 +320,46 @@ namespace HSMDataCollector.Tests
             {
                 var completed = await Task.WhenAny(signal, Task.Delay(timeout)).ConfigureAwait(false);
                 return ReferenceEquals(completed, signal);
+            }
+        }
+
+        private sealed class BlockingInitSensor : SensorBase<NoDisplayUnit>
+        {
+            private readonly TaskCompletionSource<bool> _initEntered;
+            private readonly TaskCompletionSource<bool> _releaseInit;
+            private int _startCalls;
+            private int _stopCalls;
+
+            internal BlockingInitSensor(
+                InstantSensorOptions options,
+                TaskCompletionSource<bool> initEntered,
+                TaskCompletionSource<bool> releaseInit) : base(options)
+            {
+                _initEntered = initEntered;
+                _releaseInit = releaseInit;
+            }
+
+            internal int StartCalls => Volatile.Read(ref _startCalls);
+
+            internal int StopCalls => Volatile.Read(ref _stopCalls);
+
+            public override async ValueTask<bool> InitAsync()
+            {
+                _initEntered.TrySetResult(true);
+                await _releaseInit.Task.ConfigureAwait(false);
+                return true;
+            }
+
+            public override ValueTask<bool> StartAsync()
+            {
+                Interlocked.Increment(ref _startCalls);
+                return new ValueTask<bool>(true);
+            }
+
+            public override ValueTask StopAsync()
+            {
+                Interlocked.Increment(ref _stopCalls);
+                return default;
             }
         }
     }

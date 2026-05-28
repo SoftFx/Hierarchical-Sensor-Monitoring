@@ -31,6 +31,8 @@ namespace HSMDataCollector.Core
         private readonly DataProcessor _dataProcessor;
 
         private readonly PrototypesCollection _prototypes;
+        private readonly object _dynamicStartTasksLock = new object();
+        private readonly List<Task> _dynamicStartTasks = new List<Task>();
         private int _sensorCount;
 
         public IWindowsCollection Windows { get; }
@@ -80,6 +82,16 @@ namespace HSMDataCollector.Core
         internal Task StartAsync() => Task.WhenAll(_sensors.Values.Select(async s => await s.StartAsync().ConfigureAwait(false)));
 
         internal Task StopAsync() => Task.WhenAll(_sensors.Values.Select(async s => await s.StopAsync().ConfigureAwait(false)));
+
+        internal Task WaitForDynamicStartTasksAsync()
+        {
+            Task[] tasks;
+
+            lock (_dynamicStartTasksLock)
+                tasks = _dynamicStartTasks.ToArray();
+
+            return tasks.Length == 0 ? Task.CompletedTask : Task.WhenAll(tasks);
+        }
 
         public bool TryRemove(string key, out ISensor value)
         {
@@ -172,32 +184,37 @@ namespace HSMDataCollector.Core
             if (_sensors.TryGetValue(path, out var oldSensor))
                 return oldSensor;
 
-            // Shutdown phase (Stopping) or terminal (Disposed): reject. Adding here would either
-            // leak the sensor into storage that is being torn down, or register a sensor that can
-            // never be started. Dispose the rejected sensor so it does not leak, and return it
-            // inert rather than throwing (keeps the public AddXxx API non-throwing for late calls).
-            if (!_dataProcessor.CanRegisterSensors)
+            lock (_dataProcessor.LifecycleGate)
             {
-                Logger.Error($"Cannot register sensor '{path}' — collector is stopping or disposed. The sensor was not added.");
-                sensor.Dispose();
-                return sensor;
+                // Shutdown phase (Stopping) or terminal (Disposed): reject. Adding here would either
+                // leak the sensor into storage that is being torn down, or register a sensor that can
+                // never be started. Dispose the rejected sensor so it does not leak, and return it
+                // inert rather than throwing (keeps the public AddXxx API non-throwing for late calls).
+                if (!_dataProcessor.CanRegisterSensors)
+                {
+                    Logger.Error($"Cannot register sensor '{path}' - collector is stopping or disposed. The sensor was not added.");
+                    sensor.Dispose();
+                    return sensor;
+                }
+
+                // Operational phase (Starting/Running): add and start immediately. The lifecycle
+                // gate serializes this decision with Stop/Dispose, and StopAsync waits for tracked
+                // dynamic starts before stopping sensors.
+                if (_dataProcessor.CanStartNewSensors)
+                {
+                    var addedSensor = AddSensor(sensor);
+
+                    // If the sensor was deduplicated against an existing one, don't start the duplicate.
+                    if (ReferenceEquals(addedSensor, sensor))
+                        TrackDynamicStart(InitAndStart(addedSensor));
+
+                    return addedSensor;
+                }
+
+                // Configuration phase (Stopped): queue the sensor; it will be initialized and started
+                // by SensorsStorage.InitAsync/StartAsync when the collector next starts.
+                return AddSensor(sensor);
             }
-
-            // Operational phase (Starting/Running): add and start immediately.
-            if (_dataProcessor.CanStartNewSensors)
-            {
-                var addedSensor = AddSensor(sensor);
-
-                // If the sensor was deduplicated against an existing one, don't start the duplicate.
-                if (ReferenceEquals(addedSensor, sensor))
-                    _ = InitAndStart(addedSensor);
-
-                return addedSensor;
-            }
-
-            // Configuration phase (Stopped): queue the sensor; it will be initialized and started
-            // by SensorsStorage.InitAsync/StartAsync when the collector next starts.
-            return AddSensor(sensor);
         }
 
 
@@ -205,10 +222,25 @@ namespace HSMDataCollector.Core
         {
             if (!await sensor.InitAsync().ConfigureAwait(false))
                 Logger.Error($"Failed to init {sensor.SensorPath}");
-            else if (!await sensor.StartAsync().ConfigureAwait(false))
+            else if (_dataProcessor.CanStartNewSensors && !await sensor.StartAsync().ConfigureAwait(false))
                 Logger.Error($"Failed to start {sensor.SensorPath}");
 
             return sensor;
+        }
+
+        private void TrackDynamicStart(Task task)
+        {
+            lock (_dynamicStartTasksLock)
+                _dynamicStartTasks.Add(task);
+
+            task.ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                    Logger.Error($"Dynamic sensor start failed: {t.Exception}");
+
+                lock (_dynamicStartTasksLock)
+                    _dynamicStartTasks.Remove(t);
+            }, TaskScheduler.Default);
         }
 
         private ISensor AddSensor(ISensor sensor)

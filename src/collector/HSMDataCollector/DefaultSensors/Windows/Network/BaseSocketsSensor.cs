@@ -34,6 +34,11 @@ namespace HSMDataCollector.DefaultSensors.Windows.Network
             }
             catch (Exception ex)
             {
+                _counterTCPv4?.Dispose();
+                _counterTCPv4 = null;
+                _counterTCPv6?.Dispose();
+                _counterTCPv6 = null;
+
                 HandleException(new Exception($"Error initializing performance counter: {CategoryTcp4}/{CounterName}, {CategoryTcp6}/{CounterName}: {ex}"));
 
                 return new ValueTask<bool>(false);

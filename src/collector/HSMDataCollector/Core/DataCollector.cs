@@ -26,7 +26,7 @@ namespace HSMDataCollector.Core
     }
 
 
-    public sealed class DataCollector : IDataCollector
+    public sealed class DataCollector : IDataCollector, ICollectorRegistrationState, ILifecycleObservableCollector
     {
         private readonly LoggerManager _logger = new LoggerManager();
 
@@ -100,7 +100,7 @@ namespace HSMDataCollector.Core
 
             _scheduler = new CollectorScheduler();
 
-            _dataProcessor = new DataProcessor(options, _lifecycle, _scheduler, _logger);
+            _dataProcessor = new DataProcessor(options, _lifecycle, _opLock, _scheduler, _logger);
 
             _sensorsStorage = _dataProcessor.SensorStorage;
 
