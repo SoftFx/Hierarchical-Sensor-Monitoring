@@ -71,17 +71,10 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
-            foreach (var sensor in _sensors.Values)
-            {
-                try
-                {
-                    sensor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"Failed to stop sensor {sensor.SensorPath} during storage dispose: {ex}");
-                }
-            }
+            Task.WhenAll(_sensors.Values.Select(StopSensorDuringDisposeAsync))
+                .ConfigureAwait(false)
+                .GetAwaiter()
+                .GetResult();
 
             foreach (var sensor in _sensors.Values)
             {
@@ -93,6 +86,18 @@ namespace HSMDataCollector.Core
                 {
                     Logger.Error($"Failed to dispose sensor {sensor.SensorPath}: {ex}");
                 }
+            }
+        }
+
+        private async Task StopSensorDuringDisposeAsync(ISensor sensor)
+        {
+            try
+            {
+                await sensor.StopAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Failed to stop sensor {sensor.SensorPath} during storage dispose: {ex}");
             }
         }
 

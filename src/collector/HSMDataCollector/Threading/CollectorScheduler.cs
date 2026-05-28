@@ -194,6 +194,8 @@ namespace HSMDataCollector.Threading
             {
                 if (Volatile.Read(ref _disposed) == 1)
                 {
+                    // Keep the unreturned task in a terminal state if Dispose wins the race
+                    // after allocation but before the authoritative locked add.
                     task.Dispose();
                     throw new ObjectDisposedException(nameof(CollectorScheduler));
                 }

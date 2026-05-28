@@ -10,8 +10,9 @@ namespace HSMDataCollector.Threading
     /// bar sensors previously hand-rolled with their own field + lock. Sensors now <i>compose</i> one of
     /// these per periodic action (send loop, bar-collect loop) instead of inheriting the timer plumbing.
     ///
-    /// Start and StopAsync are individually thread-safe and idempotent. Callers should still
-    /// serialize Start and StopAsync for the same handle when they need a deterministic final state.
+    /// Start and StopAsync are individually thread-safe and idempotent. Concurrent Start/StopAsync
+    /// on the same handle may end in either state depending on which call runs last; callers needing
+    /// a known final state must serialize externally.
     /// </summary>
     internal sealed class ScheduledTaskHandle
     {
