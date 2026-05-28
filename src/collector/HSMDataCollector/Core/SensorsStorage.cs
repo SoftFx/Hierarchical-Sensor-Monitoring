@@ -71,9 +71,18 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
-            foreach (var sensor in _sensors.Values)
+            var sensors = _sensors.Values.ToList();
+
+            foreach (var sensor in sensors)
             {
-                sensor.Dispose();
+                try
+                {
+                    sensor.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Failed to dispose sensor {sensor.SensorPath}: {ex}");
+                }
             }
         }
 
