@@ -163,6 +163,41 @@ handles, caused by implicit copying. The helper handles are now move-only. This
 confirms that native ownership rules should be tested early and kept explicit in
 both C ABI and C++ layers.
 
+### 2026-05-29: shared conformance fixture for .NET and C++
+
+Added a language-neutral conformance fixture:
+
+- `tests/conformance/collector/instant_int_contract.hsmtest`
+
+The fixture is action-based and is consumed by both:
+
+- .NET adapter: `CollectorConformanceTests`.
+- C++ adapter: `conformance_instant_int_contract` CTest case.
+
+Added a single command for the shared contract pass:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\test-conformance.ps1
+```
+
+The first shared contract covers:
+
+- Values added before `Start` are dropped.
+- Running collector stores integer instant values.
+- Values added after `Stop` are dropped.
+- Duplicate sensor path registration is idempotent.
+- Long comments are trimmed to 1024 characters.
+
+The shared fixture immediately exposed a parity gap: .NET normalizes sensor paths
+to `computer/module/path`, while the first native spike stored the raw path. The
+native spike now applies the same path shape for the covered slice.
+
+Verification:
+
+- `.NET CollectorConformanceTests`: 5/5 passed.
+- C++ `conformance_instant_int_contract`: passed.
+- Full C++ spike CTest suite: 10/10 passed.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first

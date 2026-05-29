@@ -2,11 +2,14 @@
 #include "hsm_collector/hsm_collector.hpp"
 
 #include <iostream>
+#include <fstream>
 #include <functional>
 #include <map>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -28,8 +31,8 @@ namespace
         options.access_key = "test-key";
         options.server_address = "https://localhost";
         options.port = 443;
-        options.module = "native-spike";
-        options.computer_name = "native-host";
+        options.module = "conformance-module";
+        options.computer_name = "conformance-host";
         return options;
     }
 
@@ -146,6 +149,177 @@ namespace
         return payload.substr(value_start, end - value_start);
     }
 
+    std::vector<std::string> SplitLine(const std::string& line)
+    {
+        std::vector<std::string> parts;
+        std::string part;
+        std::istringstream input(line);
+
+        while (std::getline(input, part, '|'))
+            parts.push_back(part);
+
+        return parts;
+    }
+
+    int ToInt(const std::string& value)
+    {
+        return std::stoi(value);
+    }
+
+    hsm_sensor_status_t ToStatus(const std::string& value)
+    {
+        if (value == "OffTime")
+            return HSM_SENSOR_STATUS_OFF_TIME;
+        if (value == "Ok")
+            return HSM_SENSOR_STATUS_OK;
+        if (value == "Warning")
+            return HSM_SENSOR_STATUS_WARNING;
+        if (value == "Error")
+            return HSM_SENSOR_STATUS_ERROR;
+
+        throw std::runtime_error("Unknown status: " + value);
+    }
+
+    std::string ExpandTextToken(const std::string& value)
+    {
+        const std::string repeat_prefix = "repeat:";
+        if (value.rfind(repeat_prefix, 0) != 0)
+            return value;
+
+        const auto char_start = repeat_prefix.size();
+        const auto separator = value.find(':', char_start);
+        Require(separator != std::string::npos && separator > char_start, "repeat token should include a character and count");
+
+        const auto ch = value[char_start];
+        const auto count = static_cast<size_t>(std::stoul(value.substr(separator + 1)));
+        return std::string(count, ch);
+    }
+
+    struct ConformanceState
+    {
+        CollectorHandle collector;
+        std::vector<SensorHandle> sensors;
+    };
+
+    using StepsByCase = std::map<std::string, std::vector<std::vector<std::string>>>;
+
+    StepsByCase ReadConformanceFile(const std::string& path)
+    {
+        std::ifstream input(path);
+        if (!input)
+            throw std::runtime_error("Cannot open conformance fixture: " + path);
+
+        StepsByCase cases;
+        std::string line;
+
+        while (std::getline(input, line))
+        {
+            if (line.empty() || line[0] == '#')
+                continue;
+
+            auto parts = SplitLine(line);
+            if (parts.size() < 2)
+                throw std::runtime_error("Invalid conformance line: " + line);
+
+            auto case_name = parts[0];
+            parts.erase(parts.begin());
+            cases[case_name].push_back(std::move(parts));
+        }
+
+        return cases;
+    }
+
+    void ExecuteConformanceStep(ConformanceState& state, const std::vector<std::string>& step)
+    {
+        const auto& action = step[0];
+
+        if (action == "create_collector")
+        {
+            state.collector = CreateCollector();
+            return;
+        }
+
+        if (action == "start")
+        {
+            Require(hsm_collector_start(state.collector.value) == HSM_RESULT_OK, "collector start failed");
+            return;
+        }
+
+        if (action == "stop")
+        {
+            Require(hsm_collector_stop(state.collector.value) == HSM_RESULT_OK, "collector stop failed");
+            return;
+        }
+
+        if (action == "create_int_sensor")
+        {
+            Require(step.size() >= 2, "create_int_sensor requires path");
+            state.sensors.push_back(CreateIntSensor(state.collector.value, step[1].c_str()));
+            return;
+        }
+
+        if (action == "add_int")
+        {
+            Require(step.size() >= 5, "add_int requires sensor index, value, status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+
+            const auto comment = ExpandTextToken(step[4]);
+            Require(
+                hsm_sensor_add_int(state.sensors[sensor_index].value, ToInt(step[2]), ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                "add_int failed");
+            return;
+        }
+
+        if (action == "expect_sent_count")
+        {
+            Require(step.size() >= 2, "expect_sent_count requires count");
+            const auto expected = static_cast<size_t>(ToInt(step[1]));
+            Require(hsm_collector_sent_count(state.collector.value) == expected, "sent count did not match");
+            return;
+        }
+
+        if (action == "expect_payload_contains")
+        {
+            Require(step.size() >= 3, "expect_payload_contains requires index and substring");
+            const auto payload = SentJson(state.collector.value, static_cast<size_t>(ToInt(step[1])));
+            Contains(payload, step[2]);
+            return;
+        }
+
+        if (action == "expect_comment_length")
+        {
+            Require(step.size() >= 3, "expect_comment_length requires index and length");
+            const auto payload = SentJson(state.collector.value, static_cast<size_t>(ToInt(step[1])));
+            const auto comment = CommentFromPayload(payload);
+            Require(comment.size() == static_cast<size_t>(ToInt(step[2])), "comment length did not match");
+            return;
+        }
+
+        throw std::runtime_error("Unknown conformance action: " + action);
+    }
+
+    void RunConformanceContract(const std::string& path)
+    {
+        const auto cases = ReadConformanceFile(path);
+        Require(!cases.empty(), "conformance fixture should contain cases");
+
+        for (const auto& test_case : cases)
+        {
+            ConformanceState state;
+
+            try
+            {
+                for (const auto& step : test_case.second)
+                    ExecuteConformanceStep(state, step);
+            }
+            catch (const std::exception& ex)
+            {
+                throw std::runtime_error("Conformance case '" + test_case.first + "' failed: " + ex.what());
+            }
+        }
+    }
+
     void CAbi_BeforeStartDropsValue()
     {
         auto collector = CreateCollector();
@@ -166,7 +340,7 @@ namespace
 
         const auto payload = SentJson(collector.value, 0);
         Contains(payload, "\"Type\":1");
-        Contains(payload, "\"Path\":\"spike/int\"");
+        Contains(payload, "\"Path\":\"conformance-host/conformance-module/spike/int\"");
         Contains(payload, "\"Value\":42");
         Contains(payload, "\"Status\":2");
         Contains(payload, "\"Comment\":\"watch\"");
@@ -184,8 +358,8 @@ namespace
         Require(hsm_sensor_add_int(second_sensor.value, 2, HSM_SENSOR_STATUS_OK, "second") == HSM_RESULT_OK, "second add failed");
         Require(hsm_collector_sent_count(collector.value) == 2, "duplicate path handles should send through one registered sensor");
 
-        Contains(SentJson(collector.value, 0), "\"Path\":\"spike/duplicate\"");
-        Contains(SentJson(collector.value, 1), "\"Path\":\"spike/duplicate\"");
+        Contains(SentJson(collector.value, 0), "\"Path\":\"conformance-host/conformance-module/spike/duplicate\"");
+        Contains(SentJson(collector.value, 1), "\"Path\":\"conformance-host/conformance-module/spike/duplicate\"");
     }
 
     void CAbi_LongCommentIsTrimmed()
@@ -248,7 +422,7 @@ namespace
         Require(collector.SentCount() == 1, "stopped collector should drop values after Stop");
 
         const auto payload = collector.SentJson(0);
-        Contains(payload, "\"Path\":\"wrapper/int\"");
+        Contains(payload, "\"Path\":\"native-host/native-spike/wrapper/int\"");
         Contains(payload, "\"Value\":100");
         Contains(payload, "\"Status\":1");
     }
@@ -301,18 +475,19 @@ namespace
         throw std::runtime_error("Expected duplicate Start error");
     }
 
-    const std::map<std::string, std::function<void()>>& Tests()
+    const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
-        static const std::map<std::string, std::function<void()>> tests = {
-            { "c_abi_before_start_drops_value", CAbi_BeforeStartDropsValue },
-            { "c_abi_running_collector_stores_int_payload", CAbi_RunningCollectorStoresIntPayload },
-            { "c_abi_duplicate_sensor_path_is_idempotent", CAbi_DuplicateSensorPathIsIdempotent },
-            { "c_abi_long_comment_is_trimmed", CAbi_LongCommentIsTrimmed },
-            { "c_abi_invalid_arguments_return_errors", CAbi_InvalidArgumentsReturnErrors },
-            { "c_abi_missing_payload_returns_not_found", CAbi_MissingPayloadReturnsNotFound },
-            { "cpp_wrapper_creates_sensor_and_reads_payload", CppWrapper_CreatesSensorAndReadsSentPayload },
-            { "cpp_wrapper_reports_invalid_path", CppWrapper_ReportsInvalidPath },
-            { "cpp_wrapper_start_twice_reports_invalid_state", CppWrapper_StartTwiceReportsInvalidState },
+        static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+            { "c_abi_before_start_drops_value", [](const std::string&) { CAbi_BeforeStartDropsValue(); } },
+            { "c_abi_running_collector_stores_int_payload", [](const std::string&) { CAbi_RunningCollectorStoresIntPayload(); } },
+            { "c_abi_duplicate_sensor_path_is_idempotent", [](const std::string&) { CAbi_DuplicateSensorPathIsIdempotent(); } },
+            { "c_abi_long_comment_is_trimmed", [](const std::string&) { CAbi_LongCommentIsTrimmed(); } },
+            { "c_abi_invalid_arguments_return_errors", [](const std::string&) { CAbi_InvalidArgumentsReturnErrors(); } },
+            { "c_abi_missing_payload_returns_not_found", [](const std::string&) { CAbi_MissingPayloadReturnsNotFound(); } },
+            { "cpp_wrapper_creates_sensor_and_reads_payload", [](const std::string&) { CppWrapper_CreatesSensorAndReadsSentPayload(); } },
+            { "cpp_wrapper_reports_invalid_path", [](const std::string&) { CppWrapper_ReportsInvalidPath(); } },
+            { "cpp_wrapper_start_twice_reports_invalid_state", [](const std::string&) { CppWrapper_StartTwiceReportsInvalidState(); } },
+            { "conformance_instant_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
         };
 
         return tests;
@@ -331,12 +506,18 @@ int main(int argc, char** argv)
             if (test == tests.end())
                 throw std::runtime_error(std::string("Unknown test: ") + argv[1]);
 
-            test->second();
+            const auto argument = argc > 2 ? std::string{ argv[2] } : std::string{};
+            test->second(argument);
             return 0;
         }
 
         for (const auto& test : tests)
-            test.second();
+        {
+            if (test.first == "conformance_instant_int_contract")
+                continue;
+
+            test.second(std::string{});
+        }
     }
     catch (const std::exception& ex)
     {

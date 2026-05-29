@@ -40,3 +40,9 @@ add_spike_test(c_abi_missing_payload_returns_not_found)
 add_spike_test(cpp_wrapper_creates_sensor_and_reads_payload)
 add_spike_test(cpp_wrapper_reports_invalid_path)
 add_spike_test(cpp_wrapper_start_twice_reports_invalid_state)
+
+add_test(
+    NAME conformance_instant_int_contract
+    COMMAND hsm_collector_spike_tests conformance_instant_int_contract
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/instant_int_contract.hsmtest
+)

@@ -144,8 +144,9 @@ namespace
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
 
             std::lock_guard<std::mutex> guard(mutex_);
+            const auto sensor_path = BuildSensorPath(path);
 
-            const auto existing = sensors_.find(path);
+            const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
                 out_sensor = existing->second;
@@ -153,8 +154,8 @@ namespace
                 return HSM_RESULT_OK;
             }
 
-            auto sensor = std::make_shared<NativeSensor>(weak_from_this(), path, HSM_SENSOR_TYPE_INT);
-            sensors_.emplace(path, sensor);
+            auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, HSM_SENSOR_TYPE_INT);
+            sensors_.emplace(sensor_path, sensor);
             out_sensor = std::move(sensor);
 
             ClearError();
@@ -232,6 +233,18 @@ namespace
         void ClearError()
         {
             last_error_.clear();
+        }
+
+        std::string BuildSensorPath(const std::string& path) const
+        {
+            if (computer_name_.empty() && module_.empty())
+                return path;
+            if (computer_name_.empty())
+                return module_ + "/" + path;
+            if (module_.empty())
+                return computer_name_ + "/" + path;
+
+            return computer_name_ + "/" + module_ + "/" + path;
         }
 
         mutable std::mutex mutex_;
