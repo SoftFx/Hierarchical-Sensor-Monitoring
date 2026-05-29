@@ -26,4 +26,17 @@ add_executable(hsm_collector_spike_tests
 target_link_libraries(hsm_collector_spike_tests PRIVATE hsm_collector_spike)
 
 enable_testing()
-add_test(NAME hsm_collector_spike_tests COMMAND hsm_collector_spike_tests)
+
+function(add_spike_test name)
+    add_test(NAME ${name} COMMAND hsm_collector_spike_tests ${name})
+endfunction()
+
+add_spike_test(c_abi_before_start_drops_value)
+add_spike_test(c_abi_running_collector_stores_int_payload)
+add_spike_test(c_abi_duplicate_sensor_path_is_idempotent)
+add_spike_test(c_abi_long_comment_is_trimmed)
+add_spike_test(c_abi_invalid_arguments_return_errors)
+add_spike_test(c_abi_missing_payload_returns_not_found)
+add_spike_test(cpp_wrapper_creates_sensor_and_reads_payload)
+add_spike_test(cpp_wrapper_reports_invalid_path)
+add_spike_test(cpp_wrapper_start_twice_reports_invalid_state)

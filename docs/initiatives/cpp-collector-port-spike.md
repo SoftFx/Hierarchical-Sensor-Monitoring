@@ -141,6 +141,28 @@ Early findings:
   production parity still needs a canonical serializer/wire-format comparison
   against `HSMSensorDataObjects`.
 
+### 2026-05-29: split C++ tests into named parity cases
+
+The first executable originally reported as one CTest test while running several
+checks internally. It now registers separate CTest cases:
+
+- `c_abi_before_start_drops_value`
+- `c_abi_running_collector_stores_int_payload`
+- `c_abi_duplicate_sensor_path_is_idempotent`
+- `c_abi_long_comment_is_trimmed`
+- `c_abi_invalid_arguments_return_errors`
+- `c_abi_missing_payload_returns_not_found`
+- `cpp_wrapper_creates_sensor_and_reads_payload`
+- `cpp_wrapper_reports_invalid_path`
+- `cpp_wrapper_start_twice_reports_invalid_state`
+
+Result: 9/9 C++ spike tests passed.
+
+Splitting the cases exposed an accidental double-free in the test helper RAII
+handles, caused by implicit copying. The helper handles are now move-only. This
+confirms that native ownership rules should be tested early and kept explicit in
+both C ABI and C++ layers.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first
