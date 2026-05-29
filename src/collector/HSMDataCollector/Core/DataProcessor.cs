@@ -43,9 +43,16 @@ namespace HSMDataCollector.Core
 
         internal bool CanRegisterSensors => _lifecycle.CanRegisterSensors;
 
-        // Lock ordering: acquire LifecycleGate before any method on CollectorLifecycle.
-        // Registration, start, stop, and dispose paths all follow this order because
-        // CollectorLifecycle has its own internal lock.
+        /// <summary>
+        /// The collector-wide lifecycle lock (DataCollector._opLock), shared so that sensor
+        /// registration (SensorsStorage.Register) is serialized with Start/Stop/Dispose transitions.
+        ///
+        /// LOCK ORDER INVARIANT: this gate is the OUTER lock. Any code path that needs both this gate
+        /// and <see cref="CollectorLifecycle"/>'s internal lock must take this gate first
+        /// (gate → CollectorLifecycle._lock). All current callers — DataCollector.Start/Stop/Dispose
+        /// and SensorsStorage.Register — already do. Never acquire this gate while holding the
+        /// CollectorLifecycle lock, or from inside a sensor/queue callback.
+        /// </summary>
         internal object LifecycleGate => _lifecycleGate;
 
         public DataProcessor(CollectorOptions options, CollectorLifecycle lifecycle, object lifecycleGate, ICollectorScheduler scheduler, LoggerManager logger)

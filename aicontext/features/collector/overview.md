@@ -131,11 +131,30 @@ Sensors do not own scheduling boilerplate inline. The "schedule one periodic act
 
 `ScheduledTaskHandle.Start` and `StopAsync` are idempotent and thread-safe. `WindowsServiceStatusSensor` deliberately keeps a raw `ScheduledTask` because it needs `ScheduledTask.CurrentRun`/`IsRunning` to defer `ServiceController` disposal until the in-flight run completes — a specialization the simple handle intentionally does not expose.
 
+Disk free-space read failures are sensor errors, not lifecycle failures. The regular free-space sensor emits an `Error` value with the exception message, while disk prediction startup and sampling report the exception through the normal collector error path, keep the sensor started, and allow later scheduled samples to recover if the OS metric becomes readable again.
+
 ### Platform metric sources
 
 The Windows-only `System.Diagnostics.PerformanceCounter` API is isolated behind `IPerformanceCounterFactory` / `IPerformanceCounter`. `WindowsSensorBase` (CPU/RAM/disk bars) and `BaseSocketsSensor` (TCP connection counts) depend on the factory via an `internal virtual PerformanceCounterFactory` seam that defaults to `WindowsPerformanceCounterFactory` (the only place real `PerformanceCounter`/`PerformanceCounterCategory` calls live). Tests substitute a fake factory, so these sensors are now unit-testable on any OS.
 
-Linux default sensors still read metrics by shelling out to `top`/`free` via `BashCommandExtension.BashExecute()`; migrating them to direct `/proc` reads behind the same kind of seam is tracked separately (issue #1065).
+Linux default sensors read metrics from the kernel directly — no external process spawning:
+- `UnixTotalCpu` → `/proc/stat` (busy % from the idle/total delta across collect ticks, via `ProcStatCpuUsage`).
+- `UnixFreeRamMemory` → `/proc/meminfo` (`MemAvailable`, via `ProcMeminfo`).
+- `UnixDiskInfo` → managed `DriveInfo("/").AvailableFreeSpace` (statvfs) instead of `df`.
+- Process sensors (`UnixProcessCpu`/`Memory`/`ThreadCount`) already used the managed `System.Diagnostics.Process` API.
+
+The parsing logic (`ProcStat`, `ProcMeminfo`) is split from file I/O so it is unit-tested with sample text on any OS. The old `top`/`free`/`df` bash-shelling (`BashCommandExtension`) has been removed.
+
+#### Verifying the platform sensors
+
+Two complementary layers:
+
+1. **Parser unit tests** — `HSMDataCollector.Tests/ProcParsersTests.cs` (Windows-targeted net48 suite) and `PerformanceCounterIsolationTests.cs` feed sample text / fake counters. These prove the parsing and the counter-factory wiring on any OS, but do not touch real `/proc`.
+2. **Linux-gated real-read test** — `HSMDataCollector.IntegrationTests/Tests/LinuxProcSensorTests.cs` (net8.0) runs the actual `ProcStatCpuUsage` / `ProcMeminfo` parsers against the real `/proc` plus `DriveInfo("/")`, asserting sane ranges. It is a no-op off Linux and runs for real on the ubuntu CI runner (the integration-tests workflow). This requires `InternalsVisibleTo("HSMDataCollector.IntegrationTests")`.
+
+Manual one-off check on a dev box without Linux: run the net8 parsers against live `/proc` in a container, e.g.
+`docker run --rm -v "<repo>:/repo" -w /repo mcr.microsoft.com/dotnet/sdk:8.0 dotnet test src/collector/HSMDataCollector.IntegrationTests/HSMDataCollector.IntegrationTests.csproj --filter FullyQualifiedName~LinuxProcSensorTests`.
+Cross-checking against `df -k /` and `grep MemAvailable /proc/meminfo` confirms the values match (disk matches `df` avail to ~1 MiB).
 
 ## Features
 

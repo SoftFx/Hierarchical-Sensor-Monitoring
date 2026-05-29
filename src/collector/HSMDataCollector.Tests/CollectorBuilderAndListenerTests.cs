@@ -232,6 +232,20 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public void InstantSensor_builder_rejects_nullable_with_clear_message()
+        {
+            using (var collector = CreateCollector(new CountingSender()))
+            {
+                var ex = Assert.Throws<NotSupportedException>(() =>
+                    collector.InstantSensor<int?>("builder/instant/nullable").Build());
+
+                // The message must point at the non-nullable form, not just emit an opaque generic name.
+                Assert.Contains("nullable", ex.Message, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("Int32", ex.Message);
+            }
+        }
+
+        [Fact]
         public async Task Builder_registered_before_start_queues_then_sends()
         {
             var sender = new CountingSender();

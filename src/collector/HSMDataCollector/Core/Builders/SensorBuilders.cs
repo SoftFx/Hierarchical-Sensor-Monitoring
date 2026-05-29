@@ -99,6 +99,15 @@ namespace HSMDataCollector.Core
             if (type == typeof(TimeSpan))
                 return Cast(_collector.CreateTimeSensor(_path, _options));
 
+            // Nullable value types (int?, bool?, ...) cannot be supported by unwrapping: the factory
+            // produces IInstantValueSensor<int>, which is NOT assignable to IInstantValueSensor<int?>
+            // (generic interfaces are invariant), so the cast would throw. Point the caller at the
+            // non-nullable form with a clear message instead of the opaque generic name.
+            var underlying = Nullable.GetUnderlyingType(type);
+            if (underlying != null)
+                throw new NotSupportedException(
+                    $"Instant sensor of nullable type '{type.Name}' is not supported. Use the non-nullable form, e.g. InstantSensor<{underlying.Name}>(...).");
+
             throw new NotSupportedException(
                 $"Instant sensor of type '{type.Name}' is not supported. Supported types: bool, int, double, string, Version, TimeSpan.");
         }
@@ -181,6 +190,8 @@ namespace HSMDataCollector.Core
 
     /// <summary>
     /// Fluent builder for a rate sensor (reports the rate of supplied values per second over a window).
+    /// Unlike <see cref="InstantSensorBuilder{T}"/> and <see cref="BarSensorBuilder{T}"/> this has no
+    /// type parameter — a rate is always a <c>double</c> (values per second), so there is nothing to choose.
     /// </summary>
     public sealed class RateSensorBuilder
     {
