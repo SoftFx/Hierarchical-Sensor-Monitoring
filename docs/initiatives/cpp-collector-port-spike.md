@@ -97,6 +97,50 @@ Produce a native test project that can:
 The first deliverable does not need real HTTP transport, default sensors, alerts,
 or complete wrapper parity.
 
+## Spike Progress
+
+### 2026-05-29: first native vertical slice
+
+Added `src/native/collector_spike`, a standalone CMake project with:
+
+- C ABI header: `include/hsm_collector/hsm_collector.h`.
+- C++ RAII wrapper: `include/hsm_collector/hsm_collector.hpp`.
+- Native implementation: `src/hsm_collector.cpp`.
+- Self-contained test executable: `tests/hsm_collector_spike_tests.cpp`.
+
+Implemented first-slice behavior:
+
+- Create/destroy collector through opaque C handles.
+- Start/stop collector.
+- Create an integer instant sensor.
+- Add integer values with status/comment.
+- Drop values while stopped, matching the managed collector's data gating.
+- Store sent payloads in an in-memory sender as JSON-like strings for inspection.
+- Preserve managed status/type enum numeric values for the covered slice.
+- Trim comments to the managed 1024-character limit.
+- Expose C ABI errors as result codes; the C++ wrapper converts them to
+  exceptions as a convenience layer.
+
+Verification on Windows with Visual Studio CMake:
+
+```powershell
+cmake -S src\native\collector_spike -B src\native\collector_spike\build -G "Visual Studio 17 2022" -A x64
+cmake --build src\native\collector_spike\build --config Debug --parallel
+ctest --test-dir src\native\collector_spike\build -C Debug --output-on-failure
+```
+
+Result: `hsm_collector_spike_tests` passed.
+
+Early findings:
+
+- The C ABI should stay result-code based; C++ exceptions are useful only in the
+  wrapper layer.
+- Handle ownership needs to be explicit from the start. This slice uses
+  collector-owned sensors with separate releasable sensor handles.
+- The first native payload intentionally uses a simple JSON-like test string;
+  production parity still needs a canonical serializer/wire-format comparison
+  against `HSMSensorDataObjects`.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first
