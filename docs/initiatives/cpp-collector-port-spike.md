@@ -198,6 +198,34 @@ Verification:
 - C++ `conformance_instant_int_contract`: passed.
 - Full C++ spike CTest suite: 10/10 passed.
 
+### 2026-05-29: expand shared conformance toward one test matrix
+
+The conformance runner now discovers all collector `*.hsmtest` fixtures and runs
+them through both the managed collector and the native spike. Added shared
+fixtures:
+
+- `tests/conformance/collector/lifecycle_int_contract.hsmtest`
+- `tests/conformance/collector/stress_int_contract.hsmtest`
+
+The shared DSL now covers:
+
+- Creating one or many integer instant sensors.
+- Sequential and parallel value ingestion.
+- Start, stop, restart, and registration before start / during running / after
+  stop.
+- Bounded stress profiles suitable for normal PR validation.
+- Shared payload assertions across every emitted value.
+
+Language-specific unit tests remain for surfaces that are not shared contracts:
+.NET internals such as queue implementation and C++ details such as C ABI
+invalid handles, ownership, and RAII wrapper behavior.
+
+Verification:
+
+- Shared conformance script: .NET 12/12 passed, C++ conformance 3/3 passed.
+- Full C++ spike CTest suite: 12/12 passed.
+- Full .NET collector unit suite: 190 passed, 9 skipped.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first

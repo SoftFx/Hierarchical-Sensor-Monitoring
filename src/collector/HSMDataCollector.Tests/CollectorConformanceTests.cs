@@ -18,8 +18,8 @@ namespace HSMDataCollector.Tests
     public sealed class CollectorConformanceTests
     {
         [Theory]
-        [MemberData(nameof(InstantIntContractCases))]
-        public async Task Instant_int_contract_matches_shared_fixture(string caseName, IReadOnlyList<ContractStep> steps)
+        [MemberData(nameof(CollectorContractCases))]
+        public async Task Collector_contract_matches_shared_fixture(string caseName, IReadOnlyList<ContractStep> steps)
         {
             Assert.False(string.IsNullOrWhiteSpace(caseName));
 
@@ -39,10 +39,15 @@ namespace HSMDataCollector.Tests
             }
         }
 
-        public static IEnumerable<object[]> InstantIntContractCases()
+        public static IEnumerable<object[]> CollectorContractCases()
         {
-            foreach (var testCase in ReadContractCases(FindContractFile("instant_int_contract.hsmtest")))
-                yield return new object[] { testCase.Key, testCase.Value };
+            foreach (var contractFile in FindContractFiles())
+            {
+                var contractName = Path.GetFileNameWithoutExtension(contractFile);
+
+                foreach (var testCase in ReadContractCases(contractFile))
+                    yield return new object[] { contractName + ":" + testCase.Key, testCase.Value };
+            }
         }
 
         private static async Task ExecuteStepAsync(ContractState state, ContractStep step)
@@ -66,14 +71,42 @@ namespace HSMDataCollector.Tests
                     state.IntSensors.Add(state.Collector.CreateIntSensor(step.Arg(0)));
                     break;
 
+                case "create_int_sensors":
+                    CreateIntSensors(state, int.Parse(step.Arg(0)), step.Arg(1));
+                    break;
+
                 case "add_int":
                     state.IntSensors[int.Parse(step.Arg(0))]
                         .AddValue(int.Parse(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
                     break;
 
+                case "add_int_sequence":
+                    AddIntSequence(
+                        state,
+                        sensorCount: int.Parse(step.Arg(0)),
+                        valuesPerSensor: int.Parse(step.Arg(1)),
+                        startValue: int.Parse(step.Arg(2)),
+                        status: ParseStatus(step.Arg(3)),
+                        comment: ExpandTextToken(step.Arg(4)));
+                    break;
+
+                case "add_int_parallel":
+                    await AddIntParallelAsync(
+                        state,
+                        workerCount: int.Parse(step.Arg(0)),
+                        valuesPerWorker: int.Parse(step.Arg(1)),
+                        sensorCount: int.Parse(step.Arg(2)),
+                        status: ParseStatus(step.Arg(3)),
+                        comment: ExpandTextToken(step.Arg(4))).ConfigureAwait(false);
+                    break;
+
                 case "expect_sent_count":
+                    var timeout = step.TryArg(1, out var seconds)
+                        ? TimeSpan.FromSeconds(int.Parse(seconds))
+                        : TimeSpan.FromSeconds(2);
+
                     Assert.True(
-                        await state.Sender.WaitForCountAsync(int.Parse(step.Arg(0)), TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                        await state.Sender.WaitForCountAsync(int.Parse(step.Arg(0)), timeout).ConfigureAwait(false),
                         $"Expected {step.Arg(0)} sent value(s), got {state.Sender.Values.Count}.");
                     break;
 
@@ -83,6 +116,10 @@ namespace HSMDataCollector.Tests
 
                 case "expect_comment_length":
                     Assert.Equal(int.Parse(step.Arg(1)), state.Sender.Values[int.Parse(step.Arg(0))].Comment?.Length ?? 0);
+                    break;
+
+                case "expect_all_payloads_contain":
+                    Assert.All(state.Sender.Values, value => Assert.Contains(step.Arg(0), PayloadText(value)));
                     break;
 
                 default:
@@ -99,13 +136,60 @@ namespace HSMDataCollector.Tests
                 ComputerName = "conformance-host",
                 Module = "conformance-module",
                 DataSender = sender,
-                MaxQueueSize = 1000,
+                MaxQueueSize = 20000,
                 MaxValuesInPackage = 50,
                 PackageCollectPeriod = TimeSpan.FromMilliseconds(20),
                 RequestTimeout = TimeSpan.FromSeconds(1),
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
                 MaxDeduplicatedMessages = 100,
             });
+        }
+
+        private static void CreateIntSensors(ContractState state, int count, string pathPrefix)
+        {
+            for (var i = 0; i < count; i++)
+                state.IntSensors.Add(state.Collector.CreateIntSensor(pathPrefix + "/" + i));
+        }
+
+        private static void AddIntSequence(
+            ContractState state,
+            int sensorCount,
+            int valuesPerSensor,
+            int startValue,
+            SensorStatus status,
+            string comment)
+        {
+            for (var sensorIndex = 0; sensorIndex < sensorCount; sensorIndex++)
+            {
+                for (var valueIndex = 0; valueIndex < valuesPerSensor; valueIndex++)
+                {
+                    var value = startValue + sensorIndex * valuesPerSensor + valueIndex;
+                    state.IntSensors[sensorIndex].AddValue(value, status, comment);
+                }
+            }
+        }
+
+        private static Task AddIntParallelAsync(
+            ContractState state,
+            int workerCount,
+            int valuesPerWorker,
+            int sensorCount,
+            SensorStatus status,
+            string comment)
+        {
+            var tasks = Enumerable.Range(0, workerCount)
+                .Select(worker => Task.Run(() =>
+                {
+                    for (var valueIndex = 0; valueIndex < valuesPerWorker; valueIndex++)
+                    {
+                        var sensorIndex = (worker + valueIndex) % sensorCount;
+                        var value = worker * valuesPerWorker + valueIndex;
+                        state.IntSensors[sensorIndex].AddValue(value, status, comment);
+                    }
+                }))
+                .ToArray();
+
+            return Task.WhenAll(tasks);
         }
 
         private static string PayloadText(SensorValueBase value)
@@ -169,20 +253,20 @@ namespace HSMDataCollector.Tests
             return cases.ToDictionary(x => x.Key, x => (IReadOnlyList<ContractStep>)x.Value, StringComparer.Ordinal);
         }
 
-        private static string FindContractFile(string fileName)
+        private static IReadOnlyList<string> FindContractFiles()
         {
             var directory = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
 
             while (directory != null)
             {
-                var candidate = Path.Combine(directory.FullName, "tests", "conformance", "collector", fileName);
-                if (File.Exists(candidate))
-                    return candidate;
+                var candidate = Path.Combine(directory.FullName, "tests", "conformance", "collector");
+                if (Directory.Exists(candidate))
+                    return Directory.GetFiles(candidate, "*.hsmtest").OrderBy(x => x, StringComparer.Ordinal).ToArray();
 
                 directory = directory.Parent;
             }
 
-            throw new FileNotFoundException($"Cannot find conformance contract '{fileName}'.");
+            throw new DirectoryNotFoundException("Cannot find collector conformance contracts.");
         }
 
         public sealed class ContractStep
@@ -198,6 +282,18 @@ namespace HSMDataCollector.Tests
             public string Action { get; }
 
             public string Arg(int index) => _args[index];
+
+            public bool TryArg(int index, out string value)
+            {
+                if (index < _args.Length)
+                {
+                    value = _args[index];
+                    return true;
+                }
+
+                value = null;
+                return false;
+            }
 
             public override string ToString() => Action;
         }

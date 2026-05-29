@@ -5,9 +5,11 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -258,6 +260,17 @@ namespace
             return;
         }
 
+        if (action == "create_int_sensors")
+        {
+            Require(step.size() >= 3, "create_int_sensors requires count and path prefix");
+            const auto count = ToInt(step[1]);
+
+            for (int i = 0; i < count; ++i)
+                state.sensors.push_back(CreateIntSensor(state.collector.value, (step[2] + "/" + std::to_string(i)).c_str()));
+
+            return;
+        }
+
         if (action == "add_int")
         {
             Require(step.size() >= 5, "add_int requires sensor index, value, status, and comment");
@@ -268,6 +281,79 @@ namespace
             Require(
                 hsm_sensor_add_int(state.sensors[sensor_index].value, ToInt(step[2]), ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
                 "add_int failed");
+            return;
+        }
+
+        if (action == "add_int_sequence")
+        {
+            Require(step.size() >= 6, "add_int_sequence requires sensor count, values per sensor, start value, status, and comment");
+            const auto sensor_count = ToInt(step[1]);
+            const auto values_per_sensor = ToInt(step[2]);
+            const auto start_value = ToInt(step[3]);
+            const auto status = ToStatus(step[4]);
+            const auto comment = ExpandTextToken(step[5]);
+
+            Require(sensor_count <= static_cast<int>(state.sensors.size()), "sensor count out of range");
+
+            for (int sensor_index = 0; sensor_index < sensor_count; ++sensor_index)
+            {
+                for (int value_index = 0; value_index < values_per_sensor; ++value_index)
+                {
+                    const auto value = start_value + sensor_index * values_per_sensor + value_index;
+                    Require(
+                        hsm_sensor_add_int(state.sensors[static_cast<size_t>(sensor_index)].value, value, status, comment.c_str()) == HSM_RESULT_OK,
+                        "add_int_sequence failed");
+                }
+            }
+
+            return;
+        }
+
+        if (action == "add_int_parallel")
+        {
+            Require(step.size() >= 6, "add_int_parallel requires worker count, values per worker, sensor count, status, and comment");
+            const auto worker_count = ToInt(step[1]);
+            const auto values_per_worker = ToInt(step[2]);
+            const auto sensor_count = ToInt(step[3]);
+            const auto status = ToStatus(step[4]);
+            const auto comment = ExpandTextToken(step[5]);
+
+            Require(sensor_count <= static_cast<int>(state.sensors.size()), "sensor count out of range");
+
+            std::vector<std::thread> workers;
+            std::exception_ptr first_exception;
+            std::mutex exception_mutex;
+
+            for (int worker = 0; worker < worker_count; ++worker)
+            {
+                workers.emplace_back([&, worker]()
+                {
+                    try
+                    {
+                        for (int value_index = 0; value_index < values_per_worker; ++value_index)
+                        {
+                            const auto sensor_index = static_cast<size_t>((worker + value_index) % sensor_count);
+                            const auto value = worker * values_per_worker + value_index;
+                            Require(
+                                hsm_sensor_add_int(state.sensors[sensor_index].value, value, status, comment.c_str()) == HSM_RESULT_OK,
+                                "add_int_parallel failed");
+                        }
+                    }
+                    catch (...)
+                    {
+                        std::lock_guard<std::mutex> guard(exception_mutex);
+                        if (!first_exception)
+                            first_exception = std::current_exception();
+                    }
+                });
+            }
+
+            for (auto& worker : workers)
+                worker.join();
+
+            if (first_exception)
+                std::rethrow_exception(first_exception);
+
             return;
         }
 
@@ -293,6 +379,17 @@ namespace
             const auto payload = SentJson(state.collector.value, static_cast<size_t>(ToInt(step[1])));
             const auto comment = CommentFromPayload(payload);
             Require(comment.size() == static_cast<size_t>(ToInt(step[2])), "comment length did not match");
+            return;
+        }
+
+        if (action == "expect_all_payloads_contain")
+        {
+            Require(step.size() >= 2, "expect_all_payloads_contain requires substring");
+            const auto count = hsm_collector_sent_count(state.collector.value);
+
+            for (size_t index = 0; index < count; ++index)
+                Contains(SentJson(state.collector.value, index), step[1]);
+
             return;
         }
 
@@ -488,6 +585,8 @@ namespace
             { "cpp_wrapper_reports_invalid_path", [](const std::string&) { CppWrapper_ReportsInvalidPath(); } },
             { "cpp_wrapper_start_twice_reports_invalid_state", [](const std::string&) { CppWrapper_StartTwiceReportsInvalidState(); } },
             { "conformance_instant_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_lifecycle_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_stress_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
         };
 
         return tests;
@@ -513,7 +612,7 @@ int main(int argc, char** argv)
 
         for (const auto& test : tests)
         {
-            if (test.first == "conformance_instant_int_contract")
+            if (test.first.rfind("conformance_", 0) == 0)
                 continue;
 
             test.second(std::string{});

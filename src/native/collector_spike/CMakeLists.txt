@@ -41,8 +41,14 @@ add_spike_test(cpp_wrapper_creates_sensor_and_reads_payload)
 add_spike_test(cpp_wrapper_reports_invalid_path)
 add_spike_test(cpp_wrapper_start_twice_reports_invalid_state)
 
-add_test(
-    NAME conformance_instant_int_contract
-    COMMAND hsm_collector_spike_tests conformance_instant_int_contract
-            ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/instant_int_contract.hsmtest
-)
+function(add_conformance_test name fixture)
+    add_test(
+        NAME ${name}
+        COMMAND hsm_collector_spike_tests ${name}
+                ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/${fixture}
+    )
+endfunction()
+
+add_conformance_test(conformance_instant_int_contract instant_int_contract.hsmtest)
+add_conformance_test(conformance_lifecycle_int_contract lifecycle_int_contract.hsmtest)
+add_conformance_test(conformance_stress_int_contract stress_int_contract.hsmtest)

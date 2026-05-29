@@ -1,14 +1,18 @@
 # HSM collector conformance v1.
 # Format: case|action|arg1|arg2|arg3|arg4
-# Supported actions in the first slice:
+# Supported actions:
 # create_collector
 # start
 # stop
 # create_int_sensor|path
+# create_int_sensors|count|path_prefix
 # add_int|sensor_index|value|status|comment
-# expect_sent_count|count
+# add_int_sequence|sensor_count|values_per_sensor|start_value|status|comment
+# add_int_parallel|worker_count|values_per_worker|sensor_count|status|comment
+# expect_sent_count|count|optional_timeout_seconds
 # expect_payload_contains|payload_index|substring
 # expect_comment_length|payload_index|length
+# expect_all_payloads_contain|substring
 
 before_start_drops_value|create_collector
 before_start_drops_value|create_int_sensor|contract/int
