@@ -226,6 +226,39 @@ Verification:
 - Full C++ spike CTest suite: 12/12 passed.
 - Full .NET collector unit suite: 190 passed, 9 skipped.
 
+### 2026-05-30: broaden shared contracts beyond smoke coverage
+
+Expanded the shared test matrix from 12 managed conformance cases to 38 managed
+cases, all driven by the same `*.hsmtest` files that the C++ spike consumes.
+Added fixtures:
+
+- `tests/conformance/collector/value_int_contract.hsmtest`
+- `tests/conformance/collector/cardinality_int_contract.hsmtest`
+
+New shared coverage includes:
+
+- Integer boundary values: zero, negative, `int.MinValue`, `int.MaxValue`.
+- Sensor status enum wire values: `OffTime`, `Ok`, `Warning`, `Error`.
+- Path composition with punctuation and spaces.
+- Comment handling, including JSON escaping and long-comment trimming.
+- Payload ordering for sequential sensor-major writes.
+- Restart behavior, idempotent stop, and stopped values not flushing after
+  restart.
+- Bounded cardinality and duplicate-path load.
+- Wider sequential and parallel stress profiles.
+
+The remaining managed tests are not yet portable because the native spike does
+not yet implement their behavioral surface: double/string/bool/version/time
+instant sensors, last-value sensors, bar/rate/function/file sensors, default
+sensors, HTTP transport chaos, queue overflow internals, resource leak probes,
+and scheduler-specific implementation tests. As each native surface is added,
+the matching managed test scenarios should move into `tests/conformance` first,
+leaving only implementation details in language-specific suites.
+
+Verification:
+
+- Shared conformance script: .NET 38/38 passed, C++ conformance 5/5 passed.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first

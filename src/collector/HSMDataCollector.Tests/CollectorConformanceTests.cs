@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -100,6 +101,15 @@ namespace HSMDataCollector.Tests
                         comment: ExpandTextToken(step.Arg(4))).ConfigureAwait(false);
                     break;
 
+                case "repeat_start_stop_add":
+                    await RepeatStartStopAddAsync(
+                        state,
+                        cycles: int.Parse(step.Arg(0)),
+                        sensorIndex: int.Parse(step.Arg(1)),
+                        status: ParseStatus(step.Arg(2)),
+                        commentPrefix: ExpandTextToken(step.Arg(3))).ConfigureAwait(false);
+                    break;
+
                 case "expect_sent_count":
                     var timeout = step.TryArg(1, out var seconds)
                         ? TimeSpan.FromSeconds(int.Parse(seconds))
@@ -120,6 +130,14 @@ namespace HSMDataCollector.Tests
 
                 case "expect_all_payloads_contain":
                     Assert.All(state.Sender.Values, value => Assert.Contains(step.Arg(0), PayloadText(value)));
+                    break;
+
+                case "expect_payload_value_sequence":
+                    ExpectPayloadValueSequence(
+                        state,
+                        startPayloadIndex: int.Parse(step.Arg(0)),
+                        count: int.Parse(step.Arg(1)),
+                        startValue: int.Parse(step.Arg(2)));
                     break;
 
                 default:
@@ -192,17 +210,82 @@ namespace HSMDataCollector.Tests
             return Task.WhenAll(tasks);
         }
 
+        private static async Task RepeatStartStopAddAsync(
+            ContractState state,
+            int cycles,
+            int sensorIndex,
+            SensorStatus status,
+            string commentPrefix)
+        {
+            for (var cycle = 0; cycle < cycles; cycle++)
+            {
+                await state.Collector.Start().ConfigureAwait(false);
+                state.IntSensors[sensorIndex].AddValue(cycle, status, commentPrefix + "-" + cycle);
+                await state.Collector.Stop().ConfigureAwait(false);
+            }
+        }
+
+        private static void ExpectPayloadValueSequence(ContractState state, int startPayloadIndex, int count, int startValue)
+        {
+            for (var offset = 0; offset < count; offset++)
+            {
+                var payload = PayloadText(state.Sender.Values[startPayloadIndex + offset]);
+                Assert.Contains("\"Value\":" + (startValue + offset), payload);
+            }
+        }
+
         private static string PayloadText(SensorValueBase value)
         {
             var intValue = value as IntSensorValue;
 
             return "{" +
                    $"\"Type\":{(int)value.Type}," +
-                   $"\"Path\":\"{value.Path}\"," +
+                   $"\"Path\":\"{EscapeJson(value.Path)}\"," +
                    $"\"Value\":{intValue?.Value}," +
                    $"\"Status\":{(int)value.Status}," +
-                   $"\"Comment\":\"{value.Comment}\"" +
+                   $"\"Comment\":\"{EscapeJson(value.Comment)}\"" +
                    "}";
+        }
+
+        private static string EscapeJson(string value)
+        {
+            if (value == null)
+                return null;
+
+            var builder = new StringBuilder(value.Length);
+
+            foreach (var ch in value)
+            {
+                switch (ch)
+                {
+                    case '\\':
+                        builder.Append("\\\\");
+                        break;
+                    case '"':
+                        builder.Append("\\\"");
+                        break;
+                    case '\b':
+                        builder.Append("\\b");
+                        break;
+                    case '\f':
+                        builder.Append("\\f");
+                        break;
+                    case '\n':
+                        builder.Append("\\n");
+                        break;
+                    case '\r':
+                        builder.Append("\\r");
+                        break;
+                    case '\t':
+                        builder.Append("\\t");
+                        break;
+                    default:
+                        builder.Append(ch);
+                        break;
+                }
+            }
+
+            return builder.ToString();
         }
 
         private static SensorStatus ParseStatus(string value)
@@ -215,7 +298,12 @@ namespace HSMDataCollector.Tests
             const string repeatPrefix = "repeat:";
 
             if (!value.StartsWith(repeatPrefix, StringComparison.Ordinal))
+            {
+                if (string.Equals(value, "token:json-special", StringComparison.Ordinal))
+                    return "quote\"slash\\tab\tnewline\n";
+
                 return value;
+            }
 
             var separator = value.IndexOf(':', repeatPrefix.Length);
             if (separator <= repeatPrefix.Length)

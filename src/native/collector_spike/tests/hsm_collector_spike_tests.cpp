@@ -186,7 +186,12 @@ namespace
     {
         const std::string repeat_prefix = "repeat:";
         if (value.rfind(repeat_prefix, 0) != 0)
+        {
+            if (value == "token:json-special")
+                return "quote\"slash\\tab\tnewline\n";
+
             return value;
+        }
 
         const auto char_start = repeat_prefix.size();
         const auto separator = value.find(':', char_start);
@@ -357,6 +362,31 @@ namespace
             return;
         }
 
+        if (action == "repeat_start_stop_add")
+        {
+            Require(step.size() >= 5, "repeat_start_stop_add requires cycles, sensor index, status, and comment prefix");
+            const auto cycles = ToInt(step[1]);
+            const auto sensor_index = static_cast<size_t>(ToInt(step[2]));
+            const auto status = ToStatus(step[3]);
+            const auto comment_prefix = ExpandTextToken(step[4]);
+
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+
+            for (int cycle = 0; cycle < cycles; ++cycle)
+            {
+                Require(hsm_collector_start(state.collector.value) == HSM_RESULT_OK, "repeat start failed");
+
+                const auto comment = comment_prefix + "-" + std::to_string(cycle);
+                Require(
+                    hsm_sensor_add_int(state.sensors[sensor_index].value, cycle, status, comment.c_str()) == HSM_RESULT_OK,
+                    "repeat add failed");
+
+                Require(hsm_collector_stop(state.collector.value) == HSM_RESULT_OK, "repeat stop failed");
+            }
+
+            return;
+        }
+
         if (action == "expect_sent_count")
         {
             Require(step.size() >= 2, "expect_sent_count requires count");
@@ -389,6 +419,22 @@ namespace
 
             for (size_t index = 0; index < count; ++index)
                 Contains(SentJson(state.collector.value, index), step[1]);
+
+            return;
+        }
+
+        if (action == "expect_payload_value_sequence")
+        {
+            Require(step.size() >= 4, "expect_payload_value_sequence requires start payload index, count, and start value");
+            const auto start_payload_index = static_cast<size_t>(ToInt(step[1]));
+            const auto count = ToInt(step[2]);
+            const auto start_value = ToInt(step[3]);
+
+            for (int offset = 0; offset < count; ++offset)
+            {
+                const auto payload = SentJson(state.collector.value, start_payload_index + static_cast<size_t>(offset));
+                Contains(payload, "\"Value\":" + std::to_string(start_value + offset));
+            }
 
             return;
         }
@@ -587,6 +633,8 @@ namespace
             { "conformance_instant_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_lifecycle_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_stress_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_value_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_cardinality_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
         };
 
         return tests;
