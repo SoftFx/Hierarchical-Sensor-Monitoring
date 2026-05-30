@@ -8,6 +8,7 @@
 # create_bool_sensor|path
 # create_double_sensor|path
 # create_string_sensor|path
+# create_enum_sensor|path
 # create_last_int_sensor|path|default_value
 # create_last_bool_sensor|path|default_value
 # create_last_double_sensor|path|default_value
@@ -17,6 +18,7 @@
 # add_bool|sensor_index|value|status|comment
 # add_double|sensor_index|value|status|comment
 # add_string|sensor_index|value|status|comment
+# add_enum|sensor_index|value|status|comment
 # add_int_sequence|sensor_count|values_per_sensor|start_value|status|comment
 # add_int_parallel|worker_count|values_per_worker|sensor_count|status|comment
 # repeat_start_stop_add|cycles|sensor_index|status|comment_prefix

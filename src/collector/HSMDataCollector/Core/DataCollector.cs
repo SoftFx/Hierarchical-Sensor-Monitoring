@@ -669,7 +669,8 @@ namespace HSMDataCollector.Core
 
         public IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOptions options) => CreateInstantSensor<int>(path, options);
 
-        public IInstantValueSensor<int> CreateEnumSensor(string path, string description = "") => CreateInstantSensor<int>(path, new EnumSensorOptions { Description = description });
+        public IInstantValueSensor<int> CreateEnumSensor(string path, string description = "") =>
+            CreateEnumSensor(path, new EnumSensorOptions { Description = description });
 
         public IInstantValueSensor<int> CreateEnumSensor(string path, EnumSensorOptions options) => _sensorsStorage.CreateEnumInstantSensor(path, options);
 

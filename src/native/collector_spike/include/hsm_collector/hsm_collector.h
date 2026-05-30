@@ -33,7 +33,8 @@ typedef enum hsm_sensor_type_t
     HSM_SENSOR_TYPE_BOOLEAN = 0,
     HSM_SENSOR_TYPE_INT = 1,
     HSM_SENSOR_TYPE_DOUBLE = 2,
-    HSM_SENSOR_TYPE_STRING = 3
+    HSM_SENSOR_TYPE_STRING = 3,
+    HSM_SENSOR_TYPE_ENUM = 10
 } hsm_sensor_type_t;
 
 typedef struct hsm_collector_options_t
@@ -64,6 +65,10 @@ hsm_result_t hsm_collector_create_double_sensor(
     const char* path,
     hsm_sensor_t** out_sensor);
 hsm_result_t hsm_collector_create_string_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_enum_sensor(
     hsm_collector_t* collector,
     const char* path,
     hsm_sensor_t** out_sensor);
@@ -108,6 +113,11 @@ hsm_result_t hsm_sensor_add_double(
 hsm_result_t hsm_sensor_add_string(
     hsm_sensor_t* sensor,
     const char* value,
+    hsm_sensor_status_t status,
+    const char* comment);
+hsm_result_t hsm_sensor_add_enum(
+    hsm_sensor_t* sensor,
+    int32_t value,
     hsm_sensor_status_t status,
     const char* comment);
 

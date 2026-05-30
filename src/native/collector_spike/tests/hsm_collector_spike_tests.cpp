@@ -154,6 +154,15 @@ namespace
         return sensor;
     }
 
+    SensorHandle CreateEnumSensor(hsm_collector_t* collector, const char* path)
+    {
+        SensorHandle sensor;
+
+        Require(hsm_collector_create_enum_sensor(collector, path, &sensor.value) == HSM_RESULT_OK, "enum sensor create failed");
+
+        return sensor;
+    }
+
     SensorHandle CreateLastIntSensor(hsm_collector_t* collector, const char* path, int default_value)
     {
         SensorHandle sensor;
@@ -370,6 +379,13 @@ namespace
             return;
         }
 
+        if (action == "create_enum_sensor")
+        {
+            Require(step.size() >= 2, "create_enum_sensor requires path");
+            state.sensors.push_back(CreateEnumSensor(state.collector.value, step[1].c_str()));
+            return;
+        }
+
         if (action == "create_last_int_sensor")
         {
             Require(step.size() >= 3, "create_last_int_sensor requires path and default value");
@@ -460,6 +476,19 @@ namespace
             Require(
                 hsm_sensor_add_string(state.sensors[sensor_index].value, value.c_str(), ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
                 "add_string failed");
+            return;
+        }
+
+        if (action == "add_enum")
+        {
+            Require(step.size() >= 5, "add_enum requires sensor index, value, status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+
+            const auto comment = ExpandTextToken(step[4]);
+            Require(
+                hsm_sensor_add_enum(state.sensors[sensor_index].value, ToInt(step[2]), ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                "add_enum failed");
             return;
         }
 
@@ -647,6 +676,7 @@ namespace
             { "conformance_cardinality_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_instant_mixed_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_last_value_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_enum_contract", [](const std::string& path) { RunConformanceContract(path); } },
         };
 
         return tests;

@@ -119,6 +119,7 @@ namespace
         hsm_result_t AddBool(bool value, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddDouble(double value, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddString(const char* value, hsm_sensor_status_t status, const char* comment);
+        hsm_result_t AddEnum(int32_t value, hsm_sensor_status_t status, const char* comment);
         bool TryGetLastValueSnapshot(SensorSnapshot& snapshot) const;
 
     private:
@@ -349,6 +350,14 @@ namespace
         return AddValueJson("\"" + EscapeJson(CopyString(value)) + "\"", status, comment);
     }
 
+    hsm_result_t NativeSensor::AddEnum(int32_t value, hsm_sensor_status_t status, const char* comment)
+    {
+        if (type_ != HSM_SENSOR_TYPE_ENUM)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        return AddValueJson(std::to_string(value), status, comment);
+    }
+
     hsm_result_t NativeSensor::AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment)
     {
         if (is_last_value_)
@@ -472,6 +481,14 @@ hsm_result_t hsm_collector_create_string_sensor(
     return CreateSensor(collector, path, HSM_SENSOR_TYPE_STRING, false, std::string{}, out_sensor);
 }
 
+hsm_result_t hsm_collector_create_enum_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor)
+{
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_ENUM, false, std::string{}, out_sensor);
+}
+
 hsm_result_t hsm_collector_create_last_value_int_sensor(
     hsm_collector_t* collector,
     const char* path,
@@ -588,6 +605,18 @@ hsm_result_t hsm_sensor_add_string(
         return HSM_RESULT_INVALID_ARGUMENT;
 
     return sensor->impl->AddString(value, status, comment);
+}
+
+hsm_result_t hsm_sensor_add_enum(
+    hsm_sensor_t* sensor,
+    int32_t value,
+    hsm_sensor_status_t status,
+    const char* comment)
+{
+    if (sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return sensor->impl->AddEnum(value, status, comment);
 }
 
 size_t hsm_collector_sent_count(const hsm_collector_t* collector)

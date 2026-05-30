@@ -85,6 +85,10 @@ namespace HSMDataCollector.Tests
                     state.StringSensors.Add(state.Collector.CreateStringSensor(step.Arg(0)));
                     break;
 
+                case "create_enum_sensor":
+                    state.EnumSensors.Add(state.Collector.CreateEnumSensor(step.Arg(0)));
+                    break;
+
                 case "create_last_int_sensor":
                     state.IntSensors.Add(state.Collector.CreateLastValueIntSensor(step.Arg(0), int.Parse(step.Arg(1))));
                     break;
@@ -125,6 +129,11 @@ namespace HSMDataCollector.Tests
                 case "add_string":
                     state.StringSensors[int.Parse(step.Arg(0))]
                         .AddValue(ExpandTextToken(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                case "add_enum":
+                    state.EnumSensors[int.Parse(step.Arg(0))]
+                        .AddValue(int.Parse(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
                     break;
 
                 case "add_int_sequence":
@@ -299,6 +308,9 @@ namespace HSMDataCollector.Tests
             if (value is IntSensorValue intValue)
                 return intValue.Value.ToString(CultureInfo.InvariantCulture);
 
+            if (value is EnumSensorValue enumValue)
+                return enumValue.Value.ToString(CultureInfo.InvariantCulture);
+
             if (value is DoubleSensorValue doubleValue)
                 return doubleValue.Value.ToString("R", CultureInfo.InvariantCulture);
 
@@ -460,6 +472,8 @@ namespace HSMDataCollector.Tests
             public List<IInstantValueSensor<double>> DoubleSensors { get; } = new List<IInstantValueSensor<double>>();
 
             public List<IInstantValueSensor<string>> StringSensors { get; } = new List<IInstantValueSensor<string>>();
+
+            public List<IInstantValueSensor<int>> EnumSensors { get; } = new List<IInstantValueSensor<int>>();
         }
 
         private sealed class RecordingSender : IDataSender

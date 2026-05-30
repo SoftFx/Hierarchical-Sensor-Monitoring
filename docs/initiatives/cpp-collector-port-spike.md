@@ -310,6 +310,25 @@ Verification:
 
 - Shared conformance script: .NET 56/56 passed, C++ conformance 7/7 passed.
 
+### 2026-05-30: move enum sensors into shared contracts
+
+Added enum instant sensor coverage:
+
+- `tests/conformance/collector/enum_contract.hsmtest`
+
+The shared enum contract covers zero, positive, and negative enum values,
+status propagation, stopped-value drop behavior, and the `SensorType.EnumSensor`
+wire value (`10`).
+
+The shared test exposed a managed bug: `CreateEnumSensor(string path, string
+description)` routed through the generic integer instant-sensor factory and sent
+`SensorType.IntSensor` (`1`) instead of `SensorType.EnumSensor` (`10`). The
+overload now delegates to the enum-specific overload.
+
+Verification:
+
+- Shared conformance script: .NET 60/60 passed, C++ conformance 8/8 passed.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first
