@@ -290,6 +290,26 @@ Verification:
 
 - Shared conformance script: .NET 48/48 passed, C++ conformance 6/6 passed.
 
+### 2026-05-30: move last-value sensors into shared contracts
+
+Added a native last-value sensor slice and a shared fixture:
+
+- `tests/conformance/collector/last_value_contract.hsmtest`
+
+The shared last-value contract covers:
+
+- `int`, `bool`, `double`, and `string` last-value sensors.
+- Remembering multiple `AddValue` calls and flushing only the latest value on
+  `Stop`.
+- Default-value flush on `Stop`.
+- Values added before `Start` and while stopped being retained for the next
+  stop flush, matching managed last-value semantics.
+- Status propagation and long-comment trimming at flush time.
+
+Verification:
+
+- Shared conformance script: .NET 56/56 passed, C++ conformance 7/7 passed.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first

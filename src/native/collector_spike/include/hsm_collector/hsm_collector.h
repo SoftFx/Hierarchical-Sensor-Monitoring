@@ -67,6 +67,26 @@ hsm_result_t hsm_collector_create_string_sensor(
     hsm_collector_t* collector,
     const char* path,
     hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_last_value_int_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int32_t default_value,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_last_value_bool_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    bool default_value,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_last_value_double_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    double default_value,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_last_value_string_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    const char* default_value,
+    hsm_sensor_t** out_sensor);
 
 void hsm_sensor_release(hsm_sensor_t* sensor);
 

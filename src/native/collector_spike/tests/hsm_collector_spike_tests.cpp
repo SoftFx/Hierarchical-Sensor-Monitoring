@@ -154,6 +154,50 @@ namespace
         return sensor;
     }
 
+    SensorHandle CreateLastIntSensor(hsm_collector_t* collector, const char* path, int default_value)
+    {
+        SensorHandle sensor;
+
+        Require(
+            hsm_collector_create_last_value_int_sensor(collector, path, default_value, &sensor.value) == HSM_RESULT_OK,
+            "last int sensor create failed");
+
+        return sensor;
+    }
+
+    SensorHandle CreateLastBoolSensor(hsm_collector_t* collector, const char* path, bool default_value)
+    {
+        SensorHandle sensor;
+
+        Require(
+            hsm_collector_create_last_value_bool_sensor(collector, path, default_value, &sensor.value) == HSM_RESULT_OK,
+            "last bool sensor create failed");
+
+        return sensor;
+    }
+
+    SensorHandle CreateLastDoubleSensor(hsm_collector_t* collector, const char* path, double default_value)
+    {
+        SensorHandle sensor;
+
+        Require(
+            hsm_collector_create_last_value_double_sensor(collector, path, default_value, &sensor.value) == HSM_RESULT_OK,
+            "last double sensor create failed");
+
+        return sensor;
+    }
+
+    SensorHandle CreateLastStringSensor(hsm_collector_t* collector, const char* path, const char* default_value)
+    {
+        SensorHandle sensor;
+
+        Require(
+            hsm_collector_create_last_value_string_sensor(collector, path, default_value, &sensor.value) == HSM_RESULT_OK,
+            "last string sensor create failed");
+
+        return sensor;
+    }
+
     std::string SentJson(hsm_collector_t* collector, size_t index)
     {
         const char* json = nullptr;
@@ -323,6 +367,35 @@ namespace
         {
             Require(step.size() >= 2, "create_string_sensor requires path");
             state.sensors.push_back(CreateStringSensor(state.collector.value, step[1].c_str()));
+            return;
+        }
+
+        if (action == "create_last_int_sensor")
+        {
+            Require(step.size() >= 3, "create_last_int_sensor requires path and default value");
+            state.sensors.push_back(CreateLastIntSensor(state.collector.value, step[1].c_str(), ToInt(step[2])));
+            return;
+        }
+
+        if (action == "create_last_bool_sensor")
+        {
+            Require(step.size() >= 3, "create_last_bool_sensor requires path and default value");
+            state.sensors.push_back(CreateLastBoolSensor(state.collector.value, step[1].c_str(), ToBool(step[2])));
+            return;
+        }
+
+        if (action == "create_last_double_sensor")
+        {
+            Require(step.size() >= 3, "create_last_double_sensor requires path and default value");
+            state.sensors.push_back(CreateLastDoubleSensor(state.collector.value, step[1].c_str(), ToDouble(step[2])));
+            return;
+        }
+
+        if (action == "create_last_string_sensor")
+        {
+            Require(step.size() >= 3, "create_last_string_sensor requires path and default value");
+            const auto default_value = ExpandTextToken(step[2]);
+            state.sensors.push_back(CreateLastStringSensor(state.collector.value, step[1].c_str(), default_value.c_str()));
             return;
         }
 
@@ -573,6 +646,7 @@ namespace
             { "conformance_value_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_cardinality_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_instant_mixed_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_last_value_contract", [](const std::string& path) { RunConformanceContract(path); } },
         };
 
         return tests;

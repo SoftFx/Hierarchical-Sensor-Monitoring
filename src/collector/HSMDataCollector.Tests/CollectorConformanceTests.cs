@@ -85,6 +85,24 @@ namespace HSMDataCollector.Tests
                     state.StringSensors.Add(state.Collector.CreateStringSensor(step.Arg(0)));
                     break;
 
+                case "create_last_int_sensor":
+                    state.IntSensors.Add(state.Collector.CreateLastValueIntSensor(step.Arg(0), int.Parse(step.Arg(1))));
+                    break;
+
+                case "create_last_bool_sensor":
+                    state.BoolSensors.Add(state.Collector.CreateLastValueBoolSensor(step.Arg(0), bool.Parse(step.Arg(1))));
+                    break;
+
+                case "create_last_double_sensor":
+                    state.DoubleSensors.Add(state.Collector.CreateLastValueDoubleSensor(
+                        step.Arg(0),
+                        double.Parse(step.Arg(1), CultureInfo.InvariantCulture)));
+                    break;
+
+                case "create_last_string_sensor":
+                    state.StringSensors.Add(state.Collector.CreateLastValueStringSensor(step.Arg(0), ExpandTextToken(step.Arg(1))));
+                    break;
+
                 case "create_int_sensors":
                     CreateIntSensors(state, int.Parse(step.Arg(0)), step.Arg(1));
                     break;

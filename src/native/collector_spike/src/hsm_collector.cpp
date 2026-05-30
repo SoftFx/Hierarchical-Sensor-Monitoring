@@ -80,15 +80,38 @@ namespace
         return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
     }
 
+    std::string DoubleJson(double value)
+    {
+        std::ostringstream output;
+        output << std::setprecision(17) << value;
+        return output.str();
+    }
+
+    struct SensorSnapshot
+    {
+        std::string path;
+        hsm_sensor_type_t type;
+        std::string value_json;
+        hsm_sensor_status_t status;
+        std::string comment;
+    };
+
     class NativeCollector;
 
     class NativeSensor
     {
     public:
-        NativeSensor(std::weak_ptr<NativeCollector> collector, std::string path, hsm_sensor_type_t type)
+        NativeSensor(
+            std::weak_ptr<NativeCollector> collector,
+            std::string path,
+            hsm_sensor_type_t type,
+            bool is_last_value,
+            std::string default_value_json)
             : collector_(std::move(collector)),
               path_(std::move(path)),
-              type_(type)
+              type_(type),
+              is_last_value_(is_last_value),
+              last_value_json_(std::move(default_value_json))
         {
         }
 
@@ -96,11 +119,19 @@ namespace
         hsm_result_t AddBool(bool value, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddDouble(double value, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddString(const char* value, hsm_sensor_status_t status, const char* comment);
+        bool TryGetLastValueSnapshot(SensorSnapshot& snapshot) const;
 
     private:
+        hsm_result_t AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment);
+
         std::weak_ptr<NativeCollector> collector_;
         std::string path_;
         hsm_sensor_type_t type_;
+        bool is_last_value_;
+        mutable std::mutex mutex_;
+        std::string last_value_json_;
+        hsm_sensor_status_t last_status_ = HSM_SENSOR_STATUS_OFF_TIME;
+        std::string last_comment_;
     };
 
     class NativeCollector : public std::enable_shared_from_this<NativeCollector>
@@ -137,12 +168,24 @@ namespace
                 return HSM_RESULT_OK;
             }
 
+            for (const auto& sensor : sensors_)
+            {
+                SensorSnapshot snapshot;
+                if (sensor.second->TryGetLastValueSnapshot(snapshot))
+                    AppendValueJsonNoLock(snapshot.path, snapshot.type, snapshot.value_json, snapshot.status, snapshot.comment.c_str());
+            }
+
             state_ = CollectorState::Stopped;
             ClearError();
             return HSM_RESULT_OK;
         }
 
-        hsm_result_t CreateSensor(const char* path, hsm_sensor_type_t type, std::shared_ptr<NativeSensor>& out_sensor)
+        hsm_result_t CreateSensor(
+            const char* path,
+            hsm_sensor_type_t type,
+            bool is_last_value,
+            const std::string& default_value_json,
+            std::shared_ptr<NativeSensor>& out_sensor)
         {
             if (path == nullptr || *path == '\0')
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
@@ -158,7 +201,7 @@ namespace
                 return HSM_RESULT_OK;
             }
 
-            auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type);
+            auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type, is_last_value, default_value_json);
             sensors_.emplace(sensor_path, sensor);
             out_sensor = std::move(sensor);
 
@@ -181,6 +224,18 @@ namespace
                 return HSM_RESULT_OK;
             }
 
+            AppendValueJsonNoLock(path, type, value_json, status, comment);
+            ClearError();
+            return HSM_RESULT_OK;
+        }
+
+        void AppendValueJsonNoLock(
+            const std::string& path,
+            hsm_sensor_type_t type,
+            const std::string& value_json,
+            hsm_sensor_status_t status,
+            const char* comment)
+        {
             const auto normalized_comment = TrimComment(CopyString(comment));
 
             std::ostringstream json;
@@ -194,8 +249,6 @@ namespace
                  << "}";
 
             sent_values_.push_back(json.str());
-            ClearError();
-            return HSM_RESULT_OK;
         }
 
         size_t SentCount() const
@@ -269,11 +322,7 @@ namespace
         if (type_ != HSM_SENSOR_TYPE_INT)
             return HSM_RESULT_INVALID_ARGUMENT;
 
-        const auto collector = collector_.lock();
-        if (!collector)
-            return HSM_RESULT_INVALID_STATE;
-
-        return collector->AddValueJson(path_, type_, std::to_string(value), status, comment);
+        return AddValueJson(std::to_string(value), status, comment);
     }
 
     hsm_result_t NativeSensor::AddBool(bool value, hsm_sensor_status_t status, const char* comment)
@@ -281,11 +330,7 @@ namespace
         if (type_ != HSM_SENSOR_TYPE_BOOLEAN)
             return HSM_RESULT_INVALID_ARGUMENT;
 
-        const auto collector = collector_.lock();
-        if (!collector)
-            return HSM_RESULT_INVALID_STATE;
-
-        return collector->AddValueJson(path_, type_, value ? "true" : "false", status, comment);
+        return AddValueJson(value ? "true" : "false", status, comment);
     }
 
     hsm_result_t NativeSensor::AddDouble(double value, hsm_sensor_status_t status, const char* comment)
@@ -293,14 +338,7 @@ namespace
         if (type_ != HSM_SENSOR_TYPE_DOUBLE)
             return HSM_RESULT_INVALID_ARGUMENT;
 
-        const auto collector = collector_.lock();
-        if (!collector)
-            return HSM_RESULT_INVALID_STATE;
-
-        std::ostringstream output;
-        output << std::setprecision(17) << value;
-
-        return collector->AddValueJson(path_, type_, output.str(), status, comment);
+        return AddValueJson(DoubleJson(value), status, comment);
     }
 
     hsm_result_t NativeSensor::AddString(const char* value, hsm_sensor_status_t status, const char* comment)
@@ -308,11 +346,39 @@ namespace
         if (type_ != HSM_SENSOR_TYPE_STRING)
             return HSM_RESULT_INVALID_ARGUMENT;
 
+        return AddValueJson("\"" + EscapeJson(CopyString(value)) + "\"", status, comment);
+    }
+
+    hsm_result_t NativeSensor::AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment)
+    {
+        if (is_last_value_)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            last_value_json_ = std::move(value_json);
+            last_status_ = status;
+            last_comment_ = TrimComment(CopyString(comment));
+            return HSM_RESULT_OK;
+        }
+
         const auto collector = collector_.lock();
         if (!collector)
             return HSM_RESULT_INVALID_STATE;
 
-        return collector->AddValueJson(path_, type_, "\"" + EscapeJson(CopyString(value)) + "\"", status, comment);
+        return collector->AddValueJson(path_, type_, value_json, status, comment);
+    }
+
+    bool NativeSensor::TryGetLastValueSnapshot(SensorSnapshot& snapshot) const
+    {
+        if (!is_last_value_)
+            return false;
+
+        std::lock_guard<std::mutex> guard(mutex_);
+        snapshot.path = path_;
+        snapshot.type = type_;
+        snapshot.value_json = last_value_json_;
+        snapshot.status = last_status_;
+        snapshot.comment = last_comment_;
+        return true;
     }
 }
 
@@ -330,6 +396,8 @@ static hsm_result_t CreateSensor(
     hsm_collector_t* collector,
     const char* path,
     hsm_sensor_type_t type,
+    bool is_last_value,
+    const std::string& default_value_json,
     hsm_sensor_t** out_sensor);
 
 hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_collector_t** out_collector)
@@ -377,7 +445,7 @@ hsm_result_t hsm_collector_create_int_sensor(
     const char* path,
     hsm_sensor_t** out_sensor)
 {
-    return CreateSensor(collector, path, HSM_SENSOR_TYPE_INT, out_sensor);
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_INT, false, std::string{}, out_sensor);
 }
 
 hsm_result_t hsm_collector_create_bool_sensor(
@@ -385,7 +453,7 @@ hsm_result_t hsm_collector_create_bool_sensor(
     const char* path,
     hsm_sensor_t** out_sensor)
 {
-    return CreateSensor(collector, path, HSM_SENSOR_TYPE_BOOLEAN, out_sensor);
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_BOOLEAN, false, std::string{}, out_sensor);
 }
 
 hsm_result_t hsm_collector_create_double_sensor(
@@ -393,7 +461,7 @@ hsm_result_t hsm_collector_create_double_sensor(
     const char* path,
     hsm_sensor_t** out_sensor)
 {
-    return CreateSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE, out_sensor);
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE, false, std::string{}, out_sensor);
 }
 
 hsm_result_t hsm_collector_create_string_sensor(
@@ -401,20 +469,64 @@ hsm_result_t hsm_collector_create_string_sensor(
     const char* path,
     hsm_sensor_t** out_sensor)
 {
-    return CreateSensor(collector, path, HSM_SENSOR_TYPE_STRING, out_sensor);
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_STRING, false, std::string{}, out_sensor);
+}
+
+hsm_result_t hsm_collector_create_last_value_int_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int32_t default_value,
+    hsm_sensor_t** out_sensor)
+{
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_INT, true, std::to_string(default_value), out_sensor);
+}
+
+hsm_result_t hsm_collector_create_last_value_bool_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    bool default_value,
+    hsm_sensor_t** out_sensor)
+{
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_BOOLEAN, true, default_value ? "true" : "false", out_sensor);
+}
+
+hsm_result_t hsm_collector_create_last_value_double_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    double default_value,
+    hsm_sensor_t** out_sensor)
+{
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE, true, DoubleJson(default_value), out_sensor);
+}
+
+hsm_result_t hsm_collector_create_last_value_string_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    const char* default_value,
+    hsm_sensor_t** out_sensor)
+{
+    return CreateSensor(
+        collector,
+        path,
+        HSM_SENSOR_TYPE_STRING,
+        true,
+        "\"" + EscapeJson(CopyString(default_value)) + "\"",
+        out_sensor);
 }
 
 static hsm_result_t CreateSensor(
     hsm_collector_t* collector,
     const char* path,
     hsm_sensor_type_t type,
+    bool is_last_value,
+    const std::string& default_value_json,
     hsm_sensor_t** out_sensor)
 {
     if (collector == nullptr || out_sensor == nullptr)
         return HSM_RESULT_INVALID_ARGUMENT;
 
     std::shared_ptr<NativeSensor> sensor;
-    const auto result = collector->impl->CreateSensor(path, type, sensor);
+    const auto result = collector->impl->CreateSensor(path, type, is_last_value, default_value_json, sensor);
     if (result != HSM_RESULT_OK)
     {
         *out_sensor = nullptr;
