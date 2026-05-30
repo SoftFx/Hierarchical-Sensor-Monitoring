@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -54,12 +55,39 @@ hsm_result_t hsm_collector_create_int_sensor(
     hsm_collector_t* collector,
     const char* path,
     hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_bool_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_double_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_string_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
 
 void hsm_sensor_release(hsm_sensor_t* sensor);
 
 hsm_result_t hsm_sensor_add_int(
     hsm_sensor_t* sensor,
     int32_t value,
+    hsm_sensor_status_t status,
+    const char* comment);
+hsm_result_t hsm_sensor_add_bool(
+    hsm_sensor_t* sensor,
+    bool value,
+    hsm_sensor_status_t status,
+    const char* comment);
+hsm_result_t hsm_sensor_add_double(
+    hsm_sensor_t* sensor,
+    double value,
+    hsm_sensor_status_t status,
+    const char* comment);
+hsm_result_t hsm_sensor_add_string(
+    hsm_sensor_t* sensor,
+    const char* value,
     hsm_sensor_status_t status,
     const char* comment);
 

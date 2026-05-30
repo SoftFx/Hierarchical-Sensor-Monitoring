@@ -127,6 +127,33 @@ namespace
         return sensor;
     }
 
+    SensorHandle CreateBoolSensor(hsm_collector_t* collector, const char* path)
+    {
+        SensorHandle sensor;
+
+        Require(hsm_collector_create_bool_sensor(collector, path, &sensor.value) == HSM_RESULT_OK, "bool sensor create failed");
+
+        return sensor;
+    }
+
+    SensorHandle CreateDoubleSensor(hsm_collector_t* collector, const char* path)
+    {
+        SensorHandle sensor;
+
+        Require(hsm_collector_create_double_sensor(collector, path, &sensor.value) == HSM_RESULT_OK, "double sensor create failed");
+
+        return sensor;
+    }
+
+    SensorHandle CreateStringSensor(hsm_collector_t* collector, const char* path)
+    {
+        SensorHandle sensor;
+
+        Require(hsm_collector_create_string_sensor(collector, path, &sensor.value) == HSM_RESULT_OK, "string sensor create failed");
+
+        return sensor;
+    }
+
     std::string SentJson(hsm_collector_t* collector, size_t index)
     {
         const char* json = nullptr;
@@ -164,6 +191,21 @@ namespace
     int ToInt(const std::string& value)
     {
         return std::stoi(value);
+    }
+
+    bool ToBool(const std::string& value)
+    {
+        if (value == "true" || value == "True")
+            return true;
+        if (value == "false" || value == "False")
+            return false;
+
+        throw std::runtime_error("Unknown bool: " + value);
+    }
+
+    double ToDouble(const std::string& value)
+    {
+        return std::stod(value);
     }
 
     hsm_sensor_status_t ToStatus(const std::string& value)
@@ -263,6 +305,27 @@ namespace
             return;
         }
 
+        if (action == "create_bool_sensor")
+        {
+            Require(step.size() >= 2, "create_bool_sensor requires path");
+            state.sensors.push_back(CreateBoolSensor(state.collector.value, step[1].c_str()));
+            return;
+        }
+
+        if (action == "create_double_sensor")
+        {
+            Require(step.size() >= 2, "create_double_sensor requires path");
+            state.sensors.push_back(CreateDoubleSensor(state.collector.value, step[1].c_str()));
+            return;
+        }
+
+        if (action == "create_string_sensor")
+        {
+            Require(step.size() >= 2, "create_string_sensor requires path");
+            state.sensors.push_back(CreateStringSensor(state.collector.value, step[1].c_str()));
+            return;
+        }
+
         if (action == "create_int_sensors")
         {
             Require(step.size() >= 3, "create_int_sensors requires count and path prefix");
@@ -284,6 +347,46 @@ namespace
             Require(
                 hsm_sensor_add_int(state.sensors[sensor_index].value, ToInt(step[2]), ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
                 "add_int failed");
+            return;
+        }
+
+        if (action == "add_bool")
+        {
+            Require(step.size() >= 5, "add_bool requires sensor index, value, status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+
+            const auto comment = ExpandTextToken(step[4]);
+            Require(
+                hsm_sensor_add_bool(state.sensors[sensor_index].value, ToBool(step[2]), ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                "add_bool failed");
+            return;
+        }
+
+        if (action == "add_double")
+        {
+            Require(step.size() >= 5, "add_double requires sensor index, value, status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+
+            const auto comment = ExpandTextToken(step[4]);
+            Require(
+                hsm_sensor_add_double(state.sensors[sensor_index].value, ToDouble(step[2]), ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                "add_double failed");
+            return;
+        }
+
+        if (action == "add_string")
+        {
+            Require(step.size() >= 5, "add_string requires sensor index, value, status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+
+            const auto value = ExpandTextToken(step[2]);
+            const auto comment = ExpandTextToken(step[4]);
+            Require(
+                hsm_sensor_add_string(state.sensors[sensor_index].value, value.c_str(), ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                "add_string failed");
             return;
         }
 
@@ -469,6 +572,7 @@ namespace
             { "conformance_stress_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_value_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_cardinality_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_instant_mixed_contract", [](const std::string& path) { RunConformanceContract(path); } },
         };
 
         return tests;

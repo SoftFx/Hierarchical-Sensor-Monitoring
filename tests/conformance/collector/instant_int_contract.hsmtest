@@ -5,8 +5,14 @@
 # start
 # stop
 # create_int_sensor|path
+# create_bool_sensor|path
+# create_double_sensor|path
+# create_string_sensor|path
 # create_int_sensors|count|path_prefix
 # add_int|sensor_index|value|status|comment
+# add_bool|sensor_index|value|status|comment
+# add_double|sensor_index|value|status|comment
+# add_string|sensor_index|value|status|comment
 # add_int_sequence|sensor_count|values_per_sensor|start_value|status|comment
 # add_int_parallel|worker_count|values_per_worker|sensor_count|status|comment
 # repeat_start_stop_add|cycles|sensor_index|status|comment_prefix

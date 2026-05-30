@@ -269,6 +269,27 @@ Going forward, new port tests should be added as shared fixtures first. A
 language-specific test is acceptable only for build mechanics or API binding
 plumbing, and should not be counted as collector behavior coverage.
 
+### 2026-05-30: move primitive instant sensors into shared contracts
+
+Added a native slice for boolean, double, and string instant sensors through the
+C ABI so their behavior can be verified by the same conformance fixture as the
+managed collector:
+
+- `tests/conformance/collector/instant_mixed_contract.hsmtest`
+
+The shared instant sensor contract now covers:
+
+- `bool`: true/false payloads, status values, stopped-value drop behavior.
+- `double`: fractional, negative, and zero payloads.
+- `string`: basic, empty, escaped JSON-special payloads, and comment trimming.
+
+This raises shared conformance coverage from 38 managed cases to 48 managed
+cases, with 6 native CTest entries, all backed by shared fixtures.
+
+Verification:
+
+- Shared conformance script: .NET 48/48 passed, C++ conformance 6/6 passed.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first

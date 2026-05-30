@@ -7,6 +7,7 @@ using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -72,6 +73,18 @@ namespace HSMDataCollector.Tests
                     state.IntSensors.Add(state.Collector.CreateIntSensor(step.Arg(0)));
                     break;
 
+                case "create_bool_sensor":
+                    state.BoolSensors.Add(state.Collector.CreateBoolSensor(step.Arg(0)));
+                    break;
+
+                case "create_double_sensor":
+                    state.DoubleSensors.Add(state.Collector.CreateDoubleSensor(step.Arg(0)));
+                    break;
+
+                case "create_string_sensor":
+                    state.StringSensors.Add(state.Collector.CreateStringSensor(step.Arg(0)));
+                    break;
+
                 case "create_int_sensors":
                     CreateIntSensors(state, int.Parse(step.Arg(0)), step.Arg(1));
                     break;
@@ -79,6 +92,21 @@ namespace HSMDataCollector.Tests
                 case "add_int":
                     state.IntSensors[int.Parse(step.Arg(0))]
                         .AddValue(int.Parse(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                case "add_bool":
+                    state.BoolSensors[int.Parse(step.Arg(0))]
+                        .AddValue(bool.Parse(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                case "add_double":
+                    state.DoubleSensors[int.Parse(step.Arg(0))]
+                        .AddValue(double.Parse(step.Arg(1), CultureInfo.InvariantCulture), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                case "add_string":
+                    state.StringSensors[int.Parse(step.Arg(0))]
+                        .AddValue(ExpandTextToken(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
                     break;
 
                 case "add_int_sequence":
@@ -236,15 +264,30 @@ namespace HSMDataCollector.Tests
 
         private static string PayloadText(SensorValueBase value)
         {
-            var intValue = value as IntSensorValue;
-
             return "{" +
                    $"\"Type\":{(int)value.Type}," +
                    $"\"Path\":\"{EscapeJson(value.Path)}\"," +
-                   $"\"Value\":{intValue?.Value}," +
+                   $"\"Value\":{PayloadValueText(value)}," +
                    $"\"Status\":{(int)value.Status}," +
                    $"\"Comment\":\"{EscapeJson(value.Comment)}\"" +
                    "}";
+        }
+
+        private static string PayloadValueText(SensorValueBase value)
+        {
+            if (value is BoolSensorValue boolValue)
+                return boolValue.Value ? "true" : "false";
+
+            if (value is IntSensorValue intValue)
+                return intValue.Value.ToString(CultureInfo.InvariantCulture);
+
+            if (value is DoubleSensorValue doubleValue)
+                return doubleValue.Value.ToString("R", CultureInfo.InvariantCulture);
+
+            if (value is StringSensorValue stringValue)
+                return "\"" + EscapeJson(stringValue.Value) + "\"";
+
+            throw new InvalidOperationException($"Unsupported conformance payload type '{value.GetType().FullName}'.");
         }
 
         private static string EscapeJson(string value)
@@ -393,6 +436,12 @@ namespace HSMDataCollector.Tests
             public RecordingSender Sender { get; set; }
 
             public List<IInstantValueSensor<int>> IntSensors { get; } = new List<IInstantValueSensor<int>>();
+
+            public List<IInstantValueSensor<bool>> BoolSensors { get; } = new List<IInstantValueSensor<bool>>();
+
+            public List<IInstantValueSensor<double>> DoubleSensors { get; } = new List<IInstantValueSensor<double>>();
+
+            public List<IInstantValueSensor<string>> StringSensors { get; } = new List<IInstantValueSensor<string>>();
         }
 
         private sealed class RecordingSender : IDataSender
