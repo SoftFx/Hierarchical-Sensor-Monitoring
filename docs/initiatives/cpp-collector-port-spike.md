@@ -252,12 +252,22 @@ not yet implement their behavioral surface: double/string/bool/version/time
 instant sensors, last-value sensors, bar/rate/function/file sensors, default
 sensors, HTTP transport chaos, queue overflow internals, resource leak probes,
 and scheduler-specific implementation tests. As each native surface is added,
-the matching managed test scenarios should move into `tests/conformance` first,
-leaving only implementation details in language-specific suites.
+the matching managed test scenarios should move into `tests/conformance` first.
 
 Verification:
 
 - Shared conformance script: .NET 38/38 passed, C++ conformance 5/5 passed.
+
+### 2026-05-30: make the native spike test suite conformance-only
+
+The native CTest suite now registers only tests backed by shared
+`tests/conformance/collector/*.hsmtest` fixtures. The earlier C++-only C ABI and
+RAII wrapper checks were removed from the runnable test matrix so the port is
+validated by the same behavior contracts as the managed collector.
+
+Going forward, new port tests should be added as shared fixtures first. A
+language-specific test is acceptable only for build mechanics or API binding
+plumbing, and should not be counted as collector behavior coverage.
 
 ## Open Questions
 
