@@ -121,6 +121,8 @@ namespace
         hsm_result_t AddString(const char* value, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddEnum(int32_t value, hsm_sensor_status_t status, const char* comment);
         bool TryGetLastValueSnapshot(SensorSnapshot& snapshot) const;
+        hsm_sensor_type_t Type() const;
+        bool IsLastValue() const;
 
     private:
         hsm_result_t AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment);
@@ -197,6 +199,12 @@ namespace
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
+                if (existing->second->Type() != type || existing->second->IsLastValue() != is_last_value)
+                {
+                    out_sensor.reset();
+                    return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path is already registered with a different type.");
+                }
+
                 out_sensor = existing->second;
                 ClearError();
                 return HSM_RESULT_OK;
@@ -388,6 +396,16 @@ namespace
         snapshot.status = last_status_;
         snapshot.comment = last_comment_;
         return true;
+    }
+
+    hsm_sensor_type_t NativeSensor::Type() const
+    {
+        return type_;
+    }
+
+    bool NativeSensor::IsLastValue() const
+    {
+        return is_last_value_;
     }
 }
 

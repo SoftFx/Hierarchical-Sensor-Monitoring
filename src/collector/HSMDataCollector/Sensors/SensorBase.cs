@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 
 
@@ -16,6 +17,7 @@ namespace HSMDataCollector.DefaultSensors
         private readonly SensorOptions<TDisplayUnit> _metainfo;
 
         public string SensorPath => _metainfo.Path;
+        internal SensorType Type => _metainfo.Type;
 
         internal bool IsProiritySensor => _metainfo.IsPrioritySensor;
 

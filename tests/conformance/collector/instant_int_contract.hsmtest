@@ -24,6 +24,7 @@
 # add_int_parallel|worker_count|values_per_worker|sensor_count|status|comment
 # add_mixed_instant_sequence|set_count|values_per_set|start_value|status|comment
 # add_mixed_instant_parallel|worker_count|values_per_worker|set_count|status|comment
+# expect_conflicting_mixed_creates_rejected_parallel|worker_count|path_count|path_prefix
 # repeat_start_stop_add|cycles|sensor_index|status|comment_prefix
 # expect_sent_count|count|optional_timeout_seconds
 # expect_payload_contains|payload_index|substring

@@ -348,6 +348,29 @@ This fixture should be the default stress gate for every collector port. Larger
 soak profiles can be added separately as opt-in fixtures, but the PR profile
 must stay shared and bounded.
 
+### 2026-05-31: harden mixed stress against duplicate path/type bugs
+
+Extended `tests/conformance/collector/stress_mixed_contract.hsmtest` with a
+duplicate-path registration stress case. The case pre-registers integer sensors,
+then concurrently attempts to register `bool`, `double`, `string`, and `enum`
+sensors on the same paths. Conflicting sensor types must fail at creation time,
+leaving the original integer sensors usable.
+
+The stress case exposed two related registration holes:
+
+- Native C++ keyed sensors only by path and returned an existing handle even
+  when the requested type differed.
+- Managed storage rejected most type conflicts only accidentally through casts,
+  while `int`/`enum` conflicts could reuse the wrong sensor because both expose
+  `IInstantValueSensor<int>`.
+
+Both collectors now make the invariant explicit: a duplicate path can reuse an
+existing sensor only when the registered sensor type matches.
+
+Verification:
+
+- Shared conformance script: .NET 64/64 passed, C++ conformance 9/9 passed.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first

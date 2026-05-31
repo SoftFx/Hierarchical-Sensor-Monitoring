@@ -699,6 +699,80 @@ namespace
             return;
         }
 
+        if (action == "expect_conflicting_mixed_creates_rejected_parallel")
+        {
+            Require(
+                step.size() >= 4,
+                "expect_conflicting_mixed_creates_rejected_parallel requires worker count, path count, and path prefix");
+
+            const auto worker_count = ToInt(step[1]);
+            const auto path_count = ToInt(step[2]);
+            const auto path_prefix = step[3];
+
+            const auto expect_rejected = [](hsm_result_t result, hsm_sensor_t* sensor)
+            {
+                if (result == HSM_RESULT_OK)
+                {
+                    hsm_sensor_release(sensor);
+                    throw std::runtime_error("conflicting sensor create succeeded");
+                }
+
+                Require(sensor == nullptr, "conflicting sensor create returned a handle");
+            };
+
+            std::vector<std::thread> workers;
+            std::exception_ptr first_exception;
+            std::mutex exception_mutex;
+
+            for (int worker = 0; worker < worker_count; ++worker)
+            {
+                workers.emplace_back([&, worker]()
+                {
+                    try
+                    {
+                        for (int path_index = worker; path_index < path_count; path_index += worker_count)
+                        {
+                            const auto path = path_prefix + "/" + std::to_string(path_index);
+                            hsm_sensor_t* sensor = nullptr;
+
+                            expect_rejected(
+                                hsm_collector_create_bool_sensor(state.collector.value, path.c_str(), &sensor),
+                                sensor);
+
+                            sensor = nullptr;
+                            expect_rejected(
+                                hsm_collector_create_double_sensor(state.collector.value, path.c_str(), &sensor),
+                                sensor);
+
+                            sensor = nullptr;
+                            expect_rejected(
+                                hsm_collector_create_string_sensor(state.collector.value, path.c_str(), &sensor),
+                                sensor);
+
+                            sensor = nullptr;
+                            expect_rejected(
+                                hsm_collector_create_enum_sensor(state.collector.value, path.c_str(), &sensor),
+                                sensor);
+                        }
+                    }
+                    catch (...)
+                    {
+                        std::lock_guard<std::mutex> guard(exception_mutex);
+                        if (!first_exception)
+                            first_exception = std::current_exception();
+                    }
+                });
+            }
+
+            for (auto& worker : workers)
+                worker.join();
+
+            if (first_exception)
+                std::rethrow_exception(first_exception);
+
+            return;
+        }
+
         if (action == "repeat_start_stop_add")
         {
             Require(step.size() >= 5, "repeat_start_stop_add requires cycles, sensor index, status, and comment prefix");

@@ -180,6 +180,14 @@ namespace HSMDataCollector.Tests
                         comment: ExpandTextToken(step.Arg(4))).ConfigureAwait(false);
                     break;
 
+                case "expect_conflicting_mixed_creates_rejected_parallel":
+                    await ExpectConflictingMixedCreatesRejectedParallelAsync(
+                        state,
+                        workerCount: int.Parse(step.Arg(0)),
+                        pathCount: int.Parse(step.Arg(1)),
+                        pathPrefix: step.Arg(2)).ConfigureAwait(false);
+                    break;
+
                 case "repeat_start_stop_add":
                     await RepeatStartStopAddAsync(
                         state,
@@ -350,6 +358,35 @@ namespace HSMDataCollector.Tests
                 .ToArray();
 
             return Task.WhenAll(tasks);
+        }
+
+        private static Task ExpectConflictingMixedCreatesRejectedParallelAsync(
+            ContractState state,
+            int workerCount,
+            int pathCount,
+            string pathPrefix)
+        {
+            var tasks = Enumerable.Range(0, workerCount)
+                .Select(worker => Task.Run(() =>
+                {
+                    for (var pathIndex = worker; pathIndex < pathCount; pathIndex += workerCount)
+                    {
+                        var path = pathPrefix + "/" + pathIndex.ToString(CultureInfo.InvariantCulture);
+
+                        ExpectCreateRejected(() => state.Collector.CreateBoolSensor(path));
+                        ExpectCreateRejected(() => state.Collector.CreateDoubleSensor(path));
+                        ExpectCreateRejected(() => state.Collector.CreateStringSensor(path));
+                        ExpectCreateRejected(() => state.Collector.CreateEnumSensor(path));
+                    }
+                }))
+                .ToArray();
+
+            return Task.WhenAll(tasks);
+        }
+
+        private static void ExpectCreateRejected<TSensor>(Func<TSensor> createSensor)
+        {
+            Assert.NotNull(Record.Exception(() => createSensor()));
         }
 
         private static void AddMixedInstantValue(ContractState state, int setIndex, int value, SensorStatus status, string comment)
