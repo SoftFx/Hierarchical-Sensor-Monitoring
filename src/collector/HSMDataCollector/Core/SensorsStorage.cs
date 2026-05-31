@@ -12,7 +12,6 @@ using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System.Threading;
-using System.Reflection;
 
 
 namespace HSMDataCollector.Core
@@ -280,37 +279,30 @@ namespace HSMDataCollector.Core
 
         private static ISensor ResolveExistingSensor(ISensor newSensor, ISensor existingSensor)
         {
-            var newSensorType = GetSensorType(newSensor);
-            var existingSensorType = GetSensorType(existingSensor);
+            var newSensorIdentity = GetSensorIdentity(newSensor);
+            var existingSensorIdentity = GetSensorIdentity(existingSensor);
 
             newSensor.Dispose();
 
-            if (existingSensorType != newSensorType)
+            if (existingSensorIdentity.Type != newSensorIdentity.Type ||
+                existingSensorIdentity.IsLastValue != newSensorIdentity.IsLastValue)
             {
                 throw new InvalidOperationException(
-                    $"Sensor with path {newSensor.SensorPath} already exists with type {existingSensorType}; requested type {newSensorType}.");
+                    $"Sensor with path {newSensor.SensorPath} already exists as {DescribeSensor(existingSensorIdentity)}; requested {DescribeSensor(newSensorIdentity)}.");
             }
 
             return existingSensor;
         }
 
-        private static SensorType GetSensorType(ISensor sensor)
+        private static string DescribeSensor(ISensorIdentity identity) =>
+            $"{(identity.IsLastValue ? "last-value" : "instant")} {identity.Type}";
+
+        private static ISensorIdentity GetSensorIdentity(ISensor sensor)
         {
-            var currentType = sensor.GetType();
+            if (sensor is ISensorIdentity identity)
+                return identity;
 
-            while (currentType != null)
-            {
-                var property = currentType.GetProperty(
-                    nameof(SensorBase<NoDisplayUnit>.Type),
-                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.DeclaredOnly);
-
-                if (property?.PropertyType == typeof(SensorType))
-                    return (SensorType)property.GetValue(sensor);
-
-                currentType = currentType.BaseType;
-            }
-
-            throw new InvalidOperationException($"Sensor with path {sensor.SensorPath} does not expose sensor type metadata.");
+            throw new InvalidOperationException($"Sensor with path {sensor.SensorPath} does not expose sensor identity metadata.");
         }
 
         private T FillOptions<T, TDisplayUnit>(string path, SensorType type, T options)

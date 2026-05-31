@@ -13,6 +13,8 @@ namespace HSMDataCollector.Sensors
         private string _lastComment;
         private T _lastValue;
 
+        protected override bool IsLastValue => true;
+
 
         public LastValueSensorInstant(InstantSensorOptions options, T customDefault) : base(options)
         {

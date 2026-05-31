@@ -15,6 +15,8 @@
 # create_last_string_sensor|path|default_value
 # create_int_sensors|count|path_prefix
 # create_mixed_instant_sensors|count|path_prefix
+# expect_create_int_sensor_rejected|path
+# expect_create_last_int_sensor_rejected|path|default_value
 # add_int|sensor_index|value|status|comment
 # add_bool|sensor_index|value|status|comment
 # add_double|sensor_index|value|status|comment

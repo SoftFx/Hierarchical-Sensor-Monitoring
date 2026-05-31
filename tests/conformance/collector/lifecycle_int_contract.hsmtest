@@ -58,6 +58,14 @@ stop_twice_is_noop|stop
 stop_twice_is_noop|add_int|0|2|Ok|after-stop
 stop_twice_is_noop|expect_sent_count|1
 
+start_twice_is_noop|create_collector
+start_twice_is_noop|create_int_sensor|contract/lifecycle/start-twice
+start_twice_is_noop|start
+start_twice_is_noop|start
+start_twice_is_noop|add_int|0|9|Ok|after-second-start
+start_twice_is_noop|expect_sent_count|1
+start_twice_is_noop|expect_payload_contains|0|"Value":9
+
 stopped_values_do_not_flush_after_restart|create_collector
 stopped_values_do_not_flush_after_restart|create_int_sensor|contract/lifecycle/stopped-values
 stopped_values_do_not_flush_after_restart|start

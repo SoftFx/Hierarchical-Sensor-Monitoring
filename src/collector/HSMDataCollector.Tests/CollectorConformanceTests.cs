@@ -115,6 +115,14 @@ namespace HSMDataCollector.Tests
                     CreateMixedInstantSensors(state, int.Parse(step.Arg(0)), step.Arg(1));
                     break;
 
+                case "expect_create_int_sensor_rejected":
+                    ExpectCreateRejected(() => state.Collector.CreateIntSensor(step.Arg(0)));
+                    break;
+
+                case "expect_create_last_int_sensor_rejected":
+                    ExpectCreateRejected(() => state.Collector.CreateLastValueIntSensor(step.Arg(0), int.Parse(step.Arg(1))));
+                    break;
+
                 case "add_int":
                     state.IntSensors[int.Parse(step.Arg(0))]
                         .AddValue(int.Parse(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));

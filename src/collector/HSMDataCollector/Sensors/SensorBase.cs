@@ -10,14 +10,17 @@ using HSMSensorDataObjects.SensorValueRequests;
 namespace HSMDataCollector.DefaultSensors
 {
 
-    public abstract class SensorBase<TDisplayUnit> : ISensor where TDisplayUnit : struct, Enum
+    public abstract class SensorBase<TDisplayUnit> : ISensor, ISensorIdentity where TDisplayUnit : struct, Enum
     {
         internal const string DefaultTimeFormat = "dd/MM/yyyy HH:mm:ss";
 
         private readonly SensorOptions<TDisplayUnit> _metainfo;
 
         public string SensorPath => _metainfo.Path;
-        internal SensorType Type => _metainfo.Type;
+        SensorType ISensorIdentity.Type => _metainfo.Type;
+        bool ISensorIdentity.IsLastValue => IsLastValue;
+
+        protected virtual bool IsLastValue => false;
 
         internal bool IsProiritySensor => _metainfo.IsPrioritySensor;
 

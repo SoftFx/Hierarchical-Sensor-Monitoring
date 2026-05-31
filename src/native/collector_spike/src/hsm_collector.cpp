@@ -154,7 +154,10 @@ namespace
             std::lock_guard<std::mutex> guard(mutex_);
 
             if (state_ == CollectorState::Running)
-                return SetError(HSM_RESULT_INVALID_STATE, "Collector is already running.");
+            {
+                ClearError();
+                return HSM_RESULT_OK;
+            }
 
             state_ = CollectorState::Running;
             ClearError();

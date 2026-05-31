@@ -468,6 +468,42 @@ namespace
             return;
         }
 
+        if (action == "expect_create_int_sensor_rejected")
+        {
+            Require(step.size() >= 2, "expect_create_int_sensor_rejected requires path");
+            hsm_sensor_t* sensor = nullptr;
+            const auto result = hsm_collector_create_int_sensor(state.collector.value, step[1].c_str(), &sensor);
+
+            if (result == HSM_RESULT_OK)
+            {
+                hsm_sensor_release(sensor);
+                throw std::runtime_error("int sensor create unexpectedly succeeded");
+            }
+
+            Require(sensor == nullptr, "rejected int sensor create returned a handle");
+            return;
+        }
+
+        if (action == "expect_create_last_int_sensor_rejected")
+        {
+            Require(step.size() >= 3, "expect_create_last_int_sensor_rejected requires path and default value");
+            hsm_sensor_t* sensor = nullptr;
+            const auto result = hsm_collector_create_last_value_int_sensor(
+                state.collector.value,
+                step[1].c_str(),
+                ToInt(step[2]),
+                &sensor);
+
+            if (result == HSM_RESULT_OK)
+            {
+                hsm_sensor_release(sensor);
+                throw std::runtime_error("last int sensor create unexpectedly succeeded");
+            }
+
+            Require(sensor == nullptr, "rejected last int sensor create returned a handle");
+            return;
+        }
+
         if (action == "add_int")
         {
             Require(step.size() >= 5, "add_int requires sensor index, value, status, and comment");

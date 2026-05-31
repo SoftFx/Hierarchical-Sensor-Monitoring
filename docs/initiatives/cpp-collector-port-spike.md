@@ -371,6 +371,31 @@ Verification:
 
 - Shared conformance script: .NET 64/64 passed, C++ conformance 9/9 passed.
 
+### 2026-05-31: start stress review loop
+
+Started a subagent-backed stress review loop with three focused review tracks:
+
+- Native lifecycle/concurrency.
+- Managed/native contract gaps.
+- C ABI/native API safety.
+
+The first shared-semantics batch added coverage for:
+
+- Idempotent `Start`: calling `Start` twice leaves the collector running and
+  able to send subsequent values. Native now matches the managed collector.
+- Sensor identity includes both wire `SensorType` and instant-vs-last-value
+  behavior. Managed storage now makes this invariant explicit via internal
+  sensor identity metadata; native already rejects mismatched last-value mode.
+
+This keeps the port aligned with the original collector instead of letting the
+C++ implementation drift into its own semantics.
+
+Verification:
+
+- Shared conformance script: .NET 67/67 passed, C++ conformance 9/9 passed.
+- Full native CTest: 9/9 passed.
+- Full managed collector tests: 245 passed, 9 skipped.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first
