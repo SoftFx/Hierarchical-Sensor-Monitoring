@@ -2,9 +2,12 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <exception>
 #include <iomanip>
+#include <initializer_list>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -46,12 +49,42 @@ namespace
         return value.substr(first, last - first + 1);
     }
 
+    bool IsBlank(const std::string& value)
+    {
+        return std::all_of(value.begin(), value.end(), [](unsigned char ch) { return std::isspace(ch) != 0; });
+    }
+
+    bool IsValidPath(const char* value)
+    {
+        if (value == nullptr)
+            return false;
+
+        return !IsBlank(TrimSlashes(CopyString(value)));
+    }
+
+    bool IsValidStatus(hsm_sensor_status_t status)
+    {
+        switch (status)
+        {
+        case HSM_SENSOR_STATUS_OFF_TIME:
+        case HSM_SENSOR_STATUS_OK:
+        case HSM_SENSOR_STATUS_WARNING:
+        case HSM_SENSOR_STATUS_ERROR:
+            return true;
+        default:
+            return false;
+        }
+    }
+
     std::string EscapeJson(const std::string& value)
     {
         std::ostringstream output;
+        output << std::hex << std::setfill('0');
 
         for (const auto ch : value)
         {
+            const auto byte = static_cast<unsigned char>(ch);
+
             switch (ch)
             {
             case '\\':
@@ -76,7 +109,10 @@ namespace
                 output << "\\t";
                 break;
             default:
-                output << ch;
+                if (byte < 0x20)
+                    output << "\\u" << std::setw(4) << static_cast<int>(byte);
+                else
+                    output << ch;
                 break;
             }
         }
@@ -95,6 +131,25 @@ namespace
         std::ostringstream output;
         output << std::setprecision(17) << value;
         return output.str();
+    }
+
+    std::string JoinPathParts(std::initializer_list<std::string> parts)
+    {
+        std::string result;
+
+        for (const auto& part : parts)
+        {
+            const auto normalized = TrimSlashes(part);
+            if (normalized.empty())
+                continue;
+
+            if (!result.empty())
+                result += "/";
+
+            result += normalized;
+        }
+
+        return result;
     }
 
     struct SensorSnapshot
@@ -203,7 +258,7 @@ namespace
             const std::string& default_value_json,
             std::shared_ptr<NativeSensor>& out_sensor)
         {
-            if (path == nullptr || TrimSlashes(CopyString(path)).empty())
+            if (!IsValidPath(path))
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
 
             std::lock_guard<std::mutex> guard(mutex_);
@@ -317,16 +372,7 @@ namespace
 
         std::string BuildSensorPath(const std::string& path) const
         {
-            const auto normalized_path = TrimSlashes(path);
-
-            if (computer_name_.empty() && module_.empty())
-                return normalized_path;
-            if (computer_name_.empty())
-                return TrimSlashes(module_) + "/" + normalized_path;
-            if (module_.empty())
-                return TrimSlashes(computer_name_) + "/" + normalized_path;
-
-            return TrimSlashes(computer_name_) + "/" + TrimSlashes(module_) + "/" + normalized_path;
+            return JoinPathParts({ computer_name_, module_, path });
         }
 
         mutable std::mutex mutex_;
@@ -363,12 +409,18 @@ namespace
         if (type_ != HSM_SENSOR_TYPE_DOUBLE)
             return HSM_RESULT_INVALID_ARGUMENT;
 
+        if (!std::isfinite(value))
+            return HSM_RESULT_INVALID_ARGUMENT;
+
         return AddValueJson(DoubleJson(value), status, comment);
     }
 
     hsm_result_t NativeSensor::AddString(const char* value, hsm_sensor_status_t status, const char* comment)
     {
         if (type_ != HSM_SENSOR_TYPE_STRING)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        if (value == nullptr)
             return HSM_RESULT_INVALID_ARGUMENT;
 
         return AddValueJson("\"" + EscapeJson(CopyString(value)) + "\"", status, comment);
@@ -384,6 +436,9 @@ namespace
 
     hsm_result_t NativeSensor::AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment)
     {
+        if (!IsValidStatus(status))
+            return HSM_RESULT_INVALID_ARGUMENT;
+
         const auto collector = collector_.lock();
         if (!collector)
             return HSM_RESULT_INVALID_STATE;
@@ -449,6 +504,12 @@ hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_co
         *out_collector = nullptr;
 
     if (options == nullptr || out_collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    if (options->access_key == nullptr || IsBlank(CopyString(options->access_key)))
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    if (options->server_address == nullptr || IsBlank(CopyString(options->server_address)))
         return HSM_RESULT_INVALID_ARGUMENT;
 
     try
@@ -550,6 +611,14 @@ hsm_result_t hsm_collector_create_last_value_double_sensor(
     double default_value,
     hsm_sensor_t** out_sensor)
 {
+    if (!std::isfinite(default_value))
+    {
+        if (out_sensor != nullptr)
+            *out_sensor = nullptr;
+
+        return HSM_RESULT_INVALID_ARGUMENT;
+    }
+
     return CreateSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE, true, DoubleJson(default_value), out_sensor);
 }
 
@@ -559,6 +628,14 @@ hsm_result_t hsm_collector_create_last_value_string_sensor(
     const char* default_value,
     hsm_sensor_t** out_sensor)
 {
+    if (default_value == nullptr)
+    {
+        if (out_sensor != nullptr)
+            *out_sensor = nullptr;
+
+        return HSM_RESULT_INVALID_ARGUMENT;
+    }
+
     return CreateSensor(
         collector,
         path,

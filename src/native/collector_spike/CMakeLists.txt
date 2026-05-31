@@ -40,6 +40,35 @@ add_test(NAME native_wrapper_sent_json_missing_throws_message
     COMMAND hsm_collector_spike_tests native_wrapper_sent_json_missing_throws_message
 )
 
+set(NATIVE_REGRESSION_TESTS
+    native_create_rejects_null_server_address
+    native_create_rejects_blank_server_address
+    native_create_rejects_null_access_key
+    native_create_rejects_blank_access_key
+    native_slash_only_module_is_omitted_from_payload_path
+    native_slash_only_computer_name_is_omitted_from_payload_path
+    native_slash_only_module_and_computer_name_are_omitted_from_payload_path
+    native_whitespace_only_path_is_rejected
+    native_instant_string_null_value_is_invalid_and_not_sent
+    native_last_value_string_null_default_is_invalid
+    native_last_value_string_null_update_is_invalid_and_preserves_previous
+    native_json_escapes_control_chars_in_string_value
+    native_json_escapes_control_chars_in_comment
+    native_json_escapes_control_chars_in_path
+    native_json_escapes_control_chars_in_options_path_prefix
+    native_double_nan_is_rejected_and_not_sent
+    native_double_positive_infinity_is_rejected_and_not_sent
+    native_double_negative_infinity_is_rejected_and_not_sent
+    native_invalid_status_on_instant_value_is_rejected_and_not_sent
+    native_invalid_status_on_last_value_preserves_previous_snapshot
+)
+
+foreach(name IN LISTS NATIVE_REGRESSION_TESTS)
+    add_test(NAME ${name}
+        COMMAND hsm_collector_spike_tests ${name}
+    )
+endforeach()
+
 function(add_conformance_test name fixture)
     add_test(
         NAME ${name}

@@ -43,7 +43,7 @@ the .NET collector and the native C++ port.
 
 ## Regression Counter
 
-Target: 10 important tests that expose P1/P2 bugs in either collector.
+Target: 30 important tests that expose P1/P2 bugs in either collector.
 
 Completed:
 
@@ -70,3 +70,44 @@ Completed:
 10. `slash_only_path_is_rejected`
     - Found that slash-only paths needed an explicit shared invalid-path
       invariant before porting.
+11. `native_create_rejects_null_server_address`
+    - Found native collector creation accepted a null server endpoint.
+12. `native_create_rejects_blank_server_address`
+    - Found native collector creation accepted a blank server endpoint.
+13. `native_create_rejects_null_access_key`
+    - Found native collector creation accepted a null access key.
+14. `native_create_rejects_blank_access_key`
+    - Found native collector creation accepted a blank access key.
+15. `native_slash_only_module_is_omitted_from_payload_path`
+    - Found slash-only module prefixes could produce malformed payload paths.
+16. `native_slash_only_computer_name_is_omitted_from_payload_path`
+    - Found slash-only computer prefixes could produce malformed payload paths.
+17. `native_slash_only_module_and_computer_name_are_omitted_from_payload_path`
+    - Found combined slash-only prefixes could produce leading-slash paths.
+18. `native_whitespace_only_path_is_rejected`
+    - Found whitespace-only native sensor paths were accepted.
+19. `native_instant_string_null_value_is_invalid_and_not_sent`
+    - Found null native string values were silently converted to empty strings.
+20. `native_last_value_string_null_default_is_invalid`
+    - Found null native last-value string defaults were silently accepted.
+21. `native_last_value_string_null_update_is_invalid_and_preserves_previous`
+    - Found null native last-value string updates could overwrite the snapshot.
+22. `native_json_escapes_control_chars_in_string_value`
+    - Found raw control characters could make string-value JSON invalid.
+23. `native_json_escapes_control_chars_in_comment`
+    - Found raw control characters could make comment JSON invalid.
+24. `native_json_escapes_control_chars_in_path`
+    - Found raw control characters could make path JSON invalid.
+25. `native_json_escapes_control_chars_in_options_path_prefix`
+    - Found raw control characters in computer/module prefixes could poison
+      payload paths.
+26. `native_double_nan_is_rejected_and_not_sent`
+    - Found native doubles could serialize `NaN` as invalid JSON.
+27. `native_double_positive_infinity_is_rejected_and_not_sent`
+    - Found native doubles could serialize positive infinity as invalid JSON.
+28. `native_double_negative_infinity_is_rejected_and_not_sent`
+    - Found native doubles could serialize negative infinity as invalid JSON.
+29. `native_invalid_status_on_instant_value_is_rejected_and_not_sent`
+    - Found invalid native status enum values could be sent.
+30. `native_invalid_status_on_last_value_preserves_previous_snapshot`
+    - Found invalid native status enum values could overwrite last-value state.

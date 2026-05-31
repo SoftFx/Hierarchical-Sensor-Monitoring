@@ -4,6 +4,7 @@
 #include <fstream>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <sstream>
@@ -25,6 +26,12 @@ namespace
     {
         if (value.find(expected) == std::string::npos)
             throw std::runtime_error("Expected substring not found: " + expected + "\nActual: " + value);
+    }
+
+    void NotContains(const std::string& value, const std::string& unexpected)
+    {
+        if (value.find(unexpected) != std::string::npos)
+            throw std::runtime_error("Unexpected substring found: " + unexpected + "\nActual: " + value);
     }
 
     hsm_collector_options_t TestOptions()
@@ -114,6 +121,15 @@ namespace
     {
         CollectorHandle collector;
         auto options = TestOptions();
+
+        Require(hsm_collector_create(&options, &collector.value) == HSM_RESULT_OK, "collector create failed");
+
+        return collector;
+    }
+
+    CollectorHandle CreateCollector(const hsm_collector_options_t& options)
+    {
+        CollectorHandle collector;
 
         Require(hsm_collector_create(&options, &collector.value) == HSM_RESULT_OK, "collector create failed");
 
@@ -1040,6 +1056,257 @@ namespace
         throw std::runtime_error("wrapper sent json should throw for missing payload");
     }
 
+    void ExpectCollectorCreateRejected(hsm_collector_options_t options)
+    {
+        auto* collector = reinterpret_cast<hsm_collector_t*>(static_cast<uintptr_t>(1));
+        Require(hsm_collector_create(&options, &collector) == HSM_RESULT_INVALID_ARGUMENT, "collector create should fail");
+        Require(collector == nullptr, "rejected collector create should clear out collector");
+    }
+
+    void NativeCreateRejectsNullServerAddress()
+    {
+        auto options = TestOptions();
+        options.server_address = nullptr;
+        ExpectCollectorCreateRejected(options);
+    }
+
+    void NativeCreateRejectsBlankServerAddress()
+    {
+        auto options = TestOptions();
+        options.server_address = " \t ";
+        ExpectCollectorCreateRejected(options);
+    }
+
+    void NativeCreateRejectsNullAccessKey()
+    {
+        auto options = TestOptions();
+        options.access_key = nullptr;
+        ExpectCollectorCreateRejected(options);
+    }
+
+    void NativeCreateRejectsBlankAccessKey()
+    {
+        auto options = TestOptions();
+        options.access_key = " \r\n ";
+        ExpectCollectorCreateRejected(options);
+    }
+
+    void NativeSlashOnlyModuleIsOmittedFromPayloadPath()
+    {
+        auto options = TestOptions();
+        options.computer_name = "";
+        options.module = "///";
+        auto collector = CreateCollector(options);
+        const auto sensor = CreateIntSensor(collector.value, "/contract/path/");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int failed");
+
+        Contains(SentJson(collector.value, 0), "\"Path\":\"contract/path\"");
+    }
+
+    void NativeSlashOnlyComputerNameIsOmittedFromPayloadPath()
+    {
+        auto options = TestOptions();
+        options.computer_name = "///";
+        options.module = "";
+        auto collector = CreateCollector(options);
+        const auto sensor = CreateIntSensor(collector.value, "/contract/path/");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int failed");
+
+        Contains(SentJson(collector.value, 0), "\"Path\":\"contract/path\"");
+    }
+
+    void NativeSlashOnlyModuleAndComputerNameAreOmittedFromPayloadPath()
+    {
+        auto options = TestOptions();
+        options.computer_name = "///";
+        options.module = "///";
+        auto collector = CreateCollector(options);
+        const auto sensor = CreateIntSensor(collector.value, "/contract/path/");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int failed");
+
+        Contains(SentJson(collector.value, 0), "\"Path\":\"contract/path\"");
+    }
+
+    void NativeWhitespaceOnlyPathIsRejected()
+    {
+        auto collector = CreateCollector();
+        auto* sensor = reinterpret_cast<hsm_sensor_t*>(static_cast<uintptr_t>(1));
+
+        Require(
+            hsm_collector_create_int_sensor(collector.value, " \t ", &sensor) == HSM_RESULT_INVALID_ARGUMENT,
+            "whitespace-only sensor path should fail");
+        Require(sensor == nullptr, "rejected whitespace-only sensor create should clear out sensor");
+    }
+
+    void NativeInstantStringNullValueIsInvalidAndNotSent()
+    {
+        auto collector = CreateCollector();
+        const auto sensor = CreateStringSensor(collector.value, "native/null/string");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(
+            hsm_sensor_add_string(sensor.value, nullptr, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_INVALID_ARGUMENT,
+            "null string value should fail");
+        Require(hsm_collector_sent_count(collector.value) == 0, "null string value should not be sent");
+    }
+
+    void NativeLastValueStringNullDefaultIsInvalid()
+    {
+        auto collector = CreateCollector();
+        auto* sensor = reinterpret_cast<hsm_sensor_t*>(static_cast<uintptr_t>(1));
+
+        Require(
+            hsm_collector_create_last_value_string_sensor(collector.value, "native/null/default", nullptr, &sensor) ==
+                HSM_RESULT_INVALID_ARGUMENT,
+            "null last string default should fail");
+        Require(sensor == nullptr, "rejected null last string default should clear out sensor");
+    }
+
+    void NativeLastValueStringNullUpdateIsInvalidAndPreservesPrevious()
+    {
+        auto collector = CreateCollector();
+        const auto sensor = CreateLastStringSensor(collector.value, "native/null/update", "default");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(hsm_sensor_add_string(sensor.value, "live", HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add string failed");
+        Require(
+            hsm_sensor_add_string(sensor.value, nullptr, HSM_SENSOR_STATUS_ERROR, "bad") == HSM_RESULT_INVALID_ARGUMENT,
+            "null last string update should fail");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        const auto payload = SentJson(collector.value, 0);
+        Contains(payload, "\"Value\":\"live\"");
+        NotContains(payload, "\"Value\":\"\"");
+    }
+
+    void NativeJsonEscapesControlCharsInStringValue()
+    {
+        auto collector = CreateCollector();
+        const auto sensor = CreateStringSensor(collector.value, "native/json/string");
+        const auto value = std::string("a") + static_cast<char>(0x01) + "b";
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(hsm_sensor_add_string(sensor.value, value.c_str(), HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add string failed");
+
+        Contains(SentJson(collector.value, 0), "\"Value\":\"a\\u0001b\"");
+    }
+
+    void NativeJsonEscapesControlCharsInComment()
+    {
+        auto collector = CreateCollector();
+        const auto sensor = CreateIntSensor(collector.value, "native/json/comment");
+        const auto comment = std::string("bad") + static_cast<char>(0x1f) + "comment";
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, comment.c_str()) == HSM_RESULT_OK, "add int failed");
+
+        Contains(SentJson(collector.value, 0), "\"Comment\":\"bad\\u001fcomment\"");
+    }
+
+    void NativeJsonEscapesControlCharsInPath()
+    {
+        auto collector = CreateCollector();
+        const auto path = std::string("native/json/") + static_cast<char>(0x02) + "/path";
+        const auto sensor = CreateIntSensor(collector.value, path.c_str());
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int failed");
+
+        Contains(SentJson(collector.value, 0), "native/json/\\u0002/path");
+    }
+
+    void NativeJsonEscapesControlCharsInOptionsPathPrefix()
+    {
+        auto options = TestOptions();
+        const auto computer_name = std::string("host") + static_cast<char>(0x03);
+        const auto module = std::string("module") + static_cast<char>(0x04);
+        options.computer_name = computer_name.c_str();
+        options.module = module.c_str();
+        auto collector = CreateCollector(options);
+        const auto sensor = CreateIntSensor(collector.value, "native/json/options");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int failed");
+
+        Contains(SentJson(collector.value, 0), "host\\u0003/module\\u0004/native/json/options");
+    }
+
+    void NativeDoubleNanIsRejectedAndNotSent()
+    {
+        auto collector = CreateCollector();
+        const auto sensor = CreateDoubleSensor(collector.value, "native/double/nan");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(
+            hsm_sensor_add_double(sensor.value, std::numeric_limits<double>::quiet_NaN(), HSM_SENSOR_STATUS_OK, "") ==
+                HSM_RESULT_INVALID_ARGUMENT,
+            "NaN double should fail");
+        Require(hsm_collector_sent_count(collector.value) == 0, "NaN double should not be sent");
+    }
+
+    void NativeDoublePositiveInfinityIsRejectedAndNotSent()
+    {
+        auto collector = CreateCollector();
+        const auto sensor = CreateDoubleSensor(collector.value, "native/double/positive-infinity");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(
+            hsm_sensor_add_double(sensor.value, std::numeric_limits<double>::infinity(), HSM_SENSOR_STATUS_OK, "") ==
+                HSM_RESULT_INVALID_ARGUMENT,
+            "positive infinity double should fail");
+        Require(hsm_collector_sent_count(collector.value) == 0, "positive infinity double should not be sent");
+    }
+
+    void NativeDoubleNegativeInfinityIsRejectedAndNotSent()
+    {
+        auto collector = CreateCollector();
+        const auto sensor = CreateDoubleSensor(collector.value, "native/double/negative-infinity");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(
+            hsm_sensor_add_double(sensor.value, -std::numeric_limits<double>::infinity(), HSM_SENSOR_STATUS_OK, "") ==
+                HSM_RESULT_INVALID_ARGUMENT,
+            "negative infinity double should fail");
+        Require(hsm_collector_sent_count(collector.value) == 0, "negative infinity double should not be sent");
+    }
+
+    void NativeInvalidStatusOnInstantValueIsRejectedAndNotSent()
+    {
+        auto collector = CreateCollector();
+        const auto sensor = CreateIntSensor(collector.value, "native/status/instant");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(
+            hsm_sensor_add_int(sensor.value, 1, static_cast<hsm_sensor_status_t>(99), "") == HSM_RESULT_INVALID_ARGUMENT,
+            "invalid instant status should fail");
+        Require(hsm_collector_sent_count(collector.value) == 0, "invalid instant status should not be sent");
+    }
+
+    void NativeInvalidStatusOnLastValuePreservesPreviousSnapshot()
+    {
+        auto collector = CreateCollector();
+        const auto sensor = CreateLastIntSensor(collector.value, "native/status/last", 1);
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
+        Require(hsm_sensor_add_int(sensor.value, 2, HSM_SENSOR_STATUS_OK, "good") == HSM_RESULT_OK, "valid last add failed");
+        Require(
+            hsm_sensor_add_int(sensor.value, 999, static_cast<hsm_sensor_status_t>(99), "bad") ==
+                HSM_RESULT_INVALID_ARGUMENT,
+            "invalid last status should fail");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "collector stop failed");
+
+        const auto payload = SentJson(collector.value, 0);
+        Contains(payload, "\"Value\":2");
+        Contains(payload, "\"Status\":1");
+        NotContains(payload, "\"Value\":999");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
@@ -1047,6 +1314,26 @@ namespace
             { "native_add_after_collector_destroy_is_rejected", [](const std::string&) { NativeAddAfterCollectorDestroyIsRejected(); } },
             { "native_sent_json_failure_reports_fresh_error", [](const std::string&) { NativeSentJsonFailureReportsFreshError(); } },
             { "native_wrapper_sent_json_missing_throws_message", [](const std::string&) { NativeWrapperSentJsonMissingThrowsMessage(); } },
+            { "native_create_rejects_null_server_address", [](const std::string&) { NativeCreateRejectsNullServerAddress(); } },
+            { "native_create_rejects_blank_server_address", [](const std::string&) { NativeCreateRejectsBlankServerAddress(); } },
+            { "native_create_rejects_null_access_key", [](const std::string&) { NativeCreateRejectsNullAccessKey(); } },
+            { "native_create_rejects_blank_access_key", [](const std::string&) { NativeCreateRejectsBlankAccessKey(); } },
+            { "native_slash_only_module_is_omitted_from_payload_path", [](const std::string&) { NativeSlashOnlyModuleIsOmittedFromPayloadPath(); } },
+            { "native_slash_only_computer_name_is_omitted_from_payload_path", [](const std::string&) { NativeSlashOnlyComputerNameIsOmittedFromPayloadPath(); } },
+            { "native_slash_only_module_and_computer_name_are_omitted_from_payload_path", [](const std::string&) { NativeSlashOnlyModuleAndComputerNameAreOmittedFromPayloadPath(); } },
+            { "native_whitespace_only_path_is_rejected", [](const std::string&) { NativeWhitespaceOnlyPathIsRejected(); } },
+            { "native_instant_string_null_value_is_invalid_and_not_sent", [](const std::string&) { NativeInstantStringNullValueIsInvalidAndNotSent(); } },
+            { "native_last_value_string_null_default_is_invalid", [](const std::string&) { NativeLastValueStringNullDefaultIsInvalid(); } },
+            { "native_last_value_string_null_update_is_invalid_and_preserves_previous", [](const std::string&) { NativeLastValueStringNullUpdateIsInvalidAndPreservesPrevious(); } },
+            { "native_json_escapes_control_chars_in_string_value", [](const std::string&) { NativeJsonEscapesControlCharsInStringValue(); } },
+            { "native_json_escapes_control_chars_in_comment", [](const std::string&) { NativeJsonEscapesControlCharsInComment(); } },
+            { "native_json_escapes_control_chars_in_path", [](const std::string&) { NativeJsonEscapesControlCharsInPath(); } },
+            { "native_json_escapes_control_chars_in_options_path_prefix", [](const std::string&) { NativeJsonEscapesControlCharsInOptionsPathPrefix(); } },
+            { "native_double_nan_is_rejected_and_not_sent", [](const std::string&) { NativeDoubleNanIsRejectedAndNotSent(); } },
+            { "native_double_positive_infinity_is_rejected_and_not_sent", [](const std::string&) { NativeDoublePositiveInfinityIsRejectedAndNotSent(); } },
+            { "native_double_negative_infinity_is_rejected_and_not_sent", [](const std::string&) { NativeDoubleNegativeInfinityIsRejectedAndNotSent(); } },
+            { "native_invalid_status_on_instant_value_is_rejected_and_not_sent", [](const std::string&) { NativeInvalidStatusOnInstantValueIsRejectedAndNotSent(); } },
+            { "native_invalid_status_on_last_value_preserves_previous_snapshot", [](const std::string&) { NativeInvalidStatusOnLastValuePreservesPreviousSnapshot(); } },
             { "conformance_instant_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_lifecycle_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_stress_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
