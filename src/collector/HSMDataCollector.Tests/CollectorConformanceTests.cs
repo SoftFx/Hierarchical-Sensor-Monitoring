@@ -70,23 +70,23 @@ namespace HSMDataCollector.Tests
                     break;
 
                 case "create_int_sensor":
-                    state.IntSensors.Add(state.Collector.CreateIntSensor(step.Arg(0)));
+                    state.IntSensors.Add(state.Collector.CreateIntSensor(ExpandTextToken(step.Arg(0))));
                     break;
 
                 case "create_bool_sensor":
-                    state.BoolSensors.Add(state.Collector.CreateBoolSensor(step.Arg(0)));
+                    state.BoolSensors.Add(state.Collector.CreateBoolSensor(ExpandTextToken(step.Arg(0))));
                     break;
 
                 case "create_double_sensor":
-                    state.DoubleSensors.Add(state.Collector.CreateDoubleSensor(step.Arg(0)));
+                    state.DoubleSensors.Add(state.Collector.CreateDoubleSensor(ExpandTextToken(step.Arg(0))));
                     break;
 
                 case "create_string_sensor":
-                    state.StringSensors.Add(state.Collector.CreateStringSensor(step.Arg(0)));
+                    state.StringSensors.Add(state.Collector.CreateStringSensor(ExpandTextToken(step.Arg(0))));
                     break;
 
                 case "create_enum_sensor":
-                    state.EnumSensors.Add(state.Collector.CreateEnumSensor(step.Arg(0)));
+                    state.EnumSensors.Add(state.Collector.CreateEnumSensor(ExpandTextToken(step.Arg(0))));
                     break;
 
                 case "create_last_int_sensor":
@@ -123,6 +123,12 @@ namespace HSMDataCollector.Tests
                     ExpectCreateRejected(() => state.Collector.CreateLastValueIntSensor(step.Arg(0), int.Parse(step.Arg(1))));
                     break;
 
+                case "expect_create_last_double_sensor_rejected":
+                    ExpectCreateRejected(() => state.Collector.CreateLastValueDoubleSensor(
+                        step.Arg(0),
+                        ParseDouble(step.Arg(1))));
+                    break;
+
                 case "add_int":
                     state.IntSensors[int.Parse(step.Arg(0))]
                         .AddValue(int.Parse(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
@@ -135,7 +141,7 @@ namespace HSMDataCollector.Tests
 
                 case "add_double":
                     state.DoubleSensors[int.Parse(step.Arg(0))]
-                        .AddValue(double.Parse(step.Arg(1), CultureInfo.InvariantCulture), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                        .AddValue(ParseDouble(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
                     break;
 
                 case "add_string":
@@ -146,6 +152,41 @@ namespace HSMDataCollector.Tests
                 case "add_enum":
                     state.EnumSensors[int.Parse(step.Arg(0))]
                         .AddValue(int.Parse(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                case "expect_add_int_rejected":
+                    ExpectAddRejected(
+                        state,
+                        () => state.IntSensors[int.Parse(step.Arg(0))]
+                            .AddValue(int.Parse(step.Arg(1)), ParseRawStatus(step.Arg(2)), ExpandTextToken(step.Arg(3))));
+                    break;
+
+                case "expect_add_bool_rejected":
+                    ExpectAddRejected(
+                        state,
+                        () => state.BoolSensors[int.Parse(step.Arg(0))]
+                            .AddValue(bool.Parse(step.Arg(1)), ParseRawStatus(step.Arg(2)), ExpandTextToken(step.Arg(3))));
+                    break;
+
+                case "expect_add_double_rejected":
+                    ExpectAddRejected(
+                        state,
+                        () => state.DoubleSensors[int.Parse(step.Arg(0))]
+                            .AddValue(ParseDouble(step.Arg(1)), ParseRawStatus(step.Arg(2)), ExpandTextToken(step.Arg(3))));
+                    break;
+
+                case "expect_add_string_rejected":
+                    ExpectAddRejected(
+                        state,
+                        () => state.StringSensors[int.Parse(step.Arg(0))]
+                            .AddValue(ExpandTextToken(step.Arg(1)), ParseRawStatus(step.Arg(2)), ExpandTextToken(step.Arg(3))));
+                    break;
+
+                case "expect_add_enum_rejected":
+                    ExpectAddRejected(
+                        state,
+                        () => state.EnumSensors[int.Parse(step.Arg(0))]
+                            .AddValue(int.Parse(step.Arg(1)), ParseRawStatus(step.Arg(2)), ExpandTextToken(step.Arg(3))));
                     break;
 
                 case "add_int_sequence":
@@ -217,6 +258,10 @@ namespace HSMDataCollector.Tests
 
                 case "expect_payload_contains":
                     Assert.Contains(step.Arg(1), PayloadText(state.Sender.Values[int.Parse(step.Arg(0))]));
+                    break;
+
+                case "expect_payload_not_contains":
+                    Assert.DoesNotContain(step.Arg(1), PayloadText(state.Sender.Values[int.Parse(step.Arg(0))]));
                     break;
 
                 case "expect_comment_length":
@@ -397,6 +442,15 @@ namespace HSMDataCollector.Tests
             Assert.NotNull(Record.Exception(() => createSensor()));
         }
 
+        private static void ExpectAddRejected(ContractState state, Action addValue)
+        {
+            var before = state.Sender.Values.Count;
+            var exception = Record.Exception(addValue);
+
+            Assert.Null(exception);
+            Assert.Equal(before, state.Sender.Values.Count);
+        }
+
         private static void AddMixedInstantValue(ContractState state, int setIndex, int value, SensorStatus status, string comment)
         {
             state.BoolSensors[setIndex].AddValue(value % 2 == 0, status, comment);
@@ -511,7 +565,10 @@ namespace HSMDataCollector.Tests
                         builder.Append("\\t");
                         break;
                     default:
-                        builder.Append(ch);
+                        if (ch < 0x20)
+                            builder.Append("\\u").Append(((int)ch).ToString("x4", CultureInfo.InvariantCulture));
+                        else
+                            builder.Append(ch);
                         break;
                 }
             }
@@ -519,10 +576,24 @@ namespace HSMDataCollector.Tests
             return builder.ToString();
         }
 
+        private static double ParseDouble(string value)
+        {
+            if (string.Equals(value, "NaN", StringComparison.Ordinal))
+                return double.NaN;
+            if (string.Equals(value, "Infinity", StringComparison.Ordinal))
+                return double.PositiveInfinity;
+            if (string.Equals(value, "-Infinity", StringComparison.Ordinal))
+                return double.NegativeInfinity;
+
+            return double.Parse(value, CultureInfo.InvariantCulture);
+        }
+
         private static SensorStatus ParseStatus(string value)
         {
             return (SensorStatus)Enum.Parse(typeof(SensorStatus), value);
         }
+
+        private static SensorStatus ParseRawStatus(string value) => (SensorStatus)int.Parse(value, CultureInfo.InvariantCulture);
 
         private static string ExpandTextToken(string value)
         {
@@ -532,6 +603,12 @@ namespace HSMDataCollector.Tests
             {
                 if (string.Equals(value, "token:json-special", StringComparison.Ordinal))
                     return "quote\"slash\\tab\tnewline\n";
+                if (string.Equals(value, "token:control-01", StringComparison.Ordinal))
+                    return "a" + '\u0001' + "b";
+                if (string.Equals(value, "token:control-02", StringComparison.Ordinal))
+                    return "path" + '\u0002' + "part";
+                if (string.Equals(value, "token:control-1f", StringComparison.Ordinal))
+                    return "bad" + '\u001f' + "comment";
 
                 return value;
             }

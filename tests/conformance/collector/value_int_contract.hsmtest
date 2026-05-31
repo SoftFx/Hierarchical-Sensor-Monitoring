@@ -81,6 +81,19 @@ path_leading_trailing_slashes_are_normalized|expect_payload_contains|0|"Path":"c
 slash_only_path_is_rejected|create_collector
 slash_only_path_is_rejected|expect_create_int_sensor_rejected|/
 
+int_invalid_status_is_rejected|create_collector
+int_invalid_status_is_rejected|create_int_sensor|contract/status/invalid/int
+int_invalid_status_is_rejected|start
+int_invalid_status_is_rejected|expect_add_int_rejected|0|1|99|bad-status
+int_invalid_status_is_rejected|expect_sent_count|0
+
+path_control_character_is_escaped|create_collector
+path_control_character_is_escaped|create_int_sensor|token:control-02
+path_control_character_is_escaped|start
+path_control_character_is_escaped|add_int|0|1|Ok|path-control
+path_control_character_is_escaped|expect_sent_count|1
+path_control_character_is_escaped|expect_payload_contains|0|path\u0002part
+
 comment_with_spaces|create_collector
 comment_with_spaces|create_int_sensor|contract/comment/spaces
 comment_with_spaces|start

@@ -43,7 +43,12 @@ the .NET collector and the native C++ port.
 
 ## Regression Counter
 
-Target: 30 important tests that expose P1/P2 bugs in either collector.
+Target: 50 important tests that expose P1/P2 bugs in either collector.
+
+Shared conformance count:
+
+- Before the second regression batch: 69 `.hsmtest` cases.
+- After promoting shared semantic regressions: 89 `.hsmtest` cases.
 
 Completed:
 
@@ -111,3 +116,26 @@ Completed:
     - Found invalid native status enum values could be sent.
 30. `native_invalid_status_on_last_value_preserves_previous_snapshot`
     - Found invalid native status enum values could overwrite last-value state.
+
+Promoted to shared conformance:
+
+31. `double_nan_is_rejected`
+32. `double_positive_infinity_is_rejected`
+33. `double_negative_infinity_is_rejected`
+34. `last_double_nan_default_is_rejected`
+35. `last_double_positive_infinity_default_is_rejected`
+36. `last_double_negative_infinity_default_is_rejected`
+37. `last_double_nan_update_preserves_previous`
+38. `last_double_positive_infinity_update_preserves_previous`
+39. `last_double_negative_infinity_update_preserves_previous`
+40. `int_invalid_status_is_rejected`
+41. `bool_invalid_status_is_rejected`
+42. `double_invalid_status_is_rejected`
+43. `string_invalid_status_is_rejected`
+44. `enum_invalid_status_is_rejected`
+45. `last_int_invalid_status_preserves_previous`
+46. `last_bool_invalid_status_preserves_previous`
+47. `last_double_invalid_status_preserves_previous`
+48. `last_string_invalid_status_preserves_previous`
+49. `string_control_character_is_escaped`
+50. `path_control_character_is_escaped`

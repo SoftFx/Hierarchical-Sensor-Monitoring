@@ -1,4 +1,5 @@
 ﻿using System.Threading.Tasks;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
@@ -18,6 +19,7 @@ namespace HSMDataCollector.Sensors
 
         public LastValueSensorInstant(InstantSensorOptions options, T customDefault) : base(options)
         {
+            SensorValueExtensions.ThrowIfUnsupportedValue(customDefault);
             _lastValue = customDefault;
         }
 
@@ -35,6 +37,9 @@ namespace HSMDataCollector.Sensors
 
         public override void AddValue(T value, SensorStatus status, string comment)
         {
+            if (!SensorValueExtensions.IsValidValue(value, status))
+                return;
+
             _lastComment = comment;
             _lastStatus = status;
             _lastValue = value;

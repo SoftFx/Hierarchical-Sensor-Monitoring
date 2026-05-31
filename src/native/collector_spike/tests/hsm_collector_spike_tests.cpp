@@ -276,6 +276,13 @@ namespace
 
     double ToDouble(const std::string& value)
     {
+        if (value == "NaN")
+            return std::numeric_limits<double>::quiet_NaN();
+        if (value == "Infinity")
+            return std::numeric_limits<double>::infinity();
+        if (value == "-Infinity")
+            return -std::numeric_limits<double>::infinity();
+
         return std::stod(value);
     }
 
@@ -293,6 +300,11 @@ namespace
         throw std::runtime_error("Unknown status: " + value);
     }
 
+    hsm_sensor_status_t ToRawStatus(const std::string& value)
+    {
+        return static_cast<hsm_sensor_status_t>(std::stoi(value));
+    }
+
     std::string ExpandTextToken(const std::string& value)
     {
         const std::string repeat_prefix = "repeat:";
@@ -300,6 +312,12 @@ namespace
         {
             if (value == "token:json-special")
                 return "quote\"slash\\tab\tnewline\n";
+            if (value == "token:control-01")
+                return std::string("a") + static_cast<char>(0x01) + "b";
+            if (value == "token:control-02")
+                return std::string("path") + static_cast<char>(0x02) + "part";
+            if (value == "token:control-1f")
+                return std::string("bad") + static_cast<char>(0x1f) + "comment";
 
             return value;
         }
@@ -383,35 +401,40 @@ namespace
         if (action == "create_int_sensor")
         {
             Require(step.size() >= 2, "create_int_sensor requires path");
-            state.sensors.push_back(CreateIntSensor(state.collector.value, step[1].c_str()));
+            const auto path = ExpandTextToken(step[1]);
+            state.sensors.push_back(CreateIntSensor(state.collector.value, path.c_str()));
             return;
         }
 
         if (action == "create_bool_sensor")
         {
             Require(step.size() >= 2, "create_bool_sensor requires path");
-            state.sensors.push_back(CreateBoolSensor(state.collector.value, step[1].c_str()));
+            const auto path = ExpandTextToken(step[1]);
+            state.sensors.push_back(CreateBoolSensor(state.collector.value, path.c_str()));
             return;
         }
 
         if (action == "create_double_sensor")
         {
             Require(step.size() >= 2, "create_double_sensor requires path");
-            state.sensors.push_back(CreateDoubleSensor(state.collector.value, step[1].c_str()));
+            const auto path = ExpandTextToken(step[1]);
+            state.sensors.push_back(CreateDoubleSensor(state.collector.value, path.c_str()));
             return;
         }
 
         if (action == "create_string_sensor")
         {
             Require(step.size() >= 2, "create_string_sensor requires path");
-            state.sensors.push_back(CreateStringSensor(state.collector.value, step[1].c_str()));
+            const auto path = ExpandTextToken(step[1]);
+            state.sensors.push_back(CreateStringSensor(state.collector.value, path.c_str()));
             return;
         }
 
         if (action == "create_enum_sensor")
         {
             Require(step.size() >= 2, "create_enum_sensor requires path");
-            state.sensors.push_back(CreateEnumSensor(state.collector.value, step[1].c_str()));
+            const auto path = ExpandTextToken(step[1]);
+            state.sensors.push_back(CreateEnumSensor(state.collector.value, path.c_str()));
             return;
         }
 
@@ -522,6 +545,26 @@ namespace
             return;
         }
 
+        if (action == "expect_create_last_double_sensor_rejected")
+        {
+            Require(step.size() >= 3, "expect_create_last_double_sensor_rejected requires path and default value");
+            hsm_sensor_t* sensor = nullptr;
+            const auto result = hsm_collector_create_last_value_double_sensor(
+                state.collector.value,
+                step[1].c_str(),
+                ToDouble(step[2]),
+                &sensor);
+
+            if (result == HSM_RESULT_OK)
+            {
+                hsm_sensor_release(sensor);
+                throw std::runtime_error("last double sensor create unexpectedly succeeded");
+            }
+
+            Require(sensor == nullptr, "rejected last double sensor create returned a handle");
+            return;
+        }
+
         if (action == "add_int")
         {
             Require(step.size() >= 5, "add_int requires sensor index, value, status, and comment");
@@ -585,6 +628,85 @@ namespace
             Require(
                 hsm_sensor_add_enum(state.sensors[sensor_index].value, ToInt(step[2]), ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
                 "add_enum failed");
+            return;
+        }
+
+        if (action == "expect_add_int_rejected")
+        {
+            Require(step.size() >= 5, "expect_add_int_rejected requires sensor index, value, raw status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto before = hsm_collector_sent_count(state.collector.value);
+            const auto comment = ExpandTextToken(step[4]);
+
+            Require(
+                hsm_sensor_add_int(state.sensors[sensor_index].value, ToInt(step[2]), ToRawStatus(step[3]), comment.c_str()) != HSM_RESULT_OK,
+                "invalid int add unexpectedly succeeded");
+            Require(hsm_collector_sent_count(state.collector.value) == before, "rejected int add should not send");
+            return;
+        }
+
+        if (action == "expect_add_bool_rejected")
+        {
+            Require(step.size() >= 5, "expect_add_bool_rejected requires sensor index, value, raw status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto before = hsm_collector_sent_count(state.collector.value);
+            const auto comment = ExpandTextToken(step[4]);
+
+            Require(
+                hsm_sensor_add_bool(state.sensors[sensor_index].value, ToBool(step[2]), ToRawStatus(step[3]), comment.c_str()) != HSM_RESULT_OK,
+                "invalid bool add unexpectedly succeeded");
+            Require(hsm_collector_sent_count(state.collector.value) == before, "rejected bool add should not send");
+            return;
+        }
+
+        if (action == "expect_add_double_rejected")
+        {
+            Require(step.size() >= 5, "expect_add_double_rejected requires sensor index, value, raw status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto before = hsm_collector_sent_count(state.collector.value);
+            const auto comment = ExpandTextToken(step[4]);
+
+            Require(
+                hsm_sensor_add_double(state.sensors[sensor_index].value, ToDouble(step[2]), ToRawStatus(step[3]), comment.c_str()) !=
+                    HSM_RESULT_OK,
+                "invalid double add unexpectedly succeeded");
+            Require(hsm_collector_sent_count(state.collector.value) == before, "rejected double add should not send");
+            return;
+        }
+
+        if (action == "expect_add_string_rejected")
+        {
+            Require(step.size() >= 5, "expect_add_string_rejected requires sensor index, value, raw status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto before = hsm_collector_sent_count(state.collector.value);
+            const auto value = ExpandTextToken(step[2]);
+            const auto comment = ExpandTextToken(step[4]);
+
+            Require(
+                hsm_sensor_add_string(state.sensors[sensor_index].value, value.c_str(), ToRawStatus(step[3]), comment.c_str()) !=
+                    HSM_RESULT_OK,
+                "invalid string add unexpectedly succeeded");
+            Require(hsm_collector_sent_count(state.collector.value) == before, "rejected string add should not send");
+            return;
+        }
+
+        if (action == "expect_add_enum_rejected")
+        {
+            Require(step.size() >= 5, "expect_add_enum_rejected requires sensor index, value, raw status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto before = hsm_collector_sent_count(state.collector.value);
+            const auto comment = ExpandTextToken(step[4]);
+
+            Require(
+                hsm_sensor_add_enum(state.sensors[sensor_index].value, ToInt(step[2]), ToRawStatus(step[3]), comment.c_str()) !=
+                    HSM_RESULT_OK,
+                "invalid enum add unexpectedly succeeded");
+            Require(hsm_collector_sent_count(state.collector.value) == before, "rejected enum add should not send");
             return;
         }
 
@@ -865,6 +987,14 @@ namespace
             Require(step.size() >= 3, "expect_payload_contains requires index and substring");
             const auto payload = SentJson(state.collector.value, static_cast<size_t>(ToInt(step[1])));
             Contains(payload, step[2]);
+            return;
+        }
+
+        if (action == "expect_payload_not_contains")
+        {
+            Require(step.size() >= 3, "expect_payload_not_contains requires index and substring");
+            const auto payload = SentJson(state.collector.value, static_cast<size_t>(ToInt(step[1])));
+            NotContains(payload, step[2]);
             return;
         }
 
