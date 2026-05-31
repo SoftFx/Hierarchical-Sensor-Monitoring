@@ -123,10 +123,18 @@ namespace HSMDataCollector.Tests
                     ExpectCreateRejected(() => state.Collector.CreateLastValueIntSensor(step.Arg(0), int.Parse(step.Arg(1))));
                     break;
 
+                case "expect_create_last_bool_sensor_rejected":
+                    ExpectCreateRejected(() => state.Collector.CreateLastValueBoolSensor(step.Arg(0), bool.Parse(step.Arg(1))));
+                    break;
+
                 case "expect_create_last_double_sensor_rejected":
                     ExpectCreateRejected(() => state.Collector.CreateLastValueDoubleSensor(
                         step.Arg(0),
                         ParseDouble(step.Arg(1))));
+                    break;
+
+                case "expect_create_last_string_sensor_rejected":
+                    ExpectCreateRejected(() => state.Collector.CreateLastValueStringSensor(step.Arg(0), ExpandTextToken(step.Arg(1))));
                     break;
 
                 case "add_int":

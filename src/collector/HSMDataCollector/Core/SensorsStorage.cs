@@ -282,14 +282,18 @@ namespace HSMDataCollector.Core
             var newSensorIdentity = GetSensorIdentity(newSensor);
             var existingSensorIdentity = GetSensorIdentity(existingSensor);
 
-            newSensor.Dispose();
-
             if (existingSensorIdentity.Type != newSensorIdentity.Type ||
                 existingSensorIdentity.IsLastValue != newSensorIdentity.IsLastValue)
             {
+                if (!newSensorIdentity.IsLastValue)
+                    newSensor.Dispose();
+
                 throw new InvalidOperationException(
                     $"Sensor with path {newSensor.SensorPath} already exists as {DescribeSensor(existingSensorIdentity)}; requested {DescribeSensor(newSensorIdentity)}.");
             }
+
+            if (!newSensorIdentity.IsLastValue)
+                newSensor.Dispose();
 
             return existingSensor;
         }

@@ -43,12 +43,13 @@ the .NET collector and the native C++ port.
 
 ## Regression Counter
 
-Target: 50 important tests that expose P1/P2 bugs in either collector.
+Target: 65 important tests that expose P1/P2 bugs in either collector.
 
 Shared conformance count:
 
 - Before the second regression batch: 69 `.hsmtest` cases.
 - After promoting shared semantic regressions: 89 `.hsmtest` cases.
+- After duplicate last-value regression promotion: 104 `.hsmtest` cases.
 
 Completed:
 
@@ -139,3 +140,18 @@ Promoted to shared conformance:
 48. `last_string_invalid_status_preserves_previous`
 49. `string_control_character_is_escaped`
 50. `path_control_character_is_escaped`
+51. `duplicate_last_int_while_running_does_not_emit_duplicate_default`
+52. `duplicate_last_bool_while_running_does_not_emit_duplicate_default`
+53. `duplicate_last_double_while_running_does_not_emit_duplicate_default`
+54. `duplicate_last_string_while_running_does_not_emit_duplicate_default`
+55. `duplicate_last_int_preserves_original_default`
+56. `duplicate_last_bool_preserves_original_default`
+57. `duplicate_last_double_preserves_original_default`
+58. `duplicate_last_string_preserves_original_default`
+59. `duplicate_last_int_second_handle_updates_without_duplicate_default`
+60. `duplicate_last_bool_second_handle_updates_without_duplicate_default`
+61. `duplicate_last_double_second_handle_updates_without_duplicate_default`
+62. `duplicate_last_string_second_handle_updates_without_duplicate_default`
+63. `duplicate_last_int_after_restart_does_not_emit_duplicate_default`
+64. `duplicate_last_double_after_restart_does_not_emit_duplicate_default`
+65. `duplicate_last_string_after_restart_does_not_emit_duplicate_default`

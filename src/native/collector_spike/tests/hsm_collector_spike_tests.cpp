@@ -545,6 +545,26 @@ namespace
             return;
         }
 
+        if (action == "expect_create_last_bool_sensor_rejected")
+        {
+            Require(step.size() >= 3, "expect_create_last_bool_sensor_rejected requires path and default value");
+            hsm_sensor_t* sensor = nullptr;
+            const auto result = hsm_collector_create_last_value_bool_sensor(
+                state.collector.value,
+                step[1].c_str(),
+                ToBool(step[2]),
+                &sensor);
+
+            if (result == HSM_RESULT_OK)
+            {
+                hsm_sensor_release(sensor);
+                throw std::runtime_error("last bool sensor create unexpectedly succeeded");
+            }
+
+            Require(sensor == nullptr, "rejected last bool sensor create returned a handle");
+            return;
+        }
+
         if (action == "expect_create_last_double_sensor_rejected")
         {
             Require(step.size() >= 3, "expect_create_last_double_sensor_rejected requires path and default value");
@@ -562,6 +582,27 @@ namespace
             }
 
             Require(sensor == nullptr, "rejected last double sensor create returned a handle");
+            return;
+        }
+
+        if (action == "expect_create_last_string_sensor_rejected")
+        {
+            Require(step.size() >= 3, "expect_create_last_string_sensor_rejected requires path and default value");
+            hsm_sensor_t* sensor = nullptr;
+            const auto default_value = ExpandTextToken(step[2]);
+            const auto result = hsm_collector_create_last_value_string_sensor(
+                state.collector.value,
+                step[1].c_str(),
+                default_value.c_str(),
+                &sensor);
+
+            if (result == HSM_RESULT_OK)
+            {
+                hsm_sensor_release(sensor);
+                throw std::runtime_error("last string sensor create unexpectedly succeeded");
+            }
+
+            Require(sensor == nullptr, "rejected last string sensor create returned a handle");
             return;
         }
 
