@@ -309,6 +309,9 @@ namespace HSMDataCollector.Core
             where T : SensorOptions<TDisplayUnit>, new()
             where TDisplayUnit : struct, Enum
         {
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(path.Trim('/')))
+                throw new ArgumentException("Sensor path must not be empty.", nameof(path));
+
             options = (T)options?.Copy() ?? new T();
 
             options.ComputerName = _options.ComputerName;

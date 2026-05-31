@@ -36,6 +36,16 @@ namespace
         return comment;
     }
 
+    std::string TrimSlashes(const std::string& value)
+    {
+        const auto first = value.find_first_not_of('/');
+        if (first == std::string::npos)
+            return std::string{};
+
+        const auto last = value.find_last_not_of('/');
+        return value.substr(first, last - first + 1);
+    }
+
     std::string EscapeJson(const std::string& value)
     {
         std::ostringstream output;
@@ -193,7 +203,7 @@ namespace
             const std::string& default_value_json,
             std::shared_ptr<NativeSensor>& out_sensor)
         {
-            if (path == nullptr || *path == '\0')
+            if (path == nullptr || TrimSlashes(CopyString(path)).empty())
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
 
             std::lock_guard<std::mutex> guard(mutex_);
@@ -279,10 +289,11 @@ namespace
             if (index >= sent_values_.size())
             {
                 *out_json = nullptr;
-                return HSM_RESULT_NOT_FOUND;
+                return SetError(HSM_RESULT_NOT_FOUND, "Sent value was not found.");
             }
 
             *out_json = sent_values_[index].c_str();
+            ClearError();
             return HSM_RESULT_OK;
         }
 
@@ -293,34 +304,36 @@ namespace
         }
 
     private:
-        hsm_result_t SetError(hsm_result_t result, std::string message)
+        hsm_result_t SetError(hsm_result_t result, std::string message) const
         {
             last_error_ = std::move(message);
             return result;
         }
 
-        void ClearError()
+        void ClearError() const
         {
             last_error_.clear();
         }
 
         std::string BuildSensorPath(const std::string& path) const
         {
-            if (computer_name_.empty() && module_.empty())
-                return path;
-            if (computer_name_.empty())
-                return module_ + "/" + path;
-            if (module_.empty())
-                return computer_name_ + "/" + path;
+            const auto normalized_path = TrimSlashes(path);
 
-            return computer_name_ + "/" + module_ + "/" + path;
+            if (computer_name_.empty() && module_.empty())
+                return normalized_path;
+            if (computer_name_.empty())
+                return TrimSlashes(module_) + "/" + normalized_path;
+            if (module_.empty())
+                return TrimSlashes(computer_name_) + "/" + normalized_path;
+
+            return TrimSlashes(computer_name_) + "/" + TrimSlashes(module_) + "/" + normalized_path;
         }
 
         mutable std::mutex mutex_;
         CollectorState state_ = CollectorState::Stopped;
         std::unordered_map<std::string, std::shared_ptr<NativeSensor>> sensors_;
         std::vector<std::string> sent_values_;
-        std::string last_error_;
+        mutable std::string last_error_;
 
         std::string access_key_;
         std::string server_address_;
@@ -371,6 +384,10 @@ namespace
 
     hsm_result_t NativeSensor::AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment)
     {
+        const auto collector = collector_.lock();
+        if (!collector)
+            return HSM_RESULT_INVALID_STATE;
+
         if (is_last_value_)
         {
             std::lock_guard<std::mutex> guard(mutex_);
@@ -379,10 +396,6 @@ namespace
             last_comment_ = TrimComment(CopyString(comment));
             return HSM_RESULT_OK;
         }
-
-        const auto collector = collector_.lock();
-        if (!collector)
-            return HSM_RESULT_INVALID_STATE;
 
         return collector->AddValueJson(path_, type_, value_json, status, comment);
     }
@@ -432,6 +445,9 @@ static hsm_result_t CreateSensor(
 
 hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_collector_t** out_collector)
 {
+    if (out_collector != nullptr)
+        *out_collector = nullptr;
+
     if (options == nullptr || out_collector == nullptr)
         return HSM_RESULT_INVALID_ARGUMENT;
 
@@ -560,16 +576,16 @@ static hsm_result_t CreateSensor(
     const std::string& default_value_json,
     hsm_sensor_t** out_sensor)
 {
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+
     if (collector == nullptr || out_sensor == nullptr)
         return HSM_RESULT_INVALID_ARGUMENT;
 
     std::shared_ptr<NativeSensor> sensor;
     const auto result = collector->impl->CreateSensor(path, type, is_last_value, default_value_json, sensor);
     if (result != HSM_RESULT_OK)
-    {
-        *out_sensor = nullptr;
         return result;
-    }
 
     *out_sensor = new hsm_sensor_t{ std::move(sensor) };
     return HSM_RESULT_OK;
@@ -650,6 +666,9 @@ size_t hsm_collector_sent_count(const hsm_collector_t* collector)
 
 hsm_result_t hsm_collector_get_sent_json(const hsm_collector_t* collector, size_t index, const char** out_json)
 {
+    if (out_json != nullptr)
+        *out_json = nullptr;
+
     if (collector == nullptr)
         return HSM_RESULT_INVALID_ARGUMENT;
 

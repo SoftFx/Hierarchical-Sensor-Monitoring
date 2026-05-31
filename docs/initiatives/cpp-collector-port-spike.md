@@ -396,6 +396,31 @@ Verification:
 - Full native CTest: 9/9 passed.
 - Full managed collector tests: 245 passed, 9 skipped.
 
+### 2026-05-31: reach 10 bug-finding stress/regression tests
+
+Continued the subagent-backed loop until the branch had 10 named important
+tests that exposed P1/P2 bugs or drift in either collector. The second batch
+added native-only C ABI safety coverage and shared path normalization coverage:
+
+- Native invalid calls clear caller-owned out parameters.
+- Native instant and last-value sensor handles reject `AddValue` after their
+  collector has been destroyed.
+- Native missing sent-json lookup sets a fresh `last_error`.
+- C++ wrapper missing sent-json lookup throws a meaningful message.
+- Leading/trailing slashes in sensor paths are normalized consistently.
+- Slash-only paths are rejected explicitly.
+
+Fixes kept shared semantics aligned across the .NET collector and native port:
+managed storage now rejects empty/slash-only paths before building full paths,
+and native path construction trims slash boundaries like the managed
+`DefaultPrototype.BuildPath` helper.
+
+Verification:
+
+- Shared conformance script: .NET 69/69 passed, C++ conformance 9/9 passed.
+- Full native CTest: 13/13 passed.
+- Full managed collector tests: 247 passed, 9 skipped.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first

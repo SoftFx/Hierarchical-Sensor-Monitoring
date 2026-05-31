@@ -40,3 +40,33 @@ the .NET collector and the native C++ port.
   trimming, stopped values, duplicate handles, queue/cardinality limits.
 - C ABI/API safety: null out parameters, stale handles after failed create,
   `last_error` behavior, `sent_json` pointer lifetime, C++ wrapper exceptions.
+
+## Regression Counter
+
+Target: 10 important tests that expose P1/P2 bugs in either collector.
+
+Completed:
+
+1. `mixed_duplicate_type_registration_stress_rejects_conflicts`
+   - Found native path-only identity reuse and managed `int`/`enum` identity
+     ambiguity.
+2. `start_twice_is_noop`
+   - Found native `Start` behavior drift from managed idempotent `Start`.
+3. `instant_then_last_same_path_is_rejected`
+   - Found managed instant/last-value identity ambiguity.
+4. `last_then_instant_same_path_is_rejected`
+   - Found the reverse managed instant/last-value identity ambiguity.
+5. `native_invalid_argument_clears_out_params`
+   - Found stale C ABI out-parameters after invalid calls.
+6. `native_add_after_collector_destroy_is_rejected`
+   - Found last-value sensors accepting writes after collector destruction.
+7. `native_sent_json_failure_reports_fresh_error`
+   - Found stale `last_error` after missing sent-json lookup.
+8. `native_wrapper_sent_json_missing_throws_message`
+   - Found the C++ wrapper could throw empty or stale messages for missing
+     sent-json lookup.
+9. `path_leading_trailing_slashes_are_normalized`
+   - Found native path normalization drift at slash boundaries.
+10. `slash_only_path_is_rejected`
+    - Found that slash-only paths needed an explicit shared invalid-path
+      invariant before porting.

@@ -1,6 +1,8 @@
 #include "hsm_collector/hsm_collector.h"
+#include "hsm_collector/hsm_collector.hpp"
 #include <iostream>
 #include <fstream>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <mutex>
@@ -936,9 +938,115 @@ namespace
         }
     }
 
+    void NativeInvalidArgumentClearsOutParams()
+    {
+        auto* collector = reinterpret_cast<hsm_collector_t*>(static_cast<uintptr_t>(1));
+        Require(
+            hsm_collector_create(nullptr, &collector) == HSM_RESULT_INVALID_ARGUMENT,
+            "collector create with null options should fail");
+        Require(collector == nullptr, "collector create failure should clear out collector");
+
+        auto* sensor = reinterpret_cast<hsm_sensor_t*>(static_cast<uintptr_t>(1));
+        Require(
+            hsm_collector_create_int_sensor(nullptr, "native/api/null-collector", &sensor) == HSM_RESULT_INVALID_ARGUMENT,
+            "sensor create with null collector should fail");
+        Require(sensor == nullptr, "sensor create failure should clear out sensor");
+
+        const char* json = reinterpret_cast<const char*>(static_cast<uintptr_t>(1));
+        Require(
+            hsm_collector_get_sent_json(nullptr, 0, &json) == HSM_RESULT_INVALID_ARGUMENT,
+            "sent json with null collector should fail");
+        Require(json == nullptr, "sent json failure should clear out json");
+    }
+
+    void NativeAddAfterCollectorDestroyIsRejected()
+    {
+        auto options = TestOptions();
+        hsm_collector_t* collector = nullptr;
+        Require(hsm_collector_create(&options, &collector) == HSM_RESULT_OK, "collector create failed");
+
+        hsm_sensor_t* instant = nullptr;
+        hsm_sensor_t* last_value = nullptr;
+
+        Require(
+            hsm_collector_create_int_sensor(collector, "native/api/destroy/instant", &instant) == HSM_RESULT_OK,
+            "instant sensor create failed");
+        Require(
+            hsm_collector_create_last_value_int_sensor(collector, "native/api/destroy/last", 0, &last_value) == HSM_RESULT_OK,
+            "last-value sensor create failed");
+
+        hsm_collector_destroy(collector);
+
+        Require(
+            hsm_sensor_add_int(instant, 1, HSM_SENSOR_STATUS_OK, "after-destroy") == HSM_RESULT_INVALID_STATE,
+            "instant sensor add after collector destroy should fail");
+        Require(
+            hsm_sensor_add_int(last_value, 1, HSM_SENSOR_STATUS_OK, "after-destroy") == HSM_RESULT_INVALID_STATE,
+            "last-value sensor add after collector destroy should fail");
+
+        hsm_sensor_release(instant);
+        hsm_sensor_release(last_value);
+    }
+
+    void NativeSentJsonFailureReportsFreshError()
+    {
+        auto options = TestOptions();
+        hsm_collector_t* collector = nullptr;
+        Require(hsm_collector_create(&options, &collector) == HSM_RESULT_OK, "collector create failed");
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_create_int_sensor(collector, "", &sensor) == HSM_RESULT_INVALID_ARGUMENT,
+            "empty sensor path should fail");
+        Require(sensor == nullptr, "empty sensor path failure should clear out sensor");
+
+        const auto stale_error = std::string{ hsm_collector_last_error(collector) };
+        Require(!stale_error.empty(), "empty sensor path should set last error");
+
+        const char* json = reinterpret_cast<const char*>(static_cast<uintptr_t>(1));
+        Require(
+            hsm_collector_get_sent_json(collector, 0, &json) == HSM_RESULT_NOT_FOUND,
+            "missing sent json should return not found");
+        Require(json == nullptr, "missing sent json should clear out json");
+
+        const auto fresh_error = std::string{ hsm_collector_last_error(collector) };
+        Require(!fresh_error.empty(), "missing sent json should set last error");
+        Require(fresh_error != stale_error, "missing sent json should not leave a stale last error");
+
+        hsm_collector_destroy(collector);
+    }
+
+    void NativeWrapperSentJsonMissingThrowsMessage()
+    {
+        hsm::collector_spike::CollectorOptions options;
+        options.access_key = "test-key";
+        options.server_address = "https://localhost";
+        options.port = 443;
+        options.module = "native-wrapper";
+        options.computer_name = "native-host";
+
+        hsm::collector_spike::Collector collector(options);
+
+        try
+        {
+            (void)collector.SentJson(0);
+        }
+        catch (const hsm::collector_spike::Error& ex)
+        {
+            Require(std::string{ ex.what() }.find("not found") != std::string::npos, "wrapper error should explain missing sent value");
+            return;
+        }
+
+        throw std::runtime_error("wrapper sent json should throw for missing payload");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+            { "native_invalid_argument_clears_out_params", [](const std::string&) { NativeInvalidArgumentClearsOutParams(); } },
+            { "native_add_after_collector_destroy_is_rejected", [](const std::string&) { NativeAddAfterCollectorDestroyIsRejected(); } },
+            { "native_sent_json_failure_reports_fresh_error", [](const std::string&) { NativeSentJsonFailureReportsFreshError(); } },
+            { "native_wrapper_sent_json_missing_throws_message", [](const std::string&) { NativeWrapperSentJsonMissingThrowsMessage(); } },
             { "conformance_instant_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_lifecycle_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_stress_int_contract", [](const std::string& path) { RunConformanceContract(path); } },

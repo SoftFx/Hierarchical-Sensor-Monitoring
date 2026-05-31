@@ -71,6 +71,16 @@ path_with_spaces|add_int|0|1|Ok|path
 path_with_spaces|expect_sent_count|1
 path_with_spaces|expect_payload_contains|0|"Path":"conformance-host/conformance-module/contract/path/with spaces"
 
+path_leading_trailing_slashes_are_normalized|create_collector
+path_leading_trailing_slashes_are_normalized|create_int_sensor|/contract/path/slashed/
+path_leading_trailing_slashes_are_normalized|start
+path_leading_trailing_slashes_are_normalized|add_int|0|1|Ok|slash
+path_leading_trailing_slashes_are_normalized|expect_sent_count|1
+path_leading_trailing_slashes_are_normalized|expect_payload_contains|0|"Path":"conformance-host/conformance-module/contract/path/slashed"
+
+slash_only_path_is_rejected|create_collector
+slash_only_path_is_rejected|expect_create_int_sensor_rejected|/
+
 comment_with_spaces|create_collector
 comment_with_spaces|create_int_sensor|contract/comment/spaces
 comment_with_spaces|start

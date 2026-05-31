@@ -27,6 +27,19 @@ target_link_libraries(hsm_collector_spike_tests PRIVATE hsm_collector_spike)
 
 enable_testing()
 
+add_test(NAME native_invalid_argument_clears_out_params
+    COMMAND hsm_collector_spike_tests native_invalid_argument_clears_out_params
+)
+add_test(NAME native_add_after_collector_destroy_is_rejected
+    COMMAND hsm_collector_spike_tests native_add_after_collector_destroy_is_rejected
+)
+add_test(NAME native_sent_json_failure_reports_fresh_error
+    COMMAND hsm_collector_spike_tests native_sent_json_failure_reports_fresh_error
+)
+add_test(NAME native_wrapper_sent_json_missing_throws_message
+    COMMAND hsm_collector_spike_tests native_wrapper_sent_json_missing_throws_message
+)
+
 function(add_conformance_test name fixture)
     add_test(
         NAME ${name}
