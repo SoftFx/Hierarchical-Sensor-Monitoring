@@ -14,6 +14,7 @@
 # create_last_double_sensor|path|default_value
 # create_last_string_sensor|path|default_value
 # create_int_sensors|count|path_prefix
+# create_mixed_instant_sensors|count|path_prefix
 # add_int|sensor_index|value|status|comment
 # add_bool|sensor_index|value|status|comment
 # add_double|sensor_index|value|status|comment
@@ -21,12 +22,15 @@
 # add_enum|sensor_index|value|status|comment
 # add_int_sequence|sensor_count|values_per_sensor|start_value|status|comment
 # add_int_parallel|worker_count|values_per_worker|sensor_count|status|comment
+# add_mixed_instant_sequence|set_count|values_per_set|start_value|status|comment
+# add_mixed_instant_parallel|worker_count|values_per_worker|set_count|status|comment
 # repeat_start_stop_add|cycles|sensor_index|status|comment_prefix
 # expect_sent_count|count|optional_timeout_seconds
 # expect_payload_contains|payload_index|substring
 # expect_comment_length|payload_index|length
 # expect_all_payloads_contain|substring
 # expect_payload_value_sequence|start_payload_index|count|start_value
+# expect_payload_type_counts|bool_count|int_count|double_count|string_count|enum_count
 
 before_start_drops_value|create_collector
 before_start_drops_value|create_int_sensor|contract/int

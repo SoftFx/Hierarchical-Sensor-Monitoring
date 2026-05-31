@@ -111,6 +111,10 @@ namespace HSMDataCollector.Tests
                     CreateIntSensors(state, int.Parse(step.Arg(0)), step.Arg(1));
                     break;
 
+                case "create_mixed_instant_sensors":
+                    CreateMixedInstantSensors(state, int.Parse(step.Arg(0)), step.Arg(1));
+                    break;
+
                 case "add_int":
                     state.IntSensors[int.Parse(step.Arg(0))]
                         .AddValue(int.Parse(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
@@ -156,6 +160,26 @@ namespace HSMDataCollector.Tests
                         comment: ExpandTextToken(step.Arg(4))).ConfigureAwait(false);
                     break;
 
+                case "add_mixed_instant_sequence":
+                    AddMixedInstantSequence(
+                        state,
+                        setCount: int.Parse(step.Arg(0)),
+                        valuesPerSet: int.Parse(step.Arg(1)),
+                        startValue: int.Parse(step.Arg(2)),
+                        status: ParseStatus(step.Arg(3)),
+                        comment: ExpandTextToken(step.Arg(4)));
+                    break;
+
+                case "add_mixed_instant_parallel":
+                    await AddMixedInstantParallelAsync(
+                        state,
+                        workerCount: int.Parse(step.Arg(0)),
+                        valuesPerWorker: int.Parse(step.Arg(1)),
+                        setCount: int.Parse(step.Arg(2)),
+                        status: ParseStatus(step.Arg(3)),
+                        comment: ExpandTextToken(step.Arg(4))).ConfigureAwait(false);
+                    break;
+
                 case "repeat_start_stop_add":
                     await RepeatStartStopAddAsync(
                         state,
@@ -195,6 +219,16 @@ namespace HSMDataCollector.Tests
                         startValue: int.Parse(step.Arg(2)));
                     break;
 
+                case "expect_payload_type_counts":
+                    ExpectPayloadTypeCounts(
+                        state,
+                        boolCount: int.Parse(step.Arg(0)),
+                        intCount: int.Parse(step.Arg(1)),
+                        doubleCount: int.Parse(step.Arg(2)),
+                        stringCount: int.Parse(step.Arg(3)),
+                        enumCount: int.Parse(step.Arg(4)));
+                    break;
+
                 default:
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
@@ -222,6 +256,18 @@ namespace HSMDataCollector.Tests
         {
             for (var i = 0; i < count; i++)
                 state.IntSensors.Add(state.Collector.CreateIntSensor(pathPrefix + "/" + i));
+        }
+
+        private static void CreateMixedInstantSensors(ContractState state, int count, string pathPrefix)
+        {
+            for (var i = 0; i < count; i++)
+            {
+                state.BoolSensors.Add(state.Collector.CreateBoolSensor(pathPrefix + "/" + i + "/bool"));
+                state.IntSensors.Add(state.Collector.CreateIntSensor(pathPrefix + "/" + i + "/int"));
+                state.DoubleSensors.Add(state.Collector.CreateDoubleSensor(pathPrefix + "/" + i + "/double"));
+                state.StringSensors.Add(state.Collector.CreateStringSensor(pathPrefix + "/" + i + "/string"));
+                state.EnumSensors.Add(state.Collector.CreateEnumSensor(pathPrefix + "/" + i + "/enum"));
+            }
         }
 
         private static void AddIntSequence(
@@ -265,6 +311,56 @@ namespace HSMDataCollector.Tests
             return Task.WhenAll(tasks);
         }
 
+        private static void AddMixedInstantSequence(
+            ContractState state,
+            int setCount,
+            int valuesPerSet,
+            int startValue,
+            SensorStatus status,
+            string comment)
+        {
+            for (var setIndex = 0; setIndex < setCount; setIndex++)
+            {
+                for (var valueIndex = 0; valueIndex < valuesPerSet; valueIndex++)
+                {
+                    var value = startValue + setIndex * valuesPerSet + valueIndex;
+                    AddMixedInstantValue(state, setIndex, value, status, comment);
+                }
+            }
+        }
+
+        private static Task AddMixedInstantParallelAsync(
+            ContractState state,
+            int workerCount,
+            int valuesPerWorker,
+            int setCount,
+            SensorStatus status,
+            string comment)
+        {
+            var tasks = Enumerable.Range(0, workerCount)
+                .Select(worker => Task.Run(() =>
+                {
+                    for (var valueIndex = 0; valueIndex < valuesPerWorker; valueIndex++)
+                    {
+                        var setIndex = (worker + valueIndex) % setCount;
+                        var value = worker * valuesPerWorker + valueIndex;
+                        AddMixedInstantValue(state, setIndex, value, status, comment);
+                    }
+                }))
+                .ToArray();
+
+            return Task.WhenAll(tasks);
+        }
+
+        private static void AddMixedInstantValue(ContractState state, int setIndex, int value, SensorStatus status, string comment)
+        {
+            state.BoolSensors[setIndex].AddValue(value % 2 == 0, status, comment);
+            state.IntSensors[setIndex].AddValue(value, status, comment);
+            state.DoubleSensors[setIndex].AddValue(value + 0.25, status, comment);
+            state.StringSensors[setIndex].AddValue("value-" + value.ToString(CultureInfo.InvariantCulture), status, comment);
+            state.EnumSensors[setIndex].AddValue(value % 4, status, comment);
+        }
+
         private static async Task RepeatStartStopAddAsync(
             ContractState state,
             int cycles,
@@ -287,6 +383,23 @@ namespace HSMDataCollector.Tests
                 var payload = PayloadText(state.Sender.Values[startPayloadIndex + offset]);
                 Assert.Contains("\"Value\":" + (startValue + offset), payload);
             }
+        }
+
+        private static void ExpectPayloadTypeCounts(
+            ContractState state,
+            int boolCount,
+            int intCount,
+            int doubleCount,
+            int stringCount,
+            int enumCount)
+        {
+            var payloads = state.Sender.Values.Select(PayloadText).ToArray();
+
+            Assert.Equal(boolCount, payloads.Count(payload => payload.Contains("\"Type\":0,")));
+            Assert.Equal(intCount, payloads.Count(payload => payload.Contains("\"Type\":1,")));
+            Assert.Equal(doubleCount, payloads.Count(payload => payload.Contains("\"Type\":2,")));
+            Assert.Equal(stringCount, payloads.Count(payload => payload.Contains("\"Type\":3,")));
+            Assert.Equal(enumCount, payloads.Count(payload => payload.Contains("\"Type\":10,")));
         }
 
         private static string PayloadText(SensorValueBase value)

@@ -329,6 +329,25 @@ Verification:
 
 - Shared conformance script: .NET 60/60 passed, C++ conformance 8/8 passed.
 
+### 2026-05-31: add unified mixed stress conformance
+
+Added the primary shared stress fixture:
+
+- `tests/conformance/collector/stress_mixed_contract.hsmtest`
+
+Unlike the earlier integer-only stress fixture, this one loads the currently
+portable mixed instant surface together: `bool`, `int`, `double`, `string`, and
+`enum`. The fixture covers:
+
+- Parallel mixed writes across 24 sensor sets and 12 workers.
+- Sequential mixed fanout across 32 sensor sets.
+- Drop-after-stop behavior under mixed stress.
+- Exact total sent counts and per-type payload counts.
+
+This fixture should be the default stress gate for every collector port. Larger
+soak profiles can be added separately as opt-in fixtures, but the PR profile
+must stay shared and bounded.
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first
