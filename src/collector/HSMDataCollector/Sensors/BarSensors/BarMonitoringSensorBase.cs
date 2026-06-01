@@ -96,8 +96,15 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
+                // Capture the generation once: if the sensor stops or restarts between this entry
+                // and the lock acquisition, we drop the bar instead of sending an obsolete one.
+                var capturedEpoch = LifecycleEpoch;
+
                 lock (_lockBar)
                 {
+                    if (LifecycleEpoch != capturedEpoch)
+                        return;
+
                     if (_internalBar.CloseTime < DateTime.UtcNow)
                     {
                         SendValueAction();

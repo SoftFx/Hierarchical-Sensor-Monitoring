@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Extensions;
@@ -17,6 +17,15 @@ namespace HSMDataCollector.DefaultSensors
         // Composed scheduling lifecycle for the periodic send loop (replaces a hand-rolled
         // ScheduledTask field + lock). The bar sensor composes a second handle for its collect loop.
         private readonly ScheduledTaskHandle _sendHandle;
+
+        // Lifecycle generation token (issue #1074). Incremented every time the send loop is started,
+        // restarted, or stopped. Scheduled callbacks capture the value at entry and verify the
+        // sensor is still on the same generation before publishing a value. This kills two classes
+        // of races: a callback overlapping a restart boundary, and a long-running callback that
+        // outlives the bounded sensor-stop wait and tries to publish into a queue that is already
+        // past its final drain. Reads/writes use Volatile so the publisher reads consistently
+        // without taking the scheduler lock.
+        private long _lifecycleEpoch;
 
         protected virtual TimeSpan TimerDueTime => TimeSpan.Zero;
 
@@ -39,6 +48,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
+                Interlocked.Increment(ref _lifecycleEpoch);
                 StartSendTask();
 
                 return base.InitAsync();
@@ -54,7 +64,15 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
+                // Order matters. We await the bounded wait FIRST so a short in-flight callback
+                // gets to finish, build its value, and publish on its original generation — that
+                // value will then be flushed by DataProcessor.StopAsync. Only AFTER the bounded
+                // wait do we bump the epoch, so a callback that outlived the bound observes a
+                // stale generation when it eventually wakes and skips its SendValue rather than
+                // landing in a queue that is about to be drained.
                 await StopInternalAsync(waitForCurrentRun: true);
+
+                Interlocked.Increment(ref _lifecycleEpoch);
 
                 await base.StopAsync();
             }
@@ -74,7 +92,17 @@ namespace HSMDataCollector.DefaultSensors
 
         protected void SendValueAction()
         {
-            SendValue(BuildSensorValue());
+            // Capture the generation when the callback starts. If it changes before SendValue
+            // runs, the sensor has restarted or stopped underneath us — drop the value rather
+            // than publish stale work into a queue that may have already been drained.
+            var capturedEpoch = Volatile.Read(ref _lifecycleEpoch);
+
+            var value = BuildSensorValue();
+
+            if (Volatile.Read(ref _lifecycleEpoch) != capturedEpoch)
+                return;
+
+            SendValue(value);
         }
 
         protected async Task RestartTimerAsync(TimeSpan newPostPeriod)
@@ -82,6 +110,11 @@ namespace HSMDataCollector.DefaultSensors
             try
             {
                 await StopInternalAsync(waitForCurrentRun: true).ConfigureAwait(false);
+
+                // Bump after the bounded wait but BEFORE rebuilding the schedule. Any callback
+                // from the old period that outlived the wait sees a stale generation and skips
+                // its SendValue, even if it wakes after the new schedule has already started.
+                Interlocked.Increment(ref _lifecycleEpoch);
 
                 if (newPostPeriod <= TimeSpan.Zero)
                     throw new ArgumentOutOfRangeException(nameof(newPostPeriod), "Post data period must be greater than zero.");
@@ -95,6 +128,12 @@ namespace HSMDataCollector.DefaultSensors
                 HandleException(ex);
             }
         }
+
+        /// <summary>
+        /// Current lifecycle generation for derived sensors (e.g. bar collect loops) that need
+        /// to honour the same invalidation boundary as the send loop.
+        /// </summary>
+        protected long LifecycleEpoch => Volatile.Read(ref _lifecycleEpoch);
 
         private ValueTask StopInternalAsync(bool waitForCurrentRun) => _sendHandle.StopAsync(waitForCurrentRun);
 

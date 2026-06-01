@@ -1,10 +1,8 @@
-using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
-using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
 
 
@@ -16,79 +14,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         public PriorityDataQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
-        internal async Task FlushAsync(CancellationToken token)
+
+        protected override async ValueTask<bool> TryDispatchOneAsync(CancellationToken token)
         {
-            try
-            {
-                while (QueueCount > 0 && !token.IsCancellationRequested)
-                {
-                    var package = GetPackage();
+            var package = GetPackage();
+            if (!package.Items.Any())
+                return false;
 
-                    if (!package.Items.Any())
-                        continue;
-
-                    try
-                    {
-                        var sendingInfo = await _sender.SendPriorityDataAsync(package.Items, token).ConfigureAwait(false);
-                        _queueManager.AddPackageSendingInfo(sendingInfo);
-                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
-                    }
-                    catch (OperationCanceledException) { throw; }
-                    catch
-                    {
-                        foreach (var item in package.Items)
-                            Enqeue(item);
-
-                        throw;
-                    }
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                _logger.Error(ex);
-            }
-        }
-
-        protected override async Task ProcessingLoop(CancellationToken token)
-        {
-            DataPackage<SensorValueBase> package;
-            while (!token.IsCancellationRequested)
-            {
-                try
-                {
-                    await WaitToReadAsync(token).ConfigureAwait(false);
-
-                    while (!IsEmpty && !token.IsCancellationRequested)
-                    {
-                        package = GetPackage();
-
-                        if (!package.Items.Any())
-                            continue;
-
-                        try
-                        {
-                            var sendingInfo = await _sender.SendPriorityDataAsync(package.Items, token).ConfigureAwait(false);
-                            _queueManager.AddPackageSendingInfo(sendingInfo);
-                            _queueManager.AddPackageInfo(QueueName, package.GetInfo());
-                        }
-                        catch (OperationCanceledException) { throw; }
-                        catch
-                        {
-                            foreach (var item in package.Items)
-                                Enqeue(item);
-
-                            throw;
-                        }
-                    }
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex);
-                    await DelayAfterFailureAsync(token).ConfigureAwait(false);
-                }
-            }
+            await DispatchPackageAsync(package,
+                                       (items, t) => _sender.SendPriorityDataAsync(items, t),
+                                       token).ConfigureAwait(false);
+            return true;
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -9,32 +9,35 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
-    internal sealed class FileQueueProcessor: QueueProcessorBase<FileSensorValue>
+    internal sealed class FileQueueProcessor : QueueProcessorBase<FileSensorValue>
     {
         public override string QueueName => "File";
 
         public FileQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
-        protected override async Task ProcessingLoop(CancellationToken token)
-        {
-            while (!token.IsCancellationRequested)
-            {
-                try
-                {
-                    await WaitToReadAsync(token).ConfigureAwait(false);
 
-                    while (!IsEmpty && !token.IsCancellationRequested)
-                    {
-                        if (TryDequeue(out QueueItem<FileSensorValue> item))
-                            await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
-                    }
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex);
-                }
+        protected override async ValueTask<bool> TryDispatchOneAsync(CancellationToken token)
+        {
+            if (!TryDequeue(out QueueItem<FileSensorValue> item))
+                return false;
+
+            try
+            {
+                await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
             }
+            catch (OperationCanceledException)
+            {
+                if (PreserveCanceledPackages)
+                    Enqeue(item.Value);
+                throw;
+            }
+            catch
+            {
+                Enqeue(item.Value);
+                throw;
+            }
+
+            return true;
         }
     }
 }

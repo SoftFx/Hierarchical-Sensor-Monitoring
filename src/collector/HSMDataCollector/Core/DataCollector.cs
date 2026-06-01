@@ -10,6 +10,7 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.SyncQueue.Data;
 using HSMDataCollector.Threading;
 using HSMSensorDataObjects;
 
@@ -254,7 +255,7 @@ namespace HSMDataCollector.Core
             }
         }
 
-        private async Task WaitForStartInitThenStopProcessor(Task startInitTask)
+        private async Task WaitForStartInitThenStopProcessor(Task startInitTask, ShutdownMode mode)
         {
             if (startInitTask != null)
             {
@@ -268,14 +269,17 @@ namespace HSMDataCollector.Core
                 }
             }
 
-            await _dataProcessor.StopAsync().ConfigureAwait(false);
+            await _dataProcessor.StopAsync(mode).ConfigureAwait(false);
         }
 
         private async Task SafeStopProcessor()
         {
             try
             {
-                await _dataProcessor.StopAsync().ConfigureAwait(false);
+                // Failed Start: the collector never finished entering the running phase, so the
+                // start-rollback mode discards queued items instead of pretending the collector
+                // accepted user work.
+                await _dataProcessor.StopAsync(ShutdownMode.StartRollback).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -300,7 +304,7 @@ namespace HSMDataCollector.Core
                 LogAndRaise(CollectorStatus.Stopping);
 
                 startInitTask = _currentStartInitTask;
-                processorStopTask = WaitForStartInitThenStopProcessor(startInitTask);
+                processorStopTask = WaitForStartInitThenStopProcessor(startInitTask, ShutdownMode.GracefulStop);
                 stopTask = Task.WhenAll(processorStopTask, customStoppingTask);
                 _currentProcessorStopTask = processorStopTask;
             }
@@ -440,7 +444,7 @@ namespace HSMDataCollector.Core
                 }
                 else if (ownsStop)
                 {
-                    DisposeComponent(() => WaitForStartInitThenStopProcessor(inFlightStartInit).ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
+                    DisposeComponent(() => WaitForStartInitThenStopProcessor(inFlightStartInit, ShutdownMode.TerminalDispose).ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
 
                     lock (_opLock)
                     {

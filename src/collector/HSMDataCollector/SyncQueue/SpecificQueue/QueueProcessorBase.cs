@@ -4,6 +4,7 @@ using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -19,7 +20,20 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
     }
 
 
-    internal abstract class QueueProcessorBase<T> : IDisposable
+    /// <summary>
+    /// Shared queue processor template that owns the dequeue → send → success/retry/cancel/flush
+    /// algorithm. Subclasses provide only how to dispatch one batch
+    /// (<see cref="TryDispatchOneAsync(CancellationToken)"/>) and, optionally, how to wait for new
+    /// work (<see cref="WaitForReadyAsync(CancellationToken)"/>).
+    ///
+    /// The <see cref="ShutdownMode"/> flowed through <see cref="StopAsync(ShutdownMode)"/> drives
+    /// whether canceled in-flight packages are re-enqueued, whether accepted work is preserved for
+    /// a follow-up flush, and whether the queue clears its leftover items immediately. After the
+    /// queue transitions to <see cref="QueueState.Stopped"/> following a stop cycle, new
+    /// <see cref="Enqeue(T)"/> calls return <see cref="EnqueueStatus.RejectedQueueStopped"/> until
+    /// the next <see cref="Start"/>.
+    /// </summary>
+    internal abstract class QueueProcessorBase<T> : IQueueProcessor
     {
         private Task _task;
         private bool _disposed;
@@ -38,6 +52,16 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected int _queueCount;
         private int _cleanupContinuationRegistered;
 
+        // 1 when the queue is open for new writes. Cleared on terminal stop (state machine reaches
+        // Stopped after running) and on Dispose; restored on Start. Read on the hot Enqeue path
+        // without holding _lifecycleLock so the lifecycle gate stays cheap.
+        private int _acceptingWritesFlag = 1;
+
+        // Last shutdown mode requested via StopAsync. Read by the processing loop's catch blocks to
+        // decide whether canceled packages should be re-enqueued. Default while running is
+        // GracefulStop so an unexpected mid-run cancellation preserves work.
+        private int _currentShutdownModeRaw = (int)ShutdownMode.GracefulStop;
+
         public abstract string QueueName { get; }
 
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
@@ -55,7 +79,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             });
         }
 
-        internal bool Start()
+        public bool Start()
         {
             lock (_lifecycleLock)
             {
@@ -93,26 +117,32 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 }
 
                 _cancellationTokenSource = new CancellationTokenSource();
-                _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
+                _task = Task.Run(() => RunLoopAsync(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
                 _state = QueueState.Running;
+                Volatile.Write(ref _currentShutdownModeRaw, (int)ShutdownMode.GracefulStop);
+                Volatile.Write(ref _acceptingWritesFlag, 1);
                 Interlocked.Exchange(ref _cleanupContinuationRegistered, 0);
             }
 
             return true;
         }
 
-        internal async ValueTask<bool> StopAsync(bool clearQueue = true)
+        public async ValueTask<bool> StopAsync(ShutdownMode mode)
         {
             try
             {
                 Task taskToWait;
                 CancellationTokenSource tokenSourceToDispose;
+                var clearOnStop = mode.ClearOnStop();
 
                 lock (_lifecycleLock)
                 {
+                    Volatile.Write(ref _currentShutdownModeRaw, (int)mode);
+
                     if (_state == QueueState.Stopped)
                     {
-                        if (clearQueue)
+                        Volatile.Write(ref _acceptingWritesFlag, 0);
+                        if (clearOnStop)
                             ClearQueue();
 
                         return true;
@@ -120,7 +150,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                     if (_state == QueueState.Stopping)
                     {
-                        if (clearQueue)
+                        if (clearOnStop)
                             ClearQueue();
 
                         return false;
@@ -148,9 +178,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                                 _logger.Error($"{QueueName} queue processor did not stop within {_options.RequestTimeout}. IDataSender may ignore cancellation.");
 
-                                if (clearQueue)
+                                if (clearOnStop)
                                     ClearQueue();
 
+                                // The processing task is still alive; we will not flip the write flag here
+                                // because the queue may still be draining items from the orphan task.
                                 return false;
                             }
 
@@ -164,7 +196,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 finally
                 {
                     if (taskToWait.IsCompleted)
-                        CompleteStoppedTask(taskToWait, tokenSourceToDispose, clearQueue);
+                        CompleteStoppedTask(taskToWait, tokenSourceToDispose, clearOnStop);
                 }
             }
             catch (OperationCanceledException)
@@ -178,34 +210,52 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             }
         }
 
-        internal virtual int Enqeue(T item)
+        internal virtual EnqueueResult Enqeue(T item)
         {
+            if (Volatile.Read(ref _acceptingWritesFlag) == 0)
+                return EnqueueResult.RejectedStopped();
+
             Interlocked.Increment(ref _queueCount);
 
             if (!Writer.TryWrite(new QueueItem<T>(item)))
             {
                 Interlocked.Decrement(ref _queueCount);
-                return 0;
+                return EnqueueResult.RejectedStopped();
             }
 
-            int result = 0;
+            int dropped = 0;
             while (Volatile.Read(ref _queueCount) > _options.MaxQueueSize)
             {
                 if (!TryDequeue(out _))
                     break;
-                result++;
+                dropped++;
             }
 
-            return result;
+            return EnqueueResult.Accept(dropped);
         }
 
-        internal virtual int Enqeue(IEnumerable<T> items)
+        internal virtual EnqueueResult Enqeue(IEnumerable<T> items)
         {
-            int result = 0;
-            foreach(var item in items)
-              result += Enqeue(item);
+            if (Volatile.Read(ref _acceptingWritesFlag) == 0)
+                return EnqueueResult.RejectedStopped();
 
-            return result;
+            int dropped = 0;
+            bool anyAccepted = false;
+            foreach (var item in items)
+            {
+                var result = Enqeue(item);
+                if (result.IsAccepted)
+                {
+                    anyAccepted = true;
+                    dropped += result.DroppedCount;
+                }
+                else if (result.Status == EnqueueStatus.RejectedQueueStopped)
+                {
+                    return result;
+                }
+            }
+
+            return anyAccepted ? EnqueueResult.Accept(dropped) : EnqueueResult.Accept(0);
         }
 
 
@@ -246,9 +296,138 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         }
 
 
-        protected abstract Task ProcessingLoop(CancellationToken token);
+        /// <summary>
+        /// Outer processing loop. Subclasses do NOT override this; they override
+        /// <see cref="WaitForReadyAsync(CancellationToken)"/> and
+        /// <see cref="TryDispatchOneAsync(CancellationToken)"/>. Centralizing the loop here
+        /// removes the per-queue drift of <c>catch (OperationCanceledException)</c> and
+        /// general-exception handling that has caused multiple shutdown-stability bugs.
+        /// </summary>
+        private async Task RunLoopAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await WaitForReadyAsync(token).ConfigureAwait(false);
+                    await DispatchPendingAsync(token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex);
+                    try
+                    {
+                        await DelayAfterFailureAsync(token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) { }
+                }
+            }
+        }
 
-        protected int QueueCount => Volatile.Read(ref _queueCount);
+        private async ValueTask DispatchPendingAsync(CancellationToken token)
+        {
+            while (!IsEmpty && !token.IsCancellationRequested)
+            {
+                var dispatched = await TryDispatchOneAsync(token).ConfigureAwait(false);
+                if (!dispatched || !ShouldContinueDispatching())
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Wait for at least one item to be available (or for the wait period to elapse). Default
+        /// is an event-driven wait via the channel reader; data queue overrides with a polling
+        /// delay to gather batches before dispatch.
+        /// </summary>
+        protected virtual async ValueTask WaitForReadyAsync(CancellationToken token)
+        {
+            await Reader.WaitToReadAsync(token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Dispatch one package/item. Returns true if anything was actually sent, false to short-
+        /// circuit the dispatch loop (e.g. empty package after validation, or single-item queue
+        /// fully drained).
+        /// </summary>
+        protected abstract ValueTask<bool> TryDispatchOneAsync(CancellationToken token);
+
+        /// <summary>
+        /// Whether the dispatch loop should pull another batch within the same outer loop
+        /// iteration after a successful dispatch. Default is true (drain until empty);
+        /// data queue overrides to only continue while the next batch could be full.
+        /// </summary>
+        protected virtual bool ShouldContinueDispatching() => true;
+
+        /// <summary>
+        /// Drain remaining queued work with a bounded token. Used by the graceful-stop path.
+        /// </summary>
+        public virtual async Task FlushAsync(CancellationToken token)
+        {
+            try
+            {
+                while (!IsEmpty && !token.IsCancellationRequested)
+                {
+                    if (!await TryDispatchOneAsync(token).ConfigureAwait(false))
+                        break;
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
+            }
+        }
+
+        /// <summary>
+        /// Send the contents of <paramref name="package"/> via <paramref name="send"/>, recording
+        /// diagnostics on success and re-enqueuing on retryable failure. On cancellation, items
+        /// are re-enqueued only if the current shutdown mode preserves canceled packages.
+        /// </summary>
+        protected async ValueTask DispatchPackageAsync(
+            DataPackage<T> package,
+            Func<IEnumerable<T>, CancellationToken, ValueTask<PackageSendingInfo>> send,
+            CancellationToken token)
+        {
+            if (package == null || !package.Items.Any())
+                return;
+
+            try
+            {
+                var sendingInfo = await send(package.Items, token).ConfigureAwait(false);
+                _queueManager.AddPackageSendingInfo(sendingInfo);
+                _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+            }
+            catch (OperationCanceledException)
+            {
+                if (PreserveCanceledPackages)
+                    ReEnqueueItems(package.Items);
+                throw;
+            }
+            catch
+            {
+                ReEnqueueItems(package.Items);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Re-enqueue items back into this queue. Used by send-retry paths so retryable failures
+        /// do not drop accepted work. Items rejected because the queue is already terminally
+        /// stopped are silently dropped — the caller is the queue's own processing loop, and there
+        /// is nothing useful to do with them at this layer.
+        /// </summary>
+        protected void ReEnqueueItems(IEnumerable<T> items)
+        {
+            foreach (var item in items)
+                Enqeue(item);
+        }
+
+        protected ShutdownMode CurrentShutdownMode => (ShutdownMode)Volatile.Read(ref _currentShutdownModeRaw);
+
+        protected bool PreserveCanceledPackages => CurrentShutdownMode.PreserveCanceledPackages();
+
+        internal int QueueCount => Volatile.Read(ref _queueCount);
 
         protected bool IsEmpty => Volatile.Read(ref _queueCount) == 0;
 
@@ -302,11 +481,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     ClearQueue();
 
                 _state = QueueState.Stopped;
+                Volatile.Write(ref _acceptingWritesFlag, 0);
                 Interlocked.Exchange(ref _cleanupContinuationRegistered, 0);
             }
         }
 
-        internal int ClearQueue()
+        public int ClearQueue()
         {
             var count = 0;
             while (TryDequeue(out _))
@@ -330,7 +510,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 try
                 {
-                    StopAsync().GetAwaiter().GetResult();
+                    Volatile.Write(ref _acceptingWritesFlag, 0);
+                    StopAsync(ShutdownMode.TerminalDispose).AsTask().GetAwaiter().GetResult();
                 }
                 catch (Exception ex)
                 {
