@@ -136,10 +136,10 @@ IUnixCollection AddProcessMonitoringSensors(BarSensorOptions options = null);
 ```
 
 # System
-Sensors in this category collect the information about the system. [Bash](https://en.wikipedia.org/wiki/Bash_(Unix_shell)) executing commands have been using
+Sensors in this category collect the information about the system. Linux CPU and RAM sensors read `/proc/stat` and `/proc/meminfo` directly; they do not require Bash, `top`, or `free`.
 
 ### AddTotalCpu
-The method creates sensor that collects data about the whole CPU usage into ([top](https://www.geeksforgeeks.org/top-command-in-linux-with-examples/) command has been using) a bar and has the next definition:
+The method creates sensor that collects data about the whole CPU usage from `/proc/stat` into a bar and has the next definition:
 ```C#
 // Parameters:
 //   options:
@@ -176,7 +176,7 @@ dataCollector.Start();
 ```
 
 ### AddFreeRamMemory
-The method creates sensor that collects data about the amount of currently available RAM memory into ([free](https://www.geeksforgeeks.org/free-command-linux-examples/) command has been using) a bar and has the next definition:
+The method creates sensor that collects data about the amount of currently available RAM memory from `/proc/meminfo` into a bar and has the next definition:
 ```C#
 // Parameters:
 //   options:
@@ -235,7 +235,7 @@ IUnixCollection AddProcessMonitoringSensors(BarSensorOptions options = null);
 ```
 
 # Disk
-Sensors in this category collect the information about the disk. 'df' command is used for sensors in the category.
+Sensors in this category collect the information about the disk. Linux disk sensors use managed `DriveInfo("/")` filesystem statistics instead of the `df` command.
 
 ### AddFreeDiskSpace
 The method creates sensor that gets current available free space of disk and has the next definition:

@@ -36,6 +36,8 @@ namespace HSMDataCollector.Core
 
         public bool AllowUntrustedServerCertificate { get; set; }
 
+        public bool AllowPlaintextTransport { get; set; }
+
         public TimeSpan ExceptionDeduplicatorWindow { get; set; } = TimeSpan.FromHours(1);
 
         public int MaxDeduplicatedMessages { get; set; } = 1000;
@@ -44,6 +46,9 @@ namespace HSMDataCollector.Core
 
         internal void Validate()
         {
+            if (string.IsNullOrWhiteSpace(ServerAddress))
+                throw new ArgumentNullException(nameof(ServerAddress));
+
             if (MaxQueueSize <= 0)
                 throw new ArgumentOutOfRangeException(nameof(MaxQueueSize), "Max queue size must be greater than zero.");
 

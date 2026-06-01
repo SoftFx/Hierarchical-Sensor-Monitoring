@@ -22,6 +22,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="HSMDataCollector.Tests" />
+    <InternalsVisibleTo Include="HSMDataCollector.IntegrationTests" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="collector.nlog.config">
@@ -36,11 +37,11 @@
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.1" />
     <PackageReference Include="System.Management" Version="8.0.0" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.1" />
+    <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup Condition=" '$(TargetFramework)' == 'net472' ">
     <PackageReference Include="System.Net.Http" Version="4.3.4" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
-    <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />

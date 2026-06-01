@@ -1,5 +1,4 @@
-using System;
-using System.Linq;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -12,7 +11,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal sealed class CommandQueueProcessor : QueueProcessorBase<CommandRequestBase>
     {
-        public override string QueueName => "Command";
+        public override string QueueName => "Command"; 
 
         public CommandQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
@@ -23,7 +22,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 try
                 {
-                    await Reader.WaitToReadAsync(token).ConfigureAwait(false);
+                    await WaitToReadAsync(token).ConfigureAwait(false);
 
                     while (!IsEmpty && !token.IsCancellationRequested)
                     {

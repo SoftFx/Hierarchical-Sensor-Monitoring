@@ -19,9 +19,10 @@ namespace HSMDataCollector.DefaultSensors
         private readonly TimeSpan _barPeriod;
         private readonly int _precision;
 
-        private readonly object _locker = new object();
+        // Composed scheduling lifecycle for the bar-collect loop (the send loop is owned by the
+        // MonitoringSensorBase base via its own handle). Replaces a hand-rolled ScheduledTask + lock.
+        private readonly ScheduledTaskHandle _collectHandle;
 
-        private ScheduledTask _collectTask;
         protected BarType _internalBar;
 
         public override BarType Current => (BarType)_internalBar.Copy().Complete();
@@ -41,42 +42,24 @@ namespace HSMDataCollector.DefaultSensors
             _barPeriod = options.BarPeriod;
             _precision = options.Precision;
 
+            _collectHandle = new ScheduledTaskHandle(_dataProcessor.Scheduler);
+
             BuildNewBar();
         }
 
 
         public override ValueTask<bool> InitAsync()
         {
-            lock (_locker)
-            {
-                if (_collectTask == null)
-                {
-                    _collectTask = CollectorScheduler.Schedule(CollectBar, _collectBarPeriod, _collectBarPeriod, HandleException);
-                }
-            }
+            _collectHandle.Start(CollectBar, _collectBarPeriod, _collectBarPeriod, HandleException);
 
             return base.InitAsync();
         }
 
         public override async ValueTask StopAsync()
         {
-            ScheduledTask taskToWait = null;
-
-            lock (_locker)
-            {
-                if (_collectTask != null)
-                {
-                    taskToWait = _collectTask;
-                    _collectTask = null;
-                }
-            }
-
             try
             {
-                if (taskToWait != null)
-                {
-                    await taskToWait.StopAsync(waitForCurrentRun: false).ConfigureAwait(false);
-                }
+                await _collectHandle.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
 
                 await base.StopAsync().ConfigureAwait(false);
             }

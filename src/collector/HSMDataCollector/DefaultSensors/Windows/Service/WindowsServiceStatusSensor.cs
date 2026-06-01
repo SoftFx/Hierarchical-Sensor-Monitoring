@@ -37,7 +37,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             {
                 if (_statusWatcher == null)
                 {
-                    _statusWatcher = CollectorScheduler.Schedule(CheckServiceStatus, _scanPeriod, _scanPeriod, HandleException);
+                    _statusWatcher = _dataProcessor.Scheduler.Schedule(CheckServiceStatus, _scanPeriod, _scanPeriod, HandleException);
                 }
             }
 
@@ -62,7 +62,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             {
                 if (taskToWait != null)
                 {
-                    await taskToWait.StopAsync(waitForCurrentRun: false).ConfigureAwait(false);
+                    await taskToWait.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
                 }
 
                 await base.StopAsync().ConfigureAwait(false);
@@ -74,7 +74,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             }
             finally
             {
-                DisposeService();
+                DisposeServiceWhenSafe(taskToWait);
             }
         }
 
@@ -153,6 +153,18 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         {
             _service?.Dispose();
             _service = null;
+        }
+
+        private void DisposeServiceWhenSafe(ScheduledTask task)
+        {
+            if (task == null || !task.IsRunning)
+            {
+                DisposeService();
+                return;
+            }
+
+            task.CurrentRun.ContinueWith(_ => DisposeService(),
+                                         TaskScheduler.Default);
         }
 
     }

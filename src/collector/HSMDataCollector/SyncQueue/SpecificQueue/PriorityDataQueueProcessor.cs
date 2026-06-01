@@ -54,7 +54,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 try
                 {
-                    await Reader.WaitToReadAsync(token).ConfigureAwait(false);
+                    await WaitToReadAsync(token).ConfigureAwait(false);
 
                     while (!IsEmpty && !token.IsCancellationRequested)
                     {
@@ -76,13 +76,13 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         }
                     }
                 }
-                catch (OperationCanceledException) {}
+                catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
                     _logger.Error(ex);
+                    await DelayAfterFailureAsync(token).ConfigureAwait(false);
                 }
             }
         }
-
     }
 }

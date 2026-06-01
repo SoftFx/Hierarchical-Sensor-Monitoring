@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -21,7 +21,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 try
                 {
-                    await Reader.WaitToReadAsync(token).ConfigureAwait(false);
+                    await WaitToReadAsync(token).ConfigureAwait(false);
 
                     while (!IsEmpty && !token.IsCancellationRequested)
                     {

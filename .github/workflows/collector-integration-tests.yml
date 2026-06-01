@@ -1,4 +1,4 @@
-name: DataCollector Integration Tests
+name: Linux Proc Sensor Integration Tests
 
 on:
   push:
@@ -8,6 +8,9 @@ on:
       - 'src/api/**'
       - 'src/collector/HSMDataCollector.IntegrationTests/**'
   pull_request:
+    # ready_for_review is required so tests run when a draft is marked ready
+    # (marking ready does not emit a synchronize event).
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'src/collector/**'
       - 'src/api/**'
@@ -17,7 +20,10 @@ on:
     - cron: '3 6 * * 1-5'
 
 jobs:
-  integration-tests:
+  linux-proc-sensor-tests:
+    # Skip on draft PRs only. Non-PR events (push/schedule/workflow_dispatch) have no
+    # pull_request payload, so they must still run — hence the event_name guard.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

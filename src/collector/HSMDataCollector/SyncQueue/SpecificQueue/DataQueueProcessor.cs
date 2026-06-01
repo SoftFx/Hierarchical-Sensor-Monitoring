@@ -89,6 +89,5 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 }
             }
         }
-
     }
 }

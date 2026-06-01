@@ -10,6 +10,7 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.Threading;
 using HSMSensorDataObjects;
 
 
@@ -21,10 +22,11 @@ namespace HSMDataCollector.Core
         Running,
         Stopping,
         Stopped,
+        Disposed,
     }
 
 
-    public sealed class DataCollector : IDataCollector
+    public sealed class DataCollector : IDataCollector, ICollectorRegistrationState, ILifecycleObservableCollector
     {
         private readonly LoggerManager _logger = new LoggerManager();
 
@@ -32,9 +34,27 @@ namespace HSMDataCollector.Core
         private readonly CollectorOptions _options;
         private readonly IDataSender _dataSender;
         private readonly DataProcessor _dataProcessor;
-        private readonly object _lifecycleLock = new object();
+        private readonly CollectorLifecycle _lifecycle = new CollectorLifecycle();
+        private readonly ICollectorScheduler _scheduler;
 
-        private bool _disposed;
+        // Serializes lifecycle state transitions with their lifecycle event raise so that
+        // concurrent Start/Stop/Dispose cannot reorder events (e.g. ToStopping before ToStarting).
+        // Always acquired before any _lifecycle method that mutates state.
+        private readonly object _opLock = new object();
+
+        // Tracks the in-flight SensorStorage init/start phase so Stop/Dispose do not dispose
+        // queues or sensors while Start() is still touching them.
+        private Task _currentStartInitTask;
+
+        // Tracks the in-flight processor StopAsync task so that a racing Dispose() can wait for it
+        // instead of issuing a duplicate StopAsync (which would no-op against queues already in Stopping
+        // and then fire ToStopped while the original Stop is still draining).
+        private Task _currentProcessorStopTask;
+
+        // Observer-pattern lifecycle listeners (portable alternative to the C# events). Guarded by
+        // its own lock; notified from LogAndRaise alongside the events.
+        private readonly object _listenersLock = new object();
+        private readonly List<ILifecycleListener> _lifecycleListeners = new List<ILifecycleListener>();
 
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
@@ -43,7 +63,9 @@ namespace HSMDataCollector.Core
         public IUnixCollection Unix => _sensorsStorage.Unix;
 
 
-        public CollectorStatus Status { get; private set; } = CollectorStatus.Stopped;
+        public CollectorStatus Status => _lifecycle.Status;
+
+        public bool IsAcceptingRegistrations => _lifecycle.CanRegisterSensors;
 
         public string ComputerName => _options?.ComputerName;
 
@@ -76,7 +98,9 @@ namespace HSMDataCollector.Core
 
             _dataSender = options.DataSender;
 
-            _dataProcessor = new DataProcessor(options, _logger);
+            _scheduler = new CollectorScheduler();
+
+            _dataProcessor = new DataProcessor(options, _lifecycle, _opLock, _scheduler, _logger);
 
             _sensorsStorage = _dataProcessor.SensorStorage;
 
@@ -116,6 +140,17 @@ namespace HSMDataCollector.Core
             return this;
         }
 
+        public IDataCollector AddLifecycleListener(ILifecycleListener listener)
+        {
+            if (listener == null)
+                return this;
+
+            lock (_listenersLock)
+                _lifecycleListeners.Add(listener);
+
+            return this;
+        }
+
         [Obsolete("Use method AddNLog() to add logging and method Start() after default sensors initialization")]
         public void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null)
         {
@@ -136,157 +171,302 @@ namespace HSMDataCollector.Core
 
         public async Task Start(Task customStartingTask)
         {
-            try
+            bool processorStarted;
+
+            // Take _opLock through the physical processor start. Otherwise a concurrent Stop could
+            // run StopAsync against queues that have not been started yet, then this method would
+            // bring them up afterwards — leaving live background tasks while public Status == Stopped.
+            lock (_opLock)
             {
-                lock (_lifecycleLock)
-                {
-                    if (_disposed)
-                        return;
+                if (!_lifecycle.TryStart())
+                    return;
 
-                    if (!Status.IsStopped())
-                        return;
-
-                    _dataProcessor.Start();
-                    ChangeStatus(CollectorStatus.Starting);
-                }
-
-                await customStartingTask.ConfigureAwait(false);
+                LogAndRaise(CollectorStatus.Starting);
 
                 if (!Status.IsStartingOrRunning())
                     return;
 
-                await _dataProcessor.InitAsync().ConfigureAwait(false);
-
-                lock (_lifecycleLock)
+                try
                 {
-                    if (Status == CollectorStatus.Starting)
-                        ChangeStatus(CollectorStatus.Running);
+                    processorStarted = _dataProcessor.Start();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"DataCollector starting error during processor start: {ex}");
+                    processorStarted = false;
                 }
 
+                if (!processorStarted)
+                {
+                    if (_lifecycle.AbortStart())
+                        LogAndRaise(CollectorStatus.Stopped);
+                    return;
+                }
+            }
+
+            // Queues are now running. Any exit path from here must roll them back if the lifecycle
+            // was cancelled by a concurrent Stop/Dispose, or background processors will outlive Status.
+            try
+            {
+                await customStartingTask.ConfigureAwait(false);
+
+                Task initTask;
+                lock (_opLock)
+                {
+                    if (!Status.IsStartingOrRunning())
+                        return;
+
+                    initTask = _dataProcessor.InitAsync();
+                    _currentStartInitTask = initTask;
+                }
+
+                try
+                {
+                    await initTask.ConfigureAwait(false);
+                }
+                finally
+                {
+                    lock (_opLock)
+                    {
+                        if (ReferenceEquals(_currentStartInitTask, initTask))
+                            _currentStartInitTask = null;
+                    }
+                }
+
+                lock (_opLock)
+                {
+                    if (_lifecycle.CompleteStart())
+                        LogAndRaise(CollectorStatus.Running);
+                    return;
+                }
             }
             catch (Exception ex)
             {
-                _logger.Error($"DataCollector starting error: {ex}" );
+                _logger.Error($"DataCollector starting error: {ex}");
 
-                await _dataProcessor.StopAsync();
+                await SafeStopProcessor().ConfigureAwait(false);
 
-                lock (_lifecycleLock)
-                    ChangeStatus(CollectorStatus.Stopped);
+                lock (_opLock)
+                {
+                    if (_lifecycle.AbortStart())
+                        LogAndRaise(CollectorStatus.Stopped);
+                }
+            }
+        }
+
+        private async Task WaitForStartInitThenStopProcessor(Task startInitTask)
+        {
+            if (startInitTask != null)
+            {
+                try
+                {
+                    await startInitTask.ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"DataCollector waiting for in-flight start initialization failed: {ex}");
+                }
+            }
+
+            await _dataProcessor.StopAsync().ConfigureAwait(false);
+        }
+
+        private async Task SafeStopProcessor()
+        {
+            try
+            {
+                await _dataProcessor.StopAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"DataCollector start-rollback stop error: {ex}");
             }
         }
 
 
         public Task Stop() => Stop(Task.CompletedTask);
 
-        public async Task Stop(Task customStartingTask)
+        public async Task Stop(Task customStoppingTask)
         {
+            Task startInitTask;
+            Task processorStopTask;
+            Task stopTask;
+
+            lock (_opLock)
+            {
+                if (!_lifecycle.TryStop())
+                    return;
+
+                LogAndRaise(CollectorStatus.Stopping);
+
+                startInitTask = _currentStartInitTask;
+                processorStopTask = WaitForStartInitThenStopProcessor(startInitTask);
+                stopTask = Task.WhenAll(processorStopTask, customStoppingTask);
+                _currentProcessorStopTask = processorStopTask;
+            }
+
             try
             {
-                lock (_lifecycleLock)
-                {
-                    if (!Status.IsStartingOrRunning())
-                        return;
-
-                    ChangeStatus(CollectorStatus.Stopping);
-                }
-
-                await Task.WhenAll(_dataProcessor.StopAsync(), customStartingTask).ConfigureAwait(false);
-
-                lock (_lifecycleLock)
-                    ChangeStatus(CollectorStatus.Stopped);
+                await stopTask.ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger.Error(ex);
-
-                lock (_lifecycleLock)
-                    ChangeStatus(CollectorStatus.Stopped);
+                _logger.Error($"DataCollector Stop error: {ex}");
             }
 
+            lock (_opLock)
+            {
+                // Clear only if still pointing to our task — Dispose may have overwritten with its own.
+                if (ReferenceEquals(_currentProcessorStopTask, processorStopTask))
+                    _currentProcessorStopTask = null;
+
+                if (_lifecycle.CompleteStop())
+                    LogAndRaise(CollectorStatus.Stopped);
+            }
         }
 
         private void InitializeProcessor()
         {
-            try
+            bool processorStarted;
+
+            lock (_opLock)
             {
-                lock (_lifecycleLock)
+                if (!_lifecycle.TryStart())
+                    return;
+
+                LogAndRaise(CollectorStatus.Starting);
+
+                _logger.Info("Initialize timer...");
+
+                try
                 {
-                    if (_disposed)
-                        return;
-
-                    if (!Status.IsStopped())
-                        return;
-
-                    _logger.Info("Initialize timer...");
-
-                    _dataProcessor.Start();
-                    ChangeStatus(CollectorStatus.Starting);
+                    processorStarted = _dataProcessor.Start();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"DataCollector initialization error during processor start: {ex}");
+                    processorStarted = false;
                 }
 
+                if (!processorStarted)
+                {
+                    if (_lifecycle.AbortStart())
+                        LogAndRaise(CollectorStatus.Stopped);
+                    return;
+                }
+            }
+
+            try
+            {
                 _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
 
-                lock (_lifecycleLock)
-                    ChangeStatus(CollectorStatus.Running);
+                bool completed;
+                lock (_opLock)
+                {
+                    completed = _lifecycle.CompleteStart();
+                    if (completed)
+                        LogAndRaise(CollectorStatus.Running);
+                }
+
+                if (!completed)
+                    SafeStopProcessor().ConfigureAwait(false).GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
                 _logger.Error($"DataCollector initialization error: {ex}");
 
-                _dataProcessor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+                SafeStopProcessor().ConfigureAwait(false).GetAwaiter().GetResult();
 
-                lock (_lifecycleLock)
-                    ChangeStatus(CollectorStatus.Stopped);
+                lock (_opLock)
+                {
+                    if (_lifecycle.AbortStart())
+                        LogAndRaise(CollectorStatus.Stopped);
+                }
             }
         }
 
 
         public void Dispose()
         {
-            var shouldStopProcessor = false;
+            CollectorStatus previousStatus;
+            Task inFlightStop;
+            Task inFlightStartInit;
+            bool ownsStop;
+
+            lock (_opLock)
+            {
+                previousStatus = _lifecycle.TryDispose();
+
+                if (previousStatus == CollectorStatus.Disposed)
+                    return;
+
+                // If another thread is already stopping, do not issue a duplicate StopAsync —
+                // wait for its task. Otherwise take the Starting/Running -> Stopping transition ourselves.
+                inFlightStop = _currentProcessorStopTask;
+                inFlightStartInit = _currentStartInitTask;
+                ownsStop = inFlightStop == null
+                    && previousStatus.IsStartingOrRunning()
+                    && _lifecycle.TryStop();
+
+                if (ownsStop)
+                    LogAndRaise(CollectorStatus.Stopping);
+            }
 
             try
             {
-                lock (_lifecycleLock)
+                if (inFlightStop != null)
                 {
-                    if (_disposed)
-                        return;
-
-                    _disposed = true;
-
-                    if (!Status.IsStopped())
+                    // Concurrent Stop() is responsible for firing ToStopped — but its continuation runs on
+                    // the threadpool after the inner stop task completes, with no ordering guarantee relative
+                    // to GetAwaiter().GetResult() returning here. Without coordination, Stop's continuation
+                    // could fire ToStopped after Dispose has already torn down components.
+                    try
                     {
-                        shouldStopProcessor = true;
-                        ChangeStatus(CollectorStatus.Stopping);
+                        inFlightStop.ConfigureAwait(false).GetAwaiter().GetResult();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"DataCollector waiting for in-flight stop failed: {ex}");
+                    }
+
+                    // Race the continuation: whichever path acquires _opLock first calls CompleteStop;
+                    // the other finds the transition already done and no-ops. Either way ToStopped fires
+                    // exactly once, and always before component disposal below.
+                    lock (_opLock)
+                    {
+                        if (_lifecycle.CompleteStop())
+                            LogAndRaise(CollectorStatus.Stopped);
                     }
                 }
+                else if (ownsStop)
+                {
+                    DisposeComponent(() => WaitForStartInitThenStopProcessor(inFlightStartInit).ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
 
-                if (shouldStopProcessor)
-                    DisposeComponent(() => _dataProcessor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
+                    lock (_opLock)
+                    {
+                        if (_lifecycle.CompleteStop())
+                            LogAndRaise(CollectorStatus.Stopped);
+                    }
+                }
 
                 DisposeComponent(_dataProcessor.Dispose, nameof(_dataProcessor));
 
                 DisposeComponent(_dataSender.Dispose, nameof(_dataSender));
+
+                DisposeComponent(_scheduler.Dispose, nameof(_scheduler));
             }
             finally
             {
                 AppDomain.CurrentDomain.UnhandledException -= UnhandledExceptionHandler;
-
-                lock (_lifecycleLock)
-                {
-                    if (!Status.IsStopped())
-                        ChangeStatus(CollectorStatus.Stopped);
-                }
             }
         }
 
 
-        private void ChangeStatus(CollectorStatus newStatus)
+        private void LogAndRaise(CollectorStatus status)
         {
-            Status = newStatus;
+            _logger.Info($"DataCollector (v. {DataCollectorExtensions.Version}) -> {status}");
 
-            _logger.Info($"DataCollector (v. {DataCollectorExtensions.Version}) -> {newStatus}");
-
-            switch (newStatus)
+            switch (status)
             {
                 case CollectorStatus.Starting:
                     RaiseLifecycleEvent(ToStarting, nameof(ToStarting));
@@ -300,6 +480,46 @@ namespace HSMDataCollector.Core
                 case CollectorStatus.Stopped:
                     RaiseLifecycleEvent(ToStopped, nameof(ToStopped));
                     break;
+            }
+
+            NotifyLifecycleListeners(status);
+        }
+
+        private void NotifyLifecycleListeners(CollectorStatus status)
+        {
+            ILifecycleListener[] snapshot;
+            lock (_listenersLock)
+            {
+                if (_lifecycleListeners.Count == 0)
+                    return;
+
+                snapshot = _lifecycleListeners.ToArray();
+            }
+
+            foreach (var listener in snapshot)
+            {
+                try
+                {
+                    switch (status)
+                    {
+                        case CollectorStatus.Starting:
+                            listener.OnStarting();
+                            break;
+                        case CollectorStatus.Running:
+                            listener.OnRunning();
+                            break;
+                        case CollectorStatus.Stopping:
+                            listener.OnStopping();
+                            break;
+                        case CollectorStatus.Stopped:
+                            listener.OnStopped();
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"DataCollector lifecycle listener error on {status}: {ex}");
+                }
             }
         }
 
