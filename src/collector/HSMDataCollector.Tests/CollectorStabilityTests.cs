@@ -288,6 +288,131 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        [Fact]
+        public async Task Transient_command_send_failure_retries_registration_command()
+        {
+            var sender = new StabilityDataSender { FailFirstNCommandSends = 1 };
+            using (var collector = CreateCollector(sender, "command-send-retry"))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                collector.CreateDoubleSensor("stability/command-retry");
+
+                Assert.True(
+                    await sender.WaitForCommandRequestsAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "A transient command send failure should not permanently drop the sensor registration command.");
+
+                await collector.Stop().ConfigureAwait(false);
+            }
+
+            Assert.True(sender.CommandSendCalls >= 2, "The command queue should retry after the first failed send.");
+        }
+
+        [Fact]
+        public async Task Transient_file_send_failure_retries_file_payload()
+        {
+            var sender = new StabilityDataSender { FailFirstNFileSends = 1 };
+            var filePath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".txt");
+            System.IO.File.WriteAllText(filePath, "payload");
+
+            try
+            {
+                using (var collector = CreateCollector(sender, "file-send-retry"))
+                {
+                    await collector.Start().ConfigureAwait(false);
+
+                    Assert.True(await collector.SendFileAsync("stability/file-retry", filePath).ConfigureAwait(false));
+                    Assert.True(
+                        await sender.WaitForFileRequestsAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                        "A transient file send failure should not permanently drop an accepted file payload.");
+
+                    await collector.Stop().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                if (System.IO.File.Exists(filePath))
+                    System.IO.File.Delete(filePath);
+            }
+
+            Assert.True(sender.FileSendCalls >= 2, "The file queue should retry after the first failed send.");
+        }
+
+        [Fact]
+        public async Task Failed_package_sending_info_retries_dequeued_values()
+        {
+            var sender = new StabilityDataSender { FailFirstNDataResults = 1 };
+            using (var collector = CreateCollector(sender, "failed-result-retry"))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                var sensor = collector.CreateDoubleSensor(
+                    "stability/failed-result-retry",
+                    new InstantSensorOptions());
+
+                for (var i = 0; i < 5; i++)
+                    sensor.AddValue(i);
+
+                Assert.True(
+                    await sender.WaitForDataValuesAsync(5, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "A failed PackageSendingInfo result should not permanently drop dequeued values.");
+
+                await collector.Stop().ConfigureAwait(false);
+            }
+
+            Assert.True(sender.DataSendCalls >= 2, "The data queue should retry after an explicit failed send result.");
+        }
+
+        [Fact]
+        public async Task Failed_command_package_sending_info_retries_registration_command()
+        {
+            var sender = new StabilityDataSender { FailFirstNCommandResults = 1 };
+            using (var collector = CreateCollector(sender, "failed-command-result-retry"))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                collector.CreateDoubleSensor("stability/failed-command-result-retry");
+
+                Assert.True(
+                    await sender.WaitForCommandRequestsAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "A failed PackageSendingInfo result should not permanently drop registration commands.");
+
+                await collector.Stop().ConfigureAwait(false);
+            }
+
+            Assert.True(sender.CommandSendCalls >= 2, "The command queue should retry after an explicit failed send result.");
+        }
+
+        [Fact]
+        public async Task Failed_file_package_sending_info_retries_file_payload()
+        {
+            var sender = new StabilityDataSender { FailFirstNFileResults = 1 };
+            var filePath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".txt");
+            System.IO.File.WriteAllText(filePath, "payload");
+
+            try
+            {
+                using (var collector = CreateCollector(sender, "failed-file-result-retry"))
+                {
+                    await collector.Start().ConfigureAwait(false);
+
+                    Assert.True(await collector.SendFileAsync("stability/failed-file-result-retry", filePath).ConfigureAwait(false));
+                    Assert.True(
+                        await sender.WaitForFileRequestsAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                        "A failed PackageSendingInfo result should not permanently drop an accepted file payload.");
+
+                    await collector.Stop().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                if (System.IO.File.Exists(filePath))
+                    System.IO.File.Delete(filePath);
+            }
+
+            Assert.True(sender.FileSendCalls >= 2, "The file queue should retry after an explicit failed send result.");
+        }
+
 
         private static DataCollector CreateCollector(StabilityDataSender sender, string module)
         {
@@ -337,16 +462,32 @@ namespace HSMDataCollector.Tests
             private int _totalDataValuesSent;
             private int _commandSendCalls;
             private bool _receivedEmptyDataPackage;
+            private int _failedCommandSends;
+            private int _totalCommandRequestsSent;
+            private int _fileSendCalls;
+            private int _failedFileSends;
+            private int _totalFileRequestsSent;
+            private int _failedDataResults;
+            private int _failedCommandResults;
+            private int _failedFileResults;
 
             public bool ThrowOnCommand { get; set; }
             public bool ThrowOnData { get; set; }
             public int FailFirstNSends { get; set; }
+            public int FailFirstNDataResults { get; set; }
+            public int FailFirstNCommandSends { get; set; }
+            public int FailFirstNCommandResults { get; set; }
+            public int FailFirstNFileSends { get; set; }
+            public int FailFirstNFileResults { get; set; }
             public TimeSpan DataSendDelay { get; set; }
 
             public int DataSendCalls => Volatile.Read(ref _dataSendCalls);
             public int FailedSends => Volatile.Read(ref _failedSends);
             public int TotalDataValuesSent => Volatile.Read(ref _totalDataValuesSent);
             public int CommandSendCalls => Volatile.Read(ref _commandSendCalls);
+            public int TotalCommandRequestsSent => Volatile.Read(ref _totalCommandRequestsSent);
+            public int FileSendCalls => Volatile.Read(ref _fileSendCalls);
+            public int TotalFileRequestsSent => Volatile.Read(ref _totalFileRequestsSent);
             public bool ReceivedEmptyDataPackage => Volatile.Read(ref _receivedEmptyDataPackage);
 
             public void Dispose() { }
@@ -389,6 +530,13 @@ namespace HSMDataCollector.Tests
                         throw new InvalidOperationException($"Simulated send failure #{failed}");
                 }
 
+                if (FailFirstNDataResults > 0)
+                {
+                    var failed = Interlocked.Increment(ref _failedDataResults);
+                    if (failed <= FailFirstNDataResults)
+                        return new PackageSendingInfo(contentSize: itemList.Count, response: null, exception: $"Simulated failed send result #{failed}");
+                }
+
                 Interlocked.Add(ref _totalDataValuesSent, itemList.Count);
 
                 return default(PackageSendingInfo);
@@ -402,13 +550,95 @@ namespace HSMDataCollector.Tests
                 if (ThrowOnCommand)
                     throw new InvalidOperationException("Sender configured to throw on commands.");
 
+                if (FailFirstNCommandSends > 0)
+                {
+                    var failed = Interlocked.Increment(ref _failedCommandSends);
+                    if (failed <= FailFirstNCommandSends)
+                        throw new InvalidOperationException($"Simulated command send failure #{failed}");
+                }
+
+                var commandCount = commands?.Count() ?? 0;
+                if (FailFirstNCommandResults > 0)
+                {
+                    var failed = Interlocked.Increment(ref _failedCommandResults);
+                    if (failed <= FailFirstNCommandResults)
+                        return new ValueTask<PackageSendingInfo>(
+                            new PackageSendingInfo(contentSize: commandCount, response: null, exception: $"Simulated failed command send result #{failed}"));
+                }
+
+                Interlocked.Add(ref _totalCommandRequestsSent, commandCount);
+
                 return new ValueTask<PackageSendingInfo>(default(PackageSendingInfo));
             }
 
             public ValueTask<PackageSendingInfo> SendFileAsync(
                 FileSensorValue file, CancellationToken token)
             {
+                Interlocked.Increment(ref _fileSendCalls);
+
+                if (FailFirstNFileSends > 0)
+                {
+                    var failed = Interlocked.Increment(ref _failedFileSends);
+                    if (failed <= FailFirstNFileSends)
+                        throw new InvalidOperationException($"Simulated file send failure #{failed}");
+                }
+
+                if (FailFirstNFileResults > 0)
+                {
+                    var failed = Interlocked.Increment(ref _failedFileResults);
+                    if (failed <= FailFirstNFileResults)
+                        return new ValueTask<PackageSendingInfo>(
+                            new PackageSendingInfo(contentSize: 1, response: null, exception: $"Simulated failed file send result #{failed}"));
+                }
+
+                Interlocked.Increment(ref _totalFileRequestsSent);
+
                 return new ValueTask<PackageSendingInfo>(default(PackageSendingInfo));
+            }
+
+            public async Task<bool> WaitForCommandRequestsAsync(int count, TimeSpan timeout)
+            {
+                var deadline = DateTime.UtcNow + timeout;
+
+                while (DateTime.UtcNow < deadline)
+                {
+                    if (TotalCommandRequestsSent >= count)
+                        return true;
+
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+
+                return false;
+            }
+
+            public async Task<bool> WaitForFileRequestsAsync(int count, TimeSpan timeout)
+            {
+                var deadline = DateTime.UtcNow + timeout;
+
+                while (DateTime.UtcNow < deadline)
+                {
+                    if (TotalFileRequestsSent >= count)
+                        return true;
+
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+
+                return false;
+            }
+
+            public async Task<bool> WaitForDataValuesAsync(int count, TimeSpan timeout)
+            {
+                var deadline = DateTime.UtcNow + timeout;
+
+                while (DateTime.UtcNow < deadline)
+                {
+                    if (TotalDataValuesSent >= count)
+                        return true;
+
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+
+                return false;
             }
         }
 

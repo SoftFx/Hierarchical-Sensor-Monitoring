@@ -263,6 +263,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return Task.Delay(delay, token);
         }
 
+        protected static void EnsureSendSucceeded(PackageSendingInfo info, CancellationToken token)
+        {
+            if (info.IsSuccess || string.IsNullOrEmpty(info.Error))
+                return;
+
+            if (token.IsCancellationRequested)
+                throw new OperationCanceledException(token);
+
+            throw new InvalidOperationException(info.Error);
+        }
+
         protected bool TryDequeue(out QueueItem<T> item)
         {
             if (!Reader.TryRead(out item))

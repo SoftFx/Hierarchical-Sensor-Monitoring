@@ -30,6 +30,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     try
                     {
                         var sendingInfo = await _sender.SendPriorityDataAsync(package.Items, token).ConfigureAwait(false);
+                        EnsureSendSucceeded(sendingInfo, token);
                         _queueManager.AddPackageSendingInfo(sendingInfo);
                         _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                     }
@@ -69,6 +70,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         try
                         {
                             var sendingInfo = await _sender.SendPriorityDataAsync(package.Items, token).ConfigureAwait(false);
+                            EnsureSendSucceeded(sendingInfo, token);
                             _queueManager.AddPackageSendingInfo(sendingInfo);
                             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                         }

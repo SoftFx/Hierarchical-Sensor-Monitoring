@@ -43,7 +43,7 @@ the .NET collector and the native C++ port.
 
 ## Regression Counter
 
-Current: 66 important bug-class tests that expose P1/P2 bugs in either collector.
+Current: 71 important bug-class tests that expose P1/P2 bugs in either collector.
 
 Shared conformance count:
 
@@ -55,6 +55,8 @@ Shared conformance count:
 - After the .NET-only collector hardening cycles: shared conformance remains
   97 `.hsmtest` cases, plus 9 focused managed regressions for APIs that do not
   yet have native/shared file scenarios.
+- After the stability retry batch: shared conformance remains 97 `.hsmtest`
+  cases, plus 14 focused managed regressions.
 
 Completed:
 
@@ -177,3 +179,18 @@ Promoted to shared conformance:
 66. `Double_bar_sensor_rejects_inconsistent_partial_values_without_sending_bar`
     - Found public bar partial updates could send impossible min/max/range
       payloads.
+67. `Transient_command_send_failure_retries_registration_command`
+    - Found registration commands could be lost after one transient
+      `SendCommandAsync` exception.
+68. `Transient_file_send_failure_retries_file_payload`
+    - Found accepted file payloads could be lost after one transient
+      `SendFileAsync` exception.
+69. `Failed_package_sending_info_retries_dequeued_values`
+    - Found data values could be dropped when the HTTPS layer returned an
+      explicit failed `PackageSendingInfo` instead of throwing.
+70. `Failed_command_package_sending_info_retries_registration_command`
+    - Found registration commands could be dropped when command sending returned
+      an explicit failed `PackageSendingInfo`.
+71. `Failed_file_package_sending_info_retries_file_payload`
+    - Found accepted file payloads could be dropped when file sending returned
+      an explicit failed `PackageSendingInfo`.

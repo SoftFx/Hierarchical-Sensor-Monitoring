@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -27,15 +28,32 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     while (!IsEmpty && !token.IsCancellationRequested)
                     {
                         package = GetPackage();
-                        var sendingInfo =  await _sender.SendCommandAsync(package.Items, token).ConfigureAwait(false);
-                        _queueManager.AddPackageSendingInfo(sendingInfo);
-                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+
+                        if (!package.Items.Any())
+                            continue;
+
+                        try
+                        {
+                            var sendingInfo =  await _sender.SendCommandAsync(package.Items, token).ConfigureAwait(false);
+                            EnsureSendSucceeded(sendingInfo, token);
+                            _queueManager.AddPackageSendingInfo(sendingInfo);
+                            _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                        }
+                        catch (OperationCanceledException) { throw; }
+                        catch
+                        {
+                            foreach (var item in package.Items)
+                                Enqeue(item);
+
+                            throw;
+                        }
                     }
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
                     _logger.Error(ex);
+                    await DelayAfterFailureAsync(token).ConfigureAwait(false);
                 }
             }
         }
