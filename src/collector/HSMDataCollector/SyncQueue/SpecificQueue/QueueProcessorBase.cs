@@ -37,6 +37,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         private readonly object _lifecycleLock = new object();
         protected int _queueCount;
         private int _cleanupContinuationRegistered;
+        private int _preserveCanceledPackages = 1;
 
         public abstract string QueueName { get; }
 
@@ -101,7 +102,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return true;
         }
 
-        internal async ValueTask<bool> StopAsync(bool clearQueue = true)
+        internal async ValueTask<bool> StopAsync(bool clearQueue = true, bool preserveCanceledPackages = true)
         {
             try
             {
@@ -126,6 +127,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         return false;
                     }
 
+                    Volatile.Write(ref _preserveCanceledPackages, preserveCanceledPackages ? 1 : 0);
                     _state = QueueState.Stopping;
                     taskToWait = _task;
                     tokenSourceToDispose = _cancellationTokenSource;
@@ -251,6 +253,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected int QueueCount => Volatile.Read(ref _queueCount);
 
         protected bool IsEmpty => Volatile.Read(ref _queueCount) == 0;
+
+        protected bool PreserveCanceledPackages => Volatile.Read(ref _preserveCanceledPackages) == 1;
 
         protected ValueTask<bool> WaitToReadAsync(CancellationToken token) => Reader.WaitToReadAsync(token);
 

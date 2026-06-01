@@ -43,7 +43,7 @@ the .NET collector and the native C++ port.
 
 ## Regression Counter
 
-Current: 71 important bug-class tests that expose P1/P2 bugs in either collector.
+Current: 78 important bug-class tests that expose P1/P2 bugs in either collector.
 
 Shared conformance count:
 
@@ -56,7 +56,7 @@ Shared conformance count:
   97 `.hsmtest` cases, plus 9 focused managed regressions for APIs that do not
   yet have native/shared file scenarios.
 - After the stability retry batch: shared conformance remains 97 `.hsmtest`
-  cases, plus 14 focused managed regressions.
+  cases, plus 21 focused managed regressions.
 
 Completed:
 
@@ -194,3 +194,24 @@ Promoted to shared conformance:
 71. `Failed_file_package_sending_info_retries_file_payload`
     - Found accepted file payloads could be dropped when file sending returned
       an explicit failed `PackageSendingInfo`.
+72. `Values_function_sensor_cache_stays_bounded_under_concurrent_producers`
+    - Found values function sensors could observe more cached items than
+      `MaxCacheSize` under concurrent producers.
+73. `Accepted_file_payloads_are_flushed_when_stop_races_file_queue`
+    - Found accepted file payloads could be discarded when stop raced the file
+      queue before a bounded flush.
+74. `Restart_timer_during_blocked_function_callback_does_not_overlap_callbacks`
+    - Found `RestartTimer` could start overlapping periodic callbacks when the
+      previous callback stayed blocked past the bounded stop wait.
+75. `Accepted_registration_commands_are_flushed_when_stop_cancels_command_queue`
+    - Found accepted registration commands could be discarded when stop canceled
+      an in-flight command send before a bounded flush.
+76. `Accepted_data_values_are_flushed_when_stop_cancels_in_flight_data_send`
+    - Found accepted data values could be discarded when stop canceled an
+      in-flight data send after the package had already been dequeued.
+77. `Values_added_by_custom_stopping_task_are_flushed_or_rejected`
+    - Found values accepted by `Stop(customStoppingTask)` could be stranded
+      after queues stopped before the custom task finished producing data.
+78. `Long_function_callback_released_after_data_flush_is_rejected_or_flushed_during_stop`
+    - Found long-running function callbacks could enqueue values into an
+      already-stopped data queue after bounded sensor stop and data flush.

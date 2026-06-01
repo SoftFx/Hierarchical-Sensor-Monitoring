@@ -34,7 +34,16 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         _queueManager.AddPackageSendingInfo(sendingInfo);
                         _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                     }
-                    catch (OperationCanceledException) { throw; }
+                    catch (OperationCanceledException)
+                    {
+                        if (PreserveCanceledPackages)
+                        {
+                            foreach (var item in package.Items)
+                                Enqeue(item);
+                        }
+
+                        throw;
+                    }
                     catch
                     {
                         foreach (var item in package.Items)
@@ -74,7 +83,16 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                             _queueManager.AddPackageSendingInfo(sendingInfo);
                             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                         }
-                        catch (OperationCanceledException) { throw; }
+                        catch (OperationCanceledException)
+                        {
+                            if (PreserveCanceledPackages)
+                            {
+                                foreach (var item in package.Items)
+                                    Enqeue(item);
+                            }
+
+                            throw;
+                        }
                         catch
                         {
                             foreach (var item in package.Items)

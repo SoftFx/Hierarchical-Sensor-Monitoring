@@ -254,7 +254,7 @@ namespace HSMDataCollector.Core
             }
         }
 
-        private async Task WaitForStartInitThenStopProcessor(Task startInitTask)
+        private async Task WaitForStartInitThenStopProcessor(Task startInitTask, bool flushAcceptedWork = true)
         {
             if (startInitTask != null)
             {
@@ -268,7 +268,7 @@ namespace HSMDataCollector.Core
                 }
             }
 
-            await _dataProcessor.StopAsync().ConfigureAwait(false);
+            await _dataProcessor.StopAsync(flushAcceptedWork).ConfigureAwait(false);
         }
 
         private async Task SafeStopProcessor()
@@ -290,7 +290,7 @@ namespace HSMDataCollector.Core
         {
             Task startInitTask;
             Task processorStopTask;
-            Task stopTask;
+            var failures = new List<Exception>();
 
             lock (_opLock)
             {
@@ -300,18 +300,38 @@ namespace HSMDataCollector.Core
                 LogAndRaise(CollectorStatus.Stopping);
 
                 startInitTask = _currentStartInitTask;
-                processorStopTask = WaitForStartInitThenStopProcessor(startInitTask);
-                stopTask = Task.WhenAll(processorStopTask, customStoppingTask);
-                _currentProcessorStopTask = processorStopTask;
             }
 
             try
             {
-                await stopTask.ConfigureAwait(false);
+                if (customStoppingTask != null)
+                    await customStoppingTask.ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger.Error($"DataCollector Stop error: {ex}");
+                failures.Add(ex);
+            }
+
+            lock (_opLock)
+            {
+                if (Status == CollectorStatus.Disposed)
+                    return;
+
+                processorStopTask = _currentProcessorStopTask;
+                if (processorStopTask == null)
+                {
+                    processorStopTask = WaitForStartInitThenStopProcessor(startInitTask);
+                    _currentProcessorStopTask = processorStopTask;
+                }
+            }
+
+            try
+            {
+                await processorStopTask.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                failures.Add(ex);
             }
 
             lock (_opLock)
@@ -323,6 +343,11 @@ namespace HSMDataCollector.Core
                 if (_lifecycle.CompleteStop())
                     LogAndRaise(CollectorStatus.Stopped);
             }
+
+            if (failures.Count == 1)
+                _logger.Error($"DataCollector Stop error: {failures[0]}");
+            else if (failures.Count > 1)
+                _logger.Error($"DataCollector Stop error: {new AggregateException(failures)}");
         }
 
         private void InitializeProcessor()
@@ -391,6 +416,7 @@ namespace HSMDataCollector.Core
             CollectorStatus previousStatus;
             Task inFlightStop;
             Task inFlightStartInit;
+            Task ownedProcessorStop = null;
             bool ownsStop;
 
             lock (_opLock)
@@ -410,6 +436,12 @@ namespace HSMDataCollector.Core
 
                 if (ownsStop)
                     LogAndRaise(CollectorStatus.Stopping);
+
+                if (inFlightStop == null && (ownsStop || previousStatus == CollectorStatus.Stopping))
+                {
+                    ownedProcessorStop = WaitForStartInitThenStopProcessor(inFlightStartInit, flushAcceptedWork: false);
+                    _currentProcessorStopTask = ownedProcessorStop;
+                }
             }
 
             try
@@ -438,12 +470,15 @@ namespace HSMDataCollector.Core
                             LogAndRaise(CollectorStatus.Stopped);
                     }
                 }
-                else if (ownsStop)
+                else if (ownedProcessorStop != null)
                 {
-                    DisposeComponent(() => WaitForStartInitThenStopProcessor(inFlightStartInit).ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
+                    DisposeComponent(() => ownedProcessorStop.ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
 
                     lock (_opLock)
                     {
+                        if (ReferenceEquals(_currentProcessorStopTask, ownedProcessorStop))
+                            _currentProcessorStopTask = null;
+
                         if (_lifecycle.CompleteStop())
                             LogAndRaise(CollectorStatus.Stopped);
                     }

@@ -101,7 +101,7 @@ namespace HSMDataCollector.Core
             await SensorStorage.StartAsync().ConfigureAwait(false);
         }
 
-        public async Task StopAsync()
+        public async Task StopAsync(bool flushAcceptedWork = true)
         {
             // Collect failures across phases so a single phase exception does not leave background queues running.
             // After all phases attempt to stop, rethrow as AggregateException so the caller knows the stop was degraded.
@@ -110,8 +110,87 @@ namespace HSMDataCollector.Core
             await TryStopPhase(() => SensorStorage.WaitForDynamicStartTasksAsync(), failures).ConfigureAwait(false);
             await TryStopPhase(() => SensorStorage.StopAsync(), failures).ConfigureAwait(false);
 
+            if (!flushAcceptedWork)
+            {
+                var terminalPriorityStopped = false;
+                var terminalDataStopped = false;
+                var terminalFileStopped = false;
+                var terminalCommandStopped = false;
+
+                await TryStopPhase(async () =>
+                {
+                    terminalPriorityStopped = await _priorityQueue.StopAsync(clearQueue: false, preserveCanceledPackages: false).ConfigureAwait(false);
+                }, failures).ConfigureAwait(false);
+
+                await TryStopPhase(async () =>
+                {
+                    terminalDataStopped = await _dataQueue.StopAsync(clearQueue: false, preserveCanceledPackages: false).ConfigureAwait(false);
+                }, failures).ConfigureAwait(false);
+
+                await TryStopPhase(async () =>
+                {
+                    terminalFileStopped = await _fileQueue.StopAsync(clearQueue: false, preserveCanceledPackages: false).ConfigureAwait(false);
+                }, failures).ConfigureAwait(false);
+
+                await TryStopPhase(async () =>
+                {
+                    terminalCommandStopped = await _commandQueue.StopAsync(clearQueue: false, preserveCanceledPackages: false).ConfigureAwait(false);
+                }, failures).ConfigureAwait(false);
+
+                if (terminalPriorityStopped)
+                {
+                    await TryStopPhase(async () =>
+                    {
+                        using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
+                            await _priorityQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+
+                        LogDiscardedItems(_priorityQueue.ClearQueue(), _priorityQueue.QueueName);
+                    }, failures).ConfigureAwait(false);
+                }
+
+                if (terminalDataStopped)
+                {
+                    await TryStopPhase(async () =>
+                    {
+                        using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
+                            await _dataQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+
+                        LogDiscardedItems(_dataQueue.ClearQueue(), _dataQueue.QueueName);
+                    }, failures).ConfigureAwait(false);
+                }
+
+                if (terminalFileStopped)
+                {
+                    await TryStopPhase(async () =>
+                    {
+                        using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
+                            await _fileQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+
+                        LogDiscardedItems(_fileQueue.ClearQueue(), _fileQueue.QueueName);
+                    }, failures).ConfigureAwait(false);
+                }
+
+                if (terminalCommandStopped)
+                {
+                    await TryStopPhase(async () =>
+                    {
+                        using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
+                            await _commandQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+
+                        LogDiscardedItems(_commandQueue.ClearQueue(), _commandQueue.QueueName);
+                    }, failures).ConfigureAwait(false);
+                }
+
+                if (failures.Count > 0)
+                    throw new AggregateException("One or more phases of DataProcessor.StopAsync failed; remaining phases completed.", failures);
+
+                return;
+            }
+
             var dataQueueStopped = false;
             var priorityQueueStopped = false;
+            var fileQueueStopped = false;
+            var commandQueueStopped = false;
 
             await TryStopPhase(async () =>
             {
@@ -145,8 +224,37 @@ namespace HSMDataCollector.Core
                 }, failures).ConfigureAwait(false);
             }
 
-            await TryStopPhase(() => _fileQueue.StopAsync().AsTask(), failures).ConfigureAwait(false);
-            await TryStopPhase(() => _commandQueue.StopAsync().AsTask(), failures).ConfigureAwait(false);
+            await TryStopPhase(async () =>
+            {
+                fileQueueStopped = await _fileQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
+            }, failures).ConfigureAwait(false);
+
+            if (fileQueueStopped)
+            {
+                await TryStopPhase(async () =>
+                {
+                    using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
+                        await _fileQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+
+                    LogDiscardedItems(_fileQueue.ClearQueue(), _fileQueue.QueueName);
+                }, failures).ConfigureAwait(false);
+            }
+
+            await TryStopPhase(async () =>
+            {
+                commandQueueStopped = await _commandQueue.StopAsync(clearQueue: false).ConfigureAwait(false);
+            }, failures).ConfigureAwait(false);
+
+            if (commandQueueStopped)
+            {
+                await TryStopPhase(async () =>
+                {
+                    using (var flushCancellation = new CancellationTokenSource(_stopFlushTimeout))
+                        await _commandQueue.FlushAsync(flushCancellation.Token).ConfigureAwait(false);
+
+                    LogDiscardedItems(_commandQueue.ClearQueue(), _commandQueue.QueueName);
+                }, failures).ConfigureAwait(false);
+            }
 
             if (failures.Count > 0)
                 throw new AggregateException("One or more phases of DataProcessor.StopAsync failed; remaining phases completed.", failures);

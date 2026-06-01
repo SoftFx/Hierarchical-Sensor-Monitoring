@@ -15,6 +15,40 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         public FileQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
+        internal async Task FlushAsync(CancellationToken token)
+        {
+            try
+            {
+                while (QueueCount > 0 && !token.IsCancellationRequested)
+                {
+                    if (!TryDequeue(out QueueItem<FileSensorValue> item))
+                        continue;
+
+                    try
+                    {
+                        var sendingInfo = await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
+                        EnsureSendSucceeded(sendingInfo, token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        if (PreserveCanceledPackages)
+                            Enqeue(item.Value);
+                        throw;
+                    }
+                    catch
+                    {
+                        Enqeue(item.Value);
+                        throw;
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
+            }
+        }
+
         protected override async Task ProcessingLoop(CancellationToken token)
         {
             while (!token.IsCancellationRequested)
@@ -32,7 +66,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                                 var sendingInfo = await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
                                 EnsureSendSucceeded(sendingInfo, token);
                             }
-                            catch (OperationCanceledException) { throw; }
+                            catch (OperationCanceledException)
+                            {
+                                if (PreserveCanceledPackages)
+                                    Enqeue(item.Value);
+                                throw;
+                            }
                             catch
                             {
                                 Enqeue(item.Value);

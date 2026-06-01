@@ -39,7 +39,16 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                             _queueManager.AddPackageSendingInfo(sendingInfo);
                             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                         }
-                        catch (OperationCanceledException) { throw; }
+                        catch (OperationCanceledException)
+                        {
+                            if (PreserveCanceledPackages)
+                            {
+                                foreach (var item in package.Items)
+                                    Enqeue(item);
+                            }
+
+                            throw;
+                        }
                         catch
                         {
                             foreach (var item in package.Items)
@@ -54,6 +63,43 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 {
                     _logger.Error(ex);
                     await DelayAfterFailureAsync(token).ConfigureAwait(false);
+                }
+            }
+        }
+
+        internal async Task FlushAsync(CancellationToken token)
+        {
+            while (QueueCount > 0 && !token.IsCancellationRequested)
+            {
+                var package = GetPackage();
+
+                if (!package.Items.Any())
+                    continue;
+
+                try
+                {
+                    var sendingInfo = await _sender.SendCommandAsync(package.Items, token).ConfigureAwait(false);
+                    EnsureSendSucceeded(sendingInfo, token);
+                    _queueManager.AddPackageSendingInfo(sendingInfo);
+                    _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                }
+                catch (OperationCanceledException)
+                {
+                    if (PreserveCanceledPackages)
+                    {
+                        foreach (var item in package.Items)
+                            Enqeue(item);
+                    }
+
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    foreach (var item in package.Items)
+                        Enqeue(item);
+
+                    _logger.Error(ex);
+                    throw;
                 }
             }
         }

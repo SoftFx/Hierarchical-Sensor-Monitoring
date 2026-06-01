@@ -17,6 +17,8 @@ namespace HSMDataCollector.DefaultSensors
         // Composed scheduling lifecycle for the periodic send loop (replaces a hand-rolled
         // ScheduledTask field + lock). The bar sensor composes a second handle for its collect loop.
         private readonly ScheduledTaskHandle _sendHandle;
+        private int _sendValueInProgress;
+        private int _stopping;
 
         protected virtual TimeSpan TimerDueTime => TimeSpan.Zero;
 
@@ -39,6 +41,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
+                Volatile.Write(ref _stopping, 0);
                 StartSendTask();
 
                 return base.InitAsync();
@@ -55,6 +58,7 @@ namespace HSMDataCollector.DefaultSensors
             try
             {
                 await StopInternalAsync(waitForCurrentRun: true);
+                Volatile.Write(ref _stopping, 1);
 
                 await base.StopAsync();
             }
@@ -74,7 +78,25 @@ namespace HSMDataCollector.DefaultSensors
 
         protected void SendValueAction()
         {
-            SendValue(BuildSensorValue());
+            if (Volatile.Read(ref _stopping) == 1)
+                return;
+
+            if (Interlocked.Exchange(ref _sendValueInProgress, 1) == 1)
+                return;
+
+            try
+            {
+                var value = BuildSensorValue();
+
+                if (Volatile.Read(ref _stopping) == 1)
+                    return;
+
+                SendValue(value);
+            }
+            finally
+            {
+                Volatile.Write(ref _sendValueInProgress, 0);
+            }
         }
 
         protected async Task RestartTimerAsync(TimeSpan newPostPeriod)
