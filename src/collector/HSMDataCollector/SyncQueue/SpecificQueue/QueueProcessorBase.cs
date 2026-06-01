@@ -36,6 +36,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         private readonly DataPackage<T> _dataPackage;
 
         private int _stopTimedOut;
+
+        private object _lifecycleLock = new object();
+
+        private QueueState _state = QueueState.Stopped;
+        private int _cleanupContinuationRegistered;
+
         public abstract string QueueName { get; }
 
         protected abstract Task ProcessingLoop(CancellationToken token);
@@ -53,7 +59,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 SingleReader = false,
                 SingleWriter = false,
-                SingleReader = false,
             });
         }
 
@@ -279,8 +284,20 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 if (ReferenceEquals(_cancellationTokenSource, tokenSource))
                     _cancellationTokenSource = null;
 
+                _state = QueueState.Stopped;
+            }
+        }
+
         protected bool IsEmpty => QueueCount == 0;
-        private void ClearQueue() { while (TryDequeue(out _)) { } }
+        internal int ClearQueue()
+        {
+            int count = 0;
+            while (TryDequeue(out _))
+            {
+                count++;
+            }
+            return count;
+        }
 
         public void Dispose() 
         {

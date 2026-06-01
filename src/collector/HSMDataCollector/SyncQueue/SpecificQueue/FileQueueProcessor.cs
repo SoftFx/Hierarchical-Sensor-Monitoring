@@ -21,7 +21,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 try
                 {
-                    await WaitToReadAsync(token).ConfigureAwait(false);
+                    await Reader.WaitToReadAsync(token).ConfigureAwait(false);
 
                     while (!IsEmpty && !token.IsCancellationRequested)
                     {

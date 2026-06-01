@@ -54,7 +54,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 try
                 {
-                    await WaitToReadAsync(token).ConfigureAwait(false);
+                    await Reader.WaitToReadAsync(token).ConfigureAwait(false);
 
                     while (!IsEmpty && !token.IsCancellationRequested)
                     {
@@ -65,7 +65,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                         try
                         {
-                            var sendingInfo = await _sender.SendPriorityDataAsync(package.Items, token).ConfigureAwait(false);
+                            var sendingInfo = await _sender.SendPriorityDataAsync(package, token).ConfigureAwait(false);
                             _queueManager.AddPackageSendingInfo(sendingInfo);
                             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                         }
@@ -80,7 +80,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 catch (Exception ex)
                 {
                     _logger.Error(ex);
-                    await DelayAfterFailureAsync(token).ConfigureAwait(false);
                 }
             }
         }
