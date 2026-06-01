@@ -717,8 +717,7 @@ namespace HSMDataCollector.Core
 
         public Task<bool> SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
-            var fullSensorPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, sensorPath);
-            var sensor = _sensorsStorage.CreateFileSensor(fullSensorPath, new FileSensorOptions());
+            var sensor = _sensorsStorage.CreateFileSensor(sensorPath, new FileSensorOptions());
 
             return sensor.SendFile(filePath, status, comment);
         }

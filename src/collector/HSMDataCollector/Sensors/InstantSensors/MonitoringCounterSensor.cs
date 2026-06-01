@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using HSMDataCollector.DefaultSensors;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
@@ -42,6 +43,9 @@ namespace HSMDataCollector.Sensors
         {
             try
             {
+                if (!SensorValueExtensions.IsValidValue(value, status))
+                    return;
+
                 AddToSum(value);
 
                 _lastComment = comment;

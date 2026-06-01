@@ -43,7 +43,7 @@ the .NET collector and the native C++ port.
 
 ## Regression Counter
 
-Target: 65 important bug-class tests that expose P1/P2 bugs in either collector.
+Current: 66 important bug-class tests that expose P1/P2 bugs in either collector.
 
 Shared conformance count:
 
@@ -52,6 +52,9 @@ Shared conformance count:
 - After representative duplicate last-value regression promotion: 90 `.hsmtest`
   cases.
 - After six red/fix/green bug-class cycles: 97 `.hsmtest` cases.
+- After the .NET-only collector hardening cycles: shared conformance remains
+  97 `.hsmtest` cases, plus 9 focused managed regressions for APIs that do not
+  yet have native/shared file scenarios.
 
 Completed:
 
@@ -149,3 +152,28 @@ Promoted to shared conformance:
 55. `string_null_value_is_rejected` / `last_string_null_default_is_rejected`
 56. `blank_access_key_is_rejected`
 57. `zero_port_is_rejected`
+58. `SendFileAsync_uses_single_system_path_prefix`
+    - Found managed `SendFileAsync` double-prefixed the computer/module path
+      before creating the file sensor.
+59. `SendFileAsync_rejects_invalid_status_without_sending_file`
+    - Found managed file sending could accept and transmit an undefined
+      `SensorStatus`.
+60. `SendFileAsync_before_start_returns_false_without_sending_file`
+    - Found file sending reported success before the collector could accept
+      data, even though nothing was sent.
+61. `Rate_sensor_rejects_invalid_status_updates`
+    - Found monitoring rate updates could persist an undefined status into the
+      next periodic payload.
+62. `Double_bar_sensor_rejects_nan_values_without_sending_bar`
+    - Found public double bar sensors could serialize non-finite values.
+63. `Function_sensor_rejects_nan_values_without_sending_payload`
+    - Found periodic function sensors could send non-finite return values.
+64. `File_sensor_string_value_rejects_null_without_throwing_or_sending`
+    - Found file sensor string values could throw on null input instead of
+      rejecting it safely.
+65. `Double_bar_sensor_rejects_negative_precision`
+    - Found invalid bar precision was accepted at creation and could become a
+      runtime send failure.
+66. `Double_bar_sensor_rejects_inconsistent_partial_values_without_sending_bar`
+    - Found public bar partial updates could send impossible min/max/range
+      payloads.

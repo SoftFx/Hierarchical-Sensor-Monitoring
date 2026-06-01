@@ -38,6 +38,9 @@ namespace HSMDataCollector.DefaultSensors
             if (options.BarPeriod <= TimeSpan.Zero)
                 throw new ArgumentOutOfRangeException(nameof(options.BarPeriod), "Bar period must be greater than zero.");
 
+            if (typeof(BarType) == typeof(DoubleMonitoringBar) && (options.Precision < 0 || options.Precision > 15))
+                throw new ArgumentOutOfRangeException(nameof(options.Precision), "Precision must be between 0 and 15.");
+
             _collectBarPeriod = options.BarTickPeriod;
             _barPeriod = options.BarPeriod;
             _precision = options.Precision;

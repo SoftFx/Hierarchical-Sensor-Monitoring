@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using HSMSensorDataObjects;
 
 
 namespace HSMDataCollector.DefaultSensors
@@ -17,6 +19,9 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
+                if (!SensorValueExtensions.IsValidValue(value, SensorStatus.Ok))
+                    return;
+
                 CheckCurrentBar();
 
                 _internalBar.AddValue(value);
@@ -28,6 +33,16 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
+                if (!SensorValueExtensions.IsValidValue(min, SensorStatus.Ok) ||
+                    !SensorValueExtensions.IsValidValue(max, SensorStatus.Ok) ||
+                    !SensorValueExtensions.IsValidValue(mean, SensorStatus.Ok) ||
+                    !SensorValueExtensions.IsValidValue(first, SensorStatus.Ok) ||
+                    !SensorValueExtensions.IsValidValue(last, SensorStatus.Ok))
+                    return;
+
+                if (!IsValidPartial(min, max, mean, first, last, count))
+                    return;
+
                 CheckCurrentBar();
 
                 _internalBar.AddPartial(min, max, mean, first, last, count);
@@ -44,6 +59,22 @@ namespace HSMDataCollector.DefaultSensors
                     AddValue(value);
             }
             catch (Exception ex) { HandleException(ex); }
+        }
+
+        private static bool IsValidPartial(T min, T max, T mean, T first, T last, int count)
+        {
+            if (count < 1)
+                return false;
+
+            var comparer = Comparer<T>.Default;
+
+            return comparer.Compare(min, max) <= 0 &&
+                   comparer.Compare(mean, min) >= 0 &&
+                   comparer.Compare(mean, max) <= 0 &&
+                   comparer.Compare(first, min) >= 0 &&
+                   comparer.Compare(first, max) <= 0 &&
+                   comparer.Compare(last, min) >= 0 &&
+                   comparer.Compare(last, max) <= 0;
         }
     }
 
