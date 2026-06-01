@@ -28,12 +28,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     while (!IsEmpty && !token.IsCancellationRequested)
                     {
                         package = GetPackage();
-                        var sendingInfo =  await _sender.SendCommandAsync(package.Items.ToList(), token).ConfigureAwait(false);
+                        var sendingInfo =  await _sender.SendCommandAsync(package, token).ConfigureAwait(false);
                         _queueManager.AddPackageSendingInfo(sendingInfo);
                         _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                     }
                 }
-                catch (OperationCanceledException) { }
+                catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
                     _logger.Error(ex);

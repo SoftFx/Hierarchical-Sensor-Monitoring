@@ -87,6 +87,7 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
                 ServerAddress = ServerAddress,
                 Port = MappedSensorPort,
                 AccessKey = _accessKey,
+                AllowUntrustedServerCertificate = true,
                 PackageCollectPeriod = TimeSpan.FromSeconds(2),
                 MaxQueueSize = 1000,
                 MaxValuesInPackage = 100,
@@ -116,8 +117,31 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
 
         public async Task StartContainerAsync()
         {
-            if (_container != null)
-                await _container.StartAsync();
+            if (_container == null) return;
+
+            await _container.DisposeAsync();
+
+            _container = new ContainerBuilder()
+                .WithImage("hsm-integration-test:latest")
+                .WithPortBinding(SensorPort, true)
+                .WithPortBinding(SitePort, true)
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(SensorPort))
+                .Build();
+
+            await _container.StartAsync();
+
+            MappedSensorPort = _container.GetMappedPublicPort(SensorPort);
+            MappedSitePort = _container.GetMappedPublicPort(SitePort);
+
+            _adminClient?.Dispose();
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+            };
+            _adminClient = new HttpClient(handler);
+
+            await AuthenticateAsync();
+            await CreateProductAndGetAccessKeyAsync();
         }
 
         private async Task AuthenticateAsync()

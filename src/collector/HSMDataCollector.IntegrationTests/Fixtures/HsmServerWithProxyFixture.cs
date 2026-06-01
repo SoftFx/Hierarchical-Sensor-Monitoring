@@ -70,6 +70,7 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
                 .WithPortBinding(SensorPort, true)
                 .WithNetwork(_network)
                 .WithNetworkAliases("toxiproxy")
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(ToxiproxyApiPort))
                 .Build();
 
             await _hsmContainer.StartAsync();
@@ -117,6 +118,7 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
                 ServerAddress = ServerAddress,
                 Port = ProxyPort,
                 AccessKey = _accessKey,
+                AllowUntrustedServerCertificate = true,
                 PackageCollectPeriod = TimeSpan.FromSeconds(2),
                 MaxQueueSize = 1000,
                 MaxValuesInPackage = 100,
@@ -195,6 +197,7 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
             var proxy = new
             {
                 name = ProxyName,
+                listen = $"0.0.0.0:{SensorPort}",
                 upstream = $"hsm-server:{SensorPort}",
                 enabled = true,
             };

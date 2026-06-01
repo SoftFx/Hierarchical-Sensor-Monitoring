@@ -1,14 +1,12 @@
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
@@ -16,9 +14,9 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
     {
         private Task _task;
         private bool _disposed;
-        private int _itemCount;
 
         private readonly Channel<QueueItem<T>> _channel;
+
         protected ChannelReader<QueueItem<T>> Reader => _channel.Reader;
         protected ChannelWriter<QueueItem<T>> Writer => _channel.Writer;
 
@@ -28,20 +26,26 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected readonly ICollectorLogger _logger;
         protected readonly DataProcessor _queueManager;
 
+        private readonly DataPackage<T> _dataPackage;
+
         private int _stopTimedOut;
         public abstract string QueueName { get; }
+
+        protected abstract Task ProcessingLoop(CancellationToken token);
 
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
-            _sender  = options.DataSender ?? throw new ArgumentNullException(nameof(options.DataSender));
+            _sender = options.DataSender ?? throw new ArgumentNullException(nameof(options.DataSender));
             _queueManager = queueManager;
             _logger = logger;
+
+            _dataPackage = new DataPackage<T>(_options.MaxValuesInPackage);
 
             _channel = Channel.CreateUnbounded<QueueItem<T>>(new UnboundedChannelOptions
             {
                 SingleWriter = false,
-                SingleReader = true,
+                SingleReader = false,
             });
         }
 
@@ -119,13 +123,23 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         internal virtual int Enqeue(T item)
         {
-            Writer.TryWrite(new QueueItem<T>(item));
-            Interlocked.Increment(ref _itemCount);
+            return Enqueue(new QueueItem<T>(item));
+        }
+
+
+        internal virtual int Enqueue(QueueItem<T> item)
+        {
+            return EnqueueCore(item);
+        }
+
+        private int EnqueueCore(QueueItem<T> item)
+        {
+            Writer.TryWrite(item);
 
             int result = 0;
-            while (Volatile.Read(ref _itemCount) > _options.MaxQueueSize)
+            while (QueueCount > _options.MaxQueueSize)
             {
-                if (!TryDequeueCore(out _))
+                if (!TryDequeue(out _))
                     break;
                 result++;
             }
@@ -136,8 +150,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         internal virtual int Enqeue(IEnumerable<T> items)
         {
             int result = 0;
-            foreach(var item in items)
-              result += Enqeue(item);
+            foreach (var item in items)
+                result += Enqeue(item);
 
             return result;
         }
@@ -145,22 +159,18 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         internal DataPackage<T> GetPackage()
         {
-            var result = new DataPackage<T>();
-            result.Items = Elements().Take(_options.MaxValuesInPackage).Where(Validate).ToList();
+            _dataPackage.Clear();
 
-            IEnumerable<T> Elements()
+
+            while (_dataPackage.Count < _options.MaxValuesInPackage && TryDequeue(out QueueItem<T> item))
             {
-                DateTime now = DateTime.UtcNow;
-
-                while (TryDequeue(out QueueItem<T> item))
+                if (Validate(item.Value))
                 {
-                    result.AddInfo((now - item.BuildDate).TotalSeconds, 1);
-
-                    yield return item.Value;
+                    _dataPackage.AddValue(item);
                 }
             }
 
-            return result;
+            return _dataPackage;
         }
 
         private bool Validate(T item)
@@ -174,18 +184,14 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return true;
         }
 
-
-        protected abstract Task ProcessingLoop(CancellationToken token);
-
-        protected int QueueCount => Volatile.Read(ref _itemCount);
+        protected int QueueCount => Reader.Count;
 
         protected bool TryDequeue(out QueueItem<T> item)
         {
-            if (!TryDequeueCore(out item))
-                return false;
+            if (Reader.TryRead(out item))
+                return true;
 
-            Interlocked.Decrement(ref _itemCount);
-            return true;
+            return false;
         }
 
         private void CompleteStoppedTask(Task task, CancellationTokenSource tokenSource, bool clearQueue)
@@ -207,41 +213,32 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             Interlocked.Exchange(ref _stopTimedOut, 0);
         }
 
-        private bool TryDequeueCore(out QueueItem<T> item) => Reader.TryRead(out item);
+        protected bool IsEmpty => QueueCount == 0;
+        private void ClearQueue() { while (TryDequeue(out _)) { } }
 
-        protected bool IsEmpty => Volatile.Read(ref _itemCount) == 0;
-
-        private void ClearQueue()
-        {
-            while (TryDequeue(out _)) { }
-        }
-
-        public void Dispose()
+        public void Dispose() 
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
 
         protected virtual void Dispose(bool disposing)
-        {
-            if (_disposed)
-                return;
+        { 
+            if (_disposed) return;
 
             if (disposing)
-            {
+            { 
                 try
                 {
                     StopAsync().GetAwaiter().GetResult();
                 }
-                catch (Exception ex)
+                catch (Exception ex) 
                 {
-
                     _logger.Error($"Error during disposal: {ex}");
                 }
             }
 
             _disposed = true;
         }
-
     }
 }
