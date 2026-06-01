@@ -46,8 +46,14 @@ namespace HSMDataCollector.Core
 
         internal void Validate()
         {
+            if (string.IsNullOrWhiteSpace(AccessKey))
+                throw new ArgumentNullException(nameof(AccessKey));
+
             if (string.IsNullOrWhiteSpace(ServerAddress))
                 throw new ArgumentNullException(nameof(ServerAddress));
+
+            if (Port <= 0 || Port > 65535)
+                throw new ArgumentOutOfRangeException(nameof(Port), "Port must be in the range 1..65535.");
 
             if (MaxQueueSize <= 0)
                 throw new ArgumentOutOfRangeException(nameof(MaxQueueSize), "Max queue size must be greater than zero.");

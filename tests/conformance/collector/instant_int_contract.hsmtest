@@ -51,6 +51,20 @@ running_collector_stores_int_payload|expect_payload_contains|0|"Value":42
 running_collector_stores_int_payload|expect_payload_contains|0|"Status":2
 running_collector_stores_int_payload|expect_payload_contains|0|"Comment":"watch"
 
+path_duplicate_separators_are_normalized|create_collector
+path_duplicate_separators_are_normalized|create_int_sensor|contract//path///leaf
+path_duplicate_separators_are_normalized|start
+path_duplicate_separators_are_normalized|add_int|0|1|Ok|path
+path_duplicate_separators_are_normalized|expect_sent_count|1
+path_duplicate_separators_are_normalized|expect_payload_contains|0|"Path":"conformance-host/conformance-module/contract/path/leaf"
+
+blank_computer_name_is_omitted_from_payload_path|create_collector_with_identity|token:blank|conformance-module
+blank_computer_name_is_omitted_from_payload_path|create_int_sensor|contract/identity/blank-computer
+blank_computer_name_is_omitted_from_payload_path|start
+blank_computer_name_is_omitted_from_payload_path|add_int|0|7|Ok|identity
+blank_computer_name_is_omitted_from_payload_path|expect_sent_count|1
+blank_computer_name_is_omitted_from_payload_path|expect_payload_contains|0|"Path":"conformance-module/contract/identity/blank-computer"
+
 stop_drops_late_values|create_collector
 stop_drops_late_values|create_int_sensor|contract/stop
 stop_drops_late_values|start

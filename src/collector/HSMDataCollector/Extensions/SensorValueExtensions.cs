@@ -22,6 +22,9 @@ namespace HSMDataCollector.Extensions
 
         private static bool IsSupportedValue<T>(T value)
         {
+            if (value == null)
+                return false;
+
             if (value is double doubleValue)
                 return !double.IsNaN(doubleValue) && !double.IsInfinity(doubleValue);
 

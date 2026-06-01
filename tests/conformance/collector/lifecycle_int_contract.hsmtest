@@ -1,6 +1,9 @@
 # HSM collector lifecycle conformance.
 # Format: case|action|arg1|arg2|arg3|arg4
 
+blank_access_key_is_rejected|expect_create_collector_rejected|token:blank|https://localhost
+zero_port_is_rejected|expect_create_collector_rejected|conformance-key|https://localhost|0
+
 register_before_start_many_sends_after_start|create_collector
 register_before_start_many_sends_after_start|create_int_sensors|5|contract/before-start
 register_before_start_many_sends_after_start|add_int_sequence|5|1|1|Ok|before-start-drop

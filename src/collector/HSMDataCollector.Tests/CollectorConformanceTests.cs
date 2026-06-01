@@ -61,6 +61,21 @@ namespace HSMDataCollector.Tests
                     state.Collector = CreateCollector(state.Sender);
                     break;
 
+                case "create_collector_with_identity":
+                    state.Sender = new RecordingSender();
+                    state.Collector = CreateCollector(
+                        state.Sender,
+                        computerName: ExpandTextToken(step.Arg(0)),
+                        module: ExpandTextToken(step.Arg(1)));
+                    break;
+
+                case "expect_create_collector_rejected":
+                    ExpectCollectorCreateRejected(
+                        accessKey: ExpandTextToken(step.Arg(0)),
+                        serverAddress: ExpandTextToken(step.Arg(1)),
+                        port: step.TryArg(2, out var port) ? int.Parse(port) : CollectorOptions.DefaultPort);
+                    break;
+
                 case "start":
                     await state.Collector.Start().ConfigureAwait(false);
                     break;
@@ -70,41 +85,41 @@ namespace HSMDataCollector.Tests
                     break;
 
                 case "create_int_sensor":
-                    state.IntSensors.Add(state.Collector.CreateIntSensor(ExpandTextToken(step.Arg(0))));
+                    AddSensor(state, state.IntSensors, state.Collector.CreateIntSensor(ExpandTextToken(step.Arg(0))));
                     break;
 
                 case "create_bool_sensor":
-                    state.BoolSensors.Add(state.Collector.CreateBoolSensor(ExpandTextToken(step.Arg(0))));
+                    AddSensor(state, state.BoolSensors, state.Collector.CreateBoolSensor(ExpandTextToken(step.Arg(0))));
                     break;
 
                 case "create_double_sensor":
-                    state.DoubleSensors.Add(state.Collector.CreateDoubleSensor(ExpandTextToken(step.Arg(0))));
+                    AddSensor(state, state.DoubleSensors, state.Collector.CreateDoubleSensor(ExpandTextToken(step.Arg(0))));
                     break;
 
                 case "create_string_sensor":
-                    state.StringSensors.Add(state.Collector.CreateStringSensor(ExpandTextToken(step.Arg(0))));
+                    AddSensor(state, state.StringSensors, state.Collector.CreateStringSensor(ExpandTextToken(step.Arg(0))));
                     break;
 
                 case "create_enum_sensor":
-                    state.EnumSensors.Add(state.Collector.CreateEnumSensor(ExpandTextToken(step.Arg(0))));
+                    AddSensor(state, state.EnumSensors, state.Collector.CreateEnumSensor(ExpandTextToken(step.Arg(0))));
                     break;
 
                 case "create_last_int_sensor":
-                    state.IntSensors.Add(state.Collector.CreateLastValueIntSensor(step.Arg(0), int.Parse(step.Arg(1))));
+                    AddSensor(state, state.IntSensors, state.Collector.CreateLastValueIntSensor(step.Arg(0), int.Parse(step.Arg(1))));
                     break;
 
                 case "create_last_bool_sensor":
-                    state.BoolSensors.Add(state.Collector.CreateLastValueBoolSensor(step.Arg(0), bool.Parse(step.Arg(1))));
+                    AddSensor(state, state.BoolSensors, state.Collector.CreateLastValueBoolSensor(step.Arg(0), bool.Parse(step.Arg(1))));
                     break;
 
                 case "create_last_double_sensor":
-                    state.DoubleSensors.Add(state.Collector.CreateLastValueDoubleSensor(
+                    AddSensor(state, state.DoubleSensors, state.Collector.CreateLastValueDoubleSensor(
                         step.Arg(0),
                         double.Parse(step.Arg(1), CultureInfo.InvariantCulture)));
                     break;
 
                 case "create_last_string_sensor":
-                    state.StringSensors.Add(state.Collector.CreateLastValueStringSensor(step.Arg(0), ExpandTextToken(step.Arg(1))));
+                    AddSensor(state, state.StringSensors, state.Collector.CreateLastValueStringSensor(step.Arg(0), ExpandTextToken(step.Arg(1))));
                     break;
 
                 case "create_int_sensors":
@@ -195,6 +210,10 @@ namespace HSMDataCollector.Tests
                         state,
                         () => state.EnumSensors[int.Parse(step.Arg(0))]
                             .AddValue(int.Parse(step.Arg(1)), ParseRawStatus(step.Arg(2)), ExpandTextToken(step.Arg(3))));
+                    break;
+
+                case "dispose_sensor":
+                    DisposeSensor(state, int.Parse(step.Arg(0)));
                     break;
 
                 case "add_int_sequence":
@@ -303,14 +322,22 @@ namespace HSMDataCollector.Tests
             }
         }
 
-        private static DataCollector CreateCollector(IDataSender sender)
+        private static DataCollector CreateCollector(
+            IDataSender sender,
+            string computerName = "conformance-host",
+            string module = "conformance-module",
+            string accessKey = "conformance-key",
+            string serverAddress = "https://localhost",
+            int port = 443)
         {
             return new DataCollector(new CollectorOptions
             {
-                AccessKey = "conformance-key",
+                AccessKey = accessKey,
+                ServerAddress = serverAddress,
+                Port = port,
                 ClientName = "conformance-client",
-                ComputerName = "conformance-host",
-                Module = "conformance-module",
+                ComputerName = computerName,
+                Module = module,
                 DataSender = sender,
                 MaxQueueSize = 20000,
                 MaxValuesInPackage = 50,
@@ -324,19 +351,25 @@ namespace HSMDataCollector.Tests
         private static void CreateIntSensors(ContractState state, int count, string pathPrefix)
         {
             for (var i = 0; i < count; i++)
-                state.IntSensors.Add(state.Collector.CreateIntSensor(pathPrefix + "/" + i));
+                AddSensor(state, state.IntSensors, state.Collector.CreateIntSensor(pathPrefix + "/" + i));
         }
 
         private static void CreateMixedInstantSensors(ContractState state, int count, string pathPrefix)
         {
             for (var i = 0; i < count; i++)
             {
-                state.BoolSensors.Add(state.Collector.CreateBoolSensor(pathPrefix + "/" + i + "/bool"));
-                state.IntSensors.Add(state.Collector.CreateIntSensor(pathPrefix + "/" + i + "/int"));
-                state.DoubleSensors.Add(state.Collector.CreateDoubleSensor(pathPrefix + "/" + i + "/double"));
-                state.StringSensors.Add(state.Collector.CreateStringSensor(pathPrefix + "/" + i + "/string"));
-                state.EnumSensors.Add(state.Collector.CreateEnumSensor(pathPrefix + "/" + i + "/enum"));
+                AddSensor(state, state.BoolSensors, state.Collector.CreateBoolSensor(pathPrefix + "/" + i + "/bool"));
+                AddSensor(state, state.IntSensors, state.Collector.CreateIntSensor(pathPrefix + "/" + i + "/int"));
+                AddSensor(state, state.DoubleSensors, state.Collector.CreateDoubleSensor(pathPrefix + "/" + i + "/double"));
+                AddSensor(state, state.StringSensors, state.Collector.CreateStringSensor(pathPrefix + "/" + i + "/string"));
+                AddSensor(state, state.EnumSensors, state.Collector.CreateEnumSensor(pathPrefix + "/" + i + "/enum"));
             }
+        }
+
+        private static void AddSensor<T>(ContractState state, List<T> typedSensors, T sensor)
+        {
+            typedSensors.Add(sensor);
+            state.Sensors.Add((IDisposable)sensor);
         }
 
         private static void AddIntSequence(
@@ -450,6 +483,22 @@ namespace HSMDataCollector.Tests
             Assert.NotNull(Record.Exception(() => createSensor()));
         }
 
+        private static void ExpectCollectorCreateRejected(string accessKey, string serverAddress, int port)
+        {
+            using (var sender = new RecordingSender())
+            {
+                DataCollector collector = null;
+                var exception = Record.Exception(() =>
+                {
+                    collector = CreateCollector(sender, accessKey: accessKey, serverAddress: serverAddress, port: port);
+                });
+
+                collector?.Dispose();
+
+                Assert.NotNull(exception);
+            }
+        }
+
         private static void ExpectAddRejected(ContractState state, Action addValue)
         {
             var before = state.Sender.Values.Count;
@@ -457,6 +506,12 @@ namespace HSMDataCollector.Tests
 
             Assert.Null(exception);
             Assert.Equal(before, state.Sender.Values.Count);
+        }
+
+        private static void DisposeSensor(ContractState state, int sensorIndex)
+        {
+            state.Sensors[sensorIndex]?.Dispose();
+            state.Sensors[sensorIndex] = null;
         }
 
         private static void AddMixedInstantValue(ContractState state, int setIndex, int value, SensorStatus status, string comment)
@@ -617,6 +672,10 @@ namespace HSMDataCollector.Tests
                     return "path" + '\u0002' + "part";
                 if (string.Equals(value, "token:control-1f", StringComparison.Ordinal))
                     return "bad" + '\u001f' + "comment";
+                if (string.Equals(value, "token:blank", StringComparison.Ordinal))
+                    return " \t ";
+                if (string.Equals(value, "token:null", StringComparison.Ordinal))
+                    return null;
 
                 return value;
             }
@@ -707,6 +766,8 @@ namespace HSMDataCollector.Tests
             public DataCollector Collector { get; set; }
 
             public RecordingSender Sender { get; set; }
+
+            public List<IDisposable> Sensors { get; } = new List<IDisposable>();
 
             public List<IInstantValueSensor<int>> IntSensors { get; } = new List<IInstantValueSensor<int>>();
 

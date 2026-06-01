@@ -318,6 +318,10 @@ namespace
                 return std::string("path") + static_cast<char>(0x02) + "part";
             if (value == "token:control-1f")
                 return std::string("bad") + static_cast<char>(0x1f) + "comment";
+            if (value == "token:blank")
+                return " \t ";
+            if (value == "token:null")
+                return std::string{};
 
             return value;
         }
@@ -383,6 +387,41 @@ namespace
         if (action == "create_collector")
         {
             state.collector = CreateCollector();
+            return;
+        }
+
+        if (action == "create_collector_with_identity")
+        {
+            Require(step.size() >= 3, "create_collector_with_identity requires computer name and module");
+            auto options = TestOptions();
+            const auto computer_name = ExpandTextToken(step[1]);
+            const auto module = ExpandTextToken(step[2]);
+            options.computer_name = computer_name.c_str();
+            options.module = module.c_str();
+            state.collector = CreateCollector(options);
+            return;
+        }
+
+        if (action == "expect_create_collector_rejected")
+        {
+            Require(step.size() >= 3, "expect_create_collector_rejected requires access key and server address");
+            auto options = TestOptions();
+            const auto access_key = ExpandTextToken(step[1]);
+            const auto server_address = ExpandTextToken(step[2]);
+            options.access_key = access_key.c_str();
+            options.server_address = server_address.c_str();
+            if (step.size() >= 4)
+                options.port = ToInt(step[3]);
+
+            hsm_collector_t* collector = nullptr;
+            const auto result = hsm_collector_create(&options, &collector);
+            if (result == HSM_RESULT_OK)
+            {
+                hsm_collector_destroy(collector);
+                throw std::runtime_error("collector create unexpectedly succeeded");
+            }
+
+            Require(collector == nullptr, "rejected collector create returned a handle");
             return;
         }
 
@@ -590,10 +629,11 @@ namespace
             Require(step.size() >= 3, "expect_create_last_string_sensor_rejected requires path and default value");
             hsm_sensor_t* sensor = nullptr;
             const auto default_value = ExpandTextToken(step[2]);
+            const char* default_value_ptr = step[2] == "token:null" ? nullptr : default_value.c_str();
             const auto result = hsm_collector_create_last_value_string_sensor(
                 state.collector.value,
                 step[1].c_str(),
-                default_value.c_str(),
+                default_value_ptr,
                 &sensor);
 
             if (result == HSM_RESULT_OK)
@@ -726,9 +766,10 @@ namespace
             const auto before = hsm_collector_sent_count(state.collector.value);
             const auto value = ExpandTextToken(step[2]);
             const auto comment = ExpandTextToken(step[4]);
+            const char* value_ptr = step[2] == "token:null" ? nullptr : value.c_str();
 
             Require(
-                hsm_sensor_add_string(state.sensors[sensor_index].value, value.c_str(), ToRawStatus(step[3]), comment.c_str()) !=
+                hsm_sensor_add_string(state.sensors[sensor_index].value, value_ptr, ToRawStatus(step[3]), comment.c_str()) !=
                     HSM_RESULT_OK,
                 "invalid string add unexpectedly succeeded");
             Require(hsm_collector_sent_count(state.collector.value) == before, "rejected string add should not send");
@@ -748,6 +789,17 @@ namespace
                     HSM_RESULT_OK,
                 "invalid enum add unexpectedly succeeded");
             Require(hsm_collector_sent_count(state.collector.value) == before, "rejected enum add should not send");
+            return;
+        }
+
+        if (action == "dispose_sensor")
+        {
+            Require(step.size() >= 2, "dispose_sensor requires sensor index");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+
+            hsm_sensor_release(state.sensors[sensor_index].value);
+            state.sensors[sensor_index].value = nullptr;
             return;
         }
 

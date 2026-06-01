@@ -143,10 +143,29 @@ namespace
             if (normalized.empty())
                 continue;
 
-            if (!result.empty())
-                result += "/";
+            size_t start = 0;
+            while (start < normalized.size())
+            {
+                const auto separator = normalized.find('/', start);
+                const auto end = separator == std::string::npos ? normalized.size() : separator;
 
-            result += normalized;
+                if (end > start)
+                {
+                    const auto segment = normalized.substr(start, end - start);
+                    if (!IsBlank(segment))
+                    {
+                        if (!result.empty())
+                            result += "/";
+
+                        result += segment;
+                    }
+                }
+
+                if (separator == std::string::npos)
+                    break;
+
+                start = separator + 1;
+            }
         }
 
         return result;
@@ -510,6 +529,9 @@ hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_co
         return HSM_RESULT_INVALID_ARGUMENT;
 
     if (options->server_address == nullptr || IsBlank(CopyString(options->server_address)))
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    if (options->port <= 0 || options->port > 65535)
         return HSM_RESULT_INVALID_ARGUMENT;
 
     try

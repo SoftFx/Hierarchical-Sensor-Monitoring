@@ -83,6 +83,8 @@ namespace HSMDataCollector.DefaultSensors
 
         public virtual ValueTask StopAsync() => default;
 
+        protected virtual ValueTask DisposeAsyncCore() => StopAsync();
+
         protected void HandleException(Exception ex)
         {
             _dataProcessor?.AddException(SensorPath, ex);
@@ -90,7 +92,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        public void Dispose() => StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+        public void Dispose() => DisposeAsyncCore().ConfigureAwait(false).GetAwaiter().GetResult();
 
     }
 }

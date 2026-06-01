@@ -30,6 +30,8 @@ namespace HSMDataCollector.Sensors
             return base.StopAsync();
         }
 
+        protected override ValueTask DisposeAsyncCore() => base.StopAsync();
+
 
         public override void AddValue(T value, string comment) => AddValue(value, SensorStatus.Ok, comment);
 

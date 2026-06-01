@@ -61,6 +61,12 @@ string_empty_payload|add_string|0||Ok|string-empty
 string_empty_payload|expect_sent_count|1
 string_empty_payload|expect_payload_contains|0|"Value":""
 
+string_null_value_is_rejected|create_collector
+string_null_value_is_rejected|create_string_sensor|contract/instant/string/null
+string_null_value_is_rejected|start
+string_null_value_is_rejected|expect_add_string_rejected|0|token:null|1|null-value
+string_null_value_is_rejected|expect_sent_count|0
+
 string_json_special_characters_are_escaped|create_collector
 string_json_special_characters_are_escaped|create_string_sensor|contract/instant/string/json-special
 string_json_special_characters_are_escaped|start
