@@ -9,7 +9,7 @@ namespace HSMDataCollector.IntegrationTests.Tests
 {
     [Trait("Category", "Integration")]
     [Collection("HSM Server")]
-    public class ConnectivityTests : IClassFixture<HsmServerFixture>
+    public class ConnectivityTests
     {
         private readonly HsmServerFixture _fixture;
 

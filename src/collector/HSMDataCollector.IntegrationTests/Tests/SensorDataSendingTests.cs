@@ -11,7 +11,7 @@ namespace HSMDataCollector.IntegrationTests.Tests
 {
     [Trait("Category", "Integration")]
     [Collection("HSM Server")]
-    public class SensorDataSendingTests : IClassFixture<HsmServerFixture>
+    public class SensorDataSendingTests
     {
         private readonly HsmServerFixture _fixture;
 

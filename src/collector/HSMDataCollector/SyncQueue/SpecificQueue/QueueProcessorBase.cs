@@ -35,9 +35,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         private readonly DataPackage<T> _dataPackage;
 
-        private int _stopTimedOut;
-
-        private object _lifecycleLock = new object();
+        private readonly object _lifecycleLock = new object();
 
         private QueueState _state = QueueState.Stopped;
         private int _cleanupContinuationRegistered;

@@ -11,6 +11,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
+using DotNet.Testcontainers.Networks;
 using HSMDataCollector.Core;
 using HSMDataCollector.IntegrationTests.Helpers;
 using HSMDataCollector.Options;
@@ -20,20 +21,29 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
 {
     public class HsmServerFixture : IAsyncLifetime
     {
-        private const string DockerImage = "hsmonitoring/hierarchical_sensor_monitoring:latest";
+        private const string HsmImage = "hsmonitoring/hierarchical_sensor_monitoring:latest";
+        private const string ToxiproxyImage = "ghcr.io/shopify/toxiproxy:latest";
         private const int SensorPort = 44330;
         private const int SitePort = 44333;
+        private const int ToxiproxyApiPort = 8474;
+        private const string ProxyName = "hsm_sensor";
         private const string DefaultUsername = "default";
         private const string DefaultPassword = "default";
         private const string TestProductName = "IntegrationTests";
 
-        private IContainer _container;
+        private INetwork _network;
+        private IContainer _hsmContainer;
+        private IContainer _toxiproxyContainer;
         private HttpClient _adminClient;
+        private HttpClient _toxiproxyClient;
         private string _accessKey;
         private string _tempConfigDir;
 
         public string ServerAddress => "localhost";
+
+        // All sensor traffic goes through Toxiproxy (transparent when no toxics applied)
         public ushort MappedSensorPort { get; private set; }
+
         public ushort MappedSitePort { get; private set; }
         public string AccessKey => _accessKey;
 
@@ -49,17 +59,40 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
                 .Build();
             await testImage.CreateAsync();
 
-            _container = new ContainerBuilder()
+            _network = new NetworkBuilder()
+                .WithName($"hsm-test-{Guid.NewGuid():N}")
+                .Build();
+
+            _hsmContainer = new ContainerBuilder()
                 .WithImage(testImage)
                 .WithPortBinding(SensorPort, true)
                 .WithPortBinding(SitePort, true)
+                .WithNetwork(_network)
+                .WithNetworkAliases("hsm-server")
                 .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(SensorPort))
                 .Build();
 
-            await _container.StartAsync();
+            _toxiproxyContainer = new ContainerBuilder()
+                .WithImage(ToxiproxyImage)
+                .WithPortBinding(ToxiproxyApiPort, true)
+                .WithPortBinding(SensorPort, true)
+                .WithNetwork(_network)
+                .WithNetworkAliases("toxiproxy")
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Starting Toxiproxy HTTP server"))
+                .Build();
 
-            MappedSensorPort = _container.GetMappedPublicPort(SensorPort);
-            MappedSitePort = _container.GetMappedPublicPort(SitePort);
+            await Task.WhenAll(_hsmContainer.StartAsync(), _toxiproxyContainer.StartAsync());
+
+            MappedSensorPort = _toxiproxyContainer.GetMappedPublicPort(SensorPort);
+            MappedSitePort = _hsmContainer.GetMappedPublicPort(SitePort);
+
+            var toxiproxyApiPort = _toxiproxyContainer.GetMappedPublicPort(ToxiproxyApiPort);
+            _toxiproxyClient = new HttpClient
+            {
+                BaseAddress = new Uri($"http://localhost:{toxiproxyApiPort}"),
+            };
+
+            await CreateProxyAsync();
 
             var handler = new HttpClientHandler
             {
@@ -74,8 +107,13 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
         public async Task DisposeAsync()
         {
             _adminClient?.Dispose();
-            if (_container != null)
-                await _container.DisposeAsync();
+            _toxiproxyClient?.Dispose();
+            if (_toxiproxyContainer != null)
+                await _toxiproxyContainer.DisposeAsync();
+            if (_hsmContainer != null)
+                await _hsmContainer.DisposeAsync();
+            if (_network != null)
+                await _network.DisposeAsync();
             if (_tempConfigDir != null && Directory.Exists(_tempConfigDir))
                 Directory.Delete(_tempConfigDir, recursive: true);
         }
@@ -109,39 +147,88 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
             return client;
         }
 
-        public async Task StopContainerAsync()
+        // Network failure simulation via Toxiproxy
+
+        public Task StopContainerAsync() => DisableConnectionAsync();
+
+        public Task StartContainerAsync() => EnableConnectionAsync();
+
+        public async Task DisableConnectionAsync()
         {
-            if (_container != null)
-                await _container.StopAsync();
+            await _toxiproxyClient.DeleteAsync($"/proxies/{ProxyName}");
         }
 
-        public async Task StartContainerAsync()
+        public async Task EnableConnectionAsync()
         {
-            if (_container == null) return;
+            await CreateProxyAsync();
+        }
 
-            await _container.DisposeAsync();
-
-            _container = new ContainerBuilder()
-                .WithImage("hsm-integration-test:latest")
-                .WithPortBinding(SensorPort, true)
-                .WithPortBinding(SitePort, true)
-                .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(SensorPort))
-                .Build();
-
-            await _container.StartAsync();
-
-            MappedSensorPort = _container.GetMappedPublicPort(SensorPort);
-            MappedSitePort = _container.GetMappedPublicPort(SitePort);
-
-            _adminClient?.Dispose();
-            var handler = new HttpClientHandler
+        public async Task AddLatencyAsync(int latencyMs)
+        {
+            var toxic = new
             {
-                ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+                name = "latency",
+                type = "latency",
+                attributes = new { latency = latencyMs },
+                stream = "downstream",
             };
-            _adminClient = new HttpClient(handler);
+            var json = JsonSerializer.Serialize(toxic);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            await _toxiproxyClient.PostAsync($"/proxies/{ProxyName}/toxics", content);
+        }
 
-            await AuthenticateAsync();
-            await CreateProductAndGetAccessKeyAsync();
+        public async Task AddTimeoutAsync()
+        {
+            var toxic = new
+            {
+                name = "timeout",
+                type = "timeout",
+                attributes = new { timeout = 0 },
+                stream = "downstream",
+            };
+            var json = JsonSerializer.Serialize(toxic);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            await _toxiproxyClient.PostAsync($"/proxies/{ProxyName}/toxics", content);
+        }
+
+        public async Task RemoveToxicAsync(string toxicName)
+        {
+            await _toxiproxyClient.DeleteAsync($"/proxies/{ProxyName}/toxics/{toxicName}");
+        }
+
+        public async Task AddConnectionResetAsync()
+        {
+            await DisableConnectionAsync();
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+            await EnableConnectionAsync();
+        }
+
+        public async Task SlowDownAsync(int kbps)
+        {
+            var toxic = new
+            {
+                name = "bandwidth",
+                type = "bandwidth",
+                attributes = new { rate = kbps },
+                stream = "downstream",
+            };
+            var json = JsonSerializer.Serialize(toxic);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            await _toxiproxyClient.PostAsync($"/proxies/{ProxyName}/toxics", content);
+        }
+
+        private async Task CreateProxyAsync()
+        {
+            var proxy = new
+            {
+                name = ProxyName,
+                listen = $"0.0.0.0:{SensorPort}",
+                upstream = $"hsm-server:{SensorPort}",
+                enabled = true,
+            };
+            var json = JsonSerializer.Serialize(proxy);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            await _toxiproxyClient.PostAsync("/proxies", content);
         }
 
         private async Task AuthenticateAsync()

@@ -11,7 +11,7 @@ namespace HSMDataCollector.IntegrationTests.Tests
 {
     [Trait("Category", "Integration")]
     [Collection("HSM Server")]
-    public class QueueBehaviorTests : IClassFixture<HsmServerFixture>
+    public class QueueBehaviorTests
     {
         private readonly HsmServerFixture _fixture;
 
