@@ -191,22 +191,24 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         internal virtual int Enqueue(QueueItem<T> item)
         {
-            return EnqueueCore(item);
-        }
-
-        private int EnqueueCore(QueueItem<T> item)
-        {
-            Writer.TryWrite(item);
-
-            int result = 0;
-            while (QueueCount > _options.MaxQueueSize)
+            if (Writer.TryWrite(item))
             {
-                if (!TryDequeue(out _))
-                    break;
-                result++;
-            }
 
-            return result;
+                int result = 0;
+                while (QueueCount > _options.MaxQueueSize)
+                {
+                    if (!TryDequeue(out _))
+                        break;
+                    result++;
+                }
+
+                return result;
+            }
+            else
+            {
+                _logger.Error($"{QueueName} queue processor did not write value");
+                return 0;
+            }
         }
 
         internal virtual int Enqeue(IEnumerable<T> items)
@@ -222,7 +224,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         internal DataPackage<T> GetPackage()
         {
             _dataPackage.Clear();
-
 
             while (_dataPackage.Count < _options.MaxValuesInPackage && TryDequeue(out QueueItem<T> item))
             {
@@ -284,6 +285,15 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                 _state = QueueState.Stopped;
             }
+        }
+
+        protected Task DelayAfterFailureAsync(CancellationToken token)
+        {
+            var delay = _options.PackageCollectPeriod > TimeSpan.Zero
+                ? _options.PackageCollectPeriod
+                : TimeSpan.FromMilliseconds(100);
+
+            return Task.Delay(delay, token);
         }
 
         protected bool IsEmpty => QueueCount == 0;

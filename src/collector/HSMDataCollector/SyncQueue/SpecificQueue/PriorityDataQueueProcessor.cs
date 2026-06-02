@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -60,7 +59,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     {
                         package = GetPackage();
 
-                        if (!package.Items.Any())
+                        if (package.Count == 0)
                             continue;
 
                         try
@@ -69,7 +68,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                             _queueManager.AddPackageSendingInfo(sendingInfo);
                             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                         }
-                        catch (OperationCanceledException) { throw; }
+                        catch (OperationCanceledException) { break; }
                         catch (Exception ex)
                         {
                             _logger.Error($"Failed to send package for {QueueName}. Error: {ex.Message}");
@@ -80,6 +79,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 catch (Exception ex)
                 {
                     _logger.Error(ex);
+
+                    await DelayAfterFailureAsync(token).ConfigureAwait(false);
                 }
             }
         }

@@ -217,6 +217,12 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
             await _toxiproxyClient.PostAsync($"/proxies/{ProxyName}/toxics", content);
         }
 
+        public async Task ResetProxyAsync()
+        {
+            await _toxiproxyClient.DeleteAsync($"/proxies/{ProxyName}");
+            await CreateProxyAsync();
+        }
+
         private async Task CreateProxyAsync()
         {
             var proxy = new

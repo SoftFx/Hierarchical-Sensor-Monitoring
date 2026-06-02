@@ -115,25 +115,31 @@ namespace HSMDataCollector.IntegrationTests.Tests
             var options = _fixture.CreateCollectorOptions();
             using var collector = new DataCollector(options);
 
-            await _fixture.AddLatencyAsync(2000);
+            try
+            {
+                await _fixture.AddLatencyAsync(2000);
 
-            await collector.Start();
+                await collector.Start();
 
-            var sensor = collector.CreateIntSensor(path);
-            sensor.AddValue(42);
+                var sensor = collector.CreateIntSensor(path);
+                sensor.AddValue(42);
 
-            var serverPath = CollectorOptionsHelper.ServerPath(options, path);
-            using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
+                var serverPath = CollectorOptionsHelper.ServerPath(options, path);
+                using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
 
-            var found = await verifier.WaitForValueAsync(serverPath, 1, TimeSpan.FromSeconds(30));
-            Assert.True(found, $"Value not received with slow network at path: {serverPath}");
+                var found = await verifier.WaitForValueAsync(serverPath, 1, TimeSpan.FromSeconds(30));
+                Assert.True(found, $"Value not received with slow network at path: {serverPath}");
 
-            var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, CollectorOptionsHelper.VerificationTimeout);
-            Assert.Single(values);
-            Assert.Equal(42.ToString(), values[0]);
+                var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, CollectorOptionsHelper.VerificationTimeout);
+                Assert.Single(values);
+                Assert.Equal(42.ToString(), values[0]);
 
-            await _fixture.RemoveToxicAsync("latency");
-            await collector.Stop();
+                await collector.Stop();
+            }
+            finally
+            {
+                await _fixture.ResetProxyAsync();
+            }
         }
 
         [Fact]
@@ -143,24 +149,31 @@ namespace HSMDataCollector.IntegrationTests.Tests
             var options = _fixture.CreateCollectorOptions();
             using var collector = new DataCollector(options);
 
-            await collector.Start();
+            try
+            {
+                await collector.Start();
 
-            await _fixture.AddConnectionResetAsync();
+                await _fixture.AddConnectionResetAsync();
 
-            var sensor = collector.CreateIntSensor(path);
-            sensor.AddValue(42);
+                var sensor = collector.CreateIntSensor(path);
+                sensor.AddValue(42);
 
-            var serverPath = CollectorOptionsHelper.ServerPath(options, path);
-            using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
+                var serverPath = CollectorOptionsHelper.ServerPath(options, path);
+                using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
 
-            var found = await verifier.WaitForValueAsync(serverPath, 1, TimeSpan.FromSeconds(30));
-            Assert.True(found, $"Value not received after connection reset at path: {serverPath}");
+                var found = await verifier.WaitForValueAsync(serverPath, 1, TimeSpan.FromSeconds(30));
+                Assert.True(found, $"Value not received after connection reset at path: {serverPath}");
 
-            var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, CollectorOptionsHelper.VerificationTimeout);
-            Assert.Single(values);
-            Assert.Equal(42.ToString(), values[0]);
+                var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, CollectorOptionsHelper.VerificationTimeout);
+                Assert.Single(values);
+                Assert.Equal(42.ToString(), values[0]);
 
-            await collector.Stop();
+                await collector.Stop();
+            }
+            finally
+            {
+                await _fixture.ResetProxyAsync();
+            }
         }
 
         [Fact]
@@ -170,25 +183,31 @@ namespace HSMDataCollector.IntegrationTests.Tests
             var options = _fixture.CreateCollectorOptions();
             using var collector = new DataCollector(options);
 
-            await _fixture.SlowDownAsync(10);
+            try
+            {
+                await _fixture.SlowDownAsync(10);
 
-            await collector.Start();
+                await collector.Start();
 
-            var sensor = collector.CreateBoolSensor(path);
-            sensor.AddValue(true);
+                var sensor = collector.CreateBoolSensor(path);
+                sensor.AddValue(true);
 
-            var serverPath = CollectorOptionsHelper.ServerPath(options, path);
-            using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
+                var serverPath = CollectorOptionsHelper.ServerPath(options, path);
+                using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
 
-            var found = await verifier.WaitForValueAsync(serverPath, 1, TimeSpan.FromSeconds(60));
-            Assert.True(found, $"Value not received with bandwidth throttling at path: {serverPath}");
+                var found = await verifier.WaitForValueAsync(serverPath, 1, TimeSpan.FromSeconds(60));
+                Assert.True(found, $"Value not received with bandwidth throttling at path: {serverPath}");
 
-            var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, CollectorOptionsHelper.VerificationTimeout);
-            Assert.Single(values);
-            Assert.Equal(true.ToString(), values[0]);
+                var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, CollectorOptionsHelper.VerificationTimeout);
+                Assert.Single(values);
+                Assert.Equal(true.ToString(), values[0]);
 
-            await _fixture.RemoveToxicAsync("bandwidth");
-            await collector.Stop();
+                await collector.Stop();
+            }
+            finally
+            {
+                await _fixture.ResetProxyAsync();
+            }
         }
     }
 }

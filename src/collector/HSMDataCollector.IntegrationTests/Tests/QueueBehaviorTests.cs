@@ -87,16 +87,17 @@ namespace HSMDataCollector.IntegrationTests.Tests
             await collector.Start();
 
             var sensor = collector.CreateIntSensor(path);
-            // Add more values than MaxQueueSize while collector is running
+            // The for loop completes in microseconds, well before the 2s PackageCollectPeriod
+            // fires, so the channel overflows and trims to the newest 5 values (5-9).
             for (int i = 0; i < 10; i++)
                 sensor.AddValue(i);
 
             var serverPath = CollectorOptionsHelper.ServerPath(options, path);
             using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
 
-            // The newest values (5-9) should survive; oldest (0-4) dropped by overflow
             var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, TimeSpan.FromSeconds(15));
-            Assert.NotEmpty(values);
+            Assert.Contains("9", values);
+            Assert.DoesNotContain("0", values);
 
             await collector.Stop();
         }
