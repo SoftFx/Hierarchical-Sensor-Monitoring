@@ -211,7 +211,7 @@ namespace HSMDataCollector.Tests
                     .GetValue(dataProcessor);
 
                 for (int i = 0; i < 5; i++)
-                    dataQueue.Enqeue(new IntBarSensorValue { Count = 0 });
+                    dataQueue.Enqueue(new IntBarSensorValue { Count = 0 });
 
                 await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
 

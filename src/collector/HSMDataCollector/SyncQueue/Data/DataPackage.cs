@@ -11,16 +11,21 @@ namespace HSMDataCollector.SyncQueue.Data
 
         internal int Count => _items.Count;
 
+        private DateTime _now = DateTime.UtcNow;
+        private double _time = 0;
+
         internal IReadOnlyCollection<QueueItem<T>> Items => _items;
 
         internal DataPackage(int maxCapacity)
         {
             _items = new List<QueueItem<T>>(maxCapacity);
+
         }
 
         internal void AddValue(QueueItem<T> item)
         {
             _items.Add(item);
+            _time += (_now - item.BuildDate).TotalSeconds;
         }
 
         public IEnumerator<T> GetEnumerator()
@@ -34,20 +39,12 @@ namespace HSMDataCollector.SyncQueue.Data
         internal void Clear()
         {
             _items.Clear();
+            _time = 0;
+            _now  = DateTime.UtcNow;
         }
 
 
-        internal PackageInfo GetInfo()
-        {
-            var now = DateTime.UtcNow;
-            double time = 0;
+        internal PackageInfo GetInfo() => new PackageInfo(_time, Count);
 
-            foreach (var item in _items)
-            {
-                time += (now - item.BuildDate).TotalMilliseconds;
-            }
-
-            return new PackageInfo(time, _items.Count);
-        }
     }
 }

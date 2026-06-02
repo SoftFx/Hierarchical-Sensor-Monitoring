@@ -183,39 +183,37 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             }
         }
 
-        internal virtual int Enqeue(T item)
+        internal virtual int Enqueue(T item)
         {
             return Enqueue(new QueueItem<T>(item));
         }
 
-
         internal virtual int Enqueue(QueueItem<T> item)
         {
-            if (Writer.TryWrite(item))
-            {
-
-                int result = 0;
-                while (QueueCount > _options.MaxQueueSize)
-                {
-                    if (!TryDequeue(out _))
-                        break;
-                    result++;
-                }
-
-                return result;
-            }
-            else
+            if (!Writer.TryWrite(item))
             {
                 _logger.Error($"{QueueName} queue processor did not write value");
                 return 0;
             }
+
+
+            int result = 0;
+            while (QueueCount > _options.MaxQueueSize)
+            {
+                if (!TryDequeue(out _))
+                    break;
+
+                result++;
+            }
+
+            return result;
         }
 
-        internal virtual int Enqeue(IEnumerable<T> items)
+        internal virtual int Enqueue(IEnumerable<T> items)
         {
             int result = 0;
             foreach (var item in items)
-                result += Enqeue(item);
+                result += Enqueue(item);
 
             return result;
         }
@@ -249,13 +247,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         protected int QueueCount => Reader.Count;
 
-        protected bool TryDequeue(out QueueItem<T> item)
-        {
-            if (Reader.TryRead(out item))
-                return true;
-
-            return false;
-        }
+        protected bool TryDequeue(out QueueItem<T> item) => Reader.TryRead(out item);
 
         private void RegisterCompletionCleanup(Task task, CancellationTokenSource tokenSource)
         {
