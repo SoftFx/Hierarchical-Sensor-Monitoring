@@ -7,7 +7,6 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
 
-
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal sealed class DataQueueProcessor : QueueProcessorBase<SensorValueBase>
@@ -30,6 +29,13 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     try
                     {
                         var sendingInfo = await _sender.SendDataAsync(package, token).ConfigureAwait(false);
+
+                        if (sendingInfo.Error != null)
+                        {
+                            _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). {sendingInfo.Error}");
+                            break;
+                        }
+
                         _queueManager.AddPackageSendingInfo(sendingInfo);
                         _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                     }
@@ -69,9 +75,14 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                         try
                         {
-
-
                             var sendingInfo = await _sender.SendDataAsync(package, token).ConfigureAwait(false);
+
+                            if (sendingInfo.Error != null)
+                            {
+                                _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). {sendingInfo.Error}");
+                                break;
+                            }
+
                             _queueManager.AddPackageSendingInfo(sendingInfo);
                             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                         }
@@ -79,6 +90,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         catch (Exception ex)
                         {
                             _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). Error: {ex.Message}");
+                            break;
                         }
                     }
                     while (QueueCount >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
