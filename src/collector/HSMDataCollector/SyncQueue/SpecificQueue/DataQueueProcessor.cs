@@ -60,22 +60,28 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     if (IsEmpty)
                         continue;
 
-                    package = GetPackage();
-
-                    if (package.Count == 0)
-                        continue;
-
-                    try
+                    do
                     {
-                        var sendingInfo = await _sender.SendDataAsync(package, token).ConfigureAwait(false);
-                        _queueManager.AddPackageSendingInfo(sendingInfo);
-                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                        package = GetPackage();
+
+                        if (package.Count == 0)
+                            continue;
+
+                        try
+                        {
+
+
+                            var sendingInfo = await _sender.SendDataAsync(package, token).ConfigureAwait(false);
+                            _queueManager.AddPackageSendingInfo(sendingInfo);
+                            _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                        }
+                        catch (OperationCanceledException) { break; }
+                        catch (Exception ex)
+                        {
+                            _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). Error: {ex.Message}");
+                        }
                     }
-                    catch (OperationCanceledException) { break; }
-                    catch (Exception ex)
-                    {
-                        _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). Error: {ex.Message}");
-                    }
+                    while (QueueCount >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception ex)

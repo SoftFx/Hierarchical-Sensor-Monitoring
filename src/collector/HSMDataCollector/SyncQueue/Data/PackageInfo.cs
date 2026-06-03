@@ -1,11 +1,10 @@
-﻿namespace HSMDataCollector.SyncQueue.Data
+namespace HSMDataCollector.SyncQueue.Data
 {
     internal readonly struct PackageInfo
     {
         internal double AvrTimeInQueue { get; }
 
         internal int ValuesCount { get; }
-
 
         internal PackageInfo(double sumTime, int count)
         {
@@ -14,7 +13,7 @@
                 AvrTimeInQueue = sumTime / count;
                 ValuesCount = count;
             }
-            else 
+            else
             {
                 AvrTimeInQueue = 0;
                 ValuesCount = 0;

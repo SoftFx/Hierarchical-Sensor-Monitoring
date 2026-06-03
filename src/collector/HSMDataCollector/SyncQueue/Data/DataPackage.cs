@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
-
 
 namespace HSMDataCollector.SyncQueue.Data
 {
@@ -11,15 +10,15 @@ namespace HSMDataCollector.SyncQueue.Data
 
         internal int Count => _items.Count;
 
-        private DateTime _now = DateTime.UtcNow;
-        private double _time = 0;
+        // Captured at construction so time-in-queue is measured from package-build time.
+        private readonly DateTime _now = DateTime.UtcNow;
+        private double _time;
 
         internal IReadOnlyCollection<QueueItem<T>> Items => _items;
 
         internal DataPackage(int maxCapacity)
         {
             _items = new List<QueueItem<T>>(maxCapacity);
-
         }
 
         internal void AddValue(QueueItem<T> item)
@@ -36,15 +35,6 @@ namespace HSMDataCollector.SyncQueue.Data
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-        internal void Clear()
-        {
-            _items.Clear();
-            _time = 0;
-            _now  = DateTime.UtcNow;
-        }
-
-
         internal PackageInfo GetInfo() => new PackageInfo(_time, Count);
-
     }
 }

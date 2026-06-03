@@ -17,7 +17,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         Stopping,
     }
 
-
     internal abstract class QueueProcessorBase<T> : IDisposable
     {
         private Task _task;
@@ -192,7 +191,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 return 0;
             }
 
-
             int result = 0;
             while (QueueCount > _options.MaxQueueSize)
             {
@@ -213,7 +211,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             return result;
         }
-
 
         internal DataPackage<T> GetPackage()
         {
@@ -287,23 +284,23 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return count;
         }
 
-        public void Dispose() 
+        public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
 
         protected virtual void Dispose(bool disposing)
-        { 
+        {
             if (_disposed) return;
 
             if (disposing)
-            { 
+            {
                 try
                 {
                     StopAsync().GetAwaiter().GetResult();
                 }
-                catch (Exception ex) 
+                catch (Exception ex)
                 {
                     _logger.Error($"Error during disposal: {ex}");
                 }
