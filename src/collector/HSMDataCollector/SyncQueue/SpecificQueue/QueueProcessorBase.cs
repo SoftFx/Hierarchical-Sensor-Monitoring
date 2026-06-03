@@ -269,6 +269,9 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 if (ReferenceEquals(_cancellationTokenSource, tokenSource))
                     _cancellationTokenSource = null;
 
+                if (clearQueue)
+                    ClearQueue();
+
                 _state = QueueState.Stopped;
             }
         }
