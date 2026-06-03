@@ -295,8 +295,13 @@ namespace HSMDataCollector.IntegrationTests.Fixtures
         private static string PrepareConfigDirectory()
         {
             var testDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            var sourceConfigDir = Path.GetFullPath(Path.Combine(testDir, "..", "..", "..", "..", "..",
-                "server", "HSMServer", "Config"));
+
+            var embeddedConfigDir = Path.Combine(testDir, "config");
+            var sourceConfigDir = Directory.Exists(embeddedConfigDir) && Directory.GetFiles(embeddedConfigDir, "appsettings*.json").Length > 0
+                ? embeddedConfigDir
+                : Path.GetFullPath(Path.Combine(testDir, "..", "..", "..", "..", "..",
+                    "src", "server", "HSMServer", "Config"));
+
             var tempDir = Path.Combine(Path.GetTempPath(), $"hsm-config-{Guid.NewGuid():N}");
 
             Directory.CreateDirectory(tempDir);

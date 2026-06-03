@@ -1,4 +1,4 @@
-name: Linux Proc Sensor Integration Tests
+name: Collector Integration Tests
 
 on:
   push:
@@ -20,7 +20,7 @@ on:
     - cron: '3 6 * * 1-5'
 
 jobs:
-  linux-proc-sensor-tests:
+  integration-tests:
     # Skip on draft PRs only. Non-PR events (push/schedule/workflow_dispatch) have no
     # pull_request payload, so they must still run — hence the event_name guard.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
