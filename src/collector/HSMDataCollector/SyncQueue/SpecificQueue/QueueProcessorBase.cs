@@ -33,8 +33,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected readonly ICollectorLogger _logger;
         protected readonly DataProcessor _queueManager;
 
-        private readonly DataPackage<T> _dataPackage;
-
         private readonly object _lifecycleLock = new object();
 
         private QueueState _state = QueueState.Stopped;
@@ -50,8 +48,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             _sender = options.DataSender ?? throw new ArgumentNullException(nameof(options.DataSender));
             _queueManager = queueManager;
             _logger = logger;
-
-            _dataPackage = new DataPackage<T>(_options.MaxValuesInPackage);
 
             _channel = Channel.CreateUnbounded<QueueItem<T>>(new UnboundedChannelOptions
             {
@@ -221,17 +217,18 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         internal DataPackage<T> GetPackage()
         {
-            _dataPackage.Clear();
+            var estimatedCount = Math.Min(QueueCount + 16, _options.MaxValuesInPackage);
+            var package = new DataPackage<T>(estimatedCount);
 
-            while (_dataPackage.Count < _options.MaxValuesInPackage && TryDequeue(out QueueItem<T> item))
+            while (package.Count < _options.MaxValuesInPackage && TryDequeue(out QueueItem<T> item))
             {
                 if (Validate(item.Value))
                 {
-                    _dataPackage.AddValue(item);
+                    package.AddValue(item);
                 }
             }
 
-            return _dataPackage;
+            return package;
         }
 
         private bool Validate(T item)
@@ -277,15 +274,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                 _state = QueueState.Stopped;
             }
-        }
-
-        protected Task DelayAfterFailureAsync(CancellationToken token)
-        {
-            var delay = _options.PackageCollectPeriod > TimeSpan.Zero
-                ? _options.PackageCollectPeriod
-                : TimeSpan.FromMilliseconds(100);
-
-            return Task.Delay(delay, token);
         }
 
         protected bool IsEmpty => QueueCount == 0;

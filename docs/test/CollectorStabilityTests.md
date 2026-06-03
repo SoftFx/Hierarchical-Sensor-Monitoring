@@ -1,35 +1,35 @@
 # Collector stability regression tests
 
-Дата подготовки: 2026-06-01.
+Prepared: 2026-06-01.
 
-Цель: регрессионные тесты на конкретные баги, найденные при разработке `DataCollector`. Каждый тест воспроизводит условие, при котором collector ломался — зависал, терял данные, отправлял пустые пакеты или падал с исключением.
+Purpose: regression tests for specific bugs found during `DataCollector` development. Each test reproduces a condition where the collector broke — hung, lost data, sent empty packages, or threw an exception.
 
-Код тестов:
+Test code:
 
 `src/collector/HSMDataCollector.Tests/CollectorStabilityTests.cs`
 
-Инфраструктура: внутренний `StabilityDataSender` (реализация `IDataSender` с настраиваемыми режимами сбоев), reflection-доступ к приватным полям (`_dataProcessor`, `_dataQueue`, `QueueCount`).
+Infrastructure: internal `StabilityDataSender` (an `IDataSender` implementation with configurable failure modes), reflection access to private fields (`_dataProcessor`, `_dataQueue`, `QueueCount`).
 
-## Что проверяется
+## What is tested
 
-| Тест | Баг | Что ломаем | Критерии успеха |
+| Test | Bug | How it is triggered | Success criteria |
 | --- | --- | --- | --- |
-| `Scheduler_loop_survives_unexpected_exception` | `CollectorScheduler.Loop()` ловит только `OperationCanceledException`; любое другое исключение убивает scheduler thread, все таймеры перестают тикать | Function sensor бросает `InvalidOperationException("boom")` каждые 50 ms; через 300 ms создается нормальный sensor | `throwCount > 0` (бросающий sensor сработал) и `goodCount > 0` (нормальный sensor продолжает работать после ошибки) |
-| `DoubleMonitoringBar_CountAvr_computes_correct_average` | `DoubleMonitoringBar.CountAvr`: `first + second / 2` вычисляет `first + (second / 2)` вместо `(first + second) / 2` | Reflection-вызов `CountAvr(10.0, 20.0)` | Результат `15.0`, а не `20.0` |
-| `Register_after_start_does_not_create_unobserved_task_exception` | `SensorsStorage.Register` вызывает `_ = AddAndStart(sensor)` при `IsStarted = true`; fire-and-forget task не обрабатывает исключения | `ThrowOnCommand = true`; создается sensor после `Start()`, что триггерит fire-and-forget; затем `GC.Collect` + `GC.WaitForPendingFinalizers` × 2 | `UnobservedTaskException` не сработал |
-| `Processing_loop_recovers_after_send_failure` | `GetPackage()` dequeue-ит элементы до `SendDataAsync`; при ошибке отправки данные теряются, но цикл должен продолжить | `FailFirstNSends = 1`; 5 значений до ошибки, 5 значений после | `FailedSends >= 1` и `TotalDataValuesSent >= 5` |
-| `Empty_package_not_sent_when_all_items_fail_validation` | `GetPackage()` dequeue-ит, фильтрует через `Validate()`, возвращает отфильтрованный список; если все элементы невалидны — отправляется пустая коллекция | Reflection-доступ к `_dataQueue`; 5 `IntBarSensorValue` с `Count = 0` (не проходят `Validate()`) | `ReceivedEmptyDataPackage == false` |
-| `DefaultSensorsCollection_Dispose_does_not_throw_on_partial_registration` | `DefaultSensorsCollection.Dispose()` вызывает `QueueOverflowSensor.Dispose()` и `CollectorErrors.Dispose()` без null-conditional; `NullReferenceException` при неполной регистрации | `TestDefaultSensorsCollection` с `base(null, null)`, `IsCorrectOs => false` | `Dispose()` не бросает `NullReferenceException` |
-| `Queue_count_stays_consistent_under_concurrent_access` | `_queueCount` отслеживается вручную через `Interlocked` параллельно с `ConcurrentQueue`; при конкурентном enqueue + GetPackage drain счетчик может разойтись с реальным размером очереди | `MaxQueueSize = 50`, `MaxValuesInPackage = 10`, `DataSendDelay = 10 ms`; 8 задач по 200 `AddValue` | `QueueCount >= 0` после drain (не уходит в минус) |
+| `Scheduler_loop_survives_unexpected_exception` | `CollectorScheduler.Loop()` only catches `OperationCanceledException`; any other exception kills the scheduler thread, all timers stop ticking | Function sensor throws `InvalidOperationException("boom")` every 50 ms; after 300 ms a normal sensor is created | `throwCount > 0` (throwing sensor fired) and `goodCount > 0` (normal sensor continues working after the error) |
+| `DoubleMonitoringBar_CountAvr_computes_correct_average` | `DoubleMonitoringBar.CountAvr`: `first + second / 2` computes `first + (second / 2)` instead of `(first + second) / 2` | Reflection call `CountAvr(10.0, 20.0)` | Result is `15.0`, not `20.0` |
+| `Register_after_start_does_not_create_unobserved_task_exception` | `SensorsStorage.Register` calls `_ = AddAndStart(sensor)` when `IsStarted = true`; fire-and-forget task doesn't handle exceptions | `ThrowOnCommand = true`; sensor created after `Start()`, triggering fire-and-forget; then `GC.Collect` + `GC.WaitForPendingFinalizers` × 2 | `UnobservedTaskException` did not fire |
+| `Processing_loop_recovers_after_send_failure` | `GetPackage()` dequeues items before `SendDataAsync`; on send failure data is lost, but the loop must continue | `FailFirstNSends = 1`; 5 values before failure, 5 values after | `FailedSends >= 1` and `TotalDataValuesSent >= 5` |
+| `Empty_package_not_sent_when_all_items_fail_validation` | `GetPackage()` dequeues, filters via `Validate()`, returns the filtered list; if all items are invalid — an empty collection is sent | Reflection access to `_dataQueue`; 5 `IntBarSensorValue` with `Count = 0` (fail `Validate()`) | `ReceivedEmptyDataPackage == false` |
+| `DefaultSensorsCollection_Dispose_does_not_throw_on_partial_registration` | `DefaultSensorsCollection.Dispose()` calls `QueueOverflowSensor.Dispose()` and `CollectorErrors.Dispose()` without null-conditional; `NullReferenceException` on partial registration | `TestDefaultSensorsCollection` with `base(null, null)`, `IsCorrectOs => false` | `Dispose()` does not throw `NullReferenceException` |
+| `Queue_count_stays_consistent_under_concurrent_access` | `_queueCount` is tracked manually via `Interlocked` alongside `ConcurrentQueue`; under concurrent enqueue + GetPackage drain, the counter may diverge from the actual queue size | `MaxQueueSize = 50`, `MaxValuesInPackage = 10`, `DataSendDelay = 10 ms`; 8 tasks each sending 200 `AddValue` | `QueueCount >= 0` after drain (does not go negative) |
 
-## Локальный запуск
+## Running locally
 
 ```powershell
 dotnet test .\src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj --no-restore --filter "FullyQualifiedName~CollectorStabilityTests" --logger "console;verbosity=detailed"
 ```
 
-## Вывод
+## Notes
 
-- Все 7 тестов закрывают конкретные регрессии, найденные при разработке и ревью.
-- Тесты используют reflection для доступа к internal-структурам, что делает их чувствительными к рефакторингу, но позволяет проверять invariant-ы, недоступные через public API.
-- `StabilityDataSender` позволяет моделировать разные режимы сбоев без запуска реального сервера.
+- All 7 tests cover specific regressions found during development and review.
+- Tests use reflection to access internal structures, making them sensitive to refactoring but allowing verification of invariants not exposed through the public API.
+- `StabilityDataSender` enables simulating various failure modes without running a real server.

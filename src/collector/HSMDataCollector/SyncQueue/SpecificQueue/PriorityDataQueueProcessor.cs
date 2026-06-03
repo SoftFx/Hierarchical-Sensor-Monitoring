@@ -35,7 +35,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     catch (OperationCanceledException) { break; }
                     catch (Exception ex)
                     {
-                        _logger.Error($"Failed to send package for {QueueName}. Error: {ex.Message}");
+                        _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). Error: {ex.Message}");
+                        break;
                     }
                 }
             }
@@ -55,32 +56,27 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 {
                     await Reader.WaitToReadAsync(token).ConfigureAwait(false);
 
-                    while (!IsEmpty && !token.IsCancellationRequested)
+                    package = GetPackage();
+
+                    if (package.Count == 0)
+                        continue;
+
+                    try
                     {
-                        package = GetPackage();
-
-                        if (package.Count == 0)
-                            continue;
-
-                        try
-                        {
-                            var sendingInfo = await _sender.SendPriorityDataAsync(package, token).ConfigureAwait(false);
-                            _queueManager.AddPackageSendingInfo(sendingInfo);
-                            _queueManager.AddPackageInfo(QueueName, package.GetInfo());
-                        }
-                        catch (OperationCanceledException) { break; }
-                        catch (Exception ex)
-                        {
-                            _logger.Error($"Failed to send package for {QueueName}. Error: {ex.Message}");
-                        }
+                        var sendingInfo = await _sender.SendPriorityDataAsync(package, token).ConfigureAwait(false);
+                        _queueManager.AddPackageSendingInfo(sendingInfo);
+                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). Error: {ex.Message}");
                     }
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
                     _logger.Error(ex);
-
-                    await DelayAfterFailureAsync(token).ConfigureAwait(false);
                 }
             }
         }
