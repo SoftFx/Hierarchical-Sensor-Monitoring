@@ -6,15 +6,8 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using Xunit;
 
-namespace HSMDataCollector.IntegrationTests.Tests
+namespace HSMDataCollector.Tests
 {
-    /// <summary>
-    /// Verifies the Linux default-sensor metric sources (#1065) against the real kernel: the actual
-    /// /proc parsers and the DriveInfo disk path produce sane values. Runs for real only on Linux
-    /// (e.g. the ubuntu CI runner); on other OSes each test is a no-op so the suite stays green on
-    /// Windows dev machines. This is the permanent counterpart to the pure parser unit tests, which
-    /// only prove parsing — these prove the real reads work end-to-end.
-    /// </summary>
     public sealed class LinuxProcSensorTests
     {
         private static bool OnLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);

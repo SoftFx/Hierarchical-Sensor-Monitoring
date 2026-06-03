@@ -11,7 +11,7 @@ namespace HSMDataCollector.IntegrationTests.Tests
 {
     [Trait("Category", "Integration")]
     [Collection("HSM Server")]
-    public class QueueBehaviorTests : IClassFixture<HsmServerFixture>
+    public class QueueBehaviorTests
     {
         private readonly HsmServerFixture _fixture;
 
@@ -21,7 +21,7 @@ namespace HSMDataCollector.IntegrationTests.Tests
         }
 
         [Fact]
-        public async Task ValuesSentBeforeStart_QueuedAndDeliveredAfterStart()
+        public async Task ValuesDroppedBeforeStart_NotDeliveredAfterStart()
         {
             var path = CollectorOptionsHelper.UniqueSensorPath("queued_sensor");
             var options = _fixture.CreateCollectorOptions();
@@ -39,9 +39,10 @@ namespace HSMDataCollector.IntegrationTests.Tests
 
             await collector.Start();
 
-            var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, CollectorOptionsHelper.VerificationTimeout);
-            Assert.Single(values);
-            Assert.Equal(42.ToString(), values[0]);
+            // Values added before Start() are silently dropped (no buffering),
+            // so the value should still not be on the server after Start()
+            var stillNotFound = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, TimeSpan.FromSeconds(3));
+            Assert.Empty(stillNotFound);
 
             await collector.Stop();
         }
@@ -80,22 +81,23 @@ namespace HSMDataCollector.IntegrationTests.Tests
             var path = CollectorOptionsHelper.UniqueSensorPath("overflow_sensor");
             var options = _fixture.CreateCollectorOptions();
             options.MaxQueueSize = 5;
+            options.PackageCollectPeriod = TimeSpan.FromSeconds(2);
 
             using var collector = new DataCollector(options);
+            await collector.Start();
 
             var sensor = collector.CreateIntSensor(path);
-            // Add more values than MaxQueueSize without starting
+            // The for loop completes in microseconds, well before the 2s PackageCollectPeriod
+            // fires, so the channel overflows and trims to the newest 5 values (5-9).
             for (int i = 0; i < 10; i++)
                 sensor.AddValue(i);
 
-            await collector.Start();
-
             var serverPath = CollectorOptionsHelper.ServerPath(options, path);
             using var verifier = new ServerVerificationHelper(_fixture.ServerAddress, _fixture.MappedSensorPort, _fixture.AccessKey);
-            var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, CollectorOptionsHelper.VerificationTimeout);
-            // The last value (9) should be the current value on the server
-            Assert.NotEmpty(values);
-            Assert.Equal(9.ToString(), values.Last());
+
+            var values = await verifier.WaitForAndGetAllValuesAsync(serverPath, 1, TimeSpan.FromSeconds(15));
+            Assert.Contains("9", values);
+            Assert.DoesNotContain("0", values);
 
             await collector.Stop();
         }

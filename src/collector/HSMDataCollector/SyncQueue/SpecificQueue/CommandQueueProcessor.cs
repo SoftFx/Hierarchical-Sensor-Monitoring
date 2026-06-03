@@ -22,17 +22,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 try
                 {
-                    await WaitToReadAsync(token).ConfigureAwait(false);
+                    await Reader.WaitToReadAsync(token).ConfigureAwait(false);
 
                     while (!IsEmpty && !token.IsCancellationRequested)
                     {
                         package = GetPackage();
-                        var sendingInfo =  await _sender.SendCommandAsync(package.Items, token).ConfigureAwait(false);
+                        var sendingInfo =  await _sender.SendCommandAsync(package, token).ConfigureAwait(false);
                         _queueManager.AddPackageSendingInfo(sendingInfo);
                         _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                     }
                 }
-                catch (OperationCanceledException) { }
+                catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
                     _logger.Error(ex);

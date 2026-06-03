@@ -1,4 +1,4 @@
-using HSMDataCollector.Core;
+﻿using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
@@ -18,12 +17,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         Stopping,
     }
 
-
     internal abstract class QueueProcessorBase<T> : IDisposable
     {
         private Task _task;
         private bool _disposed;
-        private QueueState _state;
+
         private readonly Channel<QueueItem<T>> _channel;
 
         protected ChannelReader<QueueItem<T>> Reader => _channel.Reader;
@@ -35,15 +33,18 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected readonly DataProcessor _queueManager;
 
         private readonly object _lifecycleLock = new object();
-        protected int _queueCount;
+
+        private QueueState _state = QueueState.Stopped;
         private int _cleanupContinuationRegistered;
 
         public abstract string QueueName { get; }
 
+        protected abstract Task ProcessingLoop(CancellationToken token);
+
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
-            _sender  = options.DataSender ?? throw new ArgumentNullException(nameof(options.DataSender));
+            _sender = options.DataSender ?? throw new ArgumentNullException(nameof(options.DataSender));
             _queueManager = queueManager;
             _logger = logger;
 
@@ -51,7 +52,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 SingleReader = false,
                 SingleWriter = false,
-                AllowSynchronousContinuations = false,
             });
         }
 
@@ -178,60 +178,54 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             }
         }
 
-        internal virtual int Enqeue(T item)
+        internal virtual int Enqueue(T item)
         {
-            Interlocked.Increment(ref _queueCount);
+            return Enqueue(new QueueItem<T>(item));
+        }
 
-            if (!Writer.TryWrite(new QueueItem<T>(item)))
+        internal virtual int Enqueue(QueueItem<T> item)
+        {
+            if (!Writer.TryWrite(item))
             {
-                Interlocked.Decrement(ref _queueCount);
+                _logger.Error($"{QueueName} queue processor did not write value");
                 return 0;
             }
 
             int result = 0;
-            while (Volatile.Read(ref _queueCount) > _options.MaxQueueSize)
+            while (QueueCount > _options.MaxQueueSize)
             {
                 if (!TryDequeue(out _))
                     break;
+
                 result++;
             }
 
             return result;
         }
 
-        internal virtual int Enqeue(IEnumerable<T> items)
+        internal virtual int Enqueue(IEnumerable<T> items)
         {
             int result = 0;
-            foreach(var item in items)
-              result += Enqeue(item);
+            foreach (var item in items)
+                result += Enqueue(item);
 
             return result;
         }
 
-
         internal DataPackage<T> GetPackage()
         {
-            var result = new DataPackage<T>();
-            var items = new List<T>(_options.MaxValuesInPackage);
-            var maxInspected = _options.MaxValuesInPackage > int.MaxValue / 2
-                ? int.MaxValue
-                : _options.MaxValuesInPackage * 2;
-            var inspected = 0;
-            DateTime now = DateTime.UtcNow;
+            var estimatedCount = Math.Min(QueueCount + 16, _options.MaxValuesInPackage);
+            var package = new DataPackage<T>(estimatedCount);
 
-            while (items.Count < _options.MaxValuesInPackage &&
-                   inspected < maxInspected &&
-                   TryDequeue(out QueueItem<T> item))
+            while (package.Count < _options.MaxValuesInPackage && TryDequeue(out QueueItem<T> item))
             {
-                inspected++;
-                result.AddInfo((now - item.BuildDate).TotalSeconds, 1);
-
                 if (Validate(item.Value))
-                    items.Add(item.Value);
+                {
+                    package.AddValue(item);
+                }
             }
 
-            result.Items = items;
-            return result;
+            return package;
         }
 
         private bool Validate(T item)
@@ -245,32 +239,9 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return true;
         }
 
+        protected int QueueCount => Reader.Count;
 
-        protected abstract Task ProcessingLoop(CancellationToken token);
-
-        protected int QueueCount => Volatile.Read(ref _queueCount);
-
-        protected bool IsEmpty => Volatile.Read(ref _queueCount) == 0;
-
-        protected ValueTask<bool> WaitToReadAsync(CancellationToken token) => Reader.WaitToReadAsync(token);
-
-        protected Task DelayAfterFailureAsync(CancellationToken token)
-        {
-            var delay = _options.PackageCollectPeriod > TimeSpan.Zero
-                ? _options.PackageCollectPeriod
-                : TimeSpan.FromMilliseconds(100);
-
-            return Task.Delay(delay, token);
-        }
-
-        protected bool TryDequeue(out QueueItem<T> item)
-        {
-            if (!Reader.TryRead(out item))
-                return false;
-
-            Interlocked.Decrement(ref _queueCount);
-            return true;
-        }
+        protected bool TryDequeue(out QueueItem<T> item) => Reader.TryRead(out item);
 
         private void RegisterCompletionCleanup(Task task, CancellationTokenSource tokenSource)
         {
@@ -302,16 +273,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     ClearQueue();
 
                 _state = QueueState.Stopped;
-                Interlocked.Exchange(ref _cleanupContinuationRegistered, 0);
             }
         }
 
+        protected bool IsEmpty => QueueCount == 0;
         internal int ClearQueue()
         {
-            var count = 0;
+            int count = 0;
             while (TryDequeue(out _))
+            {
                 count++;
-
+            }
             return count;
         }
 
@@ -323,8 +295,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         protected virtual void Dispose(bool disposing)
         {
-            if (_disposed)
-                return;
+            if (_disposed) return;
 
             if (disposing)
             {
@@ -334,13 +305,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 }
                 catch (Exception ex)
                 {
-
                     _logger.Error($"Error during disposal: {ex}");
                 }
             }
 
             _disposed = true;
         }
-
     }
 }

@@ -7,7 +7,6 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
 
-
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal sealed class DataQueueProcessor : QueueProcessorBase<SensorValueBase>
@@ -24,22 +23,27 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 {
                     var package = GetPackage();
 
-                    if (!package.Items.Any())
+                    if (package.Count == 0)
                         continue;
 
                     try
                     {
-                        var sendingInfo = await _sender.SendDataAsync(package.Items, token).ConfigureAwait(false);
+                        var sendingInfo = await _sender.SendDataAsync(package, token).ConfigureAwait(false);
+
+                        if (sendingInfo.Error != null)
+                        {
+                            _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). {sendingInfo.Error}");
+                            break;
+                        }
+
                         _queueManager.AddPackageSendingInfo(sendingInfo);
                         _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                     }
-                    catch (OperationCanceledException) { throw; }
-                    catch
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex)
                     {
-                        foreach (var item in package.Items)
-                            Enqeue(item);
-
-                        throw;
+                        _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). Error: {ex.Message}");
+                        break;
                     }
                 }
             }
@@ -66,22 +70,27 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     {
                         package = GetPackage();
 
-                        if (!package.Items.Any())
+                        if (package.Count == 0)
                             continue;
 
                         try
                         {
-                            var sendingInfo = await _sender.SendDataAsync(package.Items, token).ConfigureAwait(false);
+                            var sendingInfo = await _sender.SendDataAsync(package, token).ConfigureAwait(false);
+
+                            if (sendingInfo.Error != null)
+                            {
+                                _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). {sendingInfo.Error}");
+                                break;
+                            }
+
                             _queueManager.AddPackageSendingInfo(sendingInfo);
                             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
                         }
-                        catch (OperationCanceledException) { throw; }
-                        catch
+                        catch (OperationCanceledException) { break; }
+                        catch (Exception ex)
                         {
-                            foreach (var item in package.Items)
-                                Enqeue(item);
-
-                            throw;
+                            _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). Error: {ex.Message}");
+                            break;
                         }
                     }
                     while (QueueCount >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
