@@ -4,6 +4,7 @@ using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Schedule;
+using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.DataAlertTemplates;
 using HSMServer.Model.TreeViewModel;
@@ -188,9 +189,13 @@ namespace HSMServer.Controllers
             if (_cache.GetAlertTemplateModels().Any(x => x.Name == data.Name && x.Id != data.Id))
                 ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
 
+            Dictionary<Guid, string> availableChats = null;
+            if (_folders.TryGetValue(data.FolderId, out var folder) && folder.TelegramChats.Count > 0)
+                availableChats = folder.TelegramChats.GetAvailableChatsDictionary(_telegram);
+
             if (ModelState.IsValid)
             {
-                var model = data.ToModel();
+                var model = data.ToModel(availableChats);
                 var (success, error) = await _cache.AddAlertTemplateAsync(model);
 
                 if (!success)
@@ -199,9 +204,9 @@ namespace HSMServer.Controllers
                 return Ok();
             }
 
-            data = new DataAlertTemplateViewModel(data.ToModel(), _folders.GetUserFolders(CurrentUser));
+            data = new DataAlertTemplateViewModel(data.ToModel(availableChats), _folders.GetUserFolders(CurrentUser));
 
-            if (_folders.TryGetValue(data.FolderId, out var folder))
+            if (folder != null)
                 PopulateAvailableChats(data, folder.TelegramChats);
 
             foreach (var (_, alerts) in data.DataAlerts)
