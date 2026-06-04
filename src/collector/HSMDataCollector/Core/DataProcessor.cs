@@ -237,7 +237,7 @@ namespace HSMDataCollector.Core
             if (!_lifecycle.CanAcceptData)
                 return;
 
-            HandleEnqueueResult(sender, _dataQueue.Enqeue(data), _dataQueue.QueueName);
+            HandleEnqueueResult(sender, _dataQueue.Enqueue(data), _dataQueue.QueueName);
         }
 
         public void AddData(ISensor sender, IEnumerable<SensorValueBase> items)
@@ -245,7 +245,7 @@ namespace HSMDataCollector.Core
             if (!_lifecycle.CanAcceptData)
                 return;
 
-            HandleEnqueueResult(sender, _dataQueue.Enqeue(items), _dataQueue.QueueName);
+            HandleEnqueueResult(sender, _dataQueue.Enqueue(items), _dataQueue.QueueName);
         }
 
         public void AddPriorityData(ISensor sender, SensorValueBase data)
@@ -253,7 +253,7 @@ namespace HSMDataCollector.Core
             if (!_lifecycle.CanAcceptData)
                 return;
 
-            HandleEnqueueResult(sender, _priorityQueue.Enqeue(data), _priorityQueue.QueueName);
+            HandleEnqueueResult(sender, _priorityQueue.Enqueue(data), _priorityQueue.QueueName);
         }
 
         public void AddPriorityData(ISensor sender, IEnumerable<SensorValueBase> items)
@@ -261,7 +261,7 @@ namespace HSMDataCollector.Core
             if (!_lifecycle.CanAcceptData)
                 return;
 
-            HandleEnqueueResult(sender, _priorityQueue.Enqeue(items), _priorityQueue.QueueName);
+            HandleEnqueueResult(sender, _priorityQueue.Enqueue(items), _priorityQueue.QueueName);
         }
 
         public void AddCommand(ISensor sender, CommandRequestBase command)
@@ -269,7 +269,7 @@ namespace HSMDataCollector.Core
             if (!_lifecycle.CanAcceptData)
                 return;
 
-            HandleEnqueueResult(sender, _commandQueue.Enqeue(command), _commandQueue.QueueName);
+            HandleEnqueueResult(sender, _commandQueue.Enqueue(command), _commandQueue.QueueName);
         }
 
         public void AddCommand(ISensor sender, IEnumerable<CommandRequestBase> commands)
@@ -277,7 +277,7 @@ namespace HSMDataCollector.Core
             if (!_lifecycle.CanAcceptData)
                 return;
 
-            HandleEnqueueResult(sender, _commandQueue.Enqeue(commands), _commandQueue.QueueName);
+            HandleEnqueueResult(sender, _commandQueue.Enqueue(commands), _commandQueue.QueueName);
         }
 
         public void AddFile(ISensor sender, FileSensorValue file)
@@ -285,7 +285,7 @@ namespace HSMDataCollector.Core
             if (!_lifecycle.CanAcceptData)
                 return;
 
-            HandleEnqueueResult(sender, _fileQueue.Enqeue(file), _fileQueue.QueueName);
+            HandleEnqueueResult(sender, _fileQueue.Enqueue(file), _fileQueue.QueueName);
         }
 
         public void AddException(string sensorPath, Exception ex)

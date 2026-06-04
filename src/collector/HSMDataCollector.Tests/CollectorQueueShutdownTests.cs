@@ -204,7 +204,7 @@ namespace HSMDataCollector.Tests
         private static EnqueueResult InvokeEnqueue(object dataQueue, SensorValueBase value)
         {
             var method = typeof(QueueProcessorBase<SensorValueBase>)
-                .GetMethod("Enqeue", BindingFlags.Instance | BindingFlags.NonPublic, binder: null, types: new[] { typeof(SensorValueBase) }, modifiers: null);
+                .GetMethod("Enqueue", BindingFlags.Instance | BindingFlags.NonPublic, binder: null, types: new[] { typeof(SensorValueBase) }, modifiers: null);
             Assert.NotNull(method);
             return (EnqueueResult)method.Invoke(dataQueue, new object[] { value });
         }

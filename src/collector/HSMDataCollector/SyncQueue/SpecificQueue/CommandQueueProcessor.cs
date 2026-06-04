@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -14,11 +13,10 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         public CommandQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
-
         protected override async ValueTask<bool> TryDispatchOneAsync(CancellationToken token)
         {
             var package = GetPackage();
-            if (!package.Items.Any())
+            if (package.Count == 0)
                 return false;
 
             await DispatchPackageAsync(package,

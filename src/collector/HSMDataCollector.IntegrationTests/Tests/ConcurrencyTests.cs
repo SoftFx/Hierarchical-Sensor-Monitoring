@@ -12,7 +12,7 @@ namespace HSMDataCollector.IntegrationTests.Tests
 {
     [Trait("Category", "Integration")]
     [Collection("HSM Server")]
-    public class ConcurrencyTests : IClassFixture<HsmServerFixture>
+    public class ConcurrencyTests
     {
         private readonly HsmServerFixture _fixture;
 
