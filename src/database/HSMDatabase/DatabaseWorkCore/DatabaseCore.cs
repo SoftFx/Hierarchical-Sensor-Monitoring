@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -497,6 +497,23 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return keys;
         }
+
+        #endregion
+
+        #region McpAccessKey
+
+        public void RemoveMcpAccessKey(Guid id) => _environmentDatabase.RemoveMcpAccessKey(id.ToString());
+
+        public void AddMcpAccessKey(McpAccessKeyEntity entity)
+        {
+            _environmentDatabase.AddMcpAccessKey(entity);
+        }
+
+        public void UpdateMcpAccessKey(McpAccessKeyEntity entity) => AddMcpAccessKey(entity);
+
+        public McpAccessKeyEntity GetMcpAccessKey(Guid id) => _environmentDatabase.GetMcpAccessKey(id.ToString());
+
+        public List<McpAccessKeyEntity> GetAllMcpAccessKeys() => _environmentDatabase.GetAllMcpAccessKeys();
 
         #endregion
 

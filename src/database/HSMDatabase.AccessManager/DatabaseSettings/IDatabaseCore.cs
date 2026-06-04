@@ -1,4 +1,4 @@
-﻿using HSMCommon.Model;
+using HSMCommon.Model;
 using HSMCommon.TaskResult;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
@@ -63,6 +63,16 @@ namespace HSMServer.Core.DataLayer
         void UpdateAccessKey(AccessKeyEntity entity);
         AccessKeyEntity GetAccessKey(Guid id);
         List<AccessKeyEntity> GetAccessKeys();
+
+        #endregion
+
+        #region McpAccessKey
+
+        void RemoveMcpAccessKey(Guid id);
+        void AddMcpAccessKey(McpAccessKeyEntity entity);
+        void UpdateMcpAccessKey(McpAccessKeyEntity entity);
+        McpAccessKeyEntity GetMcpAccessKey(Guid id);
+        List<McpAccessKeyEntity> GetAllMcpAccessKeys();
 
         #endregion
 

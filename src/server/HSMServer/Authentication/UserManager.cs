@@ -1,4 +1,4 @@
-﻿using HSMCommon;
+using HSMCommon;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
@@ -111,6 +111,62 @@ namespace HSMServer.Authentication
         }
 
         public IEnumerable<User> GetUsers(Func<User, bool> filter = null) => filter != null ? Values.Where(filter) : Values;
+
+        public McpAccessKeyModel GetMcpAccessKey(Guid keyId)
+        {
+            var entity = _databaseCore.GetMcpAccessKey(keyId);
+            return entity != null ? new McpAccessKeyModel(entity) : null;
+        }
+
+        public IEnumerable<McpAccessKeyModel> GetUserMcpAccessKeys(Guid userId)
+        {
+            var keys = _databaseCore.GetAllMcpAccessKeys()
+                .Where(e => Guid.Parse(e.UserId) == userId)
+                .Select(e => new McpAccessKeyModel(e));
+            return keys;
+        }
+
+        public bool AddMcpAccessKey(McpAccessKeyModel key)
+        {
+            try
+            {
+                _databaseCore.AddMcpAccessKey(key.ToEntity());
+                return true;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to add McpAccessKey {key.Id}");
+                return false;
+            }
+        }
+
+        public bool UpdateMcpAccessKey(McpAccessKeyModel key)
+        {
+            try
+            {
+                _databaseCore.UpdateMcpAccessKey(key.ToEntity());
+                return true;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to update McpAccessKey {key.Id}");
+                return false;
+            }
+        }
+
+        public bool RemoveMcpAccessKey(Guid keyId)
+        {
+            try
+            {
+                _databaseCore.RemoveMcpAccessKey(keyId);
+                return true;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to remove McpAccessKey {keyId}");
+                return false;
+            }
+        }
 
         public override async Task Initialize()
         {
