@@ -144,7 +144,7 @@ namespace HSMServer.Model.DataAlerts
                         InstantSend = action.ScheduleInstantSend
                     };
 
-                    destination = new PolicyDestinationUpdate(action.Chats?.ToDictionary(k => k, v => availableChats[v]) ?? new(0), action.ChatsMode.ToCore());
+                    destination = new PolicyDestinationUpdate(action.Chats?.Where(availableChats.ContainsKey).ToDictionary(k => k, v => availableChats[v]) ?? new(0), action.ChatsMode.ToCore());
                     comment = action.Comment;
                 }
                 else if (action.Action == ActionType.ShowIcon)
