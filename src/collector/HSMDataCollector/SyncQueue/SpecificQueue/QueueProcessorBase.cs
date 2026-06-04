@@ -148,20 +148,24 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                 try
                 {
-                    tokenSourceToDispose?.Cancel();
+                    if (mode == ShutdownMode.GracefulStop)
+                        tokenSourceToDispose?.Cancel();
+                    else
+                        tokenSourceToDispose?.CancelAfter(TimeSpan.Zero);
 
                     if (!taskToWait.IsCompleted)
                     {
                         using (var delayCancellation = new CancellationTokenSource())
                         {
-                            var delayTask = Task.Delay(_options.RequestTimeout, delayCancellation.Token);
+                            var stopWaitTimeout = mode.StopWaitTimeout(_options.RequestTimeout);
+                            var delayTask = Task.Delay(stopWaitTimeout, delayCancellation.Token);
                             var completedTask = await Task.WhenAny(taskToWait, delayTask).ConfigureAwait(false);
 
                             if (completedTask != taskToWait)
                             {
                                 RegisterCompletionCleanup(taskToWait, tokenSourceToDispose);
 
-                                _logger.Error($"{QueueName} queue processor did not stop within {_options.RequestTimeout}. IDataSender may ignore cancellation.");
+                                _logger.Error($"{QueueName} queue processor did not stop within {stopWaitTimeout}. IDataSender may ignore cancellation.");
 
                                 if (clearOnStop)
                                     ClearQueue();

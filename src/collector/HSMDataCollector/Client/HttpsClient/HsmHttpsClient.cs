@@ -13,12 +13,13 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Client
 {
-    internal sealed class HsmHttpsClient : IDataSender, IDisposable
+    internal sealed class HsmHttpsClient : IDataSender, ICancelableDataSender, IDisposable
     {
         private const string HeaderClientName = "ClientName";
         private const string HeaderAccessKey = "Key";
 
-        private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
+        private readonly object _tokenSourceLock = new object();
+        private CancellationTokenSource _tokenSource = new CancellationTokenSource();
 
         private readonly CommandHandler _commandsHandler;
         private readonly DataHandlers _dataHandler;
@@ -58,14 +59,36 @@ namespace HSMDataCollector.Client
             if (Interlocked.Exchange(ref _disposed, 1) == 1)
                 return;
 
-            _tokenSource.Cancel();
+            CancellationTokenSource tokenSourceToDispose;
+
+            lock (_tokenSourceLock)
+                tokenSourceToDispose = _tokenSource;
+
+            tokenSourceToDispose.Cancel();
 
             _commandsHandler.Dispose();
             _dataHandler.Dispose();
             _priorityDataHandler.Dispose();
             _fileHandler.Dispose();
 
-            _tokenSource.Dispose();
+            tokenSourceToDispose.Dispose();
+            _client.Dispose();
+        }
+
+        public void CancelPendingRequests()
+        {
+            CancellationTokenSource tokenSourceToCancel;
+
+            lock (_tokenSourceLock)
+            {
+                if (Volatile.Read(ref _disposed) == 1)
+                    return;
+
+                tokenSourceToCancel = _tokenSource;
+                _tokenSource = new CancellationTokenSource();
+            }
+
+            tokenSourceToCancel.Cancel();
             _client.Dispose();
         }
 
@@ -89,7 +112,16 @@ namespace HSMDataCollector.Client
             return _fileHandler.SendAsync(file, token);
         }
 
-        internal ValueTask<HttpResponseMessage> SendRequestAsync(string uri, HttpContent stringContent, CancellationToken token) => new ValueTask<HttpResponseMessage>(_client.PostAsync(uri, stringContent, token));
+        internal async ValueTask<HttpResponseMessage> SendRequestAsync(string uri, HttpContent stringContent, CancellationToken token)
+        {
+            CancellationTokenSource pendingRequests;
+
+            lock (_tokenSourceLock)
+                pendingRequests = _tokenSource;
+
+            using (var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token, pendingRequests.Token))
+                return await _client.PostAsync(uri, stringContent, linkedTokenSource.Token).ConfigureAwait(false);
+        }
 
 
         public async ValueTask<ConnectionResult> TestConnectionAsync()

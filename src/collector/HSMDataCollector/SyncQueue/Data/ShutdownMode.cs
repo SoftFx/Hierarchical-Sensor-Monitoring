@@ -1,3 +1,5 @@
+using System;
+
 namespace HSMDataCollector.SyncQueue.Data
 {
     /// <summary>
@@ -57,5 +59,14 @@ namespace HSMDataCollector.SyncQueue.Data
         /// </summary>
         internal static bool ClearOnStop(this ShutdownMode mode) =>
             mode == ShutdownMode.StartRollback;
+
+        internal static TimeSpan StopWaitTimeout(this ShutdownMode mode, TimeSpan requestTimeout)
+        {
+            if (mode == ShutdownMode.GracefulStop)
+                return requestTimeout;
+
+            var terminalTimeout = TimeSpan.FromSeconds(1);
+            return requestTimeout < terminalTimeout ? requestTimeout : terminalTimeout;
+        }
     }
 }

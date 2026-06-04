@@ -293,7 +293,7 @@ namespace HSMDataCollector.Core
         {
             Task startInitTask;
             Task processorStopTask;
-            Task stopTask;
+            var failures = new List<Exception>();
 
             lock (_opLock)
             {
@@ -303,18 +303,39 @@ namespace HSMDataCollector.Core
                 LogAndRaise(CollectorStatus.Stopping);
 
                 startInitTask = _currentStartInitTask;
-                processorStopTask = WaitForStartInitThenStopProcessor(startInitTask, ShutdownMode.GracefulStop);
-                stopTask = Task.WhenAll(processorStopTask, customStoppingTask);
-                _currentProcessorStopTask = processorStopTask;
+                processorStopTask = _currentProcessorStopTask;
             }
 
             try
             {
-                await stopTask.ConfigureAwait(false);
+                if (customStoppingTask != null)
+                    await customStoppingTask.ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger.Error($"DataCollector Stop error: {ex}");
+                failures.Add(ex);
+            }
+
+            lock (_opLock)
+            {
+                if (Status == CollectorStatus.Disposed)
+                    return;
+
+                processorStopTask = _currentProcessorStopTask;
+                if (processorStopTask == null)
+                {
+                    processorStopTask = WaitForStartInitThenStopProcessor(startInitTask, ShutdownMode.GracefulStop);
+                    _currentProcessorStopTask = processorStopTask;
+                }
+            }
+
+            try
+            {
+                await processorStopTask.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                failures.Add(ex);
             }
 
             lock (_opLock)
@@ -326,6 +347,11 @@ namespace HSMDataCollector.Core
                 if (_lifecycle.CompleteStop())
                     LogAndRaise(CollectorStatus.Stopped);
             }
+
+            if (failures.Count == 1)
+                _logger.Error($"DataCollector Stop error: {failures[0]}");
+            else if (failures.Count > 1)
+                _logger.Error($"DataCollector Stop error: {new AggregateException(failures)}");
         }
 
         private void InitializeProcessor()
@@ -403,20 +429,24 @@ namespace HSMDataCollector.Core
                 if (previousStatus == CollectorStatus.Disposed)
                     return;
 
-                // If another thread is already stopping, do not issue a duplicate StopAsync —
-                // wait for its task. Otherwise take the Starting/Running -> Stopping transition ourselves.
+                // If another thread is already stopping with a registered processor stop task,
+                // wait for it. If the collector is Stopping but no processor stop task exists yet
+                // (Stop(customTask) is still running its hook), Dispose owns the terminal stop.
                 inFlightStop = _currentProcessorStopTask;
                 inFlightStartInit = _currentStartInitTask;
                 ownsStop = inFlightStop == null
-                    && previousStatus.IsStartingOrRunning()
-                    && _lifecycle.TryStop();
+                    && (previousStatus == CollectorStatus.Stopping ||
+                        (previousStatus.IsStartingOrRunning() && _lifecycle.TryStop()));
 
-                if (ownsStop)
+                if (ownsStop && previousStatus.IsStartingOrRunning())
                     LogAndRaise(CollectorStatus.Stopping);
             }
 
             try
             {
+                if (inFlightStop != null || ownsStop)
+                    (_dataSender as ICancelableDataSender)?.CancelPendingRequests();
+
                 if (inFlightStop != null)
                 {
                     // Concurrent Stop() is responsible for firing ToStopped — but its continuation runs on
