@@ -46,6 +46,32 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        // #1071 / #1073: retry re-enqueue is an internal preservation path for already accepted
+        // work. It must keep working after StopAsync closes public writes; otherwise a failed
+        // post-stop flush dequeues a package and silently loses it before ClearQueue can log it.
+        [Fact]
+        public async Task Flush_failure_after_queue_stop_preserves_dequeued_work_for_clear()
+        {
+            var sender = new SilentDataSender();
+            using (var collector = new DataCollector(CreateOptions(sender, "flush-requeue")))
+            {
+                var dataQueue = GetDataQueue(collector);
+
+                var acceptedResult = InvokeEnqueue(dataQueue, BuildBarValue());
+                Assert.Equal(EnqueueStatus.Accepted, acceptedResult.Status);
+
+                await StopQueueAsync(dataQueue, ShutdownMode.GracefulStop).ConfigureAwait(false);
+
+                sender.ThrowOnData = true;
+
+                using (var flushCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(1)))
+                    await FlushQueueAsync(dataQueue, flushCancellation.Token).ConfigureAwait(false);
+
+                Assert.Equal(1, GetQueueCount(dataQueue));
+                Assert.Equal(1, ClearQueue(dataQueue));
+            }
+        }
+
         // #1072 / #1073: lifecycle gating still rejects writes after Stop() so a late SendValue
         // does not silently land in a stopped queue, even via the public AddValue path.
         [Fact]
@@ -183,10 +209,34 @@ namespace HSMDataCollector.Tests
             return (EnqueueResult)method.Invoke(dataQueue, new object[] { value });
         }
 
+        private static async Task<bool> StopQueueAsync(object dataQueue, ShutdownMode mode)
+        {
+            var method = typeof(QueueProcessorBase<SensorValueBase>)
+                .GetMethod("StopAsync", BindingFlags.Instance | BindingFlags.Public, binder: null, types: new[] { typeof(ShutdownMode) }, modifiers: null);
+            Assert.NotNull(method);
+            return await ((ValueTask<bool>)method.Invoke(dataQueue, new object[] { mode })).ConfigureAwait(false);
+        }
+
+        private static async Task FlushQueueAsync(object dataQueue, CancellationToken token)
+        {
+            var method = typeof(QueueProcessorBase<SensorValueBase>)
+                .GetMethod("FlushAsync", BindingFlags.Instance | BindingFlags.Public, binder: null, types: new[] { typeof(CancellationToken) }, modifiers: null);
+            Assert.NotNull(method);
+            await ((Task)method.Invoke(dataQueue, new object[] { token })).ConfigureAwait(false);
+        }
+
         private static int GetQueueCount(object dataQueue) =>
             (int)typeof(QueueProcessorBase<SensorValueBase>)
                 .GetProperty("QueueCount", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.GetProperty | BindingFlags.FlattenHierarchy)
                 .GetValue(dataQueue);
+
+        private static int ClearQueue(object dataQueue)
+        {
+            var method = typeof(QueueProcessorBase<SensorValueBase>)
+                .GetMethod("ClearQueue", BindingFlags.Instance | BindingFlags.Public, binder: null, types: Type.EmptyTypes, modifiers: null);
+            Assert.NotNull(method);
+            return (int)method.Invoke(dataQueue, new object[0]);
+        }
 
         private static SensorValueBase BuildBarValue() => new IntBarSensorValue { Count = 1 };
 
@@ -195,10 +245,15 @@ namespace HSMDataCollector.Tests
         {
             private readonly TaskCompletionSource<bool> _dataReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
+            public bool ThrowOnData { get; set; }
+
             public ValueTask<ConnectionResult> TestConnectionAsync() => new ValueTask<ConnectionResult>(ConnectionResult.Ok);
 
             public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
             {
+                if (ThrowOnData)
+                    throw new InvalidOperationException("Synthetic data send failure.");
+
                 _dataReceived.TrySetResult(true);
                 return new ValueTask<PackageSendingInfo>(default(PackageSendingInfo));
             }

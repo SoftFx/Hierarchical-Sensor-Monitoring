@@ -28,12 +28,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             catch (OperationCanceledException)
             {
                 if (PreserveCanceledPackages)
-                    Enqeue(item.Value);
+                    ReEnqueueItem(item.Value);
                 throw;
             }
             catch
             {
-                Enqeue(item.Value);
+                ReEnqueueItem(item.Value);
                 throw;
             }
 

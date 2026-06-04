@@ -212,7 +212,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         internal virtual EnqueueResult Enqeue(T item)
         {
-            if (Volatile.Read(ref _acceptingWritesFlag) == 0)
+            return EnqueueCore(item, rejectWhenNotAcceptingWrites: true);
+        }
+
+        private EnqueueResult EnqueueCore(T item, bool rejectWhenNotAcceptingWrites)
+        {
+            if (rejectWhenNotAcceptingWrites && Volatile.Read(ref _acceptingWritesFlag) == 0)
                 return EnqueueResult.RejectedStopped();
 
             Interlocked.Increment(ref _queueCount);
@@ -412,15 +417,21 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         }
 
         /// <summary>
+        /// Re-enqueue an item that was already accepted and then dequeued for dispatch. This path
+        /// intentionally bypasses the public write gate so post-stop flush failures can preserve or
+        /// log accepted work instead of silently dropping it.
+        /// </summary>
+        protected EnqueueResult ReEnqueueItem(T item) =>
+            EnqueueCore(item, rejectWhenNotAcceptingWrites: false);
+
+        /// <summary>
         /// Re-enqueue items back into this queue. Used by send-retry paths so retryable failures
-        /// do not drop accepted work. Items rejected because the queue is already terminally
-        /// stopped are silently dropped — the caller is the queue's own processing loop, and there
-        /// is nothing useful to do with them at this layer.
+        /// do not drop accepted work, even if public writes have already been closed for shutdown.
         /// </summary>
         protected void ReEnqueueItems(IEnumerable<T> items)
         {
             foreach (var item in items)
-                Enqeue(item);
+                ReEnqueueItem(item);
         }
 
         protected ShutdownMode CurrentShutdownMode => (ShutdownMode)Volatile.Read(ref _currentShutdownModeRaw);
