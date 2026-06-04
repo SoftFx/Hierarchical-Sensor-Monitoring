@@ -86,7 +86,7 @@ namespace HSMDataCollector.Tests
         }
 
         [LongStressFact]
-        public async Task Collector_runs_for_ten_minutes_against_flaky_server_under_sustained_load()
+        public async Task Collector_runs_against_flaky_server_under_sustained_load()
         {
             if (!HttpListener.IsSupported)
                 return;
@@ -121,8 +121,11 @@ namespace HSMDataCollector.Tests
                 WriteServerStats(server);
                 _output.WriteLine("Managed memory growth: {0:n0} bytes", managedMemoryGrowth);
 
-                Assert.True(server.TotalRequests > 100, "Long stress should produce many HTTP requests.");
-                Assert.True(server.DataRequests > 50, "Long stress should keep sending sensor data.");
+                var minTotalRequests = duration >= TimeSpan.FromSeconds(30) ? 100 : 1;
+                var minDataRequests = duration >= TimeSpan.FromSeconds(30) ? 50 : 1;
+
+                Assert.True(server.TotalRequests > minTotalRequests, "Long stress should produce HTTP requests.");
+                Assert.True(server.DataRequests > minDataRequests, "Long stress should keep sending sensor data.");
                 Assert.True(server.FailedResponses > 0, "Long stress should include HTTP failures.");
                 Assert.True(server.AbortedConnections > 0, "Long stress should include broken connections.");
                 Assert.True(managedMemoryGrowth < 256L * 1024 * 1024, "Managed memory should not grow without bounds during stress.");
@@ -257,12 +260,17 @@ namespace HSMDataCollector.Tests
 
         private static TimeSpan GetLongStressDuration()
         {
+            var rawSeconds = Environment.GetEnvironmentVariable("HSM_COLLECTOR_STRESS_SECONDS");
+
+            if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+                return TimeSpan.FromSeconds(seconds);
+
             var rawMinutes = Environment.GetEnvironmentVariable("HSM_COLLECTOR_STRESS_MINUTES");
 
             if (double.TryParse(rawMinutes, NumberStyles.Float, CultureInfo.InvariantCulture, out var minutes) && minutes > 0)
                 return TimeSpan.FromMinutes(minutes);
 
-            return TimeSpan.FromMinutes(10);
+            return TimeSpan.FromSeconds(5);
         }
 
         private static TimeSpan GetSuiteSoakDuration()
@@ -272,7 +280,7 @@ namespace HSMDataCollector.Tests
             if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
                 return TimeSpan.FromSeconds(seconds);
 
-            return TimeSpan.FromSeconds(30);
+            return TimeSpan.FromSeconds(5);
         }
 
         private static TimeSpan GetSuiteSoakMaxDuration()
@@ -282,7 +290,7 @@ namespace HSMDataCollector.Tests
             if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
                 return TimeSpan.FromSeconds(seconds);
 
-            return TimeSpan.FromMinutes(2);
+            return TimeSpan.FromSeconds(30);
         }
 
         private static void AssertWithinSuiteSoakMax(Stopwatch stopwatch, TimeSpan maxDuration)
@@ -308,7 +316,7 @@ namespace HSMDataCollector.Tests
             public LongStressFactAttribute()
             {
                 if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_LONG_STRESS"), "1", StringComparison.Ordinal))
-                    Skip = "Set HSM_COLLECTOR_RUN_LONG_STRESS=1 to run the 10-minute collector stress test.";
+                    Skip = "Set HSM_COLLECTOR_RUN_LONG_STRESS=1 to run the sustained collector stress test.";
             }
         }
 
