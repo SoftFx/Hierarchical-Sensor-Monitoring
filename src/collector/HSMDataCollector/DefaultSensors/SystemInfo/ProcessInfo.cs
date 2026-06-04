@@ -9,21 +9,6 @@ namespace HSMDataCollector.DefaultSensors
         internal static string CurrentProcessName => CurrentProcess.ProcessName;
 
 
-        internal static Process GetProcess(string args)
-        {
-            return new Process()
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "/bin/bash",
-                    Arguments = $"-c \"{args.Replace("\"", "\\\"")}\"",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                }
-            };
-        }
-
         internal static Process GetPowershellProcess(string args)
         {
             return new Process()
@@ -33,6 +18,7 @@ namespace HSMDataCollector.DefaultSensors
                     FileName = "powershell.exe",
                     Arguments = args.Replace("\"", "\\\""),
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 }

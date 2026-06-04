@@ -3,115 +3,229 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
-
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
+    internal enum QueueState : byte
+    {
+        Stopped,
+        Running,
+        Stopping,
+    }
+
     internal abstract class QueueProcessorBase<T> : IDisposable
     {
         private Task _task;
         private bool _disposed;
 
-        protected readonly ConcurrentQueue<QueueItem<T>> _queue = new ConcurrentQueue<QueueItem<T>>();
+        private readonly Channel<QueueItem<T>> _channel;
+
+        protected ChannelReader<QueueItem<T>> Reader => _channel.Reader;
+        protected ChannelWriter<QueueItem<T>> Writer => _channel.Writer;
         protected readonly IDataSender _sender;
         protected readonly CollectorOptions _options;
         protected CancellationTokenSource _cancellationTokenSource;
         protected readonly ICollectorLogger _logger;
         protected readonly DataProcessor _queueManager;
 
+        private readonly object _lifecycleLock = new object();
+
+        private QueueState _state = QueueState.Stopped;
+        private int _cleanupContinuationRegistered;
+
         public abstract string QueueName { get; }
+
+        protected abstract Task ProcessingLoop(CancellationToken token);
 
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
-            _sender  = options.DataSender ?? throw new ArgumentNullException(nameof(options.DataSender));
+            _sender = options.DataSender ?? throw new ArgumentNullException(nameof(options.DataSender));
             _queueManager = queueManager;
             _logger = logger;
+
+            _channel = Channel.CreateUnbounded<QueueItem<T>>(new UnboundedChannelOptions
+            {
+                SingleReader = false,
+                SingleWriter = false,
+            });
         }
 
-        internal void Start()
+        internal bool Start()
         {
-            _cancellationTokenSource = new CancellationTokenSource();
-            _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
+            lock (_lifecycleLock)
+            {
+                if (_disposed)
+                {
+                    _logger.Error($"{QueueName} queue processor is disposed and cannot be started.");
+                    return false;
+                }
+
+                if (_state == QueueState.Stopping)
+                {
+                    _logger.Error($"{QueueName} queue processor is still stopping and cannot be started again yet.");
+                    return false;
+                }
+
+                if (_state == QueueState.Running)
+                {
+                    // Defensive: ProcessingLoop should never exit on its own (it loops until cancellation),
+                    // but if a subclass override breaks that contract, recover by treating the queue as stopped.
+                    // We do NOT call Task.Dispose on a possibly-faulted task — let the GC handle it to avoid
+                    // surfacing unobserved exceptions on the finalizer thread.
+                    if (_task == null || _task.IsCompleted)
+                    {
+                        _logger.Error($"{QueueName} queue processor task exited unexpectedly; restarting.");
+                        _task = null;
+                        _cancellationTokenSource?.Dispose();
+                        _cancellationTokenSource = null;
+                        _state = QueueState.Stopped;
+                        Interlocked.Exchange(ref _cleanupContinuationRegistered, 0);
+                    }
+                    else
+                    {
+                        return true;
+                    }
+                }
+
+                _cancellationTokenSource = new CancellationTokenSource();
+                _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
+                _state = QueueState.Running;
+                Interlocked.Exchange(ref _cleanupContinuationRegistered, 0);
+            }
+
+            return true;
         }
 
-        internal async ValueTask StopAsync()
+        internal async ValueTask<bool> StopAsync(bool clearQueue = true)
         {
             try
             {
-                if (_task is null)
-                    return;
+                Task taskToWait;
+                CancellationTokenSource tokenSourceToDispose;
 
-                _cancellationTokenSource?.Cancel();
+                lock (_lifecycleLock)
+                {
+                    if (_state == QueueState.Stopped)
+                    {
+                        if (clearQueue)
+                            ClearQueue();
+
+                        return true;
+                    }
+
+                    if (_state == QueueState.Stopping)
+                    {
+                        if (clearQueue)
+                            ClearQueue();
+
+                        return false;
+                    }
+
+                    _state = QueueState.Stopping;
+                    taskToWait = _task;
+                    tokenSourceToDispose = _cancellationTokenSource;
+                }
 
                 try
                 {
-                    await _task.ConfigureAwait(false);
+                    tokenSourceToDispose?.Cancel();
+
+                    if (!taskToWait.IsCompleted)
+                    {
+                        using (var delayCancellation = new CancellationTokenSource())
+                        {
+                            var delayTask = Task.Delay(_options.RequestTimeout, delayCancellation.Token);
+                            var completedTask = await Task.WhenAny(taskToWait, delayTask).ConfigureAwait(false);
+
+                            if (completedTask != taskToWait)
+                            {
+                                RegisterCompletionCleanup(taskToWait, tokenSourceToDispose);
+
+                                _logger.Error($"{QueueName} queue processor did not stop within {_options.RequestTimeout}. IDataSender may ignore cancellation.");
+
+                                if (clearQueue)
+                                    ClearQueue();
+
+                                return false;
+                            }
+
+                            delayCancellation.Cancel();
+                        }
+                    }
+
+                    await taskToWait.ConfigureAwait(false);
+                    return true;
                 }
                 finally
                 {
-                    _task.Dispose();
-                    _task = null;
-
-                    _cancellationTokenSource?.Dispose();
-                    _cancellationTokenSource = null;
+                    if (taskToWait.IsCompleted)
+                        CompleteStoppedTask(taskToWait, tokenSourceToDispose, clearQueue);
                 }
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException)
+            {
+                return true;
+            }
             catch (Exception ex)
             {
                 _logger.Error(ex);
+                return true;
             }
         }
 
-        internal virtual int Enqeue(T item)
+        internal virtual int Enqueue(T item)
         {
-            _queue.Enqueue(new QueueItem<T>(item));
+            return Enqueue(new QueueItem<T>(item));
+        }
+
+        internal virtual int Enqueue(QueueItem<T> item)
+        {
+            if (!Writer.TryWrite(item))
+            {
+                _logger.Error($"{QueueName} queue processor did not write value");
+                return 0;
+            }
 
             int result = 0;
-            while(_queue.Count >= _options.MaxQueueSize)
+            while (QueueCount > _options.MaxQueueSize)
             {
-                _queue.TryDequeue(out _);
+                if (!TryDequeue(out _))
+                    break;
+
                 result++;
             }
 
             return result;
         }
 
-        internal virtual int Enqeue(IEnumerable<T> items)
+        internal virtual int Enqueue(IEnumerable<T> items)
         {
             int result = 0;
-            foreach(var item in items)
-              result += Enqeue(item);
+            foreach (var item in items)
+                result += Enqueue(item);
 
             return result;
         }
 
-
         internal DataPackage<T> GetPackage()
         {
-            var result = new DataPackage<T>();
-            result.Items = Elements().Take(_options.MaxValuesInPackage).Where(Validate);
+            var estimatedCount = Math.Min(QueueCount + 16, _options.MaxValuesInPackage);
+            var package = new DataPackage<T>(estimatedCount);
 
-            IEnumerable<T> Elements()
+            while (package.Count < _options.MaxValuesInPackage && TryDequeue(out QueueItem<T> item))
             {
-                DateTime now = DateTime.UtcNow;
-
-                while (_queue.TryDequeue(out QueueItem<T> item))
+                if (Validate(item.Value))
                 {
-                    result.AddInfo((now - item.BuildDate).TotalSeconds, 1);
-
-                    yield return item.Value;
+                    package.AddValue(item);
                 }
             }
 
-            return result;
+            return package;
         }
 
         private bool Validate(T item)
@@ -125,8 +239,53 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return true;
         }
 
+        protected int QueueCount => Reader.Count;
 
-        protected abstract Task ProcessingLoop(CancellationToken token);
+        protected bool TryDequeue(out QueueItem<T> item) => Reader.TryRead(out item);
+
+        private void RegisterCompletionCleanup(Task task, CancellationTokenSource tokenSource)
+        {
+            if (Interlocked.Exchange(ref _cleanupContinuationRegistered, 1) == 1)
+                return;
+
+            task.ContinueWith(_ => CompleteStoppedTask(task, tokenSource, clearQueue: false),
+                              CancellationToken.None,
+                              TaskContinuationOptions.ExecuteSynchronously,
+                              TaskScheduler.Default);
+        }
+
+        private void CompleteStoppedTask(Task task, CancellationTokenSource tokenSource, bool clearQueue)
+        {
+            lock (_lifecycleLock)
+            {
+                if (!ReferenceEquals(_task, task))
+                    return;
+
+                task.Dispose();
+                _task = null;
+
+                tokenSource?.Dispose();
+
+                if (ReferenceEquals(_cancellationTokenSource, tokenSource))
+                    _cancellationTokenSource = null;
+
+                if (clearQueue)
+                    ClearQueue();
+
+                _state = QueueState.Stopped;
+            }
+        }
+
+        protected bool IsEmpty => QueueCount == 0;
+        internal int ClearQueue()
+        {
+            int count = 0;
+            while (TryDequeue(out _))
+            {
+                count++;
+            }
+            return count;
+        }
 
         public void Dispose()
         {
@@ -136,8 +295,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         protected virtual void Dispose(bool disposing)
         {
-            if (_disposed)
-                return;
+            if (_disposed) return;
 
             if (disposing)
             {
@@ -147,13 +305,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 }
                 catch (Exception ex)
                 {
-
                     _logger.Error($"Error during disposal: {ex}");
                 }
             }
 
             _disposed = true;
         }
-
     }
 }

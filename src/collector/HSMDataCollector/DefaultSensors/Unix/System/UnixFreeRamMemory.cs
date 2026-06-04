@@ -1,11 +1,15 @@
-﻿using HSMDataCollector.Extensions;
+using System;
+using System.IO;
+using System.Security;
+using HSMDataCollector.DefaultSensors.Unix.SystemInfo;
 using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Unix
 {
     public sealed class UnixFreeRamMemory : CollectableBarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
-        private const string TotalCpuBashCommand = "free -m | awk 'NR==2 { print $7 }'";
+        private const string ProcMeminfoPath = "/proc/meminfo";
+        private const double KbPerMb = 1024.0;
 
 
         internal UnixFreeRamMemory(BarSensorOptions options) : base(options) { }
@@ -13,10 +17,29 @@ namespace HSMDataCollector.DefaultSensors.Unix
 
         protected override double? GetBarData()
         {
-            if (double.TryParse(TotalCpuBashCommand.BashExecute().Replace("\n", ""), out var barData))
-                return barData;
+            var availableKb = ProcMeminfo.ParseAvailableKb(ReadMeminfo());
 
-            return null;
+            return availableKb.HasValue ? availableKb.Value / KbPerMb : (double?)null;
+        }
+
+        private static string ReadMeminfo()
+        {
+            try
+            {
+                return File.ReadAllText(ProcMeminfoPath);
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
+            catch (SecurityException)
+            {
+                return null;
+            }
         }
     }
 }
