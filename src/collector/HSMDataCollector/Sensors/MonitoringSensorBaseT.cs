@@ -17,6 +17,7 @@ namespace HSMDataCollector.DefaultSensors
         // Composed scheduling lifecycle for the periodic send loop (replaces a hand-rolled
         // ScheduledTask field + lock). The bar sensor composes a second handle for its collect loop.
         private readonly ScheduledTaskHandle _sendHandle;
+        private int _sendValueInProgress;
 
         // Lifecycle generation token (issue #1074). Incremented every time the send loop is started,
         // restarted, or stopped. Scheduled callbacks capture the value at entry and verify the
@@ -92,17 +93,27 @@ namespace HSMDataCollector.DefaultSensors
 
         protected void SendValueAction()
         {
+            if (Interlocked.Exchange(ref _sendValueInProgress, 1) == 1)
+                return;
+
             // Capture the generation when the callback starts. If it changes before SendValue
             // runs, the sensor has restarted or stopped underneath us — drop the value rather
             // than publish stale work into a queue that may have already been drained.
-            var capturedEpoch = Volatile.Read(ref _lifecycleEpoch);
+            try
+            {
+                var capturedEpoch = Volatile.Read(ref _lifecycleEpoch);
 
-            var value = BuildSensorValue();
+                var value = BuildSensorValue();
 
-            if (Volatile.Read(ref _lifecycleEpoch) != capturedEpoch)
-                return;
+                if (Volatile.Read(ref _lifecycleEpoch) != capturedEpoch)
+                    return;
 
-            SendValue(value);
+                SendValue(value);
+            }
+            finally
+            {
+                Volatile.Write(ref _sendValueInProgress, 0);
+            }
         }
 
         protected async Task RestartTimerAsync(TimeSpan newPostPeriod)

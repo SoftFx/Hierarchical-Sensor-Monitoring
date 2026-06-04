@@ -27,7 +27,13 @@ namespace HSMDataCollector.Sensors
         }
 
 
-        public void AddValue(string value, SensorStatus status, string comment) => AddValue(Encoding.UTF8.GetBytes(value).ToList(), status, comment);
+        public void AddValue(string value, SensorStatus status, string comment)
+        {
+            if (value == null)
+                return;
+
+            AddValue(Encoding.UTF8.GetBytes(value).ToList(), status, comment);
+        }
 
         public void AddValue(string value, string comment) => AddValue(value, SensorStatus.Ok, comment);
 
@@ -38,6 +44,12 @@ namespace HSMDataCollector.Sensors
         {
             try
             {
+                if (!SensorValueExtensions.IsValidStatus(status))
+                    return false;
+
+                if (!_dataProcessor.CanAcceptData)
+                    return false;
+
                 var fileInfo = new FileInfo(filePath);
 
                 if (!fileInfo.Exists)

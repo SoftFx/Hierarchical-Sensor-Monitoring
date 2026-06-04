@@ -191,7 +191,7 @@ namespace HSMDataCollector.Core
             var path = sensor.SensorPath;
 
             if (_sensors.TryGetValue(path, out var oldSensor))
-                return oldSensor;
+                return ResolveExistingSensor(sensor, oldSensor);
 
             lock (_dataProcessor.LifecycleGate)
             {
@@ -272,18 +272,50 @@ namespace HSMDataCollector.Core
             }
 
             if (_sensors.TryGetValue(path, out var existingSensor))
-            {
-                sensor.Dispose();
-                return existingSensor;
-            }
+                return ResolveExistingSensor(sensor, existingSensor);
 
             throw new InvalidOperationException($"Sensor with path {path} already exists");
+        }
+
+        private static ISensor ResolveExistingSensor(ISensor newSensor, ISensor existingSensor)
+        {
+            var newSensorIdentity = GetSensorIdentity(newSensor);
+            var existingSensorIdentity = GetSensorIdentity(existingSensor);
+
+            if (existingSensorIdentity.Type != newSensorIdentity.Type ||
+                existingSensorIdentity.IsLastValue != newSensorIdentity.IsLastValue)
+            {
+                if (!newSensorIdentity.IsLastValue)
+                    newSensor.Dispose();
+
+                throw new InvalidOperationException(
+                    $"Sensor with path {newSensor.SensorPath} already exists as {DescribeSensor(existingSensorIdentity)}; requested {DescribeSensor(newSensorIdentity)}.");
+            }
+
+            if (!newSensorIdentity.IsLastValue)
+                newSensor.Dispose();
+
+            return existingSensor;
+        }
+
+        private static string DescribeSensor(ISensorIdentity identity) =>
+            $"{(identity.IsLastValue ? "last-value" : "instant")} {identity.Type}";
+
+        private static ISensorIdentity GetSensorIdentity(ISensor sensor)
+        {
+            if (sensor is ISensorIdentity identity)
+                return identity;
+
+            throw new InvalidOperationException($"Sensor with path {sensor.SensorPath} does not expose sensor identity metadata.");
         }
 
         private T FillOptions<T, TDisplayUnit>(string path, SensorType type, T options)
             where T : SensorOptions<TDisplayUnit>, new()
             where TDisplayUnit : struct, Enum
         {
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(path.Trim('/')))
+                throw new ArgumentException("Sensor path must not be empty.", nameof(path));
+
             options = (T)options?.Copy() ?? new T();
 
             options.ComputerName = _options.ComputerName;

@@ -23,6 +23,9 @@ namespace HSMDataCollector.DefaultSensors
 
         public void SendValue(T value, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
+            if (!SensorValueExtensions.IsValidValue(value, status))
+                return;
+
             try
             {
                 SendValue(GetSensorValue(value).Complete(comment, status));

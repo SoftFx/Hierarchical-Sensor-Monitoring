@@ -55,6 +55,8 @@ namespace HSMDataCollector.Core
 
         internal bool CanRegisterSensors => _lifecycle.CanRegisterSensors;
 
+        internal bool CanAcceptData => _lifecycle.CanAcceptData;
+
         /// <summary>
         /// The collector-wide lifecycle lock (DataCollector._opLock), shared so that sensor
         /// registration (SensorsStorage.Register) is serialized with Start/Stop/Dispose transitions.

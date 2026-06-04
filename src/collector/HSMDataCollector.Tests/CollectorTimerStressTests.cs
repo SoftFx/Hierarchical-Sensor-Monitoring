@@ -144,6 +144,66 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public async Task Restart_timer_during_blocked_function_callback_does_not_overlap_callbacks()
+        {
+            var sender = new CountingDataSender();
+            var inFlight = 0;
+            var maxConcurrent = 0;
+            var firstCallbackEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var overlapObserved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using (var releaseCallback = new ManualResetEventSlim(false))
+            using (var collector = CreateCollector(sender, "timer-restart-blocked"))
+            {
+                var sensor = collector.CreateFunctionSensor(
+                    "timer/restart/blocked-function",
+                    () =>
+                    {
+                        var concurrent = Interlocked.Increment(ref inFlight);
+                        UpdateMax(ref maxConcurrent, concurrent);
+
+                        if (concurrent > 1)
+                            overlapObserved.TrySetResult(true);
+
+                        firstCallbackEntered.TrySetResult(true);
+
+                        try
+                        {
+                            releaseCallback.Wait(TimeSpan.FromSeconds(5));
+                            return concurrent;
+                        }
+                        finally
+                        {
+                            Interlocked.Decrement(ref inFlight);
+                        }
+                    },
+                    new FunctionSensorOptions
+                    {
+                        PostDataPeriod = TimeSpan.FromMilliseconds(50)
+                    });
+
+                await collector.Start().ConfigureAwait(false);
+
+                var entered = await Task.WhenAny(firstCallbackEntered.Task, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+                Assert.True(entered == firstCallbackEntered.Task, "The first callback should enter before restarting the timer.");
+
+                try
+                {
+                    sensor.RestartTimer(TimeSpan.FromMilliseconds(20));
+
+                    var overlap = await Task.WhenAny(overlapObserved.Task, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false);
+
+                    Assert.True(overlap != overlapObserved.Task,
+                        $"Restarting a timer while its callback is blocked must not overlap callbacks; max concurrent callbacks was {maxConcurrent}.");
+                }
+                finally
+                {
+                    releaseCallback.Set();
+                    await collector.Stop().ConfigureAwait(false);
+                }
+            }
+        }
+
+        [Fact]
         public async Task Thousand_function_sensor_timers_do_not_burn_cpu_or_threads()
         {
             const int sensorCount = 1000;

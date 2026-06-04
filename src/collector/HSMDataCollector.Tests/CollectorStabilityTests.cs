@@ -299,6 +299,339 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        [Fact]
+        public async Task Transient_command_send_failure_retries_registration_command()
+        {
+            var sender = new StabilityDataSender { FailFirstNCommandSends = 1 };
+            using (var collector = CreateCollector(sender, "command-send-retry"))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                collector.CreateDoubleSensor("stability/command-retry");
+
+                Assert.True(
+                    await sender.WaitForCommandRequestsAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "A transient command send failure should not permanently drop the sensor registration command.");
+
+                await collector.Stop().ConfigureAwait(false);
+            }
+
+            Assert.True(sender.CommandSendCalls >= 2, "The command queue should retry after the first failed send.");
+        }
+
+        [Fact]
+        public async Task Transient_file_send_failure_retries_file_payload()
+        {
+            var sender = new StabilityDataSender { FailFirstNFileSends = 1 };
+            var filePath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".txt");
+            System.IO.File.WriteAllText(filePath, "payload");
+
+            try
+            {
+                using (var collector = CreateCollector(sender, "file-send-retry"))
+                {
+                    await collector.Start().ConfigureAwait(false);
+
+                    Assert.True(await collector.SendFileAsync("stability/file-retry", filePath).ConfigureAwait(false));
+                    Assert.True(
+                        await sender.WaitForFileRequestsAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                        "A transient file send failure should not permanently drop an accepted file payload.");
+
+                    await collector.Stop().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                if (System.IO.File.Exists(filePath))
+                    System.IO.File.Delete(filePath);
+            }
+
+            Assert.True(sender.FileSendCalls >= 2, "The file queue should retry after the first failed send.");
+        }
+
+        [Fact]
+        public async Task Failed_package_sending_info_retries_dequeued_values()
+        {
+            var sender = new StabilityDataSender { FailFirstNDataResults = 1 };
+            using (var collector = CreateCollector(sender, "failed-result-retry"))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                var sensor = collector.CreateDoubleSensor(
+                    "stability/failed-result-retry",
+                    new InstantSensorOptions());
+
+                for (var i = 0; i < 5; i++)
+                    sensor.AddValue(i);
+
+                Assert.True(
+                    await sender.WaitForDataValuesAsync(5, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "A failed PackageSendingInfo result should not permanently drop dequeued values.");
+
+                await collector.Stop().ConfigureAwait(false);
+            }
+
+            Assert.True(sender.DataSendCalls >= 2, "The data queue should retry after an explicit failed send result.");
+        }
+
+        [Fact]
+        public async Task Failed_command_package_sending_info_retries_registration_command()
+        {
+            var sender = new StabilityDataSender { FailFirstNCommandResults = 1 };
+            using (var collector = CreateCollector(sender, "failed-command-result-retry"))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                collector.CreateDoubleSensor("stability/failed-command-result-retry");
+
+                Assert.True(
+                    await sender.WaitForCommandRequestsAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "A failed PackageSendingInfo result should not permanently drop registration commands.");
+
+                await collector.Stop().ConfigureAwait(false);
+            }
+
+            Assert.True(sender.CommandSendCalls >= 2, "The command queue should retry after an explicit failed send result.");
+        }
+
+        [Fact]
+        public async Task Failed_file_package_sending_info_retries_file_payload()
+        {
+            var sender = new StabilityDataSender { FailFirstNFileResults = 1 };
+            var filePath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".txt");
+            System.IO.File.WriteAllText(filePath, "payload");
+
+            try
+            {
+                using (var collector = CreateCollector(sender, "failed-file-result-retry"))
+                {
+                    await collector.Start().ConfigureAwait(false);
+
+                    Assert.True(await collector.SendFileAsync("stability/failed-file-result-retry", filePath).ConfigureAwait(false));
+                    Assert.True(
+                        await sender.WaitForFileRequestsAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                        "A failed PackageSendingInfo result should not permanently drop an accepted file payload.");
+
+                    await collector.Stop().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                if (System.IO.File.Exists(filePath))
+                    System.IO.File.Delete(filePath);
+            }
+
+            Assert.True(sender.FileSendCalls >= 2, "The file queue should retry after an explicit failed send result.");
+        }
+
+        [Fact]
+        public async Task Values_function_sensor_cache_stays_bounded_under_concurrent_producers()
+        {
+            const int maxCacheSize = 1;
+            var sender = new StabilityDataSender();
+            var maxObservedCount = 0;
+
+            using (var collector = CreateCollector(sender, "values-function-cache-bound"))
+            {
+                var sensor = collector.CreateValuesFunctionSensor<int, int>(
+                    "stability/values-function-cache-bound",
+                    values =>
+                    {
+                        var count = values.Count;
+                        UpdateMax(ref maxObservedCount, count);
+                        return count;
+                    },
+                    new ValuesFunctionSensorOptions
+                    {
+                        MaxCacheSize = maxCacheSize,
+                        PostDataPeriod = TimeSpan.FromMilliseconds(1),
+                    });
+
+                await collector.Start().ConfigureAwait(false);
+
+                var producers = Enumerable.Range(0, 32)
+                    .Select(worker => Task.Run(() =>
+                    {
+                        for (var i = 0; i < 20000; i++)
+                            sensor.AddValue(worker * 20000 + i);
+                    }))
+                    .ToArray();
+
+                await Task.WhenAll(producers).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
+                await collector.Stop().ConfigureAwait(false);
+            }
+
+            Assert.True(
+                maxObservedCount <= maxCacheSize,
+                $"Values function cache should be bounded to {maxCacheSize}, observed {maxObservedCount}.");
+        }
+
+        [Fact]
+        public async Task Accepted_file_payloads_are_flushed_when_stop_races_file_queue()
+        {
+            var sender = new StabilityDataSender { FileSendDelay = TimeSpan.FromMilliseconds(200) };
+            var filePaths = Enumerable.Range(0, 4)
+                .Select(_ => System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".txt"))
+                .ToArray();
+
+            foreach (var filePath in filePaths)
+                System.IO.File.WriteAllText(filePath, "payload");
+
+            try
+            {
+                using (var collector = CreateCollector(sender, "file-stop-flush"))
+                {
+                    await collector.Start().ConfigureAwait(false);
+
+                    var accepted = 0;
+                    foreach (var filePath in filePaths)
+                    {
+                        if (await collector.SendFileAsync("stability/file-stop-flush/" + accepted, filePath).ConfigureAwait(false))
+                            accepted++;
+                    }
+
+                    await collector.Stop().ConfigureAwait(false);
+
+                    Assert.Equal(accepted, sender.TotalFileRequestsSent);
+                }
+            }
+            finally
+            {
+                foreach (var filePath in filePaths)
+                {
+                    if (System.IO.File.Exists(filePath))
+                        System.IO.File.Delete(filePath);
+                }
+            }
+        }
+
+        [Fact]
+        public async Task Accepted_registration_commands_are_flushed_when_stop_cancels_command_queue()
+        {
+            var sender = new StabilityDataSender { CommandSendDelay = TimeSpan.FromMilliseconds(200) };
+            using (var collector = CreateCollector(sender, "command-stop-flush"))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                const int acceptedRegistrations = 4;
+                for (var index = 0; index < acceptedRegistrations; index++)
+                    collector.CreateDoubleSensor("stability/command-stop-flush/" + index);
+
+                Assert.True(
+                    await sender.WaitForCommandSendCallsAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "The command queue should start sending accepted registration commands before stop races it.");
+
+                await collector.Stop().ConfigureAwait(false);
+
+                Assert.True(
+                    sender.TotalCommandRequestsSent >= acceptedRegistrations,
+                    $"Stop should flush accepted registration commands. Accepted={acceptedRegistrations}, sent={sender.TotalCommandRequestsSent}.");
+            }
+        }
+
+        [Fact]
+        public async Task Accepted_data_values_are_flushed_when_stop_cancels_in_flight_data_send()
+        {
+            var sender = new StabilityDataSender { DataSendDelay = TimeSpan.FromMilliseconds(200) };
+            using (var collector = CreateCollector(sender, "data-stop-flush"))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                var sensor = collector.CreateDoubleSensor(
+                    "stability/data-stop-flush",
+                    new InstantSensorOptions());
+
+                const int acceptedValues = 4;
+                for (var index = 0; index < acceptedValues; index++)
+                    sensor.AddValue(index);
+
+                Assert.True(
+                    await sender.WaitForDataSendCallsAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "The data queue should start sending accepted values before stop races it.");
+
+                await collector.Stop().ConfigureAwait(false);
+
+                Assert.True(
+                    sender.TotalDataValuesSent >= acceptedValues,
+                    $"Stop should flush accepted data values. Accepted={acceptedValues}, sent={sender.TotalDataValuesSent}.");
+            }
+        }
+
+        [Fact]
+        public async Task Values_added_by_custom_stopping_task_are_flushed_or_rejected()
+        {
+            var sender = new StabilityDataSender();
+            using (var collector = CreateCollector(sender, "custom-stop-flush"))
+            {
+                await collector.Start().ConfigureAwait(false);
+
+                var sensor = collector.CreateIntSensor(
+                    "stability/custom-stop-flush",
+                    new InstantSensorOptions());
+
+                var customStoppingTask = Task.Run(async () =>
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
+                    sensor.AddValue(42);
+                });
+
+                await collector.Stop(customStoppingTask).ConfigureAwait(false);
+
+                Assert.True(
+                    sender.TotalDataValuesSent >= 1,
+                    $"Values accepted by the custom stopping task should be flushed before stop completes. Sent={sender.TotalDataValuesSent}.");
+            }
+        }
+
+        [Fact]
+        public async Task Long_function_callback_released_after_data_flush_is_rejected_or_flushed_during_stop()
+        {
+            var sender = new StabilityDataSender { CommandSendDelay = TimeSpan.FromSeconds(2) };
+            var callbackEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            using (var releaseCallback = new ManualResetEventSlim(false))
+            using (var collector = CreateCollector(sender, "late-function-stop"))
+            {
+                collector.CreateFunctionSensor(
+                    "stability/late-function-stop",
+                    () =>
+                    {
+                        callbackEntered.TrySetResult(true);
+                        releaseCallback.Wait(TimeSpan.FromSeconds(5));
+                        return 777;
+                    },
+                    new FunctionSensorOptions
+                    {
+                        PostDataPeriod = TimeSpan.FromMilliseconds(50)
+                    });
+
+                await collector.Start().ConfigureAwait(false);
+
+                Assert.True(
+                    await sender.WaitForCommandSendCallsAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "The registration command should be in flight before stop begins.");
+
+                Assert.True(
+                    await WaitOrTimeoutAsync(callbackEntered.Task, TimeSpan.FromSeconds(2)).ConfigureAwait(false),
+                    "The function callback should enter before stop begins.");
+
+                var stopTask = collector.Stop();
+
+                Assert.True(
+                    await sender.WaitForCommandSendCallsAsync(2, TimeSpan.FromSeconds(4)).ConfigureAwait(false),
+                    "Command flush should keep the collector in Stopping after data flush.");
+
+                releaseCallback.Set();
+                await stopTask.ConfigureAwait(false);
+
+                var queuedDataValues = GetDataQueueCount(collector);
+                Assert.True(
+                    sender.TotalDataValuesSent > 0 || queuedDataValues == 0,
+                    $"A late function callback must be flushed or rejected, not accepted into a stopped queue. Sent={sender.TotalDataValuesSent}, queued={queuedDataValues}.");
+            }
+        }
+
 
         private static DataCollector CreateCollector(StabilityDataSender sender, string module)
         {
@@ -321,6 +654,39 @@ namespace HSMDataCollector.Tests
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
                 MaxDeduplicatedMessages = 200
             };
+        }
+
+        private static void UpdateMax(ref int target, int value)
+        {
+            int snapshot;
+            do
+            {
+                snapshot = Volatile.Read(ref target);
+                if (value <= snapshot)
+                    return;
+            }
+            while (Interlocked.CompareExchange(ref target, value, snapshot) != snapshot);
+        }
+
+        private static async Task<bool> WaitOrTimeoutAsync(Task task, TimeSpan timeout)
+        {
+            var completed = await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false);
+            return completed == task;
+        }
+
+        private static int GetDataQueueCount(DataCollector collector)
+        {
+            var dataProcessor = (DataProcessor)typeof(DataCollector)
+                .GetField("_dataProcessor", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(collector);
+
+            var dataQueue = (DataQueueProcessor)typeof(DataProcessor)
+                .GetField("_dataQueue", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(dataProcessor);
+
+            return (int)typeof(QueueProcessorBase<SensorValueBase>)
+                .GetProperty("QueueCount", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.GetProperty | BindingFlags.FlattenHierarchy)
+                .GetValue(dataQueue);
         }
 
         private static DefaultSensorsCollection CreatePartialDefaultSensorsCollection()
@@ -348,16 +714,34 @@ namespace HSMDataCollector.Tests
             private int _totalDataValuesSent;
             private int _commandSendCalls;
             private bool _receivedEmptyDataPackage;
+            private int _failedCommandSends;
+            private int _totalCommandRequestsSent;
+            private int _fileSendCalls;
+            private int _failedFileSends;
+            private int _totalFileRequestsSent;
+            private int _failedDataResults;
+            private int _failedCommandResults;
+            private int _failedFileResults;
 
             public bool ThrowOnCommand { get; set; }
             public bool ThrowOnData { get; set; }
             public int FailFirstNSends { get; set; }
+            public int FailFirstNDataResults { get; set; }
+            public int FailFirstNCommandSends { get; set; }
+            public int FailFirstNCommandResults { get; set; }
+            public int FailFirstNFileSends { get; set; }
+            public int FailFirstNFileResults { get; set; }
             public TimeSpan DataSendDelay { get; set; }
+            public TimeSpan CommandSendDelay { get; set; }
+            public TimeSpan FileSendDelay { get; set; }
 
             public int DataSendCalls => Volatile.Read(ref _dataSendCalls);
             public int FailedSends => Volatile.Read(ref _failedSends);
             public int TotalDataValuesSent => Volatile.Read(ref _totalDataValuesSent);
             public int CommandSendCalls => Volatile.Read(ref _commandSendCalls);
+            public int TotalCommandRequestsSent => Volatile.Read(ref _totalCommandRequestsSent);
+            public int FileSendCalls => Volatile.Read(ref _fileSendCalls);
+            public int TotalFileRequestsSent => Volatile.Read(ref _totalFileRequestsSent);
             public bool ReceivedEmptyDataPackage => Volatile.Read(ref _receivedEmptyDataPackage);
 
             public void Dispose() { }
@@ -400,26 +784,149 @@ namespace HSMDataCollector.Tests
                         throw new InvalidOperationException($"Simulated send failure #{failed}");
                 }
 
+                if (FailFirstNDataResults > 0)
+                {
+                    var failed = Interlocked.Increment(ref _failedDataResults);
+                    if (failed <= FailFirstNDataResults)
+                        return new PackageSendingInfo(contentSize: itemList.Count, response: null, exception: $"Simulated failed send result #{failed}");
+                }
+
                 Interlocked.Add(ref _totalDataValuesSent, itemList.Count);
 
                 return default(PackageSendingInfo);
             }
 
-            public ValueTask<PackageSendingInfo> SendCommandAsync(
+            public async ValueTask<PackageSendingInfo> SendCommandAsync(
                 IEnumerable<CommandRequestBase> commands, CancellationToken token)
             {
                 Interlocked.Increment(ref _commandSendCalls);
 
+                if (CommandSendDelay != TimeSpan.Zero)
+                    await Task.Delay(CommandSendDelay, token).ConfigureAwait(false);
+
                 if (ThrowOnCommand)
                     throw new InvalidOperationException("Sender configured to throw on commands.");
 
-                return new ValueTask<PackageSendingInfo>(default(PackageSendingInfo));
+                if (FailFirstNCommandSends > 0)
+                {
+                    var failed = Interlocked.Increment(ref _failedCommandSends);
+                    if (failed <= FailFirstNCommandSends)
+                        throw new InvalidOperationException($"Simulated command send failure #{failed}");
+                }
+
+                var commandCount = commands?.Count() ?? 0;
+                if (FailFirstNCommandResults > 0)
+                {
+                    var failed = Interlocked.Increment(ref _failedCommandResults);
+                    if (failed <= FailFirstNCommandResults)
+                        return new PackageSendingInfo(contentSize: commandCount, response: null, exception: $"Simulated failed command send result #{failed}");
+                }
+
+                Interlocked.Add(ref _totalCommandRequestsSent, commandCount);
+
+                return default(PackageSendingInfo);
             }
 
-            public ValueTask<PackageSendingInfo> SendFileAsync(
+            public async ValueTask<PackageSendingInfo> SendFileAsync(
                 FileSensorValue file, CancellationToken token)
             {
-                return new ValueTask<PackageSendingInfo>(default(PackageSendingInfo));
+                Interlocked.Increment(ref _fileSendCalls);
+
+                if (FileSendDelay != TimeSpan.Zero)
+                    await Task.Delay(FileSendDelay, token).ConfigureAwait(false);
+
+                if (FailFirstNFileSends > 0)
+                {
+                    var failed = Interlocked.Increment(ref _failedFileSends);
+                    if (failed <= FailFirstNFileSends)
+                        throw new InvalidOperationException($"Simulated file send failure #{failed}");
+                }
+
+                if (FailFirstNFileResults > 0)
+                {
+                    var failed = Interlocked.Increment(ref _failedFileResults);
+                    if (failed <= FailFirstNFileResults)
+                        return new PackageSendingInfo(contentSize: 1, response: null, exception: $"Simulated failed file send result #{failed}");
+                }
+
+                Interlocked.Increment(ref _totalFileRequestsSent);
+
+                return default(PackageSendingInfo);
+            }
+
+            public async Task<bool> WaitForCommandRequestsAsync(int count, TimeSpan timeout)
+            {
+                var deadline = DateTime.UtcNow + timeout;
+
+                while (DateTime.UtcNow < deadline)
+                {
+                    if (TotalCommandRequestsSent >= count)
+                        return true;
+
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+
+                return false;
+            }
+
+            public async Task<bool> WaitForCommandSendCallsAsync(int count, TimeSpan timeout)
+            {
+                var deadline = DateTime.UtcNow + timeout;
+
+                while (DateTime.UtcNow < deadline)
+                {
+                    if (CommandSendCalls >= count)
+                        return true;
+
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+
+                return false;
+            }
+
+            public async Task<bool> WaitForFileRequestsAsync(int count, TimeSpan timeout)
+            {
+                var deadline = DateTime.UtcNow + timeout;
+
+                while (DateTime.UtcNow < deadline)
+                {
+                    if (TotalFileRequestsSent >= count)
+                        return true;
+
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+
+                return false;
+            }
+
+            public async Task<bool> WaitForDataValuesAsync(int count, TimeSpan timeout)
+            {
+                var deadline = DateTime.UtcNow + timeout;
+
+                while (DateTime.UtcNow < deadline)
+                {
+                    if (TotalDataValuesSent >= count)
+                        return true;
+
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+
+                return false;
+            }
+
+            public async Task<bool> WaitForDataSendCallsAsync(int count, TimeSpan timeout)
+            {
+                var deadline = DateTime.UtcNow + timeout;
+
+                while (DateTime.UtcNow < deadline)
+                {
+                    if (DataSendCalls >= count)
+                        return true;
+
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+
+                return false;
             }
         }
 
