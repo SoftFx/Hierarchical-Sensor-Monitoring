@@ -11,9 +11,16 @@ docs, PR descriptions, review comments, and user-facing documentation.
 |---|---|---|
 | HSM | Hierarchical-Sensor-Monitoring product and repository. | Use `HSM` after first expansion when useful. |
 | Sensor | A monitored value source identified by a hierarchical path. | Avoid using "metric" when the code/API uses sensor semantics. |
+| Bar sensor | Aggregating sensor that collects min/max/mean/count over a time window. | Keep bar period and post period semantics explicit. |
+| Rate sensor | Sensor that accumulates values and reports a rate over a configured period. | Check zero/NaN handling when changing accumulation. |
+| Function sensor | Sensor that periodically calls user-provided code and sends the result. | User exceptions must be isolated. |
+| Instant sensor | Sensor where the integrator explicitly calls `AddValue()` / `SendValue()`. | Public methods can be called from any thread. |
+| Default sensors | Built-in sensors for CPU, RAM, disk, threads, GC, service status, and related metrics. | Platform-specific behavior belongs in collector/default-sensor docs. |
 | Sensor path | Full logical path of a sensor in the hierarchy. | Use for identity and navigation. |
 | Sensor value | A concrete value sent by a sensor at a point in time. | Includes status and optional comment depending on DTO. |
 | Sensor status | Health/status marker attached to a sensor or value. | Examples include OK/error-like states from `SensorStatus`. |
+| Product | Server-side logical group of sensors, usually identified by an access key. | Keep distinct from product/application code naming. |
+| Node | Hierarchical folder in the sensor tree. | Path example: `Computer/Module/SensorPath`. |
 | Module | Logical group under a collector/client that owns sensors. | Do not confuse with .NET project/module. |
 | Environment | Server-side scope/grouping used to organize monitored systems. | Confirm exact behavior in server docs before changing. |
 | Dashboard | Operator-facing view for monitoring selected HSM data. | Use for UI dashboards, not arbitrary charts. |
@@ -28,6 +35,8 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Collector scheduler | Per-collector scheduler used for periodic sensor work. | Avoid "global timer" for new docs. |
 | Sync queue | Collector queue that buffers values before send. | Document lifecycle and backpressure when changed. |
 | Message deduplicator | Collector helper that groups repeated error/log messages within a time window. | Use when describing error-noise reduction. |
+| Package sending info | Result metadata for sending a batch, including content size and optional error. | Code term: `PackageSendingInfo`. |
+| Polly pipeline | Retry pipeline wrapping HTTP requests. | Watch `ShouldHandle` behavior for HTTP status codes. |
 
 ## Server And Storage Terms
 
@@ -48,6 +57,7 @@ docs, PR descriptions, review comments, and user-facing documentation.
 | Alert template | Reusable alert configuration/template. | Keep distinct from a concrete alert instance if code does. |
 | Alert schedule | Time window or schedule controlling alert activity. | Time zone and boundary behavior need tests. |
 | Notification | Delivered message via Telegram/email or other channel. | Use when discussing delivery, retries, and failures. |
+| TTL | Time-to-live policy on a sensor. | Expiration and status transitions should be tested. |
 
 ## API And Integration Terms
 

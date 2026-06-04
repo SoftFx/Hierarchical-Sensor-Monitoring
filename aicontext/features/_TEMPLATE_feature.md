@@ -27,6 +27,16 @@
 |---|---|---|
 | <DTO/interface/route> | `<path>` | <compatibility notes> |
 
+## Key Files
+
+| File | Purpose |
+|---|---|
+| `src/.../FileName.cs` | <What this file does> |
+
+## Data Flow
+
+<How data moves through this feature. Use plain text or reference a brief Mermaid diagram when useful.>
+
 ## Storage / Persistence
 
 <Describe owned storage, key formats, retention, snapshots, or say "None".>
@@ -55,3 +65,7 @@ Required coverage checklist:
 ## Notes
 
 <Implementation notes, known limitations, follow-ups, or migration notes.>
+
+## Known Issues / Limitations
+
+<Anything important to keep near feature.md but not part of the product description: migration plans, v1/v2 scope, known limitations.>
