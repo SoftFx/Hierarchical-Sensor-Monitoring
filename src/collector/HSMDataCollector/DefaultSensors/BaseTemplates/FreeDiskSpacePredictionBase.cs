@@ -19,6 +19,7 @@ namespace HSMDataCollector.DefaultSensors
         private readonly IDiskInfo _diskInfo;
         private readonly int _calibrationRequests;
 
+        private CancellationTokenSource _tokenSource;
         private DateTime _lastSpeedCheckTime;
         private TimeSpan _prevPrediction = TimeSpan.Zero;
 
@@ -27,7 +28,7 @@ namespace HSMDataCollector.DefaultSensors
         private long _requestsCount;
         private bool _isOffTime;
 
-        private ScheduledTask _workTask;
+        private Task _workTask;
 
         private bool IsCalibration => _requestsCount <= _calibrationRequests;
 
@@ -49,13 +50,15 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (_workTask == null)
                 {
+                    _tokenSource = new CancellationTokenSource();
+
                     _lastSpeedCheckTime = DateTime.UtcNow;
                     _lastAvailableSpace = FreeSpace;
 
                     _currentChangeSpeed = 0.0;
                     _requestsCount = 0;
 
-                    _workTask = CollectorScheduler.Schedule(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, HandleException);
+                    _workTask = PeriodicTask.Run(UpdateDiskSpeed, DateTime.UtcNow.Ceil(_calculateSpeedDelay) - DateTime.UtcNow, _calculateSpeedDelay, _tokenSource.Token, HandleException);
                 }
             }
 
@@ -66,19 +69,22 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                ScheduledTask taskToWait = null;
+                Task taskToWait = null;
                 lock (_locker)
                 {
                     if (_workTask != null)
                     {
+                        _tokenSource?.Cancel();
                         taskToWait = _workTask;
+                        _tokenSource?.Dispose();
                         _workTask = null;
                     }
                 }
 
                 if (taskToWait != null)
                 {
-                    await taskToWait.StopAsync(waitForCurrentRun: false).ConfigureAwait(false);
+                    await taskToWait.ConfigureAwait(false);
+                    taskToWait.Dispose();
                 }
                 await base.StopAsync();
             }

@@ -21,7 +21,8 @@ namespace HSMDataCollector.DefaultSensors
 
         private readonly object _locker = new object();
 
-        private ScheduledTask _collectTask;
+        private Task _collectTask;
+        private CancellationTokenSource _cancellationTokenSource;
         protected BarType _internalBar;
 
         public override BarType Current => (BarType)_internalBar.Copy().Complete();
@@ -51,7 +52,8 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (_collectTask == null)
                 {
-                    _collectTask = CollectorScheduler.Schedule(CollectBar, _collectBarPeriod, _collectBarPeriod, HandleException);
+                    _cancellationTokenSource = new CancellationTokenSource();
+                    _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token, HandleException);
                 }
             }
 
@@ -60,14 +62,20 @@ namespace HSMDataCollector.DefaultSensors
 
         public override async ValueTask StopAsync()
         {
-            ScheduledTask taskToWait = null;
+            Task taskToWait = null;
+            CancellationTokenSource cts = null;
 
             lock (_locker)
             {
                 if (_collectTask != null)
                 {
+                    cts = _cancellationTokenSource;
+                    _cancellationTokenSource = null;
+
                     taskToWait = _collectTask;
                     _collectTask = null;
+
+                    cts?.Cancel();
                 }
             }
 
@@ -75,7 +83,14 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (taskToWait != null)
                 {
-                    await taskToWait.StopAsync(waitForCurrentRun: false).ConfigureAwait(false);
+                    try
+                    {
+                        await taskToWait.ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        taskToWait.Dispose();
+                    }
                 }
 
                 await base.StopAsync().ConfigureAwait(false);
@@ -84,6 +99,10 @@ namespace HSMDataCollector.DefaultSensors
             catch (Exception ex)
             {
                 HandleException(ex);
+            }
+            finally
+            {
+                cts?.Dispose();
             }
         }
 

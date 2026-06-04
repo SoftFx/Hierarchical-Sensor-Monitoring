@@ -13,7 +13,8 @@ namespace HSMDataCollector.DefaultSensors
     public abstract class MonitoringSensorBase<T, TDisplayUnit> : SensorBase<T, TDisplayUnit> where TDisplayUnit : struct, Enum
     {
         private readonly IMonitoringOptions _options;
-        private ScheduledTask _sendTask;
+        private CancellationTokenSource _cancellationTokenSource;
+        private Task _sendTask;
 
         private readonly object _lock = new object();
 
@@ -51,7 +52,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                await StopInternalAsync(waitForCurrentRun: false);
+                await StopInternalAsync();
 
                 await base.StopAsync();
             }
@@ -78,7 +79,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                await StopInternalAsync(waitForCurrentRun: true).ConfigureAwait(false);
+                await StopInternalAsync().ConfigureAwait(false);
 
                 if (newPostPeriod <= TimeSpan.Zero)
                     throw new ArgumentOutOfRangeException(nameof(newPostPeriod), "Post data period must be greater than zero.");
@@ -93,22 +94,25 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        private async ValueTask StopInternalAsync(bool waitForCurrentRun)
+        private async ValueTask StopInternalAsync()
         {
-            ScheduledTask taskToAwait = null;
+            Task taskToAwait = null;
 
             lock (_lock)
             {
                 if (_sendTask != null)
                 {
+                    _cancellationTokenSource?.Cancel();
                     taskToAwait = _sendTask;
                     _sendTask = null;
+                    _cancellationTokenSource?.Dispose();
                 }
             }
 
             if (taskToAwait != null)
             {
-                await taskToAwait.StopAsync(waitForCurrentRun).ConfigureAwait(false);
+                await taskToAwait.ConfigureAwait(false);
+                taskToAwait.Dispose();
             }
         }
 
@@ -118,7 +122,8 @@ namespace HSMDataCollector.DefaultSensors
             {
                 if (_sendTask == null)
                 {
-                    _sendTask = CollectorScheduler.Schedule(SendValueAction, TimerDueTime, PostTimePeriod, HandleException);
+                    _cancellationTokenSource = new CancellationTokenSource();
+                    _sendTask = PeriodicTask.Run(SendValueAction, TimerDueTime, PostTimePeriod, _cancellationTokenSource.Token, HandleException);
                 }
             }
         }

@@ -28,7 +28,6 @@ namespace HSMDataCollector.Client
         private readonly ICollectorLogger _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
-        private bool _disposed;
 
         internal HsmHttpsClient(CollectorOptions options, ICollectorLogger logger)
         {
@@ -41,7 +40,6 @@ namespace HSMDataCollector.Client
                 httpHandler.ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true;
 
             _client = new HttpClient(httpHandler);
-            _client.Timeout = options.RequestTimeout;
 
             _client.DefaultRequestHeaders.Add(HeaderClientName, options.ClientName);
             _client.DefaultRequestHeaders.Add(HeaderAccessKey, options.AccessKey);
@@ -55,19 +53,11 @@ namespace HSMDataCollector.Client
 
         public void Dispose()
         {
-            if (_disposed)
-                return;
-
             _tokenSource.Cancel();
 
             _commandsHandler.Dispose();
             _dataHandler.Dispose();
-            _priorityDataHandler.Dispose();
-            _fileHandler.Dispose();
-
-            _tokenSource.Dispose();
             _client.Dispose();
-            _disposed = true;
         }
 
         public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)

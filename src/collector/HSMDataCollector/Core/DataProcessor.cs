@@ -42,7 +42,7 @@ namespace HSMDataCollector.Core
             _commandQueue  = new CommandQueueProcessor(options, this, logger);
             _messageDeduplicator = new MessageDeduplicator((msg) => { _logger.Error(msg);
                                                                       DefaultSensors?.CollectorErrors?.SendCollectorError(msg);
-                                                                    }, options.ExceptionDeduplicatorWindow, options.MaxDeduplicatedMessages);
+                                                                    }, options.ExceptionDeduplicatorWindow);
         }
 
 

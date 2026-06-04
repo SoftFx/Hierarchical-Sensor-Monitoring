@@ -43,15 +43,12 @@ namespace HSMDataCollector.Client
 
         internal Endpoints(CollectorOptions options)
         {
-            var hasExplicitScheme = options.ServerUrl.Contains("://");
             var builder = new UriBuilder(options.ServerUrl)
             {
                 Port = options.Port,
+                Scheme = "https",
                 Path = "api/sensors",
             };
-
-            if (!hasExplicitScheme)
-                builder.Scheme = "https";
 
             ConnectionAddress = $"{builder.Uri}";
         }

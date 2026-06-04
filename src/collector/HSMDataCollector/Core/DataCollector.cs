@@ -121,13 +121,16 @@ namespace HSMDataCollector.Core
             if (useLogging)
                 AddNLog();
 
-            InitializeProcessor();
+            _logger.Info("Initialize timer...");
+            _dataProcessor.Start();
+            _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
         [Obsolete("Use Initialize(bool, string, string)")]
         public void Initialize()
         {
-            InitializeProcessor();
+            _dataProcessor.Start();
+            _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
 
@@ -143,15 +146,8 @@ namespace HSMDataCollector.Core
                 _dataProcessor.Start();
                 ChangeStatus(CollectorStatus.Starting);
 
-                await customStartingTask.ConfigureAwait(false);
-
-                if (!Status.IsStartingOrRunning())
-                    return;
-
-                await _dataProcessor.InitAsync().ConfigureAwait(false);
-
-                if (Status == CollectorStatus.Starting)
-                    ChangeStatus(CollectorStatus.Running);
+                _ = customStartingTask.ContinueWith(_ => _dataProcessor.InitAsync())
+                                      .ContinueWith(_ => ChangeStatus(CollectorStatus.Running));
 
             }
             catch (Exception ex)
@@ -171,7 +167,7 @@ namespace HSMDataCollector.Core
         {
             try
             {
-                if (!Status.IsStartingOrRunning())
+                if (!Status.IsRunning())
                     return;
 
                 ChangeStatus(CollectorStatus.Stopping);
@@ -189,32 +185,6 @@ namespace HSMDataCollector.Core
 
         }
 
-        private void InitializeProcessor()
-        {
-            try
-            {
-                if (!Status.IsStopped())
-                    return;
-
-                _logger.Info("Initialize timer...");
-
-                _dataProcessor.Start();
-                ChangeStatus(CollectorStatus.Starting);
-
-                _dataProcessor.InitAsync().ConfigureAwait(false).GetAwaiter().GetResult();
-
-                ChangeStatus(CollectorStatus.Running);
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"DataCollector initialization error: {ex}");
-
-                _dataProcessor.StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
-
-                ChangeStatus(CollectorStatus.Stopped);
-            }
-        }
-
 
         public void Dispose()
         {
@@ -228,9 +198,9 @@ namespace HSMDataCollector.Core
                 if (!Status.IsStopped())
                     ChangeStatus(CollectorStatus.Stopping);
 
-                DisposeComponent(_dataProcessor.Dispose, nameof(_dataProcessor));
+                _dataProcessor.Dispose();
 
-                DisposeComponent(_dataSender.Dispose, nameof(_dataSender));
+                _dataSender.Dispose();
             }
             finally
             {
@@ -251,47 +221,17 @@ namespace HSMDataCollector.Core
             switch (newStatus)
             {
                 case CollectorStatus.Starting:
-                    RaiseLifecycleEvent(ToStarting, nameof(ToStarting));
+                    ToStarting?.Invoke();
                     break;
                 case CollectorStatus.Running:
-                    RaiseLifecycleEvent(ToRunning, nameof(ToRunning));
+                    ToRunning?.Invoke();
                     break;
                 case CollectorStatus.Stopping:
-                    RaiseLifecycleEvent(ToStopping, nameof(ToStopping));
+                    ToStopping?.Invoke();
                     break;
                 case CollectorStatus.Stopped:
-                    RaiseLifecycleEvent(ToStopped, nameof(ToStopped));
+                    ToStopped?.Invoke();
                     break;
-            }
-        }
-
-        private void RaiseLifecycleEvent(Action lifecycleEvent, string eventName)
-        {
-            if (lifecycleEvent == null)
-                return;
-
-            foreach (Action handler in lifecycleEvent.GetInvocationList())
-            {
-                try
-                {
-                    handler();
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"DataCollector {eventName} event handler error: {ex}");
-                }
-            }
-        }
-
-        private void DisposeComponent(Action dispose, string componentName)
-        {
-            try
-            {
-                dispose();
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"DataCollector {componentName} dispose error: {ex}");
             }
         }
 

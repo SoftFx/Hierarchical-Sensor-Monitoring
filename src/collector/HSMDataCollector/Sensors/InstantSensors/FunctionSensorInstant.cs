@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
@@ -18,7 +17,7 @@ namespace HSMDataCollector.Sensors
 
         TimeSpan IBaseFuncSensor.GetInterval() => PostTimePeriod;
 
-        void IBaseFuncSensor.RestartTimer(TimeSpan timeSpan) => _ = RestartTimerAsync(timeSpan);
+        void IBaseFuncSensor.RestartTimer(TimeSpan timeSpan) => RestartTimerAsync(timeSpan);
 
 
         protected U CheckFunc<U>(U function)
@@ -53,7 +52,6 @@ namespace HSMDataCollector.Sensors
         private readonly ConcurrentQueue<U> _cache = new ConcurrentQueue<U>();
         private readonly Func<List<U>, T> _getValue;
         private readonly int _cacheSize;
-        private int _cacheCount;
 
 
         public ValuesFunctionSensorInstant(Func<List<U>, T> getValue, ValuesFunctionSensorOptions options) : base(options)
@@ -69,15 +67,10 @@ namespace HSMDataCollector.Sensors
         public void AddValue(U value)
         {
             _cache.Enqueue(value);
-            Interlocked.Increment(ref _cacheCount);
 
-            while (Volatile.Read(ref _cacheCount) > _cacheSize)
-            {
+            while (_cache.Count > _cacheSize)
                 if (!_cache.TryDequeue(out _))
                     break;
-
-                Interlocked.Decrement(ref _cacheCount);
-            }
         }
 
 

@@ -25,8 +25,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected readonly ICollectorLogger _logger;
         protected readonly DataProcessor _queueManager;
 
-        protected int _queueCount;
-
         public abstract string QueueName { get; }
 
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
@@ -75,13 +73,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         internal virtual int Enqeue(T item)
         {
             _queue.Enqueue(new QueueItem<T>(item));
-            Interlocked.Increment(ref _queueCount);
 
             int result = 0;
-            while (Volatile.Read(ref _queueCount) > _options.MaxQueueSize)
+            while(_queue.Count >= _options.MaxQueueSize)
             {
-                if (!TryDequeue(out _))
-                    break;
+                _queue.TryDequeue(out _);
                 result++;
             }
 
@@ -107,7 +103,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 DateTime now = DateTime.UtcNow;
 
-                while (TryDequeue(out QueueItem<T> item))
+                while (_queue.TryDequeue(out QueueItem<T> item))
                 {
                     result.AddInfo((now - item.BuildDate).TotalSeconds, 1);
 
@@ -131,17 +127,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
 
         protected abstract Task ProcessingLoop(CancellationToken token);
-
-        protected int QueueCount => Volatile.Read(ref _queueCount);
-
-        protected bool TryDequeue(out QueueItem<T> item)
-        {
-            if (!_queue.TryDequeue(out item))
-                return false;
-
-            Interlocked.Decrement(ref _queueCount);
-            return true;
-        }
 
         public void Dispose()
         {

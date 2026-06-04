@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Linq;
 using System.ServiceProcess;
+using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Options;
 using HSMDataCollector.Threading;
@@ -17,8 +19,8 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         private ServiceController _service;
 
         private ServiceControllerStatus? _lastServiceState;
-        private ScheduledTask _statusWatcher;
-        private DateTime _nextServiceResolveTime;
+        private Task _statusWatcher;
+        private CancellationTokenSource _cancellationTokenSource;
 
         private bool _faultState = true;
 
@@ -37,7 +39,8 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             {
                 if (_statusWatcher == null)
                 {
-                    _statusWatcher = CollectorScheduler.Schedule(CheckServiceStatus, _scanPeriod, _scanPeriod, HandleException);
+                    _cancellationTokenSource = new CancellationTokenSource();
+                    _statusWatcher = PeriodicTask.Run(CheckServiceStatusAsync, _scanPeriod, _scanPeriod, _cancellationTokenSource.Token, HandleException);
                 }
             }
 
@@ -47,14 +50,20 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
 
         public override async ValueTask StopAsync()
         {
-            ScheduledTask taskToWait = null;
+            Task taskToWait = null;
+            CancellationTokenSource cts = null;
 
             lock (_locker)
             {
                 if (_statusWatcher != null)
                 {
+                    cts = _cancellationTokenSource;
+                    _cancellationTokenSource = null;
+
                     taskToWait = _statusWatcher;
                     _statusWatcher = null;
+
+                    cts?.Cancel();
                 }
             }
 
@@ -62,11 +71,19 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             {
                 if (taskToWait != null)
                 {
-                    await taskToWait.StopAsync(waitForCurrentRun: false).ConfigureAwait(false);
+                    try
+                    {
+                        await taskToWait.ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        taskToWait.Dispose();
+                    }
                 }
 
                 await base.StopAsync().ConfigureAwait(false);
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
                 HandleException(ex);
@@ -74,32 +91,34 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
             }
             finally
             {
-                DisposeService();
+                cts?.Dispose();
             }
         }
 
 
-        private void CheckServiceStatus()
+        private async Task CheckServiceStatusAsync()
         {
             try
             {
                 if (_faultState)
                 {
-                    if (_nextServiceResolveTime > DateTime.UtcNow)
-                        return;
-
-                    _service = ResolveService();
+                    _service = ServiceController.GetServices()
+                                                .FirstOrDefault(s => string.Equals(s.ServiceName, _serviceName, StringComparison.OrdinalIgnoreCase));
 
                     if (_service is null)
                     {
                         SendValue(-1, HSMSensorDataObjects.SensorStatus.Error, "Service not found!");
                         _lastServiceState = null;
-                        _nextServiceResolveTime = DateTime.UtcNow + _faultStateDelay;
+
+                        var delay = _faultStateDelay - _scanPeriod;
+                        if (delay > TimeSpan.Zero)
+                        {
+                            await Task.Delay(delay, _cancellationTokenSource.Token);
+                        }
                         return;
                     }
 
                     _faultState = false;
-                    _nextServiceResolveTime = DateTime.MinValue;
                 }
 
                 _service.Refresh();
@@ -110,6 +129,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
                     _lastServiceState = _service.Status;
                 }
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
                 HandleException(ex);
@@ -119,40 +139,6 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
                 _service?.Dispose();
                 _service = null;
             }
-        }
-
-        private ServiceController ResolveService()
-        {
-            var services = ServiceController.GetServices();
-            ServiceController matchedService = null;
-
-            try
-            {
-                foreach (var service in services)
-                {
-                    if (string.Equals(service.ServiceName, _serviceName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        matchedService = service;
-                        return matchedService;
-                    }
-                }
-
-                return null;
-            }
-            finally
-            {
-                foreach (var service in services)
-                {
-                    if (!ReferenceEquals(service, matchedService))
-                        service.Dispose();
-                }
-            }
-        }
-
-        private void DisposeService()
-        {
-            _service?.Dispose();
-            _service = null;
         }
 
     }

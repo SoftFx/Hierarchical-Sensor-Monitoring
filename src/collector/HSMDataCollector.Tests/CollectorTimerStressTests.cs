@@ -136,6 +136,61 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        [Fact]
+        public async Task Thousand_function_sensor_timers_do_not_burn_cpu_or_threads()
+        {
+            const int sensorCount = 1000;
+
+            var sender = new CountingDataSender();
+            var totalCallbacks = 0;
+            var threadsBefore = GetThreadCount();
+
+            using (var collector = CreateCollector(sender, "timer-1000-function-sensors"))
+            {
+                for (var index = 0; index < sensorCount; index++)
+                {
+                    collector.CreateFunctionSensor(
+                        "timer/many/" + index.ToString(CultureInfo.InvariantCulture),
+                        () => Interlocked.Increment(ref totalCallbacks),
+                        new FunctionSensorOptions
+                        {
+                            PostDataPeriod = TimeSpan.FromMilliseconds(100)
+                        });
+                }
+
+                await collector.Start().ConfigureAwait(false);
+
+                var cpuStart = CpuUsageSnapshot.Capture();
+                await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+                var cpu = CpuUsageSnapshot.Capture().Subtract(cpuStart);
+                var threadsAfter = GetThreadCount();
+
+                await collector.Stop().ConfigureAwait(false);
+
+                var callbacks = Volatile.Read(ref totalCallbacks);
+                var threadDelta = threadsAfter - threadsBefore;
+
+                _output.WriteLine(
+                    "timerScale; sensors={0}; periodMs=100; callbacks={1}; dataPackages={2}; dataValues={3}; threadsBefore={4}; threadsAfter={5}; threadDelta={6}; wallMs={7}; cpuMs={8}; cpuCores={9:F3}",
+                    sensorCount,
+                    callbacks,
+                    sender.DataPackages,
+                    sender.DataValues,
+                    threadsBefore,
+                    threadsAfter,
+                    threadDelta,
+                    cpu.Wall.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture),
+                    cpu.Cpu.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture),
+                    cpu.CpuCores);
+
+                Assert.True(callbacks >= sensorCount * 5,
+                    $"The scale test should exercise many timer callbacks. Callbacks={callbacks}.");
+                Assert.True(threadDelta < 96,
+                    $"Creating {sensorCount} periodic sensors should not create a thread per timer. Thread delta={threadDelta}.");
+                AssertCpuBudget(cpu, TimeSpan.FromMilliseconds(300), "1000 function sensor timers");
+            }
+        }
+
         private static DataCollector CreateCollector(CountingDataSender sender, string module)
         {
             return new DataCollector(new CollectorOptions
@@ -152,6 +207,15 @@ namespace HSMDataCollector.Tests
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
                 MaxDeduplicatedMessages = 200
             });
+        }
+
+        private static int GetThreadCount()
+        {
+            using (var process = Process.GetCurrentProcess())
+            {
+                process.Refresh();
+                return process.Threads.Count;
+            }
         }
 
         private void WriteTimerStats(string scenario, IReadOnlyList<int> counts, IReadOnlyList<TimeSpan> periods, CpuUsageSnapshot cpu, CountingDataSender sender)
