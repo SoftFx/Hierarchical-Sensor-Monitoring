@@ -158,7 +158,11 @@ namespace HSMDataCollector.DefaultSensors
                 if (value == null)
                     return default;
 
-                return GetSensorValue(value).Complete(GetComment(), GetStatus());
+                var status = GetStatus();
+                if (!SensorValueExtensions.IsValidValue(value, status))
+                    return default;
+
+                return GetSensorValue(value).Complete(GetComment(), status);
             }
             catch (Exception ex)
             {

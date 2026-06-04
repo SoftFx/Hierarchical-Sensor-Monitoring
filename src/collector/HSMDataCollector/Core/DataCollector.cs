@@ -8,7 +8,6 @@ using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
-using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue.Data;
 using HSMDataCollector.Threading;
@@ -673,7 +672,8 @@ namespace HSMDataCollector.Core
 
         public IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOptions options) => CreateInstantSensor<int>(path, options);
 
-        public IInstantValueSensor<int> CreateEnumSensor(string path, string description = "") => CreateInstantSensor<int>(path, new EnumSensorOptions { Description = description });
+        public IInstantValueSensor<int> CreateEnumSensor(string path, string description = "") =>
+            CreateEnumSensor(path, new EnumSensorOptions { Description = description });
 
         public IInstantValueSensor<int> CreateEnumSensor(string path, EnumSensorOptions options) => _sensorsStorage.CreateEnumInstantSensor(path, options);
 
@@ -720,8 +720,7 @@ namespace HSMDataCollector.Core
 
         public Task<bool> SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
-            var fullSensorPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, sensorPath);
-            var sensor = _sensorsStorage.CreateFileSensor(fullSensorPath, new FileSensorOptions());
+            var sensor = _sensorsStorage.CreateFileSensor(sensorPath, new FileSensorOptions());
 
             return sensor.SendFile(filePath, status, comment);
         }
