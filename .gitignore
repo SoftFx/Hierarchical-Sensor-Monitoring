@@ -133,5 +133,6 @@ src/module/HSMPingModule/Config/*
 /code-review-report.md
 /code-review-report.json
 
-# AI
-/.claude
+#AI
+/.claude/worktrees/
+/.claude/settings.local.json
