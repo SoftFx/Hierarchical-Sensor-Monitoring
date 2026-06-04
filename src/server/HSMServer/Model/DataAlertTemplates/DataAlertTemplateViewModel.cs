@@ -92,7 +92,7 @@ namespace HSMServer.Model.DataAlertTemplates
             SetAvailableFolders(availableFolders);
         }
 
-        public AlertTemplateModel ToModel(Dictionary<Guid, string> availableChats = null)
+        public AlertTemplateModel ToModel(Dictionary<Guid, string> availableChats)
         {
             AlertTemplateModel result = new AlertTemplateModel()
             {

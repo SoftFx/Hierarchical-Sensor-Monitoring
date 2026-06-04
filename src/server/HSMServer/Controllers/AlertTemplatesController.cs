@@ -190,8 +190,8 @@ namespace HSMServer.Controllers
                 ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
 
             Dictionary<Guid, string> availableChats = null;
-            if (_folders.TryGetValue(data.FolderId, out var chatsFolder) && chatsFolder.TelegramChats.Count > 0)
-                availableChats = chatsFolder.TelegramChats.GetAvailableChats(_telegram).ToDictionary(k => k.Id, v => v.Name);
+            if (_folders.TryGetValue(data.FolderId, out var folder) && folder.TelegramChats.Count > 0)
+                availableChats = folder.TelegramChats.GetAvailableChatsDictionary(_telegram);
 
             if (ModelState.IsValid)
             {
@@ -206,7 +206,7 @@ namespace HSMServer.Controllers
 
             data = new DataAlertTemplateViewModel(data.ToModel(availableChats), _folders.GetUserFolders(CurrentUser));
 
-            if (_folders.TryGetValue(data.FolderId, out var folder))
+            if (folder != null)
                 PopulateAvailableChats(data, folder.TelegramChats);
 
             foreach (var (_, alerts) in data.DataAlerts)
