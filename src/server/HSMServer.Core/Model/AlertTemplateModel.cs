@@ -26,7 +26,9 @@ namespace HSMServer.Core.Model
 
         public List<string> Paths { get; set; } = [];
 
-        // Backward-compatible access to the first path
+        // Backward-compatible access to the first path.
+        // Setter replaces all paths with a single entry; null is ignored to
+        // avoid wiping a multi-path list when the old Path property is read-then-written.
         public string Path
         {
             get => Paths.FirstOrDefault() ?? string.Empty;
