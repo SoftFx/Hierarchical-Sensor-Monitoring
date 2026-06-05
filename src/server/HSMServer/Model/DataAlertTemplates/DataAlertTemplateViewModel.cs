@@ -27,7 +27,6 @@ namespace HSMServer.Model.DataAlertTemplates
         [Required]
         public string Name { get; set; }
 
-        [Required]
         public List<string> PathTemplates { get; set; } = [];
 
         public List<BaseSensorModel> Sensors { get; set; }

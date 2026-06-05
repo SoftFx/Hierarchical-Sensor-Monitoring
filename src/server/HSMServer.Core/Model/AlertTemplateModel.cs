@@ -144,7 +144,10 @@ namespace HSMServer.Core.Model
 
         public bool IsMatch(BaseSensorModel sensor)
         {
-            if (_pathConverters.Count > 0 && !_pathConverters.Any(c => c.IsMatch(sensor.FullPath)))
+            if (_pathConverters.Count == 0)
+                return false;
+
+            if (!_pathConverters.Any(c => c.IsMatch(sensor.FullPath)))
                 return false;
 
             if (GetSensorType().HasValue && GetSensorType() != sensor.Type)
