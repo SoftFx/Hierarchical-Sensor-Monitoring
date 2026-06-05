@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,19 +28,20 @@ namespace HSMDataCollector.Client
         private readonly ICollectorLogger _logger;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
+        private int _disposed;
 
         internal HsmHttpsClient(CollectorOptions options, ICollectorLogger logger)
         {
             _endpoints = new Endpoints(options);
             _logger = logger;
 
-            ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, error) => true;
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+            var httpHandler = new HttpClientHandler();
 
-            _client = new HttpClient(new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true
-            });
+            if (options.AllowUntrustedServerCertificate)
+                httpHandler.ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true;
+
+            _client = new HttpClient(httpHandler);
+            _client.Timeout = options.RequestTimeout;
 
             _client.DefaultRequestHeaders.Add(HeaderClientName, options.ClientName);
             _client.DefaultRequestHeaders.Add(HeaderAccessKey, options.AccessKey);
@@ -55,10 +55,17 @@ namespace HSMDataCollector.Client
 
         public void Dispose()
         {
+            if (Interlocked.Exchange(ref _disposed, 1) == 1)
+                return;
+
             _tokenSource.Cancel();
 
             _commandsHandler.Dispose();
             _dataHandler.Dispose();
+            _priorityDataHandler.Dispose();
+            _fileHandler.Dispose();
+
+            _tokenSource.Dispose();
             _client.Dispose();
         }
 
@@ -89,14 +96,16 @@ namespace HSMDataCollector.Client
         {
             try
             {
-                var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token).ConfigureAwait(false);
+                using (var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token).ConfigureAwait(false))
+                {
 
-                if (connect.IsSuccessStatusCode)
-                    return ConnectionResult.Ok;
+                    if (connect.IsSuccessStatusCode)
+                        return ConnectionResult.Ok;
 
-                var error = await connect.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    var error = await connect.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-                return new ConnectionResult(connect.StatusCode, $"{connect.ReasonPhrase} ({error})");
+                    return new ConnectionResult(connect.StatusCode, $"{connect.ReasonPhrase} ({error})");
+                }
             }
             catch (Exception ex)
             {

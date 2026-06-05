@@ -2,10 +2,15 @@ name: Claude Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    # ready_for_review is required so the review runs when a draft is marked ready
+    # (marking ready does not emit a synchronize event).
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   claude-review:
+    # Skip review while the PR is a draft. This workflow only triggers on pull_request,
+    # so the draft flag is always present.
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     permissions:
       contents: read
