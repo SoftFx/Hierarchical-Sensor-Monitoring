@@ -100,7 +100,7 @@ namespace HSMServer.Core.Model
         public bool TryApplyPathTemplates(out string error)
         {
             error = null;
-            _pathConverters = [];
+            var converters = new List<PathTemplateConverter>();
 
             foreach (var path in Paths)
             {
@@ -110,12 +110,14 @@ namespace HSMServer.Core.Model
                 var converter = new PathTemplateConverter();
                 if (!converter.ApplyNewTemplate(path, out var pathError))
                 {
+                    _pathConverters = [];
                     error = pathError;
                     return false;
                 }
-                _pathConverters.Add(converter);
+                converters.Add(converter);
             }
 
+            _pathConverters = converters;
             return true;
         }
 

@@ -203,6 +203,14 @@ namespace HSMServer.Controllers
             if (ModelState.IsValid)
             {
                 var model = data.ToModel(availableChats);
+
+                if (!model.TryApplyPathTemplates(out var pathError))
+                    ModelState.AddModelError(nameof(data.PathTemplates), $"Invalid path template: {pathError}");
+            }
+
+            if (ModelState.IsValid)
+            {
+                var model = data.ToModel(availableChats);
                 var (success, error) = await _cache.AddAlertTemplateAsync(model);
 
                 if (!success)
