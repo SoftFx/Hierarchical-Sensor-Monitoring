@@ -6,12 +6,15 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.PathTemplates;
+using NLog;
 
 
 namespace HSMServer.Core.Model
 {
     public sealed class AlertTemplateModel
     {
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
         public const byte AnyType = 100;
 
         private List<PathTemplateConverter> _pathConverters = [];
@@ -112,15 +115,15 @@ namespace HSMServer.Core.Model
                 var converter = new PathTemplateConverter();
                 if (!converter.ApplyNewTemplate(path, out var pathError))
                 {
-                    _pathConverters = [];
+                    _logger.Warn($"Alert template '{Name}': skipping invalid path template '{path}': {pathError}");
                     error = pathError;
-                    return false;
+                    continue;
                 }
                 converters.Add(converter);
             }
 
             _pathConverters = converters;
-            return true;
+            return error == null;
         }
 
         public AlertTemplateEntity ToEntity()
