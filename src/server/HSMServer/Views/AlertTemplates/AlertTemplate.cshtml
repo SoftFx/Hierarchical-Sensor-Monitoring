@@ -187,16 +187,13 @@
 
     function updateForm(needChangeType = true) {
         var type = $('#Type').val();
-        var paths = getPaths();
+        var paths = getPaths().filter(p => p !== '');
         var folderId = $('#FolderId').val();
 
-        var params = $.param({ type: type, folderId: folderId });
-        paths.forEach(function(p) {
-            params += '&paths=' + encodeURIComponent(p);
-        });
-
         $.ajax({
-            url: `@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)?${params}`,
+            url: '@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)',
+            data: { type: type, paths: paths, folderId: folderId },
+            traditional: true,
             cache: false,
             success: (viewData) => {
 
