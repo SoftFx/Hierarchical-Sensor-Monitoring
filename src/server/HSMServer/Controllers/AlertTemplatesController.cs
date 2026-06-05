@@ -269,10 +269,7 @@ namespace HSMServer.Controllers
                 return (sensorType, sensors);
             }
 
-            byte? detectedType = (byte)sensors.FirstOrDefault()?.Type;
-            sensors = sensors.Where(x => x.Type == (SensorType)detectedType).ToList();
-
-            return (detectedType, sensors);
+            return ((byte)sensors.FirstOrDefault()!.Type, sensors);
         }
 
         private string GetTemplateName(string path, Guid folderId)
