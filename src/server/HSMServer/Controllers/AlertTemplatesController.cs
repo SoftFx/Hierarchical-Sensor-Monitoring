@@ -120,9 +120,12 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult UpdateTemplate(byte type, string paths, Guid folderId)
         {
-            var pathList = string.IsNullOrWhiteSpace(paths)
-                ? []
-                : JsonSerializer.Deserialize<List<string>>(paths)?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [];
+            List<string> pathList = [];
+            if (!string.IsNullOrWhiteSpace(paths))
+            {
+                try { pathList = JsonSerializer.Deserialize<List<string>>(paths)?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? []; }
+                catch (JsonException) { }
+            }
 
             var (sensorType, sensors) = GetAffectedSensors(type, pathList, folderId);
 
