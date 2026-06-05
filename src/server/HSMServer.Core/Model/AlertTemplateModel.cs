@@ -14,7 +14,7 @@ namespace HSMServer.Core.Model
     {
         public const byte AnyType = 100;
 
-        private PathTemplateConverter _pathTemplateConverter = new PathTemplateConverter();
+        private List<PathTemplateConverter> _pathConverters = [];
 
         public List<TtlEntry> TtlEntries { get; set; } = [];
 
@@ -24,7 +24,14 @@ namespace HSMServer.Core.Model
 
         public string Name { get; set; }
 
-        public string Path { get; set; }
+        public List<string> Paths { get; set; } = [];
+
+        // Backward-compatible access to the first path
+        public string Path
+        {
+            get => Paths.FirstOrDefault() ?? string.Empty;
+            set { if (value != null) Paths = [value]; }
+        }
 
         public byte SensorType { get; set; }
 
@@ -40,9 +47,13 @@ namespace HSMServer.Core.Model
         {
             Id = new Guid(entity.Id);
             Name = entity.Name;
-            Path = entity.Path;
             SensorType = entity.SensorType;
             FolderId = entity.FolderId;
+
+            // Migration: handle both new Paths list and legacy single Path
+            Paths = entity.Paths?.Count > 0
+                ? entity.Paths
+                : entity.Path != null ? [entity.Path] : [];
 
             TtlEntries = [];
 
@@ -83,12 +94,35 @@ namespace HSMServer.Core.Model
                 }
             }
 
-            TryApplyPathTemplate(Path, out _);
+            TryApplyPathTemplates(out _);
+        }
+
+        public bool TryApplyPathTemplates(out string error)
+        {
+            error = null;
+            _pathConverters = [];
+
+            foreach (var path in Paths)
+            {
+                if (string.IsNullOrEmpty(path))
+                    continue;
+
+                var converter = new PathTemplateConverter();
+                if (!converter.ApplyNewTemplate(path, out var pathError))
+                {
+                    error = pathError;
+                    return false;
+                }
+                _pathConverters.Add(converter);
+            }
+
+            return true;
         }
 
         public bool TryApplyPathTemplate(string path, out string error)
         {
-            return _pathTemplateConverter.ApplyNewTemplate(path, out error);
+            Paths = string.IsNullOrEmpty(path) ? [] : [path];
+            return TryApplyPathTemplates(out error);
         }
 
         public AlertTemplateEntity ToEntity()
@@ -97,7 +131,7 @@ namespace HSMServer.Core.Model
             {
                 Id = Id.ToByteArray(),
                 Name = Name,
-                Path = Path,
+                Paths = Paths,
                 TTLPolicies = TtlEntries?.Select(e => e.Policy.ToEntity()).ToList() ?? [],
                 TTLs = TtlEntries?.Select(e => e.Interval?.ToEntity()).ToList() ?? [],
                 Policies = Policies?.Select(x => x.ToEntity()).ToList() ?? [],
@@ -110,7 +144,7 @@ namespace HSMServer.Core.Model
 
         public bool IsMatch(BaseSensorModel sensor)
         {
-            if (!_pathTemplateConverter.IsMatch(sensor.FullPath))
+            if (_pathConverters.Count > 0 && !_pathConverters.Any(c => c.IsMatch(sensor.FullPath)))
                 return false;
 
             if (GetSensorType().HasValue && GetSensorType() != sensor.Type)

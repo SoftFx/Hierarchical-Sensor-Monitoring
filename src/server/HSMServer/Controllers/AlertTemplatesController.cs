@@ -1,4 +1,4 @@
-﻿using HSMCommon.Model;
+using HSMCommon.Model;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
@@ -71,7 +71,7 @@ namespace HSMServer.Controllers
             {
                 Keys = templates.Select(x =>
                 {
-                    var (type, sensors) = GetAffectedSensors(x.SensorType, x.Path, x.FolderId);
+                    var (type, sensors) = GetAffectedSensors(x.SensorType, x.Paths, x.FolderId);
                     return new DataAlertTemplateViewModel(x) { Sensors = sensors };
                 }).ToList(),
             };
@@ -117,11 +117,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult UpdateTemplate(byte type, string path, Guid folderId)
+        public IActionResult UpdateTemplate(byte type, List<string> paths, Guid folderId)
         {
-            var (sensorType, sensors) = GetAffectedSensors(type, path, folderId);
+            paths = paths?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [];
 
-            var name = GetTemplateName(path, folderId);
+            var (sensorType, sensors) = GetAffectedSensors(type, paths, folderId);
+
+            var name = GetTemplateName(paths.FirstOrDefault(), folderId);
 
             List<ChatItem> chats = [];
             if (_folders.TryGetValue(folderId, out var folder))
@@ -153,7 +155,7 @@ namespace HSMServer.Controllers
                 if (sensor != null)
                 {
                     model.FolderId = sensor.Root.FolderId ?? folders.FirstOrDefault().Id;
-                    model.PathTemplate = $"*/{sensor.Path}";
+                    model.PathTemplates = [$"*/{sensor.Path}"];
                     model.Type = (byte)sensor.Type;
                     model.Name = GetTemplateName(sensor.Path, model.FolderId);
                 }
@@ -188,6 +190,9 @@ namespace HSMServer.Controllers
             if (_cache.GetAlertTemplateModels().Any(x => x.Name == data.Name && x.Id != data.Id))
                 ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
 
+            if (data.PathTemplates == null || !data.PathTemplates.Any(p => !string.IsNullOrWhiteSpace(p)))
+                ModelState.AddModelError(nameof(data.PathTemplates), "At least one path template is required.");
+
             if (ModelState.IsValid)
             {
                 var model = data.ToModel();
@@ -220,11 +225,18 @@ namespace HSMServer.Controllers
         }
 
 
-        private (byte?, List<BaseSensorModel>) GetAffectedSensors(byte type, string path, Guid folder)
+        private (byte?, List<BaseSensorModel>) GetAffectedSensors(byte type, List<string> paths, Guid folder)
         {
-            byte? sensorType = null;
+            var allSensors = new Dictionary<Guid, BaseSensorModel>();
 
-            var sensors = _cache.GetSensors(path, type == DataAlertTemplateViewModel.AnyType ? null : (SensorType)type, folder);
+            foreach (var path in paths.Where(p => !string.IsNullOrWhiteSpace(p)))
+            {
+                foreach (var sensor in _cache.GetSensors(path, type == DataAlertTemplateViewModel.AnyType ? null : (SensorType)type, folder))
+                    allSensors.TryAdd(sensor.Id, sensor);
+            }
+
+            var sensors = allSensors.Values.ToList();
+            byte? sensorType = null;
 
             if (sensors.Count > 0)
             {

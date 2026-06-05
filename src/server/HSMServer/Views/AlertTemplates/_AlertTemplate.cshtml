@@ -1,4 +1,4 @@
-﻿@using HSMCommon.Model
+@using HSMCommon.Model
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Core.Model
@@ -37,6 +37,10 @@
     }
 
     ViewBag.IsTemplate = true;
+
+    var pathTemplates = Model.PathTemplates != null && Model.PathTemplates.Count > 0
+        ? Model.PathTemplates
+        : new List<string> { "" };
 }
 <form id="addAlertTemplate_form" method="post" action="@Html.Raw(Url.Action(nameof(AlertTemplatesController.AlertTemplate), ViewConstants.AlertTemplatesController))">
     <div class="row">
@@ -50,10 +54,21 @@
         </div>
     </div>
     <div class="row py-2">
-        <label class="col-1 col-form-label d-flex justify-content-end" asp-for="PathTemplate"></label>
-        <div class="col w-auto">
-            <input type='text' class='form-control' asp-for="PathTemplate" placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" />
-            <span asp-validation-for="PathTemplate"></span>
+        <label class="col-1 col-form-label d-flex justify-content-end">Path Templates</label>
+        <div class="col w-auto" id="pathTemplatesContainer">
+            @for (int i = 0; i < pathTemplates.Count; i++)
+            {
+                <div class="d-flex align-items-center mb-1 path-template-row">
+                    <input type='text' class='form-control path-template-input' name='PathTemplates[@i]' placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" value="@pathTemplates[i]" />
+                    @if (pathTemplates.Count > 1)
+                    {
+                        <button type="button" class="btn btn-link remove-path-btn p-0 ms-1"><i class="fa-solid fa-xmark"></i></button>
+                    }
+                </div>
+            }
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-link p-0" id="addPathBtn"><i class="fa-solid fa-plus"></i> Add path</button>
         </div>
     </div>
     <div class="row py-2">

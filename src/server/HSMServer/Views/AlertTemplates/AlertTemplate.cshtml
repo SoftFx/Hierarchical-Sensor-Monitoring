@@ -1,4 +1,4 @@
-﻿@using HSMCommon.Model
+@using HSMCommon.Model
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Core.Model
@@ -31,7 +31,7 @@
 <script>
     $(document).ready(function() {
         initForm();
-        if($('#PathTemplate').val() != '')
+        if(getPaths().length > 0 && getPaths().some(p => p !== ''))
             updateForm(@(Model.IsNew.ToString().ToLower()));
     });
 
@@ -48,14 +48,62 @@
             updateForm(false);
         });
 
+        // Path template input events (debounced)
         let timeout = null;
-        document.getElementById("PathTemplate").addEventListener("input", () => {
+        $('#pathTemplatesContainer').on("input", ".path-template-input", function() {
             clearTimeout(timeout);
-
             timeout = setTimeout(() => {
                 updateForm();
             }, 500);
         });
+
+        // Add path button
+        $('#addPathBtn').off('click').on('click', function() {
+            addPathInput();
+        });
+
+        // Remove path buttons
+        $('#pathTemplatesContainer').on('click', '.remove-path-btn', function() {
+            $(this).closest('.path-template-row').remove();
+            reindexPathInputs();
+            updateRemoveButtons();
+            updateForm();
+        });
+
+        updateRemoveButtons();
+    }
+
+    function addPathInput() {
+        var container = $('#pathTemplatesContainer');
+        var index = container.find('.path-template-row').length;
+        var newRow = $(
+            '<div class="d-flex align-items-center mb-1 path-template-row">' +
+            '<input type="text" class="form-control path-template-input" name="PathTemplates[' + index + ']" placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" value="" />' +
+            '<button type="button" class="btn btn-link remove-path-btn p-0 ms-1"><i class="fa-solid fa-xmark"></i></button>' +
+            '</div>'
+        );
+        container.append(newRow);
+        updateRemoveButtons();
+        newRow.find('.path-template-input').focus();
+    }
+
+    function reindexPathInputs() {
+        $('#pathTemplatesContainer .path-template-row').each(function(i) {
+            $(this).find('.path-template-input').attr('name', 'PathTemplates[' + i + ']');
+        });
+    }
+
+    function updateRemoveButtons() {
+        var rows = $('#pathTemplatesContainer .path-template-row');
+        rows.each(function() {
+            $(this).find('.remove-path-btn').toggle(rows.length > 1);
+        });
+    }
+
+    function getPaths() {
+        return $('#pathTemplatesContainer .path-template-input').map(function() {
+            return $(this).val();
+        }).get();
     }
 
     function onSensorTypeChanged(needUpdateForm = true) {
@@ -139,11 +187,16 @@
 
     function updateForm(needChangeType = true) {
         var type = $('#Type').val();
-        var path = $('#PathTemplate').val();
+        var paths = getPaths();
         var folderId = $('#FolderId').val();
 
+        var params = $.param({ type: type, folderId: folderId });
+        paths.forEach(function(p) {
+            params += '&paths=' + encodeURIComponent(p);
+        });
+
         $.ajax({
-            url: `@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)?type=${type}&path=${encodeURIComponent(path)}&folderId=${folderId}`,
+            url: `@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)?${params}`,
             cache: false,
             success: (viewData) => {
 

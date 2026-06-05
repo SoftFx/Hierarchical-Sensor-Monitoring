@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
@@ -28,7 +28,7 @@ namespace HSMServer.Model.DataAlertTemplates
         public string Name { get; set; }
 
         [Required]
-        public string PathTemplate { get; set; }
+        public List<string> PathTemplates { get; set; } = [];
 
         public List<BaseSensorModel> Sensors { get; set; }
 
@@ -54,7 +54,7 @@ namespace HSMServer.Model.DataAlertTemplates
         {
             Id = model.Id;
             Name = model.Name;
-            PathTemplate = model.Path;
+            PathTemplates = [.. model.Paths];
             Type = model.SensorType;
             FolderId = model.FolderId;
 
@@ -94,16 +94,16 @@ namespace HSMServer.Model.DataAlertTemplates
 
         public AlertTemplateModel ToModel()
         {
-            AlertTemplateModel result = new AlertTemplateModel()
+            var result = new AlertTemplateModel()
             {
                 Id = Id,
                 Name = Name,
-                Path = PathTemplate,
+                Paths = PathTemplates.Where(p => !string.IsNullOrWhiteSpace(p)).ToList(),
                 SensorType = Type,
                 FolderId = FolderId,
             };
 
-            result.TryApplyPathTemplate(PathTemplate, out _);
+            result.TryApplyPathTemplates(out _);
 
             var ttlAlerts = DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts : null;
 
