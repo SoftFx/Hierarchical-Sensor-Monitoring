@@ -200,9 +200,11 @@ namespace HSMServer.Controllers
             if (_folders.TryGetValue(data.FolderId, out var folder) && folder.TelegramChats.Count > 0)
                 availableChats = folder.TelegramChats.GetAvailableChatsDictionary(_telegram);
 
+            AlertTemplateModel model = null;
+
             if (ModelState.IsValid)
             {
-                var model = data.ToModel(availableChats);
+                model = data.ToModel(availableChats);
 
                 if (!model.TryApplyPathTemplates(out var pathError))
                     ModelState.AddModelError(nameof(data.PathTemplates), $"Invalid path template: {pathError}");
@@ -210,7 +212,6 @@ namespace HSMServer.Controllers
 
             if (ModelState.IsValid)
             {
-                var model = data.ToModel(availableChats);
                 var (success, error) = await _cache.AddAlertTemplateAsync(model);
 
                 if (!success)
@@ -219,7 +220,8 @@ namespace HSMServer.Controllers
                 return Ok();
             }
 
-            data = new DataAlertTemplateViewModel(data.ToModel(availableChats), _folders.GetUserFolders(CurrentUser));
+            model ??= data.ToModel(availableChats);
+            data = new DataAlertTemplateViewModel(model, _folders.GetUserFolders(CurrentUser));
 
             if (folder != null)
                 PopulateAvailableChats(data, folder.TelegramChats);
