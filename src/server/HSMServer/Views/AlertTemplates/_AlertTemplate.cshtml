@@ -60,10 +60,7 @@
             {
                 <div class="d-flex align-items-center mb-1 path-template-row">
                     <input type='text' class='form-control path-template-input' name='PathTemplates[@i]' placeholder="Example: {product}/.computer/*/Free space on {diskName} disk" value="@pathTemplates[i]" />
-                    @if (pathTemplates.Count > 1)
-                    {
-                        <button type="button" class="btn btn-link remove-path-btn p-0 ms-1"><i class="fa-solid fa-xmark"></i></button>
-                    }
+                    <button type="button" class="btn btn-link remove-path-btn p-0 ms-1" style="@(pathTemplates.Count > 1 ? "" : "display:none")"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             }
         </div>
