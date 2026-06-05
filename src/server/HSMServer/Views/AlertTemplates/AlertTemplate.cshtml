@@ -192,8 +192,7 @@
 
         $.ajax({
             url: '@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)',
-            data: { type: type, paths: paths, folderId: folderId },
-            traditional: true,
+            data: { type: type, paths: JSON.stringify(paths), folderId: folderId },
             cache: false,
             success: (viewData) => {
 

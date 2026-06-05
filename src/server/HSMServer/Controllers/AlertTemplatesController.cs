@@ -117,13 +117,15 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult UpdateTemplate(byte type, List<string> paths, Guid folderId)
+        public IActionResult UpdateTemplate(byte type, string paths, Guid folderId)
         {
-            paths = paths?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [];
+            var pathList = string.IsNullOrWhiteSpace(paths)
+                ? []
+                : JsonSerializer.Deserialize<List<string>>(paths)?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [];
 
-            var (sensorType, sensors) = GetAffectedSensors(type, paths, folderId);
+            var (sensorType, sensors) = GetAffectedSensors(type, pathList, folderId);
 
-            var name = GetTemplateName(paths.FirstOrDefault(), folderId);
+            var name = GetTemplateName(pathList.FirstOrDefault(), folderId);
 
             List<ChatItem> chats = [];
             if (_folders.TryGetValue(folderId, out var folder))
