@@ -121,12 +121,6 @@ namespace HSMServer.Core.Model
             return true;
         }
 
-        public bool TryApplyPathTemplate(string path, out string error)
-        {
-            Paths = string.IsNullOrEmpty(path) ? [] : [path];
-            return TryApplyPathTemplates(out error);
-        }
-
         public AlertTemplateEntity ToEntity()
         {
             return new AlertTemplateEntity()
