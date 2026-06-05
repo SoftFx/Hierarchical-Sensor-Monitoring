@@ -238,15 +238,23 @@ namespace HSMServer.Controllers
             }
 
             var sensors = allSensors.Values.ToList();
-            byte? sensorType = null;
 
-            if (sensors.Count > 0)
+            if (sensors.Count == 0)
+                return (null, sensors);
+
+            if (type == DataAlertTemplateViewModel.AnyType)
             {
-                sensorType = (byte)sensors.FirstOrDefault()?.Type;
-                sensors = sensors.Where(x => x.Type == (SensorType)sensorType).ToList();
+                // For "Any" type, show all matching sensors regardless of type.
+                // Auto-detect: if all sensors are the same type, return it; otherwise keep as Any.
+                var distinctTypes = sensors.Select(x => x.Type).Distinct().ToList();
+                byte? sensorType = distinctTypes.Count == 1 ? (byte)distinctTypes[0] : null;
+                return (sensorType, sensors);
             }
 
-            return (sensorType, sensors);
+            byte? detectedType = (byte)sensors.FirstOrDefault()?.Type;
+            sensors = sensors.Where(x => x.Type == (SensorType)detectedType).ToList();
+
+            return (detectedType, sensors);
         }
 
         private string GetTemplateName(string path, Guid folderId)
