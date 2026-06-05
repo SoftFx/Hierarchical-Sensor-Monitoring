@@ -196,6 +196,9 @@ namespace HSMServer.Controllers
             if (_cache.GetAlertTemplateModels().Any(x => x.Name == data.Name && x.Id != data.Id))
                 ModelState.AddModelError(nameof(data.Name), "The name must be unique.");
 
+            if (data.PathTemplates == null || data.PathTemplates.All(string.IsNullOrWhiteSpace))
+                ModelState.AddModelError(nameof(data.PathTemplates), "At least one path template is required.");
+
             Dictionary<Guid, string> availableChats = null;
             if (_folders.TryGetValue(data.FolderId, out var folder) && folder.TelegramChats.Count > 0)
                 availableChats = folder.TelegramChats.GetAvailableChatsDictionary(_telegram);
