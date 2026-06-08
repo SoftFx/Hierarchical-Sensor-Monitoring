@@ -129,12 +129,22 @@ namespace HSMDataCollector.Client
 
         internal async ValueTask<HttpResponseMessage> SendRequestAsync(string uri, HttpContent stringContent, CancellationToken token)
         {
-            CancellationTokenSource pendingRequests;
+            CancellationToken pendingRequestsToken;
 
             lock (_tokenSourceLock)
-                pendingRequests = _tokenSource;
+            {
+                // Capture the CancellationToken (not just the source ref) under the lock so
+                // CancelPendingRequests cannot swap _tokenSource out between us reading the
+                // reference and us reading .Token. A request that observed the source moments
+                // before a Cancel() call still ends up linked to the cancelled token — that is
+                // intentional and matches the contract of "cancel all in-flight requests": we
+                // cannot promise that a request which started while the cancel was racing us
+                // survives the cancel. The narrower capture just keeps the race window to the
+                // single field read.
+                pendingRequestsToken = _tokenSource.Token;
+            }
 
-            using (var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token, pendingRequests.Token))
+            using (var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token, pendingRequestsToken))
                 return await _client.PostAsync(uri, stringContent, linkedTokenSource.Token).ConfigureAwait(false);
         }
 

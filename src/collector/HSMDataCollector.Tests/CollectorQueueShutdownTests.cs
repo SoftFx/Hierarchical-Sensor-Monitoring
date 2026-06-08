@@ -240,6 +240,57 @@ namespace HSMDataCollector.Tests
                 "TerminalDispose must still drain accepted work with a bounded flush.");
         }
 
+        // PR #1080 review #5: lock in the Dispose-vs-Stop race fix. Stop(customStoppingTask) sets
+        // Status=Stopping inside its first lock, then awaits the custom task BEFORE publishing
+        // _currentProcessorStopTask. Without the fix, a Dispose() that races in during the await
+        // saw a null processor stop task, owned the terminal stop itself, and the resumed Stop
+        // then kicked off a SECOND concurrent _dataProcessor.StopAsync with the graceful mode —
+        // overwriting Dispose's TerminalDispose policy on each queue's _currentShutdownModeRaw.
+        // The fix has Dispose publish its task inside the lock; a racing Stop joins it.
+        // Assertion: after the race resolves, the data queue's mode reflects Dispose's choice,
+        // not Stop's. (Without the fix, GracefulStop would have overwritten TerminalDispose.)
+        [Fact]
+        public async Task Dispose_racing_Stop_customTask_publishes_terminal_mode_to_queues()
+        {
+            var sender = new SilentDataSender();
+            var collector = new DataCollector(CreateOptions(sender, "stop-dispose-race"));
+
+            collector.CreateDoubleSensor("stop-dispose-race/data");
+
+            await collector.Start().ConfigureAwait(false);
+
+            // customStoppingTask blocks Stop after it transitioned Status→Stopping but before
+            // it published _currentProcessorStopTask. This is the window where the bug used to
+            // open: Dispose() racing in observed _currentProcessorStopTask == null.
+            var releaseStop = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stopTask = collector.Stop(releaseStop.Task);
+
+            // Give Stop time to enter the lock and transition to Stopping.
+            await Task.Delay(TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
+
+            // Race: Dispose runs while Stop is still parked on releaseStop.Task.
+            var disposeTask = Task.Run(() => collector.Dispose());
+
+            // Give Dispose time to take the inner lock, publish its terminal stop task, and
+            // begin its bounded flush.
+            await Task.Delay(TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
+
+            // Release Stop's custom task. With the fix, Stop's second lock observes Dispose's
+            // published task and joins it instead of starting a second StopAsync.
+            releaseStop.SetResult(true);
+
+            await Task.WhenAll(stopTask, disposeTask).ConfigureAwait(false);
+
+            Assert.Equal(CollectorStatus.Disposed, collector.Status);
+
+            var dataQueue = GetDataQueue(collector);
+            var modeRaw = (int)typeof(QueueProcessorBase<SensorValueBase>)
+                .GetField("_currentShutdownModeRaw", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(dataQueue);
+
+            Assert.Equal((int)ShutdownMode.TerminalDispose, modeRaw);
+        }
+
 
         private static CollectorOptions CreateOptions(SilentDataSender sender, string module)
         {

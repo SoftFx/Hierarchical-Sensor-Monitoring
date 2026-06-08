@@ -142,6 +142,13 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     }
 
                     _state = QueueState.Stopping;
+                    // Close the queue to new public writes the moment we commit to stopping —
+                    // not at CompleteStoppedTask. Otherwise during the degraded "sender ignores
+                    // cancellation" window between Stopping and the final timeout return, public
+                    // AddValue paths whose CanAcceptData check still says true would land items
+                    // into the channel that ClearQueue silently discards seconds later. Internal
+                    // retry re-enqueue bypasses this flag via ReEnqueueItem.
+                    Volatile.Write(ref _acceptingWritesFlag, 0);
                     taskToWait = _task;
                     tokenSourceToDispose = _cancellationTokenSource;
                 }
