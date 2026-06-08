@@ -133,6 +133,14 @@ namespace HSMDataCollector.Client
 
             lock (_tokenSourceLock)
             {
+                // Surface dispose as a clean OperationCanceledException to callers instead of
+                // letting them observe a disposed _tokenSource and hit ObjectDisposedException
+                // when reading .Token. Dispose is terminal so a send racing it cannot succeed
+                // either way, but the cancellation shape is what the BaseHandlers retry pipeline
+                // and the queue's OCE branches already understand.
+                if (Volatile.Read(ref _disposed) == 1)
+                    throw new OperationCanceledException();
+
                 // Capture the CancellationToken (not just the source ref) under the lock so
                 // CancelPendingRequests cannot swap _tokenSource out between us reading the
                 // reference and us reading .Token. A request that observed the source moments

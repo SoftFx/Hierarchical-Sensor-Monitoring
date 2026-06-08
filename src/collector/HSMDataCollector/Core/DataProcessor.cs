@@ -305,6 +305,20 @@ namespace HSMDataCollector.Core
         }
 
         /// <summary>
+        /// Deduplicated error logging for the queue processing/flush loops. Retry-forever on a
+        /// non-retryable failure (e.g. server returns 4xx for a poison value) would otherwise
+        /// produce one log entry per <see cref="CollectorOptions.PackageCollectPeriod"/> cycle;
+        /// routing the identical error through <see cref="MessageDeduplicator"/> collapses the
+        /// flood to one entry per dedup window while preserving the per-cycle retry behavior
+        /// (which the ShutdownMode/PreserveCanceledPackages policy still relies on).
+        /// </summary>
+        public void AddQueueLoopError(string queueName, Exception ex)
+        {
+            var msg = $"Queue: {queueName}, {ex}";
+            _messageDeduplicator.AddMessage(msg);
+        }
+
+        /// <summary>
         /// Diagnostic hook for callers that silently dropped a value because it failed validation
         /// (NaN/Infinity, null, status out of range, partial-bar stats outside [min, max], etc.).
         /// Emits at Debug level so producers do not flood the log when a noisy upstream keeps

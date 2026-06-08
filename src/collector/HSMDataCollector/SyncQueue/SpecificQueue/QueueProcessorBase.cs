@@ -293,7 +293,19 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
-                    _logger.Error(ex);
+                    // Dedup the log because DispatchPackageAsync re-enqueues on a non-retryable
+                    // server error and rethrows here on every cycle — a poison package would
+                    // otherwise produce one error log per PackageCollectPeriod indefinitely.
+                    // RETRY POLICY: re-enqueue + rethrow is intentional. The graceful-stop story
+                    // depends on preserving accepted work even under transient transport failure;
+                    // a per-package retry cap would re-introduce the old "data dropped on first
+                    // server hiccup" regression. Overflow eviction is the backstop: a permanently
+                    // failing item rides the queue tail until MaxQueueSize evicts it.
+                    if (_queueManager != null)
+                        _queueManager.AddQueueLoopError(QueueName, ex);
+                    else
+                        _logger.Error(ex);
+
                     try
                     {
                         await DelayAfterFailureAsync(token).ConfigureAwait(false);

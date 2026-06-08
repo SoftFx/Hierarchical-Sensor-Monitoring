@@ -318,17 +318,30 @@ namespace HSMDataCollector.Core
                 failures.Add(ex);
             }
 
+            bool collectorDisposedDuringCustomTask;
             lock (_opLock)
             {
-                if (Status == CollectorStatus.Disposed)
-                    return;
+                collectorDisposedDuringCustomTask = Status == CollectorStatus.Disposed;
 
-                processorStopTask = _currentProcessorStopTask;
-                if (processorStopTask == null)
+                if (!collectorDisposedDuringCustomTask)
                 {
-                    processorStopTask = WaitForStartInitThenStopProcessor(startInitTask, ShutdownMode.GracefulStop);
-                    _currentProcessorStopTask = processorStopTask;
+                    processorStopTask = _currentProcessorStopTask;
+                    if (processorStopTask == null)
+                    {
+                        processorStopTask = WaitForStartInitThenStopProcessor(startInitTask, ShutdownMode.GracefulStop);
+                        _currentProcessorStopTask = processorStopTask;
+                    }
                 }
+            }
+
+            // Dispose() raced us and took ownership of the terminal stop. Surface anything the
+            // customStoppingTask hook produced before returning so a failing user hook is not
+            // silently swallowed by the dispose path; the terminal stop itself is Dispose's
+            // responsibility from here on.
+            if (collectorDisposedDuringCustomTask)
+            {
+                ReportStopFailures(failures);
+                return;
             }
 
             try
@@ -350,6 +363,11 @@ namespace HSMDataCollector.Core
                     LogAndRaise(CollectorStatus.Stopped);
             }
 
+            ReportStopFailures(failures);
+        }
+
+        private void ReportStopFailures(List<Exception> failures)
+        {
             if (failures.Count == 1)
                 _logger.Error($"DataCollector Stop error: {failures[0]}");
             else if (failures.Count > 1)
