@@ -399,7 +399,7 @@ img .tree-png-icon {
 
 .templatedAlert .emojionearea {
     pointer-events: none;
-    filter: grayscale(1);
+    opacity: 0.4;
 }
 
 .meta-info-label {
