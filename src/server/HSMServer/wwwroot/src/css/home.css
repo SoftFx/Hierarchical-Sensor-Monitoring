@@ -384,7 +384,7 @@ img .tree-png-icon {
 .templatedAlert .deleteCondition,
 .templatedAlert .deleteAction,
 .templatedAlert .removeSchedule,
-.templatedAlert .addschedule {
+.templatedAlert .addSchedule {
     display: none !important;
 }
 
