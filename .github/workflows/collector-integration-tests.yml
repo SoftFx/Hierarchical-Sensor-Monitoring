@@ -25,12 +25,26 @@ jobs:
     # pull_request payload, so they must still run — hence the event_name guard.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    env:
+      # Matches the fixture's `FROM hsmonitoring/hierarchical_sensor_monitoring:latest`.
+      # The fixture re-COPYs appsettings on top of this image; Docker prefers the local
+      # image over the remote one when tag matches, so building locally as :latest is
+      # enough — no push needed.
+      SERVER_IMAGE_NAME: hsmonitoring/hierarchical_sensor_monitoring
+      SERVER_IMAGE_TAG: latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
+      # Build the server container from the SAME branch the integration tests run against.
+      # Without this step the fixture pulls master's published `:latest`, so any server-side
+      # API addition on the branch (e.g. a new /enum endpoint) is invisible to the tests
+      # and the matching collector-side route returns 404. Mirrors the pattern in tests.yml.
+      - name: Build server container image from branch source
+        run: dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerImageName=${{ env.SERVER_IMAGE_NAME }} -p:ContainerImageTag=${{ env.SERVER_IMAGE_TAG }}
 
       - name: Run Integration Tests
         run: dotnet test src/collector/HSMDataCollector.IntegrationTests --logger "console;verbosity=detailed"
