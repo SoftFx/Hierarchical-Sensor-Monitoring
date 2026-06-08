@@ -353,6 +353,56 @@ namespace HSMDataCollector.Tests
         }
 
         /// <summary>
+        /// Concurrent stress test for the monotonic-epoch contract. Writers do
+        /// <see cref="Interlocked.Increment(ref long)"/>; readers do
+        /// <see cref="Interlocked.Read(ref long)"/> and must never observe a value greater
+        /// than the maximum write that has completed so far.
+        ///
+        /// On 64-bit runtimes long reads are atomic and this test always passes — it serves
+        /// as a smoke test for the concurrent shape. On 32-bit runtimes the same test with
+        /// <c>Volatile.Read</c> can produce a torn read where the high word is from a newer
+        /// write than the low word; with <c>Interlocked.Read</c> (the production path) it
+        /// cannot. PR #1080 review #8 flagged this and we converted the read in
+        /// <see cref="MonitoringSensorBase{T, TDisplayUnit}.LifecycleEpoch"/> from
+        /// Volatile to Interlocked accordingly. The CI lacks a 32-bit matrix at the moment,
+        /// so this test is left here as a placeholder + documentation hook for whoever adds
+        /// one later.
+        /// </summary>
+        [Fact]
+        public async Task LifecycleEpoch_concurrent_reads_observe_monotonic_values()
+        {
+            long epoch = 0;
+            long observedNonMonotonic = 0;
+            const int durationMs = 500;
+
+            using (var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(durationMs)))
+            {
+                var writer = Task.Run(() =>
+                {
+                    while (!cts.IsCancellationRequested)
+                        Interlocked.Increment(ref epoch);
+                });
+
+                var reader = Task.Run(() =>
+                {
+                    long previous = 0;
+                    while (!cts.IsCancellationRequested)
+                    {
+                        var current = Interlocked.Read(ref epoch);
+                        if (current < previous)
+                            Interlocked.Increment(ref observedNonMonotonic);
+
+                        previous = current;
+                    }
+                });
+
+                await Task.WhenAll(writer, reader).ConfigureAwait(false);
+            }
+
+            Assert.Equal(0, Interlocked.Read(ref observedNonMonotonic));
+        }
+
+        /// <summary>
         /// Test double for <see cref="QueueProcessorBase{T}"/> that lets the single-item Enqueue
         /// path emit a configurable Accept-then-Reject sequence. Used to drive the IEnumerable
         /// overload through its mid-batch rejection branch without racing a real stop.

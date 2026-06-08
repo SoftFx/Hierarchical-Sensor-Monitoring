@@ -304,6 +304,18 @@ namespace HSMDataCollector.Core
             _messageDeduplicator.AddMessage(msg);
         }
 
+        /// <summary>
+        /// Diagnostic hook for callers that silently dropped a value because it failed validation
+        /// (NaN/Infinity, null, status out of range, partial-bar stats outside [min, max], etc.).
+        /// Emits at Debug level so producers do not flood the log when a noisy upstream keeps
+        /// sending bad values; users who want visibility into dropped values enable Debug on
+        /// their <see cref="HSMDataCollector.Logging.ICollectorLogger"/>.
+        /// </summary>
+        public void LogDroppedValue(string sensorPath, string reason)
+        {
+            _logger.Debug($"Sensor: {sensorPath}, value rejected: {reason}");
+        }
+
         public void AddPackageInfo(string name, PackageInfo info)
         {
             if (Volatile.Read(ref _diagnosticsSuppressedFlag) == 1)

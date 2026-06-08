@@ -20,7 +20,10 @@ namespace HSMDataCollector.DefaultSensors
             try
             {
                 if (!SensorValueExtensions.IsValidValue(value, SensorStatus.Ok))
+                {
+                    _dataProcessor?.LogDroppedValue(SensorPath, "bar sample failed validation (NaN/Infinity/null)");
                     return;
+                }
 
                 CheckCurrentBar();
 
@@ -38,10 +41,16 @@ namespace HSMDataCollector.DefaultSensors
                     !SensorValueExtensions.IsValidValue(mean, SensorStatus.Ok) ||
                     !SensorValueExtensions.IsValidValue(first, SensorStatus.Ok) ||
                     !SensorValueExtensions.IsValidValue(last, SensorStatus.Ok))
+                {
+                    _dataProcessor?.LogDroppedValue(SensorPath, "partial bar contains NaN/Infinity/null in one of min/max/mean/first/last");
                     return;
+                }
 
                 if (!IsValidPartial(min, max, mean, first, last, count))
+                {
+                    _dataProcessor?.LogDroppedValue(SensorPath, $"partial bar stats inconsistent: count={count}, mean/first/last outside [min, max]");
                     return;
+                }
 
                 CheckCurrentBar();
 

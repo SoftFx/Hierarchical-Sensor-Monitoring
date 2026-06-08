@@ -421,7 +421,7 @@ namespace HSMDataCollector.Core
         {
             CollectorStatus previousStatus;
             Task inFlightStop;
-            Task inFlightStartInit;
+            Task disposeOwnedStop = null;
             bool ownsStop;
 
             lock (_opLock)
@@ -435,13 +435,24 @@ namespace HSMDataCollector.Core
                 // wait for it. If the collector is Stopping but no processor stop task exists yet
                 // (Stop(customTask) is still running its hook), Dispose owns the terminal stop.
                 inFlightStop = _currentProcessorStopTask;
-                inFlightStartInit = _currentStartInitTask;
+                var inFlightStartInit = _currentStartInitTask;
                 ownsStop = inFlightStop == null
                     && (previousStatus == CollectorStatus.Stopping ||
                         (previousStatus.IsStartingOrRunning() && _lifecycle.TryStop()));
 
-                if (ownsStop && previousStatus.IsStartingOrRunning())
-                    LogAndRaise(CollectorStatus.Stopping);
+                if (ownsStop)
+                {
+                    if (previousStatus.IsStartingOrRunning())
+                        LogAndRaise(CollectorStatus.Stopping);
+
+                    // Publish the terminal-dispose stop task INSIDE the lock so a concurrent
+                    // Stop(customStoppingTask) — whose await of customStoppingTask is currently
+                    // racing this dispose — finds our task on its second lock and joins it,
+                    // instead of seeing _currentProcessorStopTask == null and kicking off a
+                    // second concurrent _dataProcessor.StopAsync with conflicting ShutdownMode.
+                    disposeOwnedStop = WaitForStartInitThenStopProcessor(inFlightStartInit, ShutdownMode.TerminalDispose);
+                    _currentProcessorStopTask = disposeOwnedStop;
+                }
             }
 
             try
@@ -475,10 +486,15 @@ namespace HSMDataCollector.Core
                 }
                 else if (ownsStop)
                 {
-                    DisposeComponent(() => WaitForStartInitThenStopProcessor(inFlightStartInit, ShutdownMode.TerminalDispose).ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
+                    DisposeComponent(() => disposeOwnedStop.ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
 
                     lock (_opLock)
                     {
+                        // Clear only if still pointing to our task — a racing Stop may have observed
+                        // and joined it, in which case its own bookkeeping leaves the field alone.
+                        if (ReferenceEquals(_currentProcessorStopTask, disposeOwnedStop))
+                            _currentProcessorStopTask = null;
+
                         if (_lifecycle.CompleteStop())
                             LogAndRaise(CollectorStatus.Stopped);
                     }
