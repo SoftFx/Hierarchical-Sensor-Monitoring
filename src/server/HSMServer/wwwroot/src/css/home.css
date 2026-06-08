@@ -391,12 +391,10 @@ img .tree-png-icon {
 .templatedAlert select,
 .templatedAlert input:not([name='IsDisabled']):not([name='Id']):not([name='EntityId']):not([name='TemplateId']) {
     pointer-events: none;
-    opacity: 0.8;
 }
 
 .templatedAlert .bootstrap-select > .dropdown-toggle {
     pointer-events: none;
-    opacity: 0.8;
 }
 
 .templatedAlert .emojionearea {
