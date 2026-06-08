@@ -28,7 +28,7 @@ namespace HSMDataCollector.SyncQueue.Data
         internal static EnqueueResult RejectedNotAccepting() =>
             new EnqueueResult(EnqueueStatus.RejectedCollectorNotAcceptingData, 0);
 
-        internal static EnqueueResult RejectedStopped() =>
-            new EnqueueResult(EnqueueStatus.RejectedQueueStopped, 0);
+        internal static EnqueueResult RejectedStopped(int droppedCount = 0) =>
+            new EnqueueResult(EnqueueStatus.RejectedQueueStopped, droppedCount);
     }
 }

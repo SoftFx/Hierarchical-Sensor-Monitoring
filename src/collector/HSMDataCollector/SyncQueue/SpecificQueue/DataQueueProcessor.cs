@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -9,13 +10,21 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal sealed class DataQueueProcessor : QueueProcessorBase<SensorValueBase>
     {
+        // Floor mirrors DelayAfterFailureAsync so a misconfigured PackageCollectPeriod of zero
+        // cannot busy-spin the processing loop.
+        private static readonly TimeSpan MinCollectPeriod = TimeSpan.FromMilliseconds(100);
+
         public override string QueueName => "Data";
 
         public DataQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
         protected override async ValueTask WaitForReadyAsync(CancellationToken token)
         {
-            await Task.Delay(_options.PackageCollectPeriod, token).ConfigureAwait(false);
+            var period = _options.PackageCollectPeriod > TimeSpan.Zero
+                ? _options.PackageCollectPeriod
+                : MinCollectPeriod;
+
+            await Task.Delay(period, token).ConfigureAwait(false);
         }
 
         protected override async ValueTask<bool> TryDispatchOneAsync(CancellationToken token)

@@ -24,8 +24,9 @@ namespace HSMDataCollector.DefaultSensors
         // sensor is still on the same generation before publishing a value. This kills two classes
         // of races: a callback overlapping a restart boundary, and a long-running callback that
         // outlives the bounded sensor-stop wait and tries to publish into a queue that is already
-        // past its final drain. Reads/writes use Volatile so the publisher reads consistently
-        // without taking the scheduler lock.
+        // past its final drain. Writes go through Interlocked.Increment; reads use
+        // Interlocked.Read because Volatile.Read of a long is not atomic on 32-bit runtimes —
+        // a torn read of the epoch would defeat the whole guard.
         private long _lifecycleEpoch;
 
         protected virtual TimeSpan TimerDueTime => TimeSpan.Zero;
@@ -101,11 +102,11 @@ namespace HSMDataCollector.DefaultSensors
             // than publish stale work into a queue that may have already been drained.
             try
             {
-                var capturedEpoch = Volatile.Read(ref _lifecycleEpoch);
+                var capturedEpoch = Interlocked.Read(ref _lifecycleEpoch);
 
                 var value = BuildSensorValue();
 
-                if (Volatile.Read(ref _lifecycleEpoch) != capturedEpoch)
+                if (Interlocked.Read(ref _lifecycleEpoch) != capturedEpoch)
                     return;
 
                 SendValue(value);
@@ -144,7 +145,7 @@ namespace HSMDataCollector.DefaultSensors
         /// Current lifecycle generation for derived sensors (e.g. bar collect loops) that need
         /// to honour the same invalidation boundary as the send loop.
         /// </summary>
-        protected long LifecycleEpoch => Volatile.Read(ref _lifecycleEpoch);
+        protected long LifecycleEpoch => Interlocked.Read(ref _lifecycleEpoch);
 
         private ValueTask StopInternalAsync(bool waitForCurrentRun) => _sendHandle.StopAsync(waitForCurrentRun);
 

@@ -75,6 +75,16 @@ namespace HSMDataCollector.Client
             _client.Dispose();
         }
 
+        /// <summary>
+        /// Abort all in-flight HTTP requests by cancelling the shared client-wide token and
+        /// installing a fresh source so subsequent <see cref="SendRequestAsync"/> calls (e.g. a
+        /// graceful Stop's bounded flush) can still proceed against the same <see cref="HttpClient"/>.
+        ///
+        /// Note: the previous implementation disposed <see cref="_client"/> here, which converted a
+        /// `Dispose()` racing a concurrent graceful `Stop()` into silent data loss — every
+        /// remaining send in the flush threw <see cref="ObjectDisposedException"/>, got re-enqueued
+        /// then discarded by `ClearQueue`. Client disposal is owned by <see cref="Dispose"/>.
+        /// </summary>
         public void CancelPendingRequests()
         {
             CancellationTokenSource tokenSourceToCancel;
@@ -88,8 +98,13 @@ namespace HSMDataCollector.Client
                 _tokenSource = new CancellationTokenSource();
             }
 
+            // Do NOT dispose tokenSourceToCancel here: in-flight SendRequestAsync calls captured
+            // its Token into linked CTSes outside the lock, and disposing the upstream while those
+            // linked sources are alive can throw ObjectDisposedException from cancellation
+            // callbacks. The CTS is unreferenced after this method returns and the GC will reclaim
+            // it once the in-flight requests fall away. Total leak across the collector lifetime
+            // is bounded by the number of CancelPendingRequests calls (typically one, at dispose).
             tokenSourceToCancel.Cancel();
-            _client.Dispose();
         }
 
         public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)

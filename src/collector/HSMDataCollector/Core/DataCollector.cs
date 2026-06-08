@@ -292,7 +292,7 @@ namespace HSMDataCollector.Core
         public async Task Stop(Task customStoppingTask)
         {
             Task startInitTask;
-            Task processorStopTask;
+            Task processorStopTask = null;
             var failures = new List<Exception>();
 
             lock (_opLock)
@@ -303,7 +303,9 @@ namespace HSMDataCollector.Core
                 LogAndRaise(CollectorStatus.Stopping);
 
                 startInitTask = _currentStartInitTask;
-                processorStopTask = _currentProcessorStopTask;
+                // Note: _currentProcessorStopTask is re-read inside the second lock after the
+                // custom stopping task awaits, since Dispose may publish its own task in that
+                // window. We intentionally do not cache it here.
             }
 
             try

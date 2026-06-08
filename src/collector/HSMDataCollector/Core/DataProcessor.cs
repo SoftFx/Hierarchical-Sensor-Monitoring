@@ -244,58 +244,58 @@ namespace HSMDataCollector.Core
 
         public void AddData(ISensor sender, SensorValueBase data)
         {
-            if (!_lifecycle.CanAcceptData)
-                return;
-
-            HandleEnqueueResult(sender, _dataQueue.Enqueue(data), _dataQueue.QueueName);
+            HandleEnqueueResult(sender, EnqueueGated(_dataQueue, data), _dataQueue.QueueName);
         }
 
         public void AddData(ISensor sender, IEnumerable<SensorValueBase> items)
         {
-            if (!_lifecycle.CanAcceptData)
-                return;
-
-            HandleEnqueueResult(sender, _dataQueue.Enqueue(items), _dataQueue.QueueName);
+            HandleEnqueueResult(sender, EnqueueGated(_dataQueue, items), _dataQueue.QueueName);
         }
 
         public void AddPriorityData(ISensor sender, SensorValueBase data)
         {
-            if (!_lifecycle.CanAcceptData)
-                return;
-
-            HandleEnqueueResult(sender, _priorityQueue.Enqueue(data), _priorityQueue.QueueName);
+            HandleEnqueueResult(sender, EnqueueGated(_priorityQueue, data), _priorityQueue.QueueName);
         }
 
         public void AddPriorityData(ISensor sender, IEnumerable<SensorValueBase> items)
         {
-            if (!_lifecycle.CanAcceptData)
-                return;
-
-            HandleEnqueueResult(sender, _priorityQueue.Enqueue(items), _priorityQueue.QueueName);
+            HandleEnqueueResult(sender, EnqueueGated(_priorityQueue, items), _priorityQueue.QueueName);
         }
 
         public void AddCommand(ISensor sender, CommandRequestBase command)
         {
-            if (!_lifecycle.CanAcceptData)
-                return;
-
-            HandleEnqueueResult(sender, _commandQueue.Enqueue(command), _commandQueue.QueueName);
+            HandleEnqueueResult(sender, EnqueueGated(_commandQueue, command), _commandQueue.QueueName);
         }
 
         public void AddCommand(ISensor sender, IEnumerable<CommandRequestBase> commands)
         {
-            if (!_lifecycle.CanAcceptData)
-                return;
-
-            HandleEnqueueResult(sender, _commandQueue.Enqueue(commands), _commandQueue.QueueName);
+            HandleEnqueueResult(sender, EnqueueGated(_commandQueue, commands), _commandQueue.QueueName);
         }
 
         public void AddFile(ISensor sender, FileSensorValue file)
         {
-            if (!_lifecycle.CanAcceptData)
-                return;
+            HandleEnqueueResult(sender, EnqueueGated(_fileQueue, file), _fileQueue.QueueName);
+        }
 
-            HandleEnqueueResult(sender, _fileQueue.Enqueue(file), _fileQueue.QueueName);
+        // Wraps each queue's typed Enqueue with the collector-wide lifecycle gate. When the
+        // collector is not in an accepting state we surface RejectedCollectorNotAcceptingData
+        // so the caller can distinguish a lifecycle reject from a queue-stopped reject — the
+        // public AddXxx surface stays void, but internal tests/diagnostics now see the right
+        // status instead of an opaque early return.
+        private EnqueueResult EnqueueGated<TItem>(QueueProcessorBase<TItem> queue, TItem item)
+        {
+            if (!_lifecycle.CanAcceptData)
+                return EnqueueResult.RejectedNotAccepting();
+
+            return queue.Enqueue(item);
+        }
+
+        private EnqueueResult EnqueueGated<TItem>(QueueProcessorBase<TItem> queue, IEnumerable<TItem> items)
+        {
+            if (!_lifecycle.CanAcceptData)
+                return EnqueueResult.RejectedNotAccepting();
+
+            return queue.Enqueue(items);
         }
 
         public void AddException(string sensorPath, Exception ex)

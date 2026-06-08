@@ -240,11 +240,13 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 }
                 else if (result.Status == EnqueueStatus.RejectedQueueStopped)
                 {
-                    return result;
+                    // Preserve the count of items already evicted by overflow before the queue
+                    // flipped: the overflow sensor would otherwise under-report this batch.
+                    return EnqueueResult.RejectedStopped(dropped);
                 }
             }
 
-            return anyAccepted ? EnqueueResult.Accept(dropped) : EnqueueResult.Accept(0);
+            return EnqueueResult.Accept(dropped);
         }
 
         internal DataPackage<T> GetPackage()
