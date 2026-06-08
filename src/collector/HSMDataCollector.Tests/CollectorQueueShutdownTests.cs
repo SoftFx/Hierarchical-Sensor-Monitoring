@@ -1,5 +1,6 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors;
+using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.SyncQueue.Data;
 using HSMDataCollector.SyncQueue.SpecificQueue;
@@ -7,6 +8,7 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -152,6 +154,73 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        // PR #1080 review #9a: the RejectedStopped factory must round-trip the dropped count so
+        // callers can distinguish "rejected with N drops already evicted" from "rejected clean".
+        // Before the fix the factory took no arguments and DroppedCount was always 0.
+        [Fact]
+        public void RejectedStopped_factory_carries_dropped_count()
+        {
+            var result = EnqueueResult.RejectedStopped(droppedCount: 42);
+
+            Assert.Equal(EnqueueStatus.RejectedQueueStopped, result.Status);
+            Assert.Equal(42, result.DroppedCount);
+            Assert.False(result.IsAccepted);
+        }
+
+        [Fact]
+        public void RejectedStopped_factory_defaults_dropped_count_to_zero()
+        {
+            var result = EnqueueResult.RejectedStopped();
+
+            Assert.Equal(EnqueueStatus.RejectedQueueStopped, result.Status);
+            Assert.Equal(0, result.DroppedCount);
+        }
+
+        // PR #1080 review #9b: when Enqueue(IEnumerable<T>) iterates a batch and the queue flips
+        // to a stopped/terminal state midway, the result must carry the count of items already
+        // evicted by overflow before the flip. The pre-fix implementation simply did
+        // `return result;` on the first rejection, dropping the accumulator on the floor — so
+        // QueueOverflowSensor under-reported.
+        [Fact]
+        public void Enqueue_batch_preserves_drop_count_when_queue_stops_mid_batch()
+        {
+            var sender = new SilentDataSender();
+            var options = CreateOptions(sender, "drop-count-preservation");
+
+            var queue = new FlippingQueueProcessor(options, acceptFirst: 3, droppedPerAccept: 1);
+
+            var batch = Enumerable.Range(0, 10)
+                .Select(_ => (SensorValueBase)new IntBarSensorValue { Count = 1 })
+                .ToList();
+
+            var result = InvokeBatchEnqueue(queue, batch);
+
+            Assert.Equal(EnqueueStatus.RejectedQueueStopped, result.Status);
+            // 3 Accept(droppedCount: 1) calls -> 3 evictions visible to the caller even though
+            // the rejection short-circuits the rest of the batch.
+            Assert.Equal(3, result.DroppedCount);
+            Assert.False(result.IsAccepted);
+        }
+
+        [Fact]
+        public void Enqueue_batch_drop_count_is_zero_when_rejection_happens_before_any_accept()
+        {
+            var sender = new SilentDataSender();
+            var options = CreateOptions(sender, "drop-count-immediate");
+
+            // acceptFirst: 0 — the very first item is rejected; the accumulator never advances.
+            var queue = new FlippingQueueProcessor(options, acceptFirst: 0, droppedPerAccept: 5);
+
+            var batch = Enumerable.Range(0, 4)
+                .Select(_ => (SensorValueBase)new IntBarSensorValue { Count = 1 })
+                .ToList();
+
+            var result = InvokeBatchEnqueue(queue, batch);
+
+            Assert.Equal(EnqueueStatus.RejectedQueueStopped, result.Status);
+            Assert.Equal(0, result.DroppedCount);
+        }
+
         // #1072: terminal Dispose still performs a bounded flush so accepted last-value-style
         // work makes it out instead of being silently discarded.
         [Fact]
@@ -207,6 +276,14 @@ namespace HSMDataCollector.Tests
                 .GetMethod("Enqueue", BindingFlags.Instance | BindingFlags.NonPublic, binder: null, types: new[] { typeof(SensorValueBase) }, modifiers: null);
             Assert.NotNull(method);
             return (EnqueueResult)method.Invoke(dataQueue, new object[] { value });
+        }
+
+        private static EnqueueResult InvokeBatchEnqueue(QueueProcessorBase<SensorValueBase> queue, IEnumerable<SensorValueBase> values)
+        {
+            var method = typeof(QueueProcessorBase<SensorValueBase>)
+                .GetMethod("Enqueue", BindingFlags.Instance | BindingFlags.NonPublic, binder: null, types: new[] { typeof(IEnumerable<SensorValueBase>) }, modifiers: null);
+            Assert.NotNull(method);
+            return (EnqueueResult)method.Invoke(queue, new object[] { values });
         }
 
         private static async Task<bool> StopQueueAsync(object dataQueue, ShutdownMode mode)
@@ -273,6 +350,38 @@ namespace HSMDataCollector.Tests
             }
 
             public void Dispose() { }
+        }
+
+        /// <summary>
+        /// Test double for <see cref="QueueProcessorBase{T}"/> that lets the single-item Enqueue
+        /// path emit a configurable Accept-then-Reject sequence. Used to drive the IEnumerable
+        /// overload through its mid-batch rejection branch without racing a real stop.
+        /// </summary>
+        private sealed class FlippingQueueProcessor : QueueProcessorBase<SensorValueBase>
+        {
+            private readonly int _acceptFirst;
+            private readonly int _droppedPerAccept;
+            private int _enqueueCalls;
+
+            internal FlippingQueueProcessor(CollectorOptions options, int acceptFirst, int droppedPerAccept)
+                : base(options, queueManager: null, logger: new LoggerManager())
+            {
+                _acceptFirst = acceptFirst;
+                _droppedPerAccept = droppedPerAccept;
+            }
+
+            public override string QueueName => "Flipping";
+
+            internal override EnqueueResult Enqueue(SensorValueBase item)
+            {
+                var callNumber = Interlocked.Increment(ref _enqueueCalls);
+                return callNumber <= _acceptFirst
+                    ? EnqueueResult.Accept(droppedCount: _droppedPerAccept)
+                    : EnqueueResult.RejectedStopped();
+            }
+
+            protected override ValueTask<bool> TryDispatchOneAsync(CancellationToken token) =>
+                new ValueTask<bool>(false);
         }
     }
 }
