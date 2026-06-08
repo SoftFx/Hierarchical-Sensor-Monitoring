@@ -1273,7 +1273,14 @@ namespace HSMServer.Core.Cache
                     RemoveAlertTemplate(new RemoveAlertTemplateRequest(alertTemplateModel.Id, request.ProductId, request.IsPrimary));
 
 
-                foreach (var sensor in GetSensorsByWildcard(alertTemplateModel.Path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId, request.ProductId).ToList())
+                var matchedSensors = new HashSet<BaseSensorModel>();
+                foreach (var path in alertTemplateModel.Paths.Where(p => !string.IsNullOrEmpty(p)))
+                {
+                    foreach (var sensor in GetSensorsByWildcard(path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId, request.ProductId))
+                        matchedSensors.Add(sensor);
+                }
+
+                foreach (var sensor in matchedSensors)
                     AddAlertFromTemplate(sensor, alertTemplateModel);
 
                 if (request.IsPrimary)
