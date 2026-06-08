@@ -226,6 +226,10 @@
             @if(!isTemplate)
             {
                 <a class="dropdown-item text-decoration-none fw-normal button-link showMessage">Show message</a>
+                @if(Model.TemplateId != null)
+                {
+                    <a class="dropdown-item text-decoration-none fw-normal" href="@Url.Action(nameof(AlertTemplatesController.Edit), ViewConstants.AlertTemplatesController, new { id = Model.TemplateId })">Go to Template</a>
+                }
                 <a class="dropdown-item text-decoration-none fw-normal button-link enable">@(Model.IsDisabled ? "Enable" : "Disable")</a>
             }
             @if(Model.TemplateId == null)
