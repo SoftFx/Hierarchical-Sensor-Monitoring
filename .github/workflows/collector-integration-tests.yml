@@ -27,11 +27,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Matches the fixture's `FROM hsmonitoring/hierarchical_sensor_monitoring:latest`.
-      # The fixture re-COPYs appsettings on top of this image; Docker prefers the local
-      # image over the remote one when tag matches, so building locally as :latest is
-      # enough — no push needed.
-      SERVER_IMAGE_NAME: hsmonitoring/hierarchical_sensor_monitoring
-      SERVER_IMAGE_TAG: latest
+      # HSMServer.csproj already sets `ContainerImageTags=$(Version);latest`, so the
+      # local build is automatically tagged `:latest` as well — Docker prefers local
+      # over remote when the tag matches, so no push is needed.
+      SERVER_REPOSITORY: hsmonitoring/hierarchical_sensor_monitoring
     steps:
       - uses: actions/checkout@v4
 
@@ -43,8 +42,12 @@ jobs:
       # Without this step the fixture pulls master's published `:latest`, so any server-side
       # API addition on the branch (e.g. a new /enum endpoint) is invisible to the tests
       # and the matching collector-side route returns 404. Mirrors the pattern in tests.yml.
+      # `ContainerRepository` is the modern property name; the deprecated `ContainerImageName`
+      # also works but emits a warning. We do NOT set ContainerImageTag because the csproj
+      # already supplies `ContainerImageTags`, and the two are mutually exclusive (error
+      # CONTAINER2008).
       - name: Build server container image from branch source
-        run: dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerImageName=${{ env.SERVER_IMAGE_NAME }} -p:ContainerImageTag=${{ env.SERVER_IMAGE_TAG }}
+        run: dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerRepository=${{ env.SERVER_REPOSITORY }}
 
       - name: Run Integration Tests
         run: dotnet test src/collector/HSMDataCollector.IntegrationTests --logger "console;verbosity=detailed"
