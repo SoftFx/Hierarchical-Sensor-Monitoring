@@ -97,7 +97,7 @@ namespace HSMServer.Model.DataAlertTemplates
             {
                 Id = Id,
                 Name = Name,
-                Paths = PathTemplates.Where(p => !string.IsNullOrWhiteSpace(p)).ToList(),
+                Paths = PathTemplates?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? [],
                 SensorType = Type,
                 FolderId = FolderId,
             };
