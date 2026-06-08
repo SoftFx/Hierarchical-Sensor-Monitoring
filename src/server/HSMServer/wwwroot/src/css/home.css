@@ -394,6 +394,11 @@ img .tree-png-icon {
     opacity: 0.8;
 }
 
+.templatedAlert .bootstrap-select > .dropdown-toggle {
+    pointer-events: none;
+    opacity: 0.8;
+}
+
 .meta-info-label {
     min-width: 18rem;
 }

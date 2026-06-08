@@ -337,6 +337,19 @@
                 isDisabledCheckbox.val("True");
             }
         });
+
+        @if (Model.TemplateId != null)
+        {
+            <text>
+            var alertRow = $("div#alertConstructor_@Model.Id");
+            alertRow.find("select.selectpicker").each(function () {
+                $(this).selectpicker('disable');
+            });
+            alertRow.find("select[name='Action']").prop('disabled', true);
+            alertRow.find("select[name='ScheduleId']").prop('disabled', true);
+            alertRow.find(".emojionearea").off('click').find(".emojionearea-button").remove();
+            </text>
+        }
     });
 
     window.updateAlertsAddButton = function () {
