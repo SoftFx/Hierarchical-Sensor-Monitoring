@@ -107,6 +107,8 @@ namespace HSMDataCollector.Options
         public string DefaultFileName { get; set; }
 
         public string Extension { get; set; }
+
+        public long MaxFileSizeBytes { get; set; } = 10 * 1024 * 1024;
     }
 
     public abstract class BaseInstantSensorOptions<TDisplayUnit> : SensorOptions<TDisplayUnit> where TDisplayUnit : struct, Enum

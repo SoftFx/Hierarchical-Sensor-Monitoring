@@ -13,10 +13,10 @@ namespace HSMDataCollector.DefaultSensors
     public abstract class MonitoringSensorBase<T, TDisplayUnit> : SensorBase<T, TDisplayUnit> where TDisplayUnit : struct, Enum
     {
         private readonly IMonitoringOptions _options;
-        private CancellationTokenSource _cancellationTokenSource;
-        private Task _sendTask;
 
-        private readonly object _lock = new object();
+        // Composed scheduling lifecycle for the periodic send loop (replaces a hand-rolled
+        // ScheduledTask field + lock). The bar sensor composes a second handle for its collect loop.
+        private readonly ScheduledTaskHandle _sendHandle;
 
         protected virtual TimeSpan TimerDueTime => TimeSpan.Zero;
 
@@ -28,6 +28,11 @@ namespace HSMDataCollector.DefaultSensors
                 _options = monitoringOptions;
             else
                 throw new ArgumentNullException(nameof(monitoringOptions));
+
+            if (_options.PostDataPeriod <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(_options.PostDataPeriod), "Post data period must be greater than zero.");
+
+            _sendHandle = new ScheduledTaskHandle(_dataProcessor.Scheduler);
         }
 
         public override ValueTask<bool> InitAsync()
@@ -49,7 +54,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                await StopInternalAsync();
+                await StopInternalAsync(waitForCurrentRun: true);
 
                 await base.StopAsync();
             }
@@ -76,7 +81,10 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                await StopInternalAsync().ConfigureAwait(false);
+                await StopInternalAsync(waitForCurrentRun: true).ConfigureAwait(false);
+
+                if (newPostPeriod <= TimeSpan.Zero)
+                    throw new ArgumentOutOfRangeException(nameof(newPostPeriod), "Post data period must be greater than zero.");
 
                 _options.PostDataPeriod = newPostPeriod;
 
@@ -88,39 +96,9 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        private async ValueTask StopInternalAsync()
-        {
-            Task taskToAwait = null;
+        private ValueTask StopInternalAsync(bool waitForCurrentRun) => _sendHandle.StopAsync(waitForCurrentRun);
 
-            lock (_lock)
-            {
-                if (_sendTask != null)
-                {
-                    _cancellationTokenSource?.Cancel();
-                    taskToAwait = _sendTask;
-                    _sendTask = null;
-                    _cancellationTokenSource?.Dispose();
-                }
-            }
-
-            if (taskToAwait != null)
-            {
-                await taskToAwait.ConfigureAwait(false);
-                taskToAwait.Dispose();
-            }
-        }
-
-        private void StartSendTask()
-        {
-            lock (_lock)
-            {
-                if (_sendTask == null)
-                {
-                    _cancellationTokenSource = new CancellationTokenSource();
-                    _sendTask = PeriodicTask.Run(SendValueAction, TimerDueTime, PostTimePeriod, _cancellationTokenSource.Token, HandleException);
-                }
-            }
-        }
+        private void StartSendTask() => _sendHandle.Start(SendValueAction, TimerDueTime, PostTimePeriod, HandleException);
 
         private SensorValueBase BuildSensorValue()
         {

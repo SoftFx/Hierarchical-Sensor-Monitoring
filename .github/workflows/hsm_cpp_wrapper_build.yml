@@ -2,16 +2,22 @@ name: hsm-wrapper-build
 
 on:
   push:
-    branches: 
+    branches:
       - hsm-cpp-wrapper
   pull_request:
-    branches: 
+    # ready_for_review is required so the build runs when a draft is marked ready
+    # (marking ready does not emit a synchronize event).
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
       - hsm-cpp-wrapper
 
   workflow_dispatch:
 
 jobs:
   build:
+    # Skip on draft PRs only. Non-PR events (push/workflow_dispatch) have no
+    # pull_request payload, so they must still run — hence the event_name guard.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
 
     runs-on: windows-latest
 

@@ -65,7 +65,7 @@ namespace HSMDataCollector.Client.HttpsClient
                 _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Code = {args.Outcome.Result.StatusCode}");
 
             else if (args.Outcome.Exception != null)
-                    _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Exception = {args.Outcome.Exception.Message} Inner = {args.Outcome.Exception.InnerException.Message}");
+                    _logger.Error($"Failed to send data. Attempt number = {args.AttemptNumber}| Exception = {args.Outcome.Exception.Message} Inner = {args.Outcome.Exception.InnerException?.Message}");
 
             return default;
         }
@@ -75,13 +75,15 @@ namespace HSMDataCollector.Client.HttpsClient
             HttpRequest<T> request = new HttpRequest<T>(values, GetUri(values));
             try
             {
-                var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false);
-                await HandleRequestResultAsync(response, values, token).ConfigureAwait(false);
-                return new PackageSendingInfo(request.Length, response);
+                using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
+                {
+                    await HandleRequestResultAsync(response, values, token).ConfigureAwait(false);
+                    return new PackageSendingInfo(request.Length, response);
+                }
             }
             catch (Exception ex)
             {
-                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Data = {request.Content}");
+                LogSendFailure(ex, request);
                 return new PackageSendingInfo(request.Length, null, exception: ex.Message);
             }
         }
@@ -91,20 +93,33 @@ namespace HSMDataCollector.Client.HttpsClient
             HttpRequest<T> request = new HttpRequest<T>(value, GetUri(value));
             try
             {
-                var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false);
-                await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
-                return new PackageSendingInfo(request.Length, response);
+                using (var response = await _pipeline.ExecuteAsync(ExecutePipelineAsync, request, token).ConfigureAwait(false))
+                {
+                    await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
+                    return new PackageSendingInfo(request.Length, response);
+                }
             }
             catch (Exception ex)
             {
-                _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Data = {request.Content}");
+                LogSendFailure(ex, request);
                 return new PackageSendingInfo(request.Length, null, exception: ex.Message);
             }
         }
 
 
-        private ValueTask<HttpResponseMessage> ExecutePipelineAsync(HttpRequest<T> request, CancellationToken token) =>
-            _client.SendRequestAsync(request.Uri, request.GetContent(), token);
+        private void LogSendFailure(Exception ex, HttpRequest<T> request)
+        {
+            _logger.Error($"Failed to send data. Attempt number = {MaxRequestAttempts}| Exception = {ex.Message} Inner = {ex.InnerException?.Message} | Payload bytes = {request.Length}");
+        }
+
+
+        private async ValueTask<HttpResponseMessage> ExecutePipelineAsync(HttpRequest<T> request, CancellationToken token)
+        {
+            using (var content = request.GetContent())
+            {
+                return await _client.SendRequestAsync(request.Uri, content, token).ConfigureAwait(false);
+            }
+        }
 
 
         public void Dispose()

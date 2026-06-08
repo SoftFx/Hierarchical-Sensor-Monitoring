@@ -1,11 +1,11 @@
-﻿using System;
+using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
-
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
@@ -14,6 +14,45 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         public override string QueueName => "Data";
 
         public DataQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
+
+        internal async Task FlushAsync(CancellationToken token)
+        {
+            try
+            {
+                while (QueueCount > 0 && !token.IsCancellationRequested)
+                {
+                    var package = GetPackage();
+
+                    if (package.Count == 0)
+                        continue;
+
+                    try
+                    {
+                        var sendingInfo = await _sender.SendDataAsync(package, token).ConfigureAwait(false);
+
+                        if (sendingInfo.Error != null)
+                        {
+                            _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). {sendingInfo.Error}");
+                            break;
+                        }
+
+                        _queueManager.AddPackageSendingInfo(sendingInfo);
+                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). Error: {ex.Message}");
+                        break;
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
+            }
+        }
 
         protected override async Task ProcessingLoop(CancellationToken token)
         {
@@ -24,17 +63,37 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 {
                     await Task.Delay(_options.PackageCollectPeriod, token).ConfigureAwait(false);
 
-                    if (_queue.IsEmpty)
+                    if (IsEmpty)
                         continue;
 
                     do
                     {
                         package = GetPackage();
-                        var sendingInfo = await _sender.SendDataAsync(package.Items, _cancellationTokenSource.Token).ConfigureAwait(false);
-                        _queueManager.AddPackageSendingInfo(sendingInfo);
-                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+
+                        if (package.Count == 0)
+                            continue;
+
+                        try
+                        {
+                            var sendingInfo = await _sender.SendDataAsync(package, token).ConfigureAwait(false);
+
+                            if (sendingInfo.Error != null)
+                            {
+                                _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). {sendingInfo.Error}");
+                                break;
+                            }
+
+                            _queueManager.AddPackageSendingInfo(sendingInfo);
+                            _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+                        }
+                        catch (OperationCanceledException) { break; }
+                        catch (Exception ex)
+                        {
+                            _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). Error: {ex.Message}");
+                            break;
+                        }
                     }
-                    while (_queue.Count >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
+                    while (QueueCount >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
@@ -43,6 +102,5 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 }
             }
         }
-
     }
 }

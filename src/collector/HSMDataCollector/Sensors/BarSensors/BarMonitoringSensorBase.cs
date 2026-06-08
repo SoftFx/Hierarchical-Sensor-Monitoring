@@ -19,10 +19,10 @@ namespace HSMDataCollector.DefaultSensors
         private readonly TimeSpan _barPeriod;
         private readonly int _precision;
 
-        private readonly object _locker = new object();
+        // Composed scheduling lifecycle for the bar-collect loop (the send loop is owned by the
+        // MonitoringSensorBase base via its own handle). Replaces a hand-rolled ScheduledTask + lock.
+        private readonly ScheduledTaskHandle _collectHandle;
 
-        private Task _collectTask;
-        private CancellationTokenSource _cancellationTokenSource;
         protected BarType _internalBar;
 
         public override BarType Current => (BarType)_internalBar.Copy().Complete();
@@ -32,9 +32,17 @@ namespace HSMDataCollector.DefaultSensors
 
         protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)
         {
+            if (options.BarTickPeriod <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(options.BarTickPeriod), "Bar tick period must be greater than zero.");
+
+            if (options.BarPeriod <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(options.BarPeriod), "Bar period must be greater than zero.");
+
             _collectBarPeriod = options.BarTickPeriod;
             _barPeriod = options.BarPeriod;
             _precision = options.Precision;
+
+            _collectHandle = new ScheduledTaskHandle(_dataProcessor.Scheduler);
 
             BuildNewBar();
         }
@@ -42,50 +50,16 @@ namespace HSMDataCollector.DefaultSensors
 
         public override ValueTask<bool> InitAsync()
         {
-            lock (_locker)
-            {
-                if (_collectTask == null)
-                {
-                    _cancellationTokenSource = new CancellationTokenSource();
-                    _collectTask = PeriodicTask.Run(CollectBar, _collectBarPeriod, _collectBarPeriod, _cancellationTokenSource.Token, HandleException);
-                }
-            }
+            _collectHandle.Start(CollectBar, _collectBarPeriod, _collectBarPeriod, HandleException);
 
             return base.InitAsync();
         }
 
         public override async ValueTask StopAsync()
         {
-            Task taskToWait = null;
-            CancellationTokenSource cts = null;
-
-            lock (_locker)
-            {
-                if (_collectTask != null)
-                {
-                    cts = _cancellationTokenSource;
-                    _cancellationTokenSource = null;
-
-                    taskToWait = _collectTask;
-                    _collectTask = null;
-
-                    cts?.Cancel();
-                }
-            }
-
             try
             {
-                if (taskToWait != null)
-                {
-                    try
-                    {
-                        await taskToWait.ConfigureAwait(false);
-                    }
-                    finally
-                    {
-                        taskToWait.Dispose();
-                    }
-                }
+                await _collectHandle.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
 
                 await base.StopAsync().ConfigureAwait(false);
             }
@@ -93,10 +67,6 @@ namespace HSMDataCollector.DefaultSensors
             catch (Exception ex)
             {
                 HandleException(ex);
-            }
-            finally
-            {
-                cts?.Dispose();
             }
         }
 
