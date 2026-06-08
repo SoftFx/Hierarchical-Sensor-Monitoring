@@ -1169,15 +1169,17 @@ namespace HSMServer.Core.Cache
         }
 
 
-        private void AddAlertFromTemplate(BaseSensorModel sensor, AlertTemplateModel alertTemplateModel)
+        private void AddAlertFromTemplate(BaseSensorModel sensor, AlertTemplateModel alertTemplateModel,
+            DisabledStates disabledStates = null)
         {
             List<PolicyUpdate> ttlPolicyUpdates = [];
             List<PolicyUpdate> policyUpdates = [];
 
             if (alertTemplateModel.TtlEntries is not null)
             {
-                foreach (var entry in alertTemplateModel.TtlEntries)
+                for (int i = 0; i < alertTemplateModel.TtlEntries.Count; i++)
                 {
+                    var entry = alertTemplateModel.TtlEntries[i];
                     var ttlPolicy = entry.Policy;
                     var ttlInterval = entry.Interval;
 
@@ -1191,12 +1193,20 @@ namespace HSMServer.Core.Cache
                     {
                         TemplateId = alertTemplateModel.Id,
                         TTL = ttlTicks,
+                        IsDisabled = disabledStates?.GetTtl(sensor.Id, i) ?? ttlPolicy.IsDisabled,
                     });
                 }
             }
 
-            foreach (var policy in alertTemplateModel.Policies)
-                policyUpdates.Add(new PolicyUpdate(policy, InitiatorInfo.AlertTemplate) { TemplateId = alertTemplateModel.Id });
+            for (int i = 0; i < alertTemplateModel.Policies.Count; i++)
+            {
+                var policy = alertTemplateModel.Policies[i];
+                policyUpdates.Add(new PolicyUpdate(policy, InitiatorInfo.AlertTemplate)
+                {
+                    TemplateId = alertTemplateModel.Id,
+                    IsDisabled = disabledStates?.GetPolicy(sensor.Id, i) ?? policy.IsDisabled,
+                });
+            }
 
             if (ttlPolicyUpdates.Count > 0 || policyUpdates.Count > 0)
             {
@@ -1269,12 +1279,17 @@ namespace HSMServer.Core.Cache
 
             try
             {
+                DisabledStates disabledStates = null;
+
                 if (_alertTemplates.ContainsKey(alertTemplateModel.Id))
+                {
+                    disabledStates = CollectDisabledStates(alertTemplateModel.Id, request.ProductId);
                     RemoveAlertTemplate(new RemoveAlertTemplateRequest(alertTemplateModel.Id, request.ProductId, request.IsPrimary));
+                }
 
 
                 foreach (var sensor in GetSensorsByWildcard(alertTemplateModel.Path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId, request.ProductId).ToList())
-                    AddAlertFromTemplate(sensor, alertTemplateModel);
+                    AddAlertFromTemplate(sensor, alertTemplateModel, disabledStates);
 
                 if (request.IsPrimary)
                 {
@@ -1354,6 +1369,28 @@ namespace HSMServer.Core.Cache
                 _alertTemplates.TryRemove(request.Id, out _);
                 _database.RemoveAlertTemplate(request.Id);
             }
+        }
+
+        private DisabledStates CollectDisabledStates(Guid templateId, Guid productId)
+        {
+            var product = GetProduct(productId);
+            if (product == null)
+                return null;
+
+            var states = new DisabledStates();
+
+            foreach (var sensor in product.GetAllSensors())
+            {
+                var templatePolicies = sensor.Policies.Where(p => p.TemplateId == templateId).ToList();
+                for (int i = 0; i < templatePolicies.Count; i++)
+                    states.SetPolicy(sensor.Id, i, templatePolicies[i].IsDisabled);
+
+                var templateTtls = sensor.Policies.TTLPolicies.Where(t => t.TemplateId == templateId).ToList();
+                for (int i = 0; i < templateTtls.Count; i++)
+                    states.SetTtl(sensor.Id, i, templateTtls[i].IsDisabled);
+            }
+
+            return states;
         }
 
         private void RemoveChatsFromPolicies(ProductModel product, HashSet<Guid> chats, InitiatorInfo initiator)

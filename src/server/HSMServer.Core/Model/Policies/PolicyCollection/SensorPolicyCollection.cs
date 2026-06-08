@@ -275,18 +275,33 @@ namespace HSMServer.Core.Model.Policies
                     {
                         if (updates.TryGetValue(id, out var update))
                         {
-                            var oldPolicy = policy.ToString();
-
-                            if (policy.TryUpdate(update, out var err))
+                            if (policy.TemplateId != null)
                             {
+                                var oldPolicy = policy.ToString();
+                                policy.SetDisabled(update.IsDisabled);
                                 CallJournal(id, oldPolicy, policy.ToString(), initiator);
                                 Uploaded?.Invoke(ActionType.Update, policy);
                             }
                             else
-                                errors.AppendLine(err);
+                            {
+                                var oldPolicy = policy.ToString();
+
+                                if (policy.TryUpdate(update, out var err))
+                                {
+                                    CallJournal(id, oldPolicy, policy.ToString(), initiator);
+                                    Uploaded?.Invoke(ActionType.Update, policy);
+                                }
+                                else
+                                    errors.AppendLine(err);
+                            }
                         }
                         else
+                        {
+                            if (policy.TemplateId != null)
+                                continue;
+
                             RemovePolicy(id, initiator);
+                        }
                     }
 
                 var prioritySensorsExist = _storage.Any(u => !AlertChangeTable[u.Key.ToString()].CanChange(initiator));

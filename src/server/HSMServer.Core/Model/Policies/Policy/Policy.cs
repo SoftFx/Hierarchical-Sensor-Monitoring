@@ -38,6 +38,8 @@ namespace HSMServer.Core.Model.Policies
 
         public bool IsDisabled { get; private set; }
 
+        internal void SetDisabled(bool isDisabled) => IsDisabled = isDisabled;
+
         public string Icon { get; private set; }
 
 
