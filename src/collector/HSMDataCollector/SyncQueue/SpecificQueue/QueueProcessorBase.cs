@@ -57,6 +57,20 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         // the misleading "preserved" wording used in the normal retry loop (#1087 A).
         private int _inFlushFlag;
 
+        // Newest BuildDate.Ticks observed on any successful enqueue. Used by the retry path to
+        // drop a failed-retry item whose BuildDate predates everything we've recently accepted —
+        // closes the #1090 residual from #1088 where a retry slips into a below-capacity queue
+        // with an older BuildDate and then survives a later FIFO overflow. The watermark only
+        // moves forward (no reset) so retries become "second-class" during normal operation:
+        // once any newer value has been accepted, retries strictly older than that get dropped.
+        //
+        // The shutdown bypass in IsOlderThanWatermark switches off this filter once
+        // _acceptingWritesFlag is 0 — during shutdown there is no fresh telemetry to protect,
+        // and an in-flight send that was canceled by Stop() must still be preserved for the
+        // bounded flush (otherwise routine shutdowns lose accepted work; see the
+        // Accepted_file_payloads_are_flushed_when_stop_races_file_queue stability test).
+        private long _watermarkBuildDateTicks;
+
         public abstract string QueueName { get; }
 
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
@@ -223,25 +237,28 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             if (!isRetry && Volatile.Read(ref _acceptingWritesFlag) == 0)
                 return EnqueueResult.RejectedStopped();
 
-            // Issue #1088: a failed-retry item must not evict newer telemetry on overflow.
-            // The queue uses position-based FIFO eviction (drop head when over MaxQueueSize),
-            // which is correct only while position order matches BuildDate order. A retry
-            // item's BuildDate predates everything that arrived while its send attempt was in
-            // flight; if we wrote it to the tail of a full queue and let the overflow loop
-            // drop the head, we would silently delete a fresher value to preserve a stale one.
-            // Drop the retry instead — the contract is "keep the latest MaxQueueSize values",
-            // and at full capacity the queue already holds values newer than the retry. The
-            // returned DroppedCount=1 refers to THIS retry being rejected (not a head eviction);
-            // the existing telemetry path collapses both into the same "lost-payload" count,
-            // which is fine because the user-observable cost is identical.
+            // Issue #1088 / #1090: a failed-retry item must not evict newer telemetry on
+            // overflow. The queue uses position-based FIFO eviction (drop head when over
+            // MaxQueueSize), which is only correct while position order matches BuildDate order.
+            // A retry item's BuildDate predates everything that arrived while its send attempt
+            // was in flight; we drop the retry on two conditions:
             //
-            // KNOWN RESIDUAL: this only fires when the retry meets an already-full queue. A
-            // retry arriving at a below-capacity queue is written at the tail with its older
-            // BuildDate; a subsequent normal Enqueue's overflow loop can then drop the FIFO
-            // head, which may now be a fresher item than the tail-stale retry. Closing that
-            // general case requires BuildDate-aware eviction; the Channel API does not support
-            // peeking past the head, so a true fix would need a different backing store. Out
-            // of scope here; this PR closes the explicit scenario from issue #1088.
+            //   1. (#1090) Its BuildDate is older than the watermark — i.e. an item newer than
+            //      this retry has already been accepted into the queue at some point during the
+            //      current outage. Without this check, the retry would land at the tail of a
+            //      below-capacity queue and survive a later FIFO overflow that drops a fresher
+            //      head, recreating #1088 from a different state path.
+            //
+            //   2. (#1088) The queue is already at MaxQueueSize and would otherwise overflow.
+            //      Sufficient on its own for the explicit #1088 scenario, but the watermark
+            //      check above runs first to close the more general case.
+            //
+            // The returned DroppedCount=1 refers to THIS retry being rejected (not a head
+            // eviction); the existing telemetry path collapses both into the same
+            // "lost-payload" count, which is fine because the user-observable cost is identical.
+            if (isRetry && IsOlderThanWatermark(item))
+                return EnqueueResult.Accept(droppedCount: 1);
+
             if (isRetry && QueueCount >= _options.MaxQueueSize)
                 return EnqueueResult.Accept(droppedCount: 1);
 
@@ -250,6 +267,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 _logger.Error($"{QueueName} queue processor did not write value");
                 return EnqueueResult.RejectedStopped();
             }
+
+            AdvanceWatermark(item.BuildDate.Ticks);
 
             int dropped = 0;
             while (QueueCount > _options.MaxQueueSize)
@@ -261,6 +280,33 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             }
 
             return EnqueueResult.Accept(dropped);
+        }
+
+        private bool IsOlderThanWatermark(QueueItem<T> item)
+        {
+            // Skip the watermark filter once public writes are closed (StopAsync / dispose):
+            // no fresh telemetry is arriving, so there is nothing for a "stale" retry to
+            // displace. Without this bypass, a shutdown-cancellation retry of an in-flight
+            // send would be dropped just because earlier enqueues during the same lifecycle
+            // had advanced the watermark — losing accepted work during a routine Stop().
+            if (Volatile.Read(ref _acceptingWritesFlag) == 0)
+                return false;
+
+            var watermark = Volatile.Read(ref _watermarkBuildDateTicks);
+            return watermark > 0 && item.BuildDate.Ticks < watermark;
+        }
+
+        private void AdvanceWatermark(long newTicks)
+        {
+            // CAS so concurrent producers cannot stomp on a higher value with a stale read.
+            while (true)
+            {
+                var old = Volatile.Read(ref _watermarkBuildDateTicks);
+                if (newTicks <= old)
+                    return;
+                if (Interlocked.CompareExchange(ref _watermarkBuildDateTicks, newTicks, old) == old)
+                    return;
+            }
         }
 
         internal virtual EnqueueResult Enqueue(IEnumerable<T> items)

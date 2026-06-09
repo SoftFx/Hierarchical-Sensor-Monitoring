@@ -334,6 +334,91 @@ namespace HSMDataCollector.Tests
             Assert.Equal(new[] { "fresh-0", "fresh-1", "fresh-2", "fresh-3", "fresh-4" }, contents);
         }
 
+        // Issue #1090: even below capacity, a retry whose BuildDate predates the watermark
+        // (the newest BuildDate ever accepted into this queue during the current outage) must
+        // be dropped. Otherwise the retry would sit at the tail with its older BuildDate and
+        // survive a later normal-overflow eviction that drops the fresher FIFO head.
+        [Fact]
+        public void ReEnqueue_below_capacity_drops_retry_older_than_watermark()
+        {
+            var sender = new SilentDataSender();
+            var options = CreateOptions(sender, "issue-1090-watermark");
+            options.MaxQueueSize = 10;
+
+            var queue = new CapacityTestQueueProcessor(options);
+
+            // Construct items with EXPLICIT BuildDates so the test is independent of platform
+            // DateTime.UtcNow resolution. The stale retry is older than the fresh enqueue.
+            var t0 = DateTime.UtcNow.AddSeconds(-10);
+            var t1 = DateTime.UtcNow;
+
+            var fresh = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "fresh" }, t1);
+            var staleRetry = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "stale-retry" }, t0);
+
+            // Enqueue the fresh item via the normal path so the watermark advances to t1.
+            // We can't go through InvokeEnqueueRaw because it would refresh BuildDate to UtcNow;
+            // instead reuse the retry-write path via reflection on EnqueueCore.
+            var enqueueCore = typeof(QueueProcessorBase<SensorValueBase>)
+                .GetMethod("EnqueueCore", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(enqueueCore);
+            var freshResult = (EnqueueResult)enqueueCore.Invoke(queue, new object[] { fresh, /*isRetry*/ false });
+            Assert.Equal(EnqueueStatus.Accepted, freshResult.Status);
+            Assert.Equal(1, queue.QueueCount);
+
+            // Now try to re-enqueue the stale retry. Queue is far below MaxQueueSize=10, but the
+            // watermark is at t1 > t0 — so the retry must be dropped on the #1090 path.
+            var result = queue.InvokeReEnqueue(staleRetry);
+
+            Assert.Equal(EnqueueStatus.Accepted, result.Status);
+            Assert.Equal(1, result.DroppedCount);
+            Assert.Equal(1, queue.QueueCount);
+
+            var contents = queue.DrainAll().Select(v => v.Comment).ToList();
+            Assert.Equal(new[] { "fresh" }, contents);
+        }
+
+        // Issue #1090 shutdown bypass: the watermark filter must NOT fire once public writes
+        // are closed — at that point no fresh telemetry can compete with the retry, and a
+        // shutdown-cancelled in-flight send must still be preserved for the bounded flush.
+        // Regression guard for the CollectorStabilityTests.Accepted_file_payloads_are_flushed
+        // scenario that the initial #1090 implementation broke.
+        [Fact]
+        public void ReEnqueue_during_shutdown_bypasses_watermark()
+        {
+            var sender = new SilentDataSender();
+            var options = CreateOptions(sender, "issue-1090-shutdown-bypass");
+            options.MaxQueueSize = 10;
+
+            var queue = new CapacityTestQueueProcessor(options);
+
+            var t0 = DateTime.UtcNow.AddSeconds(-10);
+            var t1 = DateTime.UtcNow;
+
+            var fresh = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "fresh" }, t1);
+            var staleRetry = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "stale-cancel-retry" }, t0);
+
+            // Push the fresh item via EnqueueCore to advance the watermark to t1 — same path
+            // as the normal-mode #1090 test.
+            var enqueueCore = typeof(QueueProcessorBase<SensorValueBase>)
+                .GetMethod("EnqueueCore", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(enqueueCore);
+            enqueueCore.Invoke(queue, new object[] { fresh, /*isRetry*/ false });
+
+            // Simulate StopAsync closing public writes: flip _acceptingWritesFlag to 0.
+            var acceptingWritesField = typeof(QueueProcessorBase<SensorValueBase>)
+                .GetField("_acceptingWritesFlag", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(acceptingWritesField);
+            acceptingWritesField.SetValue(queue, 0);
+
+            // Re-enqueue the stale retry — without the shutdown bypass it would be dropped on
+            // the watermark check; with the bypass it must be preserved.
+            var result = queue.InvokeReEnqueue(staleRetry);
+
+            Assert.Equal(EnqueueStatus.Accepted, result.Status);
+            Assert.Equal(0, result.DroppedCount);
+            Assert.Equal(2, queue.QueueCount);
+        }
+
         [Fact]
         public void ReEnqueue_below_capacity_writes_item_normally()
         {
