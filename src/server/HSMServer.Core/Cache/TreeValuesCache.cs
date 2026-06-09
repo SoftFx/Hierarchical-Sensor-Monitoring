@@ -1177,9 +1177,8 @@ namespace HSMServer.Core.Cache
 
             if (alertTemplateModel.TtlEntries is not null)
             {
-                for (int i = 0; i < alertTemplateModel.TtlEntries.Count; i++)
+                foreach (var entry in alertTemplateModel.TtlEntries)
                 {
-                    var entry = alertTemplateModel.TtlEntries[i];
                     var ttlPolicy = entry.Policy;
                     var ttlInterval = entry.Interval;
 
@@ -2434,10 +2433,15 @@ namespace HSMServer.Core.Cache
 
             public static string GetSignature(Policy policy)
             {
-                return string.Join("|", policy.Conditions
+                var sig = string.Join("|", policy.Conditions
                     .OrderBy(c => c.Property)
                     .ThenBy(c => c.Operation)
                     .Select(c => $"{c.Property}:{c.Operation}:{c.Target}"));
+
+                if (policy is TTLPolicy ttl)
+                    sig += $"|ttl:{ttl.TTLTicks}";
+
+                return sig;
             }
         }
     }
