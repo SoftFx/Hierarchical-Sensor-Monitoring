@@ -359,12 +359,12 @@ namespace HSMDataCollector.Tests
             Assert.Equal(new[] { "fresh-0", "fresh-1", "retry-after-fail" }, contents);
         }
 
-        // Issue #1088: ReEnqueueItems aggregates per-item drops and reports them once. The
-        // aggregation matters because the DispatchPackageAsync failure path re-enqueues a whole
-        // package at once — without the sum, the overflow sensor would under-report a multi-item
-        // retry drop.
+        // Issue #1088: ReEnqueueItems returns the aggregated drop count so the
+        // DispatchPackageAsync failure path can log "N preserved, M dropped at capacity" instead
+        // of the previously misleading "(N values preserved)" line. The contents-unchanged
+        // assertion guards the core invariant; the returned count guards the log-honesty fix.
         [Fact]
-        public void ReEnqueueItems_reports_aggregated_drop_count_for_full_queue()
+        public void ReEnqueueItems_returns_drop_count_and_preserves_queue_for_full_queue()
         {
             var sender = new SilentDataSender();
             var options = CreateOptions(sender, "issue-1088-batch");
@@ -381,8 +381,9 @@ namespace HSMDataCollector.Tests
                 .Select(i => new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = $"retry-{i}" }))
                 .ToList();
 
-            queue.InvokeReEnqueueItems(retries);
+            var droppedCount = queue.InvokeReEnqueueItems(retries);
 
+            Assert.Equal(4, droppedCount);
             Assert.Equal(3, queue.QueueCount);
             var contents = queue.DrainAll().Select(v => v.Comment).ToList();
             Assert.Equal(new[] { "fresh-0", "fresh-1", "fresh-2" }, contents);
@@ -644,7 +645,7 @@ namespace HSMDataCollector.Tests
             internal EnqueueResult InvokeReEnqueue(QueueItem<SensorValueBase> item) =>
                 ReEnqueueItem(item);
 
-            internal void InvokeReEnqueueItems(IEnumerable<QueueItem<SensorValueBase>> items) =>
+            internal int InvokeReEnqueueItems(IEnumerable<QueueItem<SensorValueBase>> items) =>
                 ReEnqueueItems(items);
 
             internal EnqueueResult InvokeEnqueueRaw(SensorValueBase item) => Enqueue(item);
