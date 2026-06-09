@@ -55,6 +55,14 @@ namespace HSMDataCollector.Prototypes
                 path,
             });
 
+        /// <summary>
+        /// Normalises a set of path parts into a single forward-slash-joined sensor path. Drops
+        /// null / empty / whitespace parts, splits each non-null part on '/' so an input like
+        /// <c>"a/b"</c> contributes two segments, and collapses any internal <c>//</c> (the
+        /// previous <c>Trim('/')</c>-based implementation preserved interior <c>//</c>; the
+        /// current behaviour treats the path as canonical separator-joined segments).
+        /// Contract is locked down by <c>DefaultPrototypeBuildPathTests</c> (#1087 E).
+        /// </summary>
         internal static string BuildPath(params string[] parts) =>
             string.Join(
                 PathSeparator,
