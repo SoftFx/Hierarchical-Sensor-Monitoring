@@ -3,6 +3,7 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
@@ -57,19 +58,22 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         // the misleading "preserved" wording used in the normal retry loop (#1087 A).
         private int _inFlushFlag;
 
-        // Newest BuildDate.Ticks observed on any successful enqueue. Used by the retry path to
-        // drop a failed-retry item whose BuildDate predates everything we've recently accepted —
-        // closes the #1090 residual from #1088 where a retry slips into a below-capacity queue
-        // with an older BuildDate and then survives a later FIFO overflow. The watermark only
-        // moves forward (no reset) so retries become "second-class" during normal operation:
-        // once any newer value has been accepted, retries strictly older than that get dropped.
+        // Mirrors the BuildDate.Ticks of items currently in the channel, in FIFO order. Updated
+        // alongside every successful Writer.TryWrite (enqueue) and Reader.TryRead (dequeue) so
+        // TryPeek gives the head's BuildDate at a microscopic lag. Used by the retry filter to
+        // decide if a failed-retry item is OLDER than what's currently waiting — if so, it would
+        // sit at the tail with a stale BuildDate and survive later overflow eviction that drops
+        // the actually-fresher FIFO head (issue #1090). Concurrent producers can briefly desync
+        // the mirror from the channel under contention, but the worst case is one retry incorrectly
+        // dropped or kept; the consistency is good enough for a policy heuristic.
         //
-        // The shutdown bypass in IsOlderThanWatermark switches off this filter once
-        // _acceptingWritesFlag is 0 — during shutdown there is no fresh telemetry to protect,
-        // and an in-flight send that was canceled by Stop() must still be preserved for the
-        // bounded flush (otherwise routine shutdowns lose accepted work; see the
-        // Accepted_file_payloads_are_flushed_when_stop_races_file_queue stability test).
-        private long _watermarkBuildDateTicks;
+        // Replaces the original watermark approach from b0f8a90f5, which tracked the all-time
+        // newest accepted BuildDate. That implementation dropped almost any multi-item retry
+        // batch below capacity because the batch's own newest item raised the watermark above
+        // its older siblings — caught by PR #1091 review. The mirror tracks only currently-queued
+        // items, so re-enqueueing a batch [A(t1), B(t2), C(t3)] into an empty queue preserves
+        // all three (the mirror is empty for A, becomes [t1] for B's check, [t1, t2] for C's).
+        private readonly ConcurrentQueue<long> _buildDateMirror = new ConcurrentQueue<long>();
 
         public abstract string QueueName { get; }
 
@@ -243,20 +247,24 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             // A retry item's BuildDate predates everything that arrived while its send attempt
             // was in flight; we drop the retry on two conditions:
             //
-            //   1. (#1090) Its BuildDate is older than the watermark — i.e. an item newer than
-            //      this retry has already been accepted into the queue at some point during the
-            //      current outage. Without this check, the retry would land at the tail of a
-            //      below-capacity queue and survive a later FIFO overflow that drops a fresher
-            //      head, recreating #1088 from a different state path.
+            //   1. (#1090) Its BuildDate predates the FIFO head currently in queue. If we wrote
+            //      this retry to the tail it would sit there with a stale BuildDate while the
+            //      fresher head got evicted on the next normal overflow — recreating #1088 from
+            //      a different state path. The head BuildDate comes from the _buildDateMirror
+            //      which is updated alongside the channel.
             //
             //   2. (#1088) The queue is already at MaxQueueSize and would otherwise overflow.
-            //      Sufficient on its own for the explicit #1088 scenario, but the watermark
-            //      check above runs first to close the more general case.
+            //      Sufficient on its own for the explicit #1088 scenario; the head check above
+            //      closes the more general case.
+            //
+            // Both filters are bypassed once _acceptingWritesFlag is 0 (post-Stop): there is no
+            // fresh telemetry to protect during shutdown, and the in-flight items being cancelled
+            // and re-enqueued must survive into the bounded flush.
             //
             // The returned DroppedCount=1 refers to THIS retry being rejected (not a head
-            // eviction); the existing telemetry path collapses both into the same
-            // "lost-payload" count, which is fine because the user-observable cost is identical.
-            if (isRetry && IsOlderThanWatermark(item))
+            // eviction); telemetry collapses both into the same "lost-payload" count, which is
+            // fine because the user-observable cost is identical.
+            if (isRetry && IsOlderThanQueueHead(item))
                 return EnqueueResult.Accept(droppedCount: 1);
 
             if (isRetry && QueueCount >= _options.MaxQueueSize)
@@ -268,7 +276,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 return EnqueueResult.RejectedStopped();
             }
 
-            AdvanceWatermark(item.BuildDate.Ticks);
+            // Mirror update: the channel now contains this item at the tail; record its
+            // BuildDate so a later TryPeek sees the right head once everything older has been
+            // consumed. Order matters — write to channel first so the mirror cannot get ahead
+            // of the channel (the reverse race is acceptable; under contention the mirror may
+            // briefly trail the channel, which only weakens the retry filter, never breaks it).
+            _buildDateMirror.Enqueue(item.BuildDate.Ticks);
 
             int dropped = 0;
             while (QueueCount > _options.MaxQueueSize)
@@ -282,31 +295,20 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return EnqueueResult.Accept(dropped);
         }
 
-        private bool IsOlderThanWatermark(QueueItem<T> item)
+        private bool IsOlderThanQueueHead(QueueItem<T> item)
         {
-            // Skip the watermark filter once public writes are closed (StopAsync / dispose):
-            // no fresh telemetry is arriving, so there is nothing for a "stale" retry to
-            // displace. Without this bypass, a shutdown-cancellation retry of an in-flight
-            // send would be dropped just because earlier enqueues during the same lifecycle
-            // had advanced the watermark — losing accepted work during a routine Stop().
+            // Shutdown bypass: once public writes are closed (StopAsync / dispose) there is no
+            // fresh telemetry to protect from a stale retry, and a cancellation-retry of an
+            // in-flight send must still be preserved so the bounded flush can either ship it or
+            // log it as discarded. Skipping the filter here also avoids stale mirror state from
+            // leaking into the post-stop window.
             if (Volatile.Read(ref _acceptingWritesFlag) == 0)
                 return false;
 
-            var watermark = Volatile.Read(ref _watermarkBuildDateTicks);
-            return watermark > 0 && item.BuildDate.Ticks < watermark;
-        }
+            if (!_buildDateMirror.TryPeek(out var headTicks))
+                return false;
 
-        private void AdvanceWatermark(long newTicks)
-        {
-            // CAS so concurrent producers cannot stomp on a higher value with a stale read.
-            while (true)
-            {
-                var old = Volatile.Read(ref _watermarkBuildDateTicks);
-                if (newTicks <= old)
-                    return;
-                if (Interlocked.CompareExchange(ref _watermarkBuildDateTicks, newTicks, old) == old)
-                    return;
-            }
+            return item.BuildDate.Ticks < headTicks;
         }
 
         internal virtual EnqueueResult Enqueue(IEnumerable<T> items)
@@ -473,7 +475,9 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 // During FlushAsync the items are re-enqueued only so ClearQueue can log them as
                 // "discarded"; calling them "preserved" contradicts the very next log line.
                 var fate = IsFlushing ? "queued for clear" : "preserved";
-                var loss = dropped > 0 ? $", {dropped} dropped at capacity" : string.Empty;
+                // Drop count rolls up both #1088 (queue at capacity) and #1090 (retry older than
+                // current head) reasons — wording stays generic so it's accurate for either.
+                var loss = dropped > 0 ? $", {dropped} dropped" : string.Empty;
                 throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}");
             }
 
@@ -526,7 +530,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return Task.Delay(delay, token);
         }
 
-        protected bool TryDequeue(out QueueItem<T> item) => Reader.TryRead(out item);
+        // Single dequeue path so the BuildDate mirror always stays in step with the channel
+        // (modulo concurrent-producer race noise). Callers in this class are: GetPackage,
+        // the EnqueueCore overflow trim loop, and ClearQueue.
+        protected bool TryDequeue(out QueueItem<T> item)
+        {
+            if (!Reader.TryRead(out item))
+                return false;
+
+            _buildDateMirror.TryDequeue(out _);
+            return true;
+        }
 
         private void RegisterCompletionCleanup(Task task, CancellationTokenSource tokenSource)
         {
