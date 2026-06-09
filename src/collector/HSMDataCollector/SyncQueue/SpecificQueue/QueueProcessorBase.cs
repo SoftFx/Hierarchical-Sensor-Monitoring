@@ -205,12 +205,39 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         }
 
         internal virtual EnqueueResult Enqueue(T item) =>
-            EnqueueCore(new QueueItem<T>(item), rejectWhenNotAcceptingWrites: true);
+            EnqueueCore(new QueueItem<T>(item), isRetry: false);
 
-        private EnqueueResult EnqueueCore(QueueItem<T> item, bool rejectWhenNotAcceptingWrites)
+        // A single flag instead of two separate booleans: retry semantics ALWAYS imply both
+        // "bypass the writes-accepting gate" (we're preserving already-accepted work past a
+        // StopAsync) and "drop self on overflow instead of evicting newer head" (issue #1088).
+        // Splitting these into two parameters lets a future caller pass an invalid combination
+        // (e.g. bypass-gate + normal-overflow) that silently regresses #1088.
+        private EnqueueResult EnqueueCore(QueueItem<T> item, bool isRetry)
         {
-            if (rejectWhenNotAcceptingWrites && Volatile.Read(ref _acceptingWritesFlag) == 0)
+            if (!isRetry && Volatile.Read(ref _acceptingWritesFlag) == 0)
                 return EnqueueResult.RejectedStopped();
+
+            // Issue #1088: a failed-retry item must not evict newer telemetry on overflow.
+            // The queue uses position-based FIFO eviction (drop head when over MaxQueueSize),
+            // which is correct only while position order matches BuildDate order. A retry
+            // item's BuildDate predates everything that arrived while its send attempt was in
+            // flight; if we wrote it to the tail of a full queue and let the overflow loop
+            // drop the head, we would silently delete a fresher value to preserve a stale one.
+            // Drop the retry instead — the contract is "keep the latest MaxQueueSize values",
+            // and at full capacity the queue already holds values newer than the retry. The
+            // returned DroppedCount=1 refers to THIS retry being rejected (not a head eviction);
+            // the existing telemetry path collapses both into the same "lost-payload" count,
+            // which is fine because the user-observable cost is identical.
+            //
+            // KNOWN RESIDUAL: this only fires when the retry meets an already-full queue. A
+            // retry arriving at a below-capacity queue is written at the tail with its older
+            // BuildDate; a subsequent normal Enqueue's overflow loop can then drop the FIFO
+            // head, which may now be a fresher item than the tail-stale retry. Closing that
+            // general case requires BuildDate-aware eviction; the Channel API does not support
+            // peeking past the head, so a true fix would need a different backing store. Out
+            // of scope here; this PR closes the explicit scenario from issue #1088.
+            if (isRetry && QueueCount >= _options.MaxQueueSize)
+                return EnqueueResult.Accept(droppedCount: 1);
 
             if (!Writer.TryWrite(item))
             {
@@ -379,24 +406,40 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             if (sendingInfo.Error != null)
             {
-                ReEnqueueItems(package.Items);
-                throw new InvalidOperationException($"Failed to send package for {QueueName} ({package.Count} values preserved). {sendingInfo.Error}");
+                var dropped = ReEnqueueItems(package.Items);
+                var preserved = package.Count - dropped;
+                var loss = dropped > 0 ? $", {dropped} dropped at capacity" : string.Empty;
+                throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} preserved{loss}). {sendingInfo.Error}");
             }
 
             _queueManager.AddPackageSendingInfo(sendingInfo);
             _queueManager.AddPackageInfo(QueueName, package.GetInfo());
         }
 
-        protected EnqueueResult ReEnqueueItem(QueueItem<T> item) =>
-            EnqueueCore(item, rejectWhenNotAcceptingWrites: false);
-
-        protected EnqueueResult ReEnqueueItem(T item) =>
-            ReEnqueueItem(new QueueItem<T>(item));
-
-        protected void ReEnqueueItems(IEnumerable<QueueItem<T>> items)
+        // Self-reports retry-path evictions to the queue manager so every caller — including
+        // FileQueueProcessor, which only re-enqueues single items — surfaces the drop count to
+        // QueueOverflowSensor. Previously the reporting lived in ReEnqueueItems, which meant
+        // file-queue retry drops were silent (issue #1088 review).
+        protected EnqueueResult ReEnqueueItem(QueueItem<T> item)
         {
+            var result = EnqueueCore(item, isRetry: true);
+            if (result.IsAccepted && result.DroppedCount > 0)
+                _queueManager?.ReportRequeueEviction(QueueName, result.DroppedCount);
+            return result;
+        }
+
+        // Returns the count of items dropped at capacity so DispatchPackageAsync can include
+        // it in the failure log line.
+        protected int ReEnqueueItems(IEnumerable<QueueItem<T>> items)
+        {
+            int dropped = 0;
             foreach (var item in items)
-                ReEnqueueItem(item);
+            {
+                var result = ReEnqueueItem(item);
+                if (result.IsAccepted)
+                    dropped += result.DroppedCount;
+            }
+            return dropped;
         }
 
         protected ShutdownMode CurrentShutdownMode => (ShutdownMode)Volatile.Read(ref _currentShutdownModeRaw);

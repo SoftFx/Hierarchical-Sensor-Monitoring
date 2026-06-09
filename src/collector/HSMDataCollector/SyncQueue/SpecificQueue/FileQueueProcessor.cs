@@ -40,8 +40,10 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             if (sendingInfo.Error != null)
             {
-                ReEnqueueItem(item);
-                throw new InvalidOperationException($"Failed to send package for {QueueName} (1 value preserved). {sendingInfo.Error}");
+                var retryResult = ReEnqueueItem(item);
+                var preserved = retryResult.IsAccepted ? 1 - retryResult.DroppedCount : 0;
+                var loss = retryResult.DroppedCount > 0 ? $", {retryResult.DroppedCount} dropped at capacity" : string.Empty;
+                throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} preserved{loss}). {sendingInfo.Error}");
             }
 
             return true;

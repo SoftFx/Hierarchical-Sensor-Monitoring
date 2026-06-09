@@ -359,9 +359,35 @@ namespace HSMDataCollector.Core
         {
             // Rejected results are intentionally silent at this layer — CanAcceptData has already
             // gated the typical case, and a late callback that races a queue stop is logged via the
-            // overflow sensor only if it actually evicted older items.
-            if (result.DroppedCount > 0 && !(sender is QueueOverflowSensor))
-                DefaultSensors.QueueOverflowSensor?.AddValue(queueName, result.DroppedCount);
+            // overflow sensor only if it actually evicted older items. The sender check breaks the
+            // QueueOverflowSensor self-loop (its own AddValue lands in the data queue and could
+            // re-trigger overflow reporting).
+            if (!(sender is QueueOverflowSensor))
+                EmitOverflowDrops(queueName, result.DroppedCount);
+        }
+
+        /// <summary>
+        /// Issue #1088: surface evictions from the retry path. When a failed-retry item is dropped
+        /// because the queue is at <see cref="CollectorOptions.MaxQueueSize"/>, the public
+        /// AddXxx → HandleEnqueueResult path does not see it (re-enqueue is internal to the queue
+        /// processor). Route it through the same QueueOverflowSensor so a sustained outage shows
+        /// the lost-payload count instead of silently discarding old retries.
+        ///
+        /// Note: NOT gated on <see cref="_diagnosticsSuppressedFlag"/>. The field's own contract
+        /// (see comment at declaration) explicitly carves overflow telemetry OUT of suppression —
+        /// overflow IS data loss, and silencing it during the stop-flush window is exactly when
+        /// the operator most needs the count. QueueOverflowSensor.AddValue is in-memory bar
+        /// accumulation (no enqueue-back hazard at this layer), so it is safe past the boundary.
+        /// </summary>
+        public void ReportRequeueEviction(string queueName, int droppedCount) =>
+            EmitOverflowDrops(queueName, droppedCount);
+
+        private void EmitOverflowDrops(string queueName, int droppedCount)
+        {
+            if (droppedCount <= 0)
+                return;
+
+            DefaultSensors.QueueOverflowSensor?.AddValue(queueName, droppedCount);
         }
 
         private void LogDiscardedItems(int count, string queueName)
