@@ -41,7 +41,7 @@ namespace HSMDataCollector.Sensors
         {
             if (!SensorValueExtensions.IsValidValue(value, status))
             {
-                _dataProcessor?.LogDroppedValue(SensorPath, $"last-value update failed validation (status: {status})");
+                _dataProcessor.LogDroppedValue(SensorPath, $"last-value update failed validation (status: {status})");
                 return;
             }
 

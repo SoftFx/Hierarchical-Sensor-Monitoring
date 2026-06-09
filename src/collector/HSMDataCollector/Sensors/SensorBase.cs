@@ -87,7 +87,9 @@ namespace HSMDataCollector.DefaultSensors
 
         protected void HandleException(Exception ex)
         {
-            _dataProcessor?.AddException(SensorPath, ex);
+            // _dataProcessor is non-null by the ctor invariant (line 35 throws on null); the
+            // null-conditional here used to read as defensive but only hid that contract.
+            _dataProcessor.AddException(SensorPath, ex);
             ExceptionThrowing?.Invoke(SensorPath, ex);
         }
 
