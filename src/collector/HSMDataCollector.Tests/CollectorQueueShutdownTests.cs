@@ -359,6 +359,41 @@ namespace HSMDataCollector.Tests
             Assert.Equal(new[] { "fresh-0", "fresh-1", "retry-after-fail" }, contents);
         }
 
+        // Issue #1087 A: when DispatchPackageAsync runs from FlushAsync, the items it re-enqueues
+        // get immediately wiped by ClearQueue — so the failure exception must say "queued for
+        // clear" instead of "preserved" (the latter contradicts the very next LogDiscardedItems
+        // line). The normal-retry-loop variant still says "preserved".
+        [Fact]
+        public async Task Flush_failure_logs_queued_for_clear_instead_of_preserved()
+        {
+            var sender = new SilentDataSender { ReturnErrorOnData = "Synthetic flush failure" };
+            var logger = new CapturingLogger();
+
+            using (var collector = new DataCollector(CreateOptions(sender, "flush-message")))
+            {
+                collector.AddCustomLogger(logger);
+                var sensor = collector.CreateDoubleSensor("flush-message/data");
+
+                await collector.Start().ConfigureAwait(false);
+                sensor.AddValue(7);
+
+                // Give the run loop a chance to dequeue and either dispatch or land in queue
+                // before shutdown — we want at least one queued item to survive into the flush.
+                await Task.Delay(TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
+
+                await collector.Stop().ConfigureAwait(false);
+            }
+
+            // FlushAsync catches the InvalidOperationException and logs it. The captured text must
+            // describe the items as "queued for clear" (flush context) — never "preserved" (which
+            // would contradict the discard that happens immediately after).
+            Assert.True(
+                logger.ExceptionMessages.Exists(m => m.Contains("queued for clear")),
+                "Flush-context dispatch failure should be logged with the 'queued for clear' wording. " +
+                $"Captured: [{string.Join(" | ", logger.ExceptionMessages)}]");
+            Assert.DoesNotContain(logger.ExceptionMessages, m => m.Contains("preserved"));
+        }
+
         // Issue #1088: ReEnqueueItems returns the aggregated drop count so the
         // DispatchPackageAsync failure path can log "N preserved, M dropped at capacity" instead
         // of the previously misleading "(N values preserved)" line. The contents-unchanged
@@ -548,12 +583,19 @@ namespace HSMDataCollector.Tests
 
             public bool ThrowOnData { get; set; }
 
+            // Returns PackageSendingInfo with Error set instead of throwing — drives the
+            // "if (sendingInfo.Error != null)" branch in DispatchPackageAsync.
+            public string ReturnErrorOnData { get; set; }
+
             public ValueTask<ConnectionResult> TestConnectionAsync() => new ValueTask<ConnectionResult>(ConnectionResult.Ok);
 
             public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
             {
                 if (ThrowOnData)
                     throw new InvalidOperationException("Synthetic data send failure.");
+
+                if (ReturnErrorOnData != null)
+                    return new ValueTask<PackageSendingInfo>(new PackageSendingInfo(contentSize: 1, response: null, exception: ReturnErrorOnData));
 
                 _dataReceived.TrySetResult(true);
                 return new ValueTask<PackageSendingInfo>(default(PackageSendingInfo));
@@ -624,6 +666,27 @@ namespace HSMDataCollector.Tests
             }
 
             Assert.Equal(0, Interlocked.Read(ref observedNonMonotonic));
+        }
+
+        /// <summary>
+        /// Captures error-level log calls for assertion. Used by the issue #1087 A test to verify
+        /// the flush-context exception message wording.
+        /// </summary>
+        private sealed class CapturingLogger : HSMDataCollector.Logging.ICollectorLogger
+        {
+            internal readonly List<string> ExceptionMessages = new List<string>();
+            internal readonly List<string> ErrorMessages = new List<string>();
+
+            public void Debug(string message) { }
+            public void Info(string message) { }
+            public void Error(string message)
+            {
+                lock (ErrorMessages) ErrorMessages.Add(message);
+            }
+            public void Error(Exception ex)
+            {
+                lock (ExceptionMessages) ExceptionMessages.Add(ex?.ToString() ?? string.Empty);
+            }
         }
 
         /// <summary>

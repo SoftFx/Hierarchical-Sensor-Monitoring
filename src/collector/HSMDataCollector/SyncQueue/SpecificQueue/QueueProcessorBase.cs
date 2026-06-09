@@ -51,6 +51,12 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         // decide whether canceled packages should be re-enqueued.
         private int _currentShutdownModeRaw = (int)ShutdownMode.GracefulStop;
 
+        // 1 while FlushAsync is iterating the bounded post-stop drain. Re-enqueued failed packages
+        // during this window are immediately discarded by ClearQueue in FlushAndLogAsync — so the
+        // DispatchPackageAsync failure exception describes them as "queued for clear" instead of
+        // the misleading "preserved" wording used in the normal retry loop (#1087 A).
+        private int _inFlushFlag;
+
         public abstract string QueueName { get; }
 
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
@@ -363,6 +369,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         public virtual async Task FlushAsync(CancellationToken token)
         {
+            Volatile.Write(ref _inFlushFlag, 1);
             try
             {
                 while (!IsEmpty && !token.IsCancellationRequested)
@@ -376,7 +383,16 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 _logger.Error(ex);
             }
+            finally
+            {
+                Volatile.Write(ref _inFlushFlag, 0);
+            }
         }
+
+        // True while the bounded post-stop drain is running. Subclasses use this to reword
+        // dispatch-failure exceptions so the log line doesn't claim items were "preserved" right
+        // before ClearQueue discards them.
+        protected bool IsFlushing => Volatile.Read(ref _inFlushFlag) == 1;
 
         protected async ValueTask DispatchPackageAsync(
             DataPackage<T> package,
@@ -408,8 +424,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 var dropped = ReEnqueueItems(package.Items);
                 var preserved = package.Count - dropped;
+                // During FlushAsync the items are re-enqueued only so ClearQueue can log them as
+                // "discarded"; calling them "preserved" contradicts the very next log line.
+                var fate = IsFlushing ? "queued for clear" : "preserved";
                 var loss = dropped > 0 ? $", {dropped} dropped at capacity" : string.Empty;
-                throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} preserved{loss}). {sendingInfo.Error}");
+                throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}");
             }
 
             _queueManager.AddPackageSendingInfo(sendingInfo);
