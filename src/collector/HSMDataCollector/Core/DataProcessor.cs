@@ -364,6 +364,24 @@ namespace HSMDataCollector.Core
                 DefaultSensors.QueueOverflowSensor?.AddValue(queueName, result.DroppedCount);
         }
 
+        /// <summary>
+        /// Issue #1088: surface evictions from the retry path. When a failed-retry item is dropped
+        /// because the queue is at <see cref="CollectorOptions.MaxQueueSize"/>, the public
+        /// AddXxx → HandleEnqueueResult path does not see it (re-enqueue is internal to the queue
+        /// processor). Route it through the same QueueOverflowSensor so a sustained outage shows
+        /// the lost-payload count instead of silently discarding old retries.
+        /// </summary>
+        public void ReportRequeueEviction(string queueName, int droppedCount)
+        {
+            if (droppedCount <= 0)
+                return;
+
+            if (Volatile.Read(ref _diagnosticsSuppressedFlag) == 1)
+                return;
+
+            DefaultSensors.QueueOverflowSensor?.AddValue(queueName, droppedCount);
+        }
+
         private void LogDiscardedItems(int count, string queueName)
         {
             if (count > 0)

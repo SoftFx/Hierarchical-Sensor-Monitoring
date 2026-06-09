@@ -293,6 +293,101 @@ namespace HSMDataCollector.Tests
             Assert.Equal((int)ShutdownMode.TerminalDispose, modeRaw);
         }
 
+        // Issue #1088: a failed-retry payload must not evict newer telemetry on queue overflow.
+        // Before the fix, ReEnqueueItem wrote the retry to the channel tail and let the overflow
+        // loop drop the head — but the head is the FIFO-newest among items that arrived during the
+        // retry's send attempt, so a stale retry would silently delete fresher values. With the
+        // fix, the retry path checks capacity FIRST: if the queue is already at MaxQueueSize, the
+        // retry is dropped and the existing newer items stay intact.
+        [Fact]
+        public void ReEnqueue_when_queue_at_capacity_drops_retry_to_preserve_newer_telemetry()
+        {
+            var sender = new SilentDataSender();
+            var options = CreateOptions(sender, "issue-1088-full");
+            options.MaxQueueSize = 5;
+
+            var queue = new CapacityTestQueueProcessor(options);
+
+            // Fill the queue with five fresher values, tagged to verify identity below.
+            for (int i = 0; i < 5; i++)
+            {
+                var ok = queue.InvokeEnqueueRaw(new IntBarSensorValue { Count = 1, Comment = $"fresh-{i}" });
+                Assert.Equal(EnqueueStatus.Accepted, ok.Status);
+                Assert.Equal(0, ok.DroppedCount);
+            }
+            Assert.Equal(5, queue.QueueCount);
+
+            // Simulate a failed-retry payload. Before the fix this would write to the tail and
+            // overflow-evict the head ("fresh-0").
+            var staleRetry = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "stale-retry" });
+
+            var result = queue.InvokeReEnqueue(staleRetry);
+
+            Assert.Equal(EnqueueStatus.Accepted, result.Status);
+            Assert.Equal(1, result.DroppedCount);
+            Assert.Equal(5, queue.QueueCount);
+
+            // Critically: the stale retry must NOT be in the queue, and all five fresh values must
+            // still be there in their original order. Pre-fix behaviour was "C D E F A"; we want
+            // "fresh-0 .. fresh-4" with no "stale-retry".
+            var contents = queue.DrainAll().Select(v => v.Comment).ToList();
+            Assert.Equal(new[] { "fresh-0", "fresh-1", "fresh-2", "fresh-3", "fresh-4" }, contents);
+        }
+
+        [Fact]
+        public void ReEnqueue_below_capacity_writes_item_normally()
+        {
+            var sender = new SilentDataSender();
+            var options = CreateOptions(sender, "issue-1088-below");
+            options.MaxQueueSize = 5;
+
+            var queue = new CapacityTestQueueProcessor(options);
+
+            queue.InvokeEnqueueRaw(new IntBarSensorValue { Count = 1, Comment = "fresh-0" });
+            queue.InvokeEnqueueRaw(new IntBarSensorValue { Count = 1, Comment = "fresh-1" });
+            Assert.Equal(2, queue.QueueCount);
+
+            var retry = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "retry-after-fail" });
+
+            var result = queue.InvokeReEnqueue(retry);
+
+            Assert.Equal(EnqueueStatus.Accepted, result.Status);
+            Assert.Equal(0, result.DroppedCount);
+            Assert.Equal(3, queue.QueueCount);
+
+            var contents = queue.DrainAll().Select(v => v.Comment).ToList();
+            Assert.Equal(new[] { "fresh-0", "fresh-1", "retry-after-fail" }, contents);
+        }
+
+        // Issue #1088: ReEnqueueItems aggregates per-item drops and reports them once. The
+        // aggregation matters because the DispatchPackageAsync failure path re-enqueues a whole
+        // package at once — without the sum, the overflow sensor would under-report a multi-item
+        // retry drop.
+        [Fact]
+        public void ReEnqueueItems_reports_aggregated_drop_count_for_full_queue()
+        {
+            var sender = new SilentDataSender();
+            var options = CreateOptions(sender, "issue-1088-batch");
+            options.MaxQueueSize = 3;
+
+            var queue = new CapacityTestQueueProcessor(options);
+
+            for (int i = 0; i < 3; i++)
+                queue.InvokeEnqueueRaw(new IntBarSensorValue { Count = 1, Comment = $"fresh-{i}" });
+            Assert.Equal(3, queue.QueueCount);
+
+            // Simulate a failed package of 4 retries hitting an already-full queue.
+            var retries = Enumerable.Range(0, 4)
+                .Select(i => new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = $"retry-{i}" }))
+                .ToList();
+
+            queue.InvokeReEnqueueItems(retries);
+
+            Assert.Equal(3, queue.QueueCount);
+            var contents = queue.DrainAll().Select(v => v.Comment).ToList();
+            Assert.Equal(new[] { "fresh-0", "fresh-1", "fresh-2" }, contents);
+        }
+
         // PR #1080 fifth-round review HIGH: bar drop race. With the previous code, if the
         // periodic send handle was inside SendValueAction holding _sendValueInProgress=1 but
         // had not yet snapshotted the bar (i.e., before its BuildSensorValue → GetValue under
@@ -528,6 +623,39 @@ namespace HSMDataCollector.Tests
             }
 
             Assert.Equal(0, Interlocked.Read(ref observedNonMonotonic));
+        }
+
+        /// <summary>
+        /// Test double for issue #1088 — exposes ReEnqueueItem(s) and Enqueue plus a draining
+        /// helper so tests can verify both the drop count and the surviving queue contents after
+        /// a retry hits an over-capacity queue. TryDispatchOneAsync is a no-op so items stay put
+        /// until the test drains them.
+        /// </summary>
+        private sealed class CapacityTestQueueProcessor : QueueProcessorBase<SensorValueBase>
+        {
+            internal CapacityTestQueueProcessor(CollectorOptions options)
+                : base(options, queueManager: null, logger: new LoggerManager()) { }
+
+            public override string QueueName => "Capacity-test";
+
+            protected override ValueTask<bool> TryDispatchOneAsync(CancellationToken token) =>
+                new ValueTask<bool>(false);
+
+            internal EnqueueResult InvokeReEnqueue(QueueItem<SensorValueBase> item) =>
+                ReEnqueueItem(item);
+
+            internal void InvokeReEnqueueItems(IEnumerable<QueueItem<SensorValueBase>> items) =>
+                ReEnqueueItems(items);
+
+            internal EnqueueResult InvokeEnqueueRaw(SensorValueBase item) => Enqueue(item);
+
+            internal List<SensorValueBase> DrainAll()
+            {
+                var items = new List<SensorValueBase>();
+                while (TryDequeue(out var item))
+                    items.Add(item.Value);
+                return items;
+            }
         }
 
         /// <summary>

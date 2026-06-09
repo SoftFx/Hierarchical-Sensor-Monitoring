@@ -205,12 +205,23 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         }
 
         internal virtual EnqueueResult Enqueue(T item) =>
-            EnqueueCore(new QueueItem<T>(item), rejectWhenNotAcceptingWrites: true);
+            EnqueueCore(new QueueItem<T>(item), rejectWhenNotAcceptingWrites: true, isRetry: false);
 
-        private EnqueueResult EnqueueCore(QueueItem<T> item, bool rejectWhenNotAcceptingWrites)
+        private EnqueueResult EnqueueCore(QueueItem<T> item, bool rejectWhenNotAcceptingWrites, bool isRetry)
         {
             if (rejectWhenNotAcceptingWrites && Volatile.Read(ref _acceptingWritesFlag) == 0)
                 return EnqueueResult.RejectedStopped();
+
+            // Issue #1088: a failed-retry item must not evict newer telemetry on overflow.
+            // The queue uses position-based FIFO eviction (drop head when over MaxQueueSize),
+            // which is correct only while position order matches BuildDate order. A retry
+            // item's BuildDate predates everything that arrived while its send attempt was in
+            // flight; if we wrote it to the tail of a full queue and let the overflow loop
+            // drop the head, we would silently delete a fresher value to preserve a stale one.
+            // Drop the retry instead — the contract is "keep the latest MaxQueueSize values",
+            // and at full capacity the queue already holds values newer than the retry.
+            if (isRetry && QueueCount >= _options.MaxQueueSize)
+                return EnqueueResult.Accept(droppedCount: 1);
 
             if (!Writer.TryWrite(item))
             {
@@ -388,15 +399,23 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         }
 
         protected EnqueueResult ReEnqueueItem(QueueItem<T> item) =>
-            EnqueueCore(item, rejectWhenNotAcceptingWrites: false);
-
-        protected EnqueueResult ReEnqueueItem(T item) =>
-            ReEnqueueItem(new QueueItem<T>(item));
+            EnqueueCore(item, rejectWhenNotAcceptingWrites: false, isRetry: true);
 
         protected void ReEnqueueItems(IEnumerable<QueueItem<T>> items)
         {
+            int dropped = 0;
             foreach (var item in items)
-                ReEnqueueItem(item);
+            {
+                var result = ReEnqueueItem(item);
+                if (result.IsAccepted)
+                    dropped += result.DroppedCount;
+            }
+
+            // Issue #1088: surface retry-path evictions to the overflow sensor so a sustained
+            // server outage shows up in the QueueOverflow telemetry instead of silently
+            // discarding old failed payloads.
+            if (dropped > 0)
+                _queueManager?.ReportRequeueEviction(QueueName, dropped);
         }
 
         protected ShutdownMode CurrentShutdownMode => (ShutdownMode)Volatile.Read(ref _currentShutdownModeRaw);
