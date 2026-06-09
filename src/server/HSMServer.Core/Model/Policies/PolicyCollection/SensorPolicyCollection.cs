@@ -277,10 +277,13 @@ namespace HSMServer.Core.Model.Policies
                         {
                             if (policy.TemplateId != null)
                             {
-                                var oldPolicy = policy.ToString();
-                                policy.SetDisabled(update.IsDisabled);
-                                CallJournal(id, oldPolicy, policy.ToString(), initiator);
-                                Uploaded?.Invoke(ActionType.Update, policy);
+                                if (policy.IsDisabled != update.IsDisabled)
+                                {
+                                    var oldPolicy = policy.ToString();
+                                    policy.SetDisabled(update.IsDisabled);
+                                    CallJournal(id, oldPolicy, policy.ToString(), initiator);
+                                    Uploaded?.Invoke(ActionType.Update, policy);
+                                }
                             }
                             else
                             {

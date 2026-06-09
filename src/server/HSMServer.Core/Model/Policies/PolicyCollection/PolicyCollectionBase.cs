@@ -70,16 +70,28 @@ namespace HSMServer.Core.Model.Policies
                         var oldValue = policy.ToString();
 
                         if (policy.TemplateId != null && update.Initiator != InitiatorInfo.AlertTemplate)
-                            policy.SetDisabled(update.IsDisabled);
+                        {
+                            if (policy.IsDisabled != update.IsDisabled)
+                            {
+                                policy.SetDisabled(update.IsDisabled);
+                                journalEntries.Add((oldValue, policy, update, update.IsParentRequest));
+                            }
+                            else
+                            {
+                                newList.Add(policy);
+                                updatesDict.Remove(update.Id);
+                                continue;
+                            }
+                        }
                         else
                         {
                             policy.FullUpdate(update);
 
                             if (!update.TTL.HasValue)
                                 policy.SetTTLParent(_model.Settings.TTL);
-                        }
 
-                        journalEntries.Add((oldValue, policy, update, update.IsParentRequest));
+                            journalEntries.Add((oldValue, policy, update, update.IsParentRequest));
+                        }
                         newList.Add(policy);
                         updatesDict.Remove(update.Id);
                     }
