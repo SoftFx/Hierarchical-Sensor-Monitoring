@@ -3,6 +3,7 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
@@ -50,6 +51,29 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         // Last shutdown mode requested via StopAsync. Read by the processing loop's catch blocks to
         // decide whether canceled packages should be re-enqueued.
         private int _currentShutdownModeRaw = (int)ShutdownMode.GracefulStop;
+
+        // 1 while FlushAsync is iterating the bounded post-stop drain. Re-enqueued failed packages
+        // during this window are immediately discarded by ClearQueue in FlushAndLogAsync — so the
+        // DispatchPackageAsync failure exception describes them as "queued for clear" instead of
+        // the misleading "preserved" wording used in the normal retry loop (#1087 A).
+        private int _inFlushFlag;
+
+        // Mirrors the BuildDate.Ticks of items currently in the channel, in FIFO order. Updated
+        // alongside every successful Writer.TryWrite (enqueue) and Reader.TryRead (dequeue) so
+        // TryPeek gives the head's BuildDate at a microscopic lag. Used by the retry filter to
+        // decide if a failed-retry item is OLDER than what's currently waiting — if so, it would
+        // sit at the tail with a stale BuildDate and survive later overflow eviction that drops
+        // the actually-fresher FIFO head (issue #1090). Concurrent producers can briefly desync
+        // the mirror from the channel under contention, but the worst case is one retry incorrectly
+        // dropped or kept; the consistency is good enough for a policy heuristic.
+        //
+        // Replaces the original watermark approach from b0f8a90f5, which tracked the all-time
+        // newest accepted BuildDate. That implementation dropped almost any multi-item retry
+        // batch below capacity because the batch's own newest item raised the watermark above
+        // its older siblings — caught by PR #1091 review. The mirror tracks only currently-queued
+        // items, so re-enqueueing a batch [A(t1), B(t2), C(t3)] into an empty queue preserves
+        // all three (the mirror is empty for A, becomes [t1] for B's check, [t1, t2] for C's).
+        private readonly ConcurrentQueue<long> _buildDateMirror = new ConcurrentQueue<long>();
 
         public abstract string QueueName { get; }
 
@@ -217,25 +241,32 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             if (!isRetry && Volatile.Read(ref _acceptingWritesFlag) == 0)
                 return EnqueueResult.RejectedStopped();
 
-            // Issue #1088: a failed-retry item must not evict newer telemetry on overflow.
-            // The queue uses position-based FIFO eviction (drop head when over MaxQueueSize),
-            // which is correct only while position order matches BuildDate order. A retry
-            // item's BuildDate predates everything that arrived while its send attempt was in
-            // flight; if we wrote it to the tail of a full queue and let the overflow loop
-            // drop the head, we would silently delete a fresher value to preserve a stale one.
-            // Drop the retry instead — the contract is "keep the latest MaxQueueSize values",
-            // and at full capacity the queue already holds values newer than the retry. The
-            // returned DroppedCount=1 refers to THIS retry being rejected (not a head eviction);
-            // the existing telemetry path collapses both into the same "lost-payload" count,
-            // which is fine because the user-observable cost is identical.
+            // Issue #1088 / #1090: a failed-retry item must not evict newer telemetry on
+            // overflow. The queue uses position-based FIFO eviction (drop head when over
+            // MaxQueueSize), which is only correct while position order matches BuildDate order.
+            // A retry item's BuildDate predates everything that arrived while its send attempt
+            // was in flight; we drop the retry on two conditions:
             //
-            // KNOWN RESIDUAL: this only fires when the retry meets an already-full queue. A
-            // retry arriving at a below-capacity queue is written at the tail with its older
-            // BuildDate; a subsequent normal Enqueue's overflow loop can then drop the FIFO
-            // head, which may now be a fresher item than the tail-stale retry. Closing that
-            // general case requires BuildDate-aware eviction; the Channel API does not support
-            // peeking past the head, so a true fix would need a different backing store. Out
-            // of scope here; this PR closes the explicit scenario from issue #1088.
+            //   1. (#1090) Its BuildDate predates the FIFO head currently in queue. If we wrote
+            //      this retry to the tail it would sit there with a stale BuildDate while the
+            //      fresher head got evicted on the next normal overflow — recreating #1088 from
+            //      a different state path. The head BuildDate comes from the _buildDateMirror
+            //      which is updated alongside the channel.
+            //
+            //   2. (#1088) The queue is already at MaxQueueSize and would otherwise overflow.
+            //      Sufficient on its own for the explicit #1088 scenario; the head check above
+            //      closes the more general case.
+            //
+            // Both filters are bypassed once _acceptingWritesFlag is 0 (post-Stop): there is no
+            // fresh telemetry to protect during shutdown, and the in-flight items being cancelled
+            // and re-enqueued must survive into the bounded flush.
+            //
+            // The returned DroppedCount=1 refers to THIS retry being rejected (not a head
+            // eviction); telemetry collapses both into the same "lost-payload" count, which is
+            // fine because the user-observable cost is identical.
+            if (isRetry && IsOlderThanQueueHead(item))
+                return EnqueueResult.Accept(droppedCount: 1);
+
             if (isRetry && QueueCount >= _options.MaxQueueSize)
                 return EnqueueResult.Accept(droppedCount: 1);
 
@@ -244,6 +275,13 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 _logger.Error($"{QueueName} queue processor did not write value");
                 return EnqueueResult.RejectedStopped();
             }
+
+            // Mirror update: the channel now contains this item at the tail; record its
+            // BuildDate so a later TryPeek sees the right head once everything older has been
+            // consumed. Order matters — write to channel first so the mirror cannot get ahead
+            // of the channel (the reverse race is acceptable; under contention the mirror may
+            // briefly trail the channel, which only weakens the retry filter, never breaks it).
+            _buildDateMirror.Enqueue(item.BuildDate.Ticks);
 
             int dropped = 0;
             while (QueueCount > _options.MaxQueueSize)
@@ -255,6 +293,22 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             }
 
             return EnqueueResult.Accept(dropped);
+        }
+
+        private bool IsOlderThanQueueHead(QueueItem<T> item)
+        {
+            // Shutdown bypass: once public writes are closed (StopAsync / dispose) there is no
+            // fresh telemetry to protect from a stale retry, and a cancellation-retry of an
+            // in-flight send must still be preserved so the bounded flush can either ship it or
+            // log it as discarded. Skipping the filter here also avoids stale mirror state from
+            // leaking into the post-stop window.
+            if (Volatile.Read(ref _acceptingWritesFlag) == 0)
+                return false;
+
+            if (!_buildDateMirror.TryPeek(out var headTicks))
+                return false;
+
+            return item.BuildDate.Ticks < headTicks;
         }
 
         internal virtual EnqueueResult Enqueue(IEnumerable<T> items)
@@ -363,6 +417,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         public virtual async Task FlushAsync(CancellationToken token)
         {
+            Volatile.Write(ref _inFlushFlag, 1);
             try
             {
                 while (!IsEmpty && !token.IsCancellationRequested)
@@ -376,7 +431,16 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 _logger.Error(ex);
             }
+            finally
+            {
+                Volatile.Write(ref _inFlushFlag, 0);
+            }
         }
+
+        // True while the bounded post-stop drain is running. Subclasses use this to reword
+        // dispatch-failure exceptions so the log line doesn't claim items were "preserved" right
+        // before ClearQueue discards them.
+        protected bool IsFlushing => Volatile.Read(ref _inFlushFlag) == 1;
 
         protected async ValueTask DispatchPackageAsync(
             DataPackage<T> package,
@@ -408,8 +472,13 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 var dropped = ReEnqueueItems(package.Items);
                 var preserved = package.Count - dropped;
-                var loss = dropped > 0 ? $", {dropped} dropped at capacity" : string.Empty;
-                throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} preserved{loss}). {sendingInfo.Error}");
+                // During FlushAsync the items are re-enqueued only so ClearQueue can log them as
+                // "discarded"; calling them "preserved" contradicts the very next log line.
+                var fate = IsFlushing ? "queued for clear" : "preserved";
+                // Drop count rolls up both #1088 (queue at capacity) and #1090 (retry older than
+                // current head) reasons — wording stays generic so it's accurate for either.
+                var loss = dropped > 0 ? $", {dropped} dropped" : string.Empty;
+                throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}");
             }
 
             _queueManager.AddPackageSendingInfo(sendingInfo);
@@ -461,7 +530,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return Task.Delay(delay, token);
         }
 
-        protected bool TryDequeue(out QueueItem<T> item) => Reader.TryRead(out item);
+        // Single dequeue path so the BuildDate mirror always stays in step with the channel
+        // (modulo concurrent-producer race noise). Callers in this class are: GetPackage,
+        // the EnqueueCore overflow trim loop, and ClearQueue.
+        protected bool TryDequeue(out QueueItem<T> item)
+        {
+            if (!Reader.TryRead(out item))
+                return false;
+
+            _buildDateMirror.TryDequeue(out _);
+            return true;
+        }
 
         private void RegisterCompletionCleanup(Task task, CancellationTokenSource tokenSource)
         {

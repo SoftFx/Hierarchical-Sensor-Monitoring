@@ -42,8 +42,9 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 var retryResult = ReEnqueueItem(item);
                 var preserved = retryResult.IsAccepted ? 1 - retryResult.DroppedCount : 0;
-                var loss = retryResult.DroppedCount > 0 ? $", {retryResult.DroppedCount} dropped at capacity" : string.Empty;
-                throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} preserved{loss}). {sendingInfo.Error}");
+                var fate = IsFlushing ? "queued for clear" : "preserved";
+                var loss = retryResult.DroppedCount > 0 ? $", {retryResult.DroppedCount} dropped" : string.Empty;
+                throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}");
             }
 
             return true;

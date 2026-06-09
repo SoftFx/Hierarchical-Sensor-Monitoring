@@ -45,7 +45,7 @@ namespace HSMDataCollector.Sensors
             {
                 if (!SensorValueExtensions.IsValidValue(value, status))
                 {
-                    _dataProcessor?.LogDroppedValue(SensorPath, $"rate increment failed validation (status: {status})");
+                    _dataProcessor.LogDroppedValue(SensorPath, $"rate increment failed validation (status: {status})");
                     return;
                 }
 

@@ -334,6 +334,129 @@ namespace HSMDataCollector.Tests
             Assert.Equal(new[] { "fresh-0", "fresh-1", "fresh-2", "fresh-3", "fresh-4" }, contents);
         }
 
+        // Issue #1090: even below capacity, a retry whose BuildDate predates the FIFO head
+        // currently in queue must be dropped — otherwise the retry would sit at the tail with a
+        // stale BuildDate and survive a later normal-overflow that drops the fresher head.
+        [Fact]
+        public void ReEnqueue_below_capacity_drops_retry_older_than_queue_head()
+        {
+            var sender = new SilentDataSender();
+            var options = CreateOptions(sender, "issue-1090-head");
+            options.MaxQueueSize = 10;
+
+            var queue = new CapacityTestQueueProcessor(options);
+
+            // Construct items with EXPLICIT BuildDates so the test is independent of platform
+            // DateTime.UtcNow resolution. The stale retry is older than the fresh enqueue.
+            var t0 = DateTime.UtcNow.AddSeconds(-10);
+            var t1 = DateTime.UtcNow;
+
+            var fresh = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "fresh" }, t1);
+            var staleRetry = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "stale-retry" }, t0);
+
+            // Enqueue the fresh item via the normal path so the head BuildDate is t1.
+            // We can't go through InvokeEnqueueRaw because it would refresh BuildDate to UtcNow;
+            // instead reuse EnqueueCore directly via reflection.
+            var enqueueCore = typeof(QueueProcessorBase<SensorValueBase>)
+                .GetMethod("EnqueueCore", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(enqueueCore);
+            var freshResult = (EnqueueResult)enqueueCore.Invoke(queue, new object[] { fresh, /*isRetry*/ false });
+            Assert.Equal(EnqueueStatus.Accepted, freshResult.Status);
+            Assert.Equal(1, queue.QueueCount);
+
+            // Try to re-enqueue the stale retry. Queue is far below MaxQueueSize=10, but the head
+            // BuildDate is t1 > t0 — so the retry must be dropped on the #1090 path.
+            var result = queue.InvokeReEnqueue(staleRetry);
+
+            Assert.Equal(EnqueueStatus.Accepted, result.Status);
+            Assert.Equal(1, result.DroppedCount);
+            Assert.Equal(1, queue.QueueCount);
+
+            var contents = queue.DrainAll().Select(v => v.Comment).ToList();
+            Assert.Equal(new[] { "fresh" }, contents);
+        }
+
+        // PR #1091 review (the WATERMARK regression): when a multi-item batch fails to send and
+        // gets re-enqueued into an EMPTY queue, every item must survive. The original watermark
+        // implementation dropped all-but-the-newest because the batch's own newest item raised
+        // the watermark above its older siblings, defeating the "preserve accepted work" contract.
+        // The mirror-of-FIFO-head approach makes this case work because the mirror is empty when
+        // the first retry arrives, then grows in BuildDate order as later siblings re-enqueue.
+        [Fact]
+        public void ReEnqueueItems_preserves_full_multi_item_batch_below_capacity()
+        {
+            var sender = new SilentDataSender();
+            var options = CreateOptions(sender, "pr-1091-review-batch");
+            options.MaxQueueSize = 100;
+
+            var queue = new CapacityTestQueueProcessor(options);
+            Assert.Equal(0, queue.QueueCount);
+
+            // Mirror the DispatchPackageAsync failure: a batch that was sent (and hence dequeued)
+            // failed and is being put back. Items have monotonically increasing BuildDates.
+            var t0 = DateTime.UtcNow;
+            var batch = new[]
+            {
+                new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "A" }, t0.AddSeconds(0)),
+                new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "B" }, t0.AddSeconds(1)),
+                new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "C" }, t0.AddSeconds(2)),
+                new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "D" }, t0.AddSeconds(3)),
+            };
+
+            var dropped = queue.InvokeReEnqueueItems(batch);
+
+            // The reviewer's expectation: every accepted item survives a transient transport
+            // failure when the queue has capacity. Before the fix the watermark would drop
+            // A/B/C, leaving only D.
+            Assert.Equal(0, dropped);
+            Assert.Equal(4, queue.QueueCount);
+
+            var contents = queue.DrainAll().Select(v => v.Comment).ToList();
+            Assert.Equal(new[] { "A", "B", "C", "D" }, contents);
+        }
+
+        // Issue #1090 shutdown bypass: the retry filter must NOT fire once public writes are
+        // closed — at that point no fresh telemetry can compete with the retry, and a
+        // shutdown-cancelled in-flight send must still be preserved for the bounded flush.
+        // Regression guard for the CollectorStabilityTests.Accepted_file_payloads_are_flushed
+        // scenario that the initial #1090 implementation broke.
+        [Fact]
+        public void ReEnqueue_during_shutdown_bypasses_head_check()
+        {
+            var sender = new SilentDataSender();
+            var options = CreateOptions(sender, "issue-1090-shutdown-bypass");
+            options.MaxQueueSize = 10;
+
+            var queue = new CapacityTestQueueProcessor(options);
+
+            var t0 = DateTime.UtcNow.AddSeconds(-10);
+            var t1 = DateTime.UtcNow;
+
+            var fresh = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "fresh" }, t1);
+            var staleRetry = new QueueItem<SensorValueBase>(new IntBarSensorValue { Count = 1, Comment = "stale-cancel-retry" }, t0);
+
+            // Push the fresh item via EnqueueCore so the FIFO head is t1 — same path as the
+            // normal-mode #1090 test.
+            var enqueueCore = typeof(QueueProcessorBase<SensorValueBase>)
+                .GetMethod("EnqueueCore", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(enqueueCore);
+            enqueueCore.Invoke(queue, new object[] { fresh, /*isRetry*/ false });
+
+            // Simulate StopAsync closing public writes: flip _acceptingWritesFlag to 0.
+            var acceptingWritesField = typeof(QueueProcessorBase<SensorValueBase>)
+                .GetField("_acceptingWritesFlag", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(acceptingWritesField);
+            acceptingWritesField.SetValue(queue, 0);
+
+            // Re-enqueue the stale retry — without the shutdown bypass it would be dropped on
+            // the head-comparison check; with the bypass it must be preserved.
+            var result = queue.InvokeReEnqueue(staleRetry);
+
+            Assert.Equal(EnqueueStatus.Accepted, result.Status);
+            Assert.Equal(0, result.DroppedCount);
+            Assert.Equal(2, queue.QueueCount);
+        }
+
         [Fact]
         public void ReEnqueue_below_capacity_writes_item_normally()
         {
@@ -357,6 +480,41 @@ namespace HSMDataCollector.Tests
 
             var contents = queue.DrainAll().Select(v => v.Comment).ToList();
             Assert.Equal(new[] { "fresh-0", "fresh-1", "retry-after-fail" }, contents);
+        }
+
+        // Issue #1087 A: when DispatchPackageAsync runs from FlushAsync, the items it re-enqueues
+        // get immediately wiped by ClearQueue — so the failure exception must say "queued for
+        // clear" instead of "preserved" (the latter contradicts the very next LogDiscardedItems
+        // line). The normal-retry-loop variant still says "preserved".
+        [Fact]
+        public async Task Flush_failure_logs_queued_for_clear_instead_of_preserved()
+        {
+            var sender = new SilentDataSender { ReturnErrorOnData = "Synthetic flush failure" };
+            var logger = new CapturingLogger();
+
+            using (var collector = new DataCollector(CreateOptions(sender, "flush-message")))
+            {
+                collector.AddCustomLogger(logger);
+                var sensor = collector.CreateDoubleSensor("flush-message/data");
+
+                await collector.Start().ConfigureAwait(false);
+                sensor.AddValue(7);
+
+                // Give the run loop a chance to dequeue and either dispatch or land in queue
+                // before shutdown — we want at least one queued item to survive into the flush.
+                await Task.Delay(TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
+
+                await collector.Stop().ConfigureAwait(false);
+            }
+
+            // FlushAsync catches the InvalidOperationException and logs it. The captured text must
+            // describe the items as "queued for clear" (flush context) — never "preserved" (which
+            // would contradict the discard that happens immediately after).
+            Assert.True(
+                logger.ExceptionMessages.Exists(m => m.Contains("queued for clear")),
+                "Flush-context dispatch failure should be logged with the 'queued for clear' wording. " +
+                $"Captured: [{string.Join(" | ", logger.ExceptionMessages)}]");
+            Assert.DoesNotContain(logger.ExceptionMessages, m => m.Contains("preserved"));
         }
 
         // Issue #1088: ReEnqueueItems returns the aggregated drop count so the
@@ -548,12 +706,19 @@ namespace HSMDataCollector.Tests
 
             public bool ThrowOnData { get; set; }
 
+            // Returns PackageSendingInfo with Error set instead of throwing — drives the
+            // "if (sendingInfo.Error != null)" branch in DispatchPackageAsync.
+            public string ReturnErrorOnData { get; set; }
+
             public ValueTask<ConnectionResult> TestConnectionAsync() => new ValueTask<ConnectionResult>(ConnectionResult.Ok);
 
             public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
             {
                 if (ThrowOnData)
                     throw new InvalidOperationException("Synthetic data send failure.");
+
+                if (ReturnErrorOnData != null)
+                    return new ValueTask<PackageSendingInfo>(new PackageSendingInfo(contentSize: 1, response: null, exception: ReturnErrorOnData));
 
                 _dataReceived.TrySetResult(true);
                 return new ValueTask<PackageSendingInfo>(default(PackageSendingInfo));
@@ -624,6 +789,27 @@ namespace HSMDataCollector.Tests
             }
 
             Assert.Equal(0, Interlocked.Read(ref observedNonMonotonic));
+        }
+
+        /// <summary>
+        /// Captures error-level log calls for assertion. Used by the issue #1087 A test to verify
+        /// the flush-context exception message wording.
+        /// </summary>
+        private sealed class CapturingLogger : HSMDataCollector.Logging.ICollectorLogger
+        {
+            internal readonly List<string> ExceptionMessages = new List<string>();
+            internal readonly List<string> ErrorMessages = new List<string>();
+
+            public void Debug(string message) { }
+            public void Info(string message) { }
+            public void Error(string message)
+            {
+                lock (ErrorMessages) ErrorMessages.Add(message);
+            }
+            public void Error(Exception ex)
+            {
+                lock (ExceptionMessages) ExceptionMessages.Add(ex?.ToString() ?? string.Empty);
+            }
         }
 
         /// <summary>

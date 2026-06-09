@@ -25,7 +25,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             if (!SensorValueExtensions.IsValidValue(value, status))
             {
-                _dataProcessor?.LogDroppedValue(SensorPath, $"value failed validation (status: {status})");
+                _dataProcessor.LogDroppedValue(SensorPath, $"value failed validation (status: {status})");
                 return;
             }
 

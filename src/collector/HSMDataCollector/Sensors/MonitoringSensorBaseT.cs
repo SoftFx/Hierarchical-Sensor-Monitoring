@@ -177,7 +177,7 @@ namespace HSMDataCollector.DefaultSensors
                 var status = GetStatus();
                 if (!SensorValueExtensions.IsValidValue(value, status))
                 {
-                    _dataProcessor?.LogDroppedValue(SensorPath, $"monitoring sample failed validation (status: {status})");
+                    _dataProcessor.LogDroppedValue(SensorPath, $"monitoring sample failed validation (status: {status})");
                     return default;
                 }
 
