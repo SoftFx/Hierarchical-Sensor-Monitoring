@@ -2,9 +2,11 @@ using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue.Data;
 using HSMDataCollector.SyncQueue.SpecificQueue;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
@@ -289,6 +291,81 @@ namespace HSMDataCollector.Tests
                 .GetValue(dataQueue);
 
             Assert.Equal((int)ShutdownMode.TerminalDispose, modeRaw);
+        }
+
+        // PR #1080 fifth-round review HIGH: bar drop race. With the previous code, if the
+        // periodic send handle was inside SendValueAction holding _sendValueInProgress=1 but
+        // had not yet snapshotted the bar (i.e., before its BuildSensorValue → GetValue under
+        // _lockBar), a concurrent CheckCurrentBar would call SendValueAction (no-op, guard
+        // held) and then unconditionally BuildNewBar — erasing the closed bar's data before
+        // the periodic send could snapshot it. The fix splits SendValueAction into TrySendValue
+        // (bool) and makes the roll conditional on a successful send.
+        [Fact]
+        public async Task CheckCurrentBar_defers_roll_when_send_guard_is_held()
+        {
+            var sender = new SilentDataSender();
+            var options = CreateOptions(sender, "bar-drop-race");
+            using (var collector = new DataCollector(options))
+            {
+                // Long bar period (1 hour) so the scheduler's collect handle does not auto-roll
+                // the bar mid-test. We force the closed-bar state manually by overwriting
+                // _internalBar.CloseTime via reflection, which keeps the test deterministic and
+                // independent of the threadpool scheduling.
+                var sensor = (IBarSensor<int>)collector.CreateIntBarSensor(
+                    "bar-drop-race/data",
+                    barPeriod: 60 * 60 * 1000,
+                    postPeriod: 60 * 60 * 1000);
+
+                await collector.Start().ConfigureAwait(false);
+
+                sensor.AddValue(42);
+
+                var sensorObj = (object)sensor;
+
+                var inProgressField = typeof(MonitoringSensorBase<IntMonitoringBar, NoDisplayUnit>)
+                    .GetField("_sendValueInProgress", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(inProgressField);
+
+                var checkCurrentBar = typeof(BarMonitoringSensorBase<IntMonitoringBar, int>)
+                    .GetMethod("CheckCurrentBar", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(checkCurrentBar);
+
+                var internalBarField = typeof(BarMonitoringSensorBase<IntMonitoringBar, int>)
+                    .GetField("_internalBar", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.NotNull(internalBarField);
+
+                // Force the bar into "closed" state without waiting on wall-clock.
+                var barBefore = internalBarField.GetValue(sensorObj);
+                var closeTimeProperty = barBefore.GetType().GetProperty("CloseTime");
+                closeTimeProperty.SetValue(barBefore, DateTime.UtcNow.AddSeconds(-1));
+
+                // Simulate the periodic send being inside SendValueAction holding the guard
+                // but not yet at the _lockBar snapshot step.
+                inProgressField.SetValue(sensorObj, 1);
+
+                checkCurrentBar.Invoke(sensorObj, null);
+
+                var barWhileGuardHeld = internalBarField.GetValue(sensorObj);
+                var countWhileGuardHeld = (int)barWhileGuardHeld.GetType().GetProperty("Count").GetValue(barWhileGuardHeld);
+                Assert.True(countWhileGuardHeld > 0,
+                    "With _sendValueInProgress held, CheckCurrentBar must defer the roll — otherwise the closed bar's aggregated data is lost.");
+
+                // Release the guard and re-trigger — now the roll must happen because TrySendValue
+                // succeeds.
+                inProgressField.SetValue(sensorObj, 0);
+
+                // Re-stamp CloseTime in case the previous successful TrySendValue cycle did not
+                // refresh the bar (it doesn't — bar reset only happens on BuildNewBar).
+                closeTimeProperty.SetValue(internalBarField.GetValue(sensorObj), DateTime.UtcNow.AddSeconds(-1));
+
+                checkCurrentBar.Invoke(sensorObj, null);
+
+                var barAfterRelease = internalBarField.GetValue(sensorObj);
+                var countAfterRelease = (int)barAfterRelease.GetType().GetProperty("Count").GetValue(barAfterRelease);
+                Assert.Equal(0, countAfterRelease);
+
+                await collector.Stop().ConfigureAwait(false);
+            }
         }
 
 

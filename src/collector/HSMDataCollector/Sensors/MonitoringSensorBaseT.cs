@@ -92,10 +92,24 @@ namespace HSMDataCollector.DefaultSensors
 
         protected virtual SensorStatus GetStatus() => SensorStatus.Ok;
 
-        protected void SendValueAction()
+        // Scheduler-facing entry point (must be `void` to bind as Action). Delegates to
+        // <see cref="TrySendValue"/> and discards the result.
+        protected void SendValueAction() => TrySendValue();
+
+        /// <summary>
+        /// Build and publish the current sensor value, gated by the <c>_sendValueInProgress</c>
+        /// reentrancy guard and the lifecycle epoch. Returns <c>true</c> iff a value was actually
+        /// sent (or the guard's owner is expected to send shortly — see remarks). Callers that
+        /// roll the sensor state on send (notably <see cref="BarMonitoringSensorBase.CheckCurrentBar"/>,
+        /// which calls <see cref="BarMonitoringSensorBase.BuildNewBar"/> after a successful send)
+        /// MUST condition that roll on this return value — otherwise a concurrent in-flight send
+        /// from the periodic schedule that hasn't yet snapshotted state can race the roll and
+        /// observe an already-reset bar, dropping the closed bar's data.
+        /// </summary>
+        protected bool TrySendValue()
         {
             if (Interlocked.Exchange(ref _sendValueInProgress, 1) == 1)
-                return;
+                return false;
 
             // Capture the generation when the callback starts. If it changes before SendValue
             // runs, the sensor has restarted or stopped underneath us — drop the value rather
@@ -107,9 +121,10 @@ namespace HSMDataCollector.DefaultSensors
                 var value = BuildSensorValue();
 
                 if (Interlocked.Read(ref _lifecycleEpoch) != capturedEpoch)
-                    return;
+                    return false;
 
                 SendValue(value);
+                return true;
             }
             finally
             {

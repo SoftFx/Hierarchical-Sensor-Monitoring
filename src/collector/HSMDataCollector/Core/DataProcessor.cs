@@ -190,8 +190,11 @@ namespace HSMDataCollector.Core
 
         private async Task StopWithoutFlushAsync(ShutdownMode mode, List<Exception> failures)
         {
-            // Terminal dispose / start rollback: stop quickly. ShutdownMode.ClearOnStop makes each
-            // queue discard its leftovers as part of StopAsync rather than waiting for a flush.
+            // Start-rollback only: the StopAsync dispatch above routes both GracefulStop and
+            // TerminalDispose to StopWithFlushAsync (because mode.FlushAcceptedWork() is true for
+            // both), and the only mode for which it returns false is StartRollback. We keep the
+            // `mode` parameter to plumb the right ShutdownMode.ClearOnStop semantics into each
+            // queue's StopAsync — that's what discards leftovers without a flush phase.
             Volatile.Write(ref _diagnosticsSuppressedFlag, 1);
 
             var stopTasks = new[]

@@ -110,8 +110,17 @@ namespace HSMDataCollector.DefaultSensors
 
                     if (_internalBar.CloseTime < DateTime.UtcNow)
                     {
-                        SendValueAction();
-                        BuildNewBar();
+                        // Roll the bar ONLY if we actually sent its snapshot. The periodic send
+                        // schedule shares _sendValueInProgress with us, and may already be in
+                        // SendValueAction at this moment without having taken _lockBar yet to
+                        // snapshot. If we blindly BuildNewBar after a guard-skipped no-op, the
+                        // periodic send's GetValue lands on the freshly-reset (empty) bar and
+                        // the closed bar's aggregated data is lost. Deferring the roll keeps the
+                        // bar intact: either the periodic send finishes its snapshot (data sent
+                        // by the other thread), or our next CheckCurrentBar tick rolls cleanly
+                        // once the guard releases.
+                        if (TrySendValue())
+                            BuildNewBar();
                     }
                 }
             }
