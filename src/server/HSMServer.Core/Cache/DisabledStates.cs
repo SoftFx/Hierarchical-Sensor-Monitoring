@@ -1,23 +1,26 @@
+using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Cache
 {
     internal sealed class DisabledStates
     {
-        private readonly Dictionary<(Guid sensorId, int index), bool> _policies = [];
-        private readonly Dictionary<(Guid sensorId, int index), bool> _ttls = [];
+        private readonly Dictionary<(Guid sensorId, string signature), bool> _entries = [];
 
-        public void SetPolicy(Guid sensorId, int index, bool isDisabled) =>
-            _policies[(sensorId, index)] = isDisabled;
+        public void Set(Guid sensorId, string signature, bool isDisabled) =>
+            _entries[(sensorId, signature)] = isDisabled;
 
-        public void SetTtl(Guid sensorId, int index, bool isDisabled) =>
-            _ttls[(sensorId, index)] = isDisabled;
+        public bool? Get(Guid sensorId, string signature) =>
+            _entries.TryGetValue((sensorId, signature), out var v) ? v : null;
 
-        public bool? GetPolicy(Guid sensorId, int index) =>
-            _policies.TryGetValue((sensorId, index), out var v) ? v : null;
-
-        public bool? GetTtl(Guid sensorId, int index) =>
-            _ttls.TryGetValue((sensorId, index), out var v) ? v : null;
+        public static string GetSignature(Policy policy)
+        {
+            return string.Join("|", policy.Conditions
+                .OrderBy(c => c.Property)
+                .ThenBy(c => c.Operation)
+                .Select(c => $"{c.Property}:{c.Operation}:{c.Target}"));
+        }
     }
 }

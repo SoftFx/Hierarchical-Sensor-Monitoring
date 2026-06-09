@@ -1189,22 +1189,23 @@ namespace HSMServer.Core.Cache
                         ? ttlInterval.Ticks
                         : null;
 
+                    var sig = DisabledStates.GetSignature(ttlPolicy);
                     ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, InitiatorInfo.AlertTemplate)
                     {
                         TemplateId = alertTemplateModel.Id,
                         TTL = ttlTicks,
-                        IsDisabled = disabledStates?.GetTtl(sensor.Id, i) ?? ttlPolicy.IsDisabled,
+                        IsDisabled = disabledStates?.Get(sensor.Id, sig) ?? ttlPolicy.IsDisabled,
                     });
                 }
             }
 
-            for (int i = 0; i < alertTemplateModel.Policies.Count; i++)
+            foreach (var policy in alertTemplateModel.Policies)
             {
-                var policy = alertTemplateModel.Policies[i];
+                var sig = DisabledStates.GetSignature(policy);
                 policyUpdates.Add(new PolicyUpdate(policy, InitiatorInfo.AlertTemplate)
                 {
                     TemplateId = alertTemplateModel.Id,
-                    IsDisabled = disabledStates?.GetPolicy(sensor.Id, i) ?? policy.IsDisabled,
+                    IsDisabled = disabledStates?.Get(sensor.Id, sig) ?? policy.IsDisabled,
                 });
             }
 
@@ -1388,13 +1389,11 @@ namespace HSMServer.Core.Cache
 
             foreach (var sensor in product.GetAllSensors())
             {
-                var templatePolicies = sensor.Policies.Where(p => p.TemplateId == templateId).ToList();
-                for (int i = 0; i < templatePolicies.Count; i++)
-                    states.SetPolicy(sensor.Id, i, templatePolicies[i].IsDisabled);
+                foreach (var policy in sensor.Policies.Where(p => p.TemplateId == templateId))
+                    states.Set(sensor.Id, DisabledStates.GetSignature(policy), policy.IsDisabled);
 
-                var templateTtls = sensor.Policies.TTLPolicies.Where(t => t.TemplateId == templateId).ToList();
-                for (int i = 0; i < templateTtls.Count; i++)
-                    states.SetTtl(sensor.Id, i, templateTtls[i].IsDisabled);
+                foreach (var ttl in sensor.Policies.TTLPolicies.Where(t => t.TemplateId == templateId))
+                    states.Set(sensor.Id, DisabledStates.GetSignature(ttl), ttl.IsDisabled);
             }
 
             return states;
