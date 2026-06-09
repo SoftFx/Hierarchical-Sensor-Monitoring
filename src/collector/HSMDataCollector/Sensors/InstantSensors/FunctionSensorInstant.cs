@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
@@ -51,6 +50,7 @@ namespace HSMDataCollector.Sensors
     internal sealed class ValuesFunctionSensorInstant<T, U> : BaseFunctionSensorInstant<T>, IParamsFuncSensor<T, U>
     {
         private readonly ConcurrentQueue<U> _cache = new ConcurrentQueue<U>();
+        private readonly object _cacheLock = new object();
         private readonly Func<List<U>, T> _getValue;
         private readonly int _cacheSize;
         private int _cacheCount;
@@ -68,15 +68,18 @@ namespace HSMDataCollector.Sensors
 
         public void AddValue(U value)
         {
-            Interlocked.Increment(ref _cacheCount);
-            _cache.Enqueue(value);
-
-            while (Volatile.Read(ref _cacheCount) > _cacheSize)
+            lock (_cacheLock)
             {
-                if (!_cache.TryDequeue(out _))
-                    break;
+                _cache.Enqueue(value);
+                _cacheCount++;
 
-                Interlocked.Decrement(ref _cacheCount);
+                while (_cacheCount > _cacheSize)
+                {
+                    if (!_cache.TryDequeue(out _))
+                        break;
+
+                    _cacheCount--;
+                }
             }
         }
 
@@ -85,7 +88,12 @@ namespace HSMDataCollector.Sensors
 
         protected override T GetValue()
         {
-            return _getValue.Invoke(_cache.ToList());
+            List<U> values;
+
+            lock (_cacheLock)
+                values = _cache.ToList();
+
+            return _getValue.Invoke(values);
         }
 
 

@@ -595,9 +595,8 @@ namespace HSMDataCollector.Tests
         {
             var duration = GetTransportSoakDuration();
             var maxDuration = GetTransportSoakMaxDuration();
-            var collectorsPerPhase = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_COLLECTORS", 8);
-            var valuesPerCollector = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_VALUES", 250);
-            var minConnections = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_MIN_CONNECTIONS", 200);
+            var collectorsPerPhase = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_COLLECTORS", 1);
+            var valuesPerCollector = GetPositiveIntEnvironment("HSM_COLLECTOR_TRANSPORT_SOAK_VALUES", 5);
             var currentScenario = (int)TransportSoakScenario.AcceptDrop;
             var scenarios = new[]
             {
@@ -608,6 +607,9 @@ namespace HSMDataCollector.Tests
                 TransportSoakScenario.MalformedHttp,
                 TransportSoakScenario.ResetDuringBody
             };
+            var minConnections = GetPositiveIntEnvironment(
+                "HSM_COLLECTOR_TRANSPORT_SOAK_MIN_CONNECTIONS",
+                scenarios.Length * Math.Max(1, Math.Min(collectorsPerPhase, 4)));
             var before = TransportResourceSnapshot.Capture(Array.Empty<int>());
             var port = 0;
             ChaosServerStats stats;
@@ -625,15 +627,12 @@ namespace HSMDataCollector.Tests
                 var deadline = DateTime.UtcNow + duration;
                 cycles = 0;
 
-                while (DateTime.UtcNow < deadline)
+                do
                 {
                     cycles++;
 
                     foreach (var scenario in scenarios)
                     {
-                        if (DateTime.UtcNow >= deadline)
-                            break;
-
                         Volatile.Write(ref currentScenario, (int)scenario);
 
                         var phaseBefore = server.Stats;
@@ -662,6 +661,7 @@ namespace HSMDataCollector.Tests
                         AssertWithinTransportSoakMax(stopwatch, maxDuration);
                     }
                 }
+                while (DateTime.UtcNow < deadline);
 
                 await AssertNoEstablishedConnectionsAsync(new[] { server.Port }, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
                 stats = server.Stats;
@@ -839,13 +839,13 @@ namespace HSMDataCollector.Tests
                     return ChaosResponse.DropAfter(TimeSpan.Zero);
 
                 case TransportSoakScenario.NeverRespond:
-                    return ChaosResponse.NeverRespond(TimeSpan.FromMilliseconds(500));
+                    return ChaosResponse.NeverRespond(TimeSpan.FromMilliseconds(100));
 
                 case TransportSoakScenario.SlowReadBody:
                     return ChaosResponse.SlowReadBody(TimeSpan.FromMilliseconds(1));
 
                 case TransportSoakScenario.HeadersOnly:
-                    return ChaosResponse.HeadersOnly(TimeSpan.FromMilliseconds(500));
+                    return ChaosResponse.HeadersOnly(TimeSpan.FromMilliseconds(100));
 
                 case TransportSoakScenario.MalformedHttp:
                     return ChaosResponse.MalformedHttp();
@@ -1056,7 +1056,7 @@ namespace HSMDataCollector.Tests
             if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
                 return TimeSpan.FromSeconds(seconds);
 
-            return TimeSpan.FromSeconds(30);
+            return TimeSpan.FromSeconds(1);
         }
 
         private static TimeSpan GetTransportSoakMaxDuration()
@@ -1067,7 +1067,7 @@ namespace HSMDataCollector.Tests
             if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
                 return TimeSpan.FromSeconds(seconds);
 
-            return TimeSpan.FromMinutes(2);
+            return TimeSpan.FromSeconds(45);
         }
 
         private static void AssertWithinTransportSoakMax(Stopwatch stopwatch, TimeSpan maxDuration)

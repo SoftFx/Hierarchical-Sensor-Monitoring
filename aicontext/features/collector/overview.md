@@ -156,6 +156,17 @@ Manual one-off check on a dev box without Linux: run the net8 parsers against li
 `docker run --rm -v "<repo>:/repo" -w /repo mcr.microsoft.com/dotnet/sdk:8.0 dotnet test src/collector/HSMDataCollector.IntegrationTests/HSMDataCollector.IntegrationTests.csproj --filter FullyQualifiedName~LinuxProcSensorTests`.
 Cross-checking against `df -k /` and `grep MemAvailable /proc/meminfo` confirms the values match (disk matches `df` avail to ~1 MiB).
 
+## Feature Folders To Add Here
+
+- `lifecycle/` - `DataCollector` start/stop/dispose, state transitions, events.
+- `scheduler/` - collector scheduler, scheduled tasks, periodic sensor work.
+- `sensors/` - sensor base classes, default sensors, options, path behavior.
+- `transport/` - sender/client behavior, retry, connection tests, file sending.
+- `queues/` - sync queues, buffering, overflow/backpressure behavior.
+- `logging/` - collector logging and message deduplication.
+
+Create folders from `../_TEMPLATE_feature.md` as work lands.
+
 ## Features
 
 | Feature | Folder | Description |

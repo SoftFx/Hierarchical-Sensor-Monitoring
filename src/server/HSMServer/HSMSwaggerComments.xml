@@ -91,6 +91,13 @@
             <param name="rateValue"></param>
             <returns></returns>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.EnumSensorValue)">
+            <summary>
+            Receives value of enum sensor
+            </summary>
+            <param name="enumValue"></param>
+            <returns></returns>
+        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleBarSensorValue)">
             <summary>
             Receives value of double bar sensor

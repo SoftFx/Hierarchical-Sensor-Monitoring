@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -9,32 +9,42 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
-    internal sealed class FileQueueProcessor: QueueProcessorBase<FileSensorValue>
+    internal sealed class FileQueueProcessor : QueueProcessorBase<FileSensorValue>
     {
         public override string QueueName => "File";
 
         public FileQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
-        protected override async Task ProcessingLoop(CancellationToken token)
+        protected override async ValueTask<bool> TryDispatchOneAsync(CancellationToken token)
         {
-            while (!token.IsCancellationRequested)
-            {
-                try
-                {
-                    await Reader.WaitToReadAsync(token).ConfigureAwait(false);
+            if (!TryDequeue(out QueueItem<FileSensorValue> item))
+                return false;
 
-                    while (!IsEmpty && !token.IsCancellationRequested)
-                    {
-                        if (TryDequeue(out QueueItem<FileSensorValue> item))
-                            await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
-                    }
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex);
-                }
+            PackageSendingInfo sendingInfo;
+
+            try
+            {
+                sendingInfo = await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
             }
+            catch (OperationCanceledException)
+            {
+                if (PreserveCanceledPackages)
+                    ReEnqueueItem(item);
+                throw;
+            }
+            catch
+            {
+                ReEnqueueItem(item);
+                throw;
+            }
+
+            if (sendingInfo.Error != null)
+            {
+                ReEnqueueItem(item);
+                throw new InvalidOperationException($"Failed to send package for {QueueName} (1 value preserved). {sendingInfo.Error}");
+            }
+
+            return true;
         }
     }
 }

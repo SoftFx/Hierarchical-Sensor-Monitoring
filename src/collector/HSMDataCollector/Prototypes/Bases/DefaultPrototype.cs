@@ -55,6 +55,12 @@ namespace HSMDataCollector.Prototypes
                 path,
             });
 
-        internal static string BuildPath(params string[] parts) => string.Join(PathSeparator, parts.Select(u => u?.Trim('/')).Where(u => !string.IsNullOrEmpty(u)));
+        internal static string BuildPath(params string[] parts) =>
+            string.Join(
+                PathSeparator,
+                parts
+                    .Where(u => u != null)
+                    .SelectMany(u => u.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries))
+                    .Where(u => !string.IsNullOrWhiteSpace(u)));
     }
 }

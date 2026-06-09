@@ -3,19 +3,24 @@ using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 
 
 namespace HSMDataCollector.DefaultSensors
 {
 
-    public abstract class SensorBase<TDisplayUnit> : ISensor where TDisplayUnit : struct, Enum
+    public abstract class SensorBase<TDisplayUnit> : ISensor, ISensorIdentity where TDisplayUnit : struct, Enum
     {
         internal const string DefaultTimeFormat = "dd/MM/yyyy HH:mm:ss";
 
         private readonly SensorOptions<TDisplayUnit> _metainfo;
 
         public string SensorPath => _metainfo.Path;
+        SensorType ISensorIdentity.Type => _metainfo.Type;
+        bool ISensorIdentity.IsLastValue => IsLastValue;
+
+        protected virtual bool IsLastValue => false;
 
         internal bool IsProiritySensor => _metainfo.IsPrioritySensor;
 
@@ -78,6 +83,8 @@ namespace HSMDataCollector.DefaultSensors
 
         public virtual ValueTask StopAsync() => default;
 
+        protected virtual ValueTask DisposeAsyncCore() => StopAsync();
+
         protected void HandleException(Exception ex)
         {
             _dataProcessor?.AddException(SensorPath, ex);
@@ -85,7 +92,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        public void Dispose() => StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+        public void Dispose() => DisposeAsyncCore().ConfigureAwait(false).GetAwaiter().GetResult();
 
     }
 }

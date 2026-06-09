@@ -1,106 +1,45 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
-using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
+
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
     internal sealed class DataQueueProcessor : QueueProcessorBase<SensorValueBase>
     {
+        // Floor mirrors DelayAfterFailureAsync so a misconfigured PackageCollectPeriod of zero
+        // cannot busy-spin the processing loop.
+        private static readonly TimeSpan MinCollectPeriod = TimeSpan.FromMilliseconds(100);
+
         public override string QueueName => "Data";
 
         public DataQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
-        internal async Task FlushAsync(CancellationToken token)
+        protected override async ValueTask WaitForReadyAsync(CancellationToken token)
         {
-            try
-            {
-                while (QueueCount > 0 && !token.IsCancellationRequested)
-                {
-                    var package = GetPackage();
+            var period = _options.PackageCollectPeriod > TimeSpan.Zero
+                ? _options.PackageCollectPeriod
+                : MinCollectPeriod;
 
-                    if (package.Count == 0)
-                        continue;
-
-                    try
-                    {
-                        var sendingInfo = await _sender.SendDataAsync(package, token).ConfigureAwait(false);
-
-                        if (sendingInfo.Error != null)
-                        {
-                            _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). {sendingInfo.Error}");
-                            break;
-                        }
-
-                        _queueManager.AddPackageSendingInfo(sendingInfo);
-                        _queueManager.AddPackageInfo(QueueName, package.GetInfo());
-                    }
-                    catch (OperationCanceledException) { break; }
-                    catch (Exception ex)
-                    {
-                        _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). Error: {ex.Message}");
-                        break;
-                    }
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                _logger.Error(ex);
-            }
+            await Task.Delay(period, token).ConfigureAwait(false);
         }
 
-        protected override async Task ProcessingLoop(CancellationToken token)
+        protected override async ValueTask<bool> TryDispatchOneAsync(CancellationToken token)
         {
-            DataPackage<SensorValueBase> package;
-            while (!token.IsCancellationRequested)
-            {
-                try
-                {
-                    await Task.Delay(_options.PackageCollectPeriod, token).ConfigureAwait(false);
+            var package = GetPackage();
+            if (package.Count == 0)
+                return false;
 
-                    if (IsEmpty)
-                        continue;
-
-                    do
-                    {
-                        package = GetPackage();
-
-                        if (package.Count == 0)
-                            continue;
-
-                        try
-                        {
-                            var sendingInfo = await _sender.SendDataAsync(package, token).ConfigureAwait(false);
-
-                            if (sendingInfo.Error != null)
-                            {
-                                _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). {sendingInfo.Error}");
-                                break;
-                            }
-
-                            _queueManager.AddPackageSendingInfo(sendingInfo);
-                            _queueManager.AddPackageInfo(QueueName, package.GetInfo());
-                        }
-                        catch (OperationCanceledException) { break; }
-                        catch (Exception ex)
-                        {
-                            _logger.Error($"Failed to send package for {QueueName} ({package.Count} values lost). Error: {ex.Message}");
-                            break;
-                        }
-                    }
-                    while (QueueCount >= _options.MaxValuesInPackage && !token.IsCancellationRequested);
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex);
-                }
-            }
+            await DispatchPackageAsync(package,
+                                       (items, t) => _sender.SendDataAsync(items, t),
+                                       token).ConfigureAwait(false);
+            return true;
         }
+
+        // Data queue batches by MaxValuesInPackage; keep draining only while another full batch is available.
+        protected override bool ShouldContinueDispatching() => QueueCount >= _options.MaxValuesInPackage;
     }
 }

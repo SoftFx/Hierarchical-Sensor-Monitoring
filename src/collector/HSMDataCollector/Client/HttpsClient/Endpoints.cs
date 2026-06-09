@@ -27,6 +27,8 @@ namespace HSMDataCollector.Client
 
         internal string Rate => $"{ConnectionAddress}/rate";
 
+        internal string Enum => $"{ConnectionAddress}/enum";
+
 
         internal string DoubleBar => $"{ConnectionAddress}/doubleBar";
 
