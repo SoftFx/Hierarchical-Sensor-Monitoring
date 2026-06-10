@@ -254,17 +254,33 @@ namespace HSMServer.Core.Model.Policies
                 {
                     if (AlertChangeTable[update.Id.ToString()].CanChange(initiator))
                     {
-                        var policy = new PolicyType();
-
-                        if (policy.TryUpdate(update, out var err, _sensor))
+                        if (_storage.TryGetValue(update.Id, out var existingPolicy))
                         {
-                            AddPolicy(policy);
-
-                            CallJournal(policy.Id, string.Empty, policy.ToString(), initiator);
-                            Uploaded?.Invoke(ActionType.Add, policy);
+                            // UPDATE existing template-created policy in-place
+                            var oldPolicy = existingPolicy.ToString();
+                            if (existingPolicy.TryUpdate(update, out var err))
+                            {
+                                CallJournal(update.Id, oldPolicy, existingPolicy.ToString(), initiator);
+                                Uploaded?.Invoke(ActionType.Update, existingPolicy);
+                            }
+                            else
+                                errors.AppendLine(err);
                         }
                         else
-                            errors.AppendLine(err);
+                        {
+                            // ADD new template-created policy
+                            var policy = new PolicyType();
+
+                            if (policy.TryUpdate(update, out var err, _sensor))
+                            {
+                                AddPolicy(policy);
+
+                                CallJournal(policy.Id, string.Empty, policy.ToString(), initiator);
+                                Uploaded?.Invoke(ActionType.Add, policy);
+                            }
+                            else
+                                errors.AppendLine(err);
+                        }
                     }
                 }
             }
