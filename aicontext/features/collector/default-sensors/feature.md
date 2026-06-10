@@ -56,7 +56,7 @@ Event logs (instant string sensors; `EventLog.EntryWritten` subscription, value 
 
 Network (`.computer/Network/...`, TCPv4+TCPv6 counters summed, 1 min period): `AddNetworkConnectionsEstablished` (gauge), `AddNetworkConnectionFailures` (delta), `AddNetworkConnectionsReset` (delta), bulk `AddAllNetworkSensors`.
 
-Service status: `SubscribeToWindowsServiceStatus(serviceName | ServiceSensorOptions)` / `UnsubscribeWindowsServiceStatus` — enum sensor of `ServiceControllerStatus` (per-state colors), 5 s poll via `ServiceController.Refresh`, send on change, default alert "≠ Running" with 5 min confirmation. Service resolution failures → error value + 1 h re-resolve backoff (`_nextServiceResolveTime`, non-blocking); `ServiceController` disposed on stop/fault, deferred until in-flight run completes (raw `ScheduledTask` with `CurrentRun`).
+Service status: `SubscribeToWindowsServiceStatus(serviceName | ServiceSensorOptions)` / `UnsubscribeWindowsServiceStatus` — enum sensor of `ServiceControllerStatus`, 5 s poll via `ServiceController.Refresh`, send on change, default alert "≠ Running" with 5 min confirmation. Registration carries wire-visible `EnumOptions` for all 7 `ServiceControllerStatus` members with fixed ARGB colors plus an auto-generated markdown description (`ModuleInfoCollections.cs`) — a port must reproduce that payload. `ServiceSensorOptions.IsHostService` (default true) places the sensor under `.module`, else under `SensorPath`. Service resolution failures → error value + 1 h re-resolve backoff (`_nextServiceResolveTime`, non-blocking); `ServiceController` disposed on stop/fault, deferred until in-flight run completes (raw `ScheduledTask` with `CurrentRun`).
 
 ## Unix sensors
 
@@ -82,7 +82,7 @@ Module info (paths directly under `.module/`):
 | `AddCollectorVersion` | Version | collector assembly version + start time; KeepHistory ~5 y |
 | `AddCollectorErrors` | string | fed by `MessageDeduplicator` callback (see `error-handling/`) |
 | `AddProductVersion(VersionSensorOptions)` | Version | user-supplied product version + start time |
-| `CreateServiceCommandsSensor` | string commands | "Service commands" path; SendStart/Stop/Restart/Update/Custom |
+| `CreateServiceCommandsSensor` | string commands | "Service commands" path; fixed strings "Service start/stop/restart", "Service update [from X] to Y", custom; registers an implicit `IfReceivedNewValue → notification` alert |
 
 Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySensor=true`; suppression boundary in `data-pipeline/feature.md`):
 
@@ -104,7 +104,7 @@ Queue self-diagnostics (`.module/Collector queue stats/...`, all `IsPrioritySens
 
 ## Free disk space prediction algorithm
 
-`DefaultSensors/BaseTemplates/FreeDiskSpacePredictionBase.cs`: sample free space every 30 s; speed EMA `0.9*old + 0.1*new`; first 10 requests are calibration (returns OffTime); if space is shrinking → `TimeSpan = freeSpace / speed`, status Ok; if growing → previous prediction + OffTime ("cannot be calculated"). Read failures are sensor errors (Error value with message), not lifecycle failures — sampling continues and recovers.
+`DefaultSensors/BaseTemplates/FreeDiskSpacePredictionBase.cs`: sample free space every 30 s; speed EMA `0.9*old + 0.1*new`; first **6** requests are calibration (default `DiskSensorOptions.CalibrationRequests = 6`, configurable; returns OffTime); if space is shrinking → `TimeSpan = freeSpace / speed`, status Ok; if growing → previous prediction + OffTime ("cannot be calculated"). Read failures are sensor errors (Error value with message), not lifecycle failures — sampling continues and recovers.
 
 ## Perf-counter infrastructure
 

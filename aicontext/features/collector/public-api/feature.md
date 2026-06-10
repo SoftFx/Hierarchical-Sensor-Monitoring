@@ -13,7 +13,7 @@ Everything a host application touches: `DataCollector` construction, `CollectorO
 
 - `DataCollector(CollectorOptions)` — validates options immediately (`Validate()` throws).
 - `DataCollector(productKey, address = "localhost", port = 44330, clientName = null)` — convenience wrapper.
-- `TestConnection()` → `ConnectionResult { Code, Error, IsOk }`; callable in any lifecycle state.
+- `TestConnection()` → `ConnectionResult { Code, Error, IsOk, Result (= Error empty), static Ok }`; callable in any lifecycle state.
 - `IDataSender` (`Core/IDataSender.cs`) is the transport seam: `TestConnectionAsync`, `SendDataAsync`, `SendPriorityDataAsync`, `SendCommandAsync`, `SendFileAsync`, `Dispose`. Tests and embedders substitute it via `CollectorOptions.DataSender`.
 
 `CollectorOptions` (defaults + validation):
@@ -44,8 +44,9 @@ Lifecycle state machine, gates, registration phases, event ordering, and the dis
 - `Task Stop()` / `Stop(Task customStoppingTask)` — idempotent; awaits dynamic sensor-start tasks; custom-task failure logged, stop proceeds.
 - `Dispose()` — idempotent, terminal, never throws; joins an in-flight Stop and wins the shutdown-mode choice (`TerminalDispose`).
 - Events `ToStarting/ToRunning/ToStopping/ToStopped` + portable `ILifecycleListener` via `AddLifecycleListener(...)`.
-- Properties: `Status`, `ComputerName`, `Module`, `Windows` (IWindowsCollection), `Unix` (IUnixCollection).
+- Properties: `Status`, `ComputerName`, `Module`, `Windows` (IWindowsCollection), `Unix` (IUnixCollection), `DefaultSensors` (`IEnumerable<ISensor>` — public `ISensor` contract: `SensorPath`, `InitAsync`, `StartAsync`, `StopAsync`, `IDisposable`; `SensorBase` additionally exposes `SendValue(SensorValueBase)` and the `ExceptionThrowing` event). `IWindowsCollection`/`IUnixCollection` are themselves `IDisposable`.
 - Logging: `AddNLog(LoggerOptions)` (embedded `collector.nlog.config` fallback; `ConfigPath`, `WriteDebug`), `AddCustomLogger(ICollectorLogger)`. Fluent, chainable, callable pre/post Start.
+- Path validation: every `Create*` throws `ArgumentException` for null/whitespace/slash-only paths (`SensorsStorage`).
 
 ## Sensor creation surface
 
@@ -57,8 +58,8 @@ All factories live on `IDataCollector`/`DataCollector` (`Core/DataCollector.cs`)
 | Enum | `CreateEnumSensor(path, description \| EnumSensorOptions)` | `IInstantValueSensor<int>` |
 | Last-value | `CreateLastValue{Bool,Int,Double,String,Version,TimeSpan}Sensor(path, defaultValue, description)`; generic `CreateLastValueSensor<T>(path, options, defaultValue)` | `ILastValueSensor<T>` |
 | Rate | `CreateRateSensor(path, RateSensorOptions)`, `CreateM1RateSensor`, `CreateM5RateSensor` | `IMonitoringRateSensor` |
-| Bar (int) | `CreateIntBarSensor(path, barPeriod=300000 ms, postPeriod=15000 ms, descr)` + options overload + `Create{1Hr,30Min,10Min,5Min,1Min}IntBarSensor` | `IBarSensor<int>` |
-| Bar (double) | same + `precision=2` parameter | `IBarSensor<double>` |
+| Bar (int) | `CreateIntBarSensor(path, barPeriod=300000 ms, postPeriod=15000 ms, descr)` + options overload + `Create{1Hr,30Min,10Min,5Min,1Min}IntBarSensor` + DataCollector-only TimeSpan overload `(path, TimeSpan barPeriod, TimeSpan postPeriod, descr)` | `IBarSensor<int>` |
+| Bar (double) | same (+`precision=2` parameter, TimeSpan overload included) | `IBarSensor<double>` |
 | File | `CreateFileSensor(path, fileName, extension="txt", descr)` / `(path, FileSensorOptions)`; collector-level `SendFileAsync(sensorPath, filePath, status, comment)` | `IFileSensor` |
 | Function (no params) | `CreateNoParamsFuncSensor<T>(path, descr, Func<T>, interval)`, `Create{1Min,5Min}NoParamsFuncSensor`, `CreateFunctionSensor<T>(path, func, options)` | `INoParamsFuncSensor<T>` |
 | Function (params) | `CreateParamsFuncSensor<T,U>(path, descr, Func<List<U>,T>, interval)`, `Create{1Min,5Min}ParamsFuncSensor`, `CreateValuesFunctionSensor<T,U>` | `IParamsFuncSensor<T,U>` |
@@ -72,7 +73,8 @@ Sensor interfaces (`PublicAPI/SensorsAPI/*`):
 - `IFileSensor`: instant-string surface + `Task<bool> SendFile(filePath, status, comment)`.
 - `IMonitoringRateSensor`: instant-double surface.
 - `IServiceCommandsSensor`: `SendCustomCommand(command, initiator)`, `SendUpdate(initiator[, newVersion[, oldVersion]])`, `SendRestart/SendStart/SendStop(initiator)`.
-- `IBaseFuncSensor` (obsolete location, still supported): `GetInterval()`, `RestartTimer(TimeSpan)`; params variant adds `AddValue(U)`.
+- `IBaseFuncSensor` (lives in the `Obsolete` folder but is NOT `[Obsolete]` — it is the current return type of `CreateFunctionSensor`/`CreateValuesFunctionSensor`): `GetInterval()`, `RestartTimer(TimeSpan)`, `GetFunc()`; params variant adds `AddValue(U)`.
+- `ILastValueSensor` creation gotcha: `CreateLastValueStringSensor(path)` / `CreateLastValueVersionSensor(path)` with the implicit `null` default **throw `ArgumentException` at creation** (`ThrowIfUnsupportedValue(customDefault)`); pass a non-null default.
 
 Fluent builders (`Core/Builders/SensorBuilders.cs`, extension methods — `IDataCollector` unchanged):
 

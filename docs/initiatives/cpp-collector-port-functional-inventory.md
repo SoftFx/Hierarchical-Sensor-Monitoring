@@ -26,7 +26,7 @@ Details: [`public-api/feature.md`](../../aicontext/features/collector/public-api
 
 - [ ] `DataCollector(CollectorOptions)` ctor + immediate `Validate()`
 - [ ] Convenience ctor `(productKey, address="localhost", port=44330, clientName=null)`
-- [ ] `TestConnection()` → `ConnectionResult { Code, Error, IsOk }`, callable in any state
+- [ ] `TestConnection()` → `ConnectionResult { Code, Error, IsOk, Result (= Error empty), static Ok }`, callable in any state
 - [ ] `IDataSender` transport seam (`TestConnectionAsync/SendDataAsync/SendPriorityDataAsync/SendCommandAsync/SendFileAsync/Dispose`)
 - [ ] Option `AccessKey` (required, non-whitespace)
 - [ ] Option `ServerAddress` (default `localhost`, required)
@@ -65,11 +65,13 @@ Details: [`overview.md`](../../aicontext/features/collector/overview.md), [`publ
 - [ ] Disposal order: DataProcessor → DataSender → CollectorScheduler → global exception handler unhook
 - [ ] Status vs CanAcceptData asymmetry after Dispose (flush window until CompleteStop)
 - [ ] **[decide]** Obsolete: sync `Initialize()` overloads, `InitializeSystemMonitoring`/`InitializeProcessMonitoring`/`InitializeOsMonitoring`/`MonitorServiceAlive`/`InitializeWindowsUpdateMonitoring`, `ValuesQueueOverflow` event — recommend NOT porting
+- [ ] **[decide]** Obsolete (wire/options compat shims): `SensorOptions.DefaultChats` + `DefaultChatsMode`, `BaseRequest.Key` (key-in-body), `BarSensorValueBase.Percentiles`, `AddOrUpdateSensorRequest.TTL`/`TtlAlert` set-only shims, `AlertDestinationMode.DefaultChats`
 
 ## 3. Sensor registration
 
 Details: [`overview.md`](../../aicontext/features/collector/overview.md) §Sensor registration
 
+- [ ] Path validation: every `Create*` throws `ArgumentException` for null/whitespace/slash-only paths
 - [ ] Identity = full normalized path; duplicate Create (same type + IsLastValue) returns existing instance, new one disposed
 - [ ] Same path + different type/IsLastValue → `InvalidOperationException`
 - [ ] `MaxSensors` cap enforced atomically; offender removed and disposed
@@ -87,6 +89,7 @@ Details: [`public-api/feature.md`](../../aicontext/features/collector/public-api
 - [ ] `CreateLastValue{Bool,Int,Double,String,Version,TimeSpan}Sensor(path, defaultValue, description)` + generic `CreateLastValueSensor<T>(path, options, defaultValue)`
 - [ ] `CreateRateSensor(path, RateSensorOptions)` + `CreateM1RateSensor` + `CreateM5RateSensor`
 - [ ] `CreateIntBarSensor(path, barPeriod=300000, postPeriod=15000, descr)` + options overload
+- [ ] DataCollector-only TimeSpan overloads `Create{Int,Double}BarSensor(path, TimeSpan barPeriod, TimeSpan postPeriod[, precision], descr)`
 - [ ] `Create{1Hr,30Min,10Min,5Min,1Min}IntBarSensor` presets
 - [ ] `CreateDoubleBarSensor(..., precision=2, ...)` + options overload + same five presets
 - [ ] `CreateFileSensor(path, fileName, extension="txt", descr)` / `(path, FileSensorOptions)`
@@ -98,11 +101,14 @@ Details: [`public-api/feature.md`](../../aicontext/features/collector/public-api
 - [ ] Interface `ILastValueSensor<T>` (latest value, sends once on stop, default if none)
 - [ ] Interface `IBarSensor<T>`: `AddValue`, `AddValues(IEnumerable)`, `AddPartial(min,max,mean,first,last,count)`
 - [ ] Interface `IFileSensor`: + `Task<bool> SendFile(filePath, status, comment)`
-- [ ] Interface `IMonitoringRateSensor`
+- [ ] Interface `IMonitoringRateSensor` (pure alias of `IInstantValueSensor<double>`; defining file is misleadingly named `IMonitoringCounterSensor.cs`)
 - [ ] Interface `IServiceCommandsSensor`: `SendCustomCommand(cmd, initiator)`, `SendUpdate(initiator[, new[, old]])`, `SendRestart/SendStart/SendStop(initiator)`
-- [ ] Interface `IBaseFuncSensor`: `GetInterval()`, `RestartTimer(TimeSpan)`; params variant `AddValue(U)`
-- [ ] Fluent builders: `InstantSensor<T>` / `BarSensor<T>` / `RateSensor` with `.Description/.Ttl/.KeepHistory/.Priority/.BarPeriod/.PostPeriod/.TickPeriod/.Precision/.Configure → .Build()`
+- [ ] Interface `IBaseFuncSensor` (in `Obsolete` folder but NOT `[Obsolete]` — current return type): `GetInterval()`, `RestartTimer(TimeSpan)`, `GetFunc()`; params variant `AddValue(U)`
+- [ ] Last-value null-default throws: `CreateLastValueStringSensor(path)` / `CreateLastValueVersionSensor(path)` with implicit null default → `ArgumentException` at creation
+- [ ] Fluent builders (per-type setters): `InstantSensor<T>` `.Description/.Ttl/.KeepHistory/.Priority/.Configure`; `BarSensor<T>` `.BarPeriod/.PostPeriod/.TickPeriod/.Precision/.Description/.Configure`; `RateSensor` `.PostPeriod/.Description/.Configure`; `.Build()` throws `NotSupportedException` for unsupported `T`
 - [ ] Properties `Status`, `ComputerName`, `Module`, `Windows`, `Unix`
+- [ ] Property `DefaultSensors` (`IEnumerable<ISensor>`; public `ISensor`: `SensorPath/InitAsync/StartAsync/StopAsync/Dispose`; `SensorBase` adds `SendValue(SensorValueBase)` + `ExceptionThrowing` event)
+- [ ] `IWindowsCollection`/`IUnixCollection` are `IDisposable`
 - [ ] `AddNLog(LoggerOptions { ConfigPath, WriteDebug })` + embedded config fallback
 - [ ] `AddCustomLogger(ICollectorLogger { Debug, Info, Error(string), Error(Exception) })`
 
@@ -141,29 +147,36 @@ Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/featu
 Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/feature.md) §Options & path model
 
 - [ ] `SensorOptions` common: `Description`, `SensorUnit`, `TTLs`, `KeepHistory`, `SelfDestroy`, `EnableForGrafana`, `IsSingletonSensor`, `AggregateData`, `Statistics(EMA)`, `DefaultAlertsOptions`, `IsForceUpdate`, `IsPrioritySensor`, `IsComputerSensor`, `SensorLocation(Module|Product)`, `TtlAlerts`
+- [ ] Singular conveniences `SensorOptions.TTL` (→ `TTLs`) and `TtlAlert` (→ `TtlAlerts`)
+- [ ] `DisplayUnit` per options type: `NoDisplayUnit`, `RateDisplayUnit { PerSecond=0 … PerMonth=5 }` → wire `DisplayUnit (int?)`
 - [ ] `InstantSensorOptions(+Alerts)`; `MonitoringInstantSensorOptions(+PostDataPeriod 15 s)`
 - [ ] `BarSensorOptions(+BarPeriod/BarTickPeriod/Precision/BarAlerts)`
 - [ ] `RateSensorOptions(PostDataPeriod 1 min, Unit=ValueInSecond)`
-- [ ] `FunctionSensorOptions` / `ValuesFunctionSensorOptions(+MaxCacheSize)`
+- [ ] `FunctionSensorOptions` / `ValuesFunctionSensorOptions(+MaxCacheSize)` — both default `PostDataPeriod` 1 min (ms-param factory overloads default 15 s instead)
 - [ ] `FileSensorOptions(+DefaultFileName/Extension/MaxFileSizeBytes)`
-- [ ] `EnumSensorOptions(+EnumOptions, AggregateData=true)`
-- [ ] Special options: Disk / DiskBar / Version / Service / Network / WindowsInfo / CollectorMonitoringInfo
+- [ ] `EnumSensorOptions(+EnumOptions, AggregateData=true, GenerateEnumOptionsDecription())`
+- [ ] `DiskSensorOptions { TargetPath default C:\, CalibrationRequests default 6, PostDataPeriod 5 min }`; `DiskBarSensorOptions { TargetPath }`
+- [ ] `VersionSensorOptions { Version, StartTime }`; `ServiceSensorOptions { ServiceName, IsHostService default true → .module placement, SensorPath }`
+- [ ] `NetworkSensorOptions`; `WindowsInfoSensorOptions { PostDataPeriod default 12 h }`; `CollectorMonitoringInfoOptions`
 - [ ] `CalculateSystemPath`: computer → `ComputerName/Path`; module → `ComputerName/Module/Path`; product → `Path`
 - [ ] `BuildPath`: join `/`, drop null/empty/whitespace, split interior `/`, collapse `//`
 - [ ] `RevealDefaultPath` = `{.computer|.module}/Category/SensorName`
-- [ ] Prototype merge: custom non-null wins per property
+- [ ] Prototype merge: custom non-null wins for most properties; `Path/Type/IsComputerSensor/ComputerName/Module` pinned from prototype; custom `DefaultAlertsOptions/IsPrioritySensor/IsForceUpdate` dropped for default sensors
 
 ## 7. Alert DSL
 
 Details: [`alerts/feature.md`](../../aicontext/features/collector/alerts/feature.md)
 
-- [ ] Instant conditions: `IfValue/IfComment/IfStatus/IfLength/IfFileSize/IfReceivedNewValue/IfEmaValue`
+- [ ] Instant conditions: `IfValue/IfComment/IfStatus/IfLenght (actual exported name — misspelled; chaining is AndLength)/IfFileSize/IfReceivedNewValue/IfEmaValue`
 - [ ] Bar conditions: `IfMin/IfMax/IfMean/IfCount/IfFirstValue/IfLastValue/IfBarComment/IfBarStatus/IfReceivedNewBarValue` + EMA variants
+- [ ] TTL entry point `IfInactivityPeriodIs(TimeSpan? = null)` → SpecialAlertCondition (TtlValue feeds wire TTLs)
 - [ ] `.And*` chaining (And-combination)
-- [ ] Actions: `ThenSendNotification(template)` / `ThenSetIcon` / `ThenSetSensorError`
-- [ ] `AndConfirmationPeriod(TimeSpan)`; schedule modifiers (time, repeat mode, instant send)
+- [ ] Actions: `ThenSendNotification(template, AlertDestinationMode = FromParent)` / `ThenSetIcon(string | AlertIcon)` / `ThenSetSensorError`
+- [ ] `ThenSendScheduledNotification(template, time, AlertRepeatMode, instantSend, AlertDestinationMode = FromParent)` + chaining `AndSendScheduledNotification`
+- [ ] `AlertIcon { Ok=0 Warning=1 Error=2 Pause=3 ArrowUp=10 ArrowDown=11 Clock=100 Hourglass=101 }` → UTF-8 emoji string on the wire (`IconExtensions.ToUtf8`)
+- [ ] `AndConfirmationPeriod(TimeSpan)`
 - [ ] `.Build()` / `.BuildAndDisable()` → Instant/Bar/Special templates
-- [ ] TTL alerts via `TtlAlerts`; `DefaultAlertsOptions` flags (DisableTtl=1, DisableStatusChange=2)
+- [ ] TTL alerts via `TtlAlerts` (or singular `TtlAlert`); `DefaultAlertsOptions` flags (DisableTtl=1, DisableStatusChange=2)
 
 ## 8. Default sensors — Windows
 
@@ -180,7 +193,7 @@ Details: [`default-sensors/feature.md`](../../aicontext/features/collector/defau
 - [ ] `AddGlobalTimeInGC` (`.NET CLR Memory \ % Time in GC \ _Global_`)
 - [ ] `AddSystemMonitoringSensors` bulk
 - [ ] `AddFreeDiskSpace` / `AddFreeDisksSpace` (DriveInfo, instant MB, 5 min)
-- [ ] `AddFreeDiskSpacePrediction` / `AddFreeDisksSpacePrediction` (EMA 0.9/0.1, 30 s sampling, 10-request calibration, OffTime on growth)
+- [ ] `AddFreeDiskSpacePrediction` / `AddFreeDisksSpacePrediction` (EMA 0.9/0.1, 30 s sampling, calibration first 6 requests — `CalibrationRequests` default, OffTime on growth)
 - [ ] `AddActiveDiskTime` / `AddActiveDisksTime` (`LogicalDisk \ % Disk Time`)
 - [ ] `AddDiskQueueLength` / `AddDisksQueueLength` (`LogicalDisk \ Avg. Disk Queue Length`)
 - [ ] `AddDiskAverageWriteSpeed` / `AddDisksAverageWriteSpeed` (`Disk Write Bytes/sec` → MB/s)
@@ -198,7 +211,9 @@ Details: [`default-sensors/feature.md`](../../aicontext/features/collector/defau
 - [ ] `AddNetworkConnectionFailures` / `AddNetworkConnectionsReset` (deltas)
 - [ ] `AddAllNetworkSensors` bulk
 - [ ] `SubscribeToWindowsServiceStatus(name | options)` (enum of `ServiceControllerStatus`, 5 s poll, send-on-change, alert ≠Running w/ 5 min confirmation, 1 h re-resolve backoff)
+- [ ] Service-status registration payload: `EnumOptions` for 7 `ServiceControllerStatus` members with fixed ARGB colors + generated markdown description; `IsHostService` placement
 - [ ] `UnsubscribeWindowsServiceStatus`
+- [ ] ServiceCommands sensor: fixed strings "Service start/stop/restart", "Service update [from X] to Y" + implicit `IfReceivedNewValue → notification` alert
 - [ ] Perf-counter seam: `IPerformanceCounterFactory`/`IPerformanceCounter`, recreate on `InvalidOperationException`, dispose on stop
 - [ ] `AddAllComputerSensors()` / `AddAllModuleSensors(version)` / `AddAllDefaultSensors(version)` bulks
 
@@ -269,7 +284,7 @@ Details: [`http-client/feature.md`](../../aicontext/features/collector/http-clie
 - [ ] `CancelPendingRequests`: cancel token + fresh source, NEVER dispose HttpClient
 - [ ] `PackageSendingInfo { ContentSize(chars), IsSuccess, Error }`
 - [ ] JSON: System.Text.Json, NaN/Infinity literals allowed, runtime-polymorphic converter
-- [ ] Per-command response parsing (per-key error dictionary) for commands/addOrUpdate
+- [ ] Per-command response parsing for commands/addOrUpdate (error dictionary keyed by sensor **path**)
 
 ## 13. Scheduler
 
@@ -308,14 +323,18 @@ Details: [`api/wire-contract/feature.md`](../../aicontext/features/api/wire-cont
 - [ ] `AlertOperation` (LE=0 LT=1 GT=2 GE=3 Eq=4 Ne=5 IsChanged=20 IsError=21 IsOk=22 →Error=23 →Ok=24 Contains=30 StartsWith=31 EndsWith=32 ReceivedNewValue=50)
 - [ ] `AlertProperty` (Status=0 Comment=1 Value=20 Min=101 Max=102 Mean=103 Count=104 Last=105 First=106 Length=120 OriginalSize=151 NewSensorData=200 Ema*=210–214)
 - [ ] `AlertCombination` And=0 Or=1; `TargetType` Const=0 LastValue=1; `AlertRepeatMode` 5/6/7/10/20/50/100
+- [ ] `AlertDestinationMode`: DefaultChats=0(obs) NotInitialized=1 Empty=2 FromParent=3 AllChats=200
+- [ ] Display units: `NoDisplayUnit`; `RateDisplayUnit` PerSecond=0…PerMonth=5 → `DisplayUnit (int?)`
 - [ ] Flags `StatisticsOptions{EMA=1}`, `DefaultAlertsOptions{DisableTtl=1, DisableStatusChange=2}`
-- [ ] `SensorValueBase` { path, comment?, time(UTC now), status(Ok) } + typed `value` per DTO
-- [ ] Bar DTOs: min/max/mean/count/firstValue?/lastValue/openTime/closeTime (no percentiles)
-- [ ] `FileSensorValue`: value(base64), name, extension
-- [ ] `AddOrUpdateSensorRequest`: full property set incl. enumOptions, alerts, ttlAlerts, defaultAlertsOptions
-- [ ] JSON: camelCase, omit nulls/defaults, enums as numbers, ISO-8601 `Z`, TimeSpan `hh:mm:ss.fff`, Version `a.b.c[.d]`
-- [ ] Batch `list` discriminator `"type"`: bool/int/double/string/timespan/version/rate/enum/counter/intBar/doubleBar/file
-- [ ] **[decide]** History DTOs (collector doesn't query history today)
+- [ ] `SensorValueBase` { Path, Comment?, Time(UTC now), Status(Ok) } + typed `Value` per DTO
+- [ ] Bar DTOs: Min/Max/Mean/Count/FirstValue?/LastValue/OpenTime/CloseTime (obsolete `Percentiles` never populated but serialized as null)
+- [ ] `FileSensorValue`: Value = `List<byte>` → **numeric JSON array, NOT base64**; Name; Extension. No Counter DTO exists (`CounterSensorValue.cs` contains `RateSensorValue`)
+- [ ] `EnumOption` { Key:int, Value:string, Description:string, Color:int ARGB }
+- [ ] `AddOrUpdateSensorRequest`: full property set incl. EnumOptions, Alerts, TtlAlerts, DefaultAlertsOptions
+- [ ] Registration time fields (`TTLs/KeepHistory/SelfDestroy/ConfirmationPeriod`) on the wire as **long ticks**; `TtlAlerts[*].TtlValue` overrides `options.TTLs`; `IsSingletonSensor` OR-ed with `IsComputerSensor`
+- [ ] JSON: **PascalCase** property names, **nulls/defaults emitted** (default System.Text.Json — `[DefaultValue]` attrs have no effect), enums as numbers, DateTime ISO-8601 `Z`, TimeSpan .NET "c" format `[-][d.]hh:mm:ss[.fffffff]`, Version `a.b[.c[.d]]`
+- [ ] Batch `list` polymorphism: discriminated by the **numeric `Type` property** (server scans for `Type`, switches on `SensorType` int) — no string discriminator
+- [ ] **[decide]** History DTOs `HistoryRequest{Path,From,To?,Count?,Options(IncludeTtl=1)}`, `FileHistoryRequest{+FileName,Extension,IsZipArchive}` (collector doesn't query history today)
 
 ## 16. Wrapper parity gaps — ALL [decide]
 
@@ -324,11 +343,11 @@ Reference: `src/wrapper/include/` (C++/CLI wrapper as minimal-API oracle)
 - [ ] TimeSpan sensor (absent in wrapper)
 - [ ] Version sensor (absent)
 - [ ] Enum sensor (absent)
-- [ ] Counter sensor (absent)
 - [ ] Service-commands sensor (absent)
 - [ ] Lifecycle listeners/events (absent)
 - [ ] Fluent builders (absent)
 - [ ] History queries (absent)
+- [ ] Rate-sensor type asymmetry: wrapper exposes int AND double rate sensors; .NET rate is double-only
 
 ## 17. Cross-cutting invariants (gate for every slice)
 

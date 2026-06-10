@@ -23,7 +23,11 @@ Alert enums (`SensorRequests/AddOrUpdateSensor/AlertUpdateRequest.cs`):
 - `AlertProperty`: Status=0, Comment=1, Value=20, Min=101, Max=102, Mean=103, Count=104, LastValue=105, FirstValue=106, Length=120, OriginalSize=151, NewSensorData=200, EmaValue=210, EmaMin=211, EmaMax=212, EmaMean=213, EmaCount=214.
 - `AlertCombination`: And=0, Or=1. `TargetType`: Const=0, LastValue=1.
 - `AlertRepeatMode`: FiveMinutes=5, TenMinutes=6, FifteenMinutes=7, ThirtyMinutes=10, Hourly=20, Daily=50, Weekly=100.
+- `AlertDestinationMode`: DefaultChats=0 (obsolete), NotInitialized=1, Empty=2, FromParent=3, AllChats=200 — serialized in every `AlertUpdateRequest`.
 - Flags: `StatisticsOptions { None=0, EMA=1 }`, `DefaultAlertsOptions { None=0, DisableTtl=1, DisableStatusChange=2 }`.
+- Display units: `NoDisplayUnit`, `RateDisplayUnit { PerSecond=0 … PerMonth=5 }` → `AddOrUpdateSensorRequest.DisplayUnit (int?)`.
+- Alert icons: `AlertIcon { Ok=0, Warning=1, Error=2, Pause=3, ArrowUp=10, ArrowDown=11, Clock=100, Hourglass=101 }`; `ThenSetIcon(AlertIcon)` maps to UTF-8 emoji strings (`IconExtensions.ToUtf8`) — the **string** is what goes on the wire in `Icon`.
+- `EnumOption`: `{ Key:int, Value:string, Description:string, Color:int (ARGB) }`.
 
 ## Value DTOs (`SensorValueRequests/*`)
 
@@ -40,8 +44,10 @@ Alert enums (`SensorRequests/AddOrUpdateSensor/AlertUpdateRequest.cs`):
 | `EnumSensorValue` | int (option key) |
 | `RateSensorValue` | double |
 | `CounterSensorValue` | int |
-| `IntBarSensorValue` / `DoubleBarSensorValue` | `min/max/mean/count/firstValue?/lastValue/openTime/closeTime` (+obsolete `percentiles` — do not emit) |
-| `FileSensorValue` | `value` = byte list (base64), `name`, `extension` |
+| `IntBarSensorValue` / `DoubleBarSensorValue` | `Min/Max/Mean/Count/FirstValue?/LastValue/OpenTime/CloseTime` (+obsolete `Percentiles` — never populated, but serialized as `null` since nulls are not omitted) |
+| `FileSensorValue` | `Value` = `List<byte>` → **numeric JSON array** (`[72,105,...]`, NOT base64 — System.Text.Json base64-encodes `byte[]` but not `List<byte>`), `Name`, `Extension` |
+
+There is no Counter DTO: `CounterSensorValue.cs` is a legacy file name that contains `RateSensorValue`.
 
 ## Registration / command DTOs
 
@@ -51,10 +57,16 @@ History DTOs (`HistoryRequests/`): `HistoryRequest { path, from, to?, count?, op
 
 ## JSON conventions
 
-- camelCase property names; nulls/defaults omitted; enums serialized as **numbers**.
-- DateTime: ISO 8601 UTC with `Z`. TimeSpan: `hh:mm:ss.fff`. Version: `a.b.c[.d]`. Bytes: base64.
-- Batch endpoint `list` uses polymorphic items discriminated by `"type"`: `bool`, `int`, `double`, `string`, `timespan`, `version`, `rate`, `enum`, `counter`, `intBar`, `doubleBar`, `file`.
-- Collector serializer: System.Text.Json with `AllowNamedFloatingPointLiterals`, runtime-polymorphic write via `JsonRequestConverter` (`Converters/JsonRequestConverter.cs`).
+What the .NET collector actually emits (`Client/HttpsClient/RequestHandlers/HttpRequest.cs` — default System.Text.Json options + `AllowNamedFloatingPointLiterals` + polymorphic `JsonRequestConverter`, NO naming policy, NO ignore conditions):
+
+- **PascalCase** property names (`"Path"`, `"Comment"`, `"OpenTime"` — exactly as declared in C#).
+- **Nulls and defaults ARE emitted** (`"Comment":null`, `"Status":1`). The `[DefaultValue]` attributes on DTOs are Newtonsoft-era leftovers and have no effect under System.Text.Json. The server deserializes case-insensitively and tolerates omissions — but a byte-compatible port must match what the .NET collector sends, not what the server minimally accepts.
+- Enums serialized as **numbers**.
+- DateTime: ISO 8601; `Time` defaults to `DateTime.UtcNow` → `Z` suffix.
+- TimeSpan: .NET "c" format `[-][d.]hh:mm:ss[.fffffff]` (days prefix possible; 7-digit fraction omitted when zero).
+- Version: `a.b[.c[.d]]`.
+- Polymorphic batch (`list` endpoint): items discriminated by the **numeric `Type` property** (`SensorType` value) — the server's converter scans for a property named `Type` (case-insensitive) and switches on its int value. There is no string discriminator.
+- Registration time fields (`TTLs`, `KeepHistory`, `SelfDestroy`, alert `ConfirmationPeriod`) go on the wire as **`long` ticks** (`Converters/ApiConverters.cs`). When `TtlAlerts` are present their `TtlValue`s override `options.TTLs`. `IsSingletonSensor` is OR-ed with `IsComputerSensor` at conversion.
 
 ## Endpoints
 
@@ -66,7 +78,7 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 | `intBar` `doubleBar` | single bar value |
 | `list` | polymorphic batch |
 | `file` | `FileSensorValue` |
-| `commands` | command batch (per-key error dictionary in response) |
+| `commands` | command batch (response: error dictionary keyed by sensor path) |
 | `addOrUpdate` | `AddOrUpdateSensorRequest` |
 | `testConnection` | — |
 

@@ -11,21 +11,23 @@ Sensors can carry alert definitions in their options (`Alerts` for instant, `Bar
 
 ## Builder surface (`Alerts/AlertsFactory.cs`)
 
-Instant conditions: `IfValue<T>(op, target)`, `IfComment(op, target)`, `IfStatus(op)`, `IfLength(op, n)` (strings), `IfFileSize(op, n)` (files), `IfReceivedNewValue()`, `IfEmaValue(op, target)` (requires `Statistics = EMA`).
+Instant conditions: `IfValue<T>(op, target)`, `IfComment(op, target)`, `IfStatus(op)`, `IfLenght(op, n)` (strings — **note the actual exported name is misspelled** "Lenght"; chaining variant is correctly `AndLength`), `IfFileSize(op, n)` (files), `IfReceivedNewValue()`, `IfEmaValue(op, target)` (requires `Statistics = EMA`).
 
 Bar conditions: `IfMin/IfMax/IfMean/IfCount/IfFirstValue/IfLastValue(op, value)`, `IfBarComment/IfBarStatus(op)`, `IfReceivedNewBarValue()`, EMA variants `IfEmaMin/IfEmaMax/IfEmaMean/IfEmaCount`.
+
+TTL: `AlertsFactory.IfInactivityPeriodIs(TimeSpan? = null)` → `SpecialAlertCondition` — the only entry point for TTL alert templates; its `TtlValue` feeds `TTLs` on the wire.
 
 Chaining & actions:
 
 - `.And*` — additional conditions (And-combination);
-- `.ThenSendNotification(template)` — notification text template (supports `$value`, `$comment`, etc. server-side placeholders);
-- `.ThenSetIcon(icon)` — string or `AlertIcon`;
+- `.ThenSendNotification(template, AlertDestinationMode destination = FromParent)` — notification text template (supports `$value`, `$comment`, etc. server-side placeholders); destination controls chat routing;
+- `.ThenSendScheduledNotification(template, DateTime time, AlertRepeatMode, bool instantSend, AlertDestinationMode = FromParent)` / chaining `.AndSendScheduledNotification(...)`;
+- `.ThenSetIcon(icon)` — string or `AlertIcon { Ok, Warning, Error, Pause, ArrowUp, ArrowDown, Clock, Hourglass }`; the enum maps to UTF-8 emoji via `IconExtensions.ToUtf8`, and the **string** is what goes on the wire;
 - `.ThenSetSensorError()` — escalate sensor status;
 - `.AndConfirmationPeriod(TimeSpan)` — debounce before firing;
-- schedule modifiers: `AndScheduledNotificationTime(...)`, repeat mode, instant-send flag;
 - `.Build()` / `.BuildAndDisable()` → `InstantAlertTemplate` / `BarAlertTemplate` / `SpecialAlertTemplate`.
 
-TTL alerts attach via `SensorOptions.TtlAlerts` (built from `AlertsFactory.IfInactivityPeriodIs(...)`-style special conditions); `DefaultAlertsOptions` flags (`DisableTtl = 1`, `DisableStatusChange = 2`) suppress server-side default alerts.
+TTL alerts attach via `SensorOptions.TtlAlerts` (or the singular `TtlAlert` convenience setter); `DefaultAlertsOptions` flags (`DisableTtl = 1`, `DisableStatusChange = 2`) suppress server-side default alerts.
 
 ## Invariants
 
