@@ -1188,7 +1188,7 @@ namespace HSMServer.Core.Cache
                         ? ttlInterval.Ticks
                         : null;
 
-                    var sig = DisabledStates.GetSignature(ttlPolicy);
+                    var sig = DisabledStates.GetTtlSignature(ttlTicks);
                     ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, InitiatorInfo.AlertTemplate)
                     {
                         TemplateId = alertTemplateModel.Id,
@@ -1392,7 +1392,7 @@ namespace HSMServer.Core.Cache
                     states.Set(sensor.Id, DisabledStates.GetSignature(policy), policy.IsDisabled);
 
                 foreach (var ttl in sensor.Policies.TTLPolicies.Where(t => t.TemplateId == templateId))
-                    states.Set(sensor.Id, DisabledStates.GetSignature(ttl), ttl.IsDisabled);
+                    states.Set(sensor.Id, DisabledStates.GetTtlSignature(ttl.IsTTLFromParent ? null : ttl.TTLTicks), ttl.IsDisabled);
             }
 
             return states;
@@ -2433,16 +2433,13 @@ namespace HSMServer.Core.Cache
 
             public static string GetSignature(Policy policy)
             {
-                var sig = string.Join("|", policy.Conditions
+                return string.Join("|", policy.Conditions
                     .OrderBy(c => c.Property)
                     .ThenBy(c => c.Operation)
                     .Select(c => $"{c.Property}:{c.Operation}:{c.Target}"));
-
-                if (policy is TTLPolicy ttl)
-                    sig += $"|ttl:{ttl.TTLTicks}";
-
-                return sig;
             }
+
+            public static string GetTtlSignature(long? rawTtlTicks) => $"ttl:{rawTtlTicks}";
         }
     }
 }
