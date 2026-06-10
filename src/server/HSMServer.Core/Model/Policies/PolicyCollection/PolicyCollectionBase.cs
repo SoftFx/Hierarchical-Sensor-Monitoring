@@ -69,7 +69,7 @@ namespace HSMServer.Core.Model.Policies
                     {
                         var oldValue = policy.ToString();
 
-                        if (policy.TemplateId != null && update.Initiator != InitiatorInfo.AlertTemplate)
+                        if (policy.TemplateId != null && !update.Initiator.IsForceUpdate && update.Initiator != InitiatorInfo.AlertTemplate)
                         {
                             if (policy.IsDisabled != update.IsDisabled)
                             {

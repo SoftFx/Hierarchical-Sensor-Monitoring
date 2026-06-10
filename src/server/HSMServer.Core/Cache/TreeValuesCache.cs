@@ -1177,8 +1177,9 @@ namespace HSMServer.Core.Cache
 
             if (alertTemplateModel.TtlEntries is not null)
             {
-                foreach (var entry in alertTemplateModel.TtlEntries)
+                for (int i = 0; i < alertTemplateModel.TtlEntries.Count; i++)
                 {
+                    var entry = alertTemplateModel.TtlEntries[i];
                     var ttlPolicy = entry.Policy;
                     var ttlInterval = entry.Interval;
 
@@ -1188,23 +1189,22 @@ namespace HSMServer.Core.Cache
                         ? ttlInterval.Ticks
                         : null;
 
-                    var sig = DisabledStates.GetTtlSignature(ttlTicks);
                     ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, InitiatorInfo.AlertTemplate)
                     {
                         TemplateId = alertTemplateModel.Id,
                         TTL = ttlTicks,
-                        IsDisabled = disabledStates?.Get(sensor.Id, sig) ?? ttlPolicy.IsDisabled,
+                        IsDisabled = disabledStates?.GetTtl(sensor.Id, i) ?? ttlPolicy.IsDisabled,
                     });
                 }
             }
 
-            foreach (var policy in alertTemplateModel.Policies)
+            for (int i = 0; i < alertTemplateModel.Policies.Count; i++)
             {
-                var sig = DisabledStates.GetSignature(policy);
+                var policy = alertTemplateModel.Policies[i];
                 policyUpdates.Add(new PolicyUpdate(policy, InitiatorInfo.AlertTemplate)
                 {
                     TemplateId = alertTemplateModel.Id,
-                    IsDisabled = disabledStates?.Get(sensor.Id, sig) ?? policy.IsDisabled,
+                    IsDisabled = disabledStates?.GetPolicy(sensor.Id, i) ?? policy.IsDisabled,
                 });
             }
 
@@ -1389,13 +1389,32 @@ namespace HSMServer.Core.Cache
 
             var states = new DisabledStates();
 
+            // Use the old template's policy order to map sensor policies to indices.
+            // Old template is still in _alertTemplates at this point (before RemoveAlertTemplate).
+            var oldTemplate = _alertTemplates.TryGetValue(templateId, out var t) ? t : null;
+
             foreach (var sensor in product.GetAllSensors())
             {
-                foreach (var policy in sensor.Policies.Where(p => p.TemplateId == templateId))
-                    states.Set(sensor.Id, DisabledStates.GetSignature(policy), policy.IsDisabled);
+                var sensorPolicies = sensor.Policies.Where(p => p.TemplateId == templateId).ToList();
 
-                foreach (var ttl in sensor.Policies.TTLPolicies.Where(t => t.TemplateId == templateId))
-                    states.Set(sensor.Id, DisabledStates.GetTtlSignature(ttl.IsTTLFromParent ? null : ttl.TTLTicks), ttl.IsDisabled);
+                if (oldTemplate != null)
+                {
+                    // Match old template entries to sensor policies by conditions signature,
+                    // then store by positional index. This allows condition changes in the
+                    // new template to preserve disabled states.
+                    for (int i = 0; i < oldTemplate.Policies.Count; i++)
+                    {
+                        var oldSig = DisabledStates.GetSignature(oldTemplate.Policies[i]);
+                        var match = sensorPolicies.FirstOrDefault(p => DisabledStates.GetSignature(p) == oldSig);
+                        if (match != null)
+                            states.SetPolicy(sensor.Id, i, match.IsDisabled);
+                    }
+                }
+
+                // TTL policies: positional matching within the _ttlPolicies list (stable order)
+                var sensorTtls = sensor.Policies.TTLPolicies.Where(t => t.TemplateId == templateId).ToList();
+                for (int i = 0; i < sensorTtls.Count; i++)
+                    states.SetTtl(sensor.Id, i, sensorTtls[i].IsDisabled);
             }
 
             return states;
@@ -1403,13 +1422,16 @@ namespace HSMServer.Core.Cache
 
         private void RemoveChatsFromPolicies(ProductModel product, HashSet<Guid> chats, InitiatorInfo initiator)
         {
+            // Use force update so template-created policies are also updated
+            var forceInitiator = InitiatorInfo.AsSystemForce("RemoveChatsFromPolicies");
+
             if (product.Policies.TTLPolicies.Any(t => CanRemoveChatsFromPolicy(t.Destination, chats)))
             {
                 var productTtlUpdates = new List<PolicyUpdate>();
                 foreach (var ttl in product.Policies.TTLPolicies)
                 {
                     if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
-                        ttlUpdate = new PolicyUpdate(ttl, initiator);
+                        ttlUpdate = new PolicyUpdate(ttl, forceInitiator);
 
                     productTtlUpdates.Add(ttlUpdate);
                 }
@@ -1418,7 +1440,7 @@ namespace HSMServer.Core.Cache
                 {
                     Id = product.Id,
                     TTLPolicies = productTtlUpdates,
-                    Initiator = initiator,
+                    Initiator = forceInitiator,
                 };
 
                 UpdateProduct(update);
@@ -1434,7 +1456,7 @@ namespace HSMServer.Core.Cache
                     foreach (var ttl in sensor.Policies.TTLPolicies)
                     {
                         if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
-                            ttlUpdate = new PolicyUpdate(ttl, initiator);
+                            ttlUpdate = new PolicyUpdate(ttl, forceInitiator);
 
                         sensorTtlUpdates.Add(ttlUpdate);
                     }
@@ -1448,7 +1470,7 @@ namespace HSMServer.Core.Cache
                     foreach (var policy in sensor.Policies)
                     {
                         if (!TryGetPolicyUpdate(policy, chats, initiator, out var policyUpdate))
-                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), initiator);
+                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), forceInitiator);
 
                         policiesUpdate.Add(policyUpdate);
                     }
@@ -1461,7 +1483,7 @@ namespace HSMServer.Core.Cache
                         Id = sensor.Id,
                         Policies = policiesUpdate,
                         TTLPolicies = sensorTtlUpdates,
-                        Initiator = initiator,
+                        Initiator = forceInitiator,
                     };
 
                     TryUpdateSensor(update, out _);
@@ -2426,27 +2448,29 @@ namespace HSMServer.Core.Cache
 
         private sealed class DisabledStates
         {
-            private readonly Dictionary<(Guid sensorId, string signature), bool> _entries = [];
+            private readonly Dictionary<(Guid sensorId, int index), bool> _policies = [];
+            private readonly Dictionary<(Guid sensorId, int index), bool> _ttls = [];
 
-            public void Set(Guid sensorId, string signature, bool isDisabled) =>
-                _entries[(sensorId, signature)] = isDisabled;
+            public void SetPolicy(Guid sensorId, int index, bool isDisabled) =>
+                _policies[(sensorId, index)] = isDisabled;
 
-            public bool? Get(Guid sensorId, string signature) =>
-                _entries.TryGetValue((sensorId, signature), out var v) ? v : null;
+            public bool? GetPolicy(Guid sensorId, int index) =>
+                _policies.TryGetValue((sensorId, index), out var v) ? v : null;
+
+            public void SetTtl(Guid sensorId, int index, bool isDisabled) =>
+                _ttls[(sensorId, index)] = isDisabled;
+
+            public bool? GetTtl(Guid sensorId, int index) =>
+                _ttls.TryGetValue((sensorId, index), out var v) ? v : null;
 
             public static string GetSignature(Policy policy)
             {
-                var sig = string.Join("|", policy.Conditions
+                return string.Join("|", policy.Conditions
                     .OrderBy(c => c.Property)
                     .ThenBy(c => c.Operation)
                     .ThenBy(c => c.Target.Value)
                     .Select(c => $"{c.Property}:{c.Operation}:{c.Target}"));
-
-                return $"{sig}|status:{policy.Status}";
             }
-
-            public static string GetTtlSignature(long? rawTtlTicks) =>
-                $"ttl:{(rawTtlTicks.HasValue && rawTtlTicks.Value != long.MaxValue ? rawTtlTicks.Value : (long?)null)}";
         }
     }
 }

@@ -275,7 +275,7 @@ namespace HSMServer.Core.Model.Policies
                     {
                         if (updates.TryGetValue(id, out var update))
                         {
-                            if (policy.TemplateId != null && initiator != InitiatorInfo.AlertTemplate)
+                            if (policy.TemplateId != null && !initiator.IsForceUpdate && initiator != InitiatorInfo.AlertTemplate)
                             {
                                 if (policy.IsDisabled != update.IsDisabled)
                                 {
@@ -300,7 +300,7 @@ namespace HSMServer.Core.Model.Policies
                         }
                         else
                         {
-                            if (policy.TemplateId != null && initiator != InitiatorInfo.AlertTemplate)
+                            if (policy.TemplateId != null && !initiator.IsForceUpdate && initiator != InitiatorInfo.AlertTemplate)
                                 continue;
 
                             RemovePolicy(id, initiator);
