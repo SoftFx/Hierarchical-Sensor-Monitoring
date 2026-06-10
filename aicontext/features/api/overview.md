@@ -48,11 +48,13 @@ All accept POST with JSON body.
 
 All DTOs live in `HSMSensorDataObjects` (shared library):
 
-- `SensorValueBase` — base class with `Key` (sensor path), `Time`, `Status`, `Comment`
+- `SensorValueBase` — base class with `Path`, `Time`, `Status`, `Comment`
 - Typed descendants add the `Value` field of the appropriate type
 - `BarSensorValueBase` adds `Min`, `Max`, `Mean`, `Count`, `OpenTime`, `CloseTime`
 - `FileSensorValue` adds `Value` (bytes), `Name`, `Extension`
-- `CommandRequestBase` — server-to-collector command
+- `CommandRequestBase` — collector-to-server command (registration etc.)
+
+Full wire contract (enum numeric values, JSON conventions, every DTO property): [`wire-contract/feature.md`](./wire-contract/feature.md).
 
 ## Sensor Path Convention
 
@@ -79,11 +81,13 @@ Available at `https://{server}:44330/api/swagger` when running in development mo
 | Collector public API | `src/collector/HSMDataCollector/PublicAPI`, `Core/IDataCollector.cs`, `Core/DataCollector.cs`, and `Options` | Breaking changes affect integrators. |
 | C++ wrapper headers | `src/wrapper/include` | Keep parity with collector public API. |
 
-## Feature Folders To Add Here
+## Feature Folders
 
-- `sensor-requests/` - sensor registration/value request contracts.
+- [`wire-contract/`](./wire-contract/feature.md) — the frozen collector↔server wire contract (enums, DTOs, JSON conventions, endpoints).
+
+To add as work lands (from `../_TEMPLATE_feature.md`):
+
 - `history-requests/` - history query contracts.
-- `collector-public-api/` - collector interfaces/options contracts.
 - `wrapper-api/` - C++ wrapper compatibility contract.
 
-Create folders from `../_TEMPLATE_feature.md` as work lands.
+(Collector public API is documented at [`../collector/public-api/feature.md`](../collector/public-api/feature.md).)

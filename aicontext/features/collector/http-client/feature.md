@@ -1,24 +1,28 @@
 # Feature: HTTP Client
 
-> Owner: collector | Last reviewed: 2026-05-26 | Canonical: yes
+> Owner: collector | Last reviewed: 2026-06-10 | Canonical: yes
 > Scope: Collector - HTTPS transport with Polly retry for sending sensor data
 
 ---
 
 ## Description
 
-`HsmHttpsClient` wraps `System.Net.Http.HttpClient` with Polly retry pipelines for sending sensor data to HSMServer. Each value type (data, priority, file, command) has its own request handler with a separate retry pipeline.
+`HsmHttpsClient` wraps `System.Net.Http.HttpClient` with Polly retry pipelines for sending sensor data to HSMServer. Each value type (data, priority, file, command) has its own request handler with a separate retry pipeline. Wire shapes and endpoint payloads: `../../api/wire-contract/feature.md`.
 
 ---
 
 ## Business Rules / Invariants
 
-- Default scheme is HTTPS. Users can override by providing an explicit scheme in `ServerAddress` (e.g., `http://...`).
+- Default scheme is HTTPS; an explicit `http://` in `ServerAddress` requires `AllowPlaintextTransport=true`, otherwise upgraded to HTTPS.
 - `AllowUntrustedServerCertificate` must be explicitly set to `true` to bypass TLS validation. Default is `false` (secure by default).
+- Auth headers on every request: `Key: <AccessKey>`, `ClientName: <ClientName>`.
 - `RequestTimeout` (default 30s) is set on `HttpClient.Timeout`.
 - `HttpResponseMessage` is always disposed after use (`using` blocks).
 - `HttpContent` is disposed after sending (in `ExecutePipelineAsync`).
-- Polly retry: exponential backoff, max delay 2 minutes, configurable max attempts per handler.
+- Polly retry per handler: data/priority/file — 10 attempts, exponential backoff 1 s → 2 min; commands — `int.MaxValue` attempts, linear backoff.
+- `CancelPendingRequests()` (`ICancelableDataSender`, called by collector Stop) cancels the shared in-flight token and installs a fresh one. It must **NOT** dispose the HttpClient — disposal during a graceful stop converted remaining flush sends into `ObjectDisposedException` data loss (PR #1080 finding #7; regression-tested in `HsmHttpsClientCancellationTests`).
+- `PackageSendingInfo` captures content size (chars), success flag, and error string (`"Code: {status}. {content}"` or exception message) for self-diagnostics.
+- JSON: System.Text.Json, `AllowNamedFloatingPointLiterals`, runtime-polymorphic write via `JsonRequestConverter`.
 - On send failure, error is logged with payload byte count (not payload content) to prevent sensitive data in logs.
 - `Dispose()` is idempotent (guarded by `_disposed` flag). Disposes all handlers, token source, and HttpClient.
 - `InnerException?.Message` uses null-conditional to avoid NRE when InnerException is null.
@@ -41,12 +45,12 @@ All under `https://{server}:{port}/api/sensors/`:
 
 | Endpoint | Purpose |
 |---|---|
-| `bool`, `int`, `double`, `string`, `timespan`, `version`, `rate` | Typed sensor values |
+| `bool`, `int`, `double`, `string`, `timespan`, `version`, `rate`, `enum` | Typed sensor values |
 | `intBar`, `doubleBar` | Bar sensor values |
 | `file` | File sensor values |
-| `list` | Batch sensor values |
-| `commands` | Server-to-collector commands |
-| `testConnection` | Connectivity check |
+| `list` | Batch sensor values (polymorphic, `"type"` discriminator) |
+| `commands` | Command batches (per-key error dictionary in response) |
+| `testConnection` | Connectivity check (GET) |
 | `addOrUpdate` | Sensor registration/update |
 
 ---
