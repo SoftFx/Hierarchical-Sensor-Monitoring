@@ -1401,7 +1401,7 @@ namespace HSMServer.Core.Cache
 
                 if (request.IsPrimary)
                 {
-                    _alertTemplates.GetOrAdd(alertTemplateModel.Id, () => alertTemplateModel);
+                    _alertTemplates[alertTemplateModel.Id] = alertTemplateModel;
                     _database.AddAlertTemplate(alertTemplateModel.ToEntity());
                 }
             }
