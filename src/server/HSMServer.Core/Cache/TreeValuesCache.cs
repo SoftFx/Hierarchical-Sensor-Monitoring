@@ -1171,7 +1171,8 @@ namespace HSMServer.Core.Cache
 
         private void ApplyTemplateToSensor(BaseSensorModel sensor, AlertTemplateModel template)
         {
-            // Categorize existing sensor policies by TemplateAlertId
+            // Categorize existing sensor policies by TemplateAlertId.
+            // Only track the first policy per TemplateAlertId; extras become orphans to clean up.
             var existingPoliciesWithId = sensor.Policies
                 .Where(p => p.TemplateId == template.Id && p.TemplateAlertId != null)
                 .GroupBy(p => p.TemplateAlertId!.Value)
@@ -1207,9 +1208,15 @@ namespace HSMServer.Core.Cache
                 }
                 else
                 {
-                    // Fallback: match by conditions signature for legacy policies without TemplateAlertId
+                    // Fallback: match by conditions signature for legacy policies without TemplateAlertId.
+                    // Remove matched policy from candidates to prevent double-matching.
                     var sig = GetSignature(templatePolicy);
-                    existing = existingPoliciesWithoutId.FirstOrDefault(p => GetSignature(p) == sig);
+                    var matchIndex = existingPoliciesWithoutId.FindIndex(p => GetSignature(p) == sig);
+                    if (matchIndex >= 0)
+                    {
+                        existing = existingPoliciesWithoutId[matchIndex];
+                        existingPoliciesWithoutId.RemoveAt(matchIndex);
+                    }
                 }
 
                 if (existing != null)
@@ -1287,22 +1294,20 @@ namespace HSMServer.Core.Cache
                 }
             }
 
-            // Remove orphaned policies (belong to this template but no longer in template)
-            foreach (var existing in existingPoliciesWithId.Values)
+            // Remove orphaned policies (belong to this template but no longer matched).
+            // This also cleans up duplicate TemplateAlertId entries that weren't the first in their group.
+            var allTemplatePolicyIds = new HashSet<Guid>(template.Policies.Select(p => p.Id));
+            foreach (var existing in sensor.Policies.Where(p => p.TemplateId == template.Id).ToList())
+            {
                 if (!matchedSensorPolicyIds.Contains(existing.Id))
                     sensor.Policies.RemovePolicy(existing.Id, InitiatorInfo.AlertTemplate);
+            }
 
-            foreach (var existing in existingPoliciesWithoutId)
-                if (!matchedSensorPolicyIds.Contains(existing.Id))
-                    sensor.Policies.RemovePolicy(existing.Id, InitiatorInfo.AlertTemplate);
-
-            foreach (var existing in existingTtlsWithId.Values)
+            foreach (var existing in sensor.Policies.TTLPolicies.Where(t => t.TemplateId == template.Id).ToList())
+            {
                 if (!matchedSensorTtlIds.Contains(existing.Id))
                     sensor.Policies.RemoveTTLPolicy(existing.Id);
-
-            foreach (var existing in existingTtlsWithoutId)
-                if (!matchedSensorTtlIds.Contains(existing.Id))
-                    sensor.Policies.RemoveTTLPolicy(existing.Id);
+            }
 
             // Apply updates
             if (policyUpdates.Count > 0 || ttlPolicyUpdates.Count > 0)
