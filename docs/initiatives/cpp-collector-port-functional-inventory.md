@@ -15,6 +15,11 @@ line maps to a shared conformance test (see spike "Shared conformance script");
 once a line is test-covered, mark it `[x]` with the test name. The checklist
 retires when the conformance suite owns every line.
 
+Parity bug rule (AGENTS.md rule 9): a bug found in EITHER collector (.NET or
+native C++) is triaged against the other before closing — reproducing
+conformance scenario first, run on both, fix every implementation it is red
+on; one issue (`bug` + `cpp-port`) records the per-implementation verdict.
+
 Legend: **[wire]** = byte-for-byte compatibility. **[decide]** = explicit port
 decision needed (not automatically in scope).
 
