@@ -97,8 +97,8 @@ When adding new functionality:
 
 - DataCollector lifecycle: `Stopped -> Starting -> Running -> Stopping -> Stopped`; `Disposed` is terminal
 - `Dispose()` must work from any state and must not throw
-- `CollectorScheduler` is a static singleton; scheduled tasks survive collector restarts unless explicitly stopped
-- Sensor values are queued in `ConcurrentQueue` and sent in batches by `QueueProcessorBase`
+- `CollectorScheduler` is a per-collector instance (owned and disposed by its `DataCollector`); there is no process-global scheduler
+- Sensor values are queued in `Channel<QueueItem<T>>` and sent in batches by `QueueProcessorBase`; overflow/retry policy per `aicontext/features/collector/data-pipeline/feature.md`
 - HTTP retries use Polly with exponential backoff; currently no `ShouldHandle` for HTTP status codes (known issue)
 - `MessageDeduplicator` bounds cache size to prevent memory leaks from diverse exception messages
 
