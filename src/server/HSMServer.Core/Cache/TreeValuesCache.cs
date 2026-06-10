@@ -1382,7 +1382,10 @@ namespace HSMServer.Core.Cache
         {
             var product = GetProduct(productId);
             if (product == null)
+            {
+                _logger.Warn($"CollectDisabledStates: product {productId} not found, disabled states for template {templateId} will be lost");
                 return null;
+            }
 
             var states = new DisabledStates();
 
@@ -2433,13 +2436,17 @@ namespace HSMServer.Core.Cache
 
             public static string GetSignature(Policy policy)
             {
-                return string.Join("|", policy.Conditions
+                var sig = string.Join("|", policy.Conditions
                     .OrderBy(c => c.Property)
                     .ThenBy(c => c.Operation)
+                    .ThenBy(c => c.Target.Value)
                     .Select(c => $"{c.Property}:{c.Operation}:{c.Target}"));
+
+                return $"{sig}|status:{policy.Status}";
             }
 
-            public static string GetTtlSignature(long? rawTtlTicks) => $"ttl:{rawTtlTicks}";
+            public static string GetTtlSignature(long? rawTtlTicks) =>
+                $"ttl:{(rawTtlTicks.HasValue && rawTtlTicks.Value != long.MaxValue ? rawTtlTicks.Value : (long?)null)}";
         }
     }
 }
