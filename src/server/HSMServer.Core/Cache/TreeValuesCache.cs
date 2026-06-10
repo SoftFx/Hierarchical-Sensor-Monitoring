@@ -1497,7 +1497,7 @@ namespace HSMServer.Core.Cache
                 var productTtlUpdates = new List<PolicyUpdate>();
                 foreach (var ttl in product.Policies.TTLPolicies)
                 {
-                    if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
+                    if (!TryGetPolicyUpdate(ttl, chats, forceInitiator, out var ttlUpdate))
                         ttlUpdate = new PolicyUpdate(ttl, forceInitiator);
 
                     productTtlUpdates.Add(ttlUpdate);
@@ -1522,7 +1522,7 @@ namespace HSMServer.Core.Cache
 
                     foreach (var ttl in sensor.Policies.TTLPolicies)
                     {
-                        if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
+                        if (!TryGetPolicyUpdate(ttl, chats, forceInitiator, out var ttlUpdate))
                             ttlUpdate = new PolicyUpdate(ttl, forceInitiator);
 
                         sensorTtlUpdates.Add(ttlUpdate);
@@ -1536,7 +1536,7 @@ namespace HSMServer.Core.Cache
 
                     foreach (var policy in sensor.Policies)
                     {
-                        if (!TryGetPolicyUpdate(policy, chats, initiator, out var policyUpdate))
+                        if (!TryGetPolicyUpdate(policy, chats, forceInitiator, out var policyUpdate))
                             policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), forceInitiator);
 
                         policiesUpdate.Add(policyUpdate);
