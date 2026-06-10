@@ -46,6 +46,9 @@ Use a layered native shape:
 1. Inventory the existing managed collector and `src/wrapper` public surface:
    lifecycle, instant sensors, bar sensors, rate sensors, function sensors,
    default sensors, options, alerts, status/comment behavior, and file sends.
+   Done — see
+   [`cpp-collector-port-functional-inventory.md`](cpp-collector-port-functional-inventory.md)
+   (living checklist; tick items as the native core covers them).
 2. Pick a vertical slice small enough to finish:
    `DataCollector` construction, `Start`/`Stop`, one instant sensor type, value
    enqueueing, JSON/request DTO serialization, and a fake/in-memory sender.
