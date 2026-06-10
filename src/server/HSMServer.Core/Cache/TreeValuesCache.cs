@@ -1264,7 +1264,9 @@ namespace HSMServer.Core.Cache
                     }
                     else if (existingTtlsWithoutId.Count > 0)
                     {
-                        // Fallback: positional match for legacy TTL policies
+                        // Fallback: positional match for legacy TTL policies without TemplateAlertId.
+                        // TTL entries rarely have distinguishable conditions, so positional matching
+                        // is the best available heuristic for one-time migration of pre-TemplateAlertId data.
                         existing = existingTtlsWithoutId[0];
                         existingTtlsWithoutId.RemoveAt(0);
                     }
@@ -1296,7 +1298,6 @@ namespace HSMServer.Core.Cache
 
             // Remove orphaned policies (belong to this template but no longer matched).
             // This also cleans up duplicate TemplateAlertId entries that weren't the first in their group.
-            var allTemplatePolicyIds = new HashSet<Guid>(template.Policies.Select(p => p.Id));
             foreach (var existing in sensor.Policies.Where(p => p.TemplateId == template.Id).ToList())
             {
                 if (!matchedSensorPolicyIds.Contains(existing.Id))
@@ -1321,6 +1322,9 @@ namespace HSMServer.Core.Cache
                 };
 
                 TryUpdateSensor(update, out var error);
+
+                if (!string.IsNullOrEmpty(error))
+                    _logger.Error($"Failed to apply template {template.Id} to sensor {sensor.Id}: {error}");
             }
             else if (matchedSensorPolicyIds.Count == 0 && matchedSensorTtlIds.Count == 0 &&
                      (existingPoliciesWithId.Count > 0 || existingPoliciesWithoutId.Count > 0 ||
@@ -1478,6 +1482,12 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        /// <summary>
+        /// Builds a deterministic signature from policy conditions for legacy fallback matching.
+        /// Note: only conditions are compared; alerts with identical conditions but different
+        /// actions/status are indistinguishable. Only used for one-time migration of
+        /// pre-TemplateAlertId data, so this limitation is acceptable.
+        /// </summary>
         private static string GetSignature(Policy policy)
         {
             return string.Join("|", policy.Conditions
