@@ -68,14 +68,37 @@ namespace HSMServer.Core.Model.Policies
                     if (updatesDict.TryGetValue(policy.Id, out var update))
                     {
                         var oldValue = policy.ToString();
-                        policy.FullUpdate(update);
 
-                        if (!update.TTL.HasValue)
-                            policy.SetTTLParent(_model.Settings.TTL);
+                        if (policy.TemplateId != null && !update.Initiator.IsForceUpdate && update.Initiator != InitiatorInfo.AlertTemplate)
+                        {
+                            if (policy.IsDisabled != update.IsDisabled)
+                            {
+                                policy.SetDisabled(update.IsDisabled);
+                                journalEntries.Add((oldValue, policy, update, update.IsParentRequest));
+                            }
+                            else
+                            {
+                                newList.Add(policy);
+                                updatesDict.Remove(update.Id);
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            policy.FullUpdate(update);
 
-                        journalEntries.Add((oldValue, policy, update, update.IsParentRequest));
+                            if (!update.TTL.HasValue)
+                                policy.SetTTLParent(_model.Settings.TTL);
+
+                            journalEntries.Add((oldValue, policy, update, update.IsParentRequest));
+                        }
                         newList.Add(policy);
                         updatesDict.Remove(update.Id);
+                    }
+                    else if (policy.TemplateId != null)
+                    {
+                        // Preserve template-created TTL policies not in the update list
+                        newList.Add(policy);
                     }
                 }
 

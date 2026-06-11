@@ -174,7 +174,7 @@
                         @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionBlock.cshtml", condition)
                     }
 
-                    @if (!isTtlCondition)
+                    @if (!isTtlCondition && Model.TemplateId == null)
                     {
                         <a class="addCondition align-self-center"
                            data-bs-toggle="tooltip"
@@ -228,7 +228,10 @@
                 <a class="dropdown-item text-decoration-none fw-normal button-link showMessage">Show message</a>
                 <a class="dropdown-item text-decoration-none fw-normal button-link enable">@(Model.IsDisabled ? "Enable" : "Disable")</a>
             }
-            <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
+            @if(Model.TemplateId == null)
+            {
+                <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
+            }
         </div>
     </div>
 
@@ -275,6 +278,10 @@
         });
 
         $("a.deleteRow").off("click").on("click", function () {
+            if ($(this).closest("div.dataAlertRow").find("input[name='TemplateId']").val()) {
+                return;
+            }
+
             if ($(this).parents("#dataAlertsList_@TimeToLiveAlertViewModel.AlertKey").length > 0) {
                 $('#addTtlAlert').removeClass('disabled');
             }
@@ -330,6 +337,19 @@
                 isDisabledCheckbox.val("True");
             }
         });
+
+        @if (Model.TemplateId != null)
+        {
+            <text>
+            var alertRow = $("div#alertConstructor_@Model.Id");
+            alertRow.find("select.selectpicker").each(function () {
+                $(this).selectpicker('disable');
+            });
+            alertRow.find("select[name='Action']").prop('disabled', true);
+            alertRow.find("select[name='ScheduleId']").prop('disabled', true);
+            alertRow.find(".emojionearea").off('click').find(".emojionearea-button").remove();
+            </text>
+        }
     });
 
     window.updateAlertsAddButton = function () {

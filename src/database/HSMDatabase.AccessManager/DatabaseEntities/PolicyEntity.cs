@@ -68,6 +68,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public byte[] ScheduleId { get; init; }
 
+        public byte[] TemplateAlertId { get; init; }
+
         public long? TTL { get; init; }
     }
 }

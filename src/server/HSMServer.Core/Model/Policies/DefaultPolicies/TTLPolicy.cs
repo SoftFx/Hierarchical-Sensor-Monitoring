@@ -95,6 +95,7 @@ namespace HSMServer.Core.Model.Policies
             Icon = Icon,
             TemplateId = TemplateId.HasValue ? TemplateId.Value.ToByteArray() : [],
             ScheduleId = ScheduleId.HasValue ? ScheduleId.Value.ToByteArray() : [],
+            TemplateAlertId = TemplateAlertId.HasValue ? TemplateAlertId.Value.ToByteArray() : [],
             TTL = IsTTLFromParent ? null : TTLTicks,
         };
 
