@@ -23,6 +23,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="HSMDataCollector.Tests" />
     <InternalsVisibleTo Include="HSMDataCollector.IntegrationTests" />
+    <InternalsVisibleTo Include="HSMDataCollector.CrashTests.Host" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="collector.nlog.config">

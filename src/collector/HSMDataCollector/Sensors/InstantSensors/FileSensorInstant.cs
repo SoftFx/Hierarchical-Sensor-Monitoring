@@ -32,7 +32,7 @@ namespace HSMDataCollector.Sensors
             if (value == null)
                 return;
 
-            AddValue(Encoding.UTF8.GetBytes(value).ToList(), status, comment);
+            AddValue(Encoding.UTF8.GetBytes(value).AsList(), status, comment);
         }
 
         public void AddValue(string value, string comment) => AddValue(value, SensorStatus.Ok, comment);
@@ -64,9 +64,11 @@ namespace HSMDataCollector.Sensors
                 if (_options.MaxFileSizeBytes <= 0)
                     throw new ArgumentOutOfRangeException(nameof(_options.MaxFileSizeBytes), "Max file size must be greater than zero.");
 
-                if (fileInfo.Length > _options.MaxFileSizeBytes)
+                var maxFileSizeBytes = GetEffectiveMaxFileSizeBytes(_options.MaxFileSizeBytes);
+
+                if (fileInfo.Length > maxFileSizeBytes)
                 {
-                    _logger.Error($"{SensorPath} - {filePath} file size {fileInfo.Length} bytes exceeds limit {_options.MaxFileSizeBytes} bytes.");
+                    _logger.Error($"{SensorPath} - {filePath} file size {fileInfo.Length} bytes exceeds limit {maxFileSizeBytes} bytes.");
                     return false;
                 }
 
@@ -76,7 +78,7 @@ namespace HSMDataCollector.Sensors
                     return false;
                 }
 
-                var bytes = (await ReadAllBytesAsync(fileInfo).ConfigureAwait(false)).ToList();
+                var bytes = (await ReadAllBytesAsync(fileInfo).ConfigureAwait(false)).AsList();
                 var value = ApplyCustomFileProperties(GetSensorValue(bytes), fileName, extensions).Complete(comment, status);
 
                 SendValue(value);
@@ -90,6 +92,12 @@ namespace HSMDataCollector.Sensors
 
             return true;
         }
+
+
+        // The user-configured cap is clamped to the hard ceiling: the file is fully buffered and its
+        // serialized form expands ~4x, so an unbounded cap is an OOM vector (#1102-C1).
+        internal static long GetEffectiveMaxFileSizeBytes(long configuredMaxFileSizeBytes) =>
+            Math.Min(configuredMaxFileSizeBytes, FileSensorOptions.MaxAllowedFileSizeBytes);
 
 
         private static async Task<byte[]> ReadAllBytesAsync(FileInfo fileInfo)

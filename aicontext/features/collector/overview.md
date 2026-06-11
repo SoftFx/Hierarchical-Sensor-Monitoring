@@ -122,6 +122,75 @@ Each `QueueProcessorBase` maintains its own `QueueState` (Stopped/Running/Stoppi
 
 Each `DataCollector` owns its own `CollectorScheduler` instance (implementing `ICollectorScheduler`). The scheduler is constructed in `DataCollector`'s constructor, threaded through `DataProcessor.Scheduler`, and disposed at the end of `Dispose()` after `_dataProcessor` and `_dataSender`. Sensors and `MessageDeduplicator` schedule periodic work through this injected instance — there is no process-global scheduler. Two collectors in the same process have independent timer wheels and worker tasks.
 
+### Callback exception isolation (host-crash safety)
+
+Invariant: **a throwing host callback must never crash the host process or break the collector
+component that invoked it** (#1102 A1/A2, #1103). Isolation layers:
+
+- `CollectorScheduler.ExecuteQueuedTask` (async void dispatch) has a last-resort catch-all — an
+  exception escaping `async void` is rethrown on the ThreadPool and kills the process.
+- `ScheduledTask.ExecuteAttachedAsync` guards the `onError` invocation (sensors pass
+  `HandleException` here; hosts subscribe `ExceptionThrowing` inside it).
+- `SensorBase.HandleException` isolates each `ExceptionThrowing` subscriber individually (same
+  policy as lifecycle events); a throwing subscriber does not starve later subscribers or stop the
+  sensor send loop.
+- `ProcessEventListener` (net6 time-in-gc counters) guards `OnEventSourceCreated`/`OnEventWritten`
+  and parses counter payloads null-safely (null `EventName`, missing `Name`/`Mean` keys, non-double
+  `Mean` are all skipped). The callback body is extracted into the internal `ProcessEventCounters`
+  method for direct adversarial testing.
+- `LoggerManager` and lifecycle events/`ILifecycleListener` dispatch were already isolated.
+
+Verification is three-layered because a host-process crash cannot be asserted in-process:
+`HSMDataCollector.CrashTests.Host` (a console host wiring deliberately throwing callbacks) is
+spawned by `CollectorCrashIsolationTests` and must print its survival sentinel; the host-callback
+adversarial matrix in `CollectorAdversarialTests` and `ProcessEventListenerTests` cover the
+in-process behavior. CI lane: `.github/workflows/collector-unit-tests.yml` (windows runner). This
+invariant is not expressible in `.hsmtest` and is tracked in the cross-cutting port invariants of
+`docs/initiatives/cpp-collector-port-spike.md`.
+
+Note (empirical, net6): the in-proc `EventSource` dispatch swallows `EventListener` callback
+exceptions (`ThrowOnEventWriteErrors=false`), so the unguarded A2 listener silently lost counter
+values rather than crashing in-proc; the guard removes the dependence on that runtime behavior.
+
+### Reliability hardening (#1102 wave, 2026-06-11)
+
+Fixed test-first on the cpp-port-spike branch (each item has a dedicated unit-test file):
+
+- **E1, perf-counter instance binding**: multi-instance categories ("Process", ".NET CLR Memory")
+  bind by PID via the category's PID counter ("ID Process" / "Process ID"), never by name alone, and
+  re-validate the binding on every read — an instance-index reshuffle after a neighbor process exit
+  re-resolves instead of silently reporting another process's data. Name-only categories prefer an
+  exact instance-name match over a substring match. Logic lives in
+  `PerformanceCounterInstanceResolver` / `ProcessAwarePerformanceCounter` behind the
+  `IPerformanceCounterSource` seam (`PerformanceCounterInstanceResolutionTests`).
+- **B1, scheduler worker backstop**: `CollectorScheduler.Loop` restarts the worker with a 1 s backoff
+  on unexpected exceptions instead of dying silently; cancellation/dispose races exit normally.
+- **B2, bounded OS calls**: `PerformanceCounterCategory.GetInstanceNames()` and
+  `ServiceController.GetServices()` run through `BoundedBlockingCall` (30 s default) so a corrupted
+  counter registry or hung SCM cannot stall sensor init forever (`BoundedBlockingCallTests`).
+- **C1, file sensor OOM bound**: user-settable `MaxFileSizeBytes` is clamped to
+  `FileSensorOptions.MaxAllowedFileSizeBytes` (128 MB) at send time, and the duplicate
+  byte[]→List copy is eliminated via `ByteCollectionExtensions.AsList` (zero-copy wrap with a safe
+  fallback; the buffer ownership transfers to the list) (`FileSensorBoundsTests`).
+- **E2, rate sensor elapsed time**: `MonitoringRateSensor` divides the accumulated sum by the time
+  actually elapsed since the previous sample (monotonic Stopwatch, injectable in tests), falling back
+  to the configured period for the first sample / zero gap — no more inflated samples after machine
+  sleep (`RateSensorElapsedTimeTests`).
+- **E4, DNS staleness**: net6+ uses `SocketsHttpHandler` with `PooledConnectionLifetime = 5 min`;
+  net472 bounds the endpoint's `ServicePoint.ConnectionLeaseTimeout` — keep-alive connections
+  periodically re-resolve DNS (`TransportAndTimeNormalizationTests`).
+- **E5, Local time normalization**: `SensorBase.SendValue` converts `DateTimeKind.Local` values of
+  `SensorValueBase.Time` to UTC at the send boundary; the wire DTO is untouched.
+- **C2, BuildDate mirror atomicity** (fixed after merging master's #1090/#1091 queue followups):
+  the mirror exists because `Channel<T>` cannot Peek the head BuildDate that the stale-retry filter
+  needs, so it cannot be dropped — instead every channel write/read is paired with its mirror
+  update under `_mirrorLock`. Without that atomicity a consumer could pop the channel while the
+  producer's mirror write had not landed, leaving a permanent orphan tick that skews the peeked
+  head forever (deterministically reproduced by `QueueMirrorConsistencyTests` before the fix).
+
+Deliberately not fixed: D2 (Polly `ShouldHandle`) is a [decide] item in #1096; E3 (cgroup awareness)
+belongs to #1099; D1/D3/D4 are recorded architectural trade-offs, not point fixes.
+
 ### Sensor scheduling via composition
 
 Sensors do not own scheduling boilerplate inline. The "schedule one periodic action; start/stop/restart it once" lifecycle is extracted into `ScheduledTaskHandle` (a composable wrapper over a single `ScheduledTask`). Sensors *compose* one handle per periodic action rather than inheriting the timer plumbing:

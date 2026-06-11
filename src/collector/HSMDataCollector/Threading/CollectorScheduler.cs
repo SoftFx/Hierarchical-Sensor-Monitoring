@@ -107,7 +107,17 @@ namespace HSMDataCollector.Threading
             }
             catch (Exception ex)
             {
-                _onError?.Invoke(ex);
+                try
+                {
+                    _onError?.Invoke(ex);
+                }
+                catch (Exception onErrorEx)
+                {
+                    // onError is user-facing (sensors pass HandleException, hosts subscribe to
+                    // ExceptionThrowing inside it). A throw here runs inside the scheduler's
+                    // async-void dispatch, where an escaping exception kills the host process.
+                    Trace.TraceError($"{nameof(ScheduledTask)} onError callback failed: {onErrorEx}");
+                }
             }
             finally
             {
@@ -309,6 +319,45 @@ namespace HSMDataCollector.Threading
 
         private void Loop()
         {
+            // #1102-B1 backstop: a faulted worker means no scheduled work ever runs again (silent
+            // collector death). Nothing on this thread is expected to throw outside of shutdown, but
+            // if something does, log and restart the loop instead of dying silently. Cancellation and
+            // dispose races terminate normally.
+            while (!_cancellation.IsCancellationRequested)
+            {
+                try
+                {
+                    LoopCore();
+                    return;
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Scheduler handles are disposed only after shutdown; nothing left to schedule.
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Trace.TraceError($"{nameof(CollectorScheduler)} worker failed unexpectedly; restarting: {ex}");
+
+                    try
+                    {
+                        // Backoff so a persistent failure cannot turn into a hot crash loop.
+                        Task.Delay(TimeSpan.FromSeconds(1), _cancellation.Token).GetAwaiter().GetResult();
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void LoopCore()
+        {
             while (!_cancellation.IsCancellationRequested)
             {
                 List<ScheduledTask> dueTasks = null;
@@ -389,6 +438,20 @@ namespace HSMDataCollector.Threading
             try
             {
                 await task.ExecuteAttachedAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // async void: an exception escaping here is rethrown on the ThreadPool and kills
+                // the host process. ExecuteAttachedAsync isolates action/onError failures itself;
+                // this is the last-resort backstop for the dispatch path — even a throwing trace
+                // listener must not break it.
+                try
+                {
+                    Trace.TraceError($"{nameof(CollectorScheduler)} scheduled task dispatch failed: {ex}");
+                }
+                catch
+                {
+                }
             }
             finally
             {

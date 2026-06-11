@@ -58,14 +58,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         // the misleading "preserved" wording used in the normal retry loop (#1087 A).
         private int _inFlushFlag;
 
-        // Mirrors the BuildDate.Ticks of items currently in the channel, in FIFO order. Updated
-        // alongside every successful Writer.TryWrite (enqueue) and Reader.TryRead (dequeue) so
-        // TryPeek gives the head's BuildDate at a microscopic lag. Used by the retry filter to
-        // decide if a failed-retry item is OLDER than what's currently waiting — if so, it would
-        // sit at the tail with a stale BuildDate and survive later overflow eviction that drops
-        // the actually-fresher FIFO head (issue #1090). Concurrent producers can briefly desync
-        // the mirror from the channel under contention, but the worst case is one retry incorrectly
-        // dropped or kept; the consistency is good enough for a policy heuristic.
+        // Mirrors the BuildDate.Ticks of items currently in the channel, in FIFO order, so the
+        // retry filter can peek the head's BuildDate (Channel<T> cannot Peek). Used to decide if a
+        // failed-retry item is OLDER than what's currently waiting — if so, it would sit at the
+        // tail with a stale BuildDate and survive later overflow eviction that drops the
+        // actually-fresher FIFO head (issue #1090).
+        //
+        // Every channel write/read is paired with its mirror update under _mirrorLock (#1102-C2):
+        // without that atomicity a consumer could pop the channel while the producer's mirror write
+        // had not landed yet, leaving a PERMANENT orphan tick that shifts the peeked head to stale
+        // values and silently weakens the retry filter for the rest of the process lifetime
+        // (reproduced by QueueMirrorConsistencyTests).
         //
         // Replaces the original watermark approach from b0f8a90f5, which tracked the all-time
         // newest accepted BuildDate. That implementation dropped almost any multi-item retry
@@ -73,7 +76,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         // its older siblings — caught by PR #1091 review. The mirror tracks only currently-queued
         // items, so re-enqueueing a batch [A(t1), B(t2), C(t3)] into an empty queue preserves
         // all three (the mirror is empty for A, becomes [t1] for B's check, [t1, t2] for C's).
-        private readonly ConcurrentQueue<long> _buildDateMirror = new ConcurrentQueue<long>();
+        private readonly Queue<long> _buildDateMirror = new Queue<long>();
+        private readonly object _mirrorLock = new object();
 
         public abstract string QueueName { get; }
 
@@ -270,18 +274,24 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             if (isRetry && QueueCount >= _options.MaxQueueSize)
                 return EnqueueResult.Accept(droppedCount: 1);
 
-            if (!Writer.TryWrite(item))
+            // Channel write and mirror update are one atomic step (#1102-C2): a consumer observing
+            // the item in the channel is guaranteed to also observe its tick in the mirror, so no
+            // dequeue can ever leave an orphan tick behind. The (potentially user-implemented)
+            // logger is invoked outside the lock.
+            bool written;
+            lock (_mirrorLock)
+            {
+                written = Writer.TryWrite(item);
+
+                if (written)
+                    _buildDateMirror.Enqueue(item.BuildDate.Ticks);
+            }
+
+            if (!written)
             {
                 _logger.Error($"{QueueName} queue processor did not write value");
                 return EnqueueResult.RejectedStopped();
             }
-
-            // Mirror update: the channel now contains this item at the tail; record its
-            // BuildDate so a later TryPeek sees the right head once everything older has been
-            // consumed. Order matters — write to channel first so the mirror cannot get ahead
-            // of the channel (the reverse race is acceptable; under contention the mirror may
-            // briefly trail the channel, which only weakens the retry filter, never breaks it).
-            _buildDateMirror.Enqueue(item.BuildDate.Ticks);
 
             int dropped = 0;
             while (QueueCount > _options.MaxQueueSize)
@@ -305,10 +315,13 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             if (Volatile.Read(ref _acceptingWritesFlag) == 0)
                 return false;
 
-            if (!_buildDateMirror.TryPeek(out var headTicks))
-                return false;
+            lock (_mirrorLock)
+            {
+                if (_buildDateMirror.Count == 0)
+                    return false;
 
-            return item.BuildDate.Ticks < headTicks;
+                return item.BuildDate.Ticks < _buildDateMirror.Peek();
+            }
         }
 
         internal virtual EnqueueResult Enqueue(IEnumerable<T> items)
@@ -530,16 +543,21 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return Task.Delay(delay, token);
         }
 
-        // Single dequeue path so the BuildDate mirror always stays in step with the channel
-        // (modulo concurrent-producer race noise). Callers in this class are: GetPackage,
-        // the EnqueueCore overflow trim loop, and ClearQueue.
+        // Single dequeue path so the BuildDate mirror always stays in step with the channel —
+        // channel read and mirror dequeue are one atomic step under _mirrorLock (#1102-C2).
+        // Callers in this class are: GetPackage, the EnqueueCore overflow trim loop, and ClearQueue.
         protected bool TryDequeue(out QueueItem<T> item)
         {
-            if (!Reader.TryRead(out item))
-                return false;
+            lock (_mirrorLock)
+            {
+                if (!Reader.TryRead(out item))
+                    return false;
 
-            _buildDateMirror.TryDequeue(out _);
-            return true;
+                if (_buildDateMirror.Count > 0)
+                    _buildDateMirror.Dequeue();
+
+                return true;
+            }
         }
 
         private void RegisterCompletionCleanup(Task task, CancellationTokenSource tokenSource)

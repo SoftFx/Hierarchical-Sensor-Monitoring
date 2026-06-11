@@ -9,6 +9,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDataCollector.Tests", "H
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMSensorDataObjects", "..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj", "{FF797AA3-F4A4-41A4-BABB-19C4CA5FEF47}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HSMDataCollector.CrashTests.Host", "HSMDataCollector.CrashTests.Host\HSMDataCollector.CrashTests.Host.csproj", "{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HSMDataCollector.IntegrationTests", "HSMDataCollector.IntegrationTests\HSMDataCollector.IntegrationTests.csproj", "{84ED20A4-570D-4314-B237-050FC4ECB197}"
 EndProject
 Global
@@ -57,6 +59,18 @@ Global
 		{FF797AA3-F4A4-41A4-BABB-19C4CA5FEF47}.Release|x64.Build.0 = Release|Any CPU
 		{FF797AA3-F4A4-41A4-BABB-19C4CA5FEF47}.Release|x86.ActiveCfg = Release|Any CPU
 		{FF797AA3-F4A4-41A4-BABB-19C4CA5FEF47}.Release|x86.Build.0 = Release|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Debug|x64.Build.0 = Debug|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Debug|x86.Build.0 = Debug|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Release|x64.ActiveCfg = Release|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Release|x64.Build.0 = Release|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Release|x86.ActiveCfg = Release|Any CPU
+		{FA4FDDE1-BE53-4520-9C32-8C83EECEF125}.Release|x86.Build.0 = Release|Any CPU
 		{84ED20A4-570D-4314-B237-050FC4ECB197}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{84ED20A4-570D-4314-B237-050FC4ECB197}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{84ED20A4-570D-4314-B237-050FC4ECB197}.Debug|x64.ActiveCfg = Debug|Any CPU

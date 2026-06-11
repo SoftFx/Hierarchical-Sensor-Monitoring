@@ -17,6 +17,20 @@ namespace HSMDataCollector.DefaultSensors
 
 
     /// <summary>
+    /// Raw access to a performance-counter category: instance enumeration and counter creation for an
+    /// already-resolved instance name. This is the thin OS seam under
+    /// <see cref="Windows.ProcessAwarePerformanceCounter"/> — the instance-resolution logic on top of it
+    /// is platform-neutral and unit-tested with a fake source.
+    /// </summary>
+    internal interface IPerformanceCounterSource
+    {
+        string[] GetInstanceNames(string category);
+
+        IPerformanceCounter Create(string category, string counter, string instance);
+    }
+
+
+    /// <summary>
     /// Creates <see cref="IPerformanceCounter"/> instances. The default production implementation wraps
     /// the real Windows performance-counter API; tests substitute a fake. Implementations must be
     /// thread-safe for concurrent <see cref="Create"/> calls.
