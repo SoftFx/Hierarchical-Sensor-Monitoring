@@ -132,3 +132,6 @@ src/server/HSMServer/Config/*
 src/module/HSMPingModule/Config/*
 /code-review-report.md
 /code-review-report.json
+
+# Claude Code local state (permissions, worktrees) - machine-local, never commit
+.claude/
