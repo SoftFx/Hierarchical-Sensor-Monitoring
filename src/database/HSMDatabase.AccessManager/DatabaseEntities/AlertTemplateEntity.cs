@@ -22,6 +22,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public string Name { get; set; }
 
+        public List<string> Paths { get; init; } = [];
+
+        // Legacy field for backward-compatible deserialization
         public string Path { get; init; }
 
         public Guid FolderId { get; init; }

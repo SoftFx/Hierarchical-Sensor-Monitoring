@@ -227,12 +227,17 @@ Cross-checking against `df -k /` and `grep MemAvailable /proc/meminfo` confirms 
 
 | Feature | Folder | Description |
 |---|---|---|
-| Scheduling | [`scheduling/`](./scheduling/feature.md) | CollectorScheduler timer wheel, ScheduledTask |
-| Data Pipeline | [`data-pipeline/`](./data-pipeline/feature.md) | Queue processors, batching, overflow handling |
+| Public API | [`public-api/`](./public-api/feature.md) | Construction, CollectorOptions, lifecycle methods, sensor-creation surface, builders |
+| Sensors | [`sensors/`](./sensors/feature.md) | Sensor kinds, value-flow mechanics, validation, options/path model |
+| Default Sensors | [`default-sensors/`](./default-sensors/feature.md) | Built-in Windows/Unix/module/diagnostic sensors, prototypes, group helpers |
+| Alerts | [`alerts/`](./alerts/feature.md) | Fluent alert DSL → registration payloads |
+| Data Pipeline | [`data-pipeline/`](./data-pipeline/feature.md) | Queues, batching, overflow/retry policy (#1088/#1090), shutdown modes |
 | HTTP Client | [`http-client/`](./http-client/feature.md) | HTTPS transport, Polly retry, TLS configuration |
-| Sensors | [`sensors/`](./sensors/feature.md) | Sensor types: bar, rate, function, instant, file |
-| Default Sensors | [`default-sensors/`](./default-sensors/feature.md) | Built-in system metrics (CPU, RAM, disk, threads, etc.) |
+| Scheduling | [`scheduling/`](./scheduling/feature.md) | Per-collector timer wheel, ScheduledTaskHandle |
 | Error Handling | [`error-handling/`](./error-handling/feature.md) | Exception isolation, MessageDeduplicator, diagnostic sensors |
+
+Wire contract (shared with server/wrapper/ports): [`../api/wire-contract/feature.md`](../api/wire-contract/feature.md).
+C++ port coverage tracker: [`docs/initiatives/cpp-collector-port-functional-inventory.md`](../../../docs/initiatives/cpp-collector-port-functional-inventory.md).
 
 ## Thread Safety Model
 
@@ -258,4 +263,4 @@ Cross-checking against `df -k /` and `grep MemAvailable /proc/meminfo` confirms 
 ## Known Issues
 
 - Polly retry does not handle HTTP 4xx/5xx (`ShouldHandle` not configured) — data silently lost on server errors
-- Queue overflow drops oldest items without per-drop logging (only aggregate overflow count)
+- Queue overflow drops oldest items without per-drop logging (only aggregate overflow count via `QueueOverflowSensor`; retry-path drops are counted there too since #1088/#1090)

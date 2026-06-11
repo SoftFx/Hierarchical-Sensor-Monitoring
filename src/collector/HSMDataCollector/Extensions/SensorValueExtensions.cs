@@ -28,6 +28,12 @@ namespace HSMDataCollector.Extensions
             if (value is double doubleValue)
                 return !double.IsNaN(doubleValue) && !double.IsInfinity(doubleValue);
 
+            // Float follows the same NaN/Infinity rejection as double — the generic
+            // SensorBase<float, ...> path went uncovered previously, so SendValue(float.NaN)
+            // would land in the queue and propagate to the server.
+            if (value is float floatValue)
+                return !float.IsNaN(floatValue) && !float.IsInfinity(floatValue);
+
             return true;
         }
 

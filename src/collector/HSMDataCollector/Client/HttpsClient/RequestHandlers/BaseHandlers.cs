@@ -81,6 +81,15 @@ namespace HSMDataCollector.Client.HttpsClient
                     return new PackageSendingInfo(request.Length, response);
                 }
             }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // Caller-driven cancellation (e.g. queue stop): propagate so the queue processor's
+                // ShutdownMode policy can decide whether to re-enqueue or drop the package.
+                // HttpClient's own request timeout also surfaces as OperationCanceledException but
+                // without the caller's token being cancelled — that path falls through to the
+                // generic catch and becomes a normal retryable Error.
+                throw;
+            }
             catch (Exception ex)
             {
                 LogSendFailure(ex, request);
@@ -98,6 +107,11 @@ namespace HSMDataCollector.Client.HttpsClient
                     await HandleRequestResultAsync(response, value, token).ConfigureAwait(false);
                     return new PackageSendingInfo(request.Length, response);
                 }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // See IEnumerable overload above.
+                throw;
             }
             catch (Exception ex)
             {

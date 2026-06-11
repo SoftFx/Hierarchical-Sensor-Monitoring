@@ -285,8 +285,13 @@ namespace HSMDataCollector.Core
             if (existingSensorIdentity.Type != newSensorIdentity.Type ||
                 existingSensorIdentity.IsLastValue != newSensorIdentity.IsLastValue)
             {
-                if (!newSensorIdentity.IsLastValue)
-                    newSensor.Dispose();
+                // Throw path: newSensor never enters storage. Dispose regardless of last-value:
+                // its DisposeAsyncCore short-circuits the StopAsync-flushes-default override, so
+                // disposing here cannot emit a stray default value. The success path below is
+                // the one that needs the IsLastValue guard (the existing sensor is the one we
+                // return; disposing a duplicate last-value with the override would flush its
+                // last-known value).
+                newSensor.Dispose();
 
                 throw new InvalidOperationException(
                     $"Sensor with path {newSensor.SensorPath} already exists as {DescribeSensor(existingSensorIdentity)}; requested {DescribeSensor(newSensorIdentity)}.");

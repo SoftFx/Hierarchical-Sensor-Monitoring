@@ -1,4 +1,4 @@
-name: Linux Proc Sensor Integration Tests
+name: Collector Integration Tests
 
 on:
   push:
@@ -20,11 +20,17 @@ on:
     - cron: '3 6 * * 1-5'
 
 jobs:
-  linux-proc-sensor-tests:
+  integration-tests:
     # Skip on draft PRs only. Non-PR events (push/schedule/workflow_dispatch) have no
     # pull_request payload, so they must still run — hence the event_name guard.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    env:
+      # Matches the fixture's `FROM hsmonitoring/hierarchical_sensor_monitoring:latest`.
+      # HSMServer.csproj already sets `ContainerImageTags=$(Version);latest`, so the
+      # local build is automatically tagged `:latest` as well — Docker prefers local
+      # over remote when the tag matches, so no push is needed.
+      SERVER_REPOSITORY: hsmonitoring/hierarchical_sensor_monitoring
     steps:
       - uses: actions/checkout@v4
 
@@ -32,5 +38,16 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Run Linux Proc Sensor Tests
-        run: dotnet test src/collector/HSMDataCollector.IntegrationTests/HSMDataCollector.IntegrationTests.csproj --filter FullyQualifiedName~LinuxProcSensorTests --logger "console;verbosity=detailed"
+      # Build the server container from the SAME branch the integration tests run against.
+      # Without this step the fixture pulls master's published `:latest`, so any server-side
+      # API addition on the branch (e.g. a new /enum endpoint) is invisible to the tests
+      # and the matching collector-side route returns 404. Mirrors the pattern in tests.yml.
+      # `ContainerRepository` is the modern property name; the deprecated `ContainerImageName`
+      # also works but emits a warning. We do NOT set ContainerImageTag because the csproj
+      # already supplies `ContainerImageTags`, and the two are mutually exclusive (error
+      # CONTAINER2008).
+      - name: Build server container image from branch source
+        run: dotnet publish src/server/HSMServer/HSMServer.csproj -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerRepository=${{ env.SERVER_REPOSITORY }}
+
+      - name: Run Integration Tests
+        run: dotnet test src/collector/HSMDataCollector.IntegrationTests --logger "console;verbosity=detailed"

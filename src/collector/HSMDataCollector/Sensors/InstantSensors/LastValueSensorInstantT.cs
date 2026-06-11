@@ -40,7 +40,10 @@ namespace HSMDataCollector.Sensors
         public override void AddValue(T value, SensorStatus status, string comment)
         {
             if (!SensorValueExtensions.IsValidValue(value, status))
+            {
+                _dataProcessor.LogDroppedValue(SensorPath, $"last-value update failed validation (status: {status})");
                 return;
+            }
 
             _lastComment = comment;
             _lastStatus = status;

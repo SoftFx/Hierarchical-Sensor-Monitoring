@@ -99,12 +99,28 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
+                // Capture the generation once: if the sensor stops or restarts between this entry
+                // and the lock acquisition, we drop the bar instead of sending an obsolete one.
+                var capturedEpoch = LifecycleEpoch;
+
                 lock (_lockBar)
                 {
+                    if (LifecycleEpoch != capturedEpoch)
+                        return;
+
                     if (_internalBar.CloseTime < DateTime.UtcNow)
                     {
-                        SendValueAction();
-                        BuildNewBar();
+                        // Roll the bar ONLY if we actually sent its snapshot. The periodic send
+                        // schedule shares _sendValueInProgress with us, and may already be in
+                        // SendValueAction at this moment without having taken _lockBar yet to
+                        // snapshot. If we blindly BuildNewBar after a guard-skipped no-op, the
+                        // periodic send's GetValue lands on the freshly-reset (empty) bar and
+                        // the closed bar's aggregated data is lost. Deferring the roll keeps the
+                        // bar intact: either the periodic send finishes its snapshot (data sent
+                        // by the other thread), or our next CheckCurrentBar tick rolls cleanly
+                        // once the guard releases.
+                        if (TrySendValue())
+                            BuildNewBar();
                     }
                 }
             }

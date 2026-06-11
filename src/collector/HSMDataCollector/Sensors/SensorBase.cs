@@ -94,9 +94,11 @@ namespace HSMDataCollector.DefaultSensors
 
         protected void HandleException(Exception ex)
         {
+            // _dataProcessor is non-null by the ctor invariant; the try/catch is not a null guard
+            // but isolation against AddException itself failing.
             try
             {
-                _dataProcessor?.AddException(SensorPath, ex);
+                _dataProcessor.AddException(SensorPath, ex);
             }
             catch (Exception reportEx)
             {
@@ -120,7 +122,7 @@ namespace HSMDataCollector.DefaultSensors
                 {
                     try
                     {
-                        _dataProcessor?.AddException(SensorPath, handlerEx);
+                        _dataProcessor.AddException(SensorPath, handlerEx);
                     }
                     catch (Exception reportEx)
                     {

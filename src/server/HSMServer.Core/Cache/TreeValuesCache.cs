@@ -1169,38 +1169,149 @@ namespace HSMServer.Core.Cache
         }
 
 
-        private void AddAlertFromTemplate(BaseSensorModel sensor, AlertTemplateModel alertTemplateModel)
+        private void ApplyTemplateToSensor(BaseSensorModel sensor, AlertTemplateModel template)
         {
-            List<PolicyUpdate> ttlPolicyUpdates = [];
-            List<PolicyUpdate> policyUpdates = [];
+            // Categorize existing sensor policies by TemplateAlertId.
+            // Only track the first policy per TemplateAlertId; extras become orphans to clean up.
+            var existingPoliciesWithId = sensor.Policies
+                .Where(p => p.TemplateId == template.Id && p.TemplateAlertId != null)
+                .GroupBy(p => p.TemplateAlertId!.Value)
+                .ToDictionary(g => g.Key, g => g.First());
 
-            if (alertTemplateModel.TtlEntries is not null)
+            var existingPoliciesWithoutId = sensor.Policies
+                .Where(p => p.TemplateId == template.Id && p.TemplateAlertId == null)
+                .ToList();
+
+            var existingTtlsWithId = sensor.Policies.TTLPolicies
+                .Where(t => t.TemplateId == template.Id && t.TemplateAlertId != null)
+                .GroupBy(t => t.TemplateAlertId!.Value)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var existingTtlsWithoutId = sensor.Policies.TTLPolicies
+                .Where(t => t.TemplateId == template.Id && t.TemplateAlertId == null)
+                .ToList();
+
+            var policyUpdates = new List<PolicyUpdate>();
+            var ttlPolicyUpdates = new List<PolicyUpdate>();
+            var matchedSensorPolicyIds = new HashSet<Guid>();
+            var matchedSensorTtlIds = new HashSet<Guid>();
+
+            // Handle regular policies
+            foreach (var templatePolicy in template.Policies)
             {
-                foreach (var entry in alertTemplateModel.TtlEntries)
+                Policy existing = null;
+
+                // Try exact match by TemplateAlertId
+                if (existingPoliciesWithId.TryGetValue(templatePolicy.Id, out var exact))
                 {
-                    var ttlPolicy = entry.Policy;
-                    var ttlInterval = entry.Interval;
-
-                    // When TTL is inherited from parent (IsFromParent=true) or not set (null), pass null
-                    // so the policy falls back to the parent's TTL.
-                    long? ttlTicks = ttlInterval?.IsFromParent == false && ttlInterval.Ticks != long.MaxValue
-                        ? ttlInterval.Ticks
-                        : null;
-
-                    ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, InitiatorInfo.AlertTemplate)
+                    existing = exact;
+                }
+                else
+                {
+                    // Fallback: match by conditions signature for legacy policies without TemplateAlertId.
+                    // Remove matched policy from candidates to prevent double-matching.
+                    var sig = GetSignature(templatePolicy);
+                    var matchIndex = existingPoliciesWithoutId.FindIndex(p => GetSignature(p) == sig);
+                    if (matchIndex >= 0)
                     {
-                        TemplateId = alertTemplateModel.Id,
-                        TTL = ttlTicks,
+                        existing = existingPoliciesWithoutId[matchIndex];
+                        existingPoliciesWithoutId.RemoveAt(matchIndex);
+                    }
+                }
+
+                if (existing != null)
+                {
+                    // UPDATE in-place: preserve existing policy Id and disabled state
+                    policyUpdates.Add(new PolicyUpdate(templatePolicy, InitiatorInfo.AlertTemplate)
+                    {
+                        Id = existing.Id,
+                        TemplateId = template.Id,
+                        TemplateAlertId = templatePolicy.Id,
+                        IsDisabled = existing.IsDisabled,
+                    });
+                    matchedSensorPolicyIds.Add(existing.Id);
+                }
+                else
+                {
+                    // ADD new policy
+                    policyUpdates.Add(new PolicyUpdate(templatePolicy, InitiatorInfo.AlertTemplate)
+                    {
+                        Id = Guid.NewGuid(),
+                        TemplateId = template.Id,
+                        TemplateAlertId = templatePolicy.Id,
                     });
                 }
             }
 
-            foreach (var policy in alertTemplateModel.Policies)
-                policyUpdates.Add(new PolicyUpdate(policy, InitiatorInfo.AlertTemplate) { TemplateId = alertTemplateModel.Id });
-
-            if (ttlPolicyUpdates.Count > 0 || policyUpdates.Count > 0)
+            // Handle TTL policies
+            if (template.TtlEntries is not null)
             {
+                foreach (var entry in template.TtlEntries)
+                {
+                    var ttlPolicy = entry.Policy;
+                    var ttlInterval = entry.Interval;
 
+                    long? ttlTicks = ttlInterval?.IsFromParent == false && ttlInterval.Ticks != long.MaxValue
+                        ? ttlInterval.Ticks
+                        : null;
+
+                    TTLPolicy existing = null;
+
+                    // Try exact match by TemplateAlertId
+                    if (existingTtlsWithId.TryGetValue(ttlPolicy.Id, out var exact))
+                    {
+                        existing = exact;
+                    }
+                    else if (existingTtlsWithoutId.Count > 0)
+                    {
+                        // Fallback: positional match for legacy TTL policies
+                        existing = existingTtlsWithoutId[0];
+                        existingTtlsWithoutId.RemoveAt(0);
+                    }
+
+                    if (existing != null)
+                    {
+                        ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, InitiatorInfo.AlertTemplate)
+                        {
+                            Id = existing.Id,
+                            TemplateId = template.Id,
+                            TemplateAlertId = ttlPolicy.Id,
+                            TTL = ttlTicks,
+                            IsDisabled = existing.IsDisabled,
+                        });
+                        matchedSensorTtlIds.Add(existing.Id);
+                    }
+                    else
+                    {
+                        ttlPolicyUpdates.Add(new PolicyUpdate(ttlPolicy, InitiatorInfo.AlertTemplate)
+                        {
+                            Id = Guid.NewGuid(),
+                            TemplateId = template.Id,
+                            TemplateAlertId = ttlPolicy.Id,
+                            TTL = ttlTicks,
+                        });
+                    }
+                }
+            }
+
+            // Remove orphaned policies (belong to this template but no longer matched).
+            // This also cleans up duplicate TemplateAlertId entries that weren't the first in their group.
+            var allTemplatePolicyIds = new HashSet<Guid>(template.Policies.Select(p => p.Id));
+            foreach (var existing in sensor.Policies.Where(p => p.TemplateId == template.Id).ToList())
+            {
+                if (!matchedSensorPolicyIds.Contains(existing.Id))
+                    sensor.Policies.RemovePolicy(existing.Id, InitiatorInfo.AlertTemplate);
+            }
+
+            foreach (var existing in sensor.Policies.TTLPolicies.Where(t => t.TemplateId == template.Id).ToList())
+            {
+                if (!matchedSensorTtlIds.Contains(existing.Id))
+                    sensor.Policies.RemoveTTLPolicy(existing.Id);
+            }
+
+            // Apply updates
+            if (policyUpdates.Count > 0 || ttlPolicyUpdates.Count > 0)
+            {
                 var update = new SensorUpdate()
                 {
                     Id = sensor.Id,
@@ -1210,6 +1321,15 @@ namespace HSMServer.Core.Cache
                 };
 
                 TryUpdateSensor(update, out var error);
+            }
+            else if (matchedSensorPolicyIds.Count == 0 && matchedSensorTtlIds.Count == 0 &&
+                     (existingPoliciesWithId.Count > 0 || existingPoliciesWithoutId.Count > 0 ||
+                      existingTtlsWithId.Count > 0 || existingTtlsWithoutId.Count > 0))
+            {
+                // Only removals happened
+                _database.UpdateSensor(sensor.ToEntity());
+                sensor.Revalidate();
+                SensorUpdateView(sensor);
             }
         }
 
@@ -1269,19 +1389,21 @@ namespace HSMServer.Core.Cache
 
             try
             {
-                if (_alertTemplates.ContainsKey(alertTemplateModel.Id))
-                    RemoveAlertTemplate(new RemoveAlertTemplateRequest(alertTemplateModel.Id, request.ProductId, request.IsPrimary));
+                var matchedSensors = new HashSet<BaseSensorModel>();
+                foreach (var path in alertTemplateModel.Paths.Where(p => !string.IsNullOrEmpty(p)))
+                {
+                    foreach (var sensor in GetSensorsByWildcard(path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId, request.ProductId))
+                        matchedSensors.Add(sensor);
+                }
 
-
-                foreach (var sensor in GetSensorsByWildcard(alertTemplateModel.Path, alertTemplateModel.GetSensorType(), alertTemplateModel.FolderId, request.ProductId).ToList())
-                    AddAlertFromTemplate(sensor, alertTemplateModel);
+                foreach (var sensor in matchedSensors)
+                    ApplyTemplateToSensor(sensor, alertTemplateModel);
 
                 if (request.IsPrimary)
                 {
                     _alertTemplates.GetOrAdd(alertTemplateModel.Id, () => alertTemplateModel);
                     _database.AddAlertTemplate(alertTemplateModel.ToEntity());
                 }
-
             }
             catch (Exception ex)
             {
@@ -1356,15 +1478,27 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        private static string GetSignature(Policy policy)
+        {
+            return string.Join("|", policy.Conditions
+                .OrderBy(c => c.Property)
+                .ThenBy(c => c.Operation)
+                .ThenBy(c => c.Target.Value)
+                .Select(c => $"{c.Property}:{c.Operation}:{c.Target}"));
+        }
+
         private void RemoveChatsFromPolicies(ProductModel product, HashSet<Guid> chats, InitiatorInfo initiator)
         {
+            // Use force update so template-created policies are also updated
+            var forceInitiator = InitiatorInfo.AsSystemForce("RemoveChatsFromPolicies");
+
             if (product.Policies.TTLPolicies.Any(t => CanRemoveChatsFromPolicy(t.Destination, chats)))
             {
                 var productTtlUpdates = new List<PolicyUpdate>();
                 foreach (var ttl in product.Policies.TTLPolicies)
                 {
                     if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
-                        ttlUpdate = new PolicyUpdate(ttl, initiator);
+                        ttlUpdate = new PolicyUpdate(ttl, forceInitiator);
 
                     productTtlUpdates.Add(ttlUpdate);
                 }
@@ -1373,7 +1507,7 @@ namespace HSMServer.Core.Cache
                 {
                     Id = product.Id,
                     TTLPolicies = productTtlUpdates,
-                    Initiator = initiator,
+                    Initiator = forceInitiator,
                 };
 
                 UpdateProduct(update);
@@ -1389,7 +1523,7 @@ namespace HSMServer.Core.Cache
                     foreach (var ttl in sensor.Policies.TTLPolicies)
                     {
                         if (!TryGetPolicyUpdate(ttl, chats, initiator, out var ttlUpdate))
-                            ttlUpdate = new PolicyUpdate(ttl, initiator);
+                            ttlUpdate = new PolicyUpdate(ttl, forceInitiator);
 
                         sensorTtlUpdates.Add(ttlUpdate);
                     }
@@ -1403,7 +1537,7 @@ namespace HSMServer.Core.Cache
                     foreach (var policy in sensor.Policies)
                     {
                         if (!TryGetPolicyUpdate(policy, chats, initiator, out var policyUpdate))
-                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), initiator);
+                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination), forceInitiator);
 
                         policiesUpdate.Add(policyUpdate);
                     }
@@ -1416,7 +1550,7 @@ namespace HSMServer.Core.Cache
                         Id = sensor.Id,
                         Policies = policiesUpdate,
                         TTLPolicies = sensorTtlUpdates,
-                        Initiator = initiator,
+                        Initiator = forceInitiator,
                     };
 
                     TryUpdateSensor(update, out _);
@@ -2068,7 +2202,7 @@ namespace HSMServer.Core.Cache
                 foreach (var template in _alertTemplates.Values)
                 {
                     if (template.IsMatch(sensor))
-                        AddAlertFromTemplate(sensor, template);
+                        ApplyTemplateToSensor(sensor, template);
                 }
 
                 AddSensorToCache(productModel, sensor);
@@ -2378,5 +2512,6 @@ namespace HSMServer.Core.Cache
 
             return result;
         }
+
     }
 }

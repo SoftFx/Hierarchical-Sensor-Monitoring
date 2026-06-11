@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
@@ -9,84 +9,45 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
-    internal sealed class FileQueueProcessor: QueueProcessorBase<FileSensorValue>
+    internal sealed class FileQueueProcessor : QueueProcessorBase<FileSensorValue>
     {
         public override string QueueName => "File";
 
         public FileQueueProcessor(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger) : base(options, queueManager, logger) { }
 
-        internal async Task FlushAsync(CancellationToken token)
+        protected override async ValueTask<bool> TryDispatchOneAsync(CancellationToken token)
         {
+            if (!TryDequeue(out QueueItem<FileSensorValue> item))
+                return false;
+
+            PackageSendingInfo sendingInfo;
+
             try
             {
-                while (QueueCount > 0 && !token.IsCancellationRequested)
-                {
-                    if (!TryDequeue(out QueueItem<FileSensorValue> item))
-                        continue;
-
-                    try
-                    {
-                        var sendingInfo = await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
-                        EnsureSendSucceeded(sendingInfo, token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        if (PreserveCanceledPackages)
-                            Enqeue(item.Value);
-                        throw;
-                    }
-                    catch
-                    {
-                        Enqeue(item.Value);
-                        throw;
-                    }
-                }
+                sendingInfo = await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
+            catch (OperationCanceledException)
             {
-                _logger.Error(ex);
+                if (PreserveCanceledPackages)
+                    ReEnqueueItem(item);
+                throw;
             }
-        }
-
-        protected override async Task ProcessingLoop(CancellationToken token)
-        {
-            while (!token.IsCancellationRequested)
+            catch
             {
-                try
-                {
-                    await WaitToReadAsync(token).ConfigureAwait(false);
-
-                    while (!IsEmpty && !token.IsCancellationRequested)
-                    {
-                        if (TryDequeue(out QueueItem<FileSensorValue> item))
-                        {
-                            try
-                            {
-                                var sendingInfo = await _sender.SendFileAsync(item.Value, token).ConfigureAwait(false);
-                                EnsureSendSucceeded(sendingInfo, token);
-                            }
-                            catch (OperationCanceledException)
-                            {
-                                if (PreserveCanceledPackages)
-                                    Enqeue(item.Value);
-                                throw;
-                            }
-                            catch
-                            {
-                                Enqeue(item.Value);
-                                throw;
-                            }
-                        }
-                    }
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex);
-                    await DelayAfterFailureAsync(token).ConfigureAwait(false);
-                }
+                ReEnqueueItem(item);
+                throw;
             }
+
+            if (sendingInfo.Error != null)
+            {
+                var retryResult = ReEnqueueItem(item);
+                var preserved = retryResult.IsAccepted ? 1 - retryResult.DroppedCount : 0;
+                var fate = IsFlushing ? "queued for clear" : "preserved";
+                var loss = retryResult.DroppedCount > 0 ? $", {retryResult.DroppedCount} dropped" : string.Empty;
+                throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}");
+            }
+
+            return true;
         }
     }
 }

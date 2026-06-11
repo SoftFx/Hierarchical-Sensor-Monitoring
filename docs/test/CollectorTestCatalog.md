@@ -20,6 +20,8 @@
 | Timer stress | 3 fast | 85% | ~7-8 sec fast | `src/collector/HSMDataCollector.Tests/CollectorTimerStressTests.cs` | [CollectorTimerStressTests.md](CollectorTimerStressTests.md) |
 | Flaky server stress | 1 fast + 1 gated repeat | 75% | ~3-4 sec быстрый; gated suite repeat 30 sec default; long gated 10 min | `src/collector/HSMDataCollector.Tests/CollectorStressTests.cs` | [CollectorStressTests.md](CollectorStressTests.md), [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md) |
 | Default sensor smoke | 2 fast + 1 gated repeat | 5% | <1 sec fast; gated suite repeat 30 sec default, но без assertions | `src/collector/HSMDataCollector.Tests/DefaultSensorsTests.cs` | [CollectorSuiteSoakTests.md](CollectorSuiteSoakTests.md); полноценного описания нет, тесты сейчас фактически пустые |
+| Integration tests (Docker) | 25 active + 3 skipped | 40% | требуется Docker; зависит от запуска HSM сервера | `src/collector/HSMDataCollector.IntegrationTests/Tests/` | [IntegrationTests.md](IntegrationTests.md) |
+| Stability regressions | 7 fast | 50% | ~2-3 sec | `src/collector/HSMDataCollector.Tests/CollectorStabilityTests.cs` | [CollectorStabilityTests.md](CollectorStabilityTests.md) |
 
 Текущий быстрый прогон:
 
@@ -211,6 +213,37 @@ CI: `.github/workflows/collector-unit-tests.yml` (windows runner, весь unit 
 | Process CPU default sensor with specific path | 1 фактически пустой | 0% | <1 sec | `CreateDefaultSensor_WithSpecificPath_Test` | `DefaultSensorsTests.cs:33` | Нет; assertions закомментированы |
 
 Вывод: default/system sensors почти не покрыты реальными assertions.
+
+## Integration Tests
+
+Назначение: end-to-end тесты против реального HSM сервера в Docker. Проверяют доставку sensor values, lifecycle transitions, queue behavior и connectivity.
+
+Все тесты помечены `[Trait("Category", "Integration")]` и `[Collection("HSM Server")]`. Инфраструктура: `HsmServerFixture` (Docker контейнер), `CollectorOptionsHelper`, `ServerVerificationHelper`.
+
+| Что покрывает | Тестов | Покрытие | Длительность | Файл | Где описание |
+| --- | ---: | ---: | --- | --- | --- |
+| Lifecycle: Start/Stop/Dispose, events, restart | 5 | 80% | ~5 sec | `LifecycleTests.cs` | [IntegrationTests.md](IntegrationTests.md), раздел `Lifecycle` |
+| Sensor types: bool/int/double/string/rate/enum/file, IntBar/DoubleBar, TimeSpan/Version | 9 active + 2 skipped | 50% | ~15 sec | `SensorDataSendingTests.cs` | [IntegrationTests.md](IntegrationTests.md), раздел `Sensor data sending` |
+| Batch: multiple sensors, MaxValuesInPackage splitting | 2 | 60% | ~5 sec | `BatchSendingTests.cs` | [IntegrationTests.md](IntegrationTests.md), раздел `Batch sending` |
+| Concurrency: parallel sensors, high volume | 2 | 40% | ~30 sec (120 sec timeout) | `ConcurrencyTests.cs` | [IntegrationTests.md](IntegrationTests.md), раздел `Concurrency` |
+| Queue: pre-start drop, PackageCollectPeriod, overflow, priority | 4 | 50% | ~20 sec | `QueueBehaviorTests.cs` | [IntegrationTests.md](IntegrationTests.md), раздел `Queue behavior` |
+| Connectivity: TestConnection valid/invalid configs | 3 active + 1 skipped | 50% | ~3 sec | `ConnectivityTests.cs` | [IntegrationTests.md](IntegrationTests.md), раздел `Connectivity` |
+
+Пропущенные тесты: `SendTimeSpanValue` и `SendVersionValue` (server bug #1068), `TestConnection_AfterServerRestart` (Docker WSL2 port mapping).
+
+## Stability Regressions
+
+Назначение: регрессионные тесты на конкретные баги, найденные при разработке. Каждый тест воспроизводит условие сбоя и проверяет, что collector не регрессировал.
+
+| Что покрывает | Тестов | Покрытие | Длительность | Тесты | Где код | Где описание |
+| --- | ---: | ---: | --- | --- | --- | --- |
+| Scheduler loop resilience | 1 | 80% | ~2 sec | `Scheduler_loop_survives_unexpected_exception` | `CollectorStabilityTests.cs:35` | [CollectorStabilityTests.md](CollectorStabilityTests.md) |
+| DoubleMonitoringBar average formula | 1 | 95% | <1 sec | `DoubleMonitoringBar_CountAvr_computes_correct_average` | `CollectorStabilityTests.cs:76` | [CollectorStabilityTests.md](CollectorStabilityTests.md) |
+| Unobserved task exception | 1 | 75% | ~1 sec | `Register_after_start_does_not_create_unobserved_task_exception` | `CollectorStabilityTests.cs:98` | [CollectorStabilityTests.md](CollectorStabilityTests.md) |
+| Processing loop recovery | 1 | 70% | ~2 sec | `Processing_loop_recovers_after_send_failure` | `CollectorStabilityTests.cs:150` | [CollectorStabilityTests.md](CollectorStabilityTests.md) |
+| Empty package prevention | 1 | 75% | <1 sec | `Empty_package_not_sent_when_all_items_fail_validation` | `CollectorStabilityTests.cs:196` | [CollectorStabilityTests.md](CollectorStabilityTests.md) |
+| Partial Dispose safety | 1 | 80% | <1 sec | `DefaultSensorsCollection_Dispose_does_not_throw_on_partial_registration` | `CollectorStabilityTests.cs:232` | [CollectorStabilityTests.md](CollectorStabilityTests.md) |
+| Queue count consistency | 1 | 65% | ~2 sec | `Queue_count_stays_consistent_under_concurrent_access` | `CollectorStabilityTests.cs:248` | [CollectorStabilityTests.md](CollectorStabilityTests.md) |
 
 ## Что пока не покрыто или покрыто слабо
 

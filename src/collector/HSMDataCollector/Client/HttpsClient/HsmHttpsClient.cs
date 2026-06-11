@@ -13,12 +13,13 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Client
 {
-    internal sealed class HsmHttpsClient : IDataSender, IDisposable
+    internal sealed class HsmHttpsClient : IDataSender, ICancelableDataSender, IDisposable
     {
         private const string HeaderClientName = "ClientName";
         private const string HeaderAccessKey = "Key";
 
-        private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
+        private readonly object _tokenSourceLock = new object();
+        private CancellationTokenSource _tokenSource = new CancellationTokenSource();
 
         private readonly CommandHandler _commandsHandler;
         private readonly DataHandlers _dataHandler;
@@ -84,15 +85,52 @@ namespace HSMDataCollector.Client
             if (Interlocked.Exchange(ref _disposed, 1) == 1)
                 return;
 
-            _tokenSource.Cancel();
+            CancellationTokenSource tokenSourceToDispose;
+
+            lock (_tokenSourceLock)
+                tokenSourceToDispose = _tokenSource;
+
+            tokenSourceToDispose.Cancel();
 
             _commandsHandler.Dispose();
             _dataHandler.Dispose();
             _priorityDataHandler.Dispose();
             _fileHandler.Dispose();
 
-            _tokenSource.Dispose();
+            tokenSourceToDispose.Dispose();
             _client.Dispose();
+        }
+
+        /// <summary>
+        /// Abort all in-flight HTTP requests by cancelling the shared client-wide token and
+        /// installing a fresh source so subsequent <see cref="SendRequestAsync"/> calls (e.g. a
+        /// graceful Stop's bounded flush) can still proceed against the same <see cref="HttpClient"/>.
+        ///
+        /// Note: the previous implementation disposed <see cref="_client"/> here, which converted a
+        /// `Dispose()` racing a concurrent graceful `Stop()` into silent data loss — every
+        /// remaining send in the flush threw <see cref="ObjectDisposedException"/>, got re-enqueued
+        /// then discarded by `ClearQueue`. Client disposal is owned by <see cref="Dispose"/>.
+        /// </summary>
+        public void CancelPendingRequests()
+        {
+            CancellationTokenSource tokenSourceToCancel;
+
+            lock (_tokenSourceLock)
+            {
+                if (Volatile.Read(ref _disposed) == 1)
+                    return;
+
+                tokenSourceToCancel = _tokenSource;
+                _tokenSource = new CancellationTokenSource();
+            }
+
+            // Do NOT dispose tokenSourceToCancel here: in-flight SendRequestAsync calls captured
+            // its Token into linked CTSes outside the lock, and disposing the upstream while those
+            // linked sources are alive can throw ObjectDisposedException from cancellation
+            // callbacks. The CTS is unreferenced after this method returns and the GC will reclaim
+            // it once the in-flight requests fall away. Total leak across the collector lifetime
+            // is bounded by the number of CancelPendingRequests calls (typically one, at dispose).
+            tokenSourceToCancel.Cancel();
         }
 
         public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
@@ -115,7 +153,34 @@ namespace HSMDataCollector.Client
             return _fileHandler.SendAsync(file, token);
         }
 
-        internal ValueTask<HttpResponseMessage> SendRequestAsync(string uri, HttpContent stringContent, CancellationToken token) => new ValueTask<HttpResponseMessage>(_client.PostAsync(uri, stringContent, token));
+        internal async ValueTask<HttpResponseMessage> SendRequestAsync(string uri, HttpContent stringContent, CancellationToken token)
+        {
+            CancellationToken pendingRequestsToken;
+
+            lock (_tokenSourceLock)
+            {
+                // Surface dispose as a clean OperationCanceledException to callers instead of
+                // letting them observe a disposed _tokenSource and hit ObjectDisposedException
+                // when reading .Token. Dispose is terminal so a send racing it cannot succeed
+                // either way, but the cancellation shape is what the BaseHandlers retry pipeline
+                // and the queue's OCE branches already understand.
+                if (Volatile.Read(ref _disposed) == 1)
+                    throw new OperationCanceledException();
+
+                // Capture the CancellationToken (not just the source ref) under the lock so
+                // CancelPendingRequests cannot swap _tokenSource out between us reading the
+                // reference and us reading .Token. A request that observed the source moments
+                // before a Cancel() call still ends up linked to the cancelled token — that is
+                // intentional and matches the contract of "cancel all in-flight requests": we
+                // cannot promise that a request which started while the cancel was racing us
+                // survives the cancel. The narrower capture just keeps the race window to the
+                // single field read.
+                pendingRequestsToken = _tokenSource.Token;
+            }
+
+            using (var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token, pendingRequestsToken))
+                return await _client.PostAsync(uri, stringContent, linkedTokenSource.Token).ConfigureAwait(false);
+        }
 
 
         public async ValueTask<ConnectionResult> TestConnectionAsync()
