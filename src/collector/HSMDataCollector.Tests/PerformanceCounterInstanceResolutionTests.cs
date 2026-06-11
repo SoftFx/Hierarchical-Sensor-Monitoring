@@ -127,6 +127,78 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public void Repeated_reshuffles_never_return_another_process_value()
+        {
+            // Churn scenario: neighbor processes start and exit, so our PID keeps migrating between
+            // instance names while foreign instances always match the filter too. Every single read
+            // must return OUR value (42), never a neighbor's (13).
+            var source = new FakeCounterSource(OwnPid)
+                .WithInstance("App", pid: OwnPid, value: 42.0)
+                .WithInstance("App#1", pid: 901, value: 13.0);
+
+            using (var counter = CreateProcessAwareCounter(source, "App"))
+            {
+                var ownInstanceNames = new[] { "App", "App#1", "App#2" };
+
+                for (var round = 0; round < 100; round++)
+                {
+                    var ownName = ownInstanceNames[round % ownInstanceNames.Length];
+
+                    source.Reset();
+                    source.WithInstance(ownName, pid: OwnPid, value: 42.0);
+
+                    foreach (var name in ownInstanceNames)
+                    {
+                        if (name != ownName)
+                            source.WithInstance(name, pid: 900 + round, value: 13.0);
+                    }
+
+                    Assert.Equal(42.0, counter.NextValue());
+                }
+            }
+        }
+
+        [Fact]
+        public void Rebinding_failure_throws_instead_of_returning_foreign_data()
+        {
+            var source = new FakeCounterSource(OwnPid)
+                .WithInstance("App", pid: OwnPid, value: 42.0);
+
+            using (var counter = CreateProcessAwareCounter(source, "App"))
+            {
+                Assert.Equal(42.0, counter.NextValue());
+
+                // Our process's instance disappears entirely (e.g. counters break); a foreign
+                // instance still matches the name filter. The read must fail loudly, not silently
+                // bind to the neighbor.
+                source.Reset()
+                    .WithInstance("App", pid: 999, value: 13.0);
+
+                Assert.Throws<InvalidOperationException>(() => counter.NextValue());
+            }
+        }
+
+        [Fact]
+        public void Read_after_failed_rebinding_recovers_once_our_instance_returns()
+        {
+            var source = new FakeCounterSource(OwnPid)
+                .WithInstance("App", pid: OwnPid, value: 42.0);
+
+            using (var counter = CreateProcessAwareCounter(source, "App"))
+            {
+                Assert.Equal(42.0, counter.NextValue());
+
+                source.Reset().WithInstance("App", pid: 999, value: 13.0);
+                Assert.Throws<InvalidOperationException>(() => counter.NextValue());
+
+                // The instance comes back (counters repaired / process re-registered).
+                source.Reset().WithInstance("App#1", pid: OwnPid, value: 77.0);
+
+                Assert.Equal(77.0, counter.NextValue());
+            }
+        }
+
+        [Fact]
         public void Disposing_the_counter_disposes_underlying_counters()
         {
             var source = new FakeCounterSource(OwnPid)

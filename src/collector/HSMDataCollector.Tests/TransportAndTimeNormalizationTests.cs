@@ -1,5 +1,6 @@
 using System;
 using System.Net;
+using System.Threading.Tasks;
 using HSMDataCollector.Client;
 using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors;
@@ -74,6 +75,32 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        [Fact]
+        public async Task Local_time_reaches_the_sender_as_utc_end_to_end()
+        {
+            var sender = new RecordingDataSender();
+            var options = CreateOptions();
+            options.DataSender = sender;
+            options.PackageCollectPeriod = TimeSpan.FromMilliseconds(50);
+
+            using (var collector = new DataCollector(options))
+            {
+                var sensor = collector.CreateDoubleSensor("normalization/pipeline/data");
+                await collector.Start().ConfigureAwait(false);
+
+                var localTime = new DateTime(2026, 6, 11, 12, 0, 0, DateTimeKind.Local);
+                ((SensorBase<NoDisplayUnit>)sensor).SendValue(new DoubleSensorValue { Value = 1.0, Time = localTime });
+
+                var captured = await sender.WaitForFirstValueAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+
+                Assert.NotNull(captured);
+                Assert.Equal(DateTimeKind.Utc, captured.Time.Kind);
+                Assert.Equal(localTime.ToUniversalTime(), captured.Time);
+
+                await collector.Stop().ConfigureAwait(false);
+            }
+        }
+
         private static CollectorOptions CreateOptions() => new CollectorOptions
         {
             AccessKey = "normalization-test-key",
@@ -82,5 +109,41 @@ namespace HSMDataCollector.Tests
             Module = "normalization-test-module",
             ServerAddress = "https://127.0.0.1",
         };
+
+
+        private sealed class RecordingDataSender : IDataSender
+        {
+            private readonly System.Collections.Generic.List<SensorValueBase> _values = new System.Collections.Generic.List<SensorValueBase>();
+            private readonly System.Threading.Tasks.TaskCompletionSource<bool> _valueReceived = new System.Threading.Tasks.TaskCompletionSource<bool>();
+
+            internal async System.Threading.Tasks.Task<SensorValueBase> WaitForFirstValueAsync(TimeSpan timeout)
+            {
+                await System.Threading.Tasks.Task.WhenAny(_valueReceived.Task, System.Threading.Tasks.Task.Delay(timeout)).ConfigureAwait(false);
+
+                lock (_values)
+                    return _values.Count > 0 ? _values[0] : null;
+            }
+
+            public void Dispose() { }
+
+            public System.Threading.Tasks.ValueTask<ConnectionResult> TestConnectionAsync() =>
+                new System.Threading.Tasks.ValueTask<ConnectionResult>(ConnectionResult.Ok);
+
+            public System.Threading.Tasks.ValueTask<HSMDataCollector.SyncQueue.Data.PackageSendingInfo> SendDataAsync(System.Collections.Generic.IEnumerable<SensorValueBase> items, System.Threading.CancellationToken token)
+            {
+                lock (_values)
+                    _values.AddRange(items);
+
+                _valueReceived.TrySetResult(true);
+                return default;
+            }
+
+            public System.Threading.Tasks.ValueTask<HSMDataCollector.SyncQueue.Data.PackageSendingInfo> SendPriorityDataAsync(System.Collections.Generic.IEnumerable<SensorValueBase> items, System.Threading.CancellationToken token) =>
+                SendDataAsync(items, token);
+
+            public System.Threading.Tasks.ValueTask<HSMDataCollector.SyncQueue.Data.PackageSendingInfo> SendCommandAsync(System.Collections.Generic.IEnumerable<HSMSensorDataObjects.CommandRequestBase> commands, System.Threading.CancellationToken token) => default;
+
+            public System.Threading.Tasks.ValueTask<HSMDataCollector.SyncQueue.Data.PackageSendingInfo> SendFileAsync(FileSensorValue file, System.Threading.CancellationToken token) => default;
+        }
     }
 }

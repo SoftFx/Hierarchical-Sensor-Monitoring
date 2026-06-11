@@ -1,8 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using HSMDataCollector.Core;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMDataCollector.Sensors;
+using HSMSensorDataObjects.SensorValueRequests;
 using Xunit;
 
 namespace HSMDataCollector.Tests
@@ -69,6 +76,143 @@ namespace HSMDataCollector.Tests
             bytes[1] = 99;
 
             Assert.Equal(new List<byte> { 1, 99, 3 }, list);
+        }
+
+        [Fact]
+        public void AsList_serializes_identically_to_a_copied_list()
+        {
+            // The wrapped list goes straight into the wire serializer — its JSON must be
+            // byte-for-byte what a regular List<byte> produces.
+            var bytes = new byte[256];
+            for (var i = 0; i < bytes.Length; i++)
+                bytes[i] = (byte)i;
+
+            Assert.Equal(JsonSerializer.Serialize(new List<byte>(bytes)), JsonSerializer.Serialize(bytes.AsList()));
+        }
+
+        [Fact]
+        public void AsList_supports_linq_and_enumeration_like_a_regular_list()
+        {
+            var bytes = new byte[] { 5, 10, 15 };
+            var list = bytes.AsList();
+
+            Assert.Equal(30, list.Sum(b => (int)b));
+            Assert.Equal(new byte[] { 5, 10, 15 }, list.ToArray());
+            Assert.Equal(3, list.Count());
+        }
+
+        [Fact]
+        public async Task Send_file_over_configured_cap_is_rejected_without_sending()
+        {
+            var sender = new RecordingFileSender();
+            var filePath = Path.GetTempFileName();
+
+            try
+            {
+                File.WriteAllBytes(filePath, new byte[200]);
+
+                using (var collector = CreateCollector(sender))
+                {
+                    collector.CreateFileSensor("bounds/over-cap", new FileSensorOptions { MaxFileSizeBytes = 100 });
+                    await collector.Start().ConfigureAwait(false);
+
+                    Assert.False(await collector.SendFileAsync("bounds/over-cap", filePath).ConfigureAwait(false),
+                        "A file larger than the configured cap must be rejected.");
+
+                    await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
+                    Assert.Empty(sender.CapturedFiles);
+                }
+            }
+            finally
+            {
+                File.Delete(filePath);
+            }
+        }
+
+        [Fact]
+        public async Task Sent_file_bytes_survive_the_zero_copy_path_end_to_end()
+        {
+            var sender = new RecordingFileSender();
+            var filePath = Path.GetTempFileName();
+            var payload = new byte[1024];
+            new Random(42).NextBytes(payload);
+
+            try
+            {
+                File.WriteAllBytes(filePath, payload);
+
+                using (var collector = CreateCollector(sender))
+                {
+                    collector.CreateFileSensor("bounds/roundtrip", new FileSensorOptions());
+                    await collector.Start().ConfigureAwait(false);
+
+                    Assert.True(await collector.SendFileAsync("bounds/roundtrip", filePath).ConfigureAwait(false));
+
+                    var captured = await sender.WaitForFileAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+
+                    Assert.NotNull(captured);
+                    Assert.Equal(payload, captured.Value);
+                }
+            }
+            finally
+            {
+                File.Delete(filePath);
+            }
+        }
+
+        private static DataCollector CreateCollector(RecordingFileSender sender) => new DataCollector(new CollectorOptions
+        {
+            AccessKey = "file-bounds-key",
+            ClientName = "file-bounds-client",
+            ComputerName = "file-bounds-host",
+            Module = "file-bounds-module",
+            DataSender = sender,
+            PackageCollectPeriod = TimeSpan.FromMilliseconds(50),
+            RequestTimeout = TimeSpan.FromSeconds(1),
+        });
+
+
+        private sealed class RecordingFileSender : IDataSender
+        {
+            private readonly List<FileSensorValue> _files = new List<FileSensorValue>();
+            private readonly TaskCompletionSource<bool> _fileReceived = new TaskCompletionSource<bool>();
+
+            internal IReadOnlyList<FileSensorValue> CapturedFiles
+            {
+                get
+                {
+                    lock (_files)
+                        return _files.ToList();
+                }
+            }
+
+            internal async Task<FileSensorValue> WaitForFileAsync(TimeSpan timeout)
+            {
+                await Task.WhenAny(_fileReceived.Task, Task.Delay(timeout)).ConfigureAwait(false);
+
+                lock (_files)
+                    return _files.Count > 0 ? _files[0] : null;
+            }
+
+            public void Dispose() { }
+
+            public ValueTask<ConnectionResult> TestConnectionAsync() =>
+                new ValueTask<ConnectionResult>(ConnectionResult.Ok);
+
+            public ValueTask<HSMDataCollector.SyncQueue.Data.PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token) => default;
+
+            public ValueTask<HSMDataCollector.SyncQueue.Data.PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token) => default;
+
+            public ValueTask<HSMDataCollector.SyncQueue.Data.PackageSendingInfo> SendCommandAsync(IEnumerable<HSMSensorDataObjects.CommandRequestBase> commands, CancellationToken token) => default;
+
+            public ValueTask<HSMDataCollector.SyncQueue.Data.PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
+            {
+                lock (_files)
+                    _files.Add(file);
+
+                _fileReceived.TrySetResult(true);
+                return default;
+            }
         }
     }
 }

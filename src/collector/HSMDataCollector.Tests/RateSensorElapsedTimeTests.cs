@@ -84,6 +84,49 @@ namespace HSMDataCollector.Tests
             Assert.Equal(10.0, InvokeGetValue(sensor), precision: 6);
         }
 
+        [Fact]
+        public void Concurrent_adds_are_fully_conserved_across_ticks()
+        {
+            // 4 writers x 10k AddValue(1) race against periodic ticks. Every added unit must be
+            // accounted for in exactly one emitted sample: sum(rate * elapsed) == 40000. Uses an
+            // 8-second step so the divide/multiply round-trip is exact in binary floating point.
+            long nowTicks = 100L * Stopwatch.Frequency;
+            var sensor = CreateRateSensor(postDataPeriod: TimeSpan.FromSeconds(8), () => Volatile.Read(ref nowTicks));
+
+            InvokeGetValue(sensor); // Baseline tick.
+
+            const int writers = 4;
+            const int addsPerWriter = 10_000;
+            var collected = 0.0;
+
+            var threads = new Thread[writers];
+            for (var i = 0; i < writers; i++)
+            {
+                threads[i] = new Thread(() =>
+                {
+                    for (var n = 0; n < addsPerWriter; n++)
+                        sensor.AddValue(1);
+                });
+                threads[i].Start();
+            }
+
+            while (Array.Exists(threads, t => t.IsAlive))
+            {
+                Interlocked.Add(ref nowTicks, 8L * Stopwatch.Frequency);
+                collected += InvokeGetValue(sensor) * 8.0;
+                Thread.Sleep(1);
+            }
+
+            foreach (var thread in threads)
+                thread.Join();
+
+            // Drain whatever accumulated after the last mid-flight tick.
+            Interlocked.Add(ref nowTicks, 8L * Stopwatch.Frequency);
+            collected += InvokeGetValue(sensor) * 8.0;
+
+            Assert.Equal(writers * (double)addsPerWriter, collected, precision: 6);
+        }
+
         private static double InvokeGetValue(MonitoringRateSensor sensor) =>
             (double)GetValueMethod.Invoke(sensor, null);
 

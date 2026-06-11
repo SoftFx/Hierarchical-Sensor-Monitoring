@@ -50,5 +50,53 @@ namespace HSMDataCollector.Tests
             Assert.Throws<InvalidOperationException>(() =>
                 BoundedBlockingCall.Run<int>(() => throw new InvalidOperationException("original"), "failing call"));
         }
+
+        [Fact]
+        public void Parallel_calls_do_not_interfere_and_hung_calls_time_out_independently()
+        {
+            using (var release = new ManualResetEventSlim(false))
+            {
+                try
+                {
+                    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                    var outcomes = new System.Collections.Concurrent.ConcurrentBag<string>();
+
+                    System.Threading.Tasks.Parallel.For(0, 6, i =>
+                    {
+                        if (i % 2 == 0)
+                        {
+                            outcomes.Add("value:" + BoundedBlockingCall.Run(() => i, "fast call " + i));
+                        }
+                        else
+                        {
+                            try
+                            {
+                                BoundedBlockingCall.Run(
+                                    () =>
+                                    {
+                                        release.Wait();
+                                        return i;
+                                    },
+                                    "hung call " + i,
+                                    TimeSpan.FromMilliseconds(100));
+                                outcomes.Add("unexpected:" + i);
+                            }
+                            catch (TimeoutException)
+                            {
+                                outcomes.Add("timeout:" + i);
+                            }
+                        }
+                    });
+
+                    Assert.Equal(3, System.Linq.Enumerable.Count(outcomes, o => o.StartsWith("value:", StringComparison.Ordinal)));
+                    Assert.Equal(3, System.Linq.Enumerable.Count(outcomes, o => o.StartsWith("timeout:", StringComparison.Ordinal)));
+                    Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), "Parallel bounded calls should not serialize behind each other.");
+                }
+                finally
+                {
+                    release.Set();
+                }
+            }
+        }
     }
 }
