@@ -461,9 +461,11 @@ Fixed test-first (26 new unit tests, suite at 343 green):
 - **E2**: rate sensor divides by actual elapsed time (monotonic clock), not the configured period.
 - **E4**: bounded connection lifetime on both TFMs forces periodic DNS re-resolution.
 - **E5**: `DateTimeKind.Local` timestamps normalized to UTC at the send boundary (DTO untouched).
-- **C2**: not applicable on this branch — `BuildDate` travels inside the in-channel `QueueItem<T>`,
-  so the master-side `_buildDateMirror` desync cannot occur. Merge resolution: keep the in-channel
-  design, drop the mirror.
+- **C2** (closed after merging master's #1090/#1091 queue followups): the BuildDate mirror cannot
+  be dropped — it provides the head-peek that `Channel<T>` lacks — so channel and mirror updates
+  are now one atomic step under `_mirrorLock`. The orphan-tick desync was deterministically
+  reproduced by `QueueMirrorConsistencyTests` (hot producer/consumer at the near-empty boundary)
+  before the fix.
 
 Port-relevant invariants from this wave: bind process-scoped OS metrics by process id (re-validated
 per read), bound every OS call that has no timeout of its own, divide rates by measured elapsed

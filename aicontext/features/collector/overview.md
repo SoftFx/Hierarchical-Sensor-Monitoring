@@ -181,10 +181,12 @@ Fixed test-first on the cpp-port-spike branch (each item has a dedicated unit-te
   periodically re-resolve DNS (`TransportAndTimeNormalizationTests`).
 - **E5, Local time normalization**: `SensorBase.SendValue` converts `DateTimeKind.Local` values of
   `SensorValueBase.Time` to UTC at the send boundary; the wire DTO is untouched.
-- **C2 (mirror desync) is not applicable on this branch**: the queue carries `BuildDate` inside the
-  in-channel `QueueItem<T>`, atomically tied to the item — there is no `_buildDateMirror` here.
-  Merge note: when merging with master (which has the #1090/#1091 mirror design), keep this branch's
-  in-channel design and drop the mirror.
+- **C2, BuildDate mirror atomicity** (fixed after merging master's #1090/#1091 queue followups):
+  the mirror exists because `Channel<T>` cannot Peek the head BuildDate that the stale-retry filter
+  needs, so it cannot be dropped — instead every channel write/read is paired with its mirror
+  update under `_mirrorLock`. Without that atomicity a consumer could pop the channel while the
+  producer's mirror write had not landed, leaving a permanent orphan tick that skews the peeked
+  head forever (deterministically reproduced by `QueueMirrorConsistencyTests` before the fix).
 
 Deliberately not fixed: D2 (Polly `ShouldHandle`) is a [decide] item in #1096; E3 (cgroup awareness)
 belongs to #1099; D1/D3/D4 are recorded architectural trade-offs, not point fixes.
