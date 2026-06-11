@@ -104,6 +104,13 @@ namespace HSMDataCollector.Options
 
     public class FileSensorOptions : InstantSensorOptions
     {
+        /// <summary>
+        /// Hard ceiling for <see cref="MaxFileSizeBytes"/>. The file is fully buffered in memory and
+        /// JSON-serializes bytes as a numeric array (~4x expansion), so an unbounded user-configured
+        /// cap is an OOM vector (#1102-C1). Configured values above this are clamped at send time.
+        /// </summary>
+        public const long MaxAllowedFileSizeBytes = 128L * 1024 * 1024;
+
         public string DefaultFileName { get; set; }
 
         public string Extension { get; set; }

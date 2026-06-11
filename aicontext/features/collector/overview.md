@@ -152,6 +152,43 @@ Note (empirical, net6): the in-proc `EventSource` dispatch swallows `EventListen
 exceptions (`ThrowOnEventWriteErrors=false`), so the unguarded A2 listener silently lost counter
 values rather than crashing in-proc; the guard removes the dependence on that runtime behavior.
 
+### Reliability hardening (#1102 wave, 2026-06-11)
+
+Fixed test-first on the cpp-port-spike branch (each item has a dedicated unit-test file):
+
+- **E1, perf-counter instance binding**: multi-instance categories ("Process", ".NET CLR Memory")
+  bind by PID via the category's PID counter ("ID Process" / "Process ID"), never by name alone, and
+  re-validate the binding on every read — an instance-index reshuffle after a neighbor process exit
+  re-resolves instead of silently reporting another process's data. Name-only categories prefer an
+  exact instance-name match over a substring match. Logic lives in
+  `PerformanceCounterInstanceResolver` / `ProcessAwarePerformanceCounter` behind the
+  `IPerformanceCounterSource` seam (`PerformanceCounterInstanceResolutionTests`).
+- **B1, scheduler worker backstop**: `CollectorScheduler.Loop` restarts the worker with a 1 s backoff
+  on unexpected exceptions instead of dying silently; cancellation/dispose races exit normally.
+- **B2, bounded OS calls**: `PerformanceCounterCategory.GetInstanceNames()` and
+  `ServiceController.GetServices()` run through `BoundedBlockingCall` (30 s default) so a corrupted
+  counter registry or hung SCM cannot stall sensor init forever (`BoundedBlockingCallTests`).
+- **C1, file sensor OOM bound**: user-settable `MaxFileSizeBytes` is clamped to
+  `FileSensorOptions.MaxAllowedFileSizeBytes` (128 MB) at send time, and the duplicate
+  byte[]→List copy is eliminated via `ByteCollectionExtensions.AsList` (zero-copy wrap with a safe
+  fallback; the buffer ownership transfers to the list) (`FileSensorBoundsTests`).
+- **E2, rate sensor elapsed time**: `MonitoringRateSensor` divides the accumulated sum by the time
+  actually elapsed since the previous sample (monotonic Stopwatch, injectable in tests), falling back
+  to the configured period for the first sample / zero gap — no more inflated samples after machine
+  sleep (`RateSensorElapsedTimeTests`).
+- **E4, DNS staleness**: net6+ uses `SocketsHttpHandler` with `PooledConnectionLifetime = 5 min`;
+  net472 bounds the endpoint's `ServicePoint.ConnectionLeaseTimeout` — keep-alive connections
+  periodically re-resolve DNS (`TransportAndTimeNormalizationTests`).
+- **E5, Local time normalization**: `SensorBase.SendValue` converts `DateTimeKind.Local` values of
+  `SensorValueBase.Time` to UTC at the send boundary; the wire DTO is untouched.
+- **C2 (mirror desync) is not applicable on this branch**: the queue carries `BuildDate` inside the
+  in-channel `QueueItem<T>`, atomically tied to the item — there is no `_buildDateMirror` here.
+  Merge note: when merging with master (which has the #1090/#1091 mirror design), keep this branch's
+  in-channel design and drop the mirror.
+
+Deliberately not fixed: D2 (Polly `ShouldHandle`) is a [decide] item in #1096; E3 (cgroup awareness)
+belongs to #1099; D1/D3/D4 are recorded architectural trade-offs, not point fixes.
+
 ### Sensor scheduling via composition
 
 Sensors do not own scheduling boilerplate inline. The "schedule one periodic action; start/stop/restart it once" lifecycle is extracted into `ScheduledTaskHandle` (a composable wrapper over a single `ScheduledTask`). Sensors *compose* one handle per periodic action rather than inheriting the timer plumbing:

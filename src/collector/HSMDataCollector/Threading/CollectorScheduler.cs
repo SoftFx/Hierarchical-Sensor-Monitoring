@@ -319,6 +319,45 @@ namespace HSMDataCollector.Threading
 
         private void Loop()
         {
+            // #1102-B1 backstop: a faulted worker means no scheduled work ever runs again (silent
+            // collector death). Nothing on this thread is expected to throw outside of shutdown, but
+            // if something does, log and restart the loop instead of dying silently. Cancellation and
+            // dispose races terminate normally.
+            while (!_cancellation.IsCancellationRequested)
+            {
+                try
+                {
+                    LoopCore();
+                    return;
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Scheduler handles are disposed only after shutdown; nothing left to schedule.
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Trace.TraceError($"{nameof(CollectorScheduler)} worker failed unexpectedly; restarting: {ex}");
+
+                    try
+                    {
+                        // Backoff so a persistent failure cannot turn into a hot crash loop.
+                        Task.Delay(TimeSpan.FromSeconds(1), _cancellation.Token).GetAwaiter().GetResult();
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                }
+            }
+        }
+
+        private void LoopCore()
+        {
             while (!_cancellation.IsCancellationRequested)
             {
                 List<ScheduledTask> dueTasks = null;

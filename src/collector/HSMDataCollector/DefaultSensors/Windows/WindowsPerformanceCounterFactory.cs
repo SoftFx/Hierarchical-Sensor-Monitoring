@@ -1,13 +1,14 @@
 using System.Diagnostics;
-using System.Linq;
-
+using HSMDataCollector.Threading;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
     /// <summary>
     /// Production <see cref="IPerformanceCounterFactory"/> that wraps the real Windows
     /// <see cref="PerformanceCounter"/> / <see cref="PerformanceCounterCategory"/> APIs. All direct use
-    /// of those Windows-only types is confined to this class, so the sensor classes stay platform-neutral.
+    /// of those Windows-only types is confined to this class; the instance-resolution logic lives in
+    /// <see cref="PerformanceCounterInstanceResolver"/> / <see cref="ProcessAwarePerformanceCounter"/>
+    /// and is unit-tested with a fake <see cref="IPerformanceCounterSource"/>.
     /// </summary>
     internal sealed class WindowsPerformanceCounterFactory : IPerformanceCounterFactory
     {
@@ -18,14 +19,34 @@ namespace HSMDataCollector.DefaultSensors.Windows
             if (string.IsNullOrEmpty(instanceFilter))
                 return new WindowsPerformanceCounter(new PerformanceCounter(category, counter));
 
-            var resolvedInstance = new PerformanceCounterCategory(category)
-                .GetInstanceNames()
-                .FirstOrDefault(name => name.Contains(instanceFilter));
+            var source = WindowsCounterSource.Instance;
+
+            // Per-process categories: bind by PID (#1102-E1) — the collector's instance-filtered
+            // process counters always target the current process (see WindowsSensorBase subclasses).
+            if (PerformanceCounterInstanceResolver.TryGetPidCounterName(category, out var pidCounterName))
+                return ProcessAwarePerformanceCounter.TryCreate(source, category, counter, pidCounterName, instanceFilter, ProcessInfo.CurrentProcessId);
+
+            var resolvedInstance = PerformanceCounterInstanceResolver.ResolveByName(source.GetInstanceNames(category), instanceFilter);
 
             if (resolvedInstance == null)
                 return null;
 
-            return new WindowsPerformanceCounter(new PerformanceCounter(category, counter, resolvedInstance));
+            return source.Create(category, counter, resolvedInstance);
+        }
+
+
+        private sealed class WindowsCounterSource : IPerformanceCounterSource
+        {
+            internal static readonly WindowsCounterSource Instance = new WindowsCounterSource();
+
+            public string[] GetInstanceNames(string category) =>
+                // A corrupted counter registry can hang this call forever (#1102-B2).
+                BoundedBlockingCall.Run(
+                    () => new PerformanceCounterCategory(category).GetInstanceNames(),
+                    $"PerformanceCounterCategory('{category}').GetInstanceNames()");
+
+            public IPerformanceCounter Create(string category, string counter, string instance) =>
+                new WindowsPerformanceCounter(new PerformanceCounter(category, counter, instance));
         }
 
 

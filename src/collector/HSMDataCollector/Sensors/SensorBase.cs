@@ -45,6 +45,12 @@ namespace HSMDataCollector.DefaultSensors
 
                 value.Path = SensorPath;
 
+                // The public Time setter accepts DateTimeKind.Local, which serializes with a
+                // machine-local offset and shifts timestamp interpretation (#1102-E5). Normalize at
+                // the send boundary; the wire DTO stays untouched.
+                if (value.Time.Kind == DateTimeKind.Local)
+                    value.Time = value.Time.ToUniversalTime();
+
                 value.TrimLongComment();
 
                 if (value is FileSensorValue file)

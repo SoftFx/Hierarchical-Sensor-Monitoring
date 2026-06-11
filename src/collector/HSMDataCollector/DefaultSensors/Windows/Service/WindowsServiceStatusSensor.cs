@@ -123,7 +123,8 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
 
         private ServiceController ResolveService()
         {
-            var services = ServiceController.GetServices();
+            // A hung Service Control Manager can block GetServices() forever (#1102-B2).
+            var services = BoundedBlockingCall.Run(ServiceController.GetServices, "ServiceController.GetServices()");
             ServiceController matchedService = null;
 
             try

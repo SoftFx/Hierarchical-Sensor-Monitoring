@@ -30,15 +30,41 @@ namespace HSMDataCollector.Client
         private readonly HttpClient _client;
         private int _disposed;
 
+        // Bounded connection lifetime forces periodic DNS re-resolution (#1102-E4): without it a
+        // busy keep-alive connection sticks to a stale IP indefinitely (e.g. after an LB move).
+        private static readonly TimeSpan ConnectionLifetime = TimeSpan.FromMinutes(5);
+
         internal HsmHttpsClient(CollectorOptions options, ICollectorLogger logger)
         {
             _endpoints = new Endpoints(options);
             _logger = logger;
 
+#if NET6_0_OR_GREATER
+            var httpHandler = new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = ConnectionLifetime,
+            };
+
+            if (options.AllowUntrustedServerCertificate)
+                httpHandler.SslOptions.RemoteCertificateValidationCallback = (sender, certificate, chain, errors) => true;
+#else
             var httpHandler = new HttpClientHandler();
 
             if (options.AllowUntrustedServerCertificate)
                 httpHandler.ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true;
+
+            try
+            {
+                // .NET Framework has no PooledConnectionLifetime; the ServicePoint lease is the
+                // equivalent knob for the collector endpoint.
+                System.Net.ServicePointManager.FindServicePoint(new Uri(_endpoints.ConnectionAddress)).ConnectionLeaseTimeout =
+                    (int)ConnectionLifetime.TotalMilliseconds;
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error($"Failed to bound the connection lease for '{_endpoints.ConnectionAddress}': {ex}");
+            }
+#endif
 
             _client = new HttpClient(httpHandler);
             _client.Timeout = options.RequestTimeout;

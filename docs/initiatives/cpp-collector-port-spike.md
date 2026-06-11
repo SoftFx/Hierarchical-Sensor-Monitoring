@@ -445,6 +445,29 @@ throwing callbacks) spawned by `CollectorCrashIsolationTests`, plus an
 in-process host-callback adversarial matrix in `CollectorAdversarialTests`.
 CI lane: `.github/workflows/collector-unit-tests.yml`.
 
+### 2026-06-11: #1102 reliability wave beyond the crash vectors
+
+Fixed test-first (26 new unit tests, suite at 343 green):
+
+- **E1**: per-process performance-counter categories bind instances by PID and re-validate the
+  binding on every read (`ProcessAwarePerformanceCounter` behind the new
+  `IPerformanceCounterSource` seam); name-only categories prefer exact instance-name matches.
+- **B1**: the scheduler worker restarts with backoff on unexpected exceptions instead of dying
+  silently. **B2**: `GetInstanceNames()` / `GetServices()` are bounded by `BoundedBlockingCall`.
+- **C1**: `MaxFileSizeBytes` clamped to a 128 MB ceiling; duplicate file-buffer copy removed.
+- **E2**: rate sensor divides by actual elapsed time (monotonic clock), not the configured period.
+- **E4**: bounded connection lifetime on both TFMs forces periodic DNS re-resolution.
+- **E5**: `DateTimeKind.Local` timestamps normalized to UTC at the send boundary (DTO untouched).
+- **C2**: not applicable on this branch — `BuildDate` travels inside the in-channel `QueueItem<T>`,
+  so the master-side `_buildDateMirror` desync cannot occur. Merge resolution: keep the in-channel
+  design, drop the mirror.
+
+Port-relevant invariants from this wave: bind process-scoped OS metrics by process id (re-validated
+per read), bound every OS call that has no timeout of its own, divide rates by measured elapsed
+time, normalize timestamps to UTC before serialization, and bound transport connection lifetimes
+for DNS re-resolution. Out of scope by decision: D2 (#1096), E3 (#1099), D1/D3/D4 (architectural
+trade-offs).
+
 ## Cross-Cutting Port Invariants
 
 Behavioral invariants every port must uphold that are NOT expressible as
