@@ -107,7 +107,17 @@ namespace HSMDataCollector.Threading
             }
             catch (Exception ex)
             {
-                _onError?.Invoke(ex);
+                try
+                {
+                    _onError?.Invoke(ex);
+                }
+                catch (Exception onErrorEx)
+                {
+                    // onError is user-facing (sensors pass HandleException, hosts subscribe to
+                    // ExceptionThrowing inside it). A throw here runs inside the scheduler's
+                    // async-void dispatch, where an escaping exception kills the host process.
+                    Trace.TraceError($"{nameof(ScheduledTask)} onError callback failed: {onErrorEx}");
+                }
             }
             finally
             {
@@ -389,6 +399,13 @@ namespace HSMDataCollector.Threading
             try
             {
                 await task.ExecuteAttachedAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // async void: an exception escaping here is rethrown on the ThreadPool and kills
+                // the host process. ExecuteAttachedAsync isolates action/onError failures itself;
+                // this is the last-resort backstop for the dispatch path.
+                Trace.TraceError($"{nameof(CollectorScheduler)} scheduled task dispatch failed: {ex}");
             }
             finally
             {

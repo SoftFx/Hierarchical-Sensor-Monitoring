@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Extensions;
@@ -87,8 +88,40 @@ namespace HSMDataCollector.DefaultSensors
 
         protected void HandleException(Exception ex)
         {
-            _dataProcessor?.AddException(SensorPath, ex);
-            ExceptionThrowing?.Invoke(SensorPath, ex);
+            try
+            {
+                _dataProcessor?.AddException(SensorPath, ex);
+            }
+            catch (Exception reportEx)
+            {
+                Trace.TraceError($"Sensor {SensorPath} failed to report an exception: {reportEx}");
+            }
+
+            var subscribers = ExceptionThrowing;
+            if (subscribers == null)
+                return;
+
+            // HandleException is the scheduler's onError callback for monitoring sensors, so this
+            // event fires inside async-void dispatch where an escaping exception kills the host
+            // process (#1102-A1). Isolate per subscriber, same policy as the lifecycle events.
+            foreach (Action<string, Exception> handler in subscribers.GetInvocationList())
+            {
+                try
+                {
+                    handler(SensorPath, ex);
+                }
+                catch (Exception handlerEx)
+                {
+                    try
+                    {
+                        _dataProcessor?.AddException(SensorPath, handlerEx);
+                    }
+                    catch (Exception reportEx)
+                    {
+                        Trace.TraceError($"Sensor {SensorPath} failed to report an {nameof(ExceptionThrowing)} handler error: {reportEx}");
+                    }
+                }
+            }
         }
 
 

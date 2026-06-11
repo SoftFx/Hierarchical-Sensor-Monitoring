@@ -1,31 +1,60 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.Tracing;
 
 namespace HSMDataCollector.DefaultSensors.Windows.Process
 {
     internal sealed class ProcessEventListener : EventListener
     {
+        private const string RuntimeSourceName = "System.Runtime";
+        private const string CountersEventName = "EventCounters";
+        private const string TimeInGcCounterName = "time-in-gc";
+
         public event Action<double> OnTimeInGC;
 
         protected override void OnEventSourceCreated(EventSource source)
         {
-            if (source.Name.Equals("System.Runtime"))
+            // Runs while another component's EventSource is being constructed, possibly on a
+            // runtime-owned thread — a throw here must not escape (#1102-A2).
+            try
             {
-                EnableEvents(source, EventLevel.Critical, EventKeywords.All, null);
+                if (RuntimeSourceName.Equals(source?.Name, StringComparison.Ordinal))
+                    EnableEvents(source, EventLevel.Critical, EventKeywords.All, null);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceError($"{nameof(ProcessEventListener)} failed to enable events for source '{source?.Name}': {ex}");
             }
         }
 
         protected override void OnEventWritten(EventWrittenEventArgs eventData)
         {
-            if (eventData.EventName.Equals("EventCounters"))
+            // EventListener callbacks run on whatever thread writes the event, including
+            // runtime-owned threads — nothing may escape (#1102-A2).
+            try
             {
-                for (int i = 0; i < eventData.Payload.Count; i++)
+                ProcessEventCounters(eventData?.EventName, eventData?.Payload);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceError($"{nameof(ProcessEventListener)} failed to process event '{eventData?.EventName}': {ex}");
+            }
+        }
+
+        // Callback body extracted from OnEventWritten for direct adversarial testing (#1103):
+        // EventName can be null (a known EventSource case), counter payload dictionaries can miss
+        // keys or carry unexpected value types.
+        internal void ProcessEventCounters(string eventName, IEnumerable<object> payload)
+        {
+            if (!CountersEventName.Equals(eventName, StringComparison.Ordinal) || payload == null)
+                return;
+
+            foreach (var item in payload)
+            {
+                if (item is IDictionary<string, object> eventPayload)
                 {
-                    if (eventData.Payload[i] is IDictionary<string, object> eventPayload)
-                    {
-                        UpdateTimeInGc(eventPayload);
-                    }
+                    UpdateTimeInGc(eventPayload);
                 }
             }
         }
@@ -33,10 +62,11 @@ namespace HSMDataCollector.DefaultSensors.Windows.Process
 
         private void UpdateTimeInGc(IDictionary<string, object> eventPayload)
         {
-            if (eventPayload["Name"].ToString() != "time-in-gc")
+            if (!eventPayload.TryGetValue("Name", out var name) || !TimeInGcCounterName.Equals(name as string, StringComparison.Ordinal))
                 return;
 
-            OnTimeInGC?.Invoke((double)eventPayload["Mean"]);
+            if (eventPayload.TryGetValue("Mean", out var mean) && mean is double value)
+                OnTimeInGC?.Invoke(value);
         }
     }
 }

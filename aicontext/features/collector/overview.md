@@ -122,6 +122,36 @@ Each `QueueProcessorBase` maintains its own `QueueState` (Stopped/Running/Stoppi
 
 Each `DataCollector` owns its own `CollectorScheduler` instance (implementing `ICollectorScheduler`). The scheduler is constructed in `DataCollector`'s constructor, threaded through `DataProcessor.Scheduler`, and disposed at the end of `Dispose()` after `_dataProcessor` and `_dataSender`. Sensors and `MessageDeduplicator` schedule periodic work through this injected instance — there is no process-global scheduler. Two collectors in the same process have independent timer wheels and worker tasks.
 
+### Callback exception isolation (host-crash safety)
+
+Invariant: **a throwing host callback must never crash the host process or break the collector
+component that invoked it** (#1102 A1/A2, #1103). Isolation layers:
+
+- `CollectorScheduler.ExecuteQueuedTask` (async void dispatch) has a last-resort catch-all — an
+  exception escaping `async void` is rethrown on the ThreadPool and kills the process.
+- `ScheduledTask.ExecuteAttachedAsync` guards the `onError` invocation (sensors pass
+  `HandleException` here; hosts subscribe `ExceptionThrowing` inside it).
+- `SensorBase.HandleException` isolates each `ExceptionThrowing` subscriber individually (same
+  policy as lifecycle events); a throwing subscriber does not starve later subscribers or stop the
+  sensor send loop.
+- `ProcessEventListener` (net6 time-in-gc counters) guards `OnEventSourceCreated`/`OnEventWritten`
+  and parses counter payloads null-safely (null `EventName`, missing `Name`/`Mean` keys, non-double
+  `Mean` are all skipped). The callback body is extracted into the internal `ProcessEventCounters`
+  method for direct adversarial testing.
+- `LoggerManager` and lifecycle events/`ILifecycleListener` dispatch were already isolated.
+
+Verification is three-layered because a host-process crash cannot be asserted in-process:
+`HSMDataCollector.CrashTests.Host` (a console host wiring deliberately throwing callbacks) is
+spawned by `CollectorCrashIsolationTests` and must print its survival sentinel; the host-callback
+adversarial matrix in `CollectorAdversarialTests` and `ProcessEventListenerTests` cover the
+in-process behavior. CI lane: `.github/workflows/collector-unit-tests.yml` (windows runner). This
+invariant is not expressible in `.hsmtest` and is tracked in the cross-cutting port invariants of
+`docs/initiatives/cpp-collector-port-spike.md`.
+
+Note (empirical, net6): the in-proc `EventSource` dispatch swallows `EventListener` callback
+exceptions (`ThrowOnEventWriteErrors=false`), so the unguarded A2 listener silently lost counter
+values rather than crashing in-proc; the guard removes the dependence on that runtime behavior.
+
 ### Sensor scheduling via composition
 
 Sensors do not own scheduling boilerplate inline. The "schedule one periodic action; start/stop/restart it once" lifecycle is extracted into `ScheduledTaskHandle` (a composable wrapper over a single `ScheduledTask`). Sensors *compose* one handle per periodic action rather than inheriting the timer plumbing:

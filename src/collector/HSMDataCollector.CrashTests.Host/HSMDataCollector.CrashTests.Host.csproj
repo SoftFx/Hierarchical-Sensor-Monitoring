@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <!-- CI runners may only carry a newer runtime; the harness must still spawn the host. -->
+    <RollForward>LatestMajor</RollForward>
+    <IsPackable>false</IsPackable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\HSMDataCollector\HSMDataCollector.csproj" />
+  </ItemGroup>
+</Project>

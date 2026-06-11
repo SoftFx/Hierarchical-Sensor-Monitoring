@@ -421,6 +421,40 @@ Verification:
 - Full native CTest: 13/13 passed.
 - Full managed collector tests: 247 passed, 9 skipped.
 
+### 2026-06-11: crash-isolation harness and the first cross-cutting invariant (#1103)
+
+Fixed the #1102 A1/A2 host-crash vectors in the managed collector test-first:
+
+- A1: a throwing `onError`/`ExceptionThrowing` callback escaped the scheduler's
+  async-void dispatch (`CollectorScheduler.ExecuteQueuedTask`) and killed the
+  host process. Now isolated at three layers: dispatch catch-all, guarded
+  `onError` invocation, per-subscriber isolation in `SensorBase.HandleException`.
+- A2: `ProcessEventListener.OnEventWritten` threw on malformed EventCounters
+  payloads (null `EventName`, missing `Name`/`Mean` keys, non-double `Mean`).
+  The callback body is extracted into an internal, directly testable method and
+  the whole callback is guarded. Empirical finding recorded along the way: on
+  net6 the in-proc `EventSource` dispatch swallows listener exceptions
+  (`ThrowOnEventWriteErrors=false`), so in-proc A2 was silent counter loss
+  rather than process death; the guard removes the reliance on that runtime
+  behavior entirely.
+
+Because a host-process crash cannot be asserted from inside the test process,
+crash isolation is covered by a process-isolated harness instead of `.hsmtest`
+fixtures: `HSMDataCollector.CrashTests.Host` (console host wiring deliberately
+throwing callbacks) spawned by `CollectorCrashIsolationTests`, plus an
+in-process host-callback adversarial matrix in `CollectorAdversarialTests`.
+CI lane: `.github/workflows/collector-unit-tests.yml`.
+
+## Cross-Cutting Port Invariants
+
+Behavioral invariants every port must uphold that are NOT expressible as
+`tests/conformance/collector/*.hsmtest` fixtures. Each needs a port-native
+equivalent of the managed guard listed next to it.
+
+| Invariant | Managed guard | Port obligation |
+|---|---|---|
+| **Callbacks never crash the host.** Every host-supplied callback surface — scheduler `onError`, the `ExceptionThrowing` event, loggers, lifecycle listeners, runtime/event-stream callbacks (`ProcessEventListener`) — is isolated; a throwing callback may neither kill the process nor break the component that invoked it (other subscribers still fire, the scheduler worker and sensor loops keep running). | `HSMDataCollector.CrashTests.Host` + `CollectorCrashIsolationTests` (process-isolated, #1102 A1/A2), host-callback matrix in `CollectorAdversarialTests`, `ProcessEventListenerTests` | The native core must wrap every user-callback invocation (error callbacks, log sinks, lifecycle observers) and prove it with its own process-isolated crash harness — exceptions must not cross the C ABI boundary. |
+
 ## Open Questions
 
 - Should the native core own HTTP transport immediately, or should the first
