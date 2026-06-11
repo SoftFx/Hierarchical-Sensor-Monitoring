@@ -23,6 +23,20 @@ namespace HSMDataCollector.DefaultSensors.Windows
             PidCounterByCategory.TryGetValue(category ?? string.Empty, out pidCounterName);
 
         /// <summary>
+        /// PID binding applies only when the filter targets the CURRENT process. Per-process
+        /// categories also expose pseudo-instances ("_Global_" in ".NET CLR Memory" — used by the
+        /// system-wide time-in-GC sensor) and could in principle be filtered by another process's
+        /// name; both must keep resolving by name, not by this process's PID.
+        /// </summary>
+        internal static bool ShouldBindByPid(string category, string instanceFilter, string currentProcessName, out string pidCounterName)
+        {
+            pidCounterName = null;
+
+            return string.Equals(instanceFilter, currentProcessName, StringComparison.OrdinalIgnoreCase)
+                && TryGetPidCounterName(category, out pidCounterName);
+        }
+
+        /// <summary>
         /// Name-based resolution for categories without a PID counter (e.g. "_Total", "C:"). An exact
         /// name match wins over a substring match, so "App" can no longer bind to "AppService".
         /// </summary>

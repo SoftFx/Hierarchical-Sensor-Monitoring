@@ -85,6 +85,26 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public void Restart_resets_the_elapsed_baseline()
+        {
+            long nowTicks = 100L * Stopwatch.Frequency;
+
+            var sensor = CreateRateSensor(postDataPeriod: TimeSpan.FromSeconds(10), () => nowTicks);
+
+            InvokeGetValue(sensor); // Baseline tick of the first run.
+
+            // The sensor is stopped for an hour, then restarted (InitAsync). The first sample of
+            // the new run must NOT divide by the whole stopped gap — that would deflate the rate
+            // by gap/period (100 / 3600 instead of 100 / 10).
+            nowTicks += 3600L * Stopwatch.Frequency;
+            sensor.InitAsync().GetAwaiter().GetResult();
+
+            sensor.AddValue(100);
+
+            Assert.Equal(10.0, InvokeGetValue(sensor), precision: 6);
+        }
+
+        [Fact]
         public void Concurrent_adds_are_fully_conserved_across_ticks()
         {
             // 4 writers x 10k AddValue(1) race against periodic ticks. Every added unit must be

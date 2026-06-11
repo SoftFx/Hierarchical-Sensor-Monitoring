@@ -276,16 +276,21 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
             // Channel write and mirror update are one atomic step (#1102-C2): a consumer observing
             // the item in the channel is guaranteed to also observe its tick in the mirror, so no
-            // dequeue can ever leave an orphan tick behind.
+            // dequeue can ever leave an orphan tick behind. The (potentially user-implemented)
+            // logger is invoked outside the lock.
+            bool written;
             lock (_mirrorLock)
             {
-                if (!Writer.TryWrite(item))
-                {
-                    _logger.Error($"{QueueName} queue processor did not write value");
-                    return EnqueueResult.RejectedStopped();
-                }
+                written = Writer.TryWrite(item);
 
-                _buildDateMirror.Enqueue(item.BuildDate.Ticks);
+                if (written)
+                    _buildDateMirror.Enqueue(item.BuildDate.Ticks);
+            }
+
+            if (!written)
+            {
+                _logger.Error($"{QueueName} queue processor did not write value");
+                return EnqueueResult.RejectedStopped();
             }
 
             int dropped = 0;

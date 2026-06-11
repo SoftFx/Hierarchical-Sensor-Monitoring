@@ -21,9 +21,10 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
             var source = WindowsCounterSource.Instance;
 
-            // Per-process categories: bind by PID (#1102-E1) — the collector's instance-filtered
-            // process counters always target the current process (see WindowsSensorBase subclasses).
-            if (PerformanceCounterInstanceResolver.TryGetPidCounterName(category, out var pidCounterName))
+            // Current-process counters in per-process categories bind by PID (#1102-E1). Pseudo-
+            // instances of the same categories (e.g. "_Global_" for the system-wide time-in-GC
+            // sensor) have no PID and resolve by name below.
+            if (PerformanceCounterInstanceResolver.ShouldBindByPid(category, instanceFilter, ProcessInfo.CurrentProcessName, out var pidCounterName))
                 return ProcessAwarePerformanceCounter.TryCreate(source, category, counter, pidCounterName, instanceFilter, ProcessInfo.CurrentProcessId);
 
             var resolvedInstance = PerformanceCounterInstanceResolver.ResolveByName(source.GetInstanceNames(category), instanceFilter);

@@ -127,6 +127,27 @@ namespace HSMDataCollector.Tests
         }
 
         [Fact]
+        public void Pid_binding_applies_only_when_the_filter_targets_the_current_process()
+        {
+            // The current-process sensors (Process CPU/Memory/Threads, process time-in-GC) bind by PID.
+            Assert.True(PerformanceCounterInstanceResolver.ShouldBindByPid("Process", "myservice", "myservice", out var pidCounter));
+            Assert.Equal("ID Process", pidCounter);
+
+            Assert.True(PerformanceCounterInstanceResolver.ShouldBindByPid(".NET CLR Memory", "MyService", "myservice", out _));
+
+            // The SYSTEM-wide time-in-GC sensor uses the "_Global_" pseudo-instance of
+            // ".NET CLR Memory" — it has no PID and must resolve by name, or the sensor
+            // silently fails to initialize.
+            Assert.False(PerformanceCounterInstanceResolver.ShouldBindByPid(".NET CLR Memory", "_Global_", "myservice", out _));
+
+            // A filter naming a DIFFERENT process must not bind to the current process's PID.
+            Assert.False(PerformanceCounterInstanceResolver.ShouldBindByPid("Process", "otherproc", "myservice", out _));
+
+            // Non-process categories never bind by PID.
+            Assert.False(PerformanceCounterInstanceResolver.ShouldBindByPid("Processor", "_Total", "myservice", out _));
+        }
+
+        [Fact]
         public void Repeated_reshuffles_never_return_another_process_value()
         {
             // Churn scenario: neighbor processes start and exit, so our PID keeps migrating between

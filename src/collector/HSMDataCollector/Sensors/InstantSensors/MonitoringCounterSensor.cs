@@ -25,6 +25,16 @@ namespace HSMDataCollector.Sensors
         public MonitoringRateSensor(RateSensorOptions options) : base(options) { }
 
 
+        public override System.Threading.Tasks.ValueTask<bool> InitAsync()
+        {
+            // A restart must not inherit the previous run's baseline: the first sample of the new
+            // run would otherwise divide by the whole stopped gap and deflate the rate.
+            Interlocked.Exchange(ref _previousSampleTimestamp, 0);
+
+            return base.InitAsync();
+        }
+
+
         protected override double GetValue()
         {
             var now = TimestampProvider();

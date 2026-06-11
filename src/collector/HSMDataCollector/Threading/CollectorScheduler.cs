@@ -443,8 +443,15 @@ namespace HSMDataCollector.Threading
             {
                 // async void: an exception escaping here is rethrown on the ThreadPool and kills
                 // the host process. ExecuteAttachedAsync isolates action/onError failures itself;
-                // this is the last-resort backstop for the dispatch path.
-                Trace.TraceError($"{nameof(CollectorScheduler)} scheduled task dispatch failed: {ex}");
+                // this is the last-resort backstop for the dispatch path — even a throwing trace
+                // listener must not break it.
+                try
+                {
+                    Trace.TraceError($"{nameof(CollectorScheduler)} scheduled task dispatch failed: {ex}");
+                }
+                catch
+                {
+                }
             }
             finally
             {
