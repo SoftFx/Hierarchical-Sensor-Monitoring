@@ -276,6 +276,30 @@ namespace
         return SentJson(collector, 0);
     }
 
+    bool WaitForRegistrationCountEquals(hsm_collector_t* collector, size_t expected, int timeout_ms = 2000)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            if (hsm_collector_registration_count(collector) == expected)
+                return true;
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        return hsm_collector_registration_count(collector) == expected;
+    }
+
+    std::string RegistrationJson(hsm_collector_t* collector, size_t index)
+    {
+        const char* json = nullptr;
+        Require(
+            hsm_collector_get_registration_json(collector, index, &json) == HSM_RESULT_OK && json != nullptr,
+            "registration json was not found");
+        return json;
+    }
+
     std::string NumberFieldFromPayload(const std::string& payload, const std::string& field)
     {
         const auto key = "\"" + field + "\":";
@@ -307,16 +331,21 @@ namespace
         return payload.substr(value_start, end - value_start);
     }
 
-    std::vector<std::string> SplitLine(const std::string& line)
+    std::vector<std::string> SplitBy(const std::string& text, char separator)
     {
         std::vector<std::string> parts;
         std::string part;
-        std::istringstream input(line);
+        std::istringstream input(text);
 
-        while (std::getline(input, part, '|'))
+        while (std::getline(input, part, separator))
             parts.push_back(part);
 
         return parts;
+    }
+
+    std::vector<std::string> SplitLine(const std::string& line)
+    {
+        return SplitBy(line, '|');
     }
 
     int ToInt(const std::string& value)
@@ -586,6 +615,56 @@ namespace
             Require(step.size() >= 2, "create_enum_sensor requires path");
             const auto path = ExpandTextToken(step[1]);
             state.sensors.push_back(CreateEnumSensor(state.collector.value, path.c_str()));
+            return;
+        }
+
+        if (action == "create_int_sensor_with_options")
+        {
+            Require(step.size() >= 5, "create_int_sensor_with_options requires path, ttl_ms, unit, description");
+            const auto path = ExpandTextToken(step[1]);
+            const auto description = ExpandTextToken(step[4]);
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_int_sensor_with_options(
+                    state.collector.value, path.c_str(),
+                    static_cast<int64_t>(std::stoll(step[2])), ToInt(step[3]),
+                    description.c_str(), &sensor.value) == HSM_RESULT_OK,
+                "sensor create with options failed");
+
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "create_enum_sensor_with_options")
+        {
+            Require(step.size() >= 4, "create_enum_sensor_with_options requires path, description, options");
+            const auto path = ExpandTextToken(step[1]);
+            const auto description = ExpandTextToken(step[2]);
+
+            // "key:value:color:description;..." — keep the string storage alive across the call.
+            std::vector<std::vector<std::string>> parsed;
+            for (const auto& part : SplitBy(step[3], ';'))
+            {
+                auto fields = SplitBy(part, ':');
+                Require(fields.size() == 4, "enum option must be key:value:color:description");
+                parsed.push_back(std::move(fields));
+            }
+
+            std::vector<hsm_enum_option_t> options;
+            options.reserve(parsed.size());
+            for (const auto& fields : parsed)
+                options.push_back(hsm_enum_option_t{
+                    ToInt(fields[0]), fields[1].c_str(), ToInt(fields[2]), fields[3].c_str() });
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_enum_sensor_with_options(
+                    state.collector.value, path.c_str(), description.c_str(),
+                    options.data(), options.size(), &sensor.value) == HSM_RESULT_OK,
+                "enum sensor create with options failed");
+
+            state.sensors.push_back(std::move(sensor));
             return;
         }
 
@@ -1204,6 +1283,26 @@ namespace
 
             const auto count = hsm_collector_sent_count(state.collector.value);
             Require(count <= maximum, ("sent count exceeded the expected maximum: " + std::to_string(count)).c_str());
+            return;
+        }
+
+        if (action == "expect_registration_count")
+        {
+            Require(step.size() >= 2, "expect_registration_count requires count");
+            const auto expected = static_cast<size_t>(ToInt(step[1]));
+            const auto timeout_ms = step.size() >= 3 ? ToInt(step[2]) * 1000 : 2000;
+
+            Require(
+                WaitForRegistrationCountEquals(state.collector.value, expected, timeout_ms),
+                ("registration count did not match: expected " + step[1] +
+                 ", got " + std::to_string(hsm_collector_registration_count(state.collector.value))).c_str());
+            return;
+        }
+
+        if (action == "expect_registration_contains")
+        {
+            Require(step.size() >= 3, "expect_registration_contains requires index and substring");
+            Contains(RegistrationJson(state.collector.value, static_cast<size_t>(ToInt(step[1]))), step[2]);
             return;
         }
 
@@ -2237,6 +2336,7 @@ namespace
             { "conformance_function_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_file_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_number_format_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
         };
 

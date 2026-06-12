@@ -205,6 +205,67 @@ namespace
         return text;
     }
 
+    struct EnumOptionData
+    {
+        int32_t key = 0;
+        std::string value;
+        int32_t color = 0;
+        std::string description;
+    };
+
+    // Portable registration-option subset mirroring the managed sensor options
+    // (registration_contract.hsmtest). has_description=false => "Description":null —
+    // managed instant creates default to "", every other sensor family defaults to null.
+    struct RegistrationOptions
+    {
+        int64_t ttl_ms = 0;
+        int32_t unit = -1;
+        bool has_description = false;
+        std::string description;
+        bool has_enum_options = false;
+        std::vector<EnumOptionData> enum_options;
+    };
+
+    RegistrationOptions InstantRegistrationDefaults()
+    {
+        RegistrationOptions options;
+        options.has_description = true;
+        return options;
+    }
+
+    // Canonical cross-language registration text — must stay byte-identical to the C#
+    // harness RegistrationText (fixed field order; TTL in .NET ticks = ms * 10000).
+    std::string BuildRegistrationJson(const std::string& path, hsm_sensor_type_t type, const RegistrationOptions& options)
+    {
+        std::string ttl_text = "null";
+        if (options.ttl_ms > 0)
+            ttl_text = "[" + std::to_string(options.ttl_ms * 10000) + "]";
+
+        std::string enums_text = "null";
+        if (options.has_enum_options)
+        {
+            enums_text = "[";
+            for (size_t i = 0; i < options.enum_options.size(); ++i)
+            {
+                const auto& option = options.enum_options[i];
+                if (i > 0)
+                    enums_text += ",";
+                enums_text += "{\"Key\":" + std::to_string(option.key) +
+                              ",\"Value\":\"" + EscapeJson(option.value) +
+                              "\",\"Color\":" + std::to_string(option.color) +
+                              ",\"Description\":\"" + EscapeJson(option.description) + "\"}";
+            }
+            enums_text += "]";
+        }
+
+        return "{\"Command\":\"AddOrUpdate\",\"Path\":\"" + EscapeJson(path) +
+               "\",\"SensorType\":" + std::to_string(static_cast<int>(type)) +
+               ",\"TTLTicks\":" + ttl_text +
+               ",\"OriginalUnit\":" + (options.unit >= 0 ? std::to_string(options.unit) : "null") +
+               ",\"Description\":" + (options.has_description ? "\"" + EscapeJson(options.description) + "\"" : "null") +
+               ",\"EnumOptions\":" + enums_text + "}";
+    }
+
     // C# Math.Round(value, precision, MidpointRounding.AwayFromZero) — std::round is
     // half-away-from-zero, matching the double-bar field rounding contract.
     double RoundAwayFromZero(double value, int precision)
@@ -514,6 +575,12 @@ namespace
         hsm_sensor_type_t Type() const;
         bool IsLastValue() const;
 
+        // Immutable after creation: set under the collector lock before the sensor is
+        // published into the registry, so it is safe to read under the collector lock
+        // without taking the sensor lock (the lock order stays one-way).
+        void SetRegistrationJson(std::string json) { registration_json_ = std::move(json); }
+        const std::string& RegistrationJson() const { return registration_json_; }
+
     private:
         hsm_result_t AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment);
 
@@ -549,6 +616,8 @@ namespace
         // File sensor identity.
         std::string file_name_;
         std::string file_extension_;
+
+        std::string registration_json_;
     };
 
     class NativeCollector : public std::enable_shared_from_this<NativeCollector>
@@ -590,6 +659,13 @@ namespace
                 sensors_snapshot.reserve(sensors_.size());
                 for (const auto& sensor : sensors_)
                     sensors_snapshot.push_back(sensor.second);
+
+                // Every start re-registers every sensor (mirrors C# InitAsync sending the
+                // AddOrUpdate command per start). RegistrationJson is immutable, so reading
+                // it under the collector lock keeps the one-way lock order. Map iteration
+                // order is unspecified — multi-sensor fixtures assert counts only.
+                for (const auto& sensor : sensors_)
+                    registrations_.push_back(sensor.second->RegistrationJson());
 
                 ClearError();
             }
@@ -665,7 +741,8 @@ namespace
             hsm_sensor_type_t type,
             bool is_last_value,
             const std::string& default_value_json,
-            std::shared_ptr<NativeSensor>& out_sensor)
+            std::shared_ptr<NativeSensor>& out_sensor,
+            const RegistrationOptions& registration = InstantRegistrationDefaults())
         {
             if (!IsValidPath(path))
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
@@ -691,6 +768,7 @@ namespace
             }
 
             auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type, is_last_value, default_value_json);
+            RegisterSensorLocked(sensor, type, sensor_path, registration);
             sensors_.emplace(sensor_path, sensor);
             out_sensor = std::move(sensor);
 
@@ -726,6 +804,7 @@ namespace
             }
 
             auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type, bar_period_ms, precision);
+            RegisterSensorLocked(sensor, type, sensor_path, RegistrationOptions{});
             sensors_.emplace(sensor_path, sensor);
             out_sensor = std::move(sensor);
 
@@ -771,6 +850,7 @@ namespace
             auto sensor = std::make_shared<NativeSensor>(
                 weak_from_this(), sensor_path, type, post_period_ms,
                 int_function, int_values_function, function_user_data, max_cache_size);
+            RegisterSensorLocked(sensor, type, sensor_path, RegistrationOptions{});
             sensors_.emplace(sensor_path, sensor);
             out_sensor = std::move(sensor);
 
@@ -806,6 +886,7 @@ namespace
 
             auto sensor = std::make_shared<NativeSensor>(
                 weak_from_this(), sensor_path, CopyString(default_file_name), CopyString(extension));
+            RegisterSensorLocked(sensor, HSM_SENSOR_TYPE_FILE, sensor_path, RegistrationOptions{});
             sensors_.emplace(sensor_path, sensor);
             out_sensor = std::move(sensor);
 
@@ -928,6 +1009,30 @@ namespace
             return HSM_RESULT_OK;
         }
 
+        size_t RegistrationCount() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return registrations_.size();
+        }
+
+        hsm_result_t RegistrationJson(size_t index, const char** out_json) const
+        {
+            if (out_json == nullptr)
+                return HSM_RESULT_INVALID_ARGUMENT;
+
+            std::lock_guard<std::mutex> guard(mutex_);
+
+            if (index >= registrations_.size())
+            {
+                *out_json = nullptr;
+                return SetError(HSM_RESULT_NOT_FOUND, "Registration was not found.");
+            }
+
+            *out_json = registrations_[index].c_str();
+            ClearError();
+            return HSM_RESULT_OK;
+        }
+
         const char* LastError() const
         {
             std::lock_guard<std::mutex> guard(mutex_);
@@ -949,6 +1054,21 @@ namespace
         std::string BuildSensorPath(const std::string& path) const
         {
             return JoinPathParts({ computer_name_, module_, path });
+        }
+
+        // Caller holds mutex_. New sensors register immediately when the collector is
+        // already running (mirrors C# InitAsync on dynamic creation); sensors created
+        // before Start are registered by the Start loop.
+        void RegisterSensorLocked(
+            const std::shared_ptr<NativeSensor>& sensor,
+            hsm_sensor_type_t type,
+            const std::string& sensor_path,
+            const RegistrationOptions& registration)
+        {
+            sensor->SetRegistrationJson(BuildRegistrationJson(sensor_path, type, registration));
+
+            if (state_ == CollectorState::Running)
+                registrations_.push_back(sensor->RegistrationJson());
         }
 
         // FIFO send queue. Lock discipline: `queue_mutex_` and `mutex_` are never held together —
@@ -1177,6 +1297,7 @@ namespace
         CollectorState state_ = CollectorState::Stopped;
         std::unordered_map<std::string, std::shared_ptr<NativeSensor>> sensors_;
         std::vector<std::string> sent_values_;
+        std::vector<std::string> registrations_;
         mutable std::string last_error_;
 
         std::mutex queue_mutex_;
@@ -1590,7 +1711,8 @@ static hsm_result_t CreateSensor(
     hsm_sensor_type_t type,
     bool is_last_value,
     const std::string& default_value_json,
-    hsm_sensor_t** out_sensor);
+    hsm_sensor_t** out_sensor,
+    const RegistrationOptions& registration = InstantRegistrationDefaults());
 
 hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_collector_t** out_collector)
 {
@@ -1748,7 +1870,8 @@ static hsm_result_t CreateSensor(
     hsm_sensor_type_t type,
     bool is_last_value,
     const std::string& default_value_json,
-    hsm_sensor_t** out_sensor)
+    hsm_sensor_t** out_sensor,
+    const RegistrationOptions& registration)
 {
     if (out_sensor != nullptr)
         *out_sensor = nullptr;
@@ -1757,12 +1880,76 @@ static hsm_result_t CreateSensor(
         return HSM_RESULT_INVALID_ARGUMENT;
 
     std::shared_ptr<NativeSensor> sensor;
-    const auto result = collector->impl->CreateSensor(path, type, is_last_value, default_value_json, sensor);
+    const auto result = collector->impl->CreateSensor(path, type, is_last_value, default_value_json, sensor, registration);
     if (result != HSM_RESULT_OK)
         return result;
 
     *out_sensor = new hsm_sensor_t{ std::move(sensor) };
     return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_collector_create_int_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t ttl_ms,
+    int32_t unit,
+    const char* description,
+    hsm_sensor_t** out_sensor)
+{
+    auto registration = InstantRegistrationDefaults();
+    registration.ttl_ms = ttl_ms;
+    registration.unit = unit;
+    registration.description = CopyString(description);
+
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_INT, false, std::string{}, out_sensor, registration);
+}
+
+hsm_result_t hsm_collector_create_enum_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    const char* description,
+    const hsm_enum_option_t* enum_options,
+    size_t enum_option_count,
+    hsm_sensor_t** out_sensor)
+{
+    if (enum_options == nullptr && enum_option_count > 0)
+    {
+        if (out_sensor != nullptr)
+            *out_sensor = nullptr;
+        return HSM_RESULT_INVALID_ARGUMENT;
+    }
+
+    auto registration = InstantRegistrationDefaults();
+    registration.description = CopyString(description);
+    registration.has_enum_options = true;
+    registration.enum_options.reserve(enum_option_count);
+    for (size_t i = 0; i < enum_option_count; ++i)
+        registration.enum_options.push_back(EnumOptionData{
+            enum_options[i].key,
+            CopyString(enum_options[i].value),
+            enum_options[i].color,
+            CopyString(enum_options[i].description) });
+
+    return CreateSensor(collector, path, HSM_SENSOR_TYPE_ENUM, false, std::string{}, out_sensor, registration);
+}
+
+size_t hsm_collector_registration_count(const hsm_collector_t* collector)
+{
+    if (collector == nullptr)
+        return 0;
+
+    return collector->impl->RegistrationCount();
+}
+
+hsm_result_t hsm_collector_get_registration_json(const hsm_collector_t* collector, size_t index, const char** out_json)
+{
+    if (out_json != nullptr)
+        *out_json = nullptr;
+
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return collector->impl->RegistrationJson(index, out_json);
 }
 
 static hsm_result_t CreateBarSensor(

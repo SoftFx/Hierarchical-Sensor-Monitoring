@@ -91,6 +91,41 @@ hsm_result_t hsm_collector_create_enum_sensor(
     hsm_collector_t* collector,
     const char* path,
     hsm_sensor_t** out_sensor);
+/* Sensor registration metadata (the AddOrUpdate command in the managed collector).
+   Every sensor registers on every collector start, and immediately when created while
+   the collector is running. The recorded registration JSON is the canonical
+   cross-language registration text (see registration_contract.hsmtest). */
+typedef struct hsm_enum_option_t
+{
+    int32_t key;
+    const char* value;
+    int32_t color;
+    const char* description;
+} hsm_enum_option_t;
+
+/* ttl_ms <= 0 => no TTL; unit < 0 => unset (codes per the managed Unit enum);
+   description may be NULL (instant sensors default to an empty description). */
+hsm_result_t hsm_collector_create_int_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t ttl_ms,
+    int32_t unit,
+    const char* description,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_enum_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    const char* description,
+    const hsm_enum_option_t* enum_options,
+    size_t enum_option_count,
+    hsm_sensor_t** out_sensor);
+
+size_t hsm_collector_registration_count(const hsm_collector_t* collector);
+hsm_result_t hsm_collector_get_registration_json(
+    const hsm_collector_t* collector,
+    size_t index,
+    const char** out_json);
+
 hsm_result_t hsm_collector_create_last_value_int_sensor(
     hsm_collector_t* collector,
     const char* path,
