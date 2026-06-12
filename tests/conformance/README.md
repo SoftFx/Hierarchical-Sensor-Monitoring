@@ -139,7 +139,7 @@ into the per-case creation order of that sensor kind (0-based).
 
 | Verb | Semantics |
 |---|---|
-| `dump_payloads_to\|file` | writes every captured payload's canonical text, one per line (LF, UTF-8, no BOM) — the differential fuzzer's byte-comparison channel (`scripts/fuzz-conformance.ps1`); the native driver strips its spike-internal `UnixTimeMs` field |
+| `dump_payloads_to\|file` | writes every captured payload's canonical text, one per line (LF, UTF-8, no BOM) — the differential fuzzer's byte-comparison channel (`scripts/fuzz-conformance.ps1`); the native driver strips its spike-internal `UnixTimeMs` field. The fuzzer compares dumps after a **stable sort by `Path`** — order within one sensor is contractual (FIFO), order across sensors at a stop-flush is not (hash-map iteration). |
 
 ### Assertions
 

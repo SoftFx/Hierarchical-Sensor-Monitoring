@@ -161,11 +161,24 @@ function Get-DumpLines {
     return $text -split "`n"
 }
 
+# Order WITHIN one sensor path is contractual (FIFO); order ACROSS paths is
+# explicitly unspecified (tests/conformance/README.md — "Inter-sensor flush
+# order is unspecified"). The bar stop-flush iterates a hash map whose order
+# differs between the C# Dictionary and the C++ std::unordered_map, so normalize
+# by a STABLE sort on Path (preserves each path's own subsequence) before the
+# positional compare — this still catches value/aggregation/formatting drift and
+# per-sensor ordering bugs, just not the non-contractual cross-sensor order.
+function Get-PathFromPayload {
+    param([string]$Line)
+    if ($Line -match '"Path":"([^"]*)"') { return $Matches[1] }
+    return ""
+}
+
 function Compare-Dumps {
     param([string]$ManagedDump, [string]$NativeDump)
 
-    $managed = Get-DumpLines $ManagedDump
-    $native = Get-DumpLines $NativeDump
+    $managed = @(Get-DumpLines $ManagedDump | Sort-Object -Stable { Get-PathFromPayload $_ })
+    $native = @(Get-DumpLines $NativeDump | Sort-Object -Stable { Get-PathFromPayload $_ })
 
     if ($managed.Count -ne $native.Count) {
         return "payload count: managed=$($managed.Count) native=$($native.Count)"
@@ -173,7 +186,7 @@ function Compare-Dumps {
 
     for ($i = 0; $i -lt $managed.Count; $i++) {
         if ($managed[$i] -cne $native[$i]) {
-            return "payload ${i}:`n  managed: $($managed[$i])`n  native:  $($native[$i])"
+            return "payload ${i} (after stable sort by path):`n  managed: $($managed[$i])`n  native:  $($native[$i])"
         }
     }
 
