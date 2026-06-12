@@ -135,6 +135,12 @@ into the per-case creation order of that sensor kind (0-based).
 | `set_sender_fail_next\|count` | next `count` data sends fail before recording; queue must re-enqueue |
 | `set_sender_hang` | every data send blocks until the stop path cancels it (dead transport) |
 
+### Tooling
+
+| Verb | Semantics |
+|---|---|
+| `dump_payloads_to\|file` | writes every captured payload's canonical text, one per line (LF, UTF-8, no BOM) — the differential fuzzer's byte-comparison channel (`scripts/fuzz-conformance.ps1`); the native driver strips its spike-internal `UnixTimeMs` field |
+
 ### Assertions
 
 `expect_*` verbs throw/assert on mismatch — a failing step fails the case.

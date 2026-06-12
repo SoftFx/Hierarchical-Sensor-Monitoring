@@ -1286,6 +1286,36 @@ namespace
             return;
         }
 
+        if (action == "dump_payloads_to")
+        {
+            // Differential-fuzzer support: canonical payload texts, one per line, LF endings
+            // (binary mode defeats Windows CRLF translation) — byte-comparable with the C# dump.
+            Require(step.size() >= 2, "dump_payloads_to requires a file path");
+
+            std::ofstream output(step[1], std::ios::binary | std::ios::trunc);
+            Require(static_cast<bool>(output), "cannot open payload dump file");
+
+            const auto count = hsm_collector_sent_count(state.collector.value);
+            for (size_t i = 0; i < count; ++i)
+            {
+                // The spike's instant wire json carries a UnixTimeMs field the canonical C#
+                // text does not have — strip it so the dumps are byte-comparable.
+                auto line = SentJson(state.collector.value, i);
+                const std::string time_key = ",\"UnixTimeMs\":";
+                const auto time_field = line.find(time_key);
+                if (time_field != std::string::npos)
+                {
+                    auto end = time_field + time_key.size();
+                    while (end < line.size() && (line[end] == '-' || (line[end] >= '0' && line[end] <= '9')))
+                        ++end;
+                    line.erase(time_field, end - time_field);
+                }
+
+                output << line << '\n';
+            }
+            return;
+        }
+
         if (action == "expect_registration_count")
         {
             Require(step.size() >= 2, "expect_registration_count requires count");
@@ -2338,6 +2368,7 @@ namespace
             { "conformance_number_format_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
+            { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };
 
         return tests;
