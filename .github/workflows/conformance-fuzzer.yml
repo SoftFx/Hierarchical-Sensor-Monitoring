@@ -20,11 +20,10 @@ on:
 
 jobs:
   fuzz:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    # windows-latest only: the differential fuzzer needs BOTH drivers, and the
+    # managed driver test project targets net48 — running it on Linux would need
+    # mono. The value is two DRIVERS, not two OSes, and both run on Windows.
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -44,13 +43,12 @@ jobs:
           if (-not $seed) { $seed = '${{ github.run_number }}' }
           $iterations = '${{ github.event.inputs.iterations }}'
           if (-not $iterations) { $iterations = '40' }
-          $binary = if ($IsWindows) { 'build/native-spike/Release/hsm_collector_spike_tests.exe' } else { 'build/native-spike/hsm_collector_spike_tests' }
-          ./scripts/fuzz-conformance.ps1 -Seed ([int]$seed) -Iterations ([int]$iterations) -NativeTestBinary $binary
+          ./scripts/fuzz-conformance.ps1 -Seed ([int]$seed) -Iterations ([int]$iterations) -NativeTestBinary 'build/native-spike/Release/hsm_collector_spike_tests.exe'
 
       - name: Upload divergence repros
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: fuzz-repros-${{ matrix.os }}
+          name: fuzz-repros
           path: tests/conformance/fuzz-repros/
           if-no-files-found: ignore
