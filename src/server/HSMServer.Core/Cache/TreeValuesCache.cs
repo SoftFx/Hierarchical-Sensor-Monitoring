@@ -1430,20 +1430,18 @@ namespace HSMServer.Core.Cache
 
             var products = GetProducts().Where(x => x.FolderId == templateModel.FolderId);
 
-
-            var first = products.FirstOrDefault();
-
             await Parallel.ForEachAsync(products, new ParallelOptions
             {
                 MaxDegreeOfParallelism = Environment.ProcessorCount,
                 CancellationToken = token
             }, async (product, ct) =>
             {
-                var isPrimary = product == first;
-                var request = new RemoveAlertTemplateRequest(id, product.Id, isPrimary);
-
+                var request = new RemoveAlertTemplateRequest(id, product.Id, false);
                 await ProcessRequestAsync(product.Id, request, ct);
             });
+
+            _alertTemplates.TryRemove(id, out _);
+            _database.RemoveAlertTemplate(id);
         }
 
 
@@ -1473,12 +1471,6 @@ namespace HSMServer.Core.Cache
 
                     SensorUpdateView(sensor);
                 }
-            }
-
-            if (request.IsPrimary)
-            {
-                _alertTemplates.TryRemove(request.Id, out _);
-                _database.RemoveAlertTemplate(request.Id);
             }
         }
 

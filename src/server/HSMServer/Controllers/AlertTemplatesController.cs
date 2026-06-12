@@ -84,31 +84,20 @@ namespace HSMServer.Controllers
 
         private class UpdateResponse
         {
-            private const int MAX_SENSORS = 4;
-
             public byte? Type { get; set; }
             public string Sensors { get; set; }
-            public string Name { get; set; }
             public List<ChatItem> Chats { get; set; }
 
-            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, string name, List<ChatItem> chats)
+            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, List<ChatItem> chats)
             {
                 Type = type;
-                Name = name;
                 Chats = chats;
 
                 if (sensors.Count > 0)
                 {
-                    var sb = new StringBuilder(128);
-                    for (int i = 0; i < sensors.Count; i++)
-                    {
-                        if (i == MAX_SENSORS && sensors.Count > MAX_SENSORS + 1)
-                        {
-                            sb.Append($"<div class=\"d-flex flex-row align-items-center fullCondition\">... and other {sensors.Count - MAX_SENSORS}</div>");
-                            break;
-                        }
-                        sb.Append($"<div class=\"d-flex flex-row align-items-center fullCondition\">{sensors[i].FullPath}</div>");
-                    }
+                    var sb = new StringBuilder(sensors.Count * 64);
+                    foreach (var sensor in sensors)
+                        sb.Append($"<div class=\"d-flex flex-row align-items-center fullCondition\">{sensor.FullPath}</div>");
 
                     Sensors = sb.ToString();
                 }
@@ -129,8 +118,6 @@ namespace HSMServer.Controllers
 
             var (sensorType, sensors) = GetAffectedSensors(type, pathList, folderId);
 
-            var name = GetTemplateName(pathList.FirstOrDefault(), folderId);
-
             List<ChatItem> chats = [];
             if (_folders.TryGetValue(folderId, out var folder))
             {
@@ -140,7 +127,7 @@ namespace HSMServer.Controllers
                     .ToList();
             }
 
-            var response = new UpdateResponse(sensorType, sensors, name, chats);
+            var response = new UpdateResponse(sensorType, sensors, chats);
 
             return Json(JsonSerializer.Serialize(response));
         }
@@ -163,7 +150,7 @@ namespace HSMServer.Controllers
                     model.FolderId = sensor.Root.FolderId ?? folders.FirstOrDefault().Id;
                     model.PathTemplates = [$"*/{sensor.Path}"];
                     model.Type = (byte)sensor.Type;
-                    model.Name = GetTemplateName(sensor.Path, model.FolderId);
+                    model.Name = string.Empty;
                 }
             }
 
@@ -270,19 +257,6 @@ namespace HSMServer.Controllers
             }
 
             return ((byte)sensors.FirstOrDefault()!.Type, sensors);
-        }
-
-        private string GetTemplateName(string path, Guid folderId)
-        {
-            var folderName = _folders.GetUserFolders(CurrentUser).FirstOrDefault(x => x.Id == folderId)?.Name ?? string.Empty;
-
-            if (string.IsNullOrWhiteSpace(path))
-                return string.Empty;
-
-            var result = path.Split('/');
-
-            return $"{folderName}/{result[^1]}";
-
         }
 
         private List<SelectListItem> GetAlertSchedulesSelectList()

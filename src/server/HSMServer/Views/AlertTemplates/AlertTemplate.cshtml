@@ -64,6 +64,10 @@
 
         // Remove path buttons
         $('#pathTemplatesContainer').on('click', '.remove-path-btn', function() {
+            var pathValue = $(this).closest('.path-template-row').find('.path-template-input').val();
+            if (pathValue && pathValue.trim() !== '' && !confirm('Remove this path?'))
+                return;
+
             $(this).closest('.path-template-row').remove();
             reindexPathInputs();
             updateRemoveButtons();
@@ -201,11 +205,6 @@
                 if (needChangeType & data['Type'] != null) {
                     $('#Type').val(data['Type']);
                     onSensorTypeChanged(false);
-                }
-
-                var dataName = data['Name'];
-                if (dataName){
-                    $('#Name').val(dataName);
                 }
 
                 if (data['Sensors'] != null) {
