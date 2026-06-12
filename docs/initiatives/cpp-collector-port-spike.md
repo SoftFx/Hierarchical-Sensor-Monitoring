@@ -667,6 +667,35 @@ gcc 11 `-Wall -Wextra -Wpedantic` compiles both translation units warning-free;
 all 19 fixtures + 24 regression tests pass under Linux (WSL Ubuntu 22.04) and
 43/43 under MSVC.
 
+### 2026-06-12: driver meta-suite — must-fail fixtures ("test the tests")
+
+A green corpus proves nothing if a driver silently skips or rubber-stamps an
+assertion — #1094 calls this out as mutation testing of the harness. New
+`tests/conformance/collector/meta/` holds 10 single-case fixtures, each with
+exactly one deliberately WRONG expectation; a correct driver MUST fail it.
+Covered mutations: polled `expect_sent_count` overcount + exact-zero mismatch,
+`expect_payload_contains` / `expect_payload_not_contains`,
+`expect_bar_field` (wrong mean), `expect_each_value_once` (missing value),
+`expect_payload_value_sequence` (wrong start), `expect_eventually_value_above`
+(unreachable threshold), `expect_no_new_payloads_for_ms` (traffic arriving),
+and the unknown-action guard (a typo'd verb fails loudly, never skips).
+
+Runner contract (both drivers): a crash is NOT detection — the contract run is
+wrapped in-process and must surface a thrown assertion/contract failure.
+Managed: `Meta_must_fail_fixture_is_rejected_by_the_driver` theory over
+`meta/*.hsmtest` (the normal discovery globs non-recursively, so meta fixtures
+never enter the regular corpus). Native: `meta_must_fail` entry +
+`add_meta_conformance_test` CMake registrations. Both enforce one-case-per-file
+(a driver aborts a fixture on the first failing step, so a second mutation
+would never be proven).
+
+Timing-sensitive must-fails are biased so the only flake direction is benign:
+`expect_no_new_payloads_for_ms|1000` over a 100 ms post period needs a full
+second of scheduler stall to fake a pass (screened 20× both legs).
+
+Verification: managed meta 10/10 + full suite 464/464 green (9 skips
+pre-existing); MSVC ctest 53/53; gcc (WSL) meta 10/10.
+
 ## Cross-Cutting Port Invariants
 
 Behavioral invariants every port must uphold that are NOT expressible as

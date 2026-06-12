@@ -1815,6 +1815,28 @@ namespace
         }
     }
 
+    // Meta-suite ("test the tests", #1094): the fixture carries a deliberately wrong
+    // expectation, and a correct driver MUST fail it. The contract run is wrapped in-process
+    // so a crash still fails the meta test — a segfault is not "detection".
+    void RunConformanceContractExpectFailure(const std::string& path)
+    {
+        // Drivers abort a fixture on the first failing step, so a second case in a
+        // must-fail fixture would never be proven — one mutation per file.
+        Require(ReadConformanceFile(path).size() == 1, "meta fixture must contain exactly one case");
+
+        try
+        {
+            RunConformanceContract(path);
+        }
+        catch (const std::exception& ex)
+        {
+            std::cout << "must-fail fixture failed as required: " << ex.what() << '\n';
+            return;
+        }
+
+        throw std::runtime_error("Must-fail fixture unexpectedly passed: " + path);
+    }
+
     void NativeInvalidArgumentClearsOutParams()
     {
         auto* collector = reinterpret_cast<hsm_collector_t*>(static_cast<uintptr_t>(1));
@@ -2215,6 +2237,7 @@ namespace
             { "conformance_function_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_file_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_number_format_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
         };
 
         return tests;

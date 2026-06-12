@@ -1,0 +1,7 @@
+# MUST-FAIL: the rate sensor receives no increments, so every post is 0 and
+# the threshold 5 is never crossed. Proves expect_eventually_value_above times
+# out and fails instead of passing vacuously (1 second deadline).
+meta_eventually_value_above_unreachable|create_collector
+meta_eventually_value_above_unreachable|create_rate_sensor|meta/rate/flat|150
+meta_eventually_value_above_unreachable|start
+meta_eventually_value_above_unreachable|expect_eventually_value_above|5|1

@@ -1,0 +1,12 @@
+# MUST-FAIL: the delivered sequence starts at 0 but the fixture demands it
+# start at 100. Proves expect_payload_value_sequence compares actual values.
+meta_value_sequence_wrong_start|create_collector
+meta_value_sequence_wrong_start|create_int_sensor|meta/sequence/wrong-start
+meta_value_sequence_wrong_start|start
+meta_value_sequence_wrong_start|add_int|0|0|Ok|v
+meta_value_sequence_wrong_start|add_int|0|1|Ok|v
+meta_value_sequence_wrong_start|add_int|0|2|Ok|v
+meta_value_sequence_wrong_start|add_int|0|3|Ok|v
+meta_value_sequence_wrong_start|add_int|0|4|Ok|v
+meta_value_sequence_wrong_start|stop
+meta_value_sequence_wrong_start|expect_payload_value_sequence|0|5|100
