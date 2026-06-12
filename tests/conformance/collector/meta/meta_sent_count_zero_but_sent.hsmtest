@@ -1,0 +1,9 @@
+# MUST-FAIL: a value IS delivered but the fixture expects zero. Proves the
+# driver fails the exact (no-timeout) expect_sent_count direction — overcounts
+# are detected, not only undercounts.
+meta_sent_count_zero_but_sent|create_collector
+meta_sent_count_zero_but_sent|create_int_sensor|meta/sent-count/zero
+meta_sent_count_zero_but_sent|start
+meta_sent_count_zero_but_sent|add_int|0|1|Ok|delivered
+meta_sent_count_zero_but_sent|stop
+meta_sent_count_zero_but_sent|expect_sent_count|0

@@ -1,0 +1,9 @@
+# MUST-FAIL: one value is sent but the fixture expects two. Proves the driver
+# fails a polled expect_sent_count that never reaches the expected count
+# (1 second poll deadline keeps the meta run fast).
+meta_sent_count_overcount|create_collector
+meta_sent_count_overcount|create_int_sensor|meta/sent-count/overcount
+meta_sent_count_overcount|start
+meta_sent_count_overcount|add_int|0|1|Ok|only one value
+meta_sent_count_overcount|stop
+meta_sent_count_overcount|expect_sent_count|2|1

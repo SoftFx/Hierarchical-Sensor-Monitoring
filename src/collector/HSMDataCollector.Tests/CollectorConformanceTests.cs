@@ -53,6 +53,56 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        // Meta-suite ("test the tests", #1094): every fixture under meta/ carries a deliberately
+        // wrong expectation, and a correct driver MUST fail it. A driver that passes one is not
+        // evaluating the assertion it claims to evaluate. A crash is not detection — the case
+        // must surface as a thrown assertion/contract failure.
+        [Theory]
+        [MemberData(nameof(CollectorMetaMustFailCases))]
+        public async Task Meta_must_fail_fixture_is_rejected_by_the_driver(string caseName, IReadOnlyList<ContractStep> steps)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(caseName));
+
+            var state = new ContractState();
+            Exception detected = null;
+
+            try
+            {
+                foreach (var step in steps)
+                    await ExecuteStepAsync(state, step).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                detected = ex;
+            }
+            finally
+            {
+                if (state.Collector != null)
+                    await state.Collector.Stop().ConfigureAwait(false);
+
+                state.Collector?.Dispose();
+            }
+
+            Assert.True(detected != null, $"Must-fail fixture '{caseName}' passed — the driver is not detecting wrong expectations.");
+        }
+
+        public static IEnumerable<object[]> CollectorMetaMustFailCases()
+        {
+            foreach (var contractFile in FindMetaContractFiles())
+            {
+                var contractName = Path.GetFileNameWithoutExtension(contractFile);
+                var cases = ReadContractCases(contractFile);
+
+                // Drivers abort a fixture on the first failing step, so a second case in a
+                // must-fail fixture would never be proven — one mutation per file.
+                if (cases.Count != 1)
+                    throw new InvalidOperationException($"Meta fixture '{contractName}' must contain exactly one case.");
+
+                foreach (var testCase in cases)
+                    yield return new object[] { contractName + ":" + testCase.Key, testCase.Value };
+            }
+        }
+
         private static async Task ExecuteStepAsync(ContractState state, ContractStep step)
         {
             switch (step.Action)
@@ -1198,7 +1248,13 @@ namespace HSMDataCollector.Tests
             return cases.ToDictionary(x => x.Key, x => (IReadOnlyList<ContractStep>)x.Value, StringComparer.Ordinal);
         }
 
-        private static IReadOnlyList<string> FindContractFiles()
+        private static IReadOnlyList<string> FindContractFiles() =>
+            Directory.GetFiles(FindContractDirectory(), "*.hsmtest").OrderBy(x => x, StringComparer.Ordinal).ToArray();
+
+        private static IReadOnlyList<string> FindMetaContractFiles() =>
+            Directory.GetFiles(Path.Combine(FindContractDirectory(), "meta"), "*.hsmtest").OrderBy(x => x, StringComparer.Ordinal).ToArray();
+
+        private static string FindContractDirectory()
         {
             var directory = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
 
@@ -1206,7 +1262,7 @@ namespace HSMDataCollector.Tests
             {
                 var candidate = Path.Combine(directory.FullName, "tests", "conformance", "collector");
                 if (Directory.Exists(candidate))
-                    return Directory.GetFiles(candidate, "*.hsmtest").OrderBy(x => x, StringComparer.Ordinal).ToArray();
+                    return candidate;
 
                 directory = directory.Parent;
             }

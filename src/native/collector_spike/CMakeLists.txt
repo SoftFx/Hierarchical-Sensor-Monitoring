@@ -103,3 +103,26 @@ add_conformance_test(conformance_flush_contract flush_contract.hsmtest)
 add_conformance_test(conformance_rate_contract rate_contract.hsmtest)
 add_conformance_test(conformance_function_contract function_contract.hsmtest)
 add_conformance_test(conformance_file_contract file_contract.hsmtest)
+
+# Meta-suite ("test the tests"): must-FAIL fixtures with deliberately wrong
+# expectations; the meta_must_fail runner passes only when the driver detects
+# the failure. See tests/conformance/collector/meta/README.md.
+function(add_meta_conformance_test fixture)
+    get_filename_component(name ${fixture} NAME_WE)
+    add_test(
+        NAME ${name}
+        COMMAND hsm_collector_spike_tests meta_must_fail
+                ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/${fixture}
+    )
+endfunction()
+
+add_meta_conformance_test(meta_bar_field_wrong_mean.hsmtest)
+add_meta_conformance_test(meta_each_value_once_missing.hsmtest)
+add_meta_conformance_test(meta_eventually_value_above_unreachable.hsmtest)
+add_meta_conformance_test(meta_no_new_payloads_but_arriving.hsmtest)
+add_meta_conformance_test(meta_payload_contains_wrong_value.hsmtest)
+add_meta_conformance_test(meta_payload_not_contains_present.hsmtest)
+add_meta_conformance_test(meta_sent_count_overcount.hsmtest)
+add_meta_conformance_test(meta_sent_count_zero_but_sent.hsmtest)
+add_meta_conformance_test(meta_unknown_action_rejected.hsmtest)
+add_meta_conformance_test(meta_value_sequence_wrong_start.hsmtest)

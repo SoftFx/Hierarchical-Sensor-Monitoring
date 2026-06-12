@@ -1,0 +1,8 @@
+# MUST-FAIL: a function sensor posts every 100 ms, so new payloads keep
+# arriving during the 1000 ms quiet window the fixture demands. Proves
+# expect_no_new_payloads_for_ms detects traffic (the window is 10 post
+# periods wide, so a stalled scheduler cannot fake a pass).
+meta_no_new_payloads_but_arriving|create_collector
+meta_no_new_payloads_but_arriving|create_function_int_sensor|meta/func/busy|100|42
+meta_no_new_payloads_but_arriving|start
+meta_no_new_payloads_but_arriving|expect_no_new_payloads_for_ms|1000
