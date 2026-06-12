@@ -781,6 +781,27 @@ namespace
             Enqueue(std::move(json));
         }
 
+        // File payloads are push-driven (the C# file queue wakes on enqueue instead of waiting
+        // out PackageCollectPeriod), so the worker is kicked to dispatch promptly.
+        void EnqueueFileIfRunning(std::string json)
+        {
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+
+                if (state_ != CollectorState::Running)
+                    return;
+            }
+
+            Enqueue(std::move(json));
+
+            {
+                std::lock_guard<std::mutex> guard(queue_mutex_);
+                dispatch_kick_ = true;
+            }
+
+            queue_cv_.notify_all();
+        }
+
         void SetSendFailNext(int32_t count)
         {
             if (count > 0)
@@ -987,11 +1008,12 @@ namespace
                 queue_cv_.wait_for(
                     lock,
                     std::chrono::milliseconds(collect_period_ms_),
-                    [this] { return worker_stop_; });
+                    [this] { return worker_stop_ || dispatch_kick_; });
 
                 if (worker_stop_)
                     break;
 
+                dispatch_kick_ = false;
                 DispatchQueuedLocked(lock, /*clear_remainder_on_failure=*/false);
             }
         }
@@ -1095,6 +1117,7 @@ namespace
         std::condition_variable queue_cv_;
         std::deque<std::string> queue_;
         bool worker_stop_ = false;
+        bool dispatch_kick_ = false;
         std::thread worker_;
         std::atomic<int32_t> fail_next_{ 0 };
 
@@ -1330,8 +1353,9 @@ namespace
              << "\"UnixTimeMs\":" << UnixTimeMilliseconds()
              << "}";
 
-        // Instant gating: dropped unless the collector is running (values before Start are lost).
-        collector->EnqueueIfRunning(json.str());
+        // Instant gating: dropped unless the collector is running (values before Start are
+        // lost). File payloads dispatch promptly — not gated by the package collect period.
+        collector->EnqueueFileIfRunning(json.str());
         return HSM_RESULT_OK;
     }
 

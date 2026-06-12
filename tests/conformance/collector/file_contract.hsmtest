@@ -7,8 +7,9 @@
 # - AddValue(string) publishes the UTF-8 bytes as a file payload (Type 6) with the sensor
 #   options' default name/extension. Disk-based SendFile stays language-specific and is NOT
 #   part of this portable contract.
-# - File payloads route through the file queue: instant delivery while running, and the
-#   graceful Stop flush delivers anything still pending.
+# - File payloads are PUSH-DRIVEN: they dispatch promptly while running and are NOT gated by
+#   the package collect period (the C# file queue wakes on enqueue, unlike the batched data
+#   queue). There is no orchestrable "pending at stop" state for files.
 # - A null content is silently ignored; values added before Start are dropped (instant
 #   sensor gating).
 
@@ -38,11 +39,9 @@ file_null_value_is_ignored|add_file_value|0|token:null|Ok|null-content
 file_null_value_is_ignored|stop
 file_null_value_is_ignored|expect_sent_count|0
 
-file_stop_flushes_pending|create_collector_with_limits|20000|50|60000
-file_stop_flushes_pending|create_file_sensor|contract/file/flush|pending|log
-file_stop_flushes_pending|start
-file_stop_flushes_pending|add_file_value|0|flush me|Ok|flush-comment
-file_stop_flushes_pending|expect_sent_count|0
-file_stop_flushes_pending|stop
-file_stop_flushes_pending|expect_sent_count|1
-file_stop_flushes_pending|expect_payload_contains|0|"Value":"flush me"
+file_dispatches_promptly_despite_collect_period|create_collector_with_limits|20000|50|60000
+file_dispatches_promptly_despite_collect_period|create_file_sensor|contract/file/prompt|prompt|log
+file_dispatches_promptly_despite_collect_period|start
+file_dispatches_promptly_despite_collect_period|add_file_value|0|prompt file|Ok|prompt-comment
+file_dispatches_promptly_despite_collect_period|expect_sent_count|1|5
+file_dispatches_promptly_despite_collect_period|expect_payload_contains|0|"Value":"prompt file"

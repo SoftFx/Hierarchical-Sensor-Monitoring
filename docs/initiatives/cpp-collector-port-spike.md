@@ -617,7 +617,9 @@ fixtures, implemented in both harnesses at once:
   before Start.
 - `file_contract.hsmtest` (4): UTF-8 string-content publish round-trips with
   Type 6 + Name/Extension from options, values before Start dropped, null
-  content silently ignored, graceful Stop flushes a pending file payload.
+  content silently ignored, and file payloads dispatch PROMPTLY — push-driven,
+  not gated by the package collect period (the C# file queue wakes on enqueue,
+  unlike the batched data queue; the native worker gets an explicit kick).
   Disk-based `SendFile` stays language-specific (not portable).
 
 Contract pinned along the way: **the first periodic post fires immediately on
