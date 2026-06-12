@@ -36,8 +36,15 @@ typedef enum hsm_sensor_type_t
     HSM_SENSOR_TYPE_STRING = 3,
     HSM_SENSOR_TYPE_INT_BAR = 4,
     HSM_SENSOR_TYPE_DOUBLE_BAR = 5,
+    HSM_SENSOR_TYPE_FILE = 6,
+    HSM_SENSOR_TYPE_RATE = 9,
     HSM_SENSOR_TYPE_ENUM = 10
 } hsm_sensor_type_t;
+
+/* User callbacks for function sensors. Invoked on the collector's scheduler thread; they must
+   not throw across the C ABI boundary. */
+typedef int32_t (*hsm_int_function_t)(void* user_data);
+typedef int32_t (*hsm_int_values_function_t)(const int32_t* values, int32_t count, void* user_data);
 
 typedef struct hsm_collector_options_t
 {
@@ -118,6 +125,42 @@ hsm_result_t hsm_collector_create_double_bar_sensor(
     int32_t precision,
     hsm_sensor_t** out_sensor);
 
+/* Periodic sensors (rate / function): the FIRST post fires immediately on collector Start,
+   then every post_period_ms. Rate = accumulated sum / measured elapsed seconds since the
+   previous post (fallback: the configured period for the first sample); the sum resets on
+   every post; status/comment are sticky from the last accepted increment. Stop does NOT
+   flush the pending rate sum or trigger an extra function post. */
+hsm_result_t hsm_collector_create_rate_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_function_int_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_int_function_t function,
+    void* user_data,
+    hsm_sensor_t** out_sensor);
+/* Values-function: AddValue buffers into a sliding window (oldest evicted past
+   max_cache_size); every post passes a snapshot of the window to the callback — the buffer
+   is NOT drained. Values may be buffered before Start. */
+hsm_result_t hsm_collector_create_values_function_int_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    int32_t max_cache_size,
+    hsm_int_values_function_t function,
+    void* user_data,
+    hsm_sensor_t** out_sensor);
+/* File sensor (string-content path only; disk reads are not part of the portable contract). */
+hsm_result_t hsm_collector_create_file_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    const char* default_file_name,
+    const char* extension,
+    hsm_sensor_t** out_sensor);
+
 void hsm_sensor_release(hsm_sensor_t* sensor);
 
 hsm_result_t hsm_sensor_add_int(
@@ -143,6 +186,24 @@ hsm_result_t hsm_sensor_add_string(
 hsm_result_t hsm_sensor_add_enum(
     hsm_sensor_t* sensor,
     int32_t value,
+    hsm_sensor_status_t status,
+    const char* comment);
+
+/* Rate increment: a non-finite value or an invalid status is silently dropped (the call
+   returns HSM_RESULT_OK and neither the sum nor the sticky status/comment change). */
+hsm_result_t hsm_sensor_add_rate(
+    hsm_sensor_t* sensor,
+    double value,
+    hsm_sensor_status_t status,
+    const char* comment);
+
+/* Values-function buffer append (works before Start as well). */
+hsm_result_t hsm_sensor_add_function_int(hsm_sensor_t* sensor, int32_t value);
+
+/* File content publish: NULL content is silently ignored (returns HSM_RESULT_OK). */
+hsm_result_t hsm_sensor_add_file(
+    hsm_sensor_t* sensor,
+    const char* utf8_content,
     hsm_sensor_status_t status,
     const char* comment);
 

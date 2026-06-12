@@ -1,0 +1,64 @@
+# HSM collector conformance v1 — rate sensor contract.
+# Format: case|action|arg1|arg2|...
+# Actions:
+# create_rate_sensor|path|post_period_ms
+# add_rate|idx|value|status|comment           (invalid value/status increments are silently dropped)
+# add_rate_raw|idx|value|raw_status|comment   (raw numeric status — used for invalid-status cases)
+# expect_eventually_payload_contains|substring|timeout_s
+# expect_eventually_value_above|threshold|timeout_s
+# Contract notes:
+# - Rate = accumulated sum / measured elapsed seconds since the previous post; the sum resets on
+#   every post. The exact value is timing-dependent, so portable cases assert invariants only
+#   (zeros when idle, eventually-positive after adds); the elapsed-time math itself is pinned by
+#   language-local unit tests.
+# - The FIRST post fires immediately on Start (schedule due time = 0), then every post period.
+# - Status and comment are sticky: the last accepted increment's status/comment ride on every
+#   subsequent post until changed.
+# - Stop does NOT flush the pending sum (deliberate: a partial-window rate is alert-noise risk;
+#   data preservation at stop applies to bars, not rates).
+
+rate_posts_zero_when_idle|create_collector
+rate_posts_zero_when_idle|create_rate_sensor|contract/rate/idle|100
+rate_posts_zero_when_idle|start
+rate_posts_zero_when_idle|expect_sent_count_between|2|1000|10
+rate_posts_zero_when_idle|expect_all_payloads_contain|"Type":9,
+rate_posts_zero_when_idle|expect_all_payloads_contain|"Value":0,
+rate_posts_zero_when_idle|expect_all_payloads_contain|"Status":1,
+
+rate_posts_positive_value_after_adds|create_collector
+rate_posts_positive_value_after_adds|create_rate_sensor|contract/rate/adds|150
+rate_posts_positive_value_after_adds|start
+rate_posts_positive_value_after_adds|add_rate|0|60|Ok|adds
+rate_posts_positive_value_after_adds|add_rate|0|40|Ok|adds
+rate_posts_positive_value_after_adds|expect_eventually_value_above|0|10
+
+rate_status_and_comment_are_sticky|create_collector
+rate_status_and_comment_are_sticky|create_rate_sensor|contract/rate/sticky|100
+rate_status_and_comment_are_sticky|start
+rate_status_and_comment_are_sticky|add_rate|0|5|Warning|sticky-comment
+rate_status_and_comment_are_sticky|expect_eventually_payload_contains|"Status":2,|10
+rate_status_and_comment_are_sticky|expect_eventually_payload_contains|sticky-comment|10
+
+rate_invalid_status_increment_is_dropped|create_collector
+rate_invalid_status_increment_is_dropped|create_rate_sensor|contract/rate/bad-status|100
+rate_invalid_status_increment_is_dropped|start
+rate_invalid_status_increment_is_dropped|add_rate_raw|0|100|99|bad-status
+rate_invalid_status_increment_is_dropped|expect_sent_count_between|2|1000|10
+rate_invalid_status_increment_is_dropped|expect_all_payloads_contain|"Value":0,
+rate_invalid_status_increment_is_dropped|expect_all_payloads_contain|"Status":1,
+
+rate_nan_increment_is_dropped|create_collector
+rate_nan_increment_is_dropped|create_rate_sensor|contract/rate/nan|100
+rate_nan_increment_is_dropped|start
+rate_nan_increment_is_dropped|add_rate|0|NaN|Ok|nan-increment
+rate_nan_increment_is_dropped|expect_sent_count_between|2|1000|10
+rate_nan_increment_is_dropped|expect_all_payloads_contain|"Value":0,
+
+rate_stop_drops_pending_sum|create_collector
+rate_stop_drops_pending_sum|create_rate_sensor|contract/rate/stop|60000
+rate_stop_drops_pending_sum|start
+rate_stop_drops_pending_sum|expect_sent_count|1|5
+rate_stop_drops_pending_sum|add_rate|0|100|Ok|pending
+rate_stop_drops_pending_sum|stop
+rate_stop_drops_pending_sum|expect_sent_count|1
+rate_stop_drops_pending_sum|expect_all_payloads_contain|"Value":0,
