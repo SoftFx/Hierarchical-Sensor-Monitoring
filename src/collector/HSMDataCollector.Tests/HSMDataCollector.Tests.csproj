@@ -13,5 +13,12 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HSMDataCollector\HSMDataCollector.csproj" />
+    <!-- Build-only dependency: CollectorCrashIsolationTests spawns the net6.0 crash host as a
+         separate process, so the assembly is not referenced (different TFM), only built. -->
+    <ProjectReference Include="..\HSMDataCollector.CrashTests.Host\HSMDataCollector.CrashTests.Host.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <Private>false</Private>
+    </ProjectReference>
   </ItemGroup>
 </Project>

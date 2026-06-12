@@ -255,6 +255,7 @@ namespace HSMServer.ApiObjectsConverters
                 DoubleBarValue sv => sv.Convert(),
                 FileValue sv => sv.Convert(),
                 RateValue sv => sv.Convert(),
+                EnumValue sv => sv.Convert(),
                 _ => null,
             };
 

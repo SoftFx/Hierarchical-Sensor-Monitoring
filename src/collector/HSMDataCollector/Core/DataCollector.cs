@@ -8,8 +8,8 @@ using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
-using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.SyncQueue.Data;
 using HSMDataCollector.Threading;
 using HSMSensorDataObjects;
 
@@ -254,7 +254,7 @@ namespace HSMDataCollector.Core
             }
         }
 
-        private async Task WaitForStartInitThenStopProcessor(Task startInitTask)
+        private async Task WaitForStartInitThenStopProcessor(Task startInitTask, ShutdownMode mode)
         {
             if (startInitTask != null)
             {
@@ -268,14 +268,17 @@ namespace HSMDataCollector.Core
                 }
             }
 
-            await _dataProcessor.StopAsync().ConfigureAwait(false);
+            await _dataProcessor.StopAsync(mode).ConfigureAwait(false);
         }
 
         private async Task SafeStopProcessor()
         {
             try
             {
-                await _dataProcessor.StopAsync().ConfigureAwait(false);
+                // Failed Start: the collector never finished entering the running phase, so the
+                // start-rollback mode discards queued items instead of pretending the collector
+                // accepted user work.
+                await _dataProcessor.StopAsync(ShutdownMode.StartRollback).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -289,8 +292,8 @@ namespace HSMDataCollector.Core
         public async Task Stop(Task customStoppingTask)
         {
             Task startInitTask;
-            Task processorStopTask;
-            Task stopTask;
+            Task processorStopTask = null;
+            var failures = new List<Exception>();
 
             lock (_opLock)
             {
@@ -300,18 +303,54 @@ namespace HSMDataCollector.Core
                 LogAndRaise(CollectorStatus.Stopping);
 
                 startInitTask = _currentStartInitTask;
-                processorStopTask = WaitForStartInitThenStopProcessor(startInitTask);
-                stopTask = Task.WhenAll(processorStopTask, customStoppingTask);
-                _currentProcessorStopTask = processorStopTask;
+                // Note: _currentProcessorStopTask is re-read inside the second lock after the
+                // custom stopping task awaits, since Dispose may publish its own task in that
+                // window. We intentionally do not cache it here.
             }
 
             try
             {
-                await stopTask.ConfigureAwait(false);
+                if (customStoppingTask != null)
+                    await customStoppingTask.ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger.Error($"DataCollector Stop error: {ex}");
+                failures.Add(ex);
+            }
+
+            bool collectorDisposedDuringCustomTask;
+            lock (_opLock)
+            {
+                collectorDisposedDuringCustomTask = Status == CollectorStatus.Disposed;
+
+                if (!collectorDisposedDuringCustomTask)
+                {
+                    processorStopTask = _currentProcessorStopTask;
+                    if (processorStopTask == null)
+                    {
+                        processorStopTask = WaitForStartInitThenStopProcessor(startInitTask, ShutdownMode.GracefulStop);
+                        _currentProcessorStopTask = processorStopTask;
+                    }
+                }
+            }
+
+            // Dispose() raced us and took ownership of the terminal stop. Surface anything the
+            // customStoppingTask hook produced before returning so a failing user hook is not
+            // silently swallowed by the dispose path; the terminal stop itself is Dispose's
+            // responsibility from here on.
+            if (collectorDisposedDuringCustomTask)
+            {
+                ReportStopFailures(failures);
+                return;
+            }
+
+            try
+            {
+                await processorStopTask.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                failures.Add(ex);
             }
 
             lock (_opLock)
@@ -323,6 +362,16 @@ namespace HSMDataCollector.Core
                 if (_lifecycle.CompleteStop())
                     LogAndRaise(CollectorStatus.Stopped);
             }
+
+            ReportStopFailures(failures);
+        }
+
+        private void ReportStopFailures(List<Exception> failures)
+        {
+            if (failures.Count == 1)
+                _logger.Error($"DataCollector Stop error: {failures[0]}");
+            else if (failures.Count > 1)
+                _logger.Error($"DataCollector Stop error: {new AggregateException(failures)}");
         }
 
         private void InitializeProcessor()
@@ -390,7 +439,7 @@ namespace HSMDataCollector.Core
         {
             CollectorStatus previousStatus;
             Task inFlightStop;
-            Task inFlightStartInit;
+            Task disposeOwnedStop = null;
             bool ownsStop;
 
             lock (_opLock)
@@ -400,20 +449,35 @@ namespace HSMDataCollector.Core
                 if (previousStatus == CollectorStatus.Disposed)
                     return;
 
-                // If another thread is already stopping, do not issue a duplicate StopAsync —
-                // wait for its task. Otherwise take the Starting/Running -> Stopping transition ourselves.
+                // If another thread is already stopping with a registered processor stop task,
+                // wait for it. If the collector is Stopping but no processor stop task exists yet
+                // (Stop(customTask) is still running its hook), Dispose owns the terminal stop.
                 inFlightStop = _currentProcessorStopTask;
-                inFlightStartInit = _currentStartInitTask;
+                var inFlightStartInit = _currentStartInitTask;
                 ownsStop = inFlightStop == null
-                    && previousStatus.IsStartingOrRunning()
-                    && _lifecycle.TryStop();
+                    && (previousStatus == CollectorStatus.Stopping ||
+                        (previousStatus.IsStartingOrRunning() && _lifecycle.TryStop()));
 
                 if (ownsStop)
-                    LogAndRaise(CollectorStatus.Stopping);
+                {
+                    if (previousStatus.IsStartingOrRunning())
+                        LogAndRaise(CollectorStatus.Stopping);
+
+                    // Publish the terminal-dispose stop task INSIDE the lock so a concurrent
+                    // Stop(customStoppingTask) — whose await of customStoppingTask is currently
+                    // racing this dispose — finds our task on its second lock and joins it,
+                    // instead of seeing _currentProcessorStopTask == null and kicking off a
+                    // second concurrent _dataProcessor.StopAsync with conflicting ShutdownMode.
+                    disposeOwnedStop = WaitForStartInitThenStopProcessor(inFlightStartInit, ShutdownMode.TerminalDispose);
+                    _currentProcessorStopTask = disposeOwnedStop;
+                }
             }
 
             try
             {
+                if (inFlightStop != null || ownsStop)
+                    (_dataSender as ICancelableDataSender)?.CancelPendingRequests();
+
                 if (inFlightStop != null)
                 {
                     // Concurrent Stop() is responsible for firing ToStopped — but its continuation runs on
@@ -440,10 +504,15 @@ namespace HSMDataCollector.Core
                 }
                 else if (ownsStop)
                 {
-                    DisposeComponent(() => WaitForStartInitThenStopProcessor(inFlightStartInit).ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
+                    DisposeComponent(() => disposeOwnedStop.ConfigureAwait(false).GetAwaiter().GetResult(), nameof(_dataProcessor));
 
                     lock (_opLock)
                     {
+                        // Clear only if still pointing to our task — a racing Stop may have observed
+                        // and joined it, in which case its own bookkeeping leaves the field alone.
+                        if (ReferenceEquals(_currentProcessorStopTask, disposeOwnedStop))
+                            _currentProcessorStopTask = null;
+
                         if (_lifecycle.CompleteStop())
                             LogAndRaise(CollectorStatus.Stopped);
                     }
@@ -669,7 +738,8 @@ namespace HSMDataCollector.Core
 
         public IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOptions options) => CreateInstantSensor<int>(path, options);
 
-        public IInstantValueSensor<int> CreateEnumSensor(string path, string description = "") => CreateInstantSensor<int>(path, new EnumSensorOptions { Description = description });
+        public IInstantValueSensor<int> CreateEnumSensor(string path, string description = "") =>
+            CreateEnumSensor(path, new EnumSensorOptions { Description = description });
 
         public IInstantValueSensor<int> CreateEnumSensor(string path, EnumSensorOptions options) => _sensorsStorage.CreateEnumInstantSensor(path, options);
 
@@ -716,8 +786,7 @@ namespace HSMDataCollector.Core
 
         public Task<bool> SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
-            var fullSensorPath = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, sensorPath);
-            var sensor = _sensorsStorage.CreateFileSensor(fullSensorPath, new FileSensorOptions());
+            var sensor = _sensorsStorage.CreateFileSensor(sensorPath, new FileSensorOptions());
 
             return sensor.SendFile(filePath, status, comment);
         }

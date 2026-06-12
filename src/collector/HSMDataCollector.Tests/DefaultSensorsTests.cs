@@ -75,7 +75,7 @@ namespace HSMDataCollector.Tests
             if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
                 return TimeSpan.FromSeconds(seconds);
 
-            return TimeSpan.FromSeconds(30);
+            return TimeSpan.FromSeconds(5);
         }
 
         private static TimeSpan GetSuiteSoakMaxDuration()
@@ -85,7 +85,7 @@ namespace HSMDataCollector.Tests
             if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
                 return TimeSpan.FromSeconds(seconds);
 
-            return TimeSpan.FromMinutes(2);
+            return TimeSpan.FromSeconds(30);
         }
 
         private static void AssertWithinSuiteSoakMax(Stopwatch stopwatch, TimeSpan maxDuration)

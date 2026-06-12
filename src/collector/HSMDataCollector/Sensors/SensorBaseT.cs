@@ -23,6 +23,12 @@ namespace HSMDataCollector.DefaultSensors
 
         public void SendValue(T value, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
+            if (!SensorValueExtensions.IsValidValue(value, status))
+            {
+                _dataProcessor.LogDroppedValue(SensorPath, $"value failed validation (status: {status})");
+                return;
+            }
+
             try
             {
                 SendValue(GetSensorValue(value).Complete(comment, status));

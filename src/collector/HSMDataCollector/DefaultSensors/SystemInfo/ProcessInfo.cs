@@ -8,6 +8,8 @@ namespace HSMDataCollector.DefaultSensors
 
         internal static string CurrentProcessName => CurrentProcess.ProcessName;
 
+        internal static int CurrentProcessId => CurrentProcess.Id;
+
 
         internal static Process GetPowershellProcess(string args)
         {

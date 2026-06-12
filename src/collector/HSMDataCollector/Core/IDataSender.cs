@@ -21,4 +21,9 @@ namespace HSMDataCollector.Core
 
         ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token);
     }
+
+    internal interface ICancelableDataSender
+    {
+        void CancelPendingRequests();
+    }
 }

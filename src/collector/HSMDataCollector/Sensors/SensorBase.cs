@@ -1,21 +1,27 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using HSMDataCollector.Core;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 
 
 namespace HSMDataCollector.DefaultSensors
 {
 
-    public abstract class SensorBase<TDisplayUnit> : ISensor where TDisplayUnit : struct, Enum
+    public abstract class SensorBase<TDisplayUnit> : ISensor, ISensorIdentity where TDisplayUnit : struct, Enum
     {
         internal const string DefaultTimeFormat = "dd/MM/yyyy HH:mm:ss";
 
         private readonly SensorOptions<TDisplayUnit> _metainfo;
 
         public string SensorPath => _metainfo.Path;
+        SensorType ISensorIdentity.Type => _metainfo.Type;
+        bool ISensorIdentity.IsLastValue => IsLastValue;
+
+        protected virtual bool IsLastValue => false;
 
         internal bool IsProiritySensor => _metainfo.IsPrioritySensor;
 
@@ -38,6 +44,12 @@ namespace HSMDataCollector.DefaultSensors
                     return;
 
                 value.Path = SensorPath;
+
+                // The public Time setter accepts DateTimeKind.Local, which serializes with a
+                // machine-local offset and shifts timestamp interpretation (#1102-E5). Normalize at
+                // the send boundary; the wire DTO stays untouched.
+                if (value.Time.Kind == DateTimeKind.Local)
+                    value.Time = value.Time.ToUniversalTime();
 
                 value.TrimLongComment();
 
@@ -78,14 +90,50 @@ namespace HSMDataCollector.DefaultSensors
 
         public virtual ValueTask StopAsync() => default;
 
+        protected virtual ValueTask DisposeAsyncCore() => StopAsync();
+
         protected void HandleException(Exception ex)
         {
-            _dataProcessor?.AddException(SensorPath, ex);
-            ExceptionThrowing?.Invoke(SensorPath, ex);
+            // _dataProcessor is non-null by the ctor invariant; the try/catch is not a null guard
+            // but isolation against AddException itself failing.
+            try
+            {
+                _dataProcessor.AddException(SensorPath, ex);
+            }
+            catch (Exception reportEx)
+            {
+                Trace.TraceError($"Sensor {SensorPath} failed to report an exception: {reportEx}");
+            }
+
+            var subscribers = ExceptionThrowing;
+            if (subscribers == null)
+                return;
+
+            // HandleException is the scheduler's onError callback for monitoring sensors, so this
+            // event fires inside async-void dispatch where an escaping exception kills the host
+            // process (#1102-A1). Isolate per subscriber, same policy as the lifecycle events.
+            foreach (Action<string, Exception> handler in subscribers.GetInvocationList())
+            {
+                try
+                {
+                    handler(SensorPath, ex);
+                }
+                catch (Exception handlerEx)
+                {
+                    try
+                    {
+                        _dataProcessor.AddException(SensorPath, handlerEx);
+                    }
+                    catch (Exception reportEx)
+                    {
+                        Trace.TraceError($"Sensor {SensorPath} failed to report an {nameof(ExceptionThrowing)} handler error: {reportEx}");
+                    }
+                }
+            }
         }
 
 
-        public void Dispose() => StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+        public void Dispose() => DisposeAsyncCore().ConfigureAwait(false).GetAwaiter().GetResult();
 
     }
 }

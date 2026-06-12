@@ -1,12 +1,14 @@
-﻿using HSMDataCollector.Core;
+using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SyncQueue.Data;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+
 
 namespace HSMDataCollector.SyncQueue.SpecificQueue
 {
@@ -17,11 +19,18 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         Stopping,
     }
 
-    internal abstract class QueueProcessorBase<T> : IDisposable
+
+    /// <summary>
+    /// Shared queue processor template that owns the dequeue -> send -> success/retry/cancel/flush
+    /// algorithm. Subclasses provide only how to dispatch one batch
+    /// (<see cref="TryDispatchOneAsync(CancellationToken)"/>) and, optionally, how to wait for new
+    /// work (<see cref="WaitForReadyAsync(CancellationToken)"/>).
+    /// </summary>
+    internal abstract class QueueProcessorBase<T> : IQueueProcessor
     {
         private Task _task;
         private bool _disposed;
-
+        private QueueState _state = QueueState.Stopped;
         private readonly Channel<QueueItem<T>> _channel;
 
         protected ChannelReader<QueueItem<T>> Reader => _channel.Reader;
@@ -33,13 +42,44 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
         protected readonly DataProcessor _queueManager;
 
         private readonly object _lifecycleLock = new object();
-
-        private QueueState _state = QueueState.Stopped;
         private int _cleanupContinuationRegistered;
 
-        public abstract string QueueName { get; }
+        // 1 when the queue is open for public writes. Internal retry re-enqueue bypasses this so
+        // post-stop flush failures can preserve already accepted work.
+        private int _acceptingWritesFlag = 1;
 
-        protected abstract Task ProcessingLoop(CancellationToken token);
+        // Last shutdown mode requested via StopAsync. Read by the processing loop's catch blocks to
+        // decide whether canceled packages should be re-enqueued.
+        private int _currentShutdownModeRaw = (int)ShutdownMode.GracefulStop;
+
+        // 1 while FlushAsync is iterating the bounded post-stop drain. Re-enqueued failed packages
+        // during this window are immediately discarded by ClearQueue in FlushAndLogAsync — so the
+        // DispatchPackageAsync failure exception describes them as "queued for clear" instead of
+        // the misleading "preserved" wording used in the normal retry loop (#1087 A).
+        private int _inFlushFlag;
+
+        // Mirrors the BuildDate.Ticks of items currently in the channel, in FIFO order, so the
+        // retry filter can peek the head's BuildDate (Channel<T> cannot Peek). Used to decide if a
+        // failed-retry item is OLDER than what's currently waiting — if so, it would sit at the
+        // tail with a stale BuildDate and survive later overflow eviction that drops the
+        // actually-fresher FIFO head (issue #1090).
+        //
+        // Every channel write/read is paired with its mirror update under _mirrorLock (#1102-C2):
+        // without that atomicity a consumer could pop the channel while the producer's mirror write
+        // had not landed yet, leaving a PERMANENT orphan tick that shifts the peeked head to stale
+        // values and silently weakens the retry filter for the rest of the process lifetime
+        // (reproduced by QueueMirrorConsistencyTests).
+        //
+        // Replaces the original watermark approach from b0f8a90f5, which tracked the all-time
+        // newest accepted BuildDate. That implementation dropped almost any multi-item retry
+        // batch below capacity because the batch's own newest item raised the watermark above
+        // its older siblings — caught by PR #1091 review. The mirror tracks only currently-queued
+        // items, so re-enqueueing a batch [A(t1), B(t2), C(t3)] into an empty queue preserves
+        // all three (the mirror is empty for A, becomes [t1] for B's check, [t1, t2] for C's).
+        private readonly Queue<long> _buildDateMirror = new Queue<long>();
+        private readonly object _mirrorLock = new object();
+
+        public abstract string QueueName { get; }
 
         public QueueProcessorBase(CollectorOptions options, DataProcessor queueManager, ICollectorLogger logger)
         {
@@ -52,10 +92,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             {
                 SingleReader = false,
                 SingleWriter = false,
+                AllowSynchronousContinuations = false,
             });
         }
 
-        internal bool Start()
+        public bool Start()
         {
             lock (_lifecycleLock)
             {
@@ -73,10 +114,6 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                 if (_state == QueueState.Running)
                 {
-                    // Defensive: ProcessingLoop should never exit on its own (it loops until cancellation),
-                    // but if a subclass override breaks that contract, recover by treating the queue as stopped.
-                    // We do NOT call Task.Dispose on a possibly-faulted task — let the GC handle it to avoid
-                    // surfacing unobserved exceptions on the finalizer thread.
                     if (_task == null || _task.IsCompleted)
                     {
                         _logger.Error($"{QueueName} queue processor task exited unexpectedly; restarting.");
@@ -93,26 +130,32 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 }
 
                 _cancellationTokenSource = new CancellationTokenSource();
-                _task = Task.Run(() => ProcessingLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
+                _task = Task.Run(() => RunLoopAsync(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
                 _state = QueueState.Running;
+                Volatile.Write(ref _currentShutdownModeRaw, (int)ShutdownMode.GracefulStop);
+                Volatile.Write(ref _acceptingWritesFlag, 1);
                 Interlocked.Exchange(ref _cleanupContinuationRegistered, 0);
             }
 
             return true;
         }
 
-        internal async ValueTask<bool> StopAsync(bool clearQueue = true)
+        public async ValueTask<bool> StopAsync(ShutdownMode mode)
         {
             try
             {
                 Task taskToWait;
                 CancellationTokenSource tokenSourceToDispose;
+                var clearOnStop = mode.ClearOnStop();
 
                 lock (_lifecycleLock)
                 {
+                    Volatile.Write(ref _currentShutdownModeRaw, (int)mode);
+
                     if (_state == QueueState.Stopped)
                     {
-                        if (clearQueue)
+                        Volatile.Write(ref _acceptingWritesFlag, 0);
+                        if (clearOnStop)
                             ClearQueue();
 
                         return true;
@@ -120,35 +163,46 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                     if (_state == QueueState.Stopping)
                     {
-                        if (clearQueue)
+                        if (clearOnStop)
                             ClearQueue();
 
                         return false;
                     }
 
                     _state = QueueState.Stopping;
+                    // Close the queue to new public writes the moment we commit to stopping —
+                    // not at CompleteStoppedTask. Otherwise during the degraded "sender ignores
+                    // cancellation" window between Stopping and the final timeout return, public
+                    // AddValue paths whose CanAcceptData check still says true would land items
+                    // into the channel that ClearQueue silently discards seconds later. Internal
+                    // retry re-enqueue bypasses this flag via ReEnqueueItem.
+                    Volatile.Write(ref _acceptingWritesFlag, 0);
                     taskToWait = _task;
                     tokenSourceToDispose = _cancellationTokenSource;
                 }
 
                 try
                 {
-                    tokenSourceToDispose?.Cancel();
+                    if (mode == ShutdownMode.GracefulStop)
+                        tokenSourceToDispose?.Cancel();
+                    else
+                        tokenSourceToDispose?.CancelAfter(TimeSpan.Zero);
 
                     if (!taskToWait.IsCompleted)
                     {
                         using (var delayCancellation = new CancellationTokenSource())
                         {
-                            var delayTask = Task.Delay(_options.RequestTimeout, delayCancellation.Token);
+                            var stopWaitTimeout = mode.StopWaitTimeout(_options.RequestTimeout);
+                            var delayTask = Task.Delay(stopWaitTimeout, delayCancellation.Token);
                             var completedTask = await Task.WhenAny(taskToWait, delayTask).ConfigureAwait(false);
 
                             if (completedTask != taskToWait)
                             {
                                 RegisterCompletionCleanup(taskToWait, tokenSourceToDispose);
 
-                                _logger.Error($"{QueueName} queue processor did not stop within {_options.RequestTimeout}. IDataSender may ignore cancellation.");
+                                _logger.Error($"{QueueName} queue processor did not stop within {stopWaitTimeout}. IDataSender may ignore cancellation.");
 
-                                if (clearQueue)
+                                if (clearOnStop)
                                     ClearQueue();
 
                                 return false;
@@ -164,7 +218,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 finally
                 {
                     if (taskToWait.IsCompleted)
-                        CompleteStoppedTask(taskToWait, tokenSourceToDispose, clearQueue);
+                        CompleteStoppedTask(taskToWait, tokenSourceToDispose, clearOnStop);
                 }
             }
             catch (OperationCanceledException)
@@ -178,38 +232,122 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             }
         }
 
-        internal virtual int Enqueue(T item)
-        {
-            return Enqueue(new QueueItem<T>(item));
-        }
+        internal virtual EnqueueResult Enqueue(T item) =>
+            EnqueueCore(new QueueItem<T>(item), isRetry: false);
 
-        internal virtual int Enqueue(QueueItem<T> item)
+        // A single flag instead of two separate booleans: retry semantics ALWAYS imply both
+        // "bypass the writes-accepting gate" (we're preserving already-accepted work past a
+        // StopAsync) and "drop self on overflow instead of evicting newer head" (issue #1088).
+        // Splitting these into two parameters lets a future caller pass an invalid combination
+        // (e.g. bypass-gate + normal-overflow) that silently regresses #1088.
+        private EnqueueResult EnqueueCore(QueueItem<T> item, bool isRetry)
         {
-            if (!Writer.TryWrite(item))
+            if (!isRetry && Volatile.Read(ref _acceptingWritesFlag) == 0)
+                return EnqueueResult.RejectedStopped();
+
+            // Issue #1088 / #1090: a failed-retry item must not evict newer telemetry on
+            // overflow. The queue uses position-based FIFO eviction (drop head when over
+            // MaxQueueSize), which is only correct while position order matches BuildDate order.
+            // A retry item's BuildDate predates everything that arrived while its send attempt
+            // was in flight; we drop the retry on two conditions:
+            //
+            //   1. (#1090) Its BuildDate predates the FIFO head currently in queue. If we wrote
+            //      this retry to the tail it would sit there with a stale BuildDate while the
+            //      fresher head got evicted on the next normal overflow — recreating #1088 from
+            //      a different state path. The head BuildDate comes from the _buildDateMirror
+            //      which is updated alongside the channel.
+            //
+            //   2. (#1088) The queue is already at MaxQueueSize and would otherwise overflow.
+            //      Sufficient on its own for the explicit #1088 scenario; the head check above
+            //      closes the more general case.
+            //
+            // Both filters are bypassed once _acceptingWritesFlag is 0 (post-Stop): there is no
+            // fresh telemetry to protect during shutdown, and the in-flight items being cancelled
+            // and re-enqueued must survive into the bounded flush.
+            //
+            // The returned DroppedCount=1 refers to THIS retry being rejected (not a head
+            // eviction); telemetry collapses both into the same "lost-payload" count, which is
+            // fine because the user-observable cost is identical.
+            if (isRetry && IsOlderThanQueueHead(item))
+                return EnqueueResult.Accept(droppedCount: 1);
+
+            if (isRetry && QueueCount >= _options.MaxQueueSize)
+                return EnqueueResult.Accept(droppedCount: 1);
+
+            // Channel write and mirror update are one atomic step (#1102-C2): a consumer observing
+            // the item in the channel is guaranteed to also observe its tick in the mirror, so no
+            // dequeue can ever leave an orphan tick behind. The (potentially user-implemented)
+            // logger is invoked outside the lock.
+            bool written;
+            lock (_mirrorLock)
             {
-                _logger.Error($"{QueueName} queue processor did not write value");
-                return 0;
+                written = Writer.TryWrite(item);
+
+                if (written)
+                    _buildDateMirror.Enqueue(item.BuildDate.Ticks);
             }
 
-            int result = 0;
+            if (!written)
+            {
+                _logger.Error($"{QueueName} queue processor did not write value");
+                return EnqueueResult.RejectedStopped();
+            }
+
+            int dropped = 0;
             while (QueueCount > _options.MaxQueueSize)
             {
                 if (!TryDequeue(out _))
                     break;
 
-                result++;
+                dropped++;
             }
 
-            return result;
+            return EnqueueResult.Accept(dropped);
         }
 
-        internal virtual int Enqueue(IEnumerable<T> items)
+        private bool IsOlderThanQueueHead(QueueItem<T> item)
         {
-            int result = 0;
-            foreach (var item in items)
-                result += Enqueue(item);
+            // Shutdown bypass: once public writes are closed (StopAsync / dispose) there is no
+            // fresh telemetry to protect from a stale retry, and a cancellation-retry of an
+            // in-flight send must still be preserved so the bounded flush can either ship it or
+            // log it as discarded. Skipping the filter here also avoids stale mirror state from
+            // leaking into the post-stop window.
+            if (Volatile.Read(ref _acceptingWritesFlag) == 0)
+                return false;
 
-            return result;
+            lock (_mirrorLock)
+            {
+                if (_buildDateMirror.Count == 0)
+                    return false;
+
+                return item.BuildDate.Ticks < _buildDateMirror.Peek();
+            }
+        }
+
+        internal virtual EnqueueResult Enqueue(IEnumerable<T> items)
+        {
+            if (Volatile.Read(ref _acceptingWritesFlag) == 0)
+                return EnqueueResult.RejectedStopped();
+
+            int dropped = 0;
+            bool anyAccepted = false;
+            foreach (var item in items)
+            {
+                var result = Enqueue(item);
+                if (result.IsAccepted)
+                {
+                    anyAccepted = true;
+                    dropped += result.DroppedCount;
+                }
+                else if (result.Status == EnqueueStatus.RejectedQueueStopped)
+                {
+                    // Preserve the count of items already evicted by overflow before the queue
+                    // flipped: the overflow sensor would otherwise under-report this batch.
+                    return EnqueueResult.RejectedStopped(dropped);
+                }
+            }
+
+            return EnqueueResult.Accept(dropped);
         }
 
         internal DataPackage<T> GetPackage()
@@ -220,9 +358,7 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             while (package.Count < _options.MaxValuesInPackage && TryDequeue(out QueueItem<T> item))
             {
                 if (Validate(item.Value))
-                {
                     package.AddValue(item);
-                }
             }
 
             return package;
@@ -239,9 +375,233 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             return true;
         }
 
-        protected int QueueCount => Reader.Count;
+        private async Task RunLoopAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await WaitForReadyAsync(token).ConfigureAwait(false);
+                    await DispatchPendingAsync(token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    // Dedup the log because DispatchPackageAsync re-enqueues on a non-retryable
+                    // server error and rethrows here on every cycle — a poison package would
+                    // otherwise produce one error log per PackageCollectPeriod indefinitely.
+                    // RETRY POLICY: re-enqueue + rethrow is intentional. The graceful-stop story
+                    // depends on preserving accepted work even under transient transport failure;
+                    // a per-package retry cap would re-introduce the old "data dropped on first
+                    // server hiccup" regression. Overflow eviction is the backstop: a permanently
+                    // failing item rides the queue tail until MaxQueueSize evicts it.
+                    if (_queueManager != null)
+                        _queueManager.AddQueueLoopError(QueueName, ex);
+                    else
+                        _logger.Error(ex);
 
-        protected bool TryDequeue(out QueueItem<T> item) => Reader.TryRead(out item);
+                    try
+                    {
+                        await DelayAfterFailureAsync(token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) { }
+                }
+            }
+        }
+
+        private async ValueTask DispatchPendingAsync(CancellationToken token)
+        {
+            while (!IsEmpty && !token.IsCancellationRequested)
+            {
+                var dispatched = await TryDispatchOneAsync(token).ConfigureAwait(false);
+                if (!dispatched || !ShouldContinueDispatching())
+                    break;
+            }
+        }
+
+        protected virtual async ValueTask WaitForReadyAsync(CancellationToken token)
+        {
+            await Reader.WaitToReadAsync(token).ConfigureAwait(false);
+        }
+
+        protected abstract ValueTask<bool> TryDispatchOneAsync(CancellationToken token);
+
+        protected virtual bool ShouldContinueDispatching() => true;
+
+        public virtual async Task FlushAsync(CancellationToken token)
+        {
+            Volatile.Write(ref _inFlushFlag, 1);
+            try
+            {
+                Task cancellationFired = null;
+
+                while (!IsEmpty && !token.IsCancellationRequested)
+                {
+                    var dispatch = TryDispatchOneAsync(token);
+                    bool dispatched;
+
+                    if (dispatch.IsCompleted)
+                    {
+                        // Fast path: consume the ValueTask directly — no Task allocation per
+                        // drained item while the sender completes synchronously.
+                        dispatched = await dispatch.ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        // Shutdown must stay bounded even against an IDataSender that ignores
+                        // cancellation: the run-loop side is protected by StopAsync's WhenAny
+                        // timeout, but a sender that hangs for the FIRST time here would block
+                        // this await forever and lock the host's restart. Race each dispatch
+                        // against the flush token and abandon the in-flight send when it fires —
+                        // losing the in-flight items is preferable to an unbounded Stop.
+                        var dispatchTask = dispatch.AsTask();
+
+                        if (cancellationFired == null)
+                            cancellationFired = Task.Delay(Timeout.Infinite, token);
+
+                        if (await Task.WhenAny(dispatchTask, cancellationFired).ConfigureAwait(false) != dispatchTask)
+                        {
+                            ObserveAbandonedDispatch(dispatchTask);
+                            _logger.Error($"{QueueName} flush abandoned an in-flight dispatch after the flush timeout. IDataSender may ignore cancellation; its in-flight items are lost.");
+                            return;
+                        }
+
+                        dispatched = await dispatchTask.ConfigureAwait(false);
+                    }
+
+                    if (!dispatched)
+                        break;
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
+            }
+            finally
+            {
+                Volatile.Write(ref _inFlushFlag, 0);
+            }
+        }
+
+        // The abandoned dispatch keeps running on the hung sender; observe its eventual fault so
+        // it cannot surface as an unobserved task exception when it finally completes.
+        private static void ObserveAbandonedDispatch(Task dispatchTask) =>
+            _ = dispatchTask.ContinueWith(
+                task => _ = task.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
+        // True while the bounded post-stop drain is running. Subclasses use this to reword
+        // dispatch-failure exceptions so the log line doesn't claim items were "preserved" right
+        // before ClearQueue discards them.
+        protected bool IsFlushing => Volatile.Read(ref _inFlushFlag) == 1;
+
+        protected async ValueTask DispatchPackageAsync(
+            DataPackage<T> package,
+            Func<IEnumerable<T>, CancellationToken, ValueTask<PackageSendingInfo>> send,
+            CancellationToken token)
+        {
+            if (package == null || package.Count == 0)
+                return;
+
+            PackageSendingInfo sendingInfo;
+
+            try
+            {
+                sendingInfo = await send(package, token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                if (PreserveCanceledPackages)
+                    ReEnqueueItems(package.Items);
+                throw;
+            }
+            catch
+            {
+                ReEnqueueItems(package.Items);
+                throw;
+            }
+
+            if (sendingInfo.Error != null)
+            {
+                var dropped = ReEnqueueItems(package.Items);
+                var preserved = package.Count - dropped;
+                // During FlushAsync the items are re-enqueued only so ClearQueue can log them as
+                // "discarded"; calling them "preserved" contradicts the very next log line.
+                var fate = IsFlushing ? "queued for clear" : "preserved";
+                // Drop count rolls up both #1088 (queue at capacity) and #1090 (retry older than
+                // current head) reasons — wording stays generic so it's accurate for either.
+                var loss = dropped > 0 ? $", {dropped} dropped" : string.Empty;
+                throw new InvalidOperationException($"Failed to send package for {QueueName} ({preserved} {fate}{loss}). {sendingInfo.Error}");
+            }
+
+            _queueManager.AddPackageSendingInfo(sendingInfo);
+            _queueManager.AddPackageInfo(QueueName, package.GetInfo());
+        }
+
+        // Self-reports retry-path evictions to the queue manager so every caller — including
+        // FileQueueProcessor, which only re-enqueues single items — surfaces the drop count to
+        // QueueOverflowSensor. Previously the reporting lived in ReEnqueueItems, which meant
+        // file-queue retry drops were silent (issue #1088 review).
+        protected EnqueueResult ReEnqueueItem(QueueItem<T> item)
+        {
+            var result = EnqueueCore(item, isRetry: true);
+            if (result.IsAccepted && result.DroppedCount > 0)
+                _queueManager?.ReportRequeueEviction(QueueName, result.DroppedCount);
+            return result;
+        }
+
+        // Returns the count of items dropped at capacity so DispatchPackageAsync can include
+        // it in the failure log line.
+        protected int ReEnqueueItems(IEnumerable<QueueItem<T>> items)
+        {
+            int dropped = 0;
+            foreach (var item in items)
+            {
+                var result = ReEnqueueItem(item);
+                if (result.IsAccepted)
+                    dropped += result.DroppedCount;
+            }
+            return dropped;
+        }
+
+        protected ShutdownMode CurrentShutdownMode => (ShutdownMode)Volatile.Read(ref _currentShutdownModeRaw);
+
+        protected bool PreserveCanceledPackages => CurrentShutdownMode.PreserveCanceledPackages();
+
+        internal int QueueCount => Reader.Count;
+
+        protected bool IsEmpty => QueueCount == 0;
+
+        protected ValueTask<bool> WaitToReadAsync(CancellationToken token) => Reader.WaitToReadAsync(token);
+
+        protected Task DelayAfterFailureAsync(CancellationToken token)
+        {
+            var delay = _options.PackageCollectPeriod > TimeSpan.Zero
+                ? _options.PackageCollectPeriod
+                : TimeSpan.FromMilliseconds(100);
+
+            return Task.Delay(delay, token);
+        }
+
+        // Single dequeue path so the BuildDate mirror always stays in step with the channel —
+        // channel read and mirror dequeue are one atomic step under _mirrorLock (#1102-C2).
+        // Callers in this class are: GetPackage, the EnqueueCore overflow trim loop, and ClearQueue.
+        protected bool TryDequeue(out QueueItem<T> item)
+        {
+            lock (_mirrorLock)
+            {
+                if (!Reader.TryRead(out item))
+                    return false;
+
+                if (_buildDateMirror.Count > 0)
+                    _buildDateMirror.Dequeue();
+
+                return true;
+            }
+        }
 
         private void RegisterCompletionCleanup(Task task, CancellationTokenSource tokenSource)
         {
@@ -273,17 +633,17 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                     ClearQueue();
 
                 _state = QueueState.Stopped;
+                Volatile.Write(ref _acceptingWritesFlag, 0);
+                Interlocked.Exchange(ref _cleanupContinuationRegistered, 0);
             }
         }
 
-        protected bool IsEmpty => QueueCount == 0;
-        internal int ClearQueue()
+        public int ClearQueue()
         {
             int count = 0;
             while (TryDequeue(out _))
-            {
                 count++;
-            }
+
             return count;
         }
 
@@ -295,13 +655,15 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
         protected virtual void Dispose(bool disposing)
         {
-            if (_disposed) return;
+            if (_disposed)
+                return;
 
             if (disposing)
             {
                 try
                 {
-                    StopAsync().GetAwaiter().GetResult();
+                    Volatile.Write(ref _acceptingWritesFlag, 0);
+                    StopAsync(ShutdownMode.TerminalDispose).AsTask().GetAwaiter().GetResult();
                 }
                 catch (Exception ex)
                 {

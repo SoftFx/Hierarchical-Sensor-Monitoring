@@ -1,0 +1,66 @@
+# HSM collector conformance v1 — graceful Stop flush contract.
+# Format: case|action|arg1|arg2|...
+# Actions:
+# set_sender_hang                  (every data send blocks until the stop path cancels it — dead transport)
+# stop_expect_under_ms|bound_ms    (stop the collector and assert it returned within the bound)
+# Contract notes:
+# - collect_period_ms=60000 guarantees nothing is dispatched before Stop, so every delivered
+#   value below was moved by Stop's flush, not by the periodic dispatcher.
+# - Stop must deliver all pending values (in FIFO order, across multiple packages) before
+#   returning; a stopped collector accepts new values again after restart.
+# - Shutdown boundedness: when the transport hangs, Stop must still return quickly and DROP the
+#   pending data (including a flushed partial bar) — the collector must never block the host's
+#   restart; losing data at shutdown is the accepted trade-off.
+
+stop_flushes_all_pending_before_returning|create_collector_with_limits|20000|50|60000
+stop_flushes_all_pending_before_returning|create_int_sensor|contract/flush/all
+stop_flushes_all_pending_before_returning|start
+stop_flushes_all_pending_before_returning|add_int_sequence|1|120|0|Ok|flush
+stop_flushes_all_pending_before_returning|expect_sent_count|0
+stop_flushes_all_pending_before_returning|stop
+stop_flushes_all_pending_before_returning|expect_sent_count|120
+stop_flushes_all_pending_before_returning|expect_payload_value_sequence|0|120|0
+
+stop_flushes_multiple_packages_in_order|create_collector_with_limits|20000|10|60000
+stop_flushes_multiple_packages_in_order|create_int_sensor|contract/flush/packages
+stop_flushes_multiple_packages_in_order|start
+stop_flushes_multiple_packages_in_order|add_int_sequence|1|35|0|Ok|packages
+stop_flushes_multiple_packages_in_order|stop
+stop_flushes_multiple_packages_in_order|expect_sent_count|35
+stop_flushes_multiple_packages_in_order|expect_payload_value_sequence|0|35|0
+
+stop_with_empty_queue_sends_nothing|create_collector_with_limits|20000|50|60000
+stop_with_empty_queue_sends_nothing|create_int_sensor|contract/flush/empty
+stop_with_empty_queue_sends_nothing|start
+stop_with_empty_queue_sends_nothing|stop
+stop_with_empty_queue_sends_nothing|expect_sent_count|0
+
+restart_after_flush_accepts_new_values|create_collector_with_limits|20000|50|60000
+restart_after_flush_accepts_new_values|create_int_sensor|contract/flush/restart
+restart_after_flush_accepts_new_values|start
+restart_after_flush_accepts_new_values|add_int_sequence|1|5|0|Ok|cycle-1
+restart_after_flush_accepts_new_values|stop
+restart_after_flush_accepts_new_values|expect_sent_count|5
+restart_after_flush_accepts_new_values|start
+restart_after_flush_accepts_new_values|add_int_sequence|1|5|5|Ok|cycle-2
+restart_after_flush_accepts_new_values|stop
+restart_after_flush_accepts_new_values|expect_sent_count|10
+restart_after_flush_accepts_new_values|expect_payload_value_sequence|0|5|0
+restart_after_flush_accepts_new_values|expect_payload_value_sequence|5|5|5
+
+stop_with_hanging_sender_is_bounded_and_drops_pending|create_collector_with_limits|20000|50|60000
+stop_with_hanging_sender_is_bounded_and_drops_pending|create_int_sensor|contract/flush/hang
+stop_with_hanging_sender_is_bounded_and_drops_pending|start
+stop_with_hanging_sender_is_bounded_and_drops_pending|add_int_sequence|1|10|0|Ok|doomed-by-hang
+stop_with_hanging_sender_is_bounded_and_drops_pending|set_sender_hang
+stop_with_hanging_sender_is_bounded_and_drops_pending|stop_expect_under_ms|8000
+stop_with_hanging_sender_is_bounded_and_drops_pending|expect_sent_count|0
+
+stop_with_hanging_sender_drops_pending_bar|create_collector_with_limits|20000|50|60000
+stop_with_hanging_sender_drops_pending_bar|create_int_bar_sensor|contract/flush/hang-bar|3600000|0
+stop_with_hanging_sender_drops_pending_bar|start
+stop_with_hanging_sender_drops_pending_bar|add_bar_int|0|1
+stop_with_hanging_sender_drops_pending_bar|add_bar_int|0|2
+stop_with_hanging_sender_drops_pending_bar|set_sender_hang
+stop_with_hanging_sender_drops_pending_bar|stop_expect_under_ms|8000
+stop_with_hanging_sender_drops_pending_bar|expect_sent_count|0

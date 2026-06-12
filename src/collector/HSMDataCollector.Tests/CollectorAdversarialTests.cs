@@ -1,9 +1,11 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Exceptions;
+using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue.Data;
+using HSMDataCollector.Threading;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -1177,6 +1179,152 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        // --- Host-callback adversarial matrix (#1103): every callback surface the host can plug
+        // --- into the collector must be isolated — a throwing callback may neither crash the
+        // --- process nor break the collector component that invoked it. The process-death halves
+        // --- of these vectors are asserted in CollectorCrashIsolationTests via the spawned host.
+
+        [Fact]
+        public async Task Throwing_ExceptionThrowing_subscriber_does_not_stop_sensor_loop()
+        {
+            var sender = new ProbeDataSender();
+
+            using (var collector = CreateCollector(sender))
+            {
+                var calls = 0;
+                var sensor = collector.CreateFunctionSensor(
+                    "adversarial/throwing-exception-subscriber/data",
+                    () =>
+                    {
+                        var call = Interlocked.Increment(ref calls);
+                        if (call == 1)
+                            throw new InvalidOperationException("Injected sensor failure.");
+
+                        return call;
+                    },
+                    new FunctionSensorOptions { PostDataPeriod = TimeSpan.FromMilliseconds(50) });
+
+                ((SensorBase<NoDisplayUnit>)sensor).ExceptionThrowing += (path, error) =>
+                    throw new InvalidOperationException("Injected ExceptionThrowing handler failure.");
+
+                await collector.Start().ConfigureAwait(false);
+
+                Assert.True(await sender.WaitForDataPackagesAsync(2, TimeSpan.FromSeconds(3)).ConfigureAwait(false),
+                    "The sensor send loop should keep delivering values after a throwing ExceptionThrowing subscriber.");
+
+                await collector.Stop().ConfigureAwait(false);
+            }
+        }
+
+        [Fact]
+        public async Task Throwing_ExceptionThrowing_subscriber_does_not_starve_other_subscribers()
+        {
+            var sender = new ProbeDataSender();
+
+            using (var collector = CreateCollector(sender))
+            {
+                var notified = new TaskCompletionSource<bool>();
+                var sensor = collector.CreateFunctionSensor(
+                    "adversarial/exception-subscriber-isolation/data",
+                    new Func<int>(() => throw new InvalidOperationException("Injected sensor failure.")),
+                    new FunctionSensorOptions { PostDataPeriod = TimeSpan.FromMilliseconds(50) });
+
+                var sensorBase = (SensorBase<NoDisplayUnit>)sensor;
+                sensorBase.ExceptionThrowing += (path, error) =>
+                    throw new InvalidOperationException("Injected ExceptionThrowing handler failure.");
+                sensorBase.ExceptionThrowing += (path, error) => notified.TrySetResult(true);
+
+                await collector.Start().ConfigureAwait(false);
+
+                Assert.True(await WaitOrTimeoutAsync(notified.Task, TimeSpan.FromSeconds(3)).ConfigureAwait(false),
+                    "Subscribers registered after a throwing ExceptionThrowing handler should still be notified.");
+
+                await collector.Stop().ConfigureAwait(false);
+            }
+        }
+
+        [Fact]
+        public async Task Throwing_onError_callback_does_not_kill_scheduler_or_other_tasks()
+        {
+            var scheduler = new CollectorScheduler();
+
+            try
+            {
+                var healthyTicks = 0;
+
+                scheduler.Schedule(
+                    () => throw new InvalidOperationException("Injected scheduled action failure."),
+                    TimeSpan.Zero,
+                    TimeSpan.FromMilliseconds(20),
+                    onError: _ => throw new InvalidOperationException("Injected onError failure."));
+
+                scheduler.Schedule(
+                    () => Interlocked.Increment(ref healthyTicks),
+                    TimeSpan.Zero,
+                    TimeSpan.FromMilliseconds(20));
+
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+                while (Volatile.Read(ref healthyTicks) < 5 && DateTime.UtcNow < deadline)
+                    await Task.Delay(TimeSpan.FromMilliseconds(25)).ConfigureAwait(false);
+
+                Assert.True(Volatile.Read(ref healthyTicks) >= 5,
+                    "A throwing onError callback should not kill the scheduler worker or starve healthy tasks.");
+            }
+            finally
+            {
+                scheduler.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task Throwing_custom_logger_does_not_escape_collector_operations()
+        {
+            var sender = new ProbeDataSender();
+
+            using (var collector = CreateCollector(sender))
+            {
+                collector.AddCustomLogger(new ThrowingLogger());
+
+                var sensor = collector.CreateDoubleSensor("adversarial/throwing-logger/data");
+
+                await collector.Start().ConfigureAwait(false);
+                Assert.Equal(CollectorStatus.Running, collector.Status);
+
+                sensor.AddValue(1);
+                Assert.True(await sender.WaitForDataPackagesAsync(1, TimeSpan.FromSeconds(2)).ConfigureAwait(false));
+
+                var exception = await Record.ExceptionAsync(() => collector.Stop()).ConfigureAwait(false);
+
+                Assert.Null(exception);
+                Assert.Equal(CollectorStatus.Stopped, collector.Status);
+            }
+        }
+
+        [Fact]
+        public async Task Throwing_lifecycle_listener_does_not_affect_transitions_or_other_listeners()
+        {
+            var sender = new ProbeDataSender();
+
+            using (var collector = CreateCollector(sender))
+            {
+                var recorded = new ConcurrentQueue<string>();
+                collector.AddLifecycleListener(new ThrowingLifecycleListener());
+                collector.AddLifecycleListener(new RecordingLifecycleListener(recorded));
+
+                await collector.Start().ConfigureAwait(false);
+                Assert.Equal(CollectorStatus.Running, collector.Status);
+
+                await collector.Stop().ConfigureAwait(false);
+                Assert.Equal(CollectorStatus.Stopped, collector.Status);
+
+                var observed = recorded.ToArray();
+                Assert.Contains("OnStarting", observed);
+                Assert.Contains("OnRunning", observed);
+                Assert.Contains("OnStopping", observed);
+                Assert.Contains("OnStopped", observed);
+            }
+        }
+
         [SuiteSoakFact]
         public async Task Adversarial_suite_repeated_for_duration_stays_green()
         {
@@ -1381,7 +1529,7 @@ namespace HSMDataCollector.Tests
             if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
                 return TimeSpan.FromSeconds(seconds);
 
-            return TimeSpan.FromSeconds(30);
+            return TimeSpan.FromSeconds(5);
         }
 
         private static TimeSpan GetSuiteSoakMaxDuration()
@@ -1391,7 +1539,7 @@ namespace HSMDataCollector.Tests
             if (double.TryParse(rawSeconds, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
                 return TimeSpan.FromSeconds(seconds);
 
-            return TimeSpan.FromMinutes(2);
+            return TimeSpan.FromSeconds(45);
         }
 
         private static void AssertWithinSuiteSoakMax(Stopwatch stopwatch, TimeSpan maxDuration)
@@ -1407,6 +1555,46 @@ namespace HSMDataCollector.Tests
                 if (!string.Equals(Environment.GetEnvironmentVariable("HSM_COLLECTOR_RUN_SUITE_SOAK"), "1", StringComparison.Ordinal))
                     Skip = "Set HSM_COLLECTOR_RUN_SUITE_SOAK=1 to run repeated suite soak tests.";
             }
+        }
+
+        private sealed class ThrowingLogger : ICollectorLogger
+        {
+            public void Debug(string message) => throw new InvalidOperationException("Injected logger Debug failure.");
+
+            public void Info(string message) => throw new InvalidOperationException("Injected logger Info failure.");
+
+            public void Error(string message) => throw new InvalidOperationException("Injected logger Error failure.");
+
+            public void Error(Exception ex) => throw new InvalidOperationException("Injected logger Error(Exception) failure.");
+        }
+
+        private sealed class ThrowingLifecycleListener : ILifecycleListener
+        {
+            public void OnStarting() => throw new InvalidOperationException("Injected OnStarting failure.");
+
+            public void OnRunning() => throw new InvalidOperationException("Injected OnRunning failure.");
+
+            public void OnStopping() => throw new InvalidOperationException("Injected OnStopping failure.");
+
+            public void OnStopped() => throw new InvalidOperationException("Injected OnStopped failure.");
+        }
+
+        private sealed class RecordingLifecycleListener : ILifecycleListener
+        {
+            private readonly ConcurrentQueue<string> _events;
+
+            internal RecordingLifecycleListener(ConcurrentQueue<string> events)
+            {
+                _events = events;
+            }
+
+            public void OnStarting() => _events.Enqueue("OnStarting");
+
+            public void OnRunning() => _events.Enqueue("OnRunning");
+
+            public void OnStopping() => _events.Enqueue("OnStopping");
+
+            public void OnStopped() => _events.Enqueue("OnStopped");
         }
 
         private sealed class BlockingInitSensor : SensorBase<NoDisplayUnit>

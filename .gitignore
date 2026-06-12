@@ -134,5 +134,5 @@ src/module/HSMPingModule/Config/*
 /code-review-report.json
 
 #AI
-/.claude/worktrees/
-/.claude/settings.local.json
+# Claude Code local state (permissions, worktrees) - machine-local, never commit
+.claude/

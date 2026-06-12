@@ -1,0 +1,41 @@
+name: Collector unit and crash isolation tests
+
+on:
+  push:
+    branches: [master, develop]
+    paths:
+      - 'src/collector/**'
+      - 'src/api/**'
+      - '.github/workflows/collector-unit-tests.yml'
+  pull_request:
+    # ready_for_review is required so tests run when a draft is marked ready
+    # (marking ready does not emit a synchronize event).
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/collector/**'
+      - 'src/api/**'
+      - '.github/workflows/collector-unit-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  collector-unit-tests:
+    # Skip on draft PRs only. Non-PR events (push/workflow_dispatch) have no
+    # pull_request payload, so they must still run — hence the event_name guard.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # windows-latest: the test project targets net48, and the crash-isolation lane spawns the
+    # net6.0 HSMDataCollector.CrashTests.Host process (RollForward=LatestMajor, so the runner's
+    # newer runtime is fine).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # Runs the full collector unit suite, which includes the #1103 lanes:
+      # - CollectorCrashIsolationTests (process-isolated #1102 A1/A2 crash vectors)
+      # - CollectorAdversarialTests host-callback matrix
+      # - ProcessEventListenerTests malformed EventCounters matrix
+      - name: Run collector unit tests
+        run: dotnet test src/collector/HSMDataCollector.Tests/HSMDataCollector.Tests.csproj --logger "console;verbosity=minimal"

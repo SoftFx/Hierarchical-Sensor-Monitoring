@@ -38,6 +38,9 @@ namespace HSMDataCollector.DefaultSensors
             if (options.BarPeriod <= TimeSpan.Zero)
                 throw new ArgumentOutOfRangeException(nameof(options.BarPeriod), "Bar period must be greater than zero.");
 
+            if (typeof(BarType) == typeof(DoubleMonitoringBar) && (options.Precision < 0 || options.Precision > 15))
+                throw new ArgumentOutOfRangeException(nameof(options.Precision), "Precision must be between 0 and 15.");
+
             _collectBarPeriod = options.BarTickPeriod;
             _barPeriod = options.BarPeriod;
             _precision = options.Precision;
@@ -55,11 +58,32 @@ namespace HSMDataCollector.DefaultSensors
             return base.InitAsync();
         }
 
-        public override async ValueTask StopAsync()
+        public override ValueTask StopAsync() => StopCoreAsync(flushPartialBar: true);
+
+        // Sensor disposal (without a collector Stop) must not flush — mirrors
+        // LastValueSensorInstant.DisposeAsyncCore: releasing a handle is not a data point.
+        protected override ValueTask DisposeAsyncCore() => StopCoreAsync(flushPartialBar: false);
+
+        private async ValueTask StopCoreAsync(bool flushPartialBar)
         {
             try
             {
                 await _collectHandle.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
+
+                if (flushPartialBar)
+                {
+                    // Flush the in-progress partial bar before base.StopAsync bumps the lifecycle
+                    // epoch and the data queues drain — otherwise everything accumulated since the
+                    // last CloseTime is lost at shutdown. Same roll-on-successful-send contract as
+                    // CheckCurrentBar: if a periodic send is in flight (TrySendValue returns false),
+                    // that send publishes the snapshot itself and the bar intentionally stays
+                    // un-rolled (the server merges partial bars by OpenTime).
+                    lock (_lockBar)
+                    {
+                        if (_internalBar.Count > 0 && TrySendValue())
+                            BuildNewBar();
+                    }
+                }
 
                 await base.StopAsync().ConfigureAwait(false);
             }
@@ -96,12 +120,28 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
+                // Capture the generation once: if the sensor stops or restarts between this entry
+                // and the lock acquisition, we drop the bar instead of sending an obsolete one.
+                var capturedEpoch = LifecycleEpoch;
+
                 lock (_lockBar)
                 {
+                    if (LifecycleEpoch != capturedEpoch)
+                        return;
+
                     if (_internalBar.CloseTime < DateTime.UtcNow)
                     {
-                        SendValueAction();
-                        BuildNewBar();
+                        // Roll the bar ONLY if we actually sent its snapshot. The periodic send
+                        // schedule shares _sendValueInProgress with us, and may already be in
+                        // SendValueAction at this moment without having taken _lockBar yet to
+                        // snapshot. If we blindly BuildNewBar after a guard-skipped no-op, the
+                        // periodic send's GetValue lands on the freshly-reset (empty) bar and
+                        // the closed bar's aggregated data is lost. Deferring the roll keeps the
+                        // bar intact: either the periodic send finishes its snapshot (data sent
+                        // by the other thread), or our next CheckCurrentBar tick rolls cleanly
+                        // once the guard releases.
+                        if (TrySendValue())
+                            BuildNewBar();
                     }
                 }
             }

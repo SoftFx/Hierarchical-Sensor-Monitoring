@@ -52,6 +52,13 @@
 | 32 | `Data_sender_dispose_exception_does_not_escape_collector_dispose` | Исключение из пользовательского `IDataSender.Dispose()` не должно вылетать наружу из `DataCollector.Dispose()` |
 | 33 | `Start_after_dispose_does_not_resurrect_collector` | `Start()` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
 | 34 | `Initialize_after_dispose_does_not_resurrect_collector` | Legacy `Initialize(false)` после `Dispose()` не должен оживлять collector поверх закрытых ресурсов |
+| 35 | `Throwing_ExceptionThrowing_subscriber_does_not_stop_sensor_loop` | Host-callback matrix (#1103): бросающий `ExceptionThrowing` subscriber не должен останавливать send loop сенсора (до фикса #1102-A1 он убивал процесс через async-void dispatch) |
+| 36 | `Throwing_ExceptionThrowing_subscriber_does_not_starve_other_subscribers` | Host-callback matrix (#1103): изоляция per-subscriber — бросающий подписчик не блокирует следующих |
+| 37 | `Throwing_onError_callback_does_not_kill_scheduler_or_other_tasks` | Host-callback matrix (#1103): бросающий `onError` на seam шедулера не должен убивать worker или морить здоровые задачи |
+| 38 | `Throwing_custom_logger_does_not_escape_collector_operations` | Host-callback matrix (#1103): бросающий `ICollectorLogger` изолируется на всех операциях коллектора |
+| 39 | `Throwing_lifecycle_listener_does_not_affect_transitions_or_other_listeners` | Host-callback matrix (#1103): бросающий `ILifecycleListener` не ломает transitions и не блокирует других listeners |
+
+Процессная половина host-callback matrix (краш хоста нельзя заассертить in-process) живет в `CollectorCrashIsolationTests` + `HSMDataCollector.CrashTests.Host`: см. [CollectorTestCatalog.md](CollectorTestCatalog.md), раздел `Crash Isolation`.
 
 ## Что эти тесты уже нашли
 
