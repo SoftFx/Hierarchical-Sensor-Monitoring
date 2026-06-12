@@ -48,7 +48,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal void UpdateTTLs(List<PolicyUpdate> updates)
         {
-            if (updates == null)
+            if (updates == null || updates.Count == 0)
                 return;
 
             var updatesDict = updates
@@ -56,6 +56,7 @@ namespace HSMServer.Core.Model.Policies
                 .GroupBy(u => u.Id)
                 .ToDictionary(g => g.Key, g => g.Last());
             var newPolicyUpdates = updates.Where(u => u.Id == Guid.Empty).ToList();
+            var isTemplateInitiated = updates.Any(u => u.Initiator == InitiatorInfo.AlertTemplate);
 
             var journalEntries = new List<(string oldValue, TTLPolicy policy, PolicyUpdate update, bool isParent)>();
 
@@ -95,9 +96,11 @@ namespace HSMServer.Core.Model.Policies
                         newList.Add(policy);
                         updatesDict.Remove(update.Id);
                     }
-                    else if (policy.TemplateId != null)
+                    else if (policy.TemplateId != null || isTemplateInitiated)
                     {
-                        // Preserve template-created TTL policies not in the update list
+                        // Preserve TTL policies not targeted by this update.
+                        // Template-initiated updates only carry template TTL entries,
+                        // so manual and other-template policies must be preserved.
                         newList.Add(policy);
                     }
                 }

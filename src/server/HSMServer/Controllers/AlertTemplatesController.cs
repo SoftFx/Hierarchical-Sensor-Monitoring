@@ -84,31 +84,29 @@ namespace HSMServer.Controllers
 
         private class UpdateResponse
         {
-            private const int MAX_SENSORS = 4;
+            private const int PageSize = 10;
 
             public byte? Type { get; set; }
             public string Sensors { get; set; }
-            public string Name { get; set; }
             public List<ChatItem> Chats { get; set; }
+            public int TotalCount { get; set; }
+            public int Page { get; set; }
+            public int TotalPages { get; set; }
 
-            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, string name, List<ChatItem> chats)
+            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, List<ChatItem> chats, int page = 1)
             {
                 Type = type;
-                Name = name;
                 Chats = chats;
+                TotalCount = sensors.Count;
+                Page = page;
+                TotalPages = sensors.Count > 0 ? (int)Math.Ceiling((double)sensors.Count / PageSize) : 0;
 
                 if (sensors.Count > 0)
                 {
-                    var sb = new StringBuilder(128);
-                    for (int i = 0; i < sensors.Count; i++)
-                    {
-                        if (i == MAX_SENSORS && sensors.Count > MAX_SENSORS + 1)
-                        {
-                            sb.Append($"<div class=\"d-flex flex-row align-items-center fullCondition\">... and other {sensors.Count - MAX_SENSORS}</div>");
-                            break;
-                        }
-                        sb.Append($"<div class=\"d-flex flex-row align-items-center fullCondition\">{sensors[i].FullPath}</div>");
-                    }
+                    var pageSensors = sensors.Skip((page - 1) * PageSize).Take(PageSize).ToList();
+                    var sb = new StringBuilder(pageSensors.Count * 64);
+                    foreach (var sensor in pageSensors)
+                        sb.Append($"<div class=\"d-flex flex-row align-items-center fullCondition\">{System.Web.HttpUtility.HtmlEncode(sensor.FullPath)}</div>");
 
                     Sensors = sb.ToString();
                 }
@@ -118,7 +116,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult UpdateTemplate(byte type, string paths, Guid folderId)
+        public IActionResult UpdateTemplate(byte type, string paths, Guid folderId, int page = 1)
         {
             List<string> pathList = [];
             if (!string.IsNullOrWhiteSpace(paths))
@@ -129,8 +127,6 @@ namespace HSMServer.Controllers
 
             var (sensorType, sensors) = GetAffectedSensors(type, pathList, folderId);
 
-            var name = GetTemplateName(pathList.FirstOrDefault(), folderId);
-
             List<ChatItem> chats = [];
             if (_folders.TryGetValue(folderId, out var folder))
             {
@@ -140,7 +136,7 @@ namespace HSMServer.Controllers
                     .ToList();
             }
 
-            var response = new UpdateResponse(sensorType, sensors, name, chats);
+            var response = new UpdateResponse(sensorType, sensors, chats, page);
 
             return Json(JsonSerializer.Serialize(response));
         }
@@ -163,7 +159,7 @@ namespace HSMServer.Controllers
                     model.FolderId = sensor.Root.FolderId ?? folders.FirstOrDefault().Id;
                     model.PathTemplates = [$"*/{sensor.Path}"];
                     model.Type = (byte)sensor.Type;
-                    model.Name = GetTemplateName(sensor.Path, model.FolderId);
+                    model.Name = string.Empty;
                 }
             }
 
@@ -270,19 +266,6 @@ namespace HSMServer.Controllers
             }
 
             return ((byte)sensors.FirstOrDefault()!.Type, sensors);
-        }
-
-        private string GetTemplateName(string path, Guid folderId)
-        {
-            var folderName = _folders.GetUserFolders(CurrentUser).FirstOrDefault(x => x.Id == folderId)?.Name ?? string.Empty;
-
-            if (string.IsNullOrWhiteSpace(path))
-                return string.Empty;
-
-            var result = path.Split('/');
-
-            return $"{folderName}/{result[^1]}";
-
         }
 
         private List<SelectListItem> GetAlertSchedulesSelectList()

@@ -11,10 +11,7 @@ on:
     # ready_for_review is required so tests run when a draft is marked ready
     # (marking ready does not emit a synchronize event).
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'src/collector/**'
-      - 'src/api/**'
-      - '.github/workflows/collector-unit-tests.yml'
+    # No paths filter — this is a required check and must always report status.
   workflow_dispatch:
 
 jobs:
