@@ -1,0 +1,39 @@
+# HSM collector conformance v1 — transport failure / retry contract.
+# Format: case|action|arg1|arg2|...
+# Actions:
+# set_sender_fail_next|count          (next `count` data-send attempts fail before recording anything)
+# expect_each_value_once|start|count  (each int value in [start, start+count) delivered exactly once, any order)
+# Contract notes:
+# - A failed package is re-enqueued at the queue tail and retried on a later dispatch cycle:
+#   no value is lost and none is duplicated.
+# - Order is only guaranteed while everything fits in one package; a failed package re-enqueued
+#   behind later packages rotates order, so the multi-package case asserts set-equality only.
+# - A send failure during Stop's bounded flush drops the remaining pending values (current
+#   contract: shutdown is not allowed to hang on a dead transport), and Stop still completes.
+
+send_failure_retries_until_success_in_order|create_collector_with_limits|20000|50|1000
+send_failure_retries_until_success_in_order|create_int_sensor|contract/retry/in-order
+send_failure_retries_until_success_in_order|start
+send_failure_retries_until_success_in_order|set_sender_fail_next|2
+send_failure_retries_until_success_in_order|add_int_sequence|1|30|0|Ok|retry
+send_failure_retries_until_success_in_order|expect_sent_count|30|15
+send_failure_retries_until_success_in_order|expect_payload_value_sequence|0|30|0
+send_failure_retries_until_success_in_order|expect_each_value_once|0|30
+send_failure_retries_until_success_in_order|stop
+
+send_failure_multi_package_no_loss_no_duplicates|create_collector_with_limits|20000|10|1000
+send_failure_multi_package_no_loss_no_duplicates|create_int_sensor|contract/retry/multi-package
+send_failure_multi_package_no_loss_no_duplicates|start
+send_failure_multi_package_no_loss_no_duplicates|set_sender_fail_next|1
+send_failure_multi_package_no_loss_no_duplicates|add_int_sequence|1|30|0|Ok|retry-multi
+send_failure_multi_package_no_loss_no_duplicates|expect_sent_count|30|15
+send_failure_multi_package_no_loss_no_duplicates|expect_each_value_once|0|30
+send_failure_multi_package_no_loss_no_duplicates|stop
+
+send_failure_during_stop_flush_drops_pending|create_collector_with_limits|20000|50|60000
+send_failure_during_stop_flush_drops_pending|create_int_sensor|contract/retry/stop-flush
+send_failure_during_stop_flush_drops_pending|start
+send_failure_during_stop_flush_drops_pending|add_int_sequence|1|10|0|Ok|doomed
+send_failure_during_stop_flush_drops_pending|set_sender_fail_next|999
+send_failure_during_stop_flush_drops_pending|stop
+send_failure_during_stop_flush_drops_pending|expect_sent_count|0

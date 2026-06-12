@@ -473,6 +473,130 @@ time, normalize timestamps to UTC before serialization, and bound transport conn
 for DNS re-resolution. Out of scope by decision: D2 (#1096), E3 (#1099), D1/D3/D4 (architectural
 trade-offs).
 
+### 2026-06-12: bar aggregation + data-loss conformance (both languages)
+
+Closed the two largest conformance gaps — bar sensors and the queue/transport
+data-loss surface — with 42 new shared cases in 7 fixtures, implemented in both
+harnesses at once:
+
+- `tests/conformance/collector/bar_int_contract.hsmtest` (12): min/max/mean/
+  first/last/count exactness, banker's-rounding pins for the int mean (2,3 → 2;
+  3,4 → 4), large-count mean (sum > int32), values-before-Start accumulate,
+  empty bar emits nothing, stop→restart no resend, dispose-no-flush,
+  8×250 parallel adds aggregate exactly, multi-sensor count-total.
+- `bar_double_contract.hsmtest` (8): binary-exact aggregation, precision
+  rounding (away-from-zero), NaN/±Infinity silently skipped without corrupting
+  the bar.
+- `bar_partial_contract.hsmtest` (9): `AddPartial` weighted-mean merge and
+  min/max union, strict int validation vs the double epsilon tolerance
+  (`max(1e-12, |max-min|*1e-9)`) — just-inside accepted, outside rejected.
+- `bar_rollover_contract.hsmtest` (3, the only wall-clock cases): roll-on-add
+  past CloseTime, no value lost across the boundary (count-total invariant),
+  idle periods emit no empty bars, open/close aligned to the period in unix-ms.
+- `queue_overflow_contract.hsmtest` (3): FIFO eviction keeps the newest suffix
+  (150 into capacity 100 → exactly 50..149 in order), exact capacity = no
+  eviction.
+- `sender_retry_contract.hsmtest` (3): failed sends re-enqueue at the tail and
+  retry with no loss and no duplicates (single-package keeps order; the
+  multi-package case pins set-equality because re-enqueue rotates order); a
+  send failure during the stop flush drops the remainder and Stop completes.
+- `flush_contract.hsmtest` (4): graceful Stop drains everything pending (60 s
+  collect period proves the flush did it, not the dispatcher), across packages,
+  in order; restart accepts new values.
+
+Production change (managed, deliberate): `BarMonitoringSensorBase.StopAsync`
+now flushes a non-empty partial bar before stopping (previously the in-progress
+bar was silently lost at shutdown). The roll happens only on a confirmed send
+(the same `if (TrySendValue()) BuildNewBar()` shape as `CheckCurrentBar`), and
+a new `DisposeAsyncCore` keeps sensor disposal non-flushing (mirrors
+`LastValueSensorInstant`). Default system bar sensors now publish their final
+partial bar at collector shutdown; the server already merges partial bars by
+OpenTime.
+
+Native spike grew the matching machinery:
+
+- Bar sensors (`MonitoringBar` in `hsm_collector.cpp`): same accumulation,
+  partial-merge, and validation math; int mean via `std::nearbyint`
+  (round-half-to-even — `std::round` would diverge from C#), double fields via
+  `std::round(v*10^p)/10^p` (away-from-zero); roll-on-add + flush-on-stop with
+  the snapshot-under-lock/publish-outside-lock shape — the bar-roll invariant
+  from the sensors feature doc now has a C++ analogue.
+- Bounded FIFO send queue: `hsm_collector_options_t` gains `max_queue_size` /
+  `max_values_in_package` / `package_collect_period_ms` (0 ⇒ 20000/50/20 ms,
+  the managed conformance defaults), worker-thread dispatch, oldest-first
+  eviction on the enqueueing thread, re-enqueue-at-tail on injected failure
+  (`hsm_collector_set_send_fail_next`), graceful-stop drain that drops the
+  remainder on failure. Dispatch is now asynchronous, so the C++ harness's
+  `expect_sent_count` polls with a deadline (exact-equality, like the managed
+  `WaitForCountAsync`) and the formerly synchronous native payload asserts wait
+  for the first dispatch.
+
+Canonical bar payload (both harnesses emit/parse the same shape; numeric
+asserts compare with relative tolerance 1e-9 so double formatting may differ):
+`{"Type":4|5,"Path":..,"Min":..,"Max":..,"Mean":..,"First":..,"Last":..,"Count":..,"OpenTimeMs":..,"CloseTimeMs":..,"Status":1,"Comment":""}`.
+Alignment asserts are restricted to periods that divide the 0001→1970 offset in
+ms (100/200/500/1000/2000/60000/3600000 all do), so tick-space (C#) and
+unix-ms (C++) alignment agree.
+
+Out of conformance scope by decision: periodic partial-bar posting
+(`PostDataPeriod`; fixtures pin the post period inert), retry-older-than-head
+(#1090 — not orchestrable through the action protocol, stays managed-only in
+`QueueMirrorConsistencyTests`), dispose-without-stop drop semantics (the mock
+sender cannot distinguish graceful vs terminal flush).
+
+Verification:
+
+- .NET conformance 139/139 (97 prior + 42 new), full managed suite 432/432
+  (9 skips pre-existing), 5 repeat runs green.
+- C++ ctest 40/40 (24 native + 16 conformance fixtures);
+  `conformance_bar_rollover_contract` flake-screened 50 consecutive runs green.
+
+### 2026-06-12 (follow-up): shutdown boundedness under a dead/hung transport
+
+Pinned the contract that collector `Stop()` must return within a small bounded
+time even when the server is unreachable — the collector must never lock the
+host service's restart; pending data (including a flushed partial bar) is
+dropped instead.
+
+Managed audit found one real hole and fixed it: `QueueProcessorBase.FlushAsync`
+awaited `TryDispatchOneAsync(token)` unbounded, so an `IDataSender` that
+ignores cancellation and hangs **for the first time on the stop-flush dispatch
+itself** (the run-loop side was already guarded by `StopAsync`'s WhenAny
+timeout) would hang `Stop()` forever. The flush now races each dispatch against
+the flush token and abandons the in-flight send when the timeout fires (fault
+observed, loss logged). The real HTTP client respects cancellation, so this
+only affected custom senders.
+
+New tests:
+
+- `CollectorStopBoundednessTests` (managed): hung-but-cancellation-respecting
+  sender with pending values + pending partial bar; cancellation-ignoring
+  sender hung in the run loop (flush skipped); cancellation-ignoring sender
+  hanging first at flush (fails without the FlushAsync fix). All assert
+  `Stop()` returns well under a generous bound (actual ≈1 s with
+  RequestTimeout=1 s).
+- Conformance (`flush_contract.hsmtest`, both languages): new actions
+  `set_sender_hang` (sender blocks until the stop path cancels it — dead
+  transport) and `stop_expect_under_ms|bound`; cases
+  `stop_with_hanging_sender_is_bounded_and_drops_pending` and
+  `stop_with_hanging_sender_drops_pending_bar` (stop under 8 s, 0 delivered).
+- Native spike: `hsm_collector_set_send_hang` + in-flight send cancellation —
+  `StopWorker` cancels hung sends before joining, and the stop drain treats a
+  cancelled hung send as a failed send and drops the remainder, so native stop
+  is bounded by construction.
+
+Bound tightened by decision: the graceful stop wait is capped at **5 s**
+regardless of `RequestTimeout` (`ShutdownMode.StopWaitTimeout`, previously the
+full `RequestTimeout` — 30 s by default). Rationale: the collector must never
+hold the host service's restart for a transport timeout; losing pending data at
+stop is explicitly acceptable. Terminal dispose stays capped at 1 s per queue,
+and the stop-flush ceiling was already 5 s, so the whole graceful path now
+shares one 5 s upper bound per transport-facing wait. Pinned by
+`Stop_with_default_request_timeout_is_capped_at_five_seconds_per_hung_queue`.
+
+Verification: managed conformance 141/141, full managed suite 438/438 green
+(9 skips pre-existing); C++ ctest 40/40.
+
 ## Cross-Cutting Port Invariants
 
 Behavioral invariants every port must uphold that are NOT expressible as

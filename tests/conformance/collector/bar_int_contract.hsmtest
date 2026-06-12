@@ -1,0 +1,157 @@
+# HSM collector conformance v1 — int bar aggregation contract.
+# Format: case|action|arg1|arg2|...
+# Bar actions:
+# create_int_bar_sensor|path|bar_period_ms|post_period_ms   (post_period_ms=0 => inert periodic posting; BarTickPeriod is always inert)
+# add_bar_int|bar_index|value
+# add_bar_int_sequence|bar_index|count|start_value|step
+# add_bar_int_parallel|bar_index|worker_count|values_per_worker|start_value   (worker w adds start + w*per_worker + i)
+# add_int_bar_partial|bar_index|min|max|mean|first|last|count
+# expect_bar_field|payload_index|field|expected   (payload_index=-1 => last; field: type|min|max|mean|first|last|count|status)
+# expect_bar_open_close_aligned|payload_index|period_ms
+# expect_bar_count_total|expected
+# Contract notes:
+# - The collector flushes a non-empty partial bar on Stop; empty bars never produce a payload.
+# - Int bar mean is banker's rounding (round-half-to-even) of sum/count.
+# - Bar values added before Start accumulate into the bar (unlike instant sensors, which drop).
+# - Alignment asserts only use periods that divide the 0001->1970 epoch offset in ms.
+# - Fixtures create only bar sensors, so bar_index matches dispose_sensor's global sensor index.
+
+int_bar_basic_aggregation_flushes_on_stop|create_collector
+int_bar_basic_aggregation_flushes_on_stop|create_int_bar_sensor|contract/bar/basic|3600000|0
+int_bar_basic_aggregation_flushes_on_stop|start
+int_bar_basic_aggregation_flushes_on_stop|add_bar_int|0|1
+int_bar_basic_aggregation_flushes_on_stop|add_bar_int|0|2
+int_bar_basic_aggregation_flushes_on_stop|add_bar_int|0|3
+int_bar_basic_aggregation_flushes_on_stop|add_bar_int|0|4
+int_bar_basic_aggregation_flushes_on_stop|add_bar_int|0|5
+int_bar_basic_aggregation_flushes_on_stop|expect_sent_count|0
+int_bar_basic_aggregation_flushes_on_stop|stop
+int_bar_basic_aggregation_flushes_on_stop|expect_sent_count|1
+int_bar_basic_aggregation_flushes_on_stop|expect_bar_field|0|type|4
+int_bar_basic_aggregation_flushes_on_stop|expect_bar_field|0|min|1
+int_bar_basic_aggregation_flushes_on_stop|expect_bar_field|0|max|5
+int_bar_basic_aggregation_flushes_on_stop|expect_bar_field|0|mean|3
+int_bar_basic_aggregation_flushes_on_stop|expect_bar_field|0|first|1
+int_bar_basic_aggregation_flushes_on_stop|expect_bar_field|0|last|5
+int_bar_basic_aggregation_flushes_on_stop|expect_bar_field|0|count|5
+int_bar_basic_aggregation_flushes_on_stop|expect_bar_field|0|status|1
+int_bar_basic_aggregation_flushes_on_stop|expect_bar_open_close_aligned|0|3600000
+
+int_bar_single_value|create_collector
+int_bar_single_value|create_int_bar_sensor|contract/bar/single|3600000|0
+int_bar_single_value|start
+int_bar_single_value|add_bar_int|0|7
+int_bar_single_value|stop
+int_bar_single_value|expect_sent_count|1
+int_bar_single_value|expect_bar_field|0|min|7
+int_bar_single_value|expect_bar_field|0|max|7
+int_bar_single_value|expect_bar_field|0|mean|7
+int_bar_single_value|expect_bar_field|0|first|7
+int_bar_single_value|expect_bar_field|0|last|7
+int_bar_single_value|expect_bar_field|0|count|1
+
+int_bar_negative_values|create_collector
+int_bar_negative_values|create_int_bar_sensor|contract/bar/negative|3600000|0
+int_bar_negative_values|start
+int_bar_negative_values|add_bar_int|0|-5
+int_bar_negative_values|add_bar_int|0|-1
+int_bar_negative_values|add_bar_int|0|-9
+int_bar_negative_values|stop
+int_bar_negative_values|expect_sent_count|1
+int_bar_negative_values|expect_bar_field|0|min|-9
+int_bar_negative_values|expect_bar_field|0|max|-1
+int_bar_negative_values|expect_bar_field|0|mean|-5
+int_bar_negative_values|expect_bar_field|0|first|-5
+int_bar_negative_values|expect_bar_field|0|last|-9
+int_bar_negative_values|expect_bar_field|0|count|3
+
+int_bar_mean_rounds_half_to_even_down|create_collector
+int_bar_mean_rounds_half_to_even_down|create_int_bar_sensor|contract/bar/round-down|3600000|0
+int_bar_mean_rounds_half_to_even_down|start
+int_bar_mean_rounds_half_to_even_down|add_bar_int|0|2
+int_bar_mean_rounds_half_to_even_down|add_bar_int|0|3
+int_bar_mean_rounds_half_to_even_down|stop
+int_bar_mean_rounds_half_to_even_down|expect_sent_count|1
+int_bar_mean_rounds_half_to_even_down|expect_bar_field|0|mean|2
+
+int_bar_mean_rounds_half_to_even_up|create_collector
+int_bar_mean_rounds_half_to_even_up|create_int_bar_sensor|contract/bar/round-up|3600000|0
+int_bar_mean_rounds_half_to_even_up|start
+int_bar_mean_rounds_half_to_even_up|add_bar_int|0|3
+int_bar_mean_rounds_half_to_even_up|add_bar_int|0|4
+int_bar_mean_rounds_half_to_even_up|stop
+int_bar_mean_rounds_half_to_even_up|expect_sent_count|1
+int_bar_mean_rounds_half_to_even_up|expect_bar_field|0|mean|4
+
+int_bar_large_count_mean|create_collector
+int_bar_large_count_mean|create_int_bar_sensor|contract/bar/large|3600000|0
+int_bar_large_count_mean|start
+int_bar_large_count_mean|add_bar_int_sequence|0|10000|1000000|0
+int_bar_large_count_mean|stop
+int_bar_large_count_mean|expect_sent_count|1
+int_bar_large_count_mean|expect_bar_field|0|count|10000
+int_bar_large_count_mean|expect_bar_field|0|mean|1000000
+int_bar_large_count_mean|expect_bar_field|0|min|1000000
+int_bar_large_count_mean|expect_bar_field|0|max|1000000
+
+int_bar_values_before_start_are_included|create_collector
+int_bar_values_before_start_are_included|create_int_bar_sensor|contract/bar/prestart|3600000|0
+int_bar_values_before_start_are_included|add_bar_int|0|1
+int_bar_values_before_start_are_included|add_bar_int|0|2
+int_bar_values_before_start_are_included|start
+int_bar_values_before_start_are_included|stop
+int_bar_values_before_start_are_included|expect_sent_count|1
+int_bar_values_before_start_are_included|expect_bar_field|0|count|2
+int_bar_values_before_start_are_included|expect_bar_field|0|first|1
+int_bar_values_before_start_are_included|expect_bar_field|0|last|2
+
+int_bar_empty_bar_sends_no_payload|create_collector
+int_bar_empty_bar_sends_no_payload|create_int_bar_sensor|contract/bar/empty|3600000|0
+int_bar_empty_bar_sends_no_payload|start
+int_bar_empty_bar_sends_no_payload|stop
+int_bar_empty_bar_sends_no_payload|expect_sent_count|0
+
+int_bar_stop_restart_does_not_resend|create_collector
+int_bar_stop_restart_does_not_resend|create_int_bar_sensor|contract/bar/restart|3600000|0
+int_bar_stop_restart_does_not_resend|start
+int_bar_stop_restart_does_not_resend|add_bar_int|0|11
+int_bar_stop_restart_does_not_resend|stop
+int_bar_stop_restart_does_not_resend|expect_sent_count|1
+int_bar_stop_restart_does_not_resend|start
+int_bar_stop_restart_does_not_resend|stop
+int_bar_stop_restart_does_not_resend|expect_sent_count|1
+
+int_bar_release_does_not_flush|create_collector
+int_bar_release_does_not_flush|create_int_bar_sensor|contract/bar/release|3600000|0
+int_bar_release_does_not_flush|start
+int_bar_release_does_not_flush|add_bar_int|0|42
+int_bar_release_does_not_flush|dispose_sensor|0
+int_bar_release_does_not_flush|expect_sent_count|0
+int_bar_release_does_not_flush|stop
+int_bar_release_does_not_flush|expect_sent_count|1
+int_bar_release_does_not_flush|expect_bar_field|0|count|1
+int_bar_release_does_not_flush|expect_bar_field|0|last|42
+
+int_bar_parallel_adds_aggregate_exactly|create_collector
+int_bar_parallel_adds_aggregate_exactly|create_int_bar_sensor|contract/bar/parallel|3600000|0
+int_bar_parallel_adds_aggregate_exactly|start
+int_bar_parallel_adds_aggregate_exactly|add_bar_int_parallel|0|8|250|0
+int_bar_parallel_adds_aggregate_exactly|stop
+int_bar_parallel_adds_aggregate_exactly|expect_sent_count|1
+int_bar_parallel_adds_aggregate_exactly|expect_bar_field|0|count|2000
+int_bar_parallel_adds_aggregate_exactly|expect_bar_field|0|min|0
+int_bar_parallel_adds_aggregate_exactly|expect_bar_field|0|max|1999
+int_bar_parallel_adds_aggregate_exactly|expect_bar_field|0|mean|1000
+
+int_bar_two_sensors_count_total|create_collector
+int_bar_two_sensors_count_total|create_int_bar_sensor|contract/bar/two-a|3600000|0
+int_bar_two_sensors_count_total|create_int_bar_sensor|contract/bar/two-b|3600000|0
+int_bar_two_sensors_count_total|start
+int_bar_two_sensors_count_total|add_bar_int|0|1
+int_bar_two_sensors_count_total|add_bar_int|0|2
+int_bar_two_sensors_count_total|add_bar_int|0|3
+int_bar_two_sensors_count_total|add_bar_int|1|10
+int_bar_two_sensors_count_total|add_bar_int|1|20
+int_bar_two_sensors_count_total|stop
+int_bar_two_sensors_count_total|expect_sent_count|2
+int_bar_two_sensors_count_total|expect_bar_count_total|5

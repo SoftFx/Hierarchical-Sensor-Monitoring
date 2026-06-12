@@ -62,8 +62,15 @@ namespace HSMDataCollector.SyncQueue.Data
 
         internal static TimeSpan StopWaitTimeout(this ShutdownMode mode, TimeSpan requestTimeout)
         {
+            // Graceful stop is capped at 5 s regardless of RequestTimeout (default 30 s): the
+            // collector must not hold its host's shutdown hostage to a hung transport — losing
+            // pending data at stop is the accepted trade-off. The cap matches the stop-flush
+            // ceiling in DataProcessor, so the whole graceful path shares one upper bound.
             if (mode == ShutdownMode.GracefulStop)
-                return requestTimeout;
+            {
+                var gracefulCap = TimeSpan.FromSeconds(5);
+                return requestTimeout < gracefulCap ? requestTimeout : gracefulCap;
+            }
 
             var terminalTimeout = TimeSpan.FromSeconds(1);
             return requestTimeout < terminalTimeout ? requestTimeout : terminalTimeout;

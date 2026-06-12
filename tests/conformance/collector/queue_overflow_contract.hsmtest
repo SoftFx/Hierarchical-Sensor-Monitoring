@@ -1,0 +1,33 @@
+# HSM collector conformance v1 — queue overflow / FIFO eviction contract.
+# Format: case|action|arg1|arg2|...
+# Actions:
+# create_collector_with_limits|max_queue_size|max_values_in_package|collect_period_ms
+# Contract notes:
+# - On enqueue past max_queue_size the FIFO head (oldest value) is evicted; the new value is kept.
+# - collect_period_ms=60000 keeps the dispatcher out of the timeline: nothing is sent until Stop,
+#   so eviction order is fully deterministic, and Stop's graceful flush delivers the survivors.
+
+overflow_evicts_oldest_keeps_fifo_suffix|create_collector_with_limits|100|50|60000
+overflow_evicts_oldest_keeps_fifo_suffix|create_int_sensor|contract/overflow/suffix
+overflow_evicts_oldest_keeps_fifo_suffix|start
+overflow_evicts_oldest_keeps_fifo_suffix|add_int_sequence|1|150|0|Ok|overflow
+overflow_evicts_oldest_keeps_fifo_suffix|expect_sent_count|0
+overflow_evicts_oldest_keeps_fifo_suffix|stop
+overflow_evicts_oldest_keeps_fifo_suffix|expect_sent_count|100
+overflow_evicts_oldest_keeps_fifo_suffix|expect_payload_value_sequence|0|100|50
+
+overflow_exact_capacity_no_eviction|create_collector_with_limits|100|50|60000
+overflow_exact_capacity_no_eviction|create_int_sensor|contract/overflow/exact
+overflow_exact_capacity_no_eviction|start
+overflow_exact_capacity_no_eviction|add_int_sequence|1|100|0|Ok|exact
+overflow_exact_capacity_no_eviction|stop
+overflow_exact_capacity_no_eviction|expect_sent_count|100
+overflow_exact_capacity_no_eviction|expect_payload_value_sequence|0|100|0
+
+overflow_massive_burst_keeps_last_capacity|create_collector_with_limits|50|10|60000
+overflow_massive_burst_keeps_last_capacity|create_int_sensor|contract/overflow/burst
+overflow_massive_burst_keeps_last_capacity|start
+overflow_massive_burst_keeps_last_capacity|add_int_sequence|1|500|0|Ok|burst
+overflow_massive_burst_keeps_last_capacity|stop
+overflow_massive_burst_keeps_last_capacity|expect_sent_count|50
+overflow_massive_burst_keeps_last_capacity|expect_payload_value_sequence|0|50|450
