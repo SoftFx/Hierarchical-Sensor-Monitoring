@@ -437,9 +437,16 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
 
                 while (!IsEmpty && !token.IsCancellationRequested)
                 {
-                    var dispatchTask = TryDispatchOneAsync(token).AsTask();
+                    var dispatch = TryDispatchOneAsync(token);
+                    bool dispatched;
 
-                    if (!dispatchTask.IsCompleted)
+                    if (dispatch.IsCompleted)
+                    {
+                        // Fast path: consume the ValueTask directly — no Task allocation per
+                        // drained item while the sender completes synchronously.
+                        dispatched = await dispatch.ConfigureAwait(false);
+                    }
+                    else
                     {
                         // Shutdown must stay bounded even against an IDataSender that ignores
                         // cancellation: the run-loop side is protected by StopAsync's WhenAny
@@ -447,6 +454,8 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                         // this await forever and lock the host's restart. Race each dispatch
                         // against the flush token and abandon the in-flight send when it fires —
                         // losing the in-flight items is preferable to an unbounded Stop.
+                        var dispatchTask = dispatch.AsTask();
+
                         if (cancellationFired == null)
                             cancellationFired = Task.Delay(Timeout.Infinite, token);
 
@@ -456,9 +465,11 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                             _logger.Error($"{QueueName} flush abandoned an in-flight dispatch after the flush timeout. IDataSender may ignore cancellation; its in-flight items are lost.");
                             return;
                         }
+
+                        dispatched = await dispatchTask.ConfigureAwait(false);
                     }
 
-                    if (!await dispatchTask.ConfigureAwait(false))
+                    if (!dispatched)
                         break;
                 }
             }
