@@ -472,6 +472,11 @@ namespace
 
         while (std::getline(input, line))
         {
+            // Fixtures may be checked out with CRLF endings (git autocrlf on Windows);
+            // std::getline keeps the '\r' on POSIX, which would corrupt the last field.
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+
             if (line.empty() || line[0] == '#')
                 continue;
 
