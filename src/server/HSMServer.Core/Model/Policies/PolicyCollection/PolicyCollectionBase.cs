@@ -48,7 +48,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal void UpdateTTLs(List<PolicyUpdate> updates)
         {
-            if (updates == null)
+            if (updates == null || updates.Count == 0)
                 return;
 
             var updatesDict = updates

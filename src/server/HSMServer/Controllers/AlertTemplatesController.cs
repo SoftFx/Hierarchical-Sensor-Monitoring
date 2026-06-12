@@ -84,20 +84,29 @@ namespace HSMServer.Controllers
 
         private class UpdateResponse
         {
+            private const int PageSize = 10;
+
             public byte? Type { get; set; }
             public string Sensors { get; set; }
             public List<ChatItem> Chats { get; set; }
+            public int TotalCount { get; set; }
+            public int Page { get; set; }
+            public int TotalPages { get; set; }
 
-            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, List<ChatItem> chats)
+            public UpdateResponse(byte? type, List<BaseSensorModel> sensors, List<ChatItem> chats, int page = 1)
             {
                 Type = type;
                 Chats = chats;
+                TotalCount = sensors.Count;
+                Page = page;
+                TotalPages = sensors.Count > 0 ? (int)Math.Ceiling((double)sensors.Count / PageSize) : 0;
 
                 if (sensors.Count > 0)
                 {
-                    var sb = new StringBuilder(sensors.Count * 64);
-                    foreach (var sensor in sensors)
-                        sb.Append($"<div class=\"d-flex flex-row align-items-center fullCondition\">{sensor.FullPath}</div>");
+                    var pageSensors = sensors.Skip((page - 1) * PageSize).Take(PageSize).ToList();
+                    var sb = new StringBuilder(pageSensors.Count * 64);
+                    foreach (var sensor in pageSensors)
+                        sb.Append($"<div class=\"d-flex flex-row align-items-center fullCondition\">{System.Web.HttpUtility.HtmlEncode(sensor.FullPath)}</div>");
 
                     Sensors = sb.ToString();
                 }
@@ -107,7 +116,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult UpdateTemplate(byte type, string paths, Guid folderId)
+        public IActionResult UpdateTemplate(byte type, string paths, Guid folderId, int page = 1)
         {
             List<string> pathList = [];
             if (!string.IsNullOrWhiteSpace(paths))
@@ -127,7 +136,7 @@ namespace HSMServer.Controllers
                     .ToList();
             }
 
-            var response = new UpdateResponse(sensorType, sensors, chats);
+            var response = new UpdateResponse(sensorType, sensors, chats, page);
 
             return Json(JsonSerializer.Serialize(response));
         }

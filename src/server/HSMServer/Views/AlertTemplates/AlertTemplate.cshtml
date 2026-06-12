@@ -64,17 +64,37 @@
 
         // Remove path buttons
         $('#pathTemplatesContainer').on('click', '.remove-path-btn', function() {
-            var pathValue = $(this).closest('.path-template-row').find('.path-template-input').val();
-            if (pathValue && pathValue.trim() !== '' && !confirm('Remove this path?'))
+            var $row = $(this).closest('.path-template-row');
+            var pathValue = $row.find('.path-template-input').val();
+            if (pathValue && pathValue.trim() !== '') {
+                showConfirmationModal(
+                    'Remove path',
+                    'Remove this path?',
+                    function() {
+                        $row.remove();
+                        reindexPathInputs();
+                        updateRemoveButtons();
+                        updateForm();
+                    }
+                );
                 return;
+            }
 
-            $(this).closest('.path-template-row').remove();
+            $row.remove();
             reindexPathInputs();
             updateRemoveButtons();
             updateForm();
         });
 
         updateRemoveButtons();
+
+        // Pagination click handler (delegated)
+        $('#sensors_pagination').off('click').on('click', '.page-link', function(e) {
+            e.preventDefault();
+            var page = $(this).data('page');
+            if (page)
+                updateForm(false, page);
+        });
     }
 
     function addPathInput() {
@@ -189,14 +209,14 @@
         });
     }
 
-    function updateForm(needChangeType = true) {
+    function updateForm(needChangeType = true, page = 1) {
         var type = $('#Type').val();
         var paths = getPaths().filter(p => p !== '');
         var folderId = $('#FolderId').val();
 
         $.ajax({
             url: '@Url.Action(nameof(AlertTemplatesController.UpdateTemplate), ViewConstants.AlertTemplatesController)',
-            data: { type: type, paths: JSON.stringify(paths), folderId: folderId },
+            data: { type: type, paths: JSON.stringify(paths), folderId: folderId, page: page },
             cache: false,
             success: (viewData) => {
 
@@ -211,11 +231,13 @@
                     $('#affected_sensors_cardbody').empty();
                     $('#affected_sensors_cardbody').append(data['Sensors']);
                     $('#affected_sensors').removeClass('d-none');
+                    renderSensorsPagination(data['Page'], data['TotalPages']);
                 }
                 else {
                     $('#affected_sensors_cardbody').empty();
                     $('#affected_sensors_cardbody').html("No sensors were found along the specified path.");
                     $('#affected_sensors').removeClass('d-none');
+                    $('#sensors_pagination').addClass('d-none');
                 }
 
                 if (data['Chats'] != null) {
@@ -363,6 +385,56 @@
 
             $select.selectpicker('refresh');
         });
+    }
+
+    function renderSensorsPagination(currentPage, totalPages) {
+        var $nav = $('#sensors_pagination');
+        var $ul = $nav.find('ul');
+        $ul.empty();
+
+        if (totalPages <= 1) {
+            $nav.addClass('d-none');
+            return;
+        }
+
+        $nav.removeClass('d-none');
+
+        // Previous
+        if (currentPage > 1)
+            $ul.append('<li class="page-item"><a class="page-link" href="#" data-page="' + (currentPage - 1) + '">&laquo;</a></li>');
+        else
+            $ul.append('<li class="page-item disabled"><span class="page-link">&laquo;</span></li>');
+
+        // Page window (show up to 5 pages around current)
+        var startPage = Math.max(1, currentPage - 2);
+        var endPage = Math.min(totalPages, startPage + 4);
+        if (endPage - startPage < 4)
+            startPage = Math.max(1, endPage - 4);
+
+        if (startPage > 1) {
+            $ul.append('<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>');
+            if (startPage > 2)
+                $ul.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+        }
+
+        for (var i = startPage; i <= endPage; i++) {
+            if (i === currentPage)
+                $ul.append('<li class="page-item active"><span class="page-link">' + i + '</span></li>');
+            else
+                $ul.append('<li class="page-item"><a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>');
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1)
+                $ul.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+            $ul.append('<li class="page-item"><a class="page-link" href="#" data-page="' + totalPages + '">' + totalPages + '</a></li>');
+        }
+
+        // Next
+        if (currentPage < totalPages)
+            $ul.append('<li class="page-item"><a class="page-link" href="#" data-page="' + (currentPage + 1) + '">&raquo;</a></li>');
+        else
+            $ul.append('<li class="page-item disabled"><span class="page-link">&raquo;</span></li>');
     }
 
 </script>

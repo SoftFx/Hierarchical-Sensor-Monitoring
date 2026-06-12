@@ -123,6 +123,21 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         [Fact]
         [Trait("Category", "Template TTL protection")]
+        public void UpdateTTLs_TemplateWithNoTTLEntries_PreservesManualTTLs()
+        {
+            var manualId = AddManualTTL(600_000_000);
+
+            // Simulates applying a template that has regular policies but no TTL entries:
+            // ApplyTemplateToSensor sends SensorUpdate.TTLPolicies = [] (empty list),
+            // which reaches UpdateTTLs with an empty list.
+            _sensor.Policies.UpdateTTLs([]);
+
+            Assert.Single(_sensor.Policies.TTLPolicies);
+            Assert.Equal(manualId, _sensor.Policies.TTLPolicies[0].Id);
+        }
+
+        [Fact]
+        [Trait("Category", "Template TTL protection")]
         public void UpdateTTLs_TemplatePreservesManualAndOtherTemplate()
         {
             var manualId = AddManualTTL(600_000_000);
