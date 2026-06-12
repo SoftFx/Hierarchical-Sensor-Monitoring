@@ -2214,6 +2214,7 @@ namespace
             { "conformance_rate_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_function_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_file_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_number_format_contract", [](const std::string& path) { RunConformanceContract(path); } },
         };
 
         return tests;
