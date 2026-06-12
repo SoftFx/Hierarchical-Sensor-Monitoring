@@ -15,6 +15,19 @@ line maps to a shared conformance test (see spike "Shared conformance script");
 once a line is test-covered, mark it `[x]` with the test name. The checklist
 retires when the conformance suite owns every line.
 
+Coverage convention: a covered line is `[x]` and carries
+`— conformance: <fixture>:<case>[, <fixture>:<case>]` (use `<fixture>:*` when a
+whole fixture owns the line, e.g. bar aggregation math). Run
+[`scripts/conformance-coverage.ps1`](../../scripts/conformance-coverage.ps1)
+for per-section counts and to validate that every annotation still resolves to
+a real corpus case (stale annotation → non-zero exit); `-ShowUnticked` prints
+the remaining backlog. Current coverage: 49/261 lines are owned by the
+in-proc conformance corpus. The rest are either platform-bound (Windows/Unix
+default sensors, WMI, HTTP/TLS transport, NLog — covered by per-platform smoke,
+not the portable corpus), `[decide]` items, or behaviors only reachable by
+language-local unit tests (priority routing, rate elapsed-time math, the
+dispose/ToStopped race, #1088/#1090 retry-vs-head).
+
 Parity bug rule (epic #1093, "Parity bug policy"): a bug found in EITHER
 collector (.NET or native C++) is triaged against the other before closing —
 reproducing conformance scenario first, run on both, fix every implementation
@@ -30,18 +43,18 @@ decision needed (not automatically in scope).
 
 Details: [`public-api/feature.md`](../../aicontext/features/collector/public-api/feature.md)
 
-- [ ] `DataCollector(CollectorOptions)` ctor + immediate `Validate()`
+- [x] `DataCollector(CollectorOptions)` ctor + immediate `Validate()` — conformance: lifecycle_int_contract:blank_access_key_is_rejected, lifecycle_int_contract:zero_port_is_rejected
 - [ ] Convenience ctor `(productKey, address="localhost", port=44330, clientName=null)`
 - [ ] `TestConnection()` → `ConnectionResult { Code, Error, IsOk, Result (= Error empty), static Ok }`, callable in any state
 - [ ] `IDataSender` transport seam (`TestConnectionAsync/SendDataAsync/SendPriorityDataAsync/SendCommandAsync/SendFileAsync/Dispose`)
-- [ ] Option `AccessKey` (required, non-whitespace)
+- [x] Option `AccessKey` (required, non-whitespace) — conformance: lifecycle_int_contract:blank_access_key_is_rejected
 - [ ] Option `ServerAddress` (default `localhost`, required)
-- [ ] Option `Port` (default 44330, 1..65535)
+- [x] Option `Port` (default 44330, 1..65535) — conformance: lifecycle_int_contract:zero_port_is_rejected
 - [ ] Option `ClientName` (default null)
-- [ ] Option `ComputerName` / `Module` (path hierarchy)
-- [ ] Option `MaxQueueSize` (default 20000, > 0, per queue)
+- [x] Option `ComputerName` / `Module` (path hierarchy) — conformance: instant_int_contract:running_collector_stores_int_payload, instant_int_contract:blank_computer_name_is_omitted_from_payload_path
+- [x] Option `MaxQueueSize` (default 20000, > 0, per queue) — conformance: queue_overflow_contract:overflow_evicts_oldest_keeps_fifo_suffix, queue_overflow_contract:overflow_exact_capacity_no_eviction
 - [ ] Option `MaxValuesInPackage` (default 1000, > 0)
-- [ ] Option `PackageCollectPeriod` (default 15 s, > 0)
+- [x] Option `PackageCollectPeriod` (default 15 s, > 0) — conformance: flush_contract:stop_flushes_all_pending_before_returning, file_contract:file_dispatches_promptly_despite_collect_period
 - [ ] Option `RequestTimeout` (default 30 s, > 0)
 - [ ] Option `DataSender` (default `HsmHttpsClient`)
 - [ ] Option `AllowUntrustedServerCertificate` (default false)
@@ -59,13 +72,13 @@ Details: [`overview.md`](../../aicontext/features/collector/overview.md), [`publ
 - [ ] Gate `CanRegisterSensors` (Stopped/Starting/Running)
 - [ ] Gate `CanStartNewSensors` (Starting/Running)
 - [ ] Public `IsAcceptingRegistrations` / `ICollectorRegistrationState`
-- [ ] `Start()` / `Start(customStartingTask)` — idempotent; custom task between processor start and sensor init
+- [x] `Start()` / `Start(customStartingTask)` — idempotent; custom task between processor start and sensor init — conformance: lifecycle_int_contract:start_twice_is_noop
 - [ ] Start failure → rollback to Stopped (queues via `StartRollback` mode)
-- [ ] `Stop()` / `Stop(customStoppingTask)` — idempotent; awaits dynamic sensor-start tasks; custom-task failure logged, stop proceeds
+- [x] `Stop()` / `Stop(customStoppingTask)` — idempotent; awaits dynamic sensor-start tasks; custom-task failure logged, stop proceeds — conformance: lifecycle_int_contract:stop_twice_is_noop, lifecycle_int_contract:stop_before_start_is_noop
 - [ ] `Dispose()` — idempotent, terminal, never throws; from any state
 - [ ] Dispose-vs-Stop race: joins in-flight stop, exactly one ToStopped, terminal mode wins on queues
 - [ ] Stop/Dispose racing Start: waits `_currentStartInitTask`, not the pre-init custom task
-- [ ] Restart support: Start→Stop→Start re-inits and restarts all registered sensors
+- [x] Restart support: Start→Stop→Start re-inits and restarts all registered sensors — conformance: lifecycle_int_contract:restart_after_stop_sends_next_values, registration_contract:restart_reregisters_sensor
 - [ ] Events `ToStarting/ToRunning/ToStopping/ToStopped` (fired under lock, per-handler exception isolation)
 - [ ] `ILifecycleListener` (`OnStarting/OnRunning/OnStopping/OnStopped`) + `AddLifecycleListener(...)`; no replay of current state
 - [ ] Disposal order: DataProcessor → DataSender → CollectorScheduler → global exception handler unhook
@@ -77,40 +90,40 @@ Details: [`overview.md`](../../aicontext/features/collector/overview.md), [`publ
 
 Details: [`overview.md`](../../aicontext/features/collector/overview.md) §Sensor registration
 
-- [ ] Path validation: every `Create*` throws `ArgumentException` for null/whitespace/slash-only paths
-- [ ] Identity = full normalized path; duplicate Create (same type + IsLastValue) returns existing instance, new one disposed
-- [ ] Same path + different type/IsLastValue → `InvalidOperationException`
+- [x] Path validation: every `Create*` throws `ArgumentException` for null/whitespace/slash-only paths — conformance: value_int_contract:slash_only_path_is_rejected
+- [x] Identity = full normalized path; duplicate Create (same type + IsLastValue) returns existing instance, new one disposed — conformance: instant_int_contract:duplicate_sensor_path_is_idempotent, cardinality_int_contract:duplicate_sensor_handles_share_path_under_load
+- [x] Same path + different type/IsLastValue → `InvalidOperationException` — conformance: last_value_contract:instant_then_last_same_path_is_rejected, stress_mixed_contract:mixed_duplicate_type_registration_stress_rejects_conflicts
 - [ ] `MaxSensors` cap enforced atomically; offender removed and disposed
-- [ ] Stopped phase → sensor queued for next Start
-- [ ] Starting/Running → immediate async `InitAndStart`, tracked, awaited by Stop
+- [x] Stopped phase → sensor queued for next Start — conformance: lifecycle_int_contract:register_before_start_many_sends_after_start, registration_contract:plain_int_sensor_registers_on_start
+- [x] Starting/Running → immediate async `InitAndStart`, tracked, awaited by Stop — conformance: lifecycle_int_contract:register_during_running_sends_immediately, registration_contract:sensor_created_while_running_registers
 - [ ] Stopping/Disposed → rejected non-throwing (logged, disposed, returned inert)
-- [ ] `InitAsync` of every sensor sends `AddOrUpdateSensorRequest` before first value
+- [x] `InitAsync` of every sensor sends `AddOrUpdateSensorRequest` before first value — conformance: registration_contract:plain_int_sensor_registers_on_start, registration_contract:each_sensor_registers_once
 
 ## 4. Sensor creation API
 
 Details: [`public-api/feature.md`](../../aicontext/features/collector/public-api/feature.md)
 
 - [ ] `Create{Bool,Int,Double,String,Version,Time}Sensor(path, description)` + `(path, InstantSensorOptions)`
-- [ ] `CreateEnumSensor(path, description | EnumSensorOptions)`
+- [x] `CreateEnumSensor(path, description | EnumSensorOptions)` — conformance: enum_contract:enum_zero_payload, registration_contract:enum_sensor_registers_enum_options
 - [ ] `CreateLastValue{Bool,Int,Double,String,Version,TimeSpan}Sensor(path, defaultValue, description)` + generic `CreateLastValueSensor<T>(path, options, defaultValue)`
 - [ ] `CreateRateSensor(path, RateSensorOptions)` + `CreateM1RateSensor` + `CreateM5RateSensor`
-- [ ] `CreateIntBarSensor(path, barPeriod=300000, postPeriod=15000, descr)` + options overload
+- [x] `CreateIntBarSensor(path, barPeriod=300000, postPeriod=15000, descr)` + options overload — conformance: bar_int_contract:int_bar_basic_aggregation_flushes_on_stop, bar_rollover_contract:bar_rolls_on_add_after_close_strict
 - [ ] DataCollector-only TimeSpan overloads `Create{Int,Double}BarSensor(path, TimeSpan barPeriod, TimeSpan postPeriod[, precision], descr)`
 - [ ] `Create{1Hr,30Min,10Min,5Min,1Min}IntBarSensor` presets
 - [ ] `CreateDoubleBarSensor(..., precision=2, ...)` + options overload + same five presets
-- [ ] `CreateFileSensor(path, fileName, extension="txt", descr)` / `(path, FileSensorOptions)`
+- [x] `CreateFileSensor(path, fileName, extension="txt", descr)` / `(path, FileSensorOptions)` — conformance: file_contract:file_add_value_utf8_roundtrip
 - [ ] Collector-level `SendFileAsync(sensorPath, filePath, status, comment)`
 - [ ] `CreateNoParamsFuncSensor<T>(path, descr, Func<T>, interval ms|TimeSpan)` + `Create{1Min,5Min}NoParamsFuncSensor` + `CreateFunctionSensor<T>(path, func, options)`
 - [ ] `CreateParamsFuncSensor<T,U>(path, descr, Func<List<U>,T>, interval)` + `Create{1Min,5Min}ParamsFuncSensor` + `CreateValuesFunctionSensor<T,U>`
 - [ ] `CreateServiceCommandsSensor()`
 - [ ] Interface `IInstantValueSensor<T>`: `AddValue(v)` / `(v, comment)` / `(v, status, comment)`
-- [ ] Interface `ILastValueSensor<T>` (latest value, sends once on stop, default if none)
+- [x] Interface `ILastValueSensor<T>` (latest value, sends once on stop, default if none) — conformance: last_value_contract:last_int_flushes_latest_on_stop, last_value_contract:last_int_default_flushes_on_stop
 - [ ] Interface `IBarSensor<T>`: `AddValue`, `AddValues(IEnumerable)`, `AddPartial(min,max,mean,first,last,count)`
 - [ ] Interface `IFileSensor`: + `Task<bool> SendFile(filePath, status, comment)`
 - [ ] Interface `IMonitoringRateSensor` (pure alias of `IInstantValueSensor<double>`; defining file is misleadingly named `IMonitoringCounterSensor.cs`)
 - [ ] Interface `IServiceCommandsSensor`: `SendCustomCommand(cmd, initiator)`, `SendUpdate(initiator[, new[, old]])`, `SendRestart/SendStart/SendStop(initiator)`
 - [ ] Interface `IBaseFuncSensor` (in `Obsolete` folder but NOT `[Obsolete]` — current return type): `GetInterval()`, `RestartTimer(TimeSpan)`, `GetFunc()`; params variant `AddValue(U)`
-- [ ] Last-value null-default throws: `CreateLastValueStringSensor(path)` / `CreateLastValueVersionSensor(path)` with implicit null default → `ArgumentException` at creation
+- [x] Last-value null-default throws: `CreateLastValueStringSensor(path)` / `CreateLastValueVersionSensor(path)` with implicit null default → `ArgumentException` at creation — conformance: last_value_contract:last_string_null_default_is_rejected
 - [ ] Fluent builders (per-type setters): `InstantSensor<T>` `.Description/.Ttl/.KeepHistory/.Priority/.Configure`; `BarSensor<T>` `.BarPeriod/.PostPeriod/.TickPeriod/.Precision/.Description/.Configure`; `RateSensor` `.PostPeriod/.Description/.Configure`; `.Build()` throws `NotSupportedException` for unsupported `T`
 - [ ] Properties `Status`, `ComputerName`, `Module`, `Windows`, `Unix`
 - [ ] Property `DefaultSensors` (`IEnumerable<ISensor>`; public `ISensor`: `SensorPath/InitAsync/StartAsync/StopAsync/Dispose`; `SensorBase` adds `SendValue(SensorValueBase)` + `ExceptionThrowing` event)
@@ -122,30 +135,30 @@ Details: [`public-api/feature.md`](../../aicontext/features/collector/public-api
 
 Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/feature.md)
 
-- [ ] Validation: null rejected (strings allowed); double/float NaN/±Infinity rejected
-- [ ] Validation: status must be defined `SensorStatus` member
-- [ ] Validation: comment trimmed to 1024 chars
-- [ ] Validation: rejected values logged (Debug), never enqueued
+- [x] Validation: null rejected (strings allowed); double/float NaN/±Infinity rejected — conformance: instant_mixed_contract:string_null_value_is_rejected, instant_mixed_contract:double_nan_is_rejected
+- [x] Validation: status must be defined `SensorStatus` member — conformance: value_int_contract:int_invalid_status_is_rejected, instant_mixed_contract:enum_invalid_status_is_rejected
+- [x] Validation: comment trimmed to 1024 chars — conformance: instant_int_contract:long_comment_is_trimmed, last_value_contract:last_string_comment_is_trimmed_on_flush
+- [x] Validation: rejected values logged (Debug), never enqueued — conformance: instant_mixed_contract:double_nan_is_rejected, last_value_contract:last_int_invalid_status_preserves_previous
 - [ ] Instant flow: validate → enqueue immediately; `IsPrioritySensor` routes to priority queue
-- [ ] Last-value flow: store latest, single enqueue on StopAsync, `IsLastValue=true` identity
-- [ ] Bar: min/max/mean(sum/count)/count/first/last under lock
-- [ ] Bar `AddPartial` merge + consistency check (int strict; double tolerance `max(1e-12, |max-min|*1e-9)`)
-- [ ] Bar `Complete()` rounding (double: `Round(v, Precision, AwayFromZero)` on all stats; int: mean only)
+- [x] Last-value flow: store latest, single enqueue on StopAsync, `IsLastValue=true` identity — conformance: last_value_contract:last_int_flushes_latest_on_stop, last_value_contract:instant_then_last_same_path_is_rejected
+- [x] Bar: min/max/mean(sum/count)/count/first/last under lock — conformance: bar_int_contract:*
+- [x] Bar `AddPartial` merge + consistency check (int strict; double tolerance `max(1e-12, |max-min|*1e-9)`) — conformance: bar_partial_contract:*
+- [x] Bar `Complete()` rounding (double: `Round(v, Precision, AwayFromZero)` on all stats; int: mean only) — conformance: bar_double_contract:double_bar_precision_rounding, bar_int_contract:int_bar_mean_rounds_half_to_even_up
 - [ ] Bar roll only after confirmed send (`if (TrySendValue()) BuildNewBar()`) — no-roll-without-send invariant
-- [ ] Bar UTC-epoch alignment: `OpenTime = floor(now/period)*period`, `CloseTime = OpenTime + BarPeriod`
+- [x] Bar UTC-epoch alignment: `OpenTime = floor(now/period)*period`, `CloseTime = OpenTime + BarPeriod` — conformance: bar_int_contract:int_bar_basic_aggregation_flushes_on_stop, bar_rollover_contract:bar_rollover_no_value_lost_invariants
 - [ ] Bar periods: `BarPeriod` 5 min / `BarTickPeriod` 5 s / `PostDataPeriod` 15 s / `Precision` 2 (0..15), all validated
-- [ ] Monitoring base: periodic send loop via `ScheduledTaskHandle`, virtuals `GetValue/GetStatus/GetComment/GetDefaultValue`
+- [x] Monitoring base: periodic send loop via `ScheduledTaskHandle`, virtuals `GetValue/GetStatus/GetComment/GetDefaultValue` — conformance: function_contract:function_posts_constant_periodically, rate_contract:rate_posts_zero_when_idle
 - [ ] Monitoring base: `_sendValueInProgress` reentrancy guard
 - [ ] Monitoring base: lifecycle epoch — capture, revalidate before send, drop stale (init/restart/stop bump)
 - [ ] Monitoring base: `GetValue` exception → value with `status=Error, comment=ex.Message` + deduped log
 - [ ] Monitoring base: `RestartTimerAsync(newPeriod)` = bounded stop → epoch bump → reschedule
 - [ ] Rate: lock-free CAS accumulation; `GetValue` = `Interlocked.Exchange(sum,0) / period.TotalSeconds`
-- [ ] Rate: sticky status/comment from last AddValue; default PostDataPeriod 1 min
+- [x] Rate: sticky status/comment from last AddValue; default PostDataPeriod 1 min — conformance: rate_contract:rate_status_and_comment_are_sticky
 - [ ] File: async read (81920 buffer, `FileShare.ReadWrite`); `MaxFileSizeBytes` (10 MB default) + `int.MaxValue` caps
-- [ ] File: name/extension from path else options defaults; `AddValue(string)` = UTF-8 bytes
+- [x] File: name/extension from path else options defaults; `AddValue(string)` = UTF-8 bytes — conformance: file_contract:file_add_value_utf8_roundtrip
 - [ ] File: `SendFile` false on invalid status / `CanAcceptData==false` / missing / oversize
-- [ ] Function no-params: invoke func each period
-- [ ] Function params: `ConcurrentQueue` cache, FIFO eviction at `MaxCacheSize` (10000), snapshot under lock, func outside lock
+- [x] Function no-params: invoke func each period — conformance: function_contract:function_posts_initial_value_immediately, function_contract:function_posts_constant_periodically
+- [x] Function params: `ConcurrentQueue` cache, FIFO eviction at `MaxCacheSize` (10000), snapshot under lock, func outside lock — conformance: function_contract:values_function_cache_evicts_oldest, function_contract:values_function_cache_is_sliding_window
 - [ ] All sensors: `HandleException` → `AddException` (dedup) + `ExceptionThrowing` event; never crash host
 
 ## 6. Options / prototypes / paths
@@ -164,8 +177,8 @@ Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/featu
 - [ ] `DiskSensorOptions { TargetPath default C:\, CalibrationRequests default 6, PostDataPeriod 5 min }`; `DiskBarSensorOptions { TargetPath }`
 - [ ] `VersionSensorOptions { Version, StartTime }`; `ServiceSensorOptions { ServiceName, IsHostService default true → .module placement, SensorPath }`
 - [ ] `NetworkSensorOptions`; `WindowsInfoSensorOptions { PostDataPeriod default 12 h }`; `CollectorMonitoringInfoOptions`
-- [ ] `CalculateSystemPath`: computer → `ComputerName/Path`; module → `ComputerName/Module/Path`; product → `Path`
-- [ ] `BuildPath`: join `/`, drop null/empty/whitespace, split interior `/`, collapse `//`
+- [x] `CalculateSystemPath`: computer → `ComputerName/Path`; module → `ComputerName/Module/Path`; product → `Path` — conformance: instant_int_contract:running_collector_stores_int_payload, instant_int_contract:blank_computer_name_is_omitted_from_payload_path
+- [x] `BuildPath`: join `/`, drop null/empty/whitespace, split interior `/`, collapse `//` — conformance: instant_int_contract:path_duplicate_separators_are_normalized, value_int_contract:path_leading_trailing_slashes_are_normalized
 - [ ] `RevealDefaultPath` = `{.computer|.module}/Category/SensorName`
 - [ ] Prototype merge: custom non-null wins for most properties; `Path/Type/IsComputerSensor/ComputerName/Module` pinned from prototype; custom `DefaultAlertsOptions/IsPrioritySensor/IsForceUpdate` dropped for default sensors
 
@@ -260,21 +273,21 @@ Details: [`data-pipeline/feature.md`](../../aicontext/features/collector/data-pi
 - [ ] Four queues over unbounded Channel: Data (periodic batch), Priority (reactive batch), File (single-item), Command (reactive batch)
 - [ ] Data queue: `PackageCollectPeriod` wait (100 ms floor); keep draining while full batch remains
 - [ ] `QueueItem.BuildDate = UtcNow` at enqueue; `DataPackage` time-in-queue stats
-- [ ] Bar `Count <= 0` filtered at package build
+- [x] Bar `Count <= 0` filtered at package build — conformance: bar_int_contract:int_bar_empty_bar_sends_no_payload, bar_double_contract:double_bar_empty_bar_sends_no_payload
 - [ ] Per-queue state machine (Stopped/Running/Stopping) + restart-after-unexpected-exit
 - [ ] `_acceptingWritesFlag` closes public writes at StopAsync commit; internal retry bypasses
 - [ ] `EnqueueResult`: Accepted(+DroppedCount) / RejectedCollectorNotAcceptingData / RejectedQueueStopped (distinction = test-only)
-- [ ] Overflow: FIFO head drop while `count > MaxQueueSize`; counts → QueueOverflowSensor (self-loop guard)
-- [ ] Retry: failed send re-enqueues package, rethrows, retries next cycle; NO retry cap; deduped error logs
+- [x] Overflow: FIFO head drop while `count > MaxQueueSize`; counts → QueueOverflowSensor (self-loop guard) — conformance: queue_overflow_contract:overflow_evicts_oldest_keeps_fifo_suffix, queue_overflow_contract:overflow_massive_burst_keeps_last_capacity
+- [x] Retry: failed send re-enqueues package, rethrows, retries next cycle; NO retry cap; deduped error logs — conformance: sender_retry_contract:send_failure_retries_until_success_in_order, sender_retry_contract:send_failure_multi_package_no_loss_no_duplicates
 - [ ] #1088: retry at full queue dropped (never evicts fresher head), reported per item
 - [ ] #1090: BuildDate mirror — retry older than current FIFO head dropped even below capacity
 - [ ] Retry filters bypassed once writes closed (shutdown preserves cancelled in-flight work)
 - [ ] Cancellation: re-enqueue on OCE only when mode preserves (`GracefulStop` yes / `TerminalDispose` no)
-- [ ] `ShutdownMode.GracefulStop`: flush, preserve-canceled, wait `RequestTimeout`
+- [x] `ShutdownMode.GracefulStop`: flush, preserve-canceled, wait `RequestTimeout` — conformance: flush_contract:stop_flushes_all_pending_before_returning, flush_contract:stop_flushes_multiple_packages_in_order
 - [ ] `ShutdownMode.TerminalDispose`: flush, drop-canceled, wait `min(RequestTimeout, 1 s)`
 - [ ] `ShutdownMode.StartRollback`: clear immediately, no flush
 - [ ] Drain order: stop all → flush Priority → Data → [suppression flag] → File → Command → ClearQueue + LogDiscardedItems
-- [ ] Flush timeout clamped [1 s, 5 s]
+- [x] Flush timeout clamped [1 s, 5 s] — conformance: flush_contract:stop_with_hanging_sender_is_bounded_and_drops_pending, flush_contract:stop_with_hanging_sender_drops_pending_bar
 - [ ] Diagnostics suppression after data-drain boundary (#1075); overflow exempt; reset on Start
 - [ ] Flush-context failure wording: "queued for clear" vs "preserved", "+N dropped" (#1087 A)
 
@@ -324,7 +337,7 @@ Details: [`error-handling/feature.md`](../../aicontext/features/collector/error-
 Details: [`api/wire-contract/feature.md`](../../aicontext/features/api/wire-contract/feature.md)
 
 - [ ] `SensorType`: Boolean=0 Int=1 Double=2 String=3 IntegerBar=4 DoubleBar=5 File=6 TimeSpan=7 Version=8 Rate=9 Enum=10
-- [ ] `SensorStatus`: OffTime=0 Ok=1 Warning=2 Error=3
+- [x] `SensorStatus`: OffTime=0 Ok=1 Warning=2 Error=3 — conformance: value_int_contract:status_off_time_numeric_value, value_int_contract:status_error_numeric_value
 - [ ] `Unit` sparse values (bits=0…GB=4, Percents=100, Ticks=1000, ms=1010, s=1011, min=1012, Count=1100, Requests=1101, Responses=1102, rates 2100–2103, ValueInSecond=3000)
 - [ ] `AlertOperation` (LE=0 LT=1 GT=2 GE=3 Eq=4 Ne=5 IsChanged=20 IsError=21 IsOk=22 →Error=23 →Ok=24 Contains=30 StartsWith=31 EndsWith=32 ReceivedNewValue=50)
 - [ ] `AlertProperty` (Status=0 Comment=1 Value=20 Min=101 Max=102 Mean=103 Count=104 Last=105 First=106 Length=120 OriginalSize=151 NewSensorData=200 Ema*=210–214)
@@ -335,11 +348,11 @@ Details: [`api/wire-contract/feature.md`](../../aicontext/features/api/wire-cont
 - [ ] `SensorValueBase` { Path, Comment?, Time(UTC now), Status(Ok) } + typed `Value` per DTO
 - [ ] Bar DTOs: Min/Max/Mean/Count/FirstValue?/LastValue/OpenTime/CloseTime (obsolete `Percentiles` never populated but serialized as null)
 - [ ] `FileSensorValue`: Value = `List<byte>` → **numeric JSON array, NOT base64**; Name; Extension. No Counter DTO exists (`CounterSensorValue.cs` contains `RateSensorValue`)
-- [ ] `EnumOption` { Key:int, Value:string, Description:string, Color:int ARGB }
+- [x] `EnumOption` { Key:int, Value:string, Description:string, Color:int ARGB } — conformance: registration_contract:enum_sensor_registers_enum_options
 - [ ] `AddOrUpdateSensorRequest`: full property set incl. EnumOptions, Alerts, TtlAlerts, DefaultAlertsOptions
 - [ ] Registration time fields (`TTLs/KeepHistory/SelfDestroy/ConfirmationPeriod`) on the wire as **long ticks**; `TtlAlerts[*].TtlValue` overrides `options.TTLs`; `IsSingletonSensor` OR-ed with `IsComputerSensor`
 - [ ] JSON: **PascalCase** property names, **nulls/defaults emitted** (default System.Text.Json — `[DefaultValue]` attrs have no effect), enums as numbers, DateTime ISO-8601 `Z`, TimeSpan .NET "c" format `[-][d.]hh:mm:ss[.fffffff]`, Version `a.b[.c[.d]]`
-- [ ] Batch `list` polymorphism: discriminated by the **numeric `Type` property** (server scans for `Type`, switches on `SensorType` int) — no string discriminator
+- [x] Batch `list` polymorphism: discriminated by the **numeric `Type` property** (server scans for `Type`, switches on `SensorType` int) — no string discriminator — conformance: instant_int_contract:running_collector_stores_int_payload, enum_contract:enum_zero_payload
 - [ ] **[decide]** History DTOs `HistoryRequest{Path,From,To?,Count?,Options(IncludeTtl=1)}`, `FileHistoryRequest{+FileName,Extension,IsZipArchive}` (collector doesn't query history today)
 
 ## 16. Wrapper parity gaps — ALL [decide]
@@ -357,15 +370,15 @@ Reference: `src/wrapper/include/` (C++/CLI wrapper as minimal-API oracle)
 
 ## 17. Cross-cutting invariants (gate for every slice)
 
-- [ ] Values before Start / after Stop silently rejected
+- [x] Values before Start / after Stop silently rejected — conformance: instant_int_contract:before_start_drops_value, stress_mixed_contract:mixed_instant_stress_drops_values_after_stop
 - [ ] Start/Stop/Dispose idempotent + race-safe; exactly one ToStopped per cycle
-- [ ] Path dedup transparent; type conflict throws
-- [ ] All validation pre-enqueue
+- [x] Path dedup transparent; type conflict throws — conformance: instant_int_contract:duplicate_sensor_path_is_idempotent, last_value_contract:instant_then_last_same_path_is_rejected
+- [x] All validation pre-enqueue — conformance: instant_mixed_contract:double_nan_is_rejected, value_int_contract:int_invalid_status_is_rejected
 - [ ] Bars never roll without confirmed send; UTC-aligned windows
 - [ ] Stale callbacks invalidated by lifecycle epoch
 - [ ] FIFO at-least-once; retry-forever + overflow backstop; newest-data-wins (#1088/#1090)
-- [ ] Graceful stop flushes accepted work; terminal dispose bounded under broken transport
+- [x] Graceful stop flushes accepted work; terminal dispose bounded under broken transport — conformance: flush_contract:stop_flushes_all_pending_before_returning, flush_contract:stop_with_hanging_sender_is_bounded_and_drops_pending
 - [ ] Diagnostics suppressed past drain boundary; overflow exempt
 - [ ] Scheduler loop never dies; errors to onError
 - [ ] Logger/listener exceptions always swallowed
-- [ ] Wire values/names/formats frozen
+- [x] Wire values/names/formats frozen — conformance: number_format_contract:*, instant_mixed_contract:string_json_special_characters_are_escaped
