@@ -1,0 +1,65 @@
+# HSM collector conformance v1 — double wire-text matrix.
+# Pins the EXACT canonical text of double payload values across languages:
+# .NET shortest round-trip ("R") semantics — shortest digits, fixed notation
+# for decimal exponents in [-4, 14], otherwise scientific with uppercase 'E',
+# signed exponent, at least two exponent digits. The native serializer must
+# produce byte-identical text (std::to_chars digits + .NET assembly rules).
+# This is the #1 silent killer for wire parity: tolerant numeric assertions
+# (expect_bar_field) cannot catch formatting drift, so these cases assert the
+# serialized text itself. Trailing comma in every substring anchors the end of
+# the value token (so 0.1 cannot match 0.1000...).
+#
+# Deliberately excluded (documented TFM divergences inside .NET itself, to be
+# re-pinned at the wire/E2E layer once the byte-level lane exists):
+# - negative zero: net48 "R" prints "0", .NET Core prints "-0"
+# - values whose shortest form needs 16-17 significant digits: net48 "R" falls
+#   back to 17 digits (e.g. 0.3333333333333333 -> "0.33333333333333331"),
+#   .NET Core/STJ emit the true shortest form.
+# - NaN / ±Infinity never serialize: the collector rejects them at the API
+#   boundary (pinned in instant_mixed_contract / bar_double_contract).
+
+double_wire_text_matrix|create_collector
+double_wire_text_matrix|create_double_sensor|contract/number-format/matrix
+double_wire_text_matrix|start
+double_wire_text_matrix|add_double|0|0.1|Ok|simple decimal
+double_wire_text_matrix|add_double|0|2.5|Ok|exact half
+double_wire_text_matrix|add_double|0|-2.5|Ok|negative exact half
+double_wire_text_matrix|add_double|0|0.0001|Ok|fixed at exponent -4
+double_wire_text_matrix|add_double|0|0.00001|Ok|scientific at exponent -5
+double_wire_text_matrix|add_double|0|0.0000001|Ok|the 1e-7 threshold case
+double_wire_text_matrix|add_double|0|100000000000000|Ok|fixed at exponent 14
+double_wire_text_matrix|add_double|0|1000000000000000|Ok|scientific at exponent 15
+double_wire_text_matrix|add_double|0|123456789.456|Ok|many digits fixed
+double_wire_text_matrix|add_double|0|1E+300|Ok|large magnitude
+double_wire_text_matrix|add_double|0|-1.5E-300|Ok|small negative magnitude
+double_wire_text_matrix|add_double|0|42|Ok|integral double has no decimal point
+double_wire_text_matrix|add_double|0|0|Ok|zero
+double_wire_text_matrix|stop
+double_wire_text_matrix|expect_sent_count|13
+double_wire_text_matrix|expect_payload_contains|0|"Value":0.1,
+double_wire_text_matrix|expect_payload_contains|1|"Value":2.5,
+double_wire_text_matrix|expect_payload_contains|2|"Value":-2.5,
+double_wire_text_matrix|expect_payload_contains|3|"Value":0.0001,
+double_wire_text_matrix|expect_payload_contains|4|"Value":1E-05,
+double_wire_text_matrix|expect_payload_contains|5|"Value":1E-07,
+double_wire_text_matrix|expect_payload_contains|6|"Value":100000000000000,
+double_wire_text_matrix|expect_payload_contains|7|"Value":1E+15,
+double_wire_text_matrix|expect_payload_contains|8|"Value":123456789.456,
+double_wire_text_matrix|expect_payload_contains|9|"Value":1E+300,
+double_wire_text_matrix|expect_payload_contains|10|"Value":-1.5E-300,
+double_wire_text_matrix|expect_payload_contains|11|"Value":42,
+double_wire_text_matrix|expect_payload_contains|12|"Value":0,
+
+double_bar_fields_wire_text_after_rounding|create_collector
+double_bar_fields_wire_text_after_rounding|create_double_bar_sensor|contract/number-format/bar|3600000|0|2
+double_bar_fields_wire_text_after_rounding|start
+double_bar_fields_wire_text_after_rounding|add_bar_double|0|1
+double_bar_fields_wire_text_after_rounding|add_bar_double|0|1
+double_bar_fields_wire_text_after_rounding|add_bar_double|0|2
+double_bar_fields_wire_text_after_rounding|stop
+double_bar_fields_wire_text_after_rounding|expect_sent_count|1
+double_bar_fields_wire_text_after_rounding|expect_payload_contains|0|"Min":1,
+double_bar_fields_wire_text_after_rounding|expect_payload_contains|0|"Max":2,
+double_bar_fields_wire_text_after_rounding|expect_payload_contains|0|"Mean":1.33,
+double_bar_fields_wire_text_after_rounding|expect_payload_contains|0|"First":1,
+double_bar_fields_wire_text_after_rounding|expect_payload_contains|0|"Last":2,
