@@ -450,6 +450,7 @@ namespace
         void ResetPeriodicBaseline();
         bool TryBuildPeriodicJson(std::string& out_json);
         bool IsPeriodic() const;
+        bool MatchesPeriodicShape(hsm_int_function_t int_function, hsm_int_values_function_t int_values_function) const;
         hsm_sensor_type_t Type() const;
         bool IsLastValue() const;
 
@@ -691,7 +692,12 @@ namespace
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
-                if (existing->second->Type() != type || !existing->second->IsPeriodic())
+                // The callback-shape check closes the intra-periodic INT ambiguity: a no-params
+                // function and a values-function both register Type == INT, and returning the
+                // other flavor's sensor from create would hand back a type-confused handle.
+                if (existing->second->Type() != type ||
+                    !existing->second->IsPeriodic() ||
+                    !existing->second->MatchesPeriodicShape(int_function, int_values_function))
                 {
                     out_sensor.reset();
                     return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path is already registered with a different type.");
@@ -1448,6 +1454,17 @@ namespace
     bool NativeSensor::IsPeriodic() const
     {
         return is_periodic_;
+    }
+
+    // Distinguishes the periodic sub-kind for duplicate-path detection: rate (both null),
+    // no-params function, and values-function all share Type-level identity otherwise (the two
+    // function flavors are both Type == INT). Only the callback SHAPE participates — a duplicate
+    // create with the same shape but a different callback/user_data still dedupes to the
+    // existing sensor, matching the handle-dedup semantics of the other sensor families.
+    bool NativeSensor::MatchesPeriodicShape(hsm_int_function_t int_function, hsm_int_values_function_t int_values_function) const
+    {
+        return (int_function_ != nullptr) == (int_function != nullptr) &&
+               (int_values_function_ != nullptr) == (int_values_function != nullptr);
     }
 
     bool NativeSensor::TryFlushBarJson(std::string& out_json)
