@@ -155,6 +155,27 @@ namespace HSMDataCollector.Tests
                     AddSensor(state, state.EnumSensors, state.Collector.CreateEnumSensor(ExpandTextToken(step.Arg(0))));
                     break;
 
+                case "create_int_sensor_with_options":
+                    AddSensor(state, state.IntSensors, state.Collector.CreateIntSensor(
+                        ExpandTextToken(step.Arg(0)),
+                        new InstantSensorOptions
+                        {
+                            TTL = long.Parse(step.Arg(1)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))) : (TimeSpan?)null,
+                            SensorUnit = int.Parse(step.Arg(2)) >= 0 ? (Unit)int.Parse(step.Arg(2)) : (Unit?)null,
+                            Description = ExpandTextToken(step.Arg(3)),
+                        }));
+                    break;
+
+                case "create_enum_sensor_with_options":
+                    AddSensor(state, state.EnumSensors, state.Collector.CreateEnumSensor(
+                        ExpandTextToken(step.Arg(0)),
+                        new EnumSensorOptions
+                        {
+                            Description = ExpandTextToken(step.Arg(1)),
+                            EnumOptions = ParseEnumOptions(step.Arg(2)),
+                        }));
+                    break;
+
                 case "create_last_int_sensor":
                     AddSensor(state, state.IntSensors, state.Collector.CreateLastValueIntSensor(step.Arg(0), int.Parse(step.Arg(1))));
                     break;
@@ -336,6 +357,20 @@ namespace HSMDataCollector.Tests
 
                 case "expect_payload_contains":
                     Assert.Contains(step.Arg(1), PayloadText(state.Sender.Values[int.Parse(step.Arg(0))]));
+                    break;
+
+                case "expect_registration_count":
+                    var registrationTimeout = step.TryArg(1, out var registrationSeconds)
+                        ? TimeSpan.FromSeconds(int.Parse(registrationSeconds))
+                        : TimeSpan.FromSeconds(2);
+
+                    Assert.True(
+                        await state.Sender.WaitForRegistrationCountAsync(int.Parse(step.Arg(0)), registrationTimeout).ConfigureAwait(false),
+                        $"Expected {step.Arg(0)} registration(s), got {state.Sender.Registrations.Count}.");
+                    break;
+
+                case "expect_registration_contains":
+                    Assert.Contains(step.Arg(1), RegistrationText(state.Sender.Registrations[int.Parse(step.Arg(0))]));
                     break;
 
                 case "expect_payload_not_contains":
@@ -1028,6 +1063,53 @@ namespace HSMDataCollector.Tests
             Assert.Equal(enumCount, payloads.Count(payload => payload.Contains("\"Type\":10,")));
         }
 
+        // Canonical cross-language registration (AddOrUpdateSensorRequest) text — fixed field
+        // order; the portable subset only (alerts and managed-only flags are asserted by
+        // language-local tests). TTLTicks are .NET ticks (ttl_ms * 10000).
+        private static string RegistrationText(AddOrUpdateSensorRequest request)
+        {
+            var ttls = request.TTLs == null
+                ? "null"
+                : "[" + string.Join(",", request.TTLs.Select(t => t?.ToString(CultureInfo.InvariantCulture) ?? "null")) + "]";
+
+            var enums = request.EnumOptions == null
+                ? "null"
+                : "[" + string.Join(",", request.EnumOptions.Select(o =>
+                    $"{{\"Key\":{o.Key},\"Value\":\"{EscapeJson(o.Value)}\",\"Color\":{o.Color},\"Description\":\"{EscapeJson(o.Description)}\"}}")) + "]";
+
+            return "{" +
+                   "\"Command\":\"AddOrUpdate\"," +
+                   $"\"Path\":\"{EscapeJson(request.Path)}\"," +
+                   $"\"SensorType\":{(request.SensorType.HasValue ? ((int)request.SensorType.Value).ToString(CultureInfo.InvariantCulture) : "null")}," +
+                   $"\"TTLTicks\":{ttls}," +
+                   $"\"OriginalUnit\":{(request.OriginalUnit.HasValue ? ((int)request.OriginalUnit.Value).ToString(CultureInfo.InvariantCulture) : "null")}," +
+                   $"\"Description\":{(request.Description == null ? "null" : "\"" + EscapeJson(request.Description) + "\"")}," +
+                   $"\"EnumOptions\":{enums}" +
+                   "}";
+        }
+
+        // "key:value:color:description;key:value:color:description;..." — values must not
+        // contain ':' or ';' (fixture authoring constraint).
+        private static List<EnumOption> ParseEnumOptions(string text)
+        {
+            var options = new List<EnumOption>();
+
+            foreach (var part in text.Split(';'))
+            {
+                var fields = part.Split(':');
+                if (fields.Length != 4)
+                    throw new InvalidOperationException($"Invalid enum option '{part}' — expected key:value:color:description.");
+
+                options.Add(new EnumOption(
+                    int.Parse(fields[0], CultureInfo.InvariantCulture),
+                    fields[1],
+                    fields[3],
+                    int.Parse(fields[2], CultureInfo.InvariantCulture)));
+            }
+
+            return options;
+        }
+
         private static string PayloadText(SensorValueBase value)
         {
             if (value is BarSensorValueBase bar)
@@ -1386,7 +1468,45 @@ namespace HSMDataCollector.Tests
                 return default;
             }
 
-            public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token) => default;
+            // Sensor registrations (AddOrUpdateSensorRequest) are part of the recorded contract
+            // (registration_contract.hsmtest); they do not consume fail/hang injection.
+            public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token)
+            {
+                lock (_lock)
+                {
+                    foreach (var command in commands)
+                        if (command is AddOrUpdateSensorRequest registration)
+                            _registrations.Add(registration);
+                }
+
+                return default;
+            }
+
+            public IReadOnlyList<AddOrUpdateSensorRequest> Registrations
+            {
+                get
+                {
+                    lock (_lock)
+                        return _registrations.ToList();
+                }
+            }
+
+            public async Task<bool> WaitForRegistrationCountAsync(int count, TimeSpan timeout)
+            {
+                var stopAt = DateTime.UtcNow + timeout;
+
+                while (DateTime.UtcNow < stopAt)
+                {
+                    if (Registrations.Count == count)
+                        return true;
+
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+
+                return Registrations.Count == count;
+            }
+
+            private readonly List<AddOrUpdateSensorRequest> _registrations = new List<AddOrUpdateSensorRequest>();
 
             // File payloads are part of the recorded contract (file_contract.hsmtest); they do not
             // consume fail/hang injection — those fixtures target the data queue only.

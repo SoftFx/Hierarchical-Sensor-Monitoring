@@ -104,6 +104,7 @@ add_conformance_test(conformance_rate_contract rate_contract.hsmtest)
 add_conformance_test(conformance_function_contract function_contract.hsmtest)
 add_conformance_test(conformance_file_contract file_contract.hsmtest)
 add_conformance_test(conformance_number_format_contract number_format_contract.hsmtest)
+add_conformance_test(conformance_registration_contract registration_contract.hsmtest)
 
 # Meta-suite ("test the tests"): must-FAIL fixtures with deliberately wrong
 # expectations; the meta_must_fail runner passes only when the driver detects

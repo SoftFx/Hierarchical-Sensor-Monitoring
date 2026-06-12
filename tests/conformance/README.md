@@ -105,6 +105,8 @@ into the per-case creation order of that sensor kind (0-based).
 | `create_function_int_sensor\|path\|post_period_ms\|constant` | driver callback returns `constant` |
 | `create_values_function_int_sum_sensor\|path\|post_period_ms\|max_cache_size` | driver callback sums the sliding-window snapshot |
 | `create_file_sensor\|path\|default_file_name\|extension` | string-content file sensor (disk `SendFile` is not portable) |
+| `create_int_sensor_with_options\|path\|ttl_ms\|unit\|description` | `ttl_ms=0` ⇒ no TTL; `unit=-1` ⇒ unset (codes per the managed `Unit` enum) |
+| `create_enum_sensor_with_options\|path\|description\|key:value:color:desc[;...]` | enum sensor with `EnumOptions` (values must not contain `:` or `;`) |
 | `dispose_sensor\|sensor_index` | release without flushing |
 | `expect_create_int_sensor_rejected\|path`, `expect_create_last_*_sensor_rejected\|path\|default_value` | creation validation throws |
 | `expect_conflicting_mixed_creates_rejected_parallel\|worker_count\|path_count\|path_prefix` | type conflicts on one path rejected under parallel registration |
@@ -154,6 +156,8 @@ Polling assertions re-check until the deadline, then fail.
 | `expect_bar_open_close_aligned\|payload_index\|period_ms` | close−open == period and open % period == 0 (unix ms) |
 | `expect_all_bars_aligned\|period_ms` / `expect_bar_open_times_increasing` | invariants over all bar payloads |
 | `expect_eventually_payload_contains\|substring\|timeout_s` | polls any payload for the substring |
+| `expect_registration_count\|count[\|timeout_s]` | polls the recorded AddOrUpdate registrations (every sensor registers on every start; immediately when created while running) |
+| `expect_registration_contains\|index\|substring` | substring of the canonical registration text: `{"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[...]\|null,"OriginalUnit":N\|null,"Description":"..."\|null,"EnumOptions":[{"Key":k,"Value":"v","Color":c,"Description":"d"},...]\|null}` — full path incl. identity prefix; TTL in .NET ticks |
 | `expect_eventually_value_above\|threshold\|timeout_s` | polls numeric payload values; fails (not passes) on timeout |
 | `expect_no_new_payloads_for_ms\|ms` | baseline now; no new payloads during the window |
 

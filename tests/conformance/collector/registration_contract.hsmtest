@@ -1,0 +1,68 @@
+# HSM collector conformance v1 — sensor registration (AddOrUpdateSensorRequest) contract.
+# New verbs:
+# create_int_sensor_with_options|path|ttl_ms|unit|description   (ttl_ms=0 => no TTL; unit=-1 => unset; unit codes per HSMSensorDataObjects Unit enum)
+# create_enum_sensor_with_options|path|description|key:value:color:desc[;key:value:color:desc...]
+# expect_registration_count|count|[timeout_s]                    (polls like expect_sent_count)
+# expect_registration_contains|index|substring                   (canonical registration text)
+# Canonical registration text (portable subset; fixed order):
+# {"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[t|null,...]|null,
+#  "OriginalUnit":N|null,"Description":"..."|null,"EnumOptions":[{"Key":k,"Value":"v","Color":c,"Description":"d"},...]|null}
+# Contract notes:
+# - Every sensor registers itself when the collector starts (one AddOrUpdate per sensor);
+#   a sensor created while the collector is running registers immediately.
+# - TTLTicks are .NET ticks (ttl_ms * 10000).
+# - The registration Path is the FULL sensor path including the collector identity prefix
+#   (computer/module) — anchor path asserts with a trailing quote, not a leading one.
+# - Alerts and managed-only registration flags are NOT part of the portable subset; they are
+#   pinned by language-local unit tests.
+
+plain_int_sensor_registers_on_start|create_collector
+plain_int_sensor_registers_on_start|create_int_sensor|contract/registration/basic
+plain_int_sensor_registers_on_start|start
+plain_int_sensor_registers_on_start|stop
+plain_int_sensor_registers_on_start|expect_registration_count|1
+plain_int_sensor_registers_on_start|expect_registration_contains|0|contract/registration/basic"
+plain_int_sensor_registers_on_start|expect_registration_contains|0|"SensorType":1,
+plain_int_sensor_registers_on_start|expect_registration_contains|0|"TTLTicks":null
+plain_int_sensor_registers_on_start|expect_registration_contains|0|"OriginalUnit":null
+
+int_sensor_registers_ttl_unit_description|create_collector
+int_sensor_registers_ttl_unit_description|create_int_sensor_with_options|contract/registration/options|60000|1|queue depth
+int_sensor_registers_ttl_unit_description|start
+int_sensor_registers_ttl_unit_description|stop
+int_sensor_registers_ttl_unit_description|expect_registration_count|1
+int_sensor_registers_ttl_unit_description|expect_registration_contains|0|"TTLTicks":[600000000]
+int_sensor_registers_ttl_unit_description|expect_registration_contains|0|"OriginalUnit":1,
+int_sensor_registers_ttl_unit_description|expect_registration_contains|0|"Description":"queue depth"
+
+enum_sensor_registers_enum_options|create_collector
+enum_sensor_registers_enum_options|create_enum_sensor_with_options|contract/registration/enum|states|0:Idle:65280:nothing to do;1:Busy:16711680:working hard
+enum_sensor_registers_enum_options|start
+enum_sensor_registers_enum_options|stop
+enum_sensor_registers_enum_options|expect_registration_count|1
+enum_sensor_registers_enum_options|expect_registration_contains|0|"SensorType":10,
+enum_sensor_registers_enum_options|expect_registration_contains|0|"EnumOptions":[{"Key":0,"Value":"Idle","Color":65280,"Description":"nothing to do"},{"Key":1,"Value":"Busy","Color":16711680,"Description":"working hard"}]
+enum_sensor_registers_enum_options|expect_registration_contains|0|"Description":"states"
+
+each_sensor_registers_once|create_collector
+each_sensor_registers_once|create_int_sensor|contract/registration/multi/a
+each_sensor_registers_once|create_double_sensor|contract/registration/multi/b
+each_sensor_registers_once|create_string_sensor|contract/registration/multi/c
+each_sensor_registers_once|start
+each_sensor_registers_once|stop
+each_sensor_registers_once|expect_registration_count|3
+
+sensor_created_while_running_registers|create_collector
+sensor_created_while_running_registers|start
+sensor_created_while_running_registers|create_int_sensor|contract/registration/dynamic
+sensor_created_while_running_registers|expect_registration_count|1|5
+sensor_created_while_running_registers|stop
+
+restart_reregisters_sensor|create_collector
+restart_reregisters_sensor|create_int_sensor|contract/registration/restart
+restart_reregisters_sensor|start
+restart_reregisters_sensor|stop
+restart_reregisters_sensor|expect_registration_count|1
+restart_reregisters_sensor|start
+restart_reregisters_sensor|stop
+restart_reregisters_sensor|expect_registration_count|2
