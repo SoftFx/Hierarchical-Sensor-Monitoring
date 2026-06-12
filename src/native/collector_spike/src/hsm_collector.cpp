@@ -1397,6 +1397,11 @@ namespace
             if (now_ms < next_post_ms_)
                 return false;
 
+            // Re-anchoring to the actual tick time lets the cadence drift by up to the
+            // scheduler granularity (~10ms) per post, unlike the managed fixed-rate schedule.
+            // Benign for the rate VALUE (it divides by measured elapsed, not the period); a
+            // real port that wants to match managed post timestamps should anchor to the
+            // previous due time instead.
             next_post_ms_ = now_ms + post_period_ms_;
 
             if (type_ == HSM_SENSOR_TYPE_RATE)
@@ -1751,7 +1756,7 @@ hsm_result_t hsm_collector_create_double_bar_sensor(
     return CreateBarSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE_BAR, bar_period_ms, post_period_ms, precision, out_sensor);
 }
 
-static hsm_result_t CreatePeriodicSensor(
+static hsm_result_t CreatePeriodicSensorHandle(
     hsm_collector_t* collector,
     const char* path,
     hsm_sensor_type_t type,
@@ -1787,7 +1792,7 @@ hsm_result_t hsm_collector_create_rate_sensor(
     int64_t post_period_ms,
     hsm_sensor_t** out_sensor)
 {
-    return CreatePeriodicSensor(collector, path, HSM_SENSOR_TYPE_RATE, post_period_ms, nullptr, nullptr, nullptr, 0, out_sensor);
+    return CreatePeriodicSensorHandle(collector, path, HSM_SENSOR_TYPE_RATE, post_period_ms, nullptr, nullptr, nullptr, 0, out_sensor);
 }
 
 hsm_result_t hsm_collector_create_function_int_sensor(
@@ -1806,7 +1811,7 @@ hsm_result_t hsm_collector_create_function_int_sensor(
         return HSM_RESULT_INVALID_ARGUMENT;
     }
 
-    return CreatePeriodicSensor(collector, path, HSM_SENSOR_TYPE_INT, post_period_ms, function, nullptr, user_data, 0, out_sensor);
+    return CreatePeriodicSensorHandle(collector, path, HSM_SENSOR_TYPE_INT, post_period_ms, function, nullptr, user_data, 0, out_sensor);
 }
 
 hsm_result_t hsm_collector_create_values_function_int_sensor(
@@ -1826,7 +1831,7 @@ hsm_result_t hsm_collector_create_values_function_int_sensor(
         return HSM_RESULT_INVALID_ARGUMENT;
     }
 
-    return CreatePeriodicSensor(collector, path, HSM_SENSOR_TYPE_INT, post_period_ms, nullptr, function, user_data, max_cache_size, out_sensor);
+    return CreatePeriodicSensorHandle(collector, path, HSM_SENSOR_TYPE_INT, post_period_ms, nullptr, function, user_data, max_cache_size, out_sensor);
 }
 
 hsm_result_t hsm_collector_create_file_sensor(

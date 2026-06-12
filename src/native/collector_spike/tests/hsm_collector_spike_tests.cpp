@@ -1763,7 +1763,7 @@ namespace
 
                 for (size_t index = 0; index < count; ++index)
                 {
-                    double numeric;
+                    double numeric = 0;
                     if (TryNumericValueFromPayload(SentJson(state.collector.value, index), numeric) && numeric > threshold)
                         return;
                 }
