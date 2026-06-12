@@ -597,6 +597,50 @@ shares one 5 s upper bound per transport-facing wait. Pinned by
 Verification: managed conformance 141/141, full managed suite 438/438 green
 (9 skips pre-existing); C++ ctest 40/40.
 
+### 2026-06-12: rate / function / file sensor conformance (both languages)
+
+Closed the last sensor-kind conformance gaps with 15 new shared cases in 3
+fixtures, implemented in both harnesses at once:
+
+- `tests/conformance/collector/rate_contract.hsmtest` (6): zeros while idle,
+  eventually-positive after adds, sticky status/comment, invalid-status and
+  NaN increments silently dropped, **Stop does NOT flush the pending sum**
+  (deliberate: a partial-window rate is alert-noise risk — data preservation
+  at stop applies to bars, not rates). Rate = sum / measured elapsed seconds;
+  the exact value is timing-dependent, so the portable cases assert invariants
+  only and the elapsed-time math stays pinned by language-local unit tests
+  (#1102-E2 on the managed side).
+- `function_contract.hsmtest` (5): the no-params function posts its constant,
+  the values-function receives a SNAPSHOT of the buffered sliding window
+  (sum 1..5 = 15 — the buffer is not drained between posts), oldest values
+  evicted past max_cache_size (cap 3 → 3+4+5 = 12), values may be buffered
+  before Start.
+- `file_contract.hsmtest` (4): UTF-8 string-content publish round-trips with
+  Type 6 + Name/Extension from options, values before Start dropped, null
+  content silently ignored, and file payloads dispatch PROMPTLY — push-driven,
+  not gated by the package collect period (the C# file queue wakes on enqueue,
+  unlike the batched data queue; the native worker gets an explicit kick).
+  Disk-based `SendFile` stays language-specific (not portable).
+
+Contract pinned along the way: **the first periodic post fires immediately on
+Start** (managed schedule due time = 0), then every post period — the fixtures
+exploit this for determinism (long inert period + assert only the immediate
+initial post; e.g. values-function cases buffer before Start and read payload
+0 exactly).
+
+Native spike grew a periodic scheduler: a per-collector scheduler thread
+(~10 ms granularity, started on Start, joined before the stop flush) ticks
+periodic sensors — rate (monotonic-clock elapsed division, sticky
+status/comment, baseline reset on restart), int function (C callback
+`hsm_int_function_t`), values-function (sliding-window buffer + snapshot
+callback `hsm_int_values_function_t`) — plus a string-content file sensor.
+Sensor locks stay strictly outside the collector lock (snapshot-then-tick),
+the same one-way order as the bar path.
+
+Verification: managed conformance 156/156 (×3 repeat runs), full managed
+suite 453/453 green (9 skips pre-existing); C++ ctest 43/43;
+rate/function/file fixtures flake-screened 30 consecutive runs green.
+
 ## Cross-Cutting Port Invariants
 
 Behavioral invariants every port must uphold that are NOT expressible as

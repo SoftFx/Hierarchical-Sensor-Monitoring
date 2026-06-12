@@ -441,6 +441,76 @@ namespace HSMDataCollector.Tests
                     ExpectEachValueOnce(state, startValue: int.Parse(step.Arg(0)), count: int.Parse(step.Arg(1)));
                     break;
 
+                case "create_rate_sensor":
+                    AddSensor(state, state.RateSensors, state.Collector.CreateRateSensor(
+                        step.Arg(0),
+                        new RateSensorOptions { PostDataPeriod = TimeSpan.FromMilliseconds(int.Parse(step.Arg(1))) }));
+                    break;
+
+                case "add_rate":
+                    state.RateSensors[int.Parse(step.Arg(0))]
+                        .AddValue(ParseDouble(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                case "add_rate_raw":
+                    state.RateSensors[int.Parse(step.Arg(0))]
+                        .AddValue(ParseDouble(step.Arg(1)), ParseRawStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                case "create_function_int_sensor":
+                    var functionConstant = int.Parse(step.Arg(2));
+                    AddSensor(state, state.FunctionSensors, state.Collector.CreateFunctionSensor(
+                        step.Arg(0),
+                        () => functionConstant,
+                        new FunctionSensorOptions { PostDataPeriod = TimeSpan.FromMilliseconds(int.Parse(step.Arg(1))) }));
+                    break;
+
+                case "create_values_function_int_sum_sensor":
+                    AddSensor(state, state.ValuesFunctionSensors, state.Collector.CreateValuesFunctionSensor<int, int>(
+                        step.Arg(0),
+                        values => values.Sum(),
+                        new ValuesFunctionSensorOptions
+                        {
+                            PostDataPeriod = TimeSpan.FromMilliseconds(int.Parse(step.Arg(1))),
+                            MaxCacheSize = int.Parse(step.Arg(2)),
+                        }));
+                    break;
+
+                case "add_function_value":
+                    state.ValuesFunctionSensors[int.Parse(step.Arg(0))].AddValue(int.Parse(step.Arg(1)));
+                    break;
+
+                case "create_file_sensor":
+                    AddSensor(state, state.FileSensors, state.Collector.CreateFileSensor(
+                        step.Arg(0),
+                        new FileSensorOptions { DefaultFileName = step.Arg(1), Extension = step.Arg(2) }));
+                    break;
+
+                case "add_file_value":
+                    state.FileSensors[int.Parse(step.Arg(0))]
+                        .AddValue(ExpandTextToken(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                case "expect_eventually_payload_contains":
+                    await ExpectEventuallyPayloadContainsAsync(
+                        state,
+                        substring: step.Arg(0),
+                        timeout: TimeSpan.FromSeconds(int.Parse(step.Arg(1)))).ConfigureAwait(false);
+                    break;
+
+                case "expect_eventually_value_above":
+                    await ExpectEventuallyValueAboveAsync(
+                        state,
+                        threshold: ParseDouble(step.Arg(0)),
+                        timeout: TimeSpan.FromSeconds(int.Parse(step.Arg(1)))).ConfigureAwait(false);
+                    break;
+
+                case "expect_no_new_payloads_for_ms":
+                    var payloadBaseline = state.Sender.Values.Count;
+                    await Task.Delay(int.Parse(step.Arg(0))).ConfigureAwait(false);
+                    Assert.Equal(payloadBaseline, state.Sender.Values.Count);
+                    break;
+
                 default:
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
@@ -825,6 +895,63 @@ namespace HSMDataCollector.Tests
                 Assert.Contains(value, distinct);
         }
 
+        private static async Task ExpectEventuallyPayloadContainsAsync(ContractState state, string substring, TimeSpan timeout)
+        {
+            var stopAt = DateTime.UtcNow + timeout;
+
+            while (DateTime.UtcNow < stopAt)
+            {
+                if (state.Sender.Values.Any(value => PayloadText(value).Contains(substring)))
+                    return;
+
+                await Task.Delay(10).ConfigureAwait(false);
+            }
+
+            Assert.True(false, $"No payload contained '{substring}' within {timeout}.");
+        }
+
+        // Scans numeric payload values (rate/double/int) — used where the exact value is timing
+        // dependent (rate = sum / measured elapsed) and the portable contract is only "the
+        // accumulated sum eventually shows up as a positive rate".
+        private static async Task ExpectEventuallyValueAboveAsync(ContractState state, double threshold, TimeSpan timeout)
+        {
+            var stopAt = DateTime.UtcNow + timeout;
+
+            while (DateTime.UtcNow < stopAt)
+            {
+                if (state.Sender.Values.Any(value => TryGetNumericValue(value, out var numeric) && numeric > threshold))
+                    return;
+
+                await Task.Delay(10).ConfigureAwait(false);
+            }
+
+            Assert.True(false, $"No payload value above {threshold} within {timeout}.");
+        }
+
+        private static bool TryGetNumericValue(SensorValueBase value, out double numeric)
+        {
+            if (value is RateSensorValue rateValue)
+            {
+                numeric = rateValue.Value;
+                return true;
+            }
+
+            if (value is DoubleSensorValue doubleValue)
+            {
+                numeric = doubleValue.Value;
+                return true;
+            }
+
+            if (value is IntSensorValue intValue)
+            {
+                numeric = intValue.Value;
+                return true;
+            }
+
+            numeric = 0;
+            return false;
+        }
+
         private static void ExpectPayloadValueSequence(ContractState state, int startPayloadIndex, int count, int startValue)
         {
             for (var offset = 0; offset < count; offset++)
@@ -855,6 +982,9 @@ namespace HSMDataCollector.Tests
         {
             if (value is BarSensorValueBase bar)
                 return BarPayloadText(bar);
+
+            if (value is FileSensorValue file)
+                return FilePayloadText(file);
 
             return "{" +
                    $"\"Type\":{(int)value.Type}," +
@@ -908,10 +1038,29 @@ namespace HSMDataCollector.Tests
                    "}";
         }
 
+        // Canonical cross-language file payload — content is asserted as UTF-8 text.
+        private static string FilePayloadText(FileSensorValue file)
+        {
+            var content = file.Value == null ? string.Empty : Encoding.UTF8.GetString(file.Value.ToArray());
+
+            return "{" +
+                   $"\"Type\":{(int)file.Type}," +
+                   $"\"Path\":\"{EscapeJson(file.Path)}\"," +
+                   $"\"Value\":\"{EscapeJson(content)}\"," +
+                   $"\"Name\":\"{EscapeJson(file.Name)}\"," +
+                   $"\"Extension\":\"{EscapeJson(file.Extension)}\"," +
+                   $"\"Status\":{(int)file.Status}," +
+                   $"\"Comment\":\"{EscapeJson(file.Comment)}\"" +
+                   "}";
+        }
+
         private static string PayloadValueText(SensorValueBase value)
         {
             if (value is BoolSensorValue boolValue)
                 return boolValue.Value ? "true" : "false";
+
+            if (value is RateSensorValue rateValue)
+                return rateValue.Value.ToString("R", CultureInfo.InvariantCulture);
 
             if (value is IntSensorValue intValue)
                 return intValue.Value.ToString(CultureInfo.InvariantCulture);
@@ -1115,6 +1264,14 @@ namespace HSMDataCollector.Tests
             public List<IBarSensor<int>> IntBarSensors { get; } = new List<IBarSensor<int>>();
 
             public List<IBarSensor<double>> DoubleBarSensors { get; } = new List<IBarSensor<double>>();
+
+            public List<IMonitoringRateSensor> RateSensors { get; } = new List<IMonitoringRateSensor>();
+
+            public List<INoParamsFuncSensor<int>> FunctionSensors { get; } = new List<INoParamsFuncSensor<int>>();
+
+            public List<IParamsFuncSensor<int, int>> ValuesFunctionSensors { get; } = new List<IParamsFuncSensor<int, int>>();
+
+            public List<IFileSensor> FileSensors { get; } = new List<IFileSensor>();
         }
 
         private sealed class RecordingSender : IDataSender
@@ -1175,7 +1332,15 @@ namespace HSMDataCollector.Tests
 
             public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token) => default;
 
-            public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token) => default;
+            // File payloads are part of the recorded contract (file_contract.hsmtest); they do not
+            // consume fail/hang injection — those fixtures target the data queue only.
+            public ValueTask<PackageSendingInfo> SendFileAsync(FileSensorValue file, CancellationToken token)
+            {
+                lock (_lock)
+                    _values.Add(file);
+
+                return default;
+            }
 
             public async Task<bool> WaitForCountAsync(int count, TimeSpan timeout)
             {

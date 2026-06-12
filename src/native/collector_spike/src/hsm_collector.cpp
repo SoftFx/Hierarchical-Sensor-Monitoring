@@ -130,6 +130,14 @@ namespace
         return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
     }
 
+    // Monotonic clock for periodic scheduling and rate elapsed-time math (mirrors the C#
+    // collector's Stopwatch-based scheduler/rate sensor; wall-clock jumps must not skew rates).
+    int64_t SteadyMilliseconds()
+    {
+        const auto now = std::chrono::steady_clock::now().time_since_epoch();
+        return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    }
+
     std::string DoubleJson(double value)
     {
         std::ostringstream output;
@@ -384,6 +392,47 @@ namespace
             bar_.Init(UnixTimeMilliseconds());
         }
 
+        // Periodic sensor constructor (rate / function / values-function). Both function
+        // pointers null => rate sensor. The first post is due immediately; collector Start
+        // re-arms via ResetPeriodicBaseline so restarts also post at once.
+        NativeSensor(
+            std::weak_ptr<NativeCollector> collector,
+            std::string path,
+            hsm_sensor_type_t type,
+            int64_t post_period_ms,
+            hsm_int_function_t int_function,
+            hsm_int_values_function_t int_values_function,
+            void* function_user_data,
+            int32_t max_cache_size)
+            : collector_(std::move(collector)),
+              path_(std::move(path)),
+              type_(type),
+              is_last_value_(false),
+              is_periodic_(true),
+              post_period_ms_(post_period_ms),
+              next_post_ms_(SteadyMilliseconds()),
+              int_function_(int_function),
+              int_values_function_(int_values_function),
+              function_user_data_(function_user_data),
+              function_max_cache_(max_cache_size)
+        {
+        }
+
+        // File sensor constructor (string-content publishing only).
+        NativeSensor(
+            std::weak_ptr<NativeCollector> collector,
+            std::string path,
+            std::string default_file_name,
+            std::string extension)
+            : collector_(std::move(collector)),
+              path_(std::move(path)),
+              type_(HSM_SENSOR_TYPE_FILE),
+              is_last_value_(false),
+              file_name_(std::move(default_file_name)),
+              file_extension_(std::move(extension))
+        {
+        }
+
         hsm_result_t AddInt(int32_t value, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddBool(bool value, hsm_sensor_status_t status, const char* comment);
         hsm_result_t AddDouble(double value, hsm_sensor_status_t status, const char* comment);
@@ -393,8 +442,15 @@ namespace
         hsm_result_t AddBarDouble(double value);
         hsm_result_t AddBarIntPartial(int32_t min, int32_t max, int32_t mean, int32_t first, int32_t last, int32_t count);
         hsm_result_t AddBarDoublePartial(double min, double max, double mean, double first, double last, int32_t count);
+        hsm_result_t AddRate(double value, hsm_sensor_status_t status, const char* comment);
+        hsm_result_t AddFunctionInt(int32_t value);
+        hsm_result_t AddFile(const char* utf8_content, hsm_sensor_status_t status, const char* comment);
         bool TryGetLastValueSnapshot(SensorSnapshot& snapshot) const;
         bool TryFlushBarJson(std::string& out_json);
+        void ResetPeriodicBaseline();
+        bool TryBuildPeriodicJson(std::string& out_json);
+        bool IsPeriodic() const;
+        bool MatchesPeriodicShape(hsm_int_function_t int_function, hsm_int_values_function_t int_values_function) const;
         hsm_sensor_type_t Type() const;
         bool IsLastValue() const;
 
@@ -414,6 +470,25 @@ namespace
         hsm_sensor_status_t last_status_ = HSM_SENSOR_STATUS_OFF_TIME;
         std::string last_comment_;
         MonitoringBar bar_;
+
+        // Periodic (rate / function) state, guarded by mutex_.
+        bool is_periodic_ = false;
+        int64_t post_period_ms_ = 0;
+        int64_t next_post_ms_ = 0;
+        double rate_sum_ = 0.0;
+        hsm_sensor_status_t rate_status_ = HSM_SENSOR_STATUS_OK;
+        std::string rate_comment_;
+        std::chrono::steady_clock::time_point rate_prev_{};
+        bool rate_has_prev_ = false;
+        hsm_int_function_t int_function_ = nullptr;
+        hsm_int_values_function_t int_values_function_ = nullptr;
+        void* function_user_data_ = nullptr;
+        std::deque<int32_t> function_values_;
+        int32_t function_max_cache_ = 0;
+
+        // File sensor identity.
+        std::string file_name_;
+        std::string file_extension_;
     };
 
     class NativeCollector : public std::enable_shared_from_this<NativeCollector>
@@ -433,24 +508,40 @@ namespace
 
         ~NativeCollector()
         {
-            // Terminal teardown (destroy without Stop): only the worker is reclaimed — there is
-            // no observable place left to drain into.
+            // Terminal teardown (destroy without Stop): only the threads are reclaimed — there
+            // is no observable place left to drain into.
+            StopScheduler();
             StopWorker();
         }
 
         hsm_result_t Start()
         {
-            std::lock_guard<std::mutex> guard(mutex_);
-
-            if (state_ == CollectorState::Running)
+            std::vector<std::shared_ptr<NativeSensor>> sensors_snapshot;
             {
+                std::lock_guard<std::mutex> guard(mutex_);
+
+                if (state_ == CollectorState::Running)
+                {
+                    ClearError();
+                    return HSM_RESULT_OK;
+                }
+
+                state_ = CollectorState::Running;
+                sensors_snapshot.reserve(sensors_.size());
+                for (const auto& sensor : sensors_)
+                    sensors_snapshot.push_back(sensor.second);
+
                 ClearError();
-                return HSM_RESULT_OK;
             }
 
-            state_ = CollectorState::Running;
+            // Re-arm periodic sensors outside the collector lock (sensor locks are never taken
+            // under it): the first post fires immediately, and a restarted rate sensor must not
+            // divide by the stopped gap (fresh elapsed baseline — mirrors C# InitAsync).
+            for (const auto& sensor : sensors_snapshot)
+                sensor->ResetPeriodicBaseline();
+
             StartWorker();
-            ClearError();
+            StartScheduler();
             return HSM_RESULT_OK;
         }
 
@@ -477,6 +568,11 @@ namespace
 
                 ClearError();
             }
+
+            // Phase 1.5: stop the periodic scheduler. Posts racing the state flip are dropped by
+            // the EnqueueIfRunning gate; rate sums / function posts are deliberately NOT flushed
+            // (a partial-window rate is alert-noise risk — only bars preserve data at stop).
+            StopScheduler();
 
             // Phase 2: flush sensors — last-value snapshots and non-empty partial bars — into
             // the queue, bypassing the Running gate (this is the explicit stop-flush path).
@@ -520,7 +616,10 @@ namespace
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
-                if (existing->second->Type() != type || existing->second->IsLastValue() != is_last_value)
+                // IsPeriodic() closes the cross-family hole: a function-int sensor also has
+                // Type == INT / is_last_value == false and must not be returned as an instant
+                // int handle (the periodic/file create paths guard symmetrically).
+                if (existing->second->Type() != type || existing->second->IsLastValue() != is_last_value || existing->second->IsPeriodic())
                 {
                     out_sensor.reset();
                     return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path is already registered with a different type.");
@@ -574,6 +673,86 @@ namespace
             return HSM_RESULT_OK;
         }
 
+        hsm_result_t CreatePeriodicSensor(
+            const char* path,
+            hsm_sensor_type_t type,
+            int64_t post_period_ms,
+            hsm_int_function_t int_function,
+            hsm_int_values_function_t int_values_function,
+            void* function_user_data,
+            int32_t max_cache_size,
+            std::shared_ptr<NativeSensor>& out_sensor)
+        {
+            if (!IsValidPath(path))
+                return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            const auto sensor_path = BuildSensorPath(path);
+
+            const auto existing = sensors_.find(sensor_path);
+            if (existing != sensors_.end())
+            {
+                // The callback-shape check closes the intra-periodic INT ambiguity: a no-params
+                // function and a values-function both register Type == INT, and returning the
+                // other flavor's sensor from create would hand back a type-confused handle.
+                if (existing->second->Type() != type ||
+                    !existing->second->IsPeriodic() ||
+                    !existing->second->MatchesPeriodicShape(int_function, int_values_function))
+                {
+                    out_sensor.reset();
+                    return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path is already registered with a different type.");
+                }
+
+                out_sensor = existing->second;
+                ClearError();
+                return HSM_RESULT_OK;
+            }
+
+            auto sensor = std::make_shared<NativeSensor>(
+                weak_from_this(), sensor_path, type, post_period_ms,
+                int_function, int_values_function, function_user_data, max_cache_size);
+            sensors_.emplace(sensor_path, sensor);
+            out_sensor = std::move(sensor);
+
+            ClearError();
+            return HSM_RESULT_OK;
+        }
+
+        hsm_result_t CreateFileSensor(
+            const char* path,
+            const char* default_file_name,
+            const char* extension,
+            std::shared_ptr<NativeSensor>& out_sensor)
+        {
+            if (!IsValidPath(path))
+                return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            const auto sensor_path = BuildSensorPath(path);
+
+            const auto existing = sensors_.find(sensor_path);
+            if (existing != sensors_.end())
+            {
+                if (existing->second->Type() != HSM_SENSOR_TYPE_FILE)
+                {
+                    out_sensor.reset();
+                    return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path is already registered with a different type.");
+                }
+
+                out_sensor = existing->second;
+                ClearError();
+                return HSM_RESULT_OK;
+            }
+
+            auto sensor = std::make_shared<NativeSensor>(
+                weak_from_this(), sensor_path, CopyString(default_file_name), CopyString(extension));
+            sensors_.emplace(sensor_path, sensor);
+            out_sensor = std::move(sensor);
+
+            ClearError();
+            return HSM_RESULT_OK;
+        }
+
         hsm_result_t AddValueJson(
             const std::string& path,
             hsm_sensor_type_t type,
@@ -606,6 +785,27 @@ namespace
             }
 
             Enqueue(std::move(json));
+        }
+
+        // File payloads are push-driven (the C# file queue wakes on enqueue instead of waiting
+        // out PackageCollectPeriod), so the worker is kicked to dispatch promptly.
+        void EnqueueFileIfRunning(std::string json)
+        {
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+
+                if (state_ != CollectorState::Running)
+                    return;
+            }
+
+            Enqueue(std::move(json));
+
+            {
+                std::lock_guard<std::mutex> guard(queue_mutex_);
+                dispatch_kick_ = true;
+            }
+
+            queue_cv_.notify_all();
         }
 
         void SetSendFailNext(int32_t count)
@@ -721,6 +921,68 @@ namespace
             worker_ = std::thread([this] { WorkerLoop(); });
         }
 
+        void StartScheduler()
+        {
+            {
+                std::lock_guard<std::mutex> guard(scheduler_mutex_);
+                scheduler_stop_ = false;
+            }
+
+            scheduler_ = std::thread([this] { SchedulerLoop(); });
+        }
+
+        void StopScheduler()
+        {
+            {
+                std::lock_guard<std::mutex> guard(scheduler_mutex_);
+                scheduler_stop_ = true;
+            }
+
+            scheduler_cv_.notify_all();
+
+            if (scheduler_.joinable())
+                scheduler_.join();
+        }
+
+        // ~10ms tick granularity; each due periodic sensor builds its post under its own lock
+        // and publishes through the Running gate. Sensor locks are taken strictly outside the
+        // collector lock (snapshot first), same one-way order as everywhere else.
+        void SchedulerLoop()
+        {
+            std::unique_lock<std::mutex> lock(scheduler_mutex_);
+
+            while (!scheduler_stop_)
+            {
+                scheduler_cv_.wait_for(lock, std::chrono::milliseconds(10), [this] { return scheduler_stop_; });
+
+                if (scheduler_stop_)
+                    break;
+
+                lock.unlock();
+                TickPeriodicSensors();
+                lock.lock();
+            }
+        }
+
+        void TickPeriodicSensors()
+        {
+            std::vector<std::shared_ptr<NativeSensor>> periodic;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+
+                for (const auto& sensor : sensors_)
+                    if (sensor.second->IsPeriodic())
+                        periodic.push_back(sensor.second);
+            }
+
+            for (const auto& sensor : periodic)
+            {
+                std::string json;
+                if (sensor->TryBuildPeriodicJson(json))
+                    EnqueueIfRunning(std::move(json));
+            }
+        }
+
         void StopWorker()
         {
             // Cancel in-flight sends FIRST so a worker blocked inside a hung TrySendBatch wakes
@@ -752,11 +1014,12 @@ namespace
                 queue_cv_.wait_for(
                     lock,
                     std::chrono::milliseconds(collect_period_ms_),
-                    [this] { return worker_stop_; });
+                    [this] { return worker_stop_ || dispatch_kick_; });
 
                 if (worker_stop_)
                     break;
 
+                dispatch_kick_ = false;
                 DispatchQueuedLocked(lock, /*clear_remainder_on_failure=*/false);
             }
         }
@@ -860,6 +1123,7 @@ namespace
         std::condition_variable queue_cv_;
         std::deque<std::string> queue_;
         bool worker_stop_ = false;
+        bool dispatch_kick_ = false;
         std::thread worker_;
         std::atomic<int32_t> fail_next_{ 0 };
 
@@ -867,6 +1131,11 @@ namespace
         std::condition_variable hang_cv_;
         bool send_hang_ = false;
         bool send_cancelled_ = false;
+
+        std::mutex scheduler_mutex_;
+        std::condition_variable scheduler_cv_;
+        bool scheduler_stop_ = false;
+        std::thread scheduler_;
 
         std::string access_key_;
         std::string server_address_;
@@ -1027,6 +1296,180 @@ namespace
             collector->EnqueueIfRunning(std::move(closed_json));
 
         return HSM_RESULT_OK;
+    }
+
+    hsm_result_t NativeSensor::AddRate(double value, hsm_sensor_status_t status, const char* comment)
+    {
+        if (type_ != HSM_SENSOR_TYPE_RATE)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        // Silent skip on invalid value/status — neither the sum nor the sticky state change
+        // (mirrors C# MonitoringRateSensor.AddValue: log-and-return).
+        if (!std::isfinite(value) || !IsValidStatus(status))
+            return HSM_RESULT_OK;
+
+        std::lock_guard<std::mutex> guard(mutex_);
+
+        rate_sum_ += value;
+        rate_status_ = status;
+        rate_comment_ = TrimComment(CopyString(comment));
+        return HSM_RESULT_OK;
+    }
+
+    hsm_result_t NativeSensor::AddFunctionInt(int32_t value)
+    {
+        if (int_values_function_ == nullptr)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        std::lock_guard<std::mutex> guard(mutex_);
+
+        function_values_.push_back(value);
+
+        while (function_values_.size() > static_cast<size_t>(function_max_cache_))
+            function_values_.pop_front();
+
+        return HSM_RESULT_OK;
+    }
+
+    hsm_result_t NativeSensor::AddFile(const char* utf8_content, hsm_sensor_status_t status, const char* comment)
+    {
+        if (type_ != HSM_SENSOR_TYPE_FILE)
+            return HSM_RESULT_INVALID_ARGUMENT;
+
+        // Mirrors C# FileSensorInstant.AddValue: null content and invalid status are silent no-ops.
+        if (utf8_content == nullptr || !IsValidStatus(status))
+            return HSM_RESULT_OK;
+
+        const auto collector = collector_.lock();
+        if (!collector)
+            return HSM_RESULT_INVALID_STATE;
+
+        const auto normalized_comment = TrimComment(CopyString(comment));
+
+        // Canonical cross-language file payload (string content asserted as UTF-8 text).
+        std::ostringstream json;
+        json << "{"
+             << "\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE) << ","
+             << "\"Path\":\"" << EscapeJson(path_) << "\","
+             << "\"Value\":\"" << EscapeJson(CopyString(utf8_content)) << "\","
+             << "\"Name\":\"" << EscapeJson(file_name_) << "\","
+             << "\"Extension\":\"" << EscapeJson(file_extension_) << "\","
+             << "\"Status\":" << static_cast<int>(status) << ","
+             << "\"Comment\":\"" << EscapeJson(normalized_comment) << "\","
+             << "\"UnixTimeMs\":" << UnixTimeMilliseconds()
+             << "}";
+
+        // Instant gating: dropped unless the collector is running (values before Start are
+        // lost). File payloads dispatch promptly — not gated by the package collect period.
+        collector->EnqueueFileIfRunning(json.str());
+        return HSM_RESULT_OK;
+    }
+
+    void NativeSensor::ResetPeriodicBaseline()
+    {
+        if (!is_periodic_)
+            return;
+
+        std::lock_guard<std::mutex> guard(mutex_);
+
+        // Immediate first post on (re)start; the rate baseline resets so the first sample of a
+        // new run does not divide by the stopped gap (mirrors C# MonitoringRateSensor.InitAsync).
+        next_post_ms_ = SteadyMilliseconds();
+        rate_has_prev_ = false;
+    }
+
+    bool NativeSensor::TryBuildPeriodicJson(std::string& out_json)
+    {
+        if (!is_periodic_)
+            return false;
+
+        // The sensor lock covers only the due-check and the mutable-state snapshot. User
+        // callbacks run OUTSIDE it: a callback that re-enters the same sensor (AddRate /
+        // AddFunctionInt) must not deadlock on the non-recursive mutex, and arbitrary user
+        // code must not block concurrent AddValue calls. The callback pointers and user_data
+        // are immutable after construction, so reading them unlocked is safe.
+        std::vector<int32_t> values_snapshot;
+
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+
+            const auto now_ms = SteadyMilliseconds();
+            if (now_ms < next_post_ms_)
+                return false;
+
+            // Re-anchoring to the actual tick time lets the cadence drift by up to the
+            // scheduler granularity (~10ms) per post, unlike the managed fixed-rate schedule.
+            // Benign for the rate VALUE (it divides by measured elapsed, not the period); a
+            // real port that wants to match managed post timestamps should anchor to the
+            // previous due time instead.
+            next_post_ms_ = now_ms + post_period_ms_;
+
+            if (type_ == HSM_SENSOR_TYPE_RATE)
+            {
+                const auto now = std::chrono::steady_clock::now();
+
+                // Divide by the measured elapsed time since the previous post; the first sample
+                // falls back to the configured period (C# #1102-E2 contract).
+                double seconds = post_period_ms_ / 1000.0;
+                if (rate_has_prev_)
+                {
+                    const auto elapsed = std::chrono::duration<double>(now - rate_prev_).count();
+                    if (elapsed > 0)
+                        seconds = elapsed;
+                }
+
+                rate_prev_ = now;
+                rate_has_prev_ = true;
+
+                const double rate = seconds > 0 ? rate_sum_ / seconds : 0.0;
+                rate_sum_ = 0.0;
+
+                out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_RATE, DoubleJson(rate), rate_status_, rate_comment_);
+                return true;
+            }
+
+            if (int_values_function_ != nullptr)
+            {
+                // Snapshot of the sliding window — the buffer itself is NOT drained.
+                values_snapshot.assign(function_values_.begin(), function_values_.end());
+            }
+        }
+
+        if (int_function_ != nullptr)
+        {
+            const auto value = int_function_(function_user_data_);
+            out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_INT, std::to_string(value), HSM_SENSOR_STATUS_OK, std::string{});
+            return true;
+        }
+
+        if (int_values_function_ != nullptr)
+        {
+            const auto value = int_values_function_(
+                values_snapshot.empty() ? nullptr : values_snapshot.data(),
+                static_cast<int32_t>(values_snapshot.size()),
+                function_user_data_);
+
+            out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_INT, std::to_string(value), HSM_SENSOR_STATUS_OK, std::string{});
+            return true;
+        }
+
+        return false;
+    }
+
+    bool NativeSensor::IsPeriodic() const
+    {
+        return is_periodic_;
+    }
+
+    // Distinguishes the periodic sub-kind for duplicate-path detection: rate (both null),
+    // no-params function, and values-function all share Type-level identity otherwise (the two
+    // function flavors are both Type == INT). Only the callback SHAPE participates — a duplicate
+    // create with the same shape but a different callback/user_data still dedupes to the
+    // existing sensor, matching the handle-dedup semantics of the other sensor families.
+    bool NativeSensor::MatchesPeriodicShape(hsm_int_function_t int_function, hsm_int_values_function_t int_values_function) const
+    {
+        return (int_function_ != nullptr) == (int_function != nullptr) &&
+               (int_values_function_ != nullptr) == (int_values_function != nullptr);
     }
 
     bool NativeSensor::TryFlushBarJson(std::string& out_json)
@@ -1313,6 +1756,106 @@ hsm_result_t hsm_collector_create_double_bar_sensor(
     return CreateBarSensor(collector, path, HSM_SENSOR_TYPE_DOUBLE_BAR, bar_period_ms, post_period_ms, precision, out_sensor);
 }
 
+static hsm_result_t CreatePeriodicSensorHandle(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_type_t type,
+    int64_t post_period_ms,
+    hsm_int_function_t function,
+    hsm_int_values_function_t values_function,
+    void* user_data,
+    int32_t max_cache_size,
+    hsm_sensor_t** out_sensor)
+{
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+
+    if (collector == nullptr || out_sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    if (post_period_ms <= 0)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    std::shared_ptr<NativeSensor> sensor;
+    const auto result = collector->impl->CreatePeriodicSensor(
+        path, type, post_period_ms, function, values_function, user_data, max_cache_size, sensor);
+    if (result != HSM_RESULT_OK)
+        return result;
+
+    *out_sensor = new hsm_sensor_t{ std::move(sensor) };
+    return HSM_RESULT_OK;
+}
+
+hsm_result_t hsm_collector_create_rate_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_sensor_t** out_sensor)
+{
+    return CreatePeriodicSensorHandle(collector, path, HSM_SENSOR_TYPE_RATE, post_period_ms, nullptr, nullptr, nullptr, 0, out_sensor);
+}
+
+hsm_result_t hsm_collector_create_function_int_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    hsm_int_function_t function,
+    void* user_data,
+    hsm_sensor_t** out_sensor)
+{
+    if (function == nullptr)
+    {
+        if (out_sensor != nullptr)
+            *out_sensor = nullptr;
+
+        return HSM_RESULT_INVALID_ARGUMENT;
+    }
+
+    return CreatePeriodicSensorHandle(collector, path, HSM_SENSOR_TYPE_INT, post_period_ms, function, nullptr, user_data, 0, out_sensor);
+}
+
+hsm_result_t hsm_collector_create_values_function_int_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    int64_t post_period_ms,
+    int32_t max_cache_size,
+    hsm_int_values_function_t function,
+    void* user_data,
+    hsm_sensor_t** out_sensor)
+{
+    if (function == nullptr || max_cache_size <= 0)
+    {
+        if (out_sensor != nullptr)
+            *out_sensor = nullptr;
+
+        return HSM_RESULT_INVALID_ARGUMENT;
+    }
+
+    return CreatePeriodicSensorHandle(collector, path, HSM_SENSOR_TYPE_INT, post_period_ms, nullptr, function, user_data, max_cache_size, out_sensor);
+}
+
+hsm_result_t hsm_collector_create_file_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    const char* default_file_name,
+    const char* extension,
+    hsm_sensor_t** out_sensor)
+{
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+
+    if (collector == nullptr || out_sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    std::shared_ptr<NativeSensor> sensor;
+    const auto result = collector->impl->CreateFileSensor(path, default_file_name, extension, sensor);
+    if (result != HSM_RESULT_OK)
+        return result;
+
+    *out_sensor = new hsm_sensor_t{ std::move(sensor) };
+    return HSM_RESULT_OK;
+}
+
 void hsm_sensor_release(hsm_sensor_t* sensor)
 {
     delete sensor;
@@ -1422,6 +1965,38 @@ hsm_result_t hsm_sensor_add_bar_double_partial(
         return HSM_RESULT_INVALID_ARGUMENT;
 
     return sensor->impl->AddBarDoublePartial(min, max, mean, first, last, count);
+}
+
+hsm_result_t hsm_sensor_add_rate(
+    hsm_sensor_t* sensor,
+    double value,
+    hsm_sensor_status_t status,
+    const char* comment)
+{
+    if (sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return sensor->impl->AddRate(value, status, comment);
+}
+
+hsm_result_t hsm_sensor_add_function_int(hsm_sensor_t* sensor, int32_t value)
+{
+    if (sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return sensor->impl->AddFunctionInt(value);
+}
+
+hsm_result_t hsm_sensor_add_file(
+    hsm_sensor_t* sensor,
+    const char* utf8_content,
+    hsm_sensor_status_t status,
+    const char* comment)
+{
+    if (sensor == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return sensor->impl->AddFile(utf8_content, status, comment);
 }
 
 void hsm_collector_set_send_fail_next(hsm_collector_t* collector, int32_t count)

@@ -8,6 +8,7 @@
 #include <functional>
 #include <limits>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <sstream>
@@ -409,7 +410,54 @@ namespace
         };
 
         std::vector<MixedInstantSet> mixed_sets;
+
+        // Keeps function-sensor constants alive for the lifetime of the case (the C API stores
+        // the raw user_data pointer).
+        std::vector<std::unique_ptr<int32_t>> function_constants;
     };
+
+    int32_t ConstantIntFunction(void* user_data)
+    {
+        return *static_cast<int32_t*>(user_data);
+    }
+
+    int32_t SumIntValuesFunction(const int32_t* values, int32_t count, void* /*user_data*/)
+    {
+        long long sum = 0;
+
+        for (int32_t index = 0; index < count; ++index)
+            sum += values[index];
+
+        return static_cast<int32_t>(sum);
+    }
+
+    // Scans the numeric `"Value":` field of a payload; quoted (string/file) values don't parse
+    // and are skipped by the caller.
+    bool TryNumericValueFromPayload(const std::string& payload, double& out_value)
+    {
+        const std::string key = "\"Value\":";
+        const auto start = payload.find(key);
+        if (start == std::string::npos)
+            return false;
+
+        const auto value_start = start + key.size();
+        if (value_start >= payload.size() || payload[value_start] == '"')
+            return false;
+
+        const auto end = payload.find_first_of(",}", value_start);
+        if (end == std::string::npos)
+            return false;
+
+        try
+        {
+            out_value = std::stod(payload.substr(value_start, end - value_start));
+            return true;
+        }
+        catch (const std::exception&)
+        {
+            return false;
+        }
+    }
 
     using StepsByCase = std::map<std::string, std::vector<std::vector<std::string>>>;
 
@@ -1572,6 +1620,172 @@ namespace
             return;
         }
 
+        if (action == "create_rate_sensor")
+        {
+            Require(step.size() >= 3, "create_rate_sensor requires path and post period");
+            const auto path = ExpandTextToken(step[1]);
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_rate_sensor(state.collector.value, path.c_str(), std::stoll(step[2]), &sensor.value) == HSM_RESULT_OK,
+                "rate sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "add_rate")
+        {
+            Require(step.size() >= 5, "add_rate requires sensor index, value, status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto comment = ExpandTextToken(step[4]);
+            Require(
+                hsm_sensor_add_rate(state.sensors[sensor_index].value, ToDouble(step[2]), ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                "add_rate failed");
+            return;
+        }
+
+        if (action == "add_rate_raw")
+        {
+            Require(step.size() >= 5, "add_rate_raw requires sensor index, value, raw status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto comment = ExpandTextToken(step[4]);
+            Require(
+                hsm_sensor_add_rate(state.sensors[sensor_index].value, ToDouble(step[2]), ToRawStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                "add_rate_raw should be a silent no-op");
+            return;
+        }
+
+        if (action == "create_function_int_sensor")
+        {
+            Require(step.size() >= 4, "create_function_int_sensor requires path, post period, and constant");
+            const auto path = ExpandTextToken(step[1]);
+            state.function_constants.push_back(std::unique_ptr<int32_t>(new int32_t(ToInt(step[3]))));
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_function_int_sensor(
+                    state.collector.value,
+                    path.c_str(),
+                    std::stoll(step[2]),
+                    &ConstantIntFunction,
+                    state.function_constants.back().get(),
+                    &sensor.value) == HSM_RESULT_OK,
+                "function sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "create_values_function_int_sum_sensor")
+        {
+            Require(step.size() >= 4, "create_values_function_int_sum_sensor requires path, post period, and max cache size");
+            const auto path = ExpandTextToken(step[1]);
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_values_function_int_sensor(
+                    state.collector.value,
+                    path.c_str(),
+                    std::stoll(step[2]),
+                    ToInt(step[3]),
+                    &SumIntValuesFunction,
+                    nullptr,
+                    &sensor.value) == HSM_RESULT_OK,
+                "values function sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "add_function_value")
+        {
+            Require(step.size() >= 3, "add_function_value requires sensor index and value");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            Require(
+                hsm_sensor_add_function_int(state.sensors[sensor_index].value, ToInt(step[2])) == HSM_RESULT_OK,
+                "add_function_value failed");
+            return;
+        }
+
+        if (action == "create_file_sensor")
+        {
+            Require(step.size() >= 4, "create_file_sensor requires path, default file name, and extension");
+            const auto path = ExpandTextToken(step[1]);
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_file_sensor(
+                    state.collector.value, path.c_str(), step[2].c_str(), step[3].c_str(), &sensor.value) == HSM_RESULT_OK,
+                "file sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "add_file_value")
+        {
+            Require(step.size() >= 5, "add_file_value requires sensor index, content, status, and comment");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto content = ExpandTextToken(step[2]);
+            const char* content_ptr = step[2] == "token:null" ? nullptr : content.c_str();
+            const auto comment = ExpandTextToken(step[4]);
+            Require(
+                hsm_sensor_add_file(state.sensors[sensor_index].value, content_ptr, ToStatus(step[3]), comment.c_str()) == HSM_RESULT_OK,
+                "add_file_value failed");
+            return;
+        }
+
+        if (action == "expect_eventually_payload_contains")
+        {
+            Require(step.size() >= 3, "expect_eventually_payload_contains requires substring and timeout");
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(ToInt(step[2]));
+
+            while (std::chrono::steady_clock::now() < deadline)
+            {
+                const auto count = hsm_collector_sent_count(state.collector.value);
+
+                for (size_t index = 0; index < count; ++index)
+                    if (SentJson(state.collector.value, index).find(step[1]) != std::string::npos)
+                        return;
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+            throw std::runtime_error("No payload contained '" + step[1] + "' within the timeout");
+        }
+
+        if (action == "expect_eventually_value_above")
+        {
+            Require(step.size() >= 3, "expect_eventually_value_above requires threshold and timeout");
+            const auto threshold = ToDouble(step[1]);
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(ToInt(step[2]));
+
+            while (std::chrono::steady_clock::now() < deadline)
+            {
+                const auto count = hsm_collector_sent_count(state.collector.value);
+
+                for (size_t index = 0; index < count; ++index)
+                {
+                    double numeric = 0;
+                    if (TryNumericValueFromPayload(SentJson(state.collector.value, index), numeric) && numeric > threshold)
+                        return;
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+            throw std::runtime_error("No payload value above " + step[1] + " within the timeout");
+        }
+
+        if (action == "expect_no_new_payloads_for_ms")
+        {
+            Require(step.size() >= 2, "expect_no_new_payloads_for_ms requires milliseconds");
+            const auto baseline = hsm_collector_sent_count(state.collector.value);
+            std::this_thread::sleep_for(std::chrono::milliseconds(ToInt(step[1])));
+            const auto current = hsm_collector_sent_count(state.collector.value);
+            Require(
+                current == baseline,
+                ("expected no new payloads, baseline " + std::to_string(baseline) + ", got " + std::to_string(current)).c_str());
+            return;
+        }
+
         throw std::runtime_error("Unknown conformance action: " + action);
     }
 
@@ -1992,6 +2206,9 @@ namespace
             { "conformance_queue_overflow_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_sender_retry_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_flush_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_rate_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_function_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_file_contract", [](const std::string& path) { RunConformanceContract(path); } },
         };
 
         return tests;

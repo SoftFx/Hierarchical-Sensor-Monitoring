@@ -26,6 +26,8 @@ DataCollector provides sensor kinds that differ in how values are produced and a
 
 Monitoring (timer) sensors — bar, rate, function, and most default sensors — share `MonitoringSensorBase<T>`: periodic send via `ScheduledTaskHandle`, virtuals `GetValue/GetStatus/GetComment/GetDefaultValue`.
 
+Periodic-post contract (pinned cross-language by `rate_contract.hsmtest` / `function_contract.hsmtest`): the FIRST post fires immediately on Start (`TimerDueTime` = 0 → schedule delay 0), then every `PostDataPeriod`. Rate specifics: value = sum / measured elapsed (#1102-E2), status/comment sticky from the last accepted increment, invalid/NaN increments silently dropped, and Stop does NOT flush the pending sum (deliberate — a partial-window rate is alert-noise risk; data preservation at stop applies to bars, not rates). Values-function specifics: the buffer is a sliding window (snapshot per post, never drained; oldest evicted past `MaxCacheSize`; accepts values before Start). File specifics (`file_contract.hsmtest`): `AddValue(string)` → UTF-8 file payload with options' name/extension; null content ignored; file payloads are push-driven — the file queue wakes on enqueue (`Reader.WaitToReadAsync`) and is NOT gated by `PackageCollectPeriod`, unlike the batched data queue; disk-based `SendFile` is not part of the portable contract.
+
 ## Validation & normalization (all sensors)
 
 `Extensions/SensorValueExtensions.cs`:
