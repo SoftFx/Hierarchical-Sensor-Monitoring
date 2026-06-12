@@ -118,6 +118,17 @@ If `Stop()` or `Dispose()` races with `Start()` while sensor initialization is a
 
 Each `QueueProcessorBase` maintains its own `QueueState` (Stopped/Running/Stopping). If `StopAsync` times out (IDataSender ignores cancellation), the queue stays in `Stopping` and blocks subsequent `Start()` until the background task completes. As a defensive measure, `Start()` will reset and restart a queue whose `_task` exited unexpectedly while `_state` is still `Running` — this only fires if a subclass overrides `ProcessingLoop` and breaks the "loop until cancellation" contract.
 
+### Shutdown boundedness (dead/hung transport)
+
+Contract: collector `Stop()` must return within a small bounded time even when the server is unreachable or the sender hangs — the collector must never block its host's restart; pending data is dropped instead. The bound is layered:
+
+- The bar partial-bar flush on sensor stop only **enqueues** (no network) — it cannot block.
+- `QueueProcessorBase.StopAsync` races the processing loop against `ShutdownMode.StopWaitTimeout` (graceful: `min(RequestTimeout, 5s)` — the 5 s cap is deliberate and independent of the default 30 s `RequestTimeout`; terminal dispose: `min(RequestTimeout, 1s)`). A sender hung **in the run loop** while ignoring cancellation makes StopAsync return `false` and the flush for that queue is **skipped**.
+- `FlushAsync` runs under a `CancellationTokenSource` with timeout `clamp(RequestTimeout, 1s, 5s)`; a token-respecting sender (the real HTTP client) gets cancelled mid-send (`OperationCanceledException` → graceful re-enqueue → `ClearQueue` logs the discard).
+- A sender that ignores cancellation and hangs **for the first time on the flush dispatch itself** is handled inside `FlushAsync`: each dispatch is raced against the flush token via `Task.WhenAny`, and the in-flight dispatch is abandoned (fault observed, error logged, its items lost) when the timeout fires.
+
+Every transport-facing wait in the graceful stop path is therefore capped at 5 s, regardless of `RequestTimeout`. Tests: `CollectorStopBoundednessTests` (four hang scenarios incl. pending partial bar and the default-`RequestTimeout` cap), conformance `flush_contract.hsmtest` (`stop_with_hanging_sender_*` cases, cross-language via `set_sender_hang` + `stop_expect_under_ms`), transport-level coverage in `CollectorTransportChaosTests`.
+
 ### Scheduler ownership
 
 Each `DataCollector` owns its own `CollectorScheduler` instance (implementing `ICollectorScheduler`). The scheduler is constructed in `DataCollector`'s constructor, threaded through `DataProcessor.Scheduler`, and disposed at the end of `Dispose()` after `_dataProcessor` and `_dataSender`. Sensors and `MessageDeduplicator` schedule periodic work through this injected instance — there is no process-global scheduler. Two collectors in the same process have independent timer wheels and worker tasks.

@@ -17,7 +17,7 @@ DataCollector provides sensor kinds that differ in how values are produced and a
 |---|---|---|
 | Instant (`bool/int/double/string/TimeSpan/Version/enum`) | `SensorInstant<T>` | `AddValue` → validate → enqueue immediately (priority queue if `IsPrioritySensor`) |
 | Last-value | `LastValueSensorInstant<T>` (`IsLastValue=true`) | stores latest value/status/comment; single enqueue on `StopAsync`; default value if none added |
-| Bar (`int`, `double`) | `BarMonitoringSensorBase` + `IntMonitoringBar`/`DoubleMonitoringBar` | aggregates min/max/mean/count/first/last over `BarPeriod`; two scheduled handles (collect + send) |
+| Bar (`int`, `double`) | `BarMonitoringSensorBase` + `IntMonitoringBar`/`DoubleMonitoringBar` | aggregates min/max/mean/count/first/last over `BarPeriod`; two scheduled handles (collect + send); non-empty partial bar flushed on `StopAsync` (sensor disposal does NOT flush — `DisposeAsyncCore`) |
 | Rate | `MonitoringRateSensor` | lock-free CAS sum; sends `sum / PostDataPeriod.TotalSeconds`, atomic reset; sticky status/comment |
 | Function (no params) | `FunctionSensorInstant<T>` | invokes `Func<T>` every period |
 | Function (params) | `ValuesFunctionSensorInstant<T,U>` | `AddValue(U)` buffers into `ConcurrentQueue` (FIFO eviction at `MaxCacheSize`, default 10000); snapshot under lock, func invoked outside lock |
@@ -43,9 +43,10 @@ Monitoring (timer) sensors — bar, rate, function, and most default sensors —
 
 ## Bar mechanics
 
-- Window state under `_lockBar`; `Complete()` rounds: double — `Math.Round(v, Precision, AwayFromZero)` on min/max/mean/first/last; int — mean only (`(int)Math.Round(sum/count)`).
+- Window state under `_lockBar`; `Complete()` rounds: double — `Math.Round(v, Precision, AwayFromZero)` on min/max/mean/first/last; int — mean only (`(int)Math.Round(sum/count)` — note: default `MidpointRounding.ToEven`, pinned cross-language by `bar_int_contract.hsmtest`).
 - Time alignment (`Extensions/BarTimeExtensions.cs`): `OpenTime = floor(UtcNow.Ticks / period) * period` (UTC-epoch aligned), `CloseTime = OpenTime + BarPeriod`, timer due time = `max(CloseTime - now, 0)`.
 - Periods: `BarPeriod` 5 min, `BarTickPeriod` 5 s, `PostDataPeriod` 15 s, `Precision` 2 (0–15); all validated > 0.
+- **Flush on stop**: `StopAsync` publishes a non-empty partial bar (`Count > 0`) before the epoch bump and queue drain, rolling only on a confirmed send (`if (TrySendValue()) BuildNewBar()`), so the in-progress bar is not lost at shutdown and a stop→restart→stop cycle never resends it. Sensor disposal goes through the non-flushing `DisposeAsyncCore` path (releasing a handle is not a data point); the data still flushes when the collector itself stops. Conformance: `bar_int_contract.hsmtest` / `bar_double_contract.hsmtest` / `bar_partial_contract.hsmtest` / `bar_rollover_contract.hsmtest`.
 
 ### Bar sensor: do not roll the bar without confirming the send happened
 
@@ -67,7 +68,7 @@ If `CheckCurrentBar` rolls the bar **unconditionally** after calling `SendValueA
 
 C# reference: `Sensors/MonitoringSensorBaseT.TrySendValue()` returns `bool`; `Sensors/BarSensors/BarMonitoringSensorBase.CheckCurrentBar` uses `if (TrySendValue()) BuildNewBar();`. Regression test: `CheckCurrentBar_defers_roll_when_send_guard_is_held` in `CollectorQueueShutdownTests.cs`.
 
-This invariant has no C++ analogue today because the native collector spike currently exposes only instant sensors. Any future port of bar/aggregator sensors must encode one of the two shapes above from the start.
+C++ analogue: the native spike's bar sensors (`src/native/collector_spike/src/hsm_collector.cpp`) use the second shape — `AccumulateBar` snapshots the closed bar and re-inits it atomically under the sensor lock, then publishes outside the lock (also required there to keep the collector→sensor lock order one-way). The shared aggregation math is exercised by the `bar_*_contract.hsmtest` fixtures in both languages; the guard-interleaving scenario itself stays a managed-only regression test.
 
 ## Options & path model
 

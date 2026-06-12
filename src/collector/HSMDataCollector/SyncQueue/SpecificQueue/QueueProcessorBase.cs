@@ -433,9 +433,43 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
             Volatile.Write(ref _inFlushFlag, 1);
             try
             {
+                Task cancellationFired = null;
+
                 while (!IsEmpty && !token.IsCancellationRequested)
                 {
-                    if (!await TryDispatchOneAsync(token).ConfigureAwait(false))
+                    var dispatch = TryDispatchOneAsync(token);
+                    bool dispatched;
+
+                    if (dispatch.IsCompleted)
+                    {
+                        // Fast path: consume the ValueTask directly — no Task allocation per
+                        // drained item while the sender completes synchronously.
+                        dispatched = await dispatch.ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        // Shutdown must stay bounded even against an IDataSender that ignores
+                        // cancellation: the run-loop side is protected by StopAsync's WhenAny
+                        // timeout, but a sender that hangs for the FIRST time here would block
+                        // this await forever and lock the host's restart. Race each dispatch
+                        // against the flush token and abandon the in-flight send when it fires —
+                        // losing the in-flight items is preferable to an unbounded Stop.
+                        var dispatchTask = dispatch.AsTask();
+
+                        if (cancellationFired == null)
+                            cancellationFired = Task.Delay(Timeout.Infinite, token);
+
+                        if (await Task.WhenAny(dispatchTask, cancellationFired).ConfigureAwait(false) != dispatchTask)
+                        {
+                            ObserveAbandonedDispatch(dispatchTask);
+                            _logger.Error($"{QueueName} flush abandoned an in-flight dispatch after the flush timeout. IDataSender may ignore cancellation; its in-flight items are lost.");
+                            return;
+                        }
+
+                        dispatched = await dispatchTask.ConfigureAwait(false);
+                    }
+
+                    if (!dispatched)
                         break;
                 }
             }
@@ -449,6 +483,15 @@ namespace HSMDataCollector.SyncQueue.SpecificQueue
                 Volatile.Write(ref _inFlushFlag, 0);
             }
         }
+
+        // The abandoned dispatch keeps running on the hung sender; observe its eventual fault so
+        // it cannot surface as an unobserved task exception when it finally completes.
+        private static void ObserveAbandonedDispatch(Task dispatchTask) =>
+            _ = dispatchTask.ContinueWith(
+                task => _ = task.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
 
         // True while the bounded post-stop drain is running. Subclasses use this to reword
         // dispatch-failure exceptions so the log line doesn't claim items were "preserved" right

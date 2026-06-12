@@ -58,11 +58,32 @@ namespace HSMDataCollector.DefaultSensors
             return base.InitAsync();
         }
 
-        public override async ValueTask StopAsync()
+        public override ValueTask StopAsync() => StopCoreAsync(flushPartialBar: true);
+
+        // Sensor disposal (without a collector Stop) must not flush — mirrors
+        // LastValueSensorInstant.DisposeAsyncCore: releasing a handle is not a data point.
+        protected override ValueTask DisposeAsyncCore() => StopCoreAsync(flushPartialBar: false);
+
+        private async ValueTask StopCoreAsync(bool flushPartialBar)
         {
             try
             {
                 await _collectHandle.StopAsync(waitForCurrentRun: true).ConfigureAwait(false);
+
+                if (flushPartialBar)
+                {
+                    // Flush the in-progress partial bar before base.StopAsync bumps the lifecycle
+                    // epoch and the data queues drain — otherwise everything accumulated since the
+                    // last CloseTime is lost at shutdown. Same roll-on-successful-send contract as
+                    // CheckCurrentBar: if a periodic send is in flight (TrySendValue returns false),
+                    // that send publishes the snapshot itself and the bar intentionally stays
+                    // un-rolled (the server merges partial bars by OpenTime).
+                    lock (_lockBar)
+                    {
+                        if (_internalBar.Count > 0 && TrySendValue())
+                            BuildNewBar();
+                    }
+                }
 
                 await base.StopAsync().ConfigureAwait(false);
             }

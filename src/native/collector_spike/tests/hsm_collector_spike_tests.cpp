@@ -2,11 +2,14 @@
 #include "hsm_collector/hsm_collector.hpp"
 #include <iostream>
 #include <fstream>
+#include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <limits>
 #include <map>
 #include <mutex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -232,6 +235,62 @@ namespace
         Require(hsm_collector_get_sent_json(collector, index, &json) == HSM_RESULT_OK, "payload lookup failed");
 
         return std::string{ json };
+    }
+
+    // Dispatch is asynchronous (worker thread + collect period), so count asserts poll with a
+    // deadline — exact-equality semantics matching the C# harness's WaitForCountAsync.
+    bool WaitForSentCountEquals(hsm_collector_t* collector, size_t expected, int timeout_ms = 2000)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            if (hsm_collector_sent_count(collector) == expected)
+                return true;
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        return hsm_collector_sent_count(collector) == expected;
+    }
+
+    bool WaitForSentCountAtLeast(hsm_collector_t* collector, size_t minimum, int timeout_ms)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            if (hsm_collector_sent_count(collector) >= minimum)
+                return true;
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        return hsm_collector_sent_count(collector) >= minimum;
+    }
+
+    std::string WaitForFirstPayload(hsm_collector_t* collector)
+    {
+        Require(WaitForSentCountEquals(collector, 1), "payload was not dispatched in time");
+        return SentJson(collector, 0);
+    }
+
+    std::string NumberFieldFromPayload(const std::string& payload, const std::string& field)
+    {
+        const auto key = "\"" + field + "\":";
+        const auto start = payload.find(key);
+        Require(start != std::string::npos, ("payload should include field " + field + "\nActual: " + payload).c_str());
+
+        const auto value_start = start + key.size();
+        const auto end = payload.find_first_of(",}", value_start);
+        Require(end != std::string::npos, "payload field should be terminated");
+
+        return payload.substr(value_start, end - value_start);
+    }
+
+    bool IsBarPayload(const std::string& payload)
+    {
+        return payload.find("\"OpenTimeMs\":") != std::string::npos;
     }
 
     std::string CommentFromPayload(const std::string& payload)
@@ -1071,7 +1130,27 @@ namespace
         {
             Require(step.size() >= 2, "expect_sent_count requires count");
             const auto expected = static_cast<size_t>(ToInt(step[1]));
-            Require(hsm_collector_sent_count(state.collector.value) == expected, "sent count did not match");
+            const auto timeout_ms = step.size() >= 3 ? ToInt(step[2]) * 1000 : 2000;
+
+            Require(
+                WaitForSentCountEquals(state.collector.value, expected, timeout_ms),
+                ("sent count did not match: expected " + step[1] +
+                 ", got " + std::to_string(hsm_collector_sent_count(state.collector.value))).c_str());
+            return;
+        }
+
+        if (action == "expect_sent_count_between")
+        {
+            Require(step.size() >= 4, "expect_sent_count_between requires min, max, and timeout");
+            const auto minimum = static_cast<size_t>(ToInt(step[1]));
+            const auto maximum = static_cast<size_t>(ToInt(step[2]));
+
+            Require(
+                WaitForSentCountAtLeast(state.collector.value, minimum, ToInt(step[3]) * 1000),
+                "sent count did not reach the expected minimum");
+
+            const auto count = hsm_collector_sent_count(state.collector.value);
+            Require(count <= maximum, ("sent count exceeded the expected maximum: " + std::to_string(count)).c_str());
             return;
         }
 
@@ -1150,6 +1229,346 @@ namespace
             Require(count_type("\"Type\":2,") == ToInt(step[3]), "double type count did not match");
             Require(count_type("\"Type\":3,") == ToInt(step[4]), "string type count did not match");
             Require(count_type("\"Type\":10,") == ToInt(step[5]), "enum type count did not match");
+            return;
+        }
+
+        if (action == "create_collector_with_limits")
+        {
+            Require(step.size() >= 4, "create_collector_with_limits requires max queue, max package, and collect period");
+            auto options = TestOptions();
+            options.max_queue_size = ToInt(step[1]);
+            options.max_values_in_package = ToInt(step[2]);
+            options.package_collect_period_ms = ToInt(step[3]);
+            state.collector = CreateCollector(options);
+            return;
+        }
+
+        if (action == "create_int_bar_sensor")
+        {
+            Require(step.size() >= 4, "create_int_bar_sensor requires path, bar period, and post period");
+            const auto path = ExpandTextToken(step[1]);
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_int_bar_sensor(
+                    state.collector.value, path.c_str(), std::stoll(step[2]), std::stoll(step[3]), &sensor.value) == HSM_RESULT_OK,
+                "int bar sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "create_double_bar_sensor")
+        {
+            Require(step.size() >= 5, "create_double_bar_sensor requires path, bar period, post period, and precision");
+            const auto path = ExpandTextToken(step[1]);
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_double_bar_sensor(
+                    state.collector.value, path.c_str(), std::stoll(step[2]), std::stoll(step[3]), ToInt(step[4]), &sensor.value) == HSM_RESULT_OK,
+                "double bar sensor create failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
+        if (action == "add_bar_int")
+        {
+            Require(step.size() >= 3, "add_bar_int requires sensor index and value");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            Require(
+                hsm_sensor_add_bar_int(state.sensors[sensor_index].value, ToInt(step[2])) == HSM_RESULT_OK,
+                "add_bar_int failed");
+            return;
+        }
+
+        if (action == "add_bar_double")
+        {
+            Require(step.size() >= 3, "add_bar_double requires sensor index and value");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            Require(
+                hsm_sensor_add_bar_double(state.sensors[sensor_index].value, ToDouble(step[2])) == HSM_RESULT_OK,
+                "add_bar_double failed");
+            return;
+        }
+
+        if (action == "add_bar_int_sequence")
+        {
+            Require(step.size() >= 5, "add_bar_int_sequence requires sensor index, count, start value, and step");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto count = ToInt(step[2]);
+            const auto start_value = ToInt(step[3]);
+            const auto value_step = ToInt(step[4]);
+
+            for (int index = 0; index < count; ++index)
+                Require(
+                    hsm_sensor_add_bar_int(state.sensors[sensor_index].value, start_value + index * value_step) == HSM_RESULT_OK,
+                    "add_bar_int_sequence failed");
+
+            return;
+        }
+
+        if (action == "add_bar_int_parallel")
+        {
+            Require(step.size() >= 5, "add_bar_int_parallel requires sensor index, worker count, values per worker, and start value");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            const auto worker_count = ToInt(step[2]);
+            const auto values_per_worker = ToInt(step[3]);
+            const auto start_value = ToInt(step[4]);
+
+            std::vector<std::thread> workers;
+            std::exception_ptr first_exception;
+            std::mutex exception_mutex;
+
+            for (int worker = 0; worker < worker_count; ++worker)
+            {
+                workers.emplace_back([&, worker]()
+                {
+                    try
+                    {
+                        for (int value_index = 0; value_index < values_per_worker; ++value_index)
+                        {
+                            const auto value = start_value + worker * values_per_worker + value_index;
+                            Require(
+                                hsm_sensor_add_bar_int(state.sensors[sensor_index].value, value) == HSM_RESULT_OK,
+                                "add_bar_int_parallel failed");
+                        }
+                    }
+                    catch (...)
+                    {
+                        std::lock_guard<std::mutex> guard(exception_mutex);
+                        if (!first_exception)
+                            first_exception = std::current_exception();
+                    }
+                });
+            }
+
+            for (auto& worker : workers)
+                worker.join();
+
+            if (first_exception)
+                std::rethrow_exception(first_exception);
+
+            return;
+        }
+
+        if (action == "add_int_bar_partial")
+        {
+            Require(step.size() >= 8, "add_int_bar_partial requires sensor index, min, max, mean, first, last, and count");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            Require(
+                hsm_sensor_add_bar_int_partial(
+                    state.sensors[sensor_index].value,
+                    ToInt(step[2]), ToInt(step[3]), ToInt(step[4]), ToInt(step[5]), ToInt(step[6]), ToInt(step[7])) == HSM_RESULT_OK,
+                "add_int_bar_partial failed");
+            return;
+        }
+
+        if (action == "add_double_bar_partial")
+        {
+            Require(step.size() >= 8, "add_double_bar_partial requires sensor index, min, max, mean, first, last, and count");
+            const auto sensor_index = static_cast<size_t>(ToInt(step[1]));
+            Require(sensor_index < state.sensors.size(), "sensor index out of range");
+            Require(
+                hsm_sensor_add_bar_double_partial(
+                    state.sensors[sensor_index].value,
+                    ToDouble(step[2]), ToDouble(step[3]), ToDouble(step[4]), ToDouble(step[5]), ToDouble(step[6]), ToInt(step[7])) == HSM_RESULT_OK,
+                "add_double_bar_partial failed");
+            return;
+        }
+
+        if (action == "sleep_ms")
+        {
+            Require(step.size() >= 2, "sleep_ms requires milliseconds");
+            std::this_thread::sleep_for(std::chrono::milliseconds(ToInt(step[1])));
+            return;
+        }
+
+        if (action == "set_sender_fail_next")
+        {
+            Require(step.size() >= 2, "set_sender_fail_next requires count");
+            hsm_collector_set_send_fail_next(state.collector.value, ToInt(step[1]));
+            return;
+        }
+
+        if (action == "set_sender_hang")
+        {
+            hsm_collector_set_send_hang(state.collector.value, true);
+            return;
+        }
+
+        if (action == "stop_expect_under_ms")
+        {
+            Require(step.size() >= 2, "stop_expect_under_ms requires a bound in milliseconds");
+
+            const auto started = std::chrono::steady_clock::now();
+            Require(hsm_collector_stop(state.collector.value) == HSM_RESULT_OK, "collector stop failed");
+            const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started).count();
+
+            Require(
+                elapsed_ms < ToInt(step[1]),
+                ("stop took " + std::to_string(elapsed_ms) + " ms, expected under " + step[1] + " ms").c_str());
+            return;
+        }
+
+        if (action == "expect_bar_field")
+        {
+            Require(step.size() >= 4, "expect_bar_field requires payload index, field, and expected value");
+
+            const auto raw_index = ToInt(step[1]);
+            const auto sent_count = hsm_collector_sent_count(state.collector.value);
+            size_t payload_index;
+            if (raw_index < 0)
+            {
+                Require(static_cast<size_t>(-raw_index) <= sent_count, "negative payload index out of range");
+                payload_index = sent_count - static_cast<size_t>(-raw_index);
+            }
+            else
+            {
+                payload_index = static_cast<size_t>(raw_index);
+            }
+
+            const auto payload = SentJson(state.collector.value, payload_index);
+            const auto& field = step[2];
+
+            static const std::map<std::string, std::string> field_keys = {
+                { "type", "Type" }, { "min", "Min" }, { "max", "Max" }, { "mean", "Mean" },
+                { "first", "First" }, { "last", "Last" }, { "count", "Count" }, { "status", "Status" },
+            };
+
+            const auto key = field_keys.find(field);
+            Require(key != field_keys.end(), ("unknown bar field: " + field).c_str());
+
+            const auto actual_text = NumberFieldFromPayload(payload, key->second);
+
+            if (field == "type" || field == "count" || field == "status")
+            {
+                Require(
+                    std::stoll(actual_text) == static_cast<long long>(ToInt(step[3])),
+                    ("bar field " + field + " mismatch: expected " + step[3] + ", got " + actual_text).c_str());
+            }
+            else
+            {
+                // Tolerant numeric compare (relative 1e-9) — sidesteps double formatting
+                // differences between the C# and C++ payload texts.
+                const auto actual = std::stod(actual_text);
+                const auto expected = ToDouble(step[3]);
+                const auto tolerance = std::max(1e-12, std::abs(expected) * 1e-9);
+
+                Require(
+                    std::abs(actual - expected) <= tolerance,
+                    ("bar field " + field + " mismatch: expected " + step[3] + ", got " + actual_text).c_str());
+            }
+
+            return;
+        }
+
+        if (action == "expect_bar_open_close_aligned")
+        {
+            Require(step.size() >= 3, "expect_bar_open_close_aligned requires payload index and period");
+            const auto payload = SentJson(state.collector.value, static_cast<size_t>(ToInt(step[1])));
+            const auto period = std::stoll(step[2]);
+            const auto open = std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs"));
+            const auto close = std::stoll(NumberFieldFromPayload(payload, "CloseTimeMs"));
+
+            Require(close - open == period, "bar close - open should equal the bar period");
+            Require(open % period == 0, "bar open time should be aligned to the bar period");
+            return;
+        }
+
+        if (action == "expect_all_bars_aligned")
+        {
+            Require(step.size() >= 2, "expect_all_bars_aligned requires period");
+            const auto period = std::stoll(step[1]);
+            const auto sent_count = hsm_collector_sent_count(state.collector.value);
+            size_t bars = 0;
+
+            for (size_t index = 0; index < sent_count; ++index)
+            {
+                const auto payload = SentJson(state.collector.value, index);
+                if (!IsBarPayload(payload))
+                    continue;
+
+                ++bars;
+                const auto open = std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs"));
+                const auto close = std::stoll(NumberFieldFromPayload(payload, "CloseTimeMs"));
+                Require(close - open == period, "bar close - open should equal the bar period");
+                Require(open % period == 0, "bar open time should be aligned to the bar period");
+            }
+
+            Require(bars > 0, "expected at least one bar payload");
+            return;
+        }
+
+        if (action == "expect_bar_open_times_increasing")
+        {
+            const auto sent_count = hsm_collector_sent_count(state.collector.value);
+            long long previous_open = -1;
+            bool has_previous = false;
+
+            for (size_t index = 0; index < sent_count; ++index)
+            {
+                const auto payload = SentJson(state.collector.value, index);
+                if (!IsBarPayload(payload))
+                    continue;
+
+                const auto open = std::stoll(NumberFieldFromPayload(payload, "OpenTimeMs"));
+
+                if (has_previous)
+                    Require(previous_open < open, "bar open times should be strictly increasing");
+
+                previous_open = open;
+                has_previous = true;
+            }
+
+            return;
+        }
+
+        if (action == "expect_bar_count_total")
+        {
+            Require(step.size() >= 2, "expect_bar_count_total requires expected total");
+            const auto sent_count = hsm_collector_sent_count(state.collector.value);
+            long long total = 0;
+
+            for (size_t index = 0; index < sent_count; ++index)
+            {
+                const auto payload = SentJson(state.collector.value, index);
+                if (IsBarPayload(payload))
+                    total += std::stoll(NumberFieldFromPayload(payload, "Count"));
+            }
+
+            Require(
+                total == static_cast<long long>(ToInt(step[1])),
+                ("bar count total mismatch: expected " + step[1] + ", got " + std::to_string(total)).c_str());
+            return;
+        }
+
+        if (action == "expect_each_value_once")
+        {
+            Require(step.size() >= 3, "expect_each_value_once requires start value and count");
+            const auto start_value = ToInt(step[1]);
+            const auto count = ToInt(step[2]);
+            const auto sent_count = hsm_collector_sent_count(state.collector.value);
+
+            std::vector<long long> values;
+            for (size_t index = 0; index < sent_count; ++index)
+            {
+                const auto payload = SentJson(state.collector.value, index);
+                if (payload.find("\"Type\":1,") != std::string::npos)
+                    values.push_back(std::stoll(NumberFieldFromPayload(payload, "Value")));
+            }
+
+            Require(values.size() == static_cast<size_t>(count), "int payload count should equal the expected value count");
+
+            const std::set<long long> distinct(values.begin(), values.end());
+            Require(distinct.size() == values.size(), "values should be delivered without duplicates");
+
+            for (int value = start_value; value < start_value + count; ++value)
+                Require(distinct.count(value) == 1, ("missing value: " + std::to_string(value)).c_str());
+
             return;
         }
 
@@ -1325,7 +1744,7 @@ namespace
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
         Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int failed");
 
-        Contains(SentJson(collector.value, 0), "\"Path\":\"contract/path\"");
+        Contains(WaitForFirstPayload(collector.value), "\"Path\":\"contract/path\"");
     }
 
     void NativeSlashOnlyComputerNameIsOmittedFromPayloadPath()
@@ -1339,7 +1758,7 @@ namespace
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
         Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int failed");
 
-        Contains(SentJson(collector.value, 0), "\"Path\":\"contract/path\"");
+        Contains(WaitForFirstPayload(collector.value), "\"Path\":\"contract/path\"");
     }
 
     void NativeSlashOnlyModuleAndComputerNameAreOmittedFromPayloadPath()
@@ -1353,7 +1772,7 @@ namespace
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
         Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int failed");
 
-        Contains(SentJson(collector.value, 0), "\"Path\":\"contract/path\"");
+        Contains(WaitForFirstPayload(collector.value), "\"Path\":\"contract/path\"");
     }
 
     void NativeWhitespaceOnlyPathIsRejected()
@@ -1417,7 +1836,7 @@ namespace
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
         Require(hsm_sensor_add_string(sensor.value, value.c_str(), HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add string failed");
 
-        Contains(SentJson(collector.value, 0), "\"Value\":\"a\\u0001b\"");
+        Contains(WaitForFirstPayload(collector.value), "\"Value\":\"a\\u0001b\"");
     }
 
     void NativeJsonEscapesControlCharsInComment()
@@ -1429,7 +1848,7 @@ namespace
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
         Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, comment.c_str()) == HSM_RESULT_OK, "add int failed");
 
-        Contains(SentJson(collector.value, 0), "\"Comment\":\"bad\\u001fcomment\"");
+        Contains(WaitForFirstPayload(collector.value), "\"Comment\":\"bad\\u001fcomment\"");
     }
 
     void NativeJsonEscapesControlCharsInPath()
@@ -1441,7 +1860,7 @@ namespace
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
         Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int failed");
 
-        Contains(SentJson(collector.value, 0), "native/json/\\u0002/path");
+        Contains(WaitForFirstPayload(collector.value), "native/json/\\u0002/path");
     }
 
     void NativeJsonEscapesControlCharsInOptionsPathPrefix()
@@ -1457,7 +1876,7 @@ namespace
         Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "collector start failed");
         Require(hsm_sensor_add_int(sensor.value, 1, HSM_SENSOR_STATUS_OK, "") == HSM_RESULT_OK, "add int failed");
 
-        Contains(SentJson(collector.value, 0), "host\\u0003/module\\u0004/native/json/options");
+        Contains(WaitForFirstPayload(collector.value), "host\\u0003/module\\u0004/native/json/options");
     }
 
     void NativeDoubleNanIsRejectedAndNotSent()
@@ -1566,6 +1985,13 @@ namespace
             { "conformance_instant_mixed_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_last_value_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_enum_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_bar_int_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_bar_double_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_bar_partial_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_bar_rollover_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_queue_overflow_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_sender_retry_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_flush_contract", [](const std::string& path) { RunConformanceContract(path); } },
         };
 
         return tests;

@@ -7,6 +7,7 @@ using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -317,6 +318,129 @@ namespace HSMDataCollector.Tests
                         enumCount: int.Parse(step.Arg(4)));
                     break;
 
+                case "create_collector_with_limits":
+                    state.Sender = new RecordingSender();
+                    state.Collector = CreateCollector(
+                        state.Sender,
+                        maxQueueSize: int.Parse(step.Arg(0)),
+                        maxValuesInPackage: int.Parse(step.Arg(1)),
+                        collectPeriodMs: int.Parse(step.Arg(2)));
+                    break;
+
+                case "create_int_bar_sensor":
+                    AddSensor(state, state.IntBarSensors, state.Collector.CreateIntBarSensor(
+                        step.Arg(0),
+                        BuildConformanceBarOptions(int.Parse(step.Arg(1)), int.Parse(step.Arg(2)))));
+                    break;
+
+                case "create_double_bar_sensor":
+                    AddSensor(state, state.DoubleBarSensors, state.Collector.CreateDoubleBarSensor(
+                        step.Arg(0),
+                        BuildConformanceBarOptions(int.Parse(step.Arg(1)), int.Parse(step.Arg(2)), int.Parse(step.Arg(3)))));
+                    break;
+
+                case "add_bar_int":
+                    state.IntBarSensors[int.Parse(step.Arg(0))].AddValue(int.Parse(step.Arg(1)));
+                    break;
+
+                case "add_bar_double":
+                    state.DoubleBarSensors[int.Parse(step.Arg(0))].AddValue(ParseDouble(step.Arg(1)));
+                    break;
+
+                case "add_bar_int_sequence":
+                    AddBarIntSequence(
+                        state,
+                        barIndex: int.Parse(step.Arg(0)),
+                        count: int.Parse(step.Arg(1)),
+                        startValue: int.Parse(step.Arg(2)),
+                        valueStep: int.Parse(step.Arg(3)));
+                    break;
+
+                case "add_bar_int_parallel":
+                    await AddBarIntParallelAsync(
+                        state,
+                        barIndex: int.Parse(step.Arg(0)),
+                        workerCount: int.Parse(step.Arg(1)),
+                        valuesPerWorker: int.Parse(step.Arg(2)),
+                        startValue: int.Parse(step.Arg(3))).ConfigureAwait(false);
+                    break;
+
+                case "add_int_bar_partial":
+                    state.IntBarSensors[int.Parse(step.Arg(0))].AddPartial(
+                        min: int.Parse(step.Arg(1)),
+                        max: int.Parse(step.Arg(2)),
+                        mean: int.Parse(step.Arg(3)),
+                        first: int.Parse(step.Arg(4)),
+                        last: int.Parse(step.Arg(5)),
+                        count: int.Parse(step.Arg(6)));
+                    break;
+
+                case "add_double_bar_partial":
+                    state.DoubleBarSensors[int.Parse(step.Arg(0))].AddPartial(
+                        min: ParseDouble(step.Arg(1)),
+                        max: ParseDouble(step.Arg(2)),
+                        mean: ParseDouble(step.Arg(3)),
+                        first: ParseDouble(step.Arg(4)),
+                        last: ParseDouble(step.Arg(5)),
+                        count: int.Parse(step.Arg(6)));
+                    break;
+
+                case "sleep_ms":
+                    await Task.Delay(int.Parse(step.Arg(0))).ConfigureAwait(false);
+                    break;
+
+                case "set_sender_fail_next":
+                    state.Sender.FailNext(int.Parse(step.Arg(0)));
+                    break;
+
+                case "set_sender_hang":
+                    state.Sender.HangSends();
+                    break;
+
+                case "stop_expect_under_ms":
+                    var stopTimer = Stopwatch.StartNew();
+                    await state.Collector.Stop().ConfigureAwait(false);
+                    stopTimer.Stop();
+
+                    Assert.True(
+                        stopTimer.ElapsedMilliseconds < long.Parse(step.Arg(0)),
+                        $"Stop took {stopTimer.ElapsedMilliseconds} ms, expected under {step.Arg(0)} ms.");
+                    break;
+
+                case "expect_bar_field":
+                    ExpectBarField(state, int.Parse(step.Arg(0)), step.Arg(1), step.Arg(2));
+                    break;
+
+                case "expect_bar_open_close_aligned":
+                    ExpectBarAligned(BarAt(state, int.Parse(step.Arg(0))), long.Parse(step.Arg(1)));
+                    break;
+
+                case "expect_all_bars_aligned":
+                    ExpectAllBarsAligned(state, long.Parse(step.Arg(0)));
+                    break;
+
+                case "expect_bar_open_times_increasing":
+                    ExpectBarOpenTimesIncreasing(state);
+                    break;
+
+                case "expect_bar_count_total":
+                    Assert.Equal(
+                        int.Parse(step.Arg(0)),
+                        state.Sender.Values.OfType<BarSensorValueBase>().Sum(bar => bar.Count));
+                    break;
+
+                case "expect_sent_count_between":
+                    await ExpectSentCountBetweenAsync(
+                        state,
+                        min: int.Parse(step.Arg(0)),
+                        max: int.Parse(step.Arg(1)),
+                        timeout: TimeSpan.FromSeconds(int.Parse(step.Arg(2)))).ConfigureAwait(false);
+                    break;
+
+                case "expect_each_value_once":
+                    ExpectEachValueOnce(state, startValue: int.Parse(step.Arg(0)), count: int.Parse(step.Arg(1)));
+                    break;
+
                 default:
                     throw new InvalidOperationException($"Unknown conformance action '{step.Action}'.");
             }
@@ -328,7 +452,10 @@ namespace HSMDataCollector.Tests
             string module = "conformance-module",
             string accessKey = "conformance-key",
             string serverAddress = "https://localhost",
-            int port = 443)
+            int port = 443,
+            int maxQueueSize = 20000,
+            int maxValuesInPackage = 50,
+            int collectPeriodMs = 20)
         {
             return new DataCollector(new CollectorOptions
             {
@@ -339,13 +466,29 @@ namespace HSMDataCollector.Tests
                 ComputerName = computerName,
                 Module = module,
                 DataSender = sender,
-                MaxQueueSize = 20000,
-                MaxValuesInPackage = 50,
-                PackageCollectPeriod = TimeSpan.FromMilliseconds(20),
+                MaxQueueSize = maxQueueSize,
+                MaxValuesInPackage = maxValuesInPackage,
+                PackageCollectPeriod = TimeSpan.FromMilliseconds(collectPeriodMs),
                 RequestTimeout = TimeSpan.FromSeconds(1),
                 ExceptionDeduplicatorWindow = TimeSpan.FromMilliseconds(100),
                 MaxDeduplicatedMessages = 100,
             });
+        }
+
+        private static BarSensorOptions BuildConformanceBarOptions(int barPeriodMs, int postPeriodMs, int precision = 2)
+        {
+            // BarTickPeriod (and PostDataPeriod when post_period_ms = 0) are pinned a year out so the
+            // only bar publishes a fixture can observe are the roll-on-add inside AddValue/AddPartial
+            // and the partial-bar flush on Stop — no background CheckCurrentBar/send-loop ticks.
+            var inert = TimeSpan.FromDays(365);
+
+            return new BarSensorOptions
+            {
+                BarPeriod = TimeSpan.FromMilliseconds(barPeriodMs),
+                PostDataPeriod = postPeriodMs <= 0 ? inert : TimeSpan.FromMilliseconds(postPeriodMs),
+                BarTickPeriod = inert,
+                Precision = precision,
+            };
         }
 
         private static void CreateIntSensors(ContractState state, int count, string pathPrefix)
@@ -538,6 +681,150 @@ namespace HSMDataCollector.Tests
             }
         }
 
+        private static void AddBarIntSequence(ContractState state, int barIndex, int count, int startValue, int valueStep)
+        {
+            var sensor = state.IntBarSensors[barIndex];
+
+            for (var i = 0; i < count; i++)
+                sensor.AddValue(startValue + i * valueStep);
+        }
+
+        private static Task AddBarIntParallelAsync(ContractState state, int barIndex, int workerCount, int valuesPerWorker, int startValue)
+        {
+            var sensor = state.IntBarSensors[barIndex];
+
+            var tasks = Enumerable.Range(0, workerCount)
+                .Select(worker => Task.Run(() =>
+                {
+                    for (var valueIndex = 0; valueIndex < valuesPerWorker; valueIndex++)
+                        sensor.AddValue(startValue + worker * valuesPerWorker + valueIndex);
+                }))
+                .ToArray();
+
+            return Task.WhenAll(tasks);
+        }
+
+        private static BarSensorValueBase BarAt(ContractState state, int payloadIndex)
+        {
+            var values = state.Sender.Values;
+            var resolved = payloadIndex < 0 ? values.Count + payloadIndex : payloadIndex;
+
+            return Assert.IsAssignableFrom<BarSensorValueBase>(values[resolved]);
+        }
+
+        private static void ExpectBarField(ContractState state, int payloadIndex, string field, string expected)
+        {
+            var bar = BarAt(state, payloadIndex);
+
+            switch (field)
+            {
+                case "type":
+                    Assert.Equal(int.Parse(expected), (int)bar.Type);
+                    return;
+                case "status":
+                    Assert.Equal(int.Parse(expected), (int)bar.Status);
+                    return;
+                case "count":
+                    Assert.Equal(int.Parse(expected), bar.Count);
+                    return;
+            }
+
+            var actual = GetBarNumericField(bar, field);
+            var expectedValue = ParseDouble(expected);
+
+            // Relative tolerance sidesteps formatting differences between language harnesses
+            // (C# "R" round-trip vs C++ max-precision printing); type/count/status stay exact.
+            var tolerance = Math.Max(1e-12, Math.Abs(expectedValue) * 1e-9);
+
+            Assert.True(
+                Math.Abs(actual - expectedValue) <= tolerance,
+                $"Bar field '{field}': expected {expectedValue}, got {actual}.");
+        }
+
+        private static double GetBarNumericField(BarSensorValueBase bar, string field)
+        {
+            if (bar is BarSensorValueBase<int> intBar)
+            {
+                switch (field)
+                {
+                    case "min": return intBar.Min;
+                    case "max": return intBar.Max;
+                    case "mean": return intBar.Mean;
+                    case "first": return intBar.FirstValue ?? double.NaN;
+                    case "last": return intBar.LastValue;
+                }
+            }
+            else if (bar is BarSensorValueBase<double> doubleBar)
+            {
+                switch (field)
+                {
+                    case "min": return doubleBar.Min;
+                    case "max": return doubleBar.Max;
+                    case "mean": return doubleBar.Mean;
+                    case "first": return doubleBar.FirstValue ?? double.NaN;
+                    case "last": return doubleBar.LastValue;
+                }
+            }
+
+            throw new InvalidOperationException($"Unsupported bar field '{field}' for payload type '{bar.GetType().Name}'.");
+        }
+
+        private static long ToUnixMs(DateTime time) => (time.Ticks - 621355968000000000L) / 10000L;
+
+        private static void ExpectBarAligned(BarSensorValueBase bar, long periodMs)
+        {
+            var openMs = ToUnixMs(bar.OpenTime);
+            var closeMs = ToUnixMs(bar.CloseTime);
+
+            Assert.Equal(periodMs, closeMs - openMs);
+            Assert.Equal(0, openMs % periodMs);
+        }
+
+        private static void ExpectAllBarsAligned(ContractState state, long periodMs)
+        {
+            var bars = state.Sender.Values.OfType<BarSensorValueBase>().ToArray();
+
+            Assert.NotEmpty(bars);
+
+            foreach (var bar in bars)
+                ExpectBarAligned(bar, periodMs);
+        }
+
+        private static void ExpectBarOpenTimesIncreasing(ContractState state)
+        {
+            var bars = state.Sender.Values.OfType<BarSensorValueBase>().ToArray();
+
+            for (var i = 1; i < bars.Length; i++)
+                Assert.True(
+                    bars[i - 1].OpenTime < bars[i].OpenTime,
+                    $"Bar open times must be strictly increasing, got {bars[i - 1].OpenTime:O} then {bars[i].OpenTime:O}.");
+        }
+
+        private static async Task ExpectSentCountBetweenAsync(ContractState state, int min, int max, TimeSpan timeout)
+        {
+            Assert.True(
+                await state.Sender.WaitForAtLeastAsync(min, timeout).ConfigureAwait(false),
+                $"Expected at least {min} sent value(s), got {state.Sender.Values.Count}.");
+
+            var count = state.Sender.Values.Count;
+
+            Assert.True(count <= max, $"Expected at most {max} sent value(s), got {count}.");
+        }
+
+        private static void ExpectEachValueOnce(ContractState state, int startValue, int count)
+        {
+            var values = state.Sender.Values.OfType<IntSensorValue>().Select(value => value.Value).ToList();
+
+            Assert.Equal(count, values.Count);
+
+            var distinct = new HashSet<int>(values);
+
+            Assert.Equal(count, distinct.Count);
+
+            for (var value = startValue; value < startValue + count; value++)
+                Assert.Contains(value, distinct);
+        }
+
         private static void ExpectPayloadValueSequence(ContractState state, int startPayloadIndex, int count, int startValue)
         {
             for (var offset = 0; offset < count; offset++)
@@ -566,12 +853,58 @@ namespace HSMDataCollector.Tests
 
         private static string PayloadText(SensorValueBase value)
         {
+            if (value is BarSensorValueBase bar)
+                return BarPayloadText(bar);
+
             return "{" +
                    $"\"Type\":{(int)value.Type}," +
                    $"\"Path\":\"{EscapeJson(value.Path)}\"," +
                    $"\"Value\":{PayloadValueText(value)}," +
                    $"\"Status\":{(int)value.Status}," +
                    $"\"Comment\":\"{EscapeJson(value.Comment)}\"" +
+                   "}";
+        }
+
+        // Canonical cross-language bar payload text — field order and formatting are part of the
+        // conformance contract (the C++ harness emits the same shape).
+        private static string BarPayloadText(BarSensorValueBase bar)
+        {
+            string min, max, mean, first, last;
+
+            if (bar is BarSensorValueBase<int> intBar)
+            {
+                min = intBar.Min.ToString(CultureInfo.InvariantCulture);
+                max = intBar.Max.ToString(CultureInfo.InvariantCulture);
+                mean = intBar.Mean.ToString(CultureInfo.InvariantCulture);
+                first = intBar.FirstValue?.ToString(CultureInfo.InvariantCulture) ?? "null";
+                last = intBar.LastValue.ToString(CultureInfo.InvariantCulture);
+            }
+            else if (bar is BarSensorValueBase<double> doubleBar)
+            {
+                min = doubleBar.Min.ToString("R", CultureInfo.InvariantCulture);
+                max = doubleBar.Max.ToString("R", CultureInfo.InvariantCulture);
+                mean = doubleBar.Mean.ToString("R", CultureInfo.InvariantCulture);
+                first = doubleBar.FirstValue?.ToString("R", CultureInfo.InvariantCulture) ?? "null";
+                last = doubleBar.LastValue.ToString("R", CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                throw new InvalidOperationException($"Unsupported conformance bar payload type '{bar.GetType().FullName}'.");
+            }
+
+            return "{" +
+                   $"\"Type\":{(int)bar.Type}," +
+                   $"\"Path\":\"{EscapeJson(bar.Path)}\"," +
+                   $"\"Min\":{min}," +
+                   $"\"Max\":{max}," +
+                   $"\"Mean\":{mean}," +
+                   $"\"First\":{first}," +
+                   $"\"Last\":{last}," +
+                   $"\"Count\":{bar.Count}," +
+                   $"\"OpenTimeMs\":{ToUnixMs(bar.OpenTime)}," +
+                   $"\"CloseTimeMs\":{ToUnixMs(bar.CloseTime)}," +
+                   $"\"Status\":{(int)bar.Status}," +
+                   $"\"Comment\":\"{EscapeJson(bar.Comment)}\"" +
                    "}";
         }
 
@@ -778,6 +1111,10 @@ namespace HSMDataCollector.Tests
             public List<IInstantValueSensor<string>> StringSensors { get; } = new List<IInstantValueSensor<string>>();
 
             public List<IInstantValueSensor<int>> EnumSensors { get; } = new List<IInstantValueSensor<int>>();
+
+            public List<IBarSensor<int>> IntBarSensors { get; } = new List<IBarSensor<int>>();
+
+            public List<IBarSensor<double>> DoubleBarSensors { get; } = new List<IBarSensor<double>>();
         }
 
         private sealed class RecordingSender : IDataSender
@@ -795,12 +1132,33 @@ namespace HSMDataCollector.Tests
 
             private readonly List<SensorValueBase> _values = new List<SensorValueBase>();
 
+            private int _failNext;
+
+            private int _hangSends;
+
             public void Dispose() { }
+
+            // Each charged token makes one subsequent data-send attempt throw BEFORE anything is
+            // recorded — the queue's re-enqueue/retry loop is what's under test. Priority sends do
+            // not consume tokens. Failure must be an exception: the dispatch layer treats a default
+            // PackageSendingInfo (Error == null) as success.
+            public void FailNext(int count) => Interlocked.Add(ref _failNext, count);
+
+            // Models a dead/black-holed transport: every data send blocks until the caller's
+            // cancellation token fires (like the real HTTP client against an unreachable server).
+            // Nothing is recorded — the bounded stop must give up on these sends, not wait them out.
+            public void HangSends() => Volatile.Write(ref _hangSends, 1);
 
             public ValueTask<ConnectionResult> TestConnectionAsync() => new ValueTask<ConnectionResult>(ConnectionResult.Ok);
 
-            public ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
+            public async ValueTask<PackageSendingInfo> SendDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
             {
+                if (Volatile.Read(ref _hangSends) == 1)
+                    await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+
+                if (TryConsumeFailToken())
+                    throw new InvalidOperationException("Conformance: injected send failure.");
+
                 lock (_lock)
                     _values.AddRange(items);
 
@@ -808,7 +1166,12 @@ namespace HSMDataCollector.Tests
             }
 
             public ValueTask<PackageSendingInfo> SendPriorityDataAsync(IEnumerable<SensorValueBase> items, CancellationToken token)
-                => SendDataAsync(items, token);
+            {
+                lock (_lock)
+                    _values.AddRange(items);
+
+                return default;
+            }
 
             public ValueTask<PackageSendingInfo> SendCommandAsync(IEnumerable<CommandRequestBase> commands, CancellationToken token) => default;
 
@@ -827,6 +1190,35 @@ namespace HSMDataCollector.Tests
                 }
 
                 return Values.Count == count;
+            }
+
+            public async Task<bool> WaitForAtLeastAsync(int count, TimeSpan timeout)
+            {
+                var stopAt = DateTime.UtcNow + timeout;
+
+                while (DateTime.UtcNow < stopAt)
+                {
+                    if (Values.Count >= count)
+                        return true;
+
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+
+                return Values.Count >= count;
+            }
+
+            private bool TryConsumeFailToken()
+            {
+                while (true)
+                {
+                    var current = Volatile.Read(ref _failNext);
+
+                    if (current <= 0)
+                        return false;
+
+                    if (Interlocked.CompareExchange(ref _failNext, current - 1, current) == current)
+                        return true;
+                }
             }
         }
     }
