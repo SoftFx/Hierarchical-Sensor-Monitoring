@@ -1,0 +1,17 @@
+# MUST-FAIL: values 0..9 are delivered but the fixture demands [0, 11) — value
+# 10 is missing. Proves expect_each_value_once detects lost values.
+meta_each_value_once_missing|create_collector
+meta_each_value_once_missing|create_int_sensor|meta/each-once/missing
+meta_each_value_once_missing|start
+meta_each_value_once_missing|add_int|0|0|Ok|v
+meta_each_value_once_missing|add_int|0|1|Ok|v
+meta_each_value_once_missing|add_int|0|2|Ok|v
+meta_each_value_once_missing|add_int|0|3|Ok|v
+meta_each_value_once_missing|add_int|0|4|Ok|v
+meta_each_value_once_missing|add_int|0|5|Ok|v
+meta_each_value_once_missing|add_int|0|6|Ok|v
+meta_each_value_once_missing|add_int|0|7|Ok|v
+meta_each_value_once_missing|add_int|0|8|Ok|v
+meta_each_value_once_missing|add_int|0|9|Ok|v
+meta_each_value_once_missing|stop
+meta_each_value_once_missing|expect_each_value_once|0|11

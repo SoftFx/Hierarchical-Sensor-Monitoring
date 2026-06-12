@@ -1,0 +1,3 @@
+# MUST-FAIL: the verb does not exist. Proves drivers fail loudly on unknown
+# actions instead of skipping them — a silently skipped assert is a fake green.
+meta_unknown_action_rejected|definitely_not_a_real_action|some-arg
