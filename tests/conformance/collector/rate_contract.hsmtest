@@ -15,7 +15,10 @@
 # - Status and comment are sticky: the last accepted increment's status/comment ride on every
 #   subsequent post until changed.
 # - Stop does NOT flush the pending sum (deliberate: a partial-window rate is alert-noise risk;
-#   data preservation at stop applies to bars, not rates).
+#   data preservation at stop applies to bars, not rates). The accumulated sum survives a
+#   stop -> start cycle and rides the immediate first post of the next run, divided by the
+#   CONFIGURED period (the restart resets the elapsed baseline, not the accumulator — mirrors
+#   C# MonitoringRateSensor.InitAsync).
 
 rate_posts_zero_when_idle|create_collector
 rate_posts_zero_when_idle|create_rate_sensor|contract/rate/idle|100
@@ -62,3 +65,14 @@ rate_stop_drops_pending_sum|add_rate|0|100|Ok|pending
 rate_stop_drops_pending_sum|stop
 rate_stop_drops_pending_sum|expect_sent_count|1
 rate_stop_drops_pending_sum|expect_all_payloads_contain|"Value":0,
+
+rate_restart_carries_pending_sum_over_configured_period|create_collector
+rate_restart_carries_pending_sum_over_configured_period|create_rate_sensor|contract/rate/restart|60000
+rate_restart_carries_pending_sum_over_configured_period|start
+rate_restart_carries_pending_sum_over_configured_period|expect_sent_count|1|5
+rate_restart_carries_pending_sum_over_configured_period|add_rate|0|100|Ok|carried
+rate_restart_carries_pending_sum_over_configured_period|stop
+rate_restart_carries_pending_sum_over_configured_period|expect_sent_count|1
+rate_restart_carries_pending_sum_over_configured_period|start
+rate_restart_carries_pending_sum_over_configured_period|expect_sent_count|2|5
+rate_restart_carries_pending_sum_over_configured_period|expect_eventually_value_above|1|5

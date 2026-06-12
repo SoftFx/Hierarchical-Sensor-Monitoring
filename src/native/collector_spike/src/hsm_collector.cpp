@@ -615,7 +615,10 @@ namespace
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
-                if (existing->second->Type() != type || existing->second->IsLastValue() != is_last_value)
+                // IsPeriodic() closes the cross-family hole: a function-int sensor also has
+                // Type == INT / is_last_value == false and must not be returned as an instant
+                // int handle (the periodic/file create paths guard symmetrically).
+                if (existing->second->Type() != type || existing->second->IsLastValue() != is_last_value || existing->second->IsPeriodic())
                 {
                     out_sensor.reset();
                     return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path is already registered with a different type.");
@@ -1350,36 +1353,51 @@ namespace
         if (!is_periodic_)
             return false;
 
-        std::lock_guard<std::mutex> guard(mutex_);
+        // The sensor lock covers only the due-check and the mutable-state snapshot. User
+        // callbacks run OUTSIDE it: a callback that re-enters the same sensor (AddRate /
+        // AddFunctionInt) must not deadlock on the non-recursive mutex, and arbitrary user
+        // code must not block concurrent AddValue calls. The callback pointers and user_data
+        // are immutable after construction, so reading them unlocked is safe.
+        std::vector<int32_t> values_snapshot;
 
-        const auto now_ms = SteadyMilliseconds();
-        if (now_ms < next_post_ms_)
-            return false;
-
-        next_post_ms_ = now_ms + post_period_ms_;
-
-        if (type_ == HSM_SENSOR_TYPE_RATE)
         {
-            const auto now = std::chrono::steady_clock::now();
+            std::lock_guard<std::mutex> guard(mutex_);
 
-            // Divide by the measured elapsed time since the previous post; the first sample
-            // falls back to the configured period (C# #1102-E2 contract).
-            double seconds = post_period_ms_ / 1000.0;
-            if (rate_has_prev_)
+            const auto now_ms = SteadyMilliseconds();
+            if (now_ms < next_post_ms_)
+                return false;
+
+            next_post_ms_ = now_ms + post_period_ms_;
+
+            if (type_ == HSM_SENSOR_TYPE_RATE)
             {
-                const auto elapsed = std::chrono::duration<double>(now - rate_prev_).count();
-                if (elapsed > 0)
-                    seconds = elapsed;
+                const auto now = std::chrono::steady_clock::now();
+
+                // Divide by the measured elapsed time since the previous post; the first sample
+                // falls back to the configured period (C# #1102-E2 contract).
+                double seconds = post_period_ms_ / 1000.0;
+                if (rate_has_prev_)
+                {
+                    const auto elapsed = std::chrono::duration<double>(now - rate_prev_).count();
+                    if (elapsed > 0)
+                        seconds = elapsed;
+                }
+
+                rate_prev_ = now;
+                rate_has_prev_ = true;
+
+                const double rate = seconds > 0 ? rate_sum_ / seconds : 0.0;
+                rate_sum_ = 0.0;
+
+                out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_RATE, DoubleJson(rate), rate_status_, rate_comment_);
+                return true;
             }
 
-            rate_prev_ = now;
-            rate_has_prev_ = true;
-
-            const double rate = seconds > 0 ? rate_sum_ / seconds : 0.0;
-            rate_sum_ = 0.0;
-
-            out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_RATE, DoubleJson(rate), rate_status_, rate_comment_);
-            return true;
+            if (int_values_function_ != nullptr)
+            {
+                // Snapshot of the sliding window — the buffer itself is NOT drained.
+                values_snapshot.assign(function_values_.begin(), function_values_.end());
+            }
         }
 
         if (int_function_ != nullptr)
@@ -1391,11 +1409,9 @@ namespace
 
         if (int_values_function_ != nullptr)
         {
-            // Snapshot of the sliding window — the buffer itself is NOT drained.
-            std::vector<int32_t> snapshot(function_values_.begin(), function_values_.end());
             const auto value = int_values_function_(
-                snapshot.empty() ? nullptr : snapshot.data(),
-                static_cast<int32_t>(snapshot.size()),
+                values_snapshot.empty() ? nullptr : values_snapshot.data(),
+                static_cast<int32_t>(values_snapshot.size()),
                 function_user_data_);
 
             out_json = NativeCollector::BuildValueJson(path_, HSM_SENSOR_TYPE_INT, std::to_string(value), HSM_SENSOR_STATUS_OK, std::string{});

@@ -41,8 +41,11 @@ typedef enum hsm_sensor_type_t
     HSM_SENSOR_TYPE_ENUM = 10
 } hsm_sensor_type_t;
 
-/* User callbacks for function sensors. Invoked on the collector's scheduler thread; they must
-   not throw across the C ABI boundary. */
+/* User callbacks for function sensors. Invoked on the collector's scheduler thread OUTSIDE any
+   collector/sensor lock (re-entering the same sensor from a callback is safe); they must not
+   throw across the C ABI boundary. LIFETIME: `user_data` must outlive the COLLECTOR, not just
+   the sensor handle — hsm_sensor_release frees only the handle, the collector keeps the sensor
+   registered and the scheduler keeps invoking the callback until the collector is destroyed. */
 typedef int32_t (*hsm_int_function_t)(void* user_data);
 typedef int32_t (*hsm_int_values_function_t)(const int32_t* values, int32_t count, void* user_data);
 
@@ -63,6 +66,8 @@ typedef struct hsm_collector_options_t
 hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_collector_t** out_collector);
 void hsm_collector_destroy(hsm_collector_t* collector);
 
+/* Lifecycle calls are NOT safe under concurrent invocation: drive Start/Stop/destroy from one
+   thread (or serialize externally) — same assumption as the managed collector's lifecycle gate. */
 hsm_result_t hsm_collector_start(hsm_collector_t* collector);
 hsm_result_t hsm_collector_stop(hsm_collector_t* collector);
 
