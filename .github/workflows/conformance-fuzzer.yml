@@ -1,0 +1,56 @@
+name: Conformance differential fuzzer
+
+# Nightly differential fuzzing of the two collector drivers (#1094, epic #1093):
+# seeded random .hsmtest fixtures run through BOTH collectors; canonical payload
+# dumps must agree byte-for-byte. Scheduled lane, not a per-PR check — divergences
+# produce a minimized repro artifact to turn into a permanent corpus fixture.
+
+on:
+  schedule:
+    - cron: '17 4 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: 'Generator seed (default: the run number)'
+        required: false
+      iterations:
+        description: 'Fixtures per run'
+        required: false
+        default: '40'
+
+jobs:
+  fuzz:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build native driver
+        run: |
+          cmake -S src/native/collector_spike -B build/native-spike
+          cmake --build build/native-spike --config Release --parallel
+
+      - name: Run differential fuzzer
+        shell: pwsh
+        run: |
+          $seed = '${{ github.event.inputs.seed }}'
+          if (-not $seed) { $seed = '${{ github.run_number }}' }
+          $iterations = '${{ github.event.inputs.iterations }}'
+          if (-not $iterations) { $iterations = '40' }
+          $binary = if ($IsWindows) { 'build/native-spike/Release/hsm_collector_spike_tests.exe' } else { 'build/native-spike/hsm_collector_spike_tests' }
+          ./scripts/fuzz-conformance.ps1 -Seed ([int]$seed) -Iterations ([int]$iterations) -NativeTestBinary $binary
+
+      - name: Upload divergence repros
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-repros-${{ matrix.os }}
+          path: tests/conformance/fuzz-repros/
+          if-no-files-found: ignore

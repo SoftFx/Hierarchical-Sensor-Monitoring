@@ -86,6 +86,33 @@ namespace HSMDataCollector.Tests
             Assert.True(detected != null, $"Must-fail fixture '{caseName}' passed — the driver is not detecting wrong expectations.");
         }
 
+        // Differential-fuzzer entry point: executes generator-produced fixtures from the
+        // directory named by HSM_CONFORMANCE_FUZZ_DIR (scripts/fuzz-conformance.ps1). When the
+        // variable is unset (normal CI/dev runs), a single empty sentinel case keeps xUnit happy.
+        [Theory]
+        [MemberData(nameof(CollectorFuzzCases))]
+        public Task Fuzz_fixture_executes(string caseName, IReadOnlyList<ContractStep> steps) =>
+            Collector_contract_matches_shared_fixture(caseName, steps);
+
+        public static IEnumerable<object[]> CollectorFuzzCases()
+        {
+            var directory = Environment.GetEnvironmentVariable("HSM_CONFORMANCE_FUZZ_DIR");
+
+            if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
+            {
+                yield return new object[] { "fuzz-disabled", (IReadOnlyList<ContractStep>)new List<ContractStep>() };
+                yield break;
+            }
+
+            foreach (var contractFile in Directory.GetFiles(directory, "*.hsmtest").OrderBy(x => x, StringComparer.Ordinal))
+            {
+                var contractName = Path.GetFileNameWithoutExtension(contractFile);
+
+                foreach (var testCase in ReadContractCases(contractFile))
+                    yield return new object[] { contractName + ":" + testCase.Key, testCase.Value };
+            }
+        }
+
         public static IEnumerable<object[]> CollectorMetaMustFailCases()
         {
             foreach (var contractFile in FindMetaContractFiles())
@@ -357,6 +384,16 @@ namespace HSMDataCollector.Tests
 
                 case "expect_payload_contains":
                     Assert.Contains(step.Arg(1), PayloadText(state.Sender.Values[int.Parse(step.Arg(0))]));
+                    break;
+
+                // Differential-fuzzer support: write every captured payload's canonical text,
+                // one per line (LF, UTF-8 no BOM) — byte-comparable with the native driver dump.
+                case "dump_payloads_to":
+                    var dumpLines = state.Sender.Values.Select(PayloadText).ToList();
+                    File.WriteAllText(
+                        ExpandTextToken(step.Arg(0)),
+                        dumpLines.Count == 0 ? string.Empty : string.Join("\n", dumpLines) + "\n",
+                        new UTF8Encoding(false));
                     break;
 
                 case "expect_registration_count":
