@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.20)
 
 project(HsmCollectorNativeSpike LANGUAGES CXX)
 
+# The collector uses std::thread/std::condition_variable; on POSIX toolchains
+# this needs an explicit pthread link (gcc without -pthread links but may
+# crash at runtime).
+find_package(Threads REQUIRED)
+
 add_library(hsm_collector_spike STATIC
     src/hsm_collector.cpp
 )
@@ -12,6 +17,8 @@ target_include_directories(hsm_collector_spike
 )
 
 target_compile_features(hsm_collector_spike PUBLIC cxx_std_17)
+
+target_link_libraries(hsm_collector_spike PUBLIC Threads::Threads)
 
 if(MSVC)
     target_compile_options(hsm_collector_spike PRIVATE /W4 /permissive-)

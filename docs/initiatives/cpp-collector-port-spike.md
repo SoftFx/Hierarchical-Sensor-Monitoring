@@ -641,6 +641,32 @@ Verification: managed conformance 156/156 (×3 repeat runs), full managed
 suite 453/453 green (9 skips pre-existing); C++ ctest 43/43;
 rate/function/file fixtures flake-screened 30 consecutive runs green.
 
+### 2026-06-12: native conformance CI lane (Windows + Linux)
+
+Until now the native driver ran only on developer machines — parity could
+regress silently on every merge. New workflow
+`.github/workflows/native-collector-conformance.yml` builds the spike and runs
+the full ctest suite (native_* regression + all 19 conformance fixtures) on
+`windows-latest` and `ubuntu-latest`, on every PR (no paths filter, same
+required-check convention as the collector lanes) and on pushes touching
+`src/native/**` / `tests/conformance/**`.
+
+First Linux run surfaced two portability gaps, both fixed:
+
+- **CRLF fixtures broke the native parser on POSIX**: `std::getline` keeps the
+  `'\r'` on Linux, corrupting the last field of every line (16 of 19 fixtures
+  failed; the 3 LF-authored ones passed). Fixed twice over: the driver strips a
+  trailing `'\r'` per line, and `.gitattributes` pins `*.hsmtest text eol=lf`
+  so the corpus is byte-identical on every platform (the managed driver and
+  Windows text-mode `ifstream` are indifferent).
+- **Missing pthread link**: the spike uses `std::thread`/`condition_variable`;
+  CMake now does `find_package(Threads REQUIRED)` and links
+  `Threads::Threads` (gcc without `-pthread` is UB-adjacent at runtime).
+
+gcc 11 `-Wall -Wextra -Wpedantic` compiles both translation units warning-free;
+all 19 fixtures + 24 regression tests pass under Linux (WSL Ubuntu 22.04) and
+43/43 under MSVC.
+
 ## Cross-Cutting Port Invariants
 
 Behavioral invariants every port must uphold that are NOT expressible as

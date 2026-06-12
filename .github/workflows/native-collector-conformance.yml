@@ -1,0 +1,46 @@
+name: Native collector conformance
+
+# Builds the native C++ collector spike and runs the shared conformance corpus
+# (tests/conformance/collector/*.hsmtest) against it via ctest, on Windows and
+# Linux. The same corpus runs against the .NET collector in collector-unit-tests
+# (CollectorConformanceTests) — together they form the parity gate of epic #1093.
+
+on:
+  push:
+    branches: [master, develop]
+    paths:
+      - 'src/native/**'
+      - 'tests/conformance/**'
+      - '.github/workflows/native-collector-conformance.yml'
+  pull_request:
+    # ready_for_review is required so tests run when a draft is marked ready
+    # (marking ready does not emit a synchronize event).
+    types: [opened, synchronize, reopened, ready_for_review]
+    # No paths filter — this lane is intended as a required check and must
+    # always report status. The build is two translation units; it is cheap.
+  workflow_dispatch:
+
+jobs:
+  native-conformance:
+    # Skip on draft PRs only. Non-PR events (push/workflow_dispatch) have no
+    # pull_request payload, so they must still run — hence the event_name guard.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S src/native/collector_spike -B build/native-spike
+
+      - name: Build
+        run: cmake --build build/native-spike --config Release --parallel
+
+      # Runs both lanes registered in the spike's CMakeLists:
+      # - native_* regression tests (C ABI / validation / JSON escaping)
+      # - conformance_* fixtures — the shared .hsmtest corpus
+      - name: Test
+        run: ctest --test-dir build/native-spike -C Release --output-on-failure
