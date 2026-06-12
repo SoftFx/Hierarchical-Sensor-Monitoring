@@ -696,6 +696,58 @@ second of scheduler stall to fake a pass (screened 20× both legs).
 Verification: managed meta 10/10 + full suite 464/464 green (9 skips
 pre-existing); MSVC ctest 53/53; gcc (WSL) meta 10/10.
 
+### 2026-06-12: #1094 wrap-up — DSL spec, parity matrix, fuzzer, mapping, E2E
+
+Closed out the remaining #1094 workstream items across six PRs (#1110 native
+CI lane, #1111 meta-suite, #1112 DSL spec + AGENTS policy, #1113
+number-format matrix, #1114 registration, #1115/#1117 differential fuzzer,
+#1116 inventory mapping + coverage script):
+
+- **DSL formalized** (`tests/conformance/README.md`): file format, text tokens,
+  canonical payload shapes, the full ~70-verb catalog, determinism/authoring
+  rules, versioning policy, driver contract, unsupported-marker mechanism.
+  AGENTS.md rule #9 makes conformance coverage a review gate.
+- **Number-format matrix**: the native serializer printed `setprecision(17)`
+  (0.1 → 0.10000000000000001) — invisible under tolerant compares. Rewrote
+  `DoubleJson` to .NET shortest-round-trip (`R`) semantics; pinned by an
+  exact-text matrix.
+- **Registration corpus**: AddOrUpdate (TTL ticks / unit / description /
+  EnumOptions, re-register on restart, immediate-while-running).
+- **Differential fuzzer**: seeded generator → both drivers → byte-compare
+  canonical dumps. Its first real run did its job — surfaced a false-positive
+  ordering divergence (bar stop-flush iterates a hash map; C# `Dictionary` vs
+  C++ `std::unordered_map`), triaged to the non-contractual inter-sensor flush
+  order and fixed the oracle (stable-sort by Path), not the collectors.
+  windows-only lane (managed driver is net48 → needs mono on Linux).
+- **Coverage mapping**: 49/261 inventory lines annotated with their owning
+  `fixture:case`, plus `scripts/conformance-coverage.ps1` that validates every
+  annotation against the corpus so the mapping can't rot.
+
+**Fake-server E2E smoke lane (#1094, .NET leg).** New
+`HSMDataCollector.IntegrationTests/.../FakeHsmServer.cs` +
+`FakeServerE2ETests.cs`: an in-process `HttpListener` Sensor API over real
+plaintext HTTP (no Docker, no TLS — `AllowPlaintextTransport`). Proves the
+real `HttpClient` stack end-to-end: the `Key`/`ClientName` auth headers and
+the serialized value reach the wire; a sensor registration arrives batched to
+`/commands`; `TestConnection` hits `/testConnection`; and an injected
+transient 503 is survived by the queue's **re-enqueue-on-non-success** path
+(the default Polly pipeline retries only exceptions, not 5xx — #1096 — but the
+package is re-enqueued and lands on a later collect cycle). 4 tests, ~3 s, no
+container. The **native leg is blocked on #1096** (the spike has no HTTP
+transport yet) — it joins this lane when the transport lands.
+
+**Clock seam (`advance_clock`) — deliberately deferred (`[decide]`).** The
+issue lists an injectable clock seam so TTL/bar-alignment scenarios avoid
+wall-clock sleeps. Assessed and deferred: it is a *production* change spanning
+`CollectorScheduler` (`Stopwatch.GetTimestamp`), `BarTimeHelper`
+(`DateTime.UtcNow`), the bar/rate sensors and the dedup window — the same
+scheduler that hosted the critical TickCount-wraparound silent-death bug —
+for **low marginal coverage**: the corpus is already deterministic without it
+(inert periods + flush-on-stop + immediate-first-post), bar alignment is
+already pinned, and the collector has no local TTL expiry (TTL is server-side,
+already pinned in `registration_contract`). Revisit when a scenario genuinely
+needs controllable time (e.g. server-side TTL expiry in the E2E lane).
+
 ## Cross-Cutting Port Invariants
 
 Behavioral invariants every port must uphold that are NOT expressible as
