@@ -437,7 +437,6 @@ namespace
 
     struct ConformanceState
     {
-        CollectorHandle collector;
         std::vector<SensorHandle> sensors;
 
         struct MixedInstantSet
@@ -452,8 +451,14 @@ namespace
         std::vector<MixedInstantSet> mixed_sets;
 
         // Keeps function-sensor constants alive for the lifetime of the case (the C API stores
-        // the raw user_data pointer).
+        // the raw user_data pointer). MUST be destroyed AFTER the collector: the scheduler keeps
+        // invoking the function callback (which reads this user_data) until the collector is
+        // destroyed, so the collector is declared LAST here — members destruct in reverse
+        // declaration order, so the collector (and its scheduler-worker join) tears down first,
+        // before these constants are freed. (TSan caught the reverse order as a use-after-free.)
         std::vector<std::unique_ptr<int32_t>> function_constants;
+
+        CollectorHandle collector;
     };
 
     int32_t ConstantIntFunction(void* user_data)
