@@ -2201,17 +2201,17 @@ namespace HSMServer.Core.Cache
         {
             try
             {
-                foreach (var template in _alertTemplates.Values)
-                {
-                    if (template.IsMatch(sensor))
-                        ApplyTemplateToSensor(sensor, template);
-                }
-
                 AddSensorToCache(productModel, sensor);
 
                 _database.AddSensor(sensor.ToEntity());
 
                 ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
+
+                foreach (var template in _alertTemplates.Values)
+                {
+                    if (template.IsMatch(sensor))
+                        ApplyTemplateToSensor(sensor, template);
+                }
             }
             catch (Exception ex)
             {
