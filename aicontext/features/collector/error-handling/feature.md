@@ -58,6 +58,19 @@ DataCollector must never crash the host application. All exceptions from sensor 
 
 ---
 
+## Native port (C++)
+
+The native core (`src/native/collector`, #1095) mirrors the isolation + dedup contract:
+a swallow-all `InvokeIsolated` wrapper guards every host callback (lifecycle listeners,
+the pluggable log sink, function-sensor callbacks, the scheduler action) so a throwing
+one neither crosses the C ABI boundary nor breaks the collector; a `MessageDeduplicator`
+collapses repeated error messages within `exception_deduplicator_window_ms`
+(count-suffix flush, capacity + oldest-expiry eviction), and **zero window logs
+immediately** (the same regression-guarded contract). Error routing funnels validation
+drops and shutdown discards through the deduplicator to the C-ABI log sink. Verified by
+`native_logger_*` and `native_lifecycle_listener_exception_is_isolated` unit tests. C ABI:
+[`docs/native-collector-c-abi.md`](../../../../docs/native-collector-c-abi.md).
+
 ## Known Issues / Limitations
 
 - Deduplication is exact-string; messages differing only by timestamp/address are not grouped.
