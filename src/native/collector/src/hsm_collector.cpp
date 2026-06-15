@@ -331,8 +331,14 @@ namespace
                     continue;
                 }
 
-                const auto wait = std::chrono::milliseconds(std::min<int64_t>(due - now, kMaxWaitMs));
-                cv_.wait_for(lock, wait, [this] { return stop_; });
+                // due > now here. Guard the subtraction against overflow when due is the
+                // "nothing scheduled" sentinel (int64_max) or the (virtual) clock is far
+                // negative — just cap the sleep at kMaxWaitMs.
+                int64_t wait_ms = kMaxWaitMs;
+                if (due < (std::numeric_limits<int64_t>::max)())
+                    wait_ms = std::min<int64_t>(due - now, kMaxWaitMs);
+
+                cv_.wait_for(lock, std::chrono::milliseconds(wait_ms), [this] { return stop_; });
             }
         }
 
@@ -873,10 +879,14 @@ namespace
               max_deduplicated_messages_(options.max_deduplicated_messages > 0 ? options.max_deduplicated_messages : 1000)
         {
             // The scheduler reads time through clock_ (swappable before Start via SetClock) and
-            // wakes at the earliest periodic due-time. Lock order is task -> collector: the
-            // due/now callbacks lock the collector mutex, never the reverse.
+            // wakes at the earliest periodic due-time. Lock order is task -> collector: BOTH the
+            // now and due callbacks lock the collector mutex (never the reverse), so clock_ is
+            // never read unlocked even if a caller swaps it.
             scheduler_task_ = std::make_unique<ScheduledTask>(
-                [this] { return clock_->SteadyNowMs(); },
+                [this] {
+                    std::lock_guard<std::mutex> guard(mutex_);
+                    return clock_->SteadyNowMs();
+                },
                 [this] { return EarliestNextPostMs(); },
                 [this] { TickPeriodicSensors(); });
         }
@@ -936,6 +946,13 @@ namespace
         {
             std::lock_guard<std::mutex> op_guard(op_mutex_);
 
+            // The state flip to Starting AND the registration snapshot happen under one lock:
+            // otherwise a CreateSensor interleaving between them would be both in this snapshot
+            // and self-register via RegisterSensorLocked (Starting qualifies), double-counting
+            // its AddOrUpdate. Every start re-registers every sensor (mirrors C# InitAsync).
+            // RegistrationJson is immutable, so reading it under the collector lock keeps the
+            // one-way lock order. Map iteration order is unspecified — fixtures assert counts.
+            std::vector<std::shared_ptr<NativeSensor>> sensors_snapshot;
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
@@ -950,17 +967,7 @@ namespace
 
                 state_ = CollectorState::Starting;
                 ClearError();
-            }
 
-            NotifyLifecycle(CollectorState::Starting);
-
-            // Every start re-registers every sensor (mirrors C# InitAsync sending the
-            // AddOrUpdate command per start). RegistrationJson is immutable, so reading
-            // it under the collector lock keeps the one-way lock order. Map iteration
-            // order is unspecified — multi-sensor fixtures assert counts only.
-            std::vector<std::shared_ptr<NativeSensor>> sensors_snapshot;
-            {
-                std::lock_guard<std::mutex> guard(mutex_);
                 sensors_snapshot.reserve(sensors_.size());
                 for (const auto& sensor : sensors_)
                 {
@@ -968,6 +975,8 @@ namespace
                     registrations_.push_back(sensor.second->RegistrationJson());
                 }
             }
+
+            NotifyLifecycle(CollectorState::Starting);
 
             // Re-arm periodic sensors outside the collector lock (sensor locks are never taken
             // under it): the first post fires immediately, and a restarted rate sensor must not
@@ -2163,9 +2172,18 @@ namespace
             // Catch up by whole periods: if the worker (or a virtual-clock jump) skipped past
             // several periods, advance to the next future boundary and emit once — a fixed
             // cadence from the start anchor, no backlog of posts (managed fixed-rate schedule).
-            do
-                next_post_ms_ += post_period_ms_;
-            while (next_post_ms_ <= now_ms);
+            // The C ABI rejects a non-positive period at creation; the guard is defensive so a
+            // zero/negative period can never spin this loop forever under the sensor lock.
+            if (post_period_ms_ > 0)
+            {
+                do
+                    next_post_ms_ += post_period_ms_;
+                while (next_post_ms_ <= now_ms);
+            }
+            else
+            {
+                next_post_ms_ = now_ms + 1;
+            }
             next_post_hint_.store(next_post_ms_);
 
             if (type_ == HSM_SENSOR_TYPE_RATE)
