@@ -1921,19 +1921,23 @@ namespace
         void* log_user_data_ = nullptr;
         std::unordered_map<std::string, DedupEntry> dedup_;
 
+        // [[maybe_unused]] marks options stored to mirror CollectorOptions but consumed only by
+        // the HTTP transport (#1096), which has not landed yet — this keeps the clang
+        // -Wunused-private-field lane (under -Werror) green without reordering the members
+        // (which would trip -Wreorder against the constructor initializer list).
         std::string access_key_;
         std::string server_address_;
-        int32_t port_;
+        [[maybe_unused]] int32_t port_;
         std::string client_name_;
         std::string module_;
         std::string computer_name_;
         int32_t max_queue_size_;
         int32_t max_values_in_package_;
         int32_t collect_period_ms_;
-        int32_t request_timeout_ms_;
+        [[maybe_unused]] int32_t request_timeout_ms_;
         int32_t max_sensors_;
-        bool allow_untrusted_certificate_;
-        bool allow_plaintext_transport_;
+        [[maybe_unused]] bool allow_untrusted_certificate_;
+        [[maybe_unused]] bool allow_plaintext_transport_;
         int64_t dedup_window_ms_;
         int32_t max_deduplicated_messages_;
     };
