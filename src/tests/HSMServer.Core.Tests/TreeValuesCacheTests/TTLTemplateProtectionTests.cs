@@ -103,7 +103,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     Conditions = [],
                     Destination = new PolicyDestinationUpdate(),
                 },
-            ]);
+            ], InitiatorInfo.AsUser("test"));
 
             Assert.Single(_sensor.Policies.TTLPolicies);
             Assert.Equal(keepId, _sensor.Policies.TTLPolicies[0].Id);
@@ -130,10 +130,22 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             // Simulates applying a template that has regular policies but no TTL entries:
             // ApplyTemplateToSensor sends SensorUpdate.TTLPolicies = [] (empty list),
             // which reaches UpdateTTLs with an empty list.
-            _sensor.Policies.UpdateTTLs([]);
+            _sensor.Policies.UpdateTTLs([], InitiatorInfo.AlertTemplate);
 
             Assert.Single(_sensor.Policies.TTLPolicies);
             Assert.Equal(manualId, _sensor.Policies.TTLPolicies[0].Id);
+        }
+
+        [Fact]
+        [Trait("Category", "Template TTL protection")]
+        public void UpdateTTLs_UserInitiatedEmptyList_ClearsAllManualTTLs()
+        {
+            AddManualTTL(600_000_000);
+            AddManualTTL(3_000_000_000);
+
+            _sensor.Policies.UpdateTTLs([], InitiatorInfo.AsUser("test"));
+
+            Assert.Empty(_sensor.Policies.TTLPolicies);
         }
 
         [Fact]
@@ -170,7 +182,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     Conditions = [],
                     Destination = new PolicyDestinationUpdate(),
                 },
-            ]);
+            ], InitiatorInfo.AsUser("test"));
             return id;
         }
 
@@ -189,7 +201,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     Conditions = [],
                     Destination = new PolicyDestinationUpdate(),
                 },
-            ]);
+            ], InitiatorInfo.AlertTemplate);
             return id;
         }
 
@@ -206,7 +218,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Destination = new PolicyDestinationUpdate(),
             }).ToList();
 
-            _sensor.Policies.UpdateTTLs(updates);
+            _sensor.Policies.UpdateTTLs(updates, InitiatorInfo.AlertTemplate);
         }
     }
 }

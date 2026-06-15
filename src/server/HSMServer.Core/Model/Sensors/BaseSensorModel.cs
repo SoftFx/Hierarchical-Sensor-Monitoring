@@ -4,6 +4,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.Model.Sensors;
 using System;
@@ -144,7 +145,7 @@ namespace HSMServer.Core.Model
         public Task<List<BaseValue>> GetHistoryData(SensorHistoryRequest request) => ReadDataFromDb?.Invoke(Id, request).AsTask() ?? Task.FromResult(new List<BaseValue>());
 
 
-        protected override void UpdateTTLs(List<PolicyUpdate> updates) => Policies.UpdateTTLs(updates);
+        protected override void UpdateTTLs(List<PolicyUpdate> updates, InitiatorInfo initiator) => Policies.UpdateTTLs(updates, initiator);
 
         internal abstract void Revalidate();
 
