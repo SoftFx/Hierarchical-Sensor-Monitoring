@@ -18,6 +18,12 @@
 #include <utility>
 #include <vector>
 
+// Test-only seam (defined in hsm_collector.cpp, deliberately not in the public header): drive
+// the scheduler's injectable clock from the native unit tests (issue #1095 §13).
+extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms);
+extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, int64_t delta_ms);
+extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message);
+
 namespace
 {
     void Require(bool condition, const char* message)
@@ -2488,9 +2494,110 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
     }
 
+    void NativeSchedulerClockSeamDrivesPeriodicPosts()
+    {
+        auto collector = CreateCollector();
+        // Install a virtual clock BEFORE start so both the scheduler wait and the sensor
+        // due-checks read it (issue #1095 §13 injectable clock seam).
+        hsm_collector_test_install_manual_clock(collector.value, 1000000);
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_create_function_int_sensor(
+                collector.value, "seam/func", 100, [](void*) -> int32_t { return 7; }, nullptr, &sensor) == HSM_RESULT_OK,
+            "create function sensor failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // The first post fires immediately on start (next_post == clock base).
+        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "first periodic post should fire immediately on start");
+        const auto first = hsm_collector_sent_count(collector.value);
+
+        // Real time passing must NOT advance the virtual clock: no further posts appear.
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        Require(hsm_collector_sent_count(collector.value) == first, "frozen virtual clock: real time must not drive posts");
+
+        // Advancing virtual time past one period makes exactly one more post due.
+        hsm_collector_test_advance_clock_ms(collector.value, 150);
+        Require(
+            WaitForSentCountAtLeast(collector.value, first + 1, 2000),
+            "advancing the virtual clock should drive the next post");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+
+    void NativeSchedulerOnErrorIsolatesThrowingCallback()
+    {
+        auto collector = CreateCollector();
+        // A function sensor whose callback throws must not kill the scheduler loop; a second
+        // healthy function sensor must keep posting (onError contract, issue #1095 §13).
+        hsm_sensor_t* boom = nullptr;
+        hsm_sensor_t* ok = nullptr;
+        Require(
+            hsm_collector_create_function_int_sensor(
+                collector.value, "sched/boom", 20, [](void*) -> int32_t { throw std::runtime_error("boom"); }, nullptr,
+                &boom) == HSM_RESULT_OK,
+            "create throwing sensor failed");
+        Require(
+            hsm_collector_create_function_int_sensor(
+                collector.value, "sched/ok", 20, [](void*) -> int32_t { return 1; }, nullptr, &ok) == HSM_RESULT_OK,
+            "create healthy sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(
+            WaitForSentCountAtLeast(collector.value, 3, 3000),
+            "healthy sensor must keep posting despite a throwing callback on every tick");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(boom);
+        hsm_sensor_release(ok);
+    }
+
+    void NativeLoggerDeduplicatesRepeatedErrorsWithinWindow()
+    {
+        std::vector<std::string> logs;
+        auto options = TestOptions();
+        options.exception_deduplicator_window_ms = 3600000; // 1 h: nothing expires during the test
+        auto collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t, const char* message, void* ud) {
+                static_cast<std::vector<std::string>*>(ud)->emplace_back(message);
+            },
+            &logs);
+
+        for (int i = 0; i < 5; ++i)
+            hsm_collector_test_log_error(collector.value, "disk full");
+
+        Require(logs.size() == 1, "repeated errors within the window must collapse to a single log line");
+        Require(logs[0] == "disk full", "the first occurrence is logged verbatim");
+    }
+
+    void NativeLoggerZeroWindowLogsEveryError()
+    {
+        std::vector<std::string> logs;
+        auto options = TestOptions();
+        options.exception_deduplicator_window_ms = 0; // log immediately, no dedup (managed zero-window contract)
+        auto collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t, const char* message, void* ud) {
+                static_cast<std::vector<std::string>*>(ud)->emplace_back(message);
+            },
+            &logs);
+
+        for (int i = 0; i < 3; ++i)
+            hsm_collector_test_log_error(collector.value, "blip");
+
+        Require(logs.size() == 3, "a zero window logs every error immediately with no deduplication");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+            { "native_logger_deduplicates_repeated_errors_within_window", [](const std::string&) { NativeLoggerDeduplicatesRepeatedErrorsWithinWindow(); } },
+            { "native_logger_zero_window_logs_every_error", [](const std::string&) { NativeLoggerZeroWindowLogsEveryError(); } },
+            { "native_scheduler_clock_seam_drives_periodic_posts", [](const std::string&) { NativeSchedulerClockSeamDrivesPeriodicPosts(); } },
+            { "native_scheduler_on_error_isolates_throwing_callback", [](const std::string&) { NativeSchedulerOnErrorIsolatesThrowingCallback(); } },
             { "native_version_matches_macro", [](const std::string&) { NativeVersionMatchesMacro(); } },
             { "native_status_tracks_lifecycle", [](const std::string&) { NativeStatusTracksLifecycle(); } },
             { "native_dispose_is_terminal_and_idempotent", [](const std::string&) { NativeDisposeIsTerminalAndIdempotent(); } },

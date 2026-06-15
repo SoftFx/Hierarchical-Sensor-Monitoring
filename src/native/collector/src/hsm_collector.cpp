@@ -11,7 +11,9 @@
 #include <deque>
 #include <exception>
 #include <iomanip>
+#include <functional>
 #include <initializer_list>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -180,6 +182,170 @@ namespace
         const auto now = std::chrono::steady_clock::now().time_since_epoch();
         return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
     }
+
+    // Injectable clock seam (issue #1095 §13). The collector reads time for periodic
+    // scheduling through this so a test can drive virtual time; the default RealClock
+    // leaves production behavior unchanged. Only the scheduler / periodic-due path is
+    // routed through it — payload timestamps and bar alignment keep the real wall clock
+    // (there are no conformance time-control verbs, by design — see the spike journal).
+    class Clock
+    {
+    public:
+        virtual ~Clock() = default;
+        virtual int64_t SteadyNowMs() const = 0;
+        virtual int64_t SystemNowMs() const = 0;
+    };
+
+    class RealClock : public Clock
+    {
+    public:
+        int64_t SteadyNowMs() const override
+        {
+            return SteadyMilliseconds();
+        }
+        int64_t SystemNowMs() const override
+        {
+            return UnixTimeMilliseconds();
+        }
+    };
+
+    class ManualClock : public Clock
+    {
+    public:
+        explicit ManualClock(int64_t steady = 0, int64_t system = 0)
+            : steady_(steady), system_(system)
+        {
+        }
+        int64_t SteadyNowMs() const override
+        {
+            return steady_.load();
+        }
+        int64_t SystemNowMs() const override
+        {
+            return system_.load();
+        }
+        void AdvanceMs(int64_t delta)
+        {
+            steady_ += delta;
+            system_ += delta;
+        }
+
+    private:
+        std::atomic<int64_t> steady_;
+        std::atomic<int64_t> system_;
+    };
+
+    // Host-callback isolation: a throwing callback may neither cross the C ABI boundary nor
+    // break the component that invoked it — lifecycle listeners, log sinks, scheduler actions
+    // and onError. overview.md "Callback exception isolation".
+    template <typename Fn>
+    void InvokeIsolated(Fn&& fn) noexcept
+    {
+        try
+        {
+            fn();
+        }
+        catch (...)
+        {
+            // Swallowed by contract.
+        }
+    }
+
+    // Single-worker periodic task — the portable ScheduledTaskHandle (issue #1095 §13).
+    // Idempotent Start/Stop; the worker sleeps until the next due time reported by the
+    // injected clock (event-driven, not a busy poll — bounded by kMaxWaitMs so a dynamic
+    // schedule change or virtual-clock jump is still picked up), runs the action with no
+    // overlap (one worker, sequential) and exception isolation, and Stop joins after at
+    // most one in-flight action (bounded wait-for-current-run).
+    class ScheduledTask
+    {
+    public:
+        // now_ms reports the current monotonic time through the collector's (swappable) clock;
+        // next_due_ms reports the next absolute due time; action is the work to run when due.
+        ScheduledTask(std::function<int64_t()> now_ms, std::function<int64_t()> next_due_ms, std::function<void()> action)
+            : now_ms_(std::move(now_ms)), next_due_ms_(std::move(next_due_ms)), action_(std::move(action))
+        {
+        }
+
+        ScheduledTask(const ScheduledTask&) = delete;
+        ScheduledTask& operator=(const ScheduledTask&) = delete;
+
+        ~ScheduledTask()
+        {
+            Stop();
+        }
+
+        void Start()
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (running_)
+                return;
+
+            stop_ = false;
+            running_ = true;
+            worker_ = std::thread([this] { Loop(); });
+        }
+
+        void Stop()
+        {
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (!running_)
+                    return;
+
+                stop_ = true;
+            }
+
+            cv_.notify_all();
+            if (worker_.joinable())
+                worker_.join();
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            running_ = false;
+        }
+
+        // Re-evaluate the schedule now (e.g. a periodic sensor was added, or virtual time
+        // advanced). Cheap and lock-free against the worker — just nudges the wait.
+        void Wake()
+        {
+            cv_.notify_all();
+        }
+
+    private:
+        static constexpr int64_t kMaxWaitMs = 1000;
+
+        void Loop()
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+
+            while (!stop_)
+            {
+                const int64_t now = now_ms_();
+                const int64_t due = next_due_ms_();
+
+                if (now >= due)
+                {
+                    lock.unlock();
+                    InvokeIsolated(action_);
+                    lock.lock();
+                    continue;
+                }
+
+                const auto wait = std::chrono::milliseconds(std::min<int64_t>(due - now, kMaxWaitMs));
+                cv_.wait_for(lock, wait, [this] { return stop_; });
+            }
+        }
+
+        std::function<int64_t()> now_ms_;
+        std::function<int64_t()> next_due_ms_;
+        std::function<void()> action_;
+
+        std::mutex mutex_;
+        std::condition_variable cv_;
+        std::thread worker_;
+        bool running_ = false;
+        bool stop_ = false;
+    };
 
     // .NET shortest round-trip ("R") double text — the canonical payload contract
     // (tests/conformance/README.md). std::to_chars produces the shortest digits, but its
@@ -579,6 +745,10 @@ namespace
               function_user_data_(function_user_data),
               function_max_cache_(max_cache_size)
         {
+            // Seed the scheduler hint so a sensor created while the collector is already
+            // running is due immediately (managed: dynamic create posts at once); pre-start
+            // sensors are re-anchored by ResetPeriodicBaseline on Start.
+            next_post_hint_.store(next_post_ms_);
         }
 
         // File sensor constructor (string-content publishing only).
@@ -623,8 +793,19 @@ namespace
         void SetRegistrationJson(std::string json) { registration_json_ = std::move(json); }
         const std::string& RegistrationJson() const { return registration_json_; }
 
+        // Periodic scheduling clock (issue #1095 §13). Set under the collector lock at
+        // registration; the periodic due-time and rate elapsed read through it so a test
+        // clock can drive cadence. Null falls back to the real monotonic clock.
+        void SetClock(std::shared_ptr<Clock> clock) { clock_ = std::move(clock); }
+
+        // Lock-free hint of the next periodic due time (steady ms) for the scheduler's wait
+        // computation; std::numeric_limits<int64_t>::max() for a non-periodic sensor.
+        int64_t NextPostHint() const { return next_post_hint_.load(); }
+
     private:
         hsm_result_t AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment);
+
+        int64_t SteadyNowMs() const { return clock_ ? clock_->SteadyNowMs() : SteadyMilliseconds(); }
 
         template <typename Accumulate>
         hsm_result_t AccumulateBar(Accumulate&& accumulate);
@@ -640,6 +821,11 @@ namespace
         std::string last_comment_;
         MonitoringBar bar_;
 
+        // Periodic scheduling clock (real by default) + lock-free next-due hint read by the
+        // scheduler without taking the sensor lock.
+        std::shared_ptr<Clock> clock_;
+        std::atomic<int64_t> next_post_hint_{ (std::numeric_limits<int64_t>::max)() };
+
         // Periodic (rate / function) state, guarded by mutex_.
         bool is_periodic_ = false;
         int64_t post_period_ms_ = 0;
@@ -647,7 +833,7 @@ namespace
         double rate_sum_ = 0.0;
         hsm_sensor_status_t rate_status_ = HSM_SENSOR_STATUS_OK;
         std::string rate_comment_;
-        std::chrono::steady_clock::time_point rate_prev_{};
+        int64_t rate_prev_ms_ = 0;
         bool rate_has_prev_ = false;
         hsm_int_function_t int_function_ = nullptr;
         hsm_int_values_function_t int_values_function_ = nullptr;
@@ -686,6 +872,52 @@ namespace
               dedup_window_ms_(options.exception_deduplicator_window_ms),
               max_deduplicated_messages_(options.max_deduplicated_messages > 0 ? options.max_deduplicated_messages : 1000)
         {
+            // The scheduler reads time through clock_ (swappable before Start via SetClock) and
+            // wakes at the earliest periodic due-time. Lock order is task -> collector: the
+            // due/now callbacks lock the collector mutex, never the reverse.
+            scheduler_task_ = std::make_unique<ScheduledTask>(
+                [this] { return clock_->SteadyNowMs(); },
+                [this] { return EarliestNextPostMs(); },
+                [this] { TickPeriodicSensors(); });
+        }
+
+        // Test-only seam (no public C ABI surface): swap the scheduling clock before Start.
+        // Existing sensors are re-pointed at it too, so a manual clock drives both the
+        // scheduler wait and the sensors' due-checks.
+        void SetClock(std::shared_ptr<Clock> clock)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            clock_ = std::move(clock);
+            for (const auto& sensor : sensors_)
+                sensor.second->SetClock(clock_);
+        }
+
+        void TestInstallManualClock(int64_t base_ms)
+        {
+            SetClock(std::make_shared<ManualClock>(base_ms, base_ms));
+        }
+
+        // Advance the installed manual clock and wake the scheduler so it re-evaluates the
+        // virtual due-time at once (no real-time wait).
+        void TestAdvanceClock(int64_t delta_ms)
+        {
+            std::shared_ptr<Clock> clock;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                clock = clock_;
+            }
+
+            if (auto* manual = dynamic_cast<ManualClock*>(clock.get()))
+                manual->AdvanceMs(delta_ms);
+
+            scheduler_task_->Wake();
+        }
+
+        // Drive the error-routing/dedup path directly (the production routes — validation
+        // drops, shutdown discards — are hard to fire deterministically from a unit test).
+        void TestLogError(const std::string& message)
+        {
+            LogError(message);
         }
 
         ~NativeCollector()
@@ -1285,21 +1517,6 @@ namespace
             return state_ != CollectorState::Stopping && state_ != CollectorState::Disposed;
         }
 
-        // Run a host-supplied callback so a throwing/crashing one can neither cross the C ABI
-        // boundary nor break the collector (lifecycle listeners, log sinks, scheduler onError).
-        template <typename Fn>
-        static void InvokeIsolated(Fn&& fn) noexcept
-        {
-            try
-            {
-                fn();
-            }
-            catch (...)
-            {
-                // Swallowed by contract — see overview.md "Callback exception isolation".
-            }
-        }
-
         // Fire a lifecycle transition to every listener, exception-isolated. Caller holds
         // op_mutex_ (never mutex_), so callbacks observe transitions in order and a listener
         // may safely read collector state — but must not re-enter Start/Stop/Dispose.
@@ -1402,10 +1619,18 @@ namespace
             const std::string& sensor_path,
             const RegistrationOptions& registration)
         {
+            sensor->SetClock(clock_);
             sensor->SetRegistrationJson(BuildRegistrationJson(sensor_path, type, registration));
 
             if (CanStartNewSensorsLocked())
+            {
                 registrations_.push_back(sensor->RegistrationJson());
+
+                // A periodic sensor created while running must post immediately: nudge the
+                // scheduler so it re-reads the due-time instead of waiting out its current sleep.
+                if (sensor->IsPeriodic())
+                    scheduler_task_->Wake();
+            }
         }
 
         // FIFO send queue. Lock discipline: `queue_mutex_` and `mutex_` are never held together —
@@ -1440,47 +1665,32 @@ namespace
 
         void StartScheduler()
         {
-            {
-                std::lock_guard<std::mutex> guard(scheduler_mutex_);
-                scheduler_stop_ = false;
-            }
-
-            scheduler_ = std::thread([this] { SchedulerLoop(); });
+            scheduler_task_->Start();
         }
 
         void StopScheduler()
         {
-            {
-                std::lock_guard<std::mutex> guard(scheduler_mutex_);
-                scheduler_stop_ = true;
-            }
-
-            scheduler_cv_.notify_all();
-
-            if (scheduler_.joinable())
-                scheduler_.join();
+            scheduler_task_->Stop();
         }
 
-        // ~10ms tick granularity; each due periodic sensor builds its post under its own lock
-        // and publishes through the Running gate. Sensor locks are taken strictly outside the
-        // collector lock (snapshot first), same one-way order as everywhere else.
-        void SchedulerLoop()
+        // Earliest next periodic due time (steady ms) across all periodic sensors; the
+        // scheduler sleeps until then instead of polling. Reads each sensor's lock-free hint,
+        // so no sensor lock is taken under the collector lock. Far future when nothing periodic.
+        int64_t EarliestNextPostMs()
         {
-            std::unique_lock<std::mutex> lock(scheduler_mutex_);
+            int64_t earliest = (std::numeric_limits<int64_t>::max)();
+            std::lock_guard<std::mutex> guard(mutex_);
+            for (const auto& sensor : sensors_)
+                if (sensor.second->IsPeriodic())
+                    earliest = std::min(earliest, sensor.second->NextPostHint());
 
-            while (!scheduler_stop_)
-            {
-                scheduler_cv_.wait_for(lock, std::chrono::milliseconds(10), [this] { return scheduler_stop_; });
-
-                if (scheduler_stop_)
-                    break;
-
-                lock.unlock();
-                TickPeriodicSensors();
-                lock.lock();
-            }
+            return earliest;
         }
 
+        // Each due periodic sensor builds its post under its own lock and publishes through the
+        // data gate. Sensor locks are taken strictly outside the collector lock (snapshot
+        // first), same one-way order as everywhere else. A throwing user function callback is
+        // isolated so it cannot kill the scheduler loop or starve the other sensors (onError).
         void TickPeriodicSensors()
         {
             std::vector<std::shared_ptr<NativeSensor>> periodic;
@@ -1494,9 +1704,11 @@ namespace
 
             for (const auto& sensor : periodic)
             {
-                std::string json;
-                if (sensor->TryBuildPeriodicJson(json))
-                    EnqueueIfRunning(std::move(json));
+                InvokeIsolated([&] {
+                    std::string json;
+                    if (sensor->TryBuildPeriodicJson(json))
+                        EnqueueIfRunning(std::move(json));
+                });
             }
         }
 
@@ -1543,16 +1755,26 @@ namespace
 
         void DrainQueueOnStop()
         {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            DispatchQueuedLocked(lock, /*clear_remainder_on_failure=*/true);
+            size_t dropped = 0;
+            {
+                std::unique_lock<std::mutex> lock(queue_mutex_);
+                dropped = DispatchQueuedLocked(lock, /*clear_remainder_on_failure=*/true);
+            }
+
+            // Error routing — shutdown discard: a bounded stop that drops pending values on a
+            // dead/failing transport reports it (logged outside the queue lock so a slow log
+            // sink cannot stall shutdown). Deduplicated like any other error.
+            if (dropped > 0)
+                LogError("Collector stop dropped " + std::to_string(dropped) + " pending value(s): transport unavailable.");
         }
 
         // Pops and sends batches of up to max_values_in_package_ until the queue is empty or a
         // send fails. The lock is dropped around the send so enqueues never wait on dispatch.
         // On failure the batch is re-enqueued at the TAIL (the C# re-enqueue contract: a retried
         // package rotates behind later packages) — or, during the stop flush, everything left is
-        // dropped so shutdown cannot hang on a failing transport.
-        void DispatchQueuedLocked(std::unique_lock<std::mutex>& lock, bool clear_remainder_on_failure)
+        // dropped so shutdown cannot hang on a failing transport. Returns the number of values
+        // dropped (only non-zero on the clear-on-failure stop path).
+        size_t DispatchQueuedLocked(std::unique_lock<std::mutex>& lock, bool clear_remainder_on_failure)
         {
             while (!queue_.empty())
             {
@@ -1574,17 +1796,19 @@ namespace
                 {
                     if (clear_remainder_on_failure)
                     {
+                        const size_t dropped = batch.size() + queue_.size();
                         queue_.clear();
-                    }
-                    else
-                    {
-                        for (auto& json : batch)
-                            queue_.push_back(std::move(json));
+                        return dropped;
                     }
 
-                    return;
+                    for (auto& json : batch)
+                        queue_.push_back(std::move(json));
+
+                    return 0;
                 }
             }
+
+            return 0;
         }
 
         bool TrySendBatch(std::vector<std::string>& batch)
@@ -1650,10 +1874,12 @@ namespace
         bool send_hang_ = false;
         bool send_cancelled_ = false;
 
-        std::mutex scheduler_mutex_;
-        std::condition_variable scheduler_cv_;
-        bool scheduler_stop_ = false;
-        std::thread scheduler_;
+        // Periodic scheduler (issue #1095 §13): a single ScheduledTask worker that sleeps
+        // until the earliest sensor due-time, read through the swappable clock seam. The
+        // clock is shared with each periodic sensor (via SetClock at registration) so a test
+        // clock drives both the wait and the sensors' due-checks.
+        std::shared_ptr<Clock> clock_ = std::make_shared<RealClock>();
+        std::unique_ptr<ScheduledTask> scheduler_task_;
 
         // Lifecycle operations (Start/Stop/Dispose) serialize on this coarse lock so a
         // dispose racing a stop joins the in-flight transition rather than duplicating
@@ -1910,7 +2136,8 @@ namespace
 
         // Immediate first post on (re)start; the rate baseline resets so the first sample of a
         // new run does not divide by the stopped gap (mirrors C# MonitoringRateSensor.InitAsync).
-        next_post_ms_ = SteadyMilliseconds();
+        next_post_ms_ = SteadyNowMs();
+        next_post_hint_.store(next_post_ms_);
         rate_has_prev_ = false;
     }
 
@@ -1929,32 +2156,32 @@ namespace
         {
             std::lock_guard<std::mutex> guard(mutex_);
 
-            const auto now_ms = SteadyMilliseconds();
+            const auto now_ms = SteadyNowMs();
             if (now_ms < next_post_ms_)
                 return false;
 
-            // Re-anchoring to the actual tick time lets the cadence drift by up to the
-            // scheduler granularity (~10ms) per post, unlike the managed fixed-rate schedule.
-            // Benign for the rate VALUE (it divides by measured elapsed, not the period); a
-            // real port that wants to match managed post timestamps should anchor to the
-            // previous due time instead.
-            next_post_ms_ = now_ms + post_period_ms_;
+            // Catch up by whole periods: if the worker (or a virtual-clock jump) skipped past
+            // several periods, advance to the next future boundary and emit once — a fixed
+            // cadence from the start anchor, no backlog of posts (managed fixed-rate schedule).
+            do
+                next_post_ms_ += post_period_ms_;
+            while (next_post_ms_ <= now_ms);
+            next_post_hint_.store(next_post_ms_);
 
             if (type_ == HSM_SENSOR_TYPE_RATE)
             {
-                const auto now = std::chrono::steady_clock::now();
-
                 // Divide by the measured elapsed time since the previous post; the first sample
-                // falls back to the configured period (C# #1102-E2 contract).
+                // falls back to the configured period (C# #1102-E2 contract). Elapsed is read
+                // through the clock seam (ms granularity).
                 double seconds = post_period_ms_ / 1000.0;
                 if (rate_has_prev_)
                 {
-                    const auto elapsed = std::chrono::duration<double>(now - rate_prev_).count();
+                    const double elapsed = (now_ms - rate_prev_ms_) / 1000.0;
                     if (elapsed > 0)
                         seconds = elapsed;
                 }
 
-                rate_prev_ = now;
+                rate_prev_ms_ = now_ms;
                 rate_has_prev_ = true;
 
                 const double rate = seconds > 0 ? rate_sum_ / seconds : 0.0;
@@ -2173,6 +2400,27 @@ hsm_result_t hsm_collector_set_logger(hsm_collector_t* collector, hsm_log_callba
 
     collector->impl->SetLogger(callback, user_data);
     return HSM_RESULT_OK;
+}
+
+// Test-only seam — deliberately NOT declared in the public header. The native unit tests
+// forward-declare these to drive the scheduler's clock without real-time sleeps (the
+// injectable clock seam, issue #1095 §13). Install before Start; advance while running.
+extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms)
+{
+    if (collector != nullptr)
+        collector->impl->TestInstallManualClock(base_ms);
+}
+
+extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, int64_t delta_ms)
+{
+    if (collector != nullptr)
+        collector->impl->TestAdvanceClock(delta_ms);
+}
+
+extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message)
+{
+    if (collector != nullptr && message != nullptr)
+        collector->impl->TestLogError(message);
 }
 
 hsm_result_t hsm_collector_create_int_sensor(

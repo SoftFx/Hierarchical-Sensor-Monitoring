@@ -157,6 +157,10 @@ set(NATIVE_REGRESSION_TESTS
     native_max_sensors_cap_rejects_beyond_limit
     native_create_rejects_negative_option_fields
     native_logger_sink_can_be_set_and_cleared
+    native_scheduler_clock_seam_drives_periodic_posts
+    native_scheduler_on_error_isolates_throwing_callback
+    native_logger_deduplicates_repeated_errors_within_window
+    native_logger_zero_window_logs_every_error
 )
 
 foreach(name IN LISTS NATIVE_REGRESSION_TESTS)
