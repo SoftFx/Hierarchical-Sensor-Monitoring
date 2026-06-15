@@ -46,9 +46,9 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal void UpdateTTLs(List<PolicyUpdate> updates)
+        internal void UpdateTTLs(List<PolicyUpdate> updates, InitiatorInfo initiator)
         {
-            if (updates == null || updates.Count == 0)
+            if (updates == null || (updates.Count == 0 && initiator == InitiatorInfo.AlertTemplate))
                 return;
 
             var updatesDict = updates
@@ -56,7 +56,8 @@ namespace HSMServer.Core.Model.Policies
                 .GroupBy(u => u.Id)
                 .ToDictionary(g => g.Key, g => g.Last());
             var newPolicyUpdates = updates.Where(u => u.Id == Guid.Empty).ToList();
-            var isTemplateInitiated = updates.Any(u => u.Initiator == InitiatorInfo.AlertTemplate);
+            var isTemplateInitiated = initiator == InitiatorInfo.AlertTemplate
+                || updates.Any(u => u.Initiator == InitiatorInfo.AlertTemplate);
 
             var journalEntries = new List<(string oldValue, TTLPolicy policy, PolicyUpdate update, bool isParent)>();
 

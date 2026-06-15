@@ -89,7 +89,7 @@ namespace HSMServer.Core.Model
 
         internal abstract bool CheckTimeout();
 
-        protected abstract void UpdateTTLs(List<PolicyUpdate> updates);
+        protected abstract void UpdateTTLs(List<PolicyUpdate> updates, InitiatorInfo initiator);
 
 
         internal BaseNodeModel AddParent(ProductModel parent)
@@ -133,7 +133,7 @@ namespace HSMServer.Core.Model
                         if (!updateIds.Contains(existing.Id.ToString()))
                             ChangeTable.TtlPolicies[existing.Id.ToString()].SetUpdate(update.Initiator);
 
-                    UpdateTTLs(update.TTLPolicies);
+                    UpdateTTLs(update.TTLPolicies, update.Initiator);
                     foreach (var ttlUpdate in update.TTLPolicies)
                         if (ttlUpdate.Id != Guid.Empty)
                             ChangeTable.TtlPolicies[ttlUpdate.Id.ToString()].SetUpdate(update.Initiator);

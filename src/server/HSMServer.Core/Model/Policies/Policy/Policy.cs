@@ -263,7 +263,7 @@ namespace HSMServer.Core.Model.Policies
             {
                 TemplateAlertId = entity.TemplateAlertId?.Length > 0 ? new Guid(entity.TemplateAlertId) : null;
             }
-            catch
+            catch (FormatException)
             {
                 TemplateAlertId = null;
             }

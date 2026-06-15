@@ -17,7 +17,7 @@ namespace HSMServer.Core.Model
 
         public const byte AnyType = 100;
 
-        private List<PathTemplateConverter> _pathConverters = [];
+        private volatile List<PathTemplateConverter> _pathConverters = [];
 
         public List<TtlEntry> TtlEntries { get; set; } = [];
 

@@ -1297,7 +1297,6 @@ namespace HSMServer.Core.Cache
             }
 
             // Remove orphaned policies (belong to this template but no longer matched).
-            // This also cleans up duplicate TemplateAlertId entries that weren't the first in their group.
             foreach (var existing in sensor.Policies.Where(p => p.TemplateId == template.Id).ToList())
             {
                 if (!matchedSensorPolicyIds.Contains(existing.Id))
@@ -1310,8 +1309,9 @@ namespace HSMServer.Core.Cache
                     sensor.Policies.RemoveTTLPolicy(existing.Id);
             }
 
-            // Apply updates
-            if (policyUpdates.Count > 0 || ttlPolicyUpdates.Count > 0)
+            // Persist changes: new/updated policies, or orphan removals
+            if (policyUpdates.Count > 0 || ttlPolicyUpdates.Count > 0 ||
+                matchedSensorPolicyIds.Count > 0 || matchedSensorTtlIds.Count > 0)
             {
                 var update = new SensorUpdate()
                 {
@@ -1325,15 +1325,6 @@ namespace HSMServer.Core.Cache
 
                 if (!string.IsNullOrEmpty(error))
                     _logger.Error($"Failed to apply template {template.Id} to sensor {sensor.Id}: {error}");
-            }
-            else if (matchedSensorPolicyIds.Count == 0 && matchedSensorTtlIds.Count == 0 &&
-                     (existingPoliciesWithId.Count > 0 || existingPoliciesWithoutId.Count > 0 ||
-                      existingTtlsWithId.Count > 0 || existingTtlsWithoutId.Count > 0))
-            {
-                // Only removals happened
-                _database.UpdateSensor(sensor.ToEntity());
-                sensor.Revalidate();
-                SensorUpdateView(sensor);
             }
         }
 
@@ -1430,15 +1421,26 @@ namespace HSMServer.Core.Cache
 
             var products = GetProducts().Where(x => x.FolderId == templateModel.FolderId);
 
-            await Parallel.ForEachAsync(products, new ParallelOptions
+            try
             {
-                MaxDegreeOfParallelism = Environment.ProcessorCount,
-                CancellationToken = token
-            }, async (product, ct) =>
+                await Parallel.ForEachAsync(products, new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = Environment.ProcessorCount,
+                    CancellationToken = token
+                }, async (product, ct) =>
+                {
+                    var request = new RemoveAlertTemplateRequest(id, product.Id, false);
+                    await ProcessRequestAsync(product.Id, request, ct);
+                });
+            }
+            catch (OperationCanceledException)
             {
-                var request = new RemoveAlertTemplateRequest(id, product.Id, false);
-                await ProcessRequestAsync(product.Id, request, ct);
-            });
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Partial failure removing template {id} from products", ex);
+            }
 
             _alertTemplates.TryRemove(id, out _);
             _database.RemoveAlertTemplate(id);

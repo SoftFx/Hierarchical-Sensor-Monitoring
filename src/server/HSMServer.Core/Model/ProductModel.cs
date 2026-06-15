@@ -2,6 +2,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -137,9 +138,9 @@ namespace HSMServer.Core.Model
         };
 
 
-        protected override void UpdateTTLs(List<PolicyUpdate> updates)
+        protected override void UpdateTTLs(List<PolicyUpdate> updates, InitiatorInfo initiator)
         {
-            Policies.UpdateTTLs(updates);
+            Policies.UpdateTTLs(updates, initiator);
         }
     }
 }
