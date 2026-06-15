@@ -46,6 +46,11 @@ namespace
         options.port = 443;
         options.module = "conformance-module";
         options.computer_name = "conformance-host";
+        // The managed package/period defaults dispatch every 15 s; the corpus needs fast
+        // dispatch, so the harness sets the small test values explicitly (matching the C#
+        // CollectorConformanceTests harness). create_collector_with_limits overrides these.
+        options.max_values_in_package = 50;
+        options.package_collect_period_ms = 20;
         return options;
     }
 

@@ -25,10 +25,52 @@ namespace
 {
     constexpr size_t MaxCommentLength = 1024;
 
+    // Full lifecycle state machine (overview.md "Lifecycle"), mirroring the managed
+    // CollectorStatus: Stopped -> Starting -> Running -> Stopping -> Stopped, and
+    // Any-except-Disposed -> Disposed (terminal). Starting/Stopping are transient —
+    // they are only observable from another thread while Start()/Stop() runs.
     enum class CollectorState
     {
         Stopped,
+        Starting,
         Running,
+        Stopping,
+        Disposed,
+    };
+
+    hsm_collector_status_t ToPublicStatus(CollectorState state)
+    {
+        switch (state)
+        {
+        case CollectorState::Stopped:
+            return HSM_COLLECTOR_STATUS_STOPPED;
+        case CollectorState::Starting:
+            return HSM_COLLECTOR_STATUS_STARTING;
+        case CollectorState::Running:
+            return HSM_COLLECTOR_STATUS_RUNNING;
+        case CollectorState::Stopping:
+            return HSM_COLLECTOR_STATUS_STOPPING;
+        case CollectorState::Disposed:
+            return HSM_COLLECTOR_STATUS_DISPOSED;
+        }
+
+        return HSM_COLLECTOR_STATUS_STOPPED;
+    }
+
+    // A registered lifecycle observer (portable ILifecycleListener). The callback is
+    // invoked exception-isolated; user_data must outlive the collector.
+    struct LifecycleListener
+    {
+        hsm_lifecycle_callback_t callback;
+        void* user_data;
+    };
+
+    // One deduplicated error message: how many occurrences have been collapsed since
+    // the last emit, and the system-clock time of that emit (for window expiry).
+    struct DedupEntry
+    {
+        int64_t suppressed;
+        int64_t last_logged_ms;
     };
 
     std::string CopyString(const char* value)
@@ -623,51 +665,76 @@ namespace
     class NativeCollector : public std::enable_shared_from_this<NativeCollector>
     {
     public:
+        // 0 selects the managed CollectorOptions default for every numeric field
+        // EXCEPT the dedup window, where 0 is a meaningful value (log immediately,
+        // no dedup) and is passed through verbatim. Negative fields are rejected
+        // before construction (hsm_collector_create validation).
         explicit NativeCollector(const hsm_collector_options_t& options)
             : access_key_(CopyString(options.access_key)),
               server_address_(CopyString(options.server_address)),
               port_(options.port),
+              client_name_(CopyString(options.client_name)),
               module_(CopyString(options.module)),
               computer_name_(CopyString(options.computer_name)),
               max_queue_size_(options.max_queue_size > 0 ? options.max_queue_size : 20000),
-              max_values_in_package_(options.max_values_in_package > 0 ? options.max_values_in_package : 50),
-              collect_period_ms_(options.package_collect_period_ms > 0 ? options.package_collect_period_ms : 20)
+              max_values_in_package_(options.max_values_in_package > 0 ? options.max_values_in_package : 1000),
+              collect_period_ms_(options.package_collect_period_ms > 0 ? options.package_collect_period_ms : 15000),
+              request_timeout_ms_(options.request_timeout_ms > 0 ? options.request_timeout_ms : 30000),
+              max_sensors_(options.max_sensors > 0 ? options.max_sensors : 100000),
+              allow_untrusted_certificate_(options.allow_untrusted_server_certificate),
+              allow_plaintext_transport_(options.allow_plaintext_transport),
+              dedup_window_ms_(options.exception_deduplicator_window_ms),
+              max_deduplicated_messages_(options.max_deduplicated_messages > 0 ? options.max_deduplicated_messages : 1000)
         {
         }
 
         ~NativeCollector()
         {
-            // Terminal teardown (destroy without Stop): only the threads are reclaimed — there
-            // is no observable place left to drain into.
+            // Terminal teardown (destroy without an explicit dispose/stop): only the
+            // threads are reclaimed — there is no observable place left to drain into.
+            // Idempotent with Dispose() via the joinable() guards.
             StopScheduler();
             StopWorker();
         }
 
+        // Start: Stopped -> Starting -> Running. Idempotent (Running/Starting -> no-op),
+        // rejected once Disposed. The op lock serializes the whole transition against
+        // Stop/Dispose so listeners observe a consistent order.
         hsm_result_t Start()
         {
-            std::vector<std::shared_ptr<NativeSensor>> sensors_snapshot;
+            std::lock_guard<std::mutex> op_guard(op_mutex_);
+
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
-                if (state_ == CollectorState::Running)
+                if (state_ == CollectorState::Disposed)
+                    return SetError(HSM_RESULT_INVALID_STATE, "Collector is disposed.");
+
+                if (state_ == CollectorState::Running || state_ == CollectorState::Starting)
                 {
                     ClearError();
                     return HSM_RESULT_OK;
                 }
 
-                state_ = CollectorState::Running;
+                state_ = CollectorState::Starting;
+                ClearError();
+            }
+
+            NotifyLifecycle(CollectorState::Starting);
+
+            // Every start re-registers every sensor (mirrors C# InitAsync sending the
+            // AddOrUpdate command per start). RegistrationJson is immutable, so reading
+            // it under the collector lock keeps the one-way lock order. Map iteration
+            // order is unspecified — multi-sensor fixtures assert counts only.
+            std::vector<std::shared_ptr<NativeSensor>> sensors_snapshot;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
                 sensors_snapshot.reserve(sensors_.size());
                 for (const auto& sensor : sensors_)
+                {
                     sensors_snapshot.push_back(sensor.second);
-
-                // Every start re-registers every sensor (mirrors C# InitAsync sending the
-                // AddOrUpdate command per start). RegistrationJson is immutable, so reading
-                // it under the collector lock keeps the one-way lock order. Map iteration
-                // order is unspecified — multi-sensor fixtures assert counts only.
-                for (const auto& sensor : sensors_)
                     registrations_.push_back(sensor.second->RegistrationJson());
-
-                ClearError();
+                }
             }
 
             // Re-arm periodic sensors outside the collector lock (sensor locks are never taken
@@ -678,26 +745,40 @@ namespace
 
             StartWorker();
             StartScheduler();
+
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                state_ = CollectorState::Running;
+            }
+
+            NotifyLifecycle(CollectorState::Running);
             return HSM_RESULT_OK;
         }
 
+        // Stop: Running -> Stopping -> Stopped. Idempotent (Stopped/Disposed -> no-op).
         hsm_result_t Stop()
         {
-            // Phase 1: flip the state so new instant values are rejected, and snapshot the
-            // sensor set. Sensor locks are taken strictly outside the collector lock (and the
-            // bar add path takes the sensor lock before calling into the collector), so the
-            // flush below must run unlocked to keep the lock order one-way.
+            std::lock_guard<std::mutex> op_guard(op_mutex_);
+            return StopCore();
+        }
+
+        // Caller holds op_mutex_. Drives the stop transition exactly once (Stopped/Disposed
+        // are no-ops), firing the Stopping/Stopped notifications around the flush+drain.
+        // Dispose reuses this so a dispose racing an in-flight Stop joins on op_mutex_ and
+        // sees Stopped here — exactly one stopped-notification, no duplicate flush.
+        hsm_result_t StopCore()
+        {
             std::vector<std::shared_ptr<NativeSensor>> sensors_snapshot;
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
-                if (state_ == CollectorState::Stopped)
+                if (state_ == CollectorState::Stopped || state_ == CollectorState::Disposed)
                 {
                     ClearError();
                     return HSM_RESULT_OK;
                 }
 
-                state_ = CollectorState::Stopped;
+                state_ = CollectorState::Stopping;
                 sensors_snapshot.reserve(sensors_.size());
                 for (const auto& sensor : sensors_)
                     sensors_snapshot.push_back(sensor.second);
@@ -705,13 +786,15 @@ namespace
                 ClearError();
             }
 
-            // Phase 1.5: stop the periodic scheduler. Posts racing the state flip are dropped by
-            // the EnqueueIfRunning gate; rate sums / function posts are deliberately NOT flushed
+            NotifyLifecycle(CollectorState::Stopping);
+
+            // Phase 1: stop the periodic scheduler. Posts racing the state flip are dropped by
+            // the CanAcceptData gate; rate sums / function posts are deliberately NOT flushed
             // (a partial-window rate is alert-noise risk — only bars preserve data at stop).
             StopScheduler();
 
             // Phase 2: flush sensors — last-value snapshots and non-empty partial bars — into
-            // the queue, bypassing the Running gate (this is the explicit stop-flush path).
+            // the queue, bypassing the data gate (this is the explicit stop-flush path).
             std::vector<std::string> flushed;
             for (const auto& sensor : sensors_snapshot)
             {
@@ -733,7 +816,71 @@ namespace
             StopWorker();
             DrainQueueOnStop();
 
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                state_ = CollectorState::Stopped;
+            }
+
+            NotifyLifecycle(CollectorState::Stopped);
             return HSM_RESULT_OK;
+        }
+
+        // Dispose: terminal, idempotent, never throws. Stops first if active (firing
+        // Stopping/Stopped, like the managed Dispose-from-active path), then Disposed.
+        void Dispose()
+        {
+            std::lock_guard<std::mutex> op_guard(op_mutex_);
+
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (state_ == CollectorState::Disposed)
+                    return;
+            }
+
+            StopCore();
+
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                state_ = CollectorState::Disposed;
+            }
+            // No listener notification for Disposed — mirrors the managed collector, which
+            // fires only ToStopping/ToStopped on dispose-from-active and nothing once stopped.
+        }
+
+        hsm_collector_status_t Status() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return ToPublicStatus(state_);
+        }
+
+        // TestConnection is callable in any state (mirrors ConnectionResult). The in-memory
+        // sender is always reachable until the HTTP transport lands (#1096); a disposed
+        // collector reports invalid state instead of a phantom healthy connection.
+        hsm_result_t TestConnection()
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (state_ == CollectorState::Disposed)
+                return SetError(HSM_RESULT_INVALID_STATE, "Collector is disposed.");
+
+            ClearError();
+            return HSM_RESULT_OK;
+        }
+
+        hsm_result_t AddLifecycleListener(hsm_lifecycle_callback_t callback, void* user_data)
+        {
+            if (callback == nullptr)
+                return HSM_RESULT_INVALID_ARGUMENT;
+
+            std::lock_guard<std::mutex> op_guard(op_mutex_);
+            lifecycle_listeners_.push_back(LifecycleListener{ callback, user_data });
+            return HSM_RESULT_OK;
+        }
+
+        void SetLogger(hsm_log_callback_t callback, void* user_data)
+        {
+            std::lock_guard<std::mutex> guard(logger_mutex_);
+            log_callback_ = callback;
+            log_user_data_ = user_data;
         }
 
         hsm_result_t CreateSensor(
@@ -750,6 +897,14 @@ namespace
             std::lock_guard<std::mutex> guard(mutex_);
             const auto sensor_path = BuildSensorPath(path);
 
+            // Registration is closed while Stopping/Disposed: reject without crashing the host
+            // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
+            if (!CanRegisterSensorsLocked())
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_INVALID_STATE, "Collector is not accepting sensor registrations.");
+            }
+
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
@@ -765,6 +920,14 @@ namespace
                 out_sensor = existing->second;
                 ClearError();
                 return HSM_RESULT_OK;
+            }
+
+            // A registered path returns its existing handle above (idempotent, not counted);
+            // a genuinely new sensor is capped at MaxSensors (managed registration cap).
+            if (sensors_.size() >= static_cast<size_t>(max_sensors_))
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_LIMIT_EXCEEDED, "MaxSensors limit reached.");
             }
 
             auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type, is_last_value, default_value_json);
@@ -789,6 +952,14 @@ namespace
             std::lock_guard<std::mutex> guard(mutex_);
             const auto sensor_path = BuildSensorPath(path);
 
+            // Registration is closed while Stopping/Disposed: reject without crashing the host
+            // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
+            if (!CanRegisterSensorsLocked())
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_INVALID_STATE, "Collector is not accepting sensor registrations.");
+            }
+
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
@@ -801,6 +972,14 @@ namespace
                 out_sensor = existing->second;
                 ClearError();
                 return HSM_RESULT_OK;
+            }
+
+            // A registered path returns its existing handle above (idempotent, not counted);
+            // a genuinely new sensor is capped at MaxSensors (managed registration cap).
+            if (sensors_.size() >= static_cast<size_t>(max_sensors_))
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_LIMIT_EXCEEDED, "MaxSensors limit reached.");
             }
 
             auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type, bar_period_ms, precision);
@@ -828,6 +1007,14 @@ namespace
             std::lock_guard<std::mutex> guard(mutex_);
             const auto sensor_path = BuildSensorPath(path);
 
+            // Registration is closed while Stopping/Disposed: reject without crashing the host
+            // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
+            if (!CanRegisterSensorsLocked())
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_INVALID_STATE, "Collector is not accepting sensor registrations.");
+            }
+
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
@@ -845,6 +1032,14 @@ namespace
                 out_sensor = existing->second;
                 ClearError();
                 return HSM_RESULT_OK;
+            }
+
+            // A registered path returns its existing handle above (idempotent, not counted);
+            // a genuinely new sensor is capped at MaxSensors (managed registration cap).
+            if (sensors_.size() >= static_cast<size_t>(max_sensors_))
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_LIMIT_EXCEEDED, "MaxSensors limit reached.");
             }
 
             auto sensor = std::make_shared<NativeSensor>(
@@ -870,6 +1065,14 @@ namespace
             std::lock_guard<std::mutex> guard(mutex_);
             const auto sensor_path = BuildSensorPath(path);
 
+            // Registration is closed while Stopping/Disposed: reject without crashing the host
+            // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
+            if (!CanRegisterSensorsLocked())
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_INVALID_STATE, "Collector is not accepting sensor registrations.");
+            }
+
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
@@ -882,6 +1085,14 @@ namespace
                 out_sensor = existing->second;
                 ClearError();
                 return HSM_RESULT_OK;
+            }
+
+            // A registered path returns its existing handle above (idempotent, not counted);
+            // a genuinely new sensor is capped at MaxSensors (managed registration cap).
+            if (sensors_.size() >= static_cast<size_t>(max_sensors_))
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_LIMIT_EXCEEDED, "MaxSensors limit reached.");
             }
 
             auto sensor = std::make_shared<NativeSensor>(
@@ -906,7 +1117,7 @@ namespace
 
                 ClearError();
 
-                if (state_ != CollectorState::Running)
+                if (!CanAcceptDataLocked())
                     return HSM_RESULT_OK;
             }
 
@@ -914,14 +1125,14 @@ namespace
             return HSM_RESULT_OK;
         }
 
-        // Bar publish path (roll-on-add): gated on Running exactly like an instant value —
+        // Bar publish path (roll-on-add): gated on CanAcceptData exactly like an instant value —
         // a bar that closes while the collector is stopped is dropped, not queued.
         void EnqueueIfRunning(std::string json)
         {
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
-                if (state_ != CollectorState::Running)
+                if (!CanAcceptDataLocked())
                     return;
             }
 
@@ -935,7 +1146,7 @@ namespace
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
-                if (state_ != CollectorState::Running)
+                if (!CanAcceptDataLocked())
                     return;
             }
 
@@ -1051,14 +1262,141 @@ namespace
             last_error_.clear();
         }
 
+        // --- Lifecycle gates (caller holds mutex_). Same phase table as the managed
+        // collector (overview.md "Data gating" / "Sensor registration"). ---
+
+        // Data may be queued while Starting/Running/Stopping (so sensors flush at stop);
+        // dropped while Stopped or Disposed.
+        bool CanAcceptDataLocked() const
+        {
+            return state_ == CollectorState::Starting || state_ == CollectorState::Running
+                || state_ == CollectorState::Stopping;
+        }
+
+        // A new sensor starts (and registers) immediately only while Starting/Running.
+        bool CanStartNewSensorsLocked() const
+        {
+            return state_ == CollectorState::Starting || state_ == CollectorState::Running;
+        }
+
+        // Registration is accepted unless shutting down or terminal (Stopping/Disposed):
+        // the union of the configuration (Stopped) and operational (Starting/Running) phases.
+        bool CanRegisterSensorsLocked() const
+        {
+            return state_ != CollectorState::Stopping && state_ != CollectorState::Disposed;
+        }
+
+        // Run a host-supplied callback so a throwing/crashing one can neither cross the C ABI
+        // boundary nor break the collector (lifecycle listeners, log sinks, scheduler onError).
+        template <typename Fn>
+        static void InvokeIsolated(Fn&& fn) noexcept
+        {
+            try
+            {
+                fn();
+            }
+            catch (...)
+            {
+                // Swallowed by contract — see overview.md "Callback exception isolation".
+            }
+        }
+
+        // Fire a lifecycle transition to every listener, exception-isolated. Caller holds
+        // op_mutex_ (never mutex_), so callbacks observe transitions in order and a listener
+        // may safely read collector state — but must not re-enter Start/Stop/Dispose.
+        void NotifyLifecycle(CollectorState state)
+        {
+            const auto status = ToPublicStatus(state);
+            for (const auto& listener : lifecycle_listeners_)
+                InvokeIsolated([&] { listener.callback(status, listener.user_data); });
+        }
+
+        void LogMessage(hsm_log_level_t level, const std::string& message)
+        {
+            hsm_log_callback_t callback = nullptr;
+            void* user_data = nullptr;
+            {
+                std::lock_guard<std::mutex> guard(logger_mutex_);
+                callback = log_callback_;
+                user_data = log_user_data_;
+            }
+
+            if (callback == nullptr)
+                return;
+
+            InvokeIsolated([&] { callback(level, message.c_str(), user_data); });
+        }
+
+        // Error routing entry point: validation drops, loop errors and shutdown discards all
+        // funnel here. Errors pass through the deduplicator (window/capacity from the options)
+        // so a storm of identical messages collapses to one log line plus a periodic
+        // "(N suppressed)" flush. A zero window logs immediately and returns (no dedup) — the
+        // managed MessageDeduplicator's zero-window contract (and the double-log bug guard).
+        void LogError(const std::string& message)
+        {
+            if (dedup_window_ms_ <= 0)
+            {
+                LogMessage(HSM_LOG_LEVEL_ERROR, message);
+                return;
+            }
+
+            const auto now_ms = UnixTimeMilliseconds();
+            bool emit = false;
+            int64_t suppressed = 0;
+            {
+                std::lock_guard<std::mutex> guard(logger_mutex_);
+
+                auto it = dedup_.find(message);
+                if (it == dedup_.end())
+                {
+                    EvictDedupIfFullLocked(now_ms);
+                    dedup_.emplace(message, DedupEntry{ 0, now_ms });
+                    emit = true;
+                }
+                else if (now_ms - it->second.last_logged_ms >= dedup_window_ms_)
+                {
+                    suppressed = it->second.suppressed;
+                    it->second.suppressed = 0;
+                    it->second.last_logged_ms = now_ms;
+                    emit = true;
+                }
+                else
+                {
+                    ++it->second.suppressed;
+                }
+            }
+
+            if (emit)
+                LogMessage(HSM_LOG_LEVEL_ERROR, suppressed > 0
+                        ? message + " (" + std::to_string(suppressed) + " suppressed)"
+                        : message);
+        }
+
+        // Caller holds logger_mutex_. Bounds the dedup map to max_deduplicated_messages_ by
+        // evicting the oldest entry (smallest last_logged_ms) — same capacity+oldest-expiry
+        // policy as the managed MessageDeduplicator.
+        void EvictDedupIfFullLocked(int64_t /*now_ms*/)
+        {
+            if (dedup_.size() < static_cast<size_t>(max_deduplicated_messages_))
+                return;
+
+            auto oldest = dedup_.begin();
+            for (auto it = dedup_.begin(); it != dedup_.end(); ++it)
+                if (it->second.last_logged_ms < oldest->second.last_logged_ms)
+                    oldest = it;
+
+            if (oldest != dedup_.end())
+                dedup_.erase(oldest);
+        }
+
         std::string BuildSensorPath(const std::string& path) const
         {
             return JoinPathParts({ computer_name_, module_, path });
         }
 
-        // Caller holds mutex_. New sensors register immediately when the collector is
-        // already running (mirrors C# InitAsync on dynamic creation); sensors created
-        // before Start are registered by the Start loop.
+        // Caller holds mutex_. New sensors register immediately when the collector can start
+        // new sensors (Starting/Running — mirrors C# InitAsync on dynamic creation); sensors
+        // created before Start are registered by the Start loop.
         void RegisterSensorLocked(
             const std::shared_ptr<NativeSensor>& sensor,
             hsm_sensor_type_t type,
@@ -1067,7 +1405,7 @@ namespace
         {
             sensor->SetRegistrationJson(BuildRegistrationJson(sensor_path, type, registration));
 
-            if (state_ == CollectorState::Running)
+            if (CanStartNewSensorsLocked())
                 registrations_.push_back(sensor->RegistrationJson());
         }
 
@@ -1318,14 +1656,33 @@ namespace
         bool scheduler_stop_ = false;
         std::thread scheduler_;
 
+        // Lifecycle operations (Start/Stop/Dispose) serialize on this coarse lock so a
+        // dispose racing a stop joins the in-flight transition rather than duplicating
+        // it. Listeners are invoked under it (after state_ flips) for consistent order.
+        std::mutex op_mutex_;
+        std::vector<LifecycleListener> lifecycle_listeners_;
+
+        // Pluggable log sink + error deduplicator (overview.md "error-handling").
+        std::mutex logger_mutex_;
+        hsm_log_callback_t log_callback_ = nullptr;
+        void* log_user_data_ = nullptr;
+        std::unordered_map<std::string, DedupEntry> dedup_;
+
         std::string access_key_;
         std::string server_address_;
         int32_t port_;
+        std::string client_name_;
         std::string module_;
         std::string computer_name_;
         int32_t max_queue_size_;
         int32_t max_values_in_package_;
         int32_t collect_period_ms_;
+        int32_t request_timeout_ms_;
+        int32_t max_sensors_;
+        bool allow_untrusted_certificate_;
+        bool allow_plaintext_transport_;
+        int64_t dedup_window_ms_;
+        int32_t max_deduplicated_messages_;
     };
 
     hsm_result_t NativeSensor::AddInt(int32_t value, hsm_sensor_status_t status, const char* comment)
@@ -1713,6 +2070,11 @@ static hsm_result_t CreateSensor(
     hsm_sensor_t** out_sensor,
     const RegistrationOptions& registration = InstantRegistrationDefaults());
 
+int32_t hsm_collector_version(void)
+{
+    return HSM_COLLECTOR_VERSION;
+}
+
 hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_collector_t** out_collector)
 {
     if (out_collector != nullptr)
@@ -1728,6 +2090,14 @@ hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_co
         return HSM_RESULT_INVALID_ARGUMENT;
 
     if (options->port <= 0 || options->port > 65535)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    // 0 means "managed default" for every numeric field (the dedup window's 0 means
+    // log-immediately); a negative value is always invalid.
+    if (options->max_queue_size < 0 || options->max_values_in_package < 0
+        || options->package_collect_period_ms < 0 || options->request_timeout_ms < 0
+        || options->max_sensors < 0 || options->exception_deduplicator_window_ms < 0
+        || options->max_deduplicated_messages < 0)
         return HSM_RESULT_INVALID_ARGUMENT;
 
     try
@@ -1763,6 +2133,50 @@ hsm_result_t hsm_collector_stop(hsm_collector_t* collector)
         return HSM_RESULT_INVALID_ARGUMENT;
 
     return collector->impl->Stop();
+}
+
+hsm_collector_status_t hsm_collector_status(const hsm_collector_t* collector)
+{
+    if (collector == nullptr)
+        return HSM_COLLECTOR_STATUS_DISPOSED;
+
+    return collector->impl->Status();
+}
+
+void hsm_collector_dispose(hsm_collector_t* collector)
+{
+    if (collector == nullptr)
+        return;
+
+    collector->impl->Dispose();
+}
+
+hsm_result_t hsm_collector_test_connection(hsm_collector_t* collector)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return collector->impl->TestConnection();
+}
+
+hsm_result_t hsm_collector_add_lifecycle_listener(
+    hsm_collector_t* collector,
+    hsm_lifecycle_callback_t callback,
+    void* user_data)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return collector->impl->AddLifecycleListener(callback, user_data);
+}
+
+hsm_result_t hsm_collector_set_logger(hsm_collector_t* collector, hsm_log_callback_t callback, void* user_data)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    collector->impl->SetLogger(callback, user_data);
+    return HSM_RESULT_OK;
 }
 
 hsm_result_t hsm_collector_create_int_sensor(
