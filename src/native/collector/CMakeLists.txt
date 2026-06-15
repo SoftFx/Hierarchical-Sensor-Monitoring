@@ -1,50 +1,87 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(HsmCollectorNativeSpike LANGUAGES CXX)
+project(HsmCollectorNative LANGUAGES CXX)
 
-# The collector uses std::thread/std::condition_variable; on POSIX toolchains
-# this needs an explicit pthread link (gcc without -pthread links but may
-# crash at runtime).
+# ---------------------------------------------------------------------------
+# Target topology (epic #1093 / issue #1095 §1 — "core lib / C ABI lib / C++
+# wrapper / tests"):
+#
+#   hsm_collector_core  STATIC    the implementation AND the extern "C" ABI
+#                                 symbols. The internal C++ core and the C
+#                                 boundary currently share one translation
+#                                 unit; splitting them into separate compiled
+#                                 libraries waits until the ABI surface settles
+#                                 across the rest of the #1095 wave (state
+#                                 machine, options struct, logging) so we do
+#                                 not edit both halves of a split five times.
+#                                 Tracked in the spike journal.
+#   hsm_collector_cpp   INTERFACE the header-only C++ wrapper (hsm_collector.hpp)
+#                                 over the C ABI; links the core.
+#   hsm_collector_tests EXE       the cross-language conformance driver plus the
+#                                 native C-ABI / validation regression tests.
+# ---------------------------------------------------------------------------
+
+# std::thread / std::condition_variable need an explicit pthread link on POSIX
+# toolchains (gcc without -pthread links but may crash at runtime).
 find_package(Threads REQUIRED)
 
-add_library(hsm_collector_spike STATIC
+# Warning flags shared by every first-party target we compile.
+function(hsm_collector_set_warnings target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endfunction()
+
+add_library(hsm_collector_core STATIC
     src/hsm_collector.cpp
 )
 
-target_include_directories(hsm_collector_spike
+target_include_directories(hsm_collector_core
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_compile_features(hsm_collector_spike PUBLIC cxx_std_17)
+target_compile_features(hsm_collector_core PUBLIC cxx_std_17)
 
-target_link_libraries(hsm_collector_spike PUBLIC Threads::Threads)
+target_link_libraries(hsm_collector_core PUBLIC Threads::Threads)
 
-if(MSVC)
-    target_compile_options(hsm_collector_spike PRIVATE /W4 /permissive-)
-else()
-    target_compile_options(hsm_collector_spike PRIVATE -Wall -Wextra -Wpedantic)
-endif()
+hsm_collector_set_warnings(hsm_collector_core)
 
-add_executable(hsm_collector_spike_tests
-    tests/hsm_collector_spike_tests.cpp
+# Header-only C++ RAII wrapper over the C ABI.
+add_library(hsm_collector_cpp INTERFACE)
+
+target_include_directories(hsm_collector_cpp
+    INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(hsm_collector_spike_tests PRIVATE hsm_collector_spike)
+target_link_libraries(hsm_collector_cpp INTERFACE hsm_collector_core)
+
+target_compile_features(hsm_collector_cpp INTERFACE cxx_std_17)
+
+add_executable(hsm_collector_tests
+    tests/hsm_collector_tests.cpp
+)
+
+target_link_libraries(hsm_collector_tests PRIVATE hsm_collector_core)
+
+hsm_collector_set_warnings(hsm_collector_tests)
 
 enable_testing()
 
 add_test(NAME native_invalid_argument_clears_out_params
-    COMMAND hsm_collector_spike_tests native_invalid_argument_clears_out_params
+    COMMAND hsm_collector_tests native_invalid_argument_clears_out_params
 )
 add_test(NAME native_add_after_collector_destroy_is_rejected
-    COMMAND hsm_collector_spike_tests native_add_after_collector_destroy_is_rejected
+    COMMAND hsm_collector_tests native_add_after_collector_destroy_is_rejected
 )
 add_test(NAME native_sent_json_failure_reports_fresh_error
-    COMMAND hsm_collector_spike_tests native_sent_json_failure_reports_fresh_error
+    COMMAND hsm_collector_tests native_sent_json_failure_reports_fresh_error
 )
 add_test(NAME native_wrapper_sent_json_missing_throws_message
-    COMMAND hsm_collector_spike_tests native_wrapper_sent_json_missing_throws_message
+    COMMAND hsm_collector_tests native_wrapper_sent_json_missing_throws_message
 )
 
 set(NATIVE_REGRESSION_TESTS
@@ -72,14 +109,14 @@ set(NATIVE_REGRESSION_TESTS
 
 foreach(name IN LISTS NATIVE_REGRESSION_TESTS)
     add_test(NAME ${name}
-        COMMAND hsm_collector_spike_tests ${name}
+        COMMAND hsm_collector_tests ${name}
     )
 endforeach()
 
 function(add_conformance_test name fixture)
     add_test(
         NAME ${name}
-        COMMAND hsm_collector_spike_tests ${name}
+        COMMAND hsm_collector_tests ${name}
                 ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/${fixture}
     )
 endfunction()
@@ -113,7 +150,7 @@ function(add_meta_conformance_test fixture)
     get_filename_component(name ${fixture} NAME_WE)
     add_test(
         NAME ${name}
-        COMMAND hsm_collector_spike_tests meta_must_fail
+        COMMAND hsm_collector_tests meta_must_fail
                 ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/conformance/collector/meta/${fixture}
     )
 endfunction()

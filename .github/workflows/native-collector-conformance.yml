@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Configure
-        run: cmake -S src/native/collector_spike -B build/native-spike
+        run: cmake -S src/native/collector -B build/native-collector
 
       - name: Build
         run: cmake --build build/native-spike --config Release --parallel

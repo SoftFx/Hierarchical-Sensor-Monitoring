@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $collectorTests = Join-Path $repoRoot "src\collector\HSMDataCollector.Tests\HSMDataCollector.Tests.csproj"
-$nativeSource = Join-Path $repoRoot "src\native\collector_spike"
+$nativeSource = Join-Path $repoRoot "src\native\collector"
 $nativeBuild = Join-Path $nativeSource "build"
 
 function Resolve-CMake {

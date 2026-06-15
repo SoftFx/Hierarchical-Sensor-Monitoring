@@ -6,7 +6,7 @@
 #include <string>
 #include <utility>
 
-namespace hsm::collector_spike
+namespace hsm::collector
 {
     class Error : public std::runtime_error
     {
