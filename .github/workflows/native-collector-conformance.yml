@@ -37,10 +37,10 @@ jobs:
         run: cmake -S src/native/collector -B build/native-collector
 
       - name: Build
-        run: cmake --build build/native-spike --config Release --parallel
+        run: cmake --build build/native-collector --config Release --parallel
 
-      # Runs both lanes registered in the spike's CMakeLists:
+      # Runs both lanes registered in the native CMakeLists:
       # - native_* regression tests (C ABI / validation / JSON escaping)
       # - conformance_* fixtures — the shared .hsmtest corpus
       - name: Test
-        run: ctest --test-dir build/native-spike -C Release --output-on-failure
+        run: ctest --test-dir build/native-collector -C Release --output-on-failure
