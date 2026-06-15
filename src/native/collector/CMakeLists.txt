@@ -153,6 +153,7 @@ set(NATIVE_REGRESSION_TESTS
     native_dispose_from_running_stops
     native_lifecycle_listener_receives_transitions
     native_lifecycle_listener_exception_is_isolated
+    native_lifecycle_listener_can_register_another_listener
     native_test_connection_reports_reachable
     native_max_sensors_cap_rejects_beyond_limit
     native_create_rejects_negative_option_fields

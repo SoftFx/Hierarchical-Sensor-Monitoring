@@ -2591,9 +2591,27 @@ namespace
         Require(logs.size() == 3, "a zero window logs every error immediately with no deduplication");
     }
 
+    void NativeLifecycleListenerCanRegisterAnotherListener()
+    {
+        auto collector = CreateCollector();
+        // A listener that registers another listener from within its callback must not deadlock
+        // on the lifecycle lock, nor corrupt the listener vector mid-iteration (snapshot-then-invoke).
+        hsm_collector_add_lifecycle_listener(
+            collector.value,
+            [](hsm_collector_status_t, void* ud) {
+                hsm_collector_add_lifecycle_listener(
+                    static_cast<hsm_collector_t*>(ud), [](hsm_collector_status_t, void*) {}, nullptr);
+            },
+            collector.value);
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start must not deadlock when a listener adds a listener");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop must not deadlock when a listener adds a listener");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+            { "native_lifecycle_listener_can_register_another_listener", [](const std::string&) { NativeLifecycleListenerCanRegisterAnotherListener(); } },
             { "native_logger_deduplicates_repeated_errors_within_window", [](const std::string&) { NativeLoggerDeduplicatesRepeatedErrorsWithinWindow(); } },
             { "native_logger_zero_window_logs_every_error", [](const std::string&) { NativeLoggerZeroWindowLogsEveryError(); } },
             { "native_scheduler_clock_seam_drives_periodic_posts", [](const std::string&) { NativeSchedulerClockSeamDrivesPeriodicPosts(); } },

@@ -1112,7 +1112,10 @@ namespace
             if (callback == nullptr)
                 return HSM_RESULT_INVALID_ARGUMENT;
 
-            std::lock_guard<std::mutex> op_guard(op_mutex_);
+            // Guarded by its own mutex (not op_mutex_): NotifyLifecycle snapshots under this
+            // lock and invokes OUTSIDE it, so a callback that registers another listener does
+            // not deadlock on a held lock, and the listener vector is never mutated mid-iteration.
+            std::lock_guard<std::mutex> guard(listeners_mutex_);
             lifecycle_listeners_.push_back(LifecycleListener{ callback, user_data });
             return HSM_RESULT_OK;
         }
@@ -1527,12 +1530,22 @@ namespace
         }
 
         // Fire a lifecycle transition to every listener, exception-isolated. Caller holds
-        // op_mutex_ (never mutex_), so callbacks observe transitions in order and a listener
-        // may safely read collector state — but must not re-enter Start/Stop/Dispose.
+        // op_mutex_ (never mutex_), so transitions are serialized and callbacks observe them in
+        // order. The listener set is snapshotted under listeners_mutex_ and the callbacks run
+        // OUTSIDE that lock, so a callback may register another listener (no self-deadlock, no
+        // mid-iteration mutation). A listener may read collector state but must not re-enter
+        // Start/Stop/Dispose (those hold op_mutex_, which this thread already holds).
         void NotifyLifecycle(CollectorState state)
         {
             const auto status = ToPublicStatus(state);
-            for (const auto& listener : lifecycle_listeners_)
+
+            std::vector<LifecycleListener> listeners;
+            {
+                std::lock_guard<std::mutex> guard(listeners_mutex_);
+                listeners = lifecycle_listeners_;
+            }
+
+            for (const auto& listener : listeners)
                 InvokeIsolated([&] { listener.callback(status, listener.user_data); });
         }
 
@@ -1554,9 +1567,11 @@ namespace
 
         // Error routing entry point: validation drops, loop errors and shutdown discards all
         // funnel here. Errors pass through the deduplicator (window/capacity from the options)
-        // so a storm of identical messages collapses to one log line plus a periodic
-        // "(N suppressed)" flush. A zero window logs immediately and returns (no dedup) — the
-        // managed MessageDeduplicator's zero-window contract (and the double-log bug guard).
+        // so a storm of identical messages collapses to one log line; the suppressed count is
+        // flushed as a "(N suppressed)" suffix on the FIRST recurrence after the window elapses
+        // (recurrence-driven, not timer-driven — a storm that simply stops leaves its trailing
+        // count unemitted; memory is still bounded by capacity eviction). A zero window logs
+        // immediately and returns (no dedup) — the managed zero-window contract / double-log guard.
         void LogError(const std::string& message)
         {
             if (dedup_window_ms_ <= 0)
@@ -1894,6 +1909,10 @@ namespace
         // dispose racing a stop joins the in-flight transition rather than duplicating
         // it. Listeners are invoked under it (after state_ flips) for consistent order.
         std::mutex op_mutex_;
+
+        // Lifecycle listeners have their own lock: NotifyLifecycle snapshots under it and
+        // invokes callbacks outside it, so a callback may add a listener without deadlocking.
+        std::mutex listeners_mutex_;
         std::vector<LifecycleListener> lifecycle_listeners_;
 
         // Pluggable log sink + error deduplicator (overview.md "error-handling").

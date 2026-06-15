@@ -67,9 +67,11 @@ typedef enum hsm_sensor_type_t
 
 /* User callbacks for function sensors. Invoked on the collector's scheduler thread OUTSIDE any
    collector/sensor lock (re-entering the same sensor from a callback is safe); they must not
-   throw across the C ABI boundary. LIFETIME: `user_data` must outlive the COLLECTOR, not just
-   the sensor handle — hsm_sensor_release frees only the handle, the collector keeps the sensor
-   registered and the scheduler keeps invoking the callback until the collector is destroyed. */
+   throw across the C ABI boundary, and must NOT call a collector lifecycle method
+   (start/stop/dispose) — doing so from the scheduler thread would join that thread on itself.
+   LIFETIME: `user_data` must outlive the COLLECTOR, not just the sensor handle —
+   hsm_sensor_release frees only the handle, the collector keeps the sensor registered and the
+   scheduler keeps invoking the callback until the collector is destroyed. */
 typedef int32_t (*hsm_int_function_t)(void* user_data);
 typedef int32_t (*hsm_int_values_function_t)(const int32_t* values, int32_t count, void* user_data);
 
@@ -145,8 +147,10 @@ hsm_result_t hsm_collector_test_connection(hsm_collector_t* collector);
    fires on the thread driving the transition, under the lifecycle lock, AFTER
    the status changes; only transitions after registration are delivered (no
    replay). A throwing/crashing callback is isolated — it can neither cross the
-   C ABI boundary nor break the collector. `user_data` must outlive the
-   collector. NULL callback unregisters nothing (returns INVALID_ARGUMENT). */
+   C ABI boundary nor break the collector. The callback may read collector state
+   and may add another listener, but must NOT call a lifecycle method
+   (start/stop/dispose) — that thread already holds the lifecycle lock.
+   `user_data` must outlive the collector. NULL callback returns INVALID_ARGUMENT. */
 typedef void (*hsm_lifecycle_callback_t)(hsm_collector_status_t status, void* user_data);
 hsm_result_t hsm_collector_add_lifecycle_listener(
     hsm_collector_t* collector,
