@@ -2326,9 +2326,181 @@ namespace
         NotContains(payload, "\"Value\":999");
     }
 
+    // --- #1095 native core: ABI version, lifecycle state machine, dispose, listeners,
+    // TestConnection, MaxSensors cap, options validation, log sink. ---
+
+    void NativeVersionMatchesMacro()
+    {
+        Require(hsm_collector_version() == HSM_COLLECTOR_VERSION, "version() must match the header macro");
+        Require(HSM_COLLECTOR_VERSION_MAJOR == 0 && HSM_COLLECTOR_VERSION_MINOR >= 2, "unexpected ABI version");
+    }
+
+    void NativeStatusTracksLifecycle()
+    {
+        auto collector = CreateCollector();
+        Require(hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_STOPPED, "fresh collector should be Stopped");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_RUNNING, "started collector should be Running");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        Require(hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_STOPPED, "stopped collector should be Stopped");
+    }
+
+    void NativeDisposeIsTerminalAndIdempotent()
+    {
+        auto collector = CreateCollector();
+        hsm_collector_dispose(collector.value);
+        Require(hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_DISPOSED, "disposed collector should be Disposed");
+        hsm_collector_dispose(collector.value);
+        Require(hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_DISPOSED, "second dispose should be a no-op");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_INVALID_STATE, "start after dispose must be rejected");
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_create_int_sensor(collector.value, "after/dispose", &sensor) == HSM_RESULT_INVALID_STATE,
+            "registration after dispose must be rejected");
+        Require(sensor == nullptr, "rejected registration must return a null handle");
+    }
+
+    void NativeDisposeFromRunningStops()
+    {
+        auto collector = CreateCollector();
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        hsm_collector_dispose(collector.value);
+        Require(
+            hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_DISPOSED,
+            "dispose from running should reach Disposed");
+    }
+
+    void NativeLifecycleListenerReceivesTransitions()
+    {
+        std::vector<hsm_collector_status_t> seen;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_add_lifecycle_listener(
+                collector.value,
+                [](hsm_collector_status_t status, void* user_data) {
+                    static_cast<std::vector<hsm_collector_status_t>*>(user_data)->push_back(status);
+                },
+                &seen) == HSM_RESULT_OK,
+            "add listener failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const std::vector<hsm_collector_status_t> expected = {
+            HSM_COLLECTOR_STATUS_STARTING,
+            HSM_COLLECTOR_STATUS_RUNNING,
+            HSM_COLLECTOR_STATUS_STOPPING,
+            HSM_COLLECTOR_STATUS_STOPPED
+        };
+        Require(seen == expected, "listener should observe Starting,Running,Stopping,Stopped in order");
+    }
+
+    void NativeLifecycleListenerExceptionIsIsolated()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_add_lifecycle_listener(
+                collector.value,
+                [](hsm_collector_status_t, void*) { throw std::runtime_error("listener boom"); },
+                nullptr) == HSM_RESULT_OK,
+            "add listener failed");
+
+        // A throwing listener must neither break the transition nor escape the ABI.
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start must survive a throwing listener");
+        Require(
+            hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_RUNNING,
+            "collector must still be Running after a throwing listener");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop must survive a throwing listener");
+    }
+
+    void NativeTestConnectionReportsReachable()
+    {
+        auto collector = CreateCollector();
+        Require(hsm_collector_test_connection(collector.value) == HSM_RESULT_OK, "test connection should be OK when stopped");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_test_connection(collector.value) == HSM_RESULT_OK, "test connection should be OK while running");
+        hsm_collector_dispose(collector.value);
+        Require(
+            hsm_collector_test_connection(collector.value) == HSM_RESULT_INVALID_STATE,
+            "test connection on a disposed collector should report invalid state");
+    }
+
+    void NativeMaxSensorsCapRejectsBeyondLimit()
+    {
+        auto options = TestOptions();
+        options.max_sensors = 2;
+        auto collector = CreateCollector(options);
+
+        hsm_sensor_t* a = nullptr;
+        hsm_sensor_t* b = nullptr;
+        hsm_sensor_t* c = nullptr;
+        Require(hsm_collector_create_int_sensor(collector.value, "cap/a", &a) == HSM_RESULT_OK, "first sensor should be accepted");
+        Require(hsm_collector_create_int_sensor(collector.value, "cap/b", &b) == HSM_RESULT_OK, "second sensor should be accepted");
+        Require(
+            hsm_collector_create_int_sensor(collector.value, "cap/c", &c) == HSM_RESULT_LIMIT_EXCEEDED,
+            "third sensor should hit the MaxSensors cap");
+        Require(c == nullptr, "rejected sensor must return a null handle");
+
+        // A duplicate path returns the existing handle and does not count against the cap.
+        hsm_sensor_t* a_again = nullptr;
+        Require(
+            hsm_collector_create_int_sensor(collector.value, "cap/a", &a_again) == HSM_RESULT_OK,
+            "duplicate path must stay idempotent under the cap");
+
+        hsm_sensor_release(a);
+        hsm_sensor_release(b);
+        hsm_sensor_release(a_again);
+    }
+
+    void NativeCreateRejectsNegativeOptionFields()
+    {
+        {
+            auto options = TestOptions();
+            options.max_queue_size = -1;
+            ExpectCollectorCreateRejected(options);
+        }
+        {
+            auto options = TestOptions();
+            options.exception_deduplicator_window_ms = -5;
+            ExpectCollectorCreateRejected(options);
+        }
+        {
+            auto options = TestOptions();
+            options.max_sensors = -10;
+            ExpectCollectorCreateRejected(options);
+        }
+    }
+
+    void NativeLoggerSinkCanBeSetAndCleared()
+    {
+        int calls = 0;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_set_logger(
+                collector.value,
+                [](hsm_log_level_t, const char*, void* user_data) { ++*static_cast<int*>(user_data); },
+                &calls) == HSM_RESULT_OK,
+            "set logger failed");
+        Require(hsm_collector_set_logger(collector.value, nullptr, nullptr) == HSM_RESULT_OK, "clearing logger failed");
+        // Lifecycle still works with a logger attached and then detached.
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+            { "native_version_matches_macro", [](const std::string&) { NativeVersionMatchesMacro(); } },
+            { "native_status_tracks_lifecycle", [](const std::string&) { NativeStatusTracksLifecycle(); } },
+            { "native_dispose_is_terminal_and_idempotent", [](const std::string&) { NativeDisposeIsTerminalAndIdempotent(); } },
+            { "native_dispose_from_running_stops", [](const std::string&) { NativeDisposeFromRunningStops(); } },
+            { "native_lifecycle_listener_receives_transitions", [](const std::string&) { NativeLifecycleListenerReceivesTransitions(); } },
+            { "native_lifecycle_listener_exception_is_isolated", [](const std::string&) { NativeLifecycleListenerExceptionIsIsolated(); } },
+            { "native_test_connection_reports_reachable", [](const std::string&) { NativeTestConnectionReportsReachable(); } },
+            { "native_max_sensors_cap_rejects_beyond_limit", [](const std::string&) { NativeMaxSensorsCapRejectsBeyondLimit(); } },
+            { "native_create_rejects_negative_option_fields", [](const std::string&) { NativeCreateRejectsNegativeOptionFields(); } },
+            { "native_logger_sink_can_be_set_and_cleared", [](const std::string&) { NativeLoggerSinkCanBeSetAndCleared(); } },
             { "native_invalid_argument_clears_out_params", [](const std::string&) { NativeInvalidArgumentClearsOutParams(); } },
             { "native_add_after_collector_destroy_is_rejected", [](const std::string&) { NativeAddAfterCollectorDestroyIsRejected(); } },
             { "native_sent_json_failure_reports_fresh_error", [](const std::string&) { NativeSentJsonFailureReportsFreshError(); } },

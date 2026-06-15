@@ -1269,8 +1269,7 @@ namespace
         // dropped while Stopped or Disposed.
         bool CanAcceptDataLocked() const
         {
-            return state_ == CollectorState::Starting || state_ == CollectorState::Running
-                || state_ == CollectorState::Stopping;
+            return state_ == CollectorState::Starting || state_ == CollectorState::Running || state_ == CollectorState::Stopping;
         }
 
         // A new sensor starts (and registers) immediately only while Starting/Running.
@@ -1368,8 +1367,8 @@ namespace
 
             if (emit)
                 LogMessage(HSM_LOG_LEVEL_ERROR, suppressed > 0
-                        ? message + " (" + std::to_string(suppressed) + " suppressed)"
-                        : message);
+                                                    ? message + " (" + std::to_string(suppressed) + " suppressed)"
+                                                    : message);
         }
 
         // Caller holds logger_mutex_. Bounds the dedup map to max_deduplicated_messages_ by
@@ -2094,10 +2093,7 @@ hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_co
 
     // 0 means "managed default" for every numeric field (the dedup window's 0 means
     // log-immediately); a negative value is always invalid.
-    if (options->max_queue_size < 0 || options->max_values_in_package < 0
-        || options->package_collect_period_ms < 0 || options->request_timeout_ms < 0
-        || options->max_sensors < 0 || options->exception_deduplicator_window_ms < 0
-        || options->max_deduplicated_messages < 0)
+    if (options->max_queue_size < 0 || options->max_values_in_package < 0 || options->package_collect_period_ms < 0 || options->request_timeout_ms < 0 || options->max_sensors < 0 || options->exception_deduplicator_window_ms < 0 || options->max_deduplicated_messages < 0)
         return HSM_RESULT_INVALID_ARGUMENT;
 
     try

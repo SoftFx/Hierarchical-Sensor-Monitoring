@@ -147,6 +147,16 @@ set(NATIVE_REGRESSION_TESTS
     native_double_negative_infinity_is_rejected_and_not_sent
     native_invalid_status_on_instant_value_is_rejected_and_not_sent
     native_invalid_status_on_last_value_preserves_previous_snapshot
+    native_version_matches_macro
+    native_status_tracks_lifecycle
+    native_dispose_is_terminal_and_idempotent
+    native_dispose_from_running_stops
+    native_lifecycle_listener_receives_transitions
+    native_lifecycle_listener_exception_is_isolated
+    native_test_connection_reports_reachable
+    native_max_sensors_cap_rejects_beyond_limit
+    native_create_rejects_negative_option_fields
+    native_logger_sink_can_be_set_and_cleared
 )
 
 foreach(name IN LISTS NATIVE_REGRESSION_TESTS)

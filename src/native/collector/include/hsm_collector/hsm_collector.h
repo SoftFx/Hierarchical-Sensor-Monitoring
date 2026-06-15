@@ -82,7 +82,7 @@ typedef int32_t (*hsm_int_values_function_t)(const int32_t* values, int32_t coun
 typedef struct hsm_collector_options_t
 {
     /* Connection. */
-    const char* access_key;    /* required, non-blank */
+    const char* access_key;     /* required, non-blank */
     const char* server_address; /* required, non-blank */
     int32_t port;               /* 1..65535 */
     const char* client_name;    /* may be NULL */
