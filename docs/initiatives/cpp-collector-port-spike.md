@@ -748,6 +748,45 @@ already pinned, and the collector has no local TTL expiry (TTL is server-side,
 already pinned in `registration_contract`). Revisit when a scenario genuinely
 needs controllable time (e.g. server-side TTL expiry in the E2E lane).
 
+### 2026-06-15: #1095 begins — graduate the spike (PR 1, project move + multi-target CMake)
+
+Workstream #1094 (the conformance corpus) is closed; #1095 lays the native
+*core* under that unchanged behavioral contract. The corpus is now the
+regression net for a wave of infrastructure PRs (state machine, dispose,
+timer-wheel scheduler, full options struct, logging/dedup, C-ABI doc).
+
+PR 1 is the mechanical, isolated move:
+
+- `src/native/collector_spike/` → **`src/native/collector/`** (hard move, no
+  alias — the spike was never a shipped artifact). Decided with the user.
+- Test source/exe `hsm_collector_spike_tests` → **`hsm_collector_tests`**;
+  namespace `hsm::collector_spike` → **`hsm::collector`**.
+- `CMakeLists.txt` restructured into the #1095 §1 target topology:
+  `hsm_collector_core` (STATIC, impl + C ABI — one TU for now), `hsm_collector_cpp`
+  (INTERFACE wrapper), `hsm_collector_tests` (driver + unit tests). The
+  core-vs-ABI *source* split is deferred until the ABI surface settles across
+  this wave (avoids editing both halves of a split five times); recorded in the
+  CMake comment.
+- External references updated: `native-collector-conformance.yml`,
+  `conformance-fuzzer.yml`, `scripts/test-conformance.ps1`,
+  `scripts/fuzz-conformance.ps1`, `tests/conformance/README.md`,
+  `aicontext/features/collector/sensors/feature.md`.
+
+No behavior change — the full ctest suite (native_* + conformance_* + meta_*)
+must pass identically on both platforms. Current verification commands:
+
+```powershell
+cmake -S src\native\collector -B src\native\collector\build -G "Visual Studio 17 2022" -A x64
+cmake --build src\native\collector\build --config Debug --parallel
+ctest --test-dir src\native\collector\build -C Debug --output-on-failure
+```
+
+**Wave decisions (with the user):** clock seam — build the injectable interface
+in PR 6 but add **no** new wall-clock fixtures (keeps the #1094 deferral's
+cost/benefit intact while satisfying the issue's structural ask); min standard
+stays **C++17**; sanitizer CI is **Linux clang ASan + TSan** required, Windows
+ASan nightly/opt-in.
+
 ## Cross-Cutting Port Invariants
 
 Behavioral invariants every port must uphold that are NOT expressible as

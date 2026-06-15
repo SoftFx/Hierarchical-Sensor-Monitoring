@@ -33,8 +33,8 @@ jobs:
 
       - name: Build native driver
         run: |
-          cmake -S src/native/collector_spike -B build/native-spike
-          cmake --build build/native-spike --config Release --parallel
+          cmake -S src/native/collector -B build/native-collector
+          cmake --build build/native-collector --config Release --parallel
 
       - name: Run differential fuzzer
         shell: pwsh
@@ -43,7 +43,7 @@ jobs:
           if (-not $seed) { $seed = '${{ github.run_number }}' }
           $iterations = '${{ github.event.inputs.iterations }}'
           if (-not $iterations) { $iterations = '40' }
-          ./scripts/fuzz-conformance.ps1 -Seed ([int]$seed) -Iterations ([int]$iterations) -NativeTestBinary 'build/native-spike/Release/hsm_collector_spike_tests.exe'
+          ./scripts/fuzz-conformance.ps1 -Seed ([int]$seed) -Iterations ([int]$iterations) -NativeTestBinary 'build/native-collector/Release/hsm_collector_tests.exe'
 
       - name: Upload divergence repros
         if: failure()

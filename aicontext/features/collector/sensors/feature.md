@@ -70,7 +70,7 @@ If `CheckCurrentBar` rolls the bar **unconditionally** after calling `SendValueA
 
 C# reference: `Sensors/MonitoringSensorBaseT.TrySendValue()` returns `bool`; `Sensors/BarSensors/BarMonitoringSensorBase.CheckCurrentBar` uses `if (TrySendValue()) BuildNewBar();`. Regression test: `CheckCurrentBar_defers_roll_when_send_guard_is_held` in `CollectorQueueShutdownTests.cs`.
 
-C++ analogue: the native spike's bar sensors (`src/native/collector_spike/src/hsm_collector.cpp`) use the second shape — `AccumulateBar` snapshots the closed bar and re-inits it atomically under the sensor lock, then publishes outside the lock (also required there to keep the collector→sensor lock order one-way). The shared aggregation math is exercised by the `bar_*_contract.hsmtest` fixtures in both languages; the guard-interleaving scenario itself stays a managed-only regression test.
+C++ analogue: the native collector's bar sensors (`src/native/collector/src/hsm_collector.cpp`) use the second shape — `AccumulateBar` snapshots the closed bar and re-inits it atomically under the sensor lock, then publishes outside the lock (also required there to keep the collector→sensor lock order one-way). The shared aggregation math is exercised by the `bar_*_contract.hsmtest` fixtures in both languages; the guard-interleaving scenario itself stays a managed-only regression test.
 
 ## Options & path model
 

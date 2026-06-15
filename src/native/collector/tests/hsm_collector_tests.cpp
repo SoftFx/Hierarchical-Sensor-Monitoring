@@ -2046,20 +2046,20 @@ namespace
 
     void NativeWrapperSentJsonMissingThrowsMessage()
     {
-        hsm::collector_spike::CollectorOptions options;
+        hsm::collector::CollectorOptions options;
         options.access_key = "test-key";
         options.server_address = "https://localhost";
         options.port = 443;
         options.module = "native-wrapper";
         options.computer_name = "native-host";
 
-        hsm::collector_spike::Collector collector(options);
+        hsm::collector::Collector collector(options);
 
         try
         {
             (void)collector.SentJson(0);
         }
-        catch (const hsm::collector_spike::Error& ex)
+        catch (const hsm::collector::Error& ex)
         {
             Require(std::string{ ex.what() }.find("not found") != std::string::npos, "wrapper error should explain missing sent value");
             return;

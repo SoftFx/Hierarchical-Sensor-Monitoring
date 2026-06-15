@@ -35,8 +35,8 @@ function Resolve-NativeBinary {
     }
 
     $candidates = @(
-        (Join-Path $repoRoot "src/native/collector_spike/build/$Configuration/hsm_collector_spike_tests.exe"),
-        (Join-Path $repoRoot "src/native/collector_spike/build/hsm_collector_spike_tests")
+        (Join-Path $repoRoot "src/native/collector/build/$Configuration/hsm_collector_tests.exe"),
+        (Join-Path $repoRoot "src/native/collector/build/hsm_collector_tests")
     )
 
     foreach ($candidate in $candidates) {

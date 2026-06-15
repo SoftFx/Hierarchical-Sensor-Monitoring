@@ -12,7 +12,7 @@ Current drivers:
 | Driver | Runner | Fixture discovery |
 |---|---|---|
 | .NET (canonical) | `src/collector/HSMDataCollector.Tests/CollectorConformanceTests.cs` | auto: globs `collector/*.hsmtest` (non-recursive) |
-| native C++ | `src/native/collector_spike/tests/hsm_collector_spike_tests.cpp` | explicit: `add_conformance_test` in the spike `CMakeLists.txt` |
+| native C++ | `src/native/collector/tests/hsm_collector_tests.cpp` | explicit: `add_conformance_test` in the native `CMakeLists.txt` |
 
 CI: `collector-unit-tests` runs the corpus through the .NET driver;
 `native-collector-conformance.yml` builds the native driver and runs it on
