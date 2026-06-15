@@ -1,9 +1,15 @@
 name: Native collector conformance
 
-# Builds the native C++ collector spike and runs the shared conformance corpus
+# Builds the native C++ collector core and runs the shared conformance corpus
 # (tests/conformance/collector/*.hsmtest) against it via ctest, on Windows and
 # Linux. The same corpus runs against the .NET collector in collector-unit-tests
 # (CollectorConformanceTests) — together they form the parity gate of epic #1093.
+#
+# Lanes (#1095 toolchain hardening):
+# - format-check : clang-format (pinned) must report no diff.
+# - native-conformance : MSVC + gcc, warnings-as-errors, the corpus via ctest.
+# - native-conformance-clang : the same on Linux clang (toolchain matrix).
+# - sanitizers : the suite under clang ASan+UBSan and TSan on Linux.
 
 on:
   push:
@@ -21,6 +27,25 @@ on:
   workflow_dispatch:
 
 jobs:
+  format-check:
+    # clang-format is pinned to the exact version the .clang-format config was
+    # authored against — minor versions disagree on formatting, so an unpinned
+    # runner clang-format would flag false diffs.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install clang-format
+        run: pip install clang-format==19.1.1
+      - name: Check formatting
+        run: |
+          clang-format --version
+          files=$(find src/native/collector \( -name '*.cpp' -o -name '*.h' -o -name '*.hpp' \))
+          echo "$files"
+          clang-format --dry-run --Werror $files
+
   native-conformance:
     # Skip on draft PRs only. Non-PR events (push/workflow_dispatch) have no
     # pull_request payload, so they must still run — hence the event_name guard.
@@ -34,7 +59,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Configure
-        run: cmake -S src/native/collector -B build/native-collector
+        run: cmake -S src/native/collector -B build/native-collector -DHSM_COLLECTOR_WERROR=ON
 
       - name: Build
         run: cmake --build build/native-collector --config Release --parallel
@@ -44,3 +69,40 @@ jobs:
       # - conformance_* fixtures — the shared .hsmtest corpus
       - name: Test
         run: ctest --test-dir build/native-collector -C Release --output-on-failure
+
+  native-conformance-clang:
+    # The toolchain matrix's clang leg (the default ubuntu lane above uses gcc).
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S src/native/collector -B build/native-clang -DHSM_COLLECTOR_WERROR=ON
+      - name: Build
+        run: cmake --build build/native-clang --parallel
+      - name: Test
+        run: ctest --test-dir build/native-clang --output-on-failure
+
+  sanitizers:
+    # ASan+UBSan and TSan on Linux clang. These exercise the multi-threaded
+    # scheduler/worker that the single-threaded corpus run cannot stress.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [asan, tsan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+        working-directory: src/native/collector
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+        working-directory: src/native/collector
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }}
+        working-directory: src/native/collector

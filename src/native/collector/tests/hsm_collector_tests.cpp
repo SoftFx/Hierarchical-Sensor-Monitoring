@@ -1036,8 +1036,7 @@ namespace
 
             for (int worker = 0; worker < worker_count; ++worker)
             {
-                workers.emplace_back([&, worker]()
-                {
+                workers.emplace_back([&, worker]() {
                     try
                     {
                         for (int value_index = 0; value_index < values_per_worker; ++value_index)
@@ -1067,8 +1066,7 @@ namespace
             return;
         }
 
-        const auto add_mixed_instant_value = [&](size_t set_index, int value, hsm_sensor_status_t status, const std::string& comment)
-        {
+        const auto add_mixed_instant_value = [&](size_t set_index, int value, hsm_sensor_status_t status, const std::string& comment) {
             Require(set_index < state.mixed_sets.size(), "mixed set index out of range");
             const auto& set = state.mixed_sets[set_index];
             const auto string_value = "value-" + std::to_string(value);
@@ -1130,8 +1128,7 @@ namespace
 
             for (int worker = 0; worker < worker_count; ++worker)
             {
-                workers.emplace_back([&, worker]()
-                {
+                workers.emplace_back([&, worker]() {
                     try
                     {
                         for (int value_index = 0; value_index < values_per_worker; ++value_index)
@@ -1169,8 +1166,7 @@ namespace
             const auto path_count = ToInt(step[2]);
             const auto path_prefix = step[3];
 
-            const auto expect_rejected = [](hsm_result_t result, hsm_sensor_t* sensor)
-            {
+            const auto expect_rejected = [](hsm_result_t result, hsm_sensor_t* sensor) {
                 if (result == HSM_RESULT_OK)
                 {
                     hsm_sensor_release(sensor);
@@ -1186,8 +1182,7 @@ namespace
 
             for (int worker = 0; worker < worker_count; ++worker)
             {
-                workers.emplace_back([&, worker]()
-                {
+                workers.emplace_back([&, worker]() {
                     try
                     {
                         for (int path_index = worker; path_index < path_count; path_index += worker_count)
@@ -1267,7 +1262,8 @@ namespace
             Require(
                 WaitForSentCountEquals(state.collector.value, expected, timeout_ms),
                 ("sent count did not match: expected " + step[1] +
-                 ", got " + std::to_string(hsm_collector_sent_count(state.collector.value))).c_str());
+                 ", got " + std::to_string(hsm_collector_sent_count(state.collector.value)))
+                    .c_str());
             return;
         }
 
@@ -1325,7 +1321,8 @@ namespace
             Require(
                 WaitForRegistrationCountEquals(state.collector.value, expected, timeout_ms),
                 ("registration count did not match: expected " + step[1] +
-                 ", got " + std::to_string(hsm_collector_registration_count(state.collector.value))).c_str());
+                 ", got " + std::to_string(hsm_collector_registration_count(state.collector.value)))
+                    .c_str());
             return;
         }
 
@@ -1392,8 +1389,7 @@ namespace
         {
             Require(step.size() >= 6, "expect_payload_type_counts requires bool, int, double, string, and enum counts");
 
-            const auto count_type = [&](const std::string& type)
-            {
+            const auto count_type = [&](const std::string& type) {
                 auto actual = 0;
                 const auto sent_count = hsm_collector_sent_count(state.collector.value);
 
@@ -1505,8 +1501,7 @@ namespace
 
             for (int worker = 0; worker < worker_count; ++worker)
             {
-                workers.emplace_back([&, worker]()
-                {
+                workers.emplace_back([&, worker]() {
                     try
                     {
                         for (int value_index = 0; value_index < values_per_worker; ++value_index)
@@ -1588,7 +1583,8 @@ namespace
             const auto started = std::chrono::steady_clock::now();
             Require(hsm_collector_stop(state.collector.value) == HSM_RESULT_OK, "collector stop failed");
             const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - started).count();
+                                        std::chrono::steady_clock::now() - started)
+                                        .count();
 
             Require(
                 elapsed_ms < ToInt(step[1]),
@@ -1617,8 +1613,14 @@ namespace
             const auto& field = step[2];
 
             static const std::map<std::string, std::string> field_keys = {
-                { "type", "Type" }, { "min", "Min" }, { "max", "Max" }, { "mean", "Mean" },
-                { "first", "First" }, { "last", "Last" }, { "count", "Count" }, { "status", "Status" },
+                { "type", "Type" },
+                { "min", "Min" },
+                { "max", "Max" },
+                { "mean", "Mean" },
+                { "first", "First" },
+                { "last", "Last" },
+                { "count", "Count" },
+                { "status", "Status" },
             };
 
             const auto key = field_keys.find(field);
@@ -2373,7 +2375,7 @@ namespace
 
         return tests;
     }
-}
+} // namespace
 
 int main(int argc, char** argv)
 {
@@ -2399,6 +2401,4 @@ int main(int argc, char** argv)
         std::cerr << ex.what() << '\n';
         return 1;
     }
-
-    return 0;
 }

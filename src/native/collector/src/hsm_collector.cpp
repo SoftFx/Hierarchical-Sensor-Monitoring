@@ -1423,8 +1423,7 @@ namespace
         if (!IsValidIntPartial(min, max, mean, first, last, count))
             return HSM_RESULT_OK;
 
-        return AccumulateBar([=](MonitoringBar& bar)
-        {
+        return AccumulateBar([=](MonitoringBar& bar) {
             bar.AddPartial(
                 static_cast<double>(min),
                 static_cast<double>(max),
@@ -1693,7 +1692,7 @@ namespace
     {
         return is_last_value_;
     }
-}
+} // namespace
 
 struct hsm_collector_t
 {

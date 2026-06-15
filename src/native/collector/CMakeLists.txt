@@ -25,12 +25,52 @@ project(HsmCollectorNative LANGUAGES CXX)
 # toolchains (gcc without -pthread links but may crash at runtime).
 find_package(Threads REQUIRED)
 
+# Treat warnings as errors (off by default so local dev is not blocked; CI
+# turns it on). The corpus + unit tests must build warning-clean under it.
+option(HSM_COLLECTOR_WERROR "Treat compiler warnings as errors" OFF)
+
+# Build with a sanitizer: "address" (ASan+UBSan) or "thread" (TSan). Empty =
+# none. Driven by the CMakePresets asan/tsan presets and the sanitized CI lane.
+# MSVC supports only address; clang/gcc support both.
+set(HSM_COLLECTOR_SANITIZER "" CACHE STRING "Sanitizer: address, thread, or empty")
+set_property(CACHE HSM_COLLECTOR_SANITIZER PROPERTY STRINGS "" "address" "thread")
+
 # Warning flags shared by every first-party target we compile.
 function(hsm_collector_set_warnings target)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /permissive-)
+        if(HSM_COLLECTOR_WERROR)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
     else()
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+        if(HSM_COLLECTOR_WERROR)
+            target_compile_options(${target} PRIVATE -Werror)
+        endif()
+    endif()
+endfunction()
+
+# Apply the selected sanitizer to a first-party target (compile + link).
+function(hsm_collector_apply_sanitizer target)
+    if(HSM_COLLECTOR_SANITIZER STREQUAL "")
+        return()
+    endif()
+
+    if(MSVC)
+        if(NOT HSM_COLLECTOR_SANITIZER STREQUAL "address")
+            message(FATAL_ERROR "MSVC supports only the address sanitizer (got '${HSM_COLLECTOR_SANITIZER}')")
+        endif()
+        target_compile_options(${target} PRIVATE /fsanitize=address)
+    else()
+        if(HSM_COLLECTOR_SANITIZER STREQUAL "address")
+            set(flags -fsanitize=address,undefined -fno-sanitize-recover=all)
+        elseif(HSM_COLLECTOR_SANITIZER STREQUAL "thread")
+            set(flags -fsanitize=thread)
+        else()
+            message(FATAL_ERROR "Unknown HSM_COLLECTOR_SANITIZER '${HSM_COLLECTOR_SANITIZER}' (use address or thread)")
+        endif()
+        target_compile_options(${target} PRIVATE ${flags} -fno-omit-frame-pointer -g)
+        target_link_options(${target} PRIVATE ${flags})
     endif()
 endfunction()
 
@@ -48,6 +88,7 @@ target_compile_features(hsm_collector_core PUBLIC cxx_std_17)
 target_link_libraries(hsm_collector_core PUBLIC Threads::Threads)
 
 hsm_collector_set_warnings(hsm_collector_core)
+hsm_collector_apply_sanitizer(hsm_collector_core)
 
 # Header-only C++ RAII wrapper over the C ABI.
 add_library(hsm_collector_cpp INTERFACE)
@@ -68,6 +109,7 @@ add_executable(hsm_collector_tests
 target_link_libraries(hsm_collector_tests PRIVATE hsm_collector_core)
 
 hsm_collector_set_warnings(hsm_collector_tests)
+hsm_collector_apply_sanitizer(hsm_collector_tests)
 
 enable_testing()
 

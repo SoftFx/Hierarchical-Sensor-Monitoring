@@ -179,4 +179,4 @@ namespace hsm::collector
 
         hsm_collector_t* handle_ = nullptr;
     };
-}
+} // namespace hsm::collector
