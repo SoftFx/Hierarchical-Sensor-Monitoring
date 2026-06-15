@@ -22,7 +22,18 @@ extern "C"
 typedef struct hsm_collector_t hsm_collector_t;
 typedef struct hsm_sensor_t hsm_sensor_t;
 
-typedef enum hsm_result_t
+/* Fixed underlying type so ANY int value is a valid object representation. The C ABI
+   receives untrusted integers for enum-typed parameters (e.g. a caller passing a bad
+   sensor status) and validates them at runtime; without a fixed type, merely loading an
+   out-of-range value would be UB (caught by -fsanitize=enum). C++ and C23 support the
+   syntax; older C is int-compatible already, so it falls back to a plain enum. */
+#if defined(__cplusplus) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L)
+#define HSM_ENUM_INT32 : int32_t
+#else
+#define HSM_ENUM_INT32
+#endif
+
+typedef enum hsm_result_t HSM_ENUM_INT32
 {
     HSM_RESULT_OK = 0,
     HSM_RESULT_INVALID_ARGUMENT = 1,
@@ -35,7 +46,7 @@ typedef enum hsm_result_t
 /* Collector lifecycle status. Mirrors the managed CollectorStatus state machine
    (overview.md "Lifecycle"): Stopped -> Starting -> Running -> Stopping ->
    Stopped, and Any-except-Disposed -> Disposed (terminal). */
-typedef enum hsm_collector_status_t
+typedef enum hsm_collector_status_t HSM_ENUM_INT32
 {
     HSM_COLLECTOR_STATUS_STOPPED = 0,
     HSM_COLLECTOR_STATUS_STARTING = 1,
@@ -44,7 +55,7 @@ typedef enum hsm_collector_status_t
     HSM_COLLECTOR_STATUS_DISPOSED = 4
 } hsm_collector_status_t;
 
-typedef enum hsm_sensor_status_t
+typedef enum hsm_sensor_status_t HSM_ENUM_INT32
 {
     HSM_SENSOR_STATUS_OFF_TIME = 0,
     HSM_SENSOR_STATUS_OK = 1,
@@ -52,7 +63,7 @@ typedef enum hsm_sensor_status_t
     HSM_SENSOR_STATUS_ERROR = 3
 } hsm_sensor_status_t;
 
-typedef enum hsm_sensor_type_t
+typedef enum hsm_sensor_type_t HSM_ENUM_INT32
 {
     HSM_SENSOR_TYPE_BOOLEAN = 0,
     HSM_SENSOR_TYPE_INT = 1,
@@ -162,7 +173,7 @@ hsm_result_t hsm_collector_add_lifecycle_listener(
    caught and dropped (a broken logger must never break the collector). Error
    messages pass through the MessageDeduplicator first (window/capacity from the
    options). Passing a NULL callback clears the sink. */
-typedef enum hsm_log_level_t
+typedef enum hsm_log_level_t HSM_ENUM_INT32
 {
     HSM_LOG_LEVEL_DEBUG = 0,
     HSM_LOG_LEVEL_INFO = 1,
