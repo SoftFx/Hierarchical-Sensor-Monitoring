@@ -90,6 +90,19 @@ target_link_libraries(hsm_collector_core PUBLIC Threads::Threads)
 hsm_collector_set_warnings(hsm_collector_core)
 hsm_collector_apply_sanitizer(hsm_collector_core)
 
+# libcurl HTTP transport (#1096 §12). Opt-in so the serialization/behavior build and the existing
+# CI lanes need no curl/vcpkg; the dedicated HTTP lane sets it ON (vcpkg.json provides curl[ssl] —
+# Schannel on Windows, OpenSSL elsewhere). curl headers are SYSTEM so the -Werror gate ignores
+# them; only hsm_http_transport.cpp includes <curl/curl.h>.
+option(HSM_COLLECTOR_HTTP "Build the libcurl HTTP transport" OFF)
+if(HSM_COLLECTOR_HTTP)
+    find_package(CURL REQUIRED)
+    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp)
+    target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_HTTP=1)
+    target_link_libraries(hsm_collector_core PRIVATE CURL::libcurl)
+    target_include_directories(hsm_collector_core SYSTEM PRIVATE ${CURL_INCLUDE_DIRS})
+endif()
+
 # Header-only C++ RAII wrapper over the C ABI.
 add_library(hsm_collector_cpp INTERFACE)
 
@@ -111,7 +124,19 @@ target_link_libraries(hsm_collector_tests PRIVATE hsm_collector_core)
 hsm_collector_set_warnings(hsm_collector_tests)
 hsm_collector_apply_sanitizer(hsm_collector_tests)
 
+# The HTTP-transport E2E test compiles only in the HTTP build (it needs the transport + the
+# in-proc capture server). The define gates the #ifdef'd test code; ws2_32 auto-links on MSVC.
+if(HSM_COLLECTOR_HTTP)
+    target_compile_definitions(hsm_collector_tests PRIVATE HSM_COLLECTOR_HTTP=1)
+endif()
+
 enable_testing()
+
+if(HSM_COLLECTOR_HTTP)
+    add_test(NAME native_http_transport_posts_to_capture_server
+        COMMAND hsm_collector_tests native_http_transport_posts_to_capture_server
+    )
+endif()
 
 add_test(NAME native_invalid_argument_clears_out_params
     COMMAND hsm_collector_tests native_invalid_argument_clears_out_params
@@ -159,6 +184,8 @@ set(NATIVE_REGRESSION_TESTS
     native_wire_file_json_matches_net_byte_layout
     native_wire_timespan_and_version_match_net
     native_wire_registration_json_matches_net_byte_layout
+    native_http_endpoint_routing_matches_net
+    native_http_retry_policy_matches_net
     native_lifecycle_listener_can_register_another_listener
     native_test_connection_reports_reachable
     native_max_sensors_cap_rejects_beyond_limit

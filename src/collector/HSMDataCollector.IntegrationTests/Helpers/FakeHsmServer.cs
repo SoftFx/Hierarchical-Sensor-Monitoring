@@ -28,6 +28,9 @@ namespace HSMDataCollector.IntegrationTests.Helpers
         // Data POSTs to fail with 503 before the first success (decremented per data request).
         private int _failDataRequests;
 
+        // Command POSTs (/commands, /addOrUpdate) to fail with 503 before the first success.
+        private int _failCommandRequests;
+
         public FakeHsmServer()
         {
             Port = GetFreeTcpPort();
@@ -47,6 +50,15 @@ namespace HSMDataCollector.IntegrationTests.Helpers
         /// <summary>The next <paramref name="count"/> data POSTs answer 503; the collector must
         /// re-enqueue and retry until they stop failing.</summary>
         public void FailNextDataRequests(int count) => Interlocked.Exchange(ref _failDataRequests, count);
+
+        /// <summary>The next <paramref name="count"/> command POSTs (/commands or /addOrUpdate)
+        /// answer 503.</summary>
+        public void FailNextCommandRequests(int count) => Interlocked.Exchange(ref _failCommandRequests, count);
+
+        public IEnumerable<CapturedRequest> CommandRequests =>
+            Requests.Where(r => r.Method == "POST"
+                                && (r.Path.EndsWith("/addOrUpdate", StringComparison.Ordinal)
+                                    || r.Path.EndsWith("/commands", StringComparison.Ordinal)));
 
         public IEnumerable<CapturedRequest> DataRequests =>
             Requests.Where(r => r.Method == "POST"
@@ -84,9 +96,11 @@ namespace HSMDataCollector.IntegrationTests.Helpers
                 body = reader.ReadToEnd();
 
             var path = request.Url?.AbsolutePath ?? string.Empty;
+            var isCommand = request.HttpMethod == "POST"
+                            && (path.EndsWith("/addOrUpdate", StringComparison.Ordinal)
+                                || path.EndsWith("/commands", StringComparison.Ordinal));
             var isData = request.HttpMethod == "POST"
-                         && !path.EndsWith("/addOrUpdate", StringComparison.Ordinal)
-                         && !path.EndsWith("/commands", StringComparison.Ordinal)
+                         && !isCommand
                          && !path.EndsWith("/testConnection", StringComparison.Ordinal);
 
             _requests.Enqueue(new CapturedRequest(
@@ -101,6 +115,10 @@ namespace HSMDataCollector.IntegrationTests.Helpers
                 statusCode = HttpStatusCode.ServiceUnavailable;
             else if (isData)
                 Interlocked.Increment(ref _failDataRequests); // floor the counter at 0
+            else if (isCommand && Interlocked.Decrement(ref _failCommandRequests) >= 0)
+                statusCode = HttpStatusCode.ServiceUnavailable;
+            else if (isCommand)
+                Interlocked.Increment(ref _failCommandRequests); // floor the counter at 0
 
             try
             {
