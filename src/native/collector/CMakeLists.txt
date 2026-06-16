@@ -124,7 +124,19 @@ target_link_libraries(hsm_collector_tests PRIVATE hsm_collector_core)
 hsm_collector_set_warnings(hsm_collector_tests)
 hsm_collector_apply_sanitizer(hsm_collector_tests)
 
+# The HTTP-transport E2E test compiles only in the HTTP build (it needs the transport + the
+# in-proc capture server). The define gates the #ifdef'd test code; ws2_32 auto-links on MSVC.
+if(HSM_COLLECTOR_HTTP)
+    target_compile_definitions(hsm_collector_tests PRIVATE HSM_COLLECTOR_HTTP=1)
+endif()
+
 enable_testing()
+
+if(HSM_COLLECTOR_HTTP)
+    add_test(NAME native_http_transport_posts_to_capture_server
+        COMMAND hsm_collector_tests native_http_transport_posts_to_capture_server
+    )
+endif()
 
 add_test(NAME native_invalid_argument_clears_out_params
     COMMAND hsm_collector_tests native_invalid_argument_clears_out_params

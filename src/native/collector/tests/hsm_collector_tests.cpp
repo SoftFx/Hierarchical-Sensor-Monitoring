@@ -18,6 +18,11 @@
 #include <utility>
 #include <vector>
 
+#if defined(HSM_COLLECTOR_HTTP)
+#include "../src/hsm_http_transport.hpp"
+#include "http_capture_server.hpp"
+#endif
+
 // Test-only seam (defined in hsm_collector.cpp, deliberately not in the public header): drive
 // the scheduler's injectable clock from the native unit tests (issue #1095 §13).
 extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms);
@@ -2752,6 +2757,38 @@ namespace
             "file wire layout (List<byte> numeric array)");
     }
 
+#if defined(HSM_COLLECTOR_HTTP)
+    void NativeHttpTransportPostsToCaptureServer()
+    {
+        hsm::test::HttpCaptureServer server(200);
+        hsm::http::HttpTransport transport(5000, /*verify_peer=*/false);
+
+        const std::string url = "http://127.0.0.1:" + std::to_string(server.Port()) + "/api/sensors/list";
+        const std::string body = "[{\"Type\":1,\"Value\":42,\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/int\"}]";
+
+        const auto response = transport.Post(
+            url,
+            body,
+            { hsm::http::HttpHeader{ "Key", "test-key" },
+              hsm::http::HttpHeader{ "ClientName", "test-client" },
+              hsm::http::HttpHeader{ "Content-Type", "application/json" } });
+
+        Require(response.transport_ok, ("transport must reach the local capture server: " + response.error).c_str());
+        Require(response.IsSuccess(), "expected a 2xx from the capture server");
+
+        for (int i = 0; i < 200 && !server.Request().received.load(std::memory_order_acquire); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+        const auto& request = server.Request();
+        Require(request.received.load(std::memory_order_acquire), "the capture server must have received the request");
+        Require(request.method == "POST", "method must be POST");
+        Require(request.path == "/api/sensors/list", "path must be the list endpoint");
+        Contains(request.headers, "Key: test-key");
+        Contains(request.headers, "ClientName: test-client");
+        Require(request.body == body, "captured body must be the exact wire bytes sent");
+    }
+#endif
+
     void NativeWireTimeSpanAndVersionMatchNet()
     {
         // .NET TimeSpan "c": "1.02:03:04.0050000" (ticks for TimeSpan(1,2,3,4,5) = 937840050000);
@@ -2790,6 +2827,9 @@ namespace
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+#if defined(HSM_COLLECTOR_HTTP)
+            { "native_http_transport_posts_to_capture_server", [](const std::string&) { NativeHttpTransportPostsToCaptureServer(); } },
+#endif
             { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
