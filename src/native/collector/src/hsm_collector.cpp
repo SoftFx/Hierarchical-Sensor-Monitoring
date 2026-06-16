@@ -241,6 +241,46 @@ namespace
         return json.str();
     }
 
+    // .NET serializes List<byte> as a numeric JSON array ([104,105]), NOT base64 (#1096 §15).
+    std::string ByteArrayJson(const std::string& content)
+    {
+        std::ostringstream array;
+        array << '[';
+        for (size_t i = 0; i < content.size(); ++i)
+        {
+            if (i != 0)
+                array << ',';
+            array << static_cast<int>(static_cast<unsigned char>(content[i]));
+        }
+        array << ']';
+        return array.str();
+    }
+
+    // Real wire JSON for FileSensorValue: Type, Extension, Name, Value(byte array), Comment,
+    // Time, Status, Key, Path (#1096 §15).
+    std::string BuildWireFileJson(
+        const std::string& extension,
+        const std::string& name,
+        const std::string& content_utf8,
+        const std::string& comment,
+        bool comment_is_null,
+        hsm_sensor_status_t status,
+        int64_t time_ms,
+        const std::string& path)
+    {
+        std::ostringstream json;
+        json << "{\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE)
+             << ",\"Extension\":\"" << EscapeJson(extension) << "\""
+             << ",\"Name\":\"" << EscapeJson(name) << "\""
+             << ",\"Value\":" << ByteArrayJson(content_utf8)
+             << ",\"Comment\":" << (comment_is_null ? std::string("null") : ("\"" + EscapeJson(comment) + "\""))
+             << ",\"Time\":\"" << IsoUtcFromUnixMs(time_ms) << "\""
+             << ",\"Status\":" << static_cast<int>(status)
+             << ",\"Key\":null"
+             << ",\"Path\":\"" << EscapeJson(path) << "\"}";
+        return json.str();
+    }
+
     // Monotonic clock for periodic scheduling and rate elapsed-time math (mirrors the C#
     // collector's Stopwatch-based scheduler/rate sensor; wall-clock jumps must not skew rates).
     int64_t SteadyMilliseconds()
@@ -703,6 +743,51 @@ namespace
              << "\"Comment\":\"\""
              << "}";
 
+        return json.str();
+    }
+
+    // Real wire JSON for a bar DTO (#1096 §15): Type, Min, Max, Mean, FirstValue, LastValue,
+    // Percentiles(null), OpenTime, CloseTime, Count, Comment(null), Time, Status, Key, Path.
+    // Field VALUES reuse the same int/double formatting as the internal MonitoringBarJson.
+    std::string BuildWireBarJson(const MonitoringBar& bar, int64_t time_ms, const std::string& path)
+    {
+        const double raw_mean = bar.total_sum / bar.count;
+
+        std::string min_text, max_text, mean_text, first_text, last_text;
+        if (bar.is_int)
+        {
+            min_text = BarIntFieldJson(bar.min);
+            max_text = BarIntFieldJson(bar.max);
+            mean_text = std::to_string(static_cast<int32_t>(std::nearbyint(raw_mean)));
+            first_text = BarIntFieldJson(bar.first);
+            last_text = BarIntFieldJson(bar.last);
+        }
+        else
+        {
+            min_text = DoubleJson(RoundAwayFromZero(bar.min, bar.precision));
+            max_text = DoubleJson(RoundAwayFromZero(bar.max, bar.precision));
+            mean_text = DoubleJson(RoundAwayFromZero(raw_mean, bar.precision));
+            first_text = DoubleJson(RoundAwayFromZero(bar.first, bar.precision));
+            last_text = DoubleJson(RoundAwayFromZero(bar.last, bar.precision));
+        }
+
+        std::ostringstream json;
+        json << "{\"Type\":"
+             << (bar.is_int ? static_cast<int>(HSM_SENSOR_TYPE_INT_BAR) : static_cast<int>(HSM_SENSOR_TYPE_DOUBLE_BAR))
+             << ",\"Min\":" << min_text
+             << ",\"Max\":" << max_text
+             << ",\"Mean\":" << mean_text
+             << ",\"FirstValue\":" << first_text
+             << ",\"LastValue\":" << last_text
+             << ",\"Percentiles\":null"
+             << ",\"OpenTime\":\"" << IsoUtcFromUnixMs(bar.open_ms) << "\""
+             << ",\"CloseTime\":\"" << IsoUtcFromUnixMs(bar.close_ms) << "\""
+             << ",\"Count\":" << bar.count
+             << ",\"Comment\":null"
+             << ",\"Time\":\"" << IsoUtcFromUnixMs(time_ms) << "\""
+             << ",\"Status\":" << static_cast<int>(HSM_SENSOR_STATUS_OK)
+             << ",\"Key\":null"
+             << ",\"Path\":\"" << EscapeJson(path) << "\"}";
         return json.str();
     }
 
@@ -2553,6 +2638,59 @@ extern "C" const char* hsm_collector_test_wire_value_json(
     buffer = BuildWireValueJson(
         static_cast<hsm_sensor_type_t>(type),
         value_json != nullptr ? value_json : "",
+        comment != nullptr ? comment : "",
+        comment_is_null != 0,
+        static_cast<hsm_sensor_status_t>(status),
+        time_ms,
+        path != nullptr ? path : "");
+    return buffer.c_str();
+}
+
+extern "C" const char* hsm_collector_test_wire_bar_json(
+    int is_int,
+    double min,
+    double max,
+    double total_sum,
+    double first,
+    double last,
+    int32_t count,
+    int precision,
+    int64_t open_ms,
+    int64_t close_ms,
+    int64_t time_ms,
+    const char* path)
+{
+    static thread_local std::string buffer;
+    MonitoringBar bar;
+    bar.is_int = is_int != 0;
+    bar.precision = precision;
+    bar.open_ms = open_ms;
+    bar.close_ms = close_ms;
+    bar.total_sum = total_sum;
+    bar.min = min;
+    bar.max = max;
+    bar.first = first;
+    bar.last = last;
+    bar.count = count;
+    buffer = BuildWireBarJson(bar, time_ms, path != nullptr ? path : "");
+    return buffer.c_str();
+}
+
+extern "C" const char* hsm_collector_test_wire_file_json(
+    const char* extension,
+    const char* name,
+    const char* content,
+    const char* comment,
+    int comment_is_null,
+    int32_t status,
+    int64_t time_ms,
+    const char* path)
+{
+    static thread_local std::string buffer;
+    buffer = BuildWireFileJson(
+        extension != nullptr ? extension : "",
+        name != nullptr ? name : "",
+        content != nullptr ? content : "",
         comment != nullptr ? comment : "",
         comment_is_null != 0,
         static_cast<hsm_sensor_status_t>(status),

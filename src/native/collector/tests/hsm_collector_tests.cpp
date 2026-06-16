@@ -33,6 +33,28 @@ extern "C" const char* hsm_collector_test_wire_value_json(
     int32_t status,
     int64_t time_ms,
     const char* path);
+extern "C" const char* hsm_collector_test_wire_bar_json(
+    int is_int,
+    double min,
+    double max,
+    double total_sum,
+    double first,
+    double last,
+    int32_t count,
+    int precision,
+    int64_t open_ms,
+    int64_t close_ms,
+    int64_t time_ms,
+    const char* path);
+extern "C" const char* hsm_collector_test_wire_file_json(
+    const char* extension,
+    const char* name,
+    const char* content,
+    const char* comment,
+    int comment_is_null,
+    int32_t status,
+    int64_t time_ms,
+    const char* path);
 
 namespace
 {
@@ -2649,11 +2671,33 @@ namespace
             "string wire value layout with comment + fractional time");
     }
 
+    void NativeWireBarJsonMatchesNetByteLayout()
+    {
+        // int bar: min1 max5 sum15 count5 -> mean nearbyint(3); open epoch, close +2s.
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(
+                1, 1, 5, 15, 1, 5, 5, 2, 0, 2000, 0, "p/ib")) == "{\"Type\":4,\"Min\":1,\"Max\":5,\"Mean\":3,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
+                                                                 "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
+                                                                 "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
+            "int bar wire layout");
+    }
+
+    void NativeWireFileJsonMatchesNetByteLayout()
+    {
+        // "hi" serializes as the byte array [104,105]; Extension/Name precede Value.
+        Require(
+            std::string(hsm_collector_test_wire_file_json("txt", "n", "hi", "", 1, 1, 0, "p/f")) == "{\"Type\":6,\"Extension\":\"txt\",\"Name\":\"n\",\"Value\":[104,105],\"Comment\":null,"
+                                                                                                    "\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/f\"}",
+            "file wire layout (List<byte> numeric array)");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
             { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
+            { "native_wire_bar_json_matches_net_byte_layout", [](const std::string&) { NativeWireBarJsonMatchesNetByteLayout(); } },
+            { "native_wire_file_json_matches_net_byte_layout", [](const std::string&) { NativeWireFileJsonMatchesNetByteLayout(); } },
             { "native_lifecycle_listener_can_register_another_listener", [](const std::string&) { NativeLifecycleListenerCanRegisterAnotherListener(); } },
             { "native_logger_deduplicates_repeated_errors_within_window", [](const std::string&) { NativeLoggerDeduplicatesRepeatedErrorsWithinWindow(); } },
             { "native_logger_zero_window_logs_every_error", [](const std::string&) { NativeLoggerZeroWindowLogsEveryError(); } },
