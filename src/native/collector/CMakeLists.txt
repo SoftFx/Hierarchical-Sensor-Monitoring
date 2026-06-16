@@ -90,6 +90,19 @@ target_link_libraries(hsm_collector_core PUBLIC Threads::Threads)
 hsm_collector_set_warnings(hsm_collector_core)
 hsm_collector_apply_sanitizer(hsm_collector_core)
 
+# libcurl HTTP transport (#1096 §12). Opt-in so the serialization/behavior build and the existing
+# CI lanes need no curl/vcpkg; the dedicated HTTP lane sets it ON (vcpkg.json provides curl[ssl] —
+# Schannel on Windows, OpenSSL elsewhere). curl headers are SYSTEM so the -Werror gate ignores
+# them; only hsm_http_transport.cpp includes <curl/curl.h>.
+option(HSM_COLLECTOR_HTTP "Build the libcurl HTTP transport" OFF)
+if(HSM_COLLECTOR_HTTP)
+    find_package(CURL REQUIRED)
+    target_sources(hsm_collector_core PRIVATE src/hsm_http_transport.cpp)
+    target_compile_definitions(hsm_collector_core PRIVATE HSM_COLLECTOR_HTTP=1)
+    target_link_libraries(hsm_collector_core PRIVATE CURL::libcurl)
+    target_include_directories(hsm_collector_core SYSTEM PRIVATE ${CURL_INCLUDE_DIRS})
+endif()
+
 # Header-only C++ RAII wrapper over the C ABI.
 add_library(hsm_collector_cpp INTERFACE)
 

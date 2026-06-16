@@ -40,6 +40,7 @@ namespace HSMDataCollector.Client.HttpsClient
                 MaxDelay = TimeSpan.FromMinutes(2),
                 Delay    = TimeSpan.FromSeconds(1),
 
+                ShouldHandle = ShouldRetry,
                 OnRetry  = LogException,
             };
 
@@ -58,6 +59,25 @@ namespace HSMDataCollector.Client.HttpsClient
 
         internal abstract string GetUri(object rawData);
 
+
+        // Retry predicate (#1096). The default Polly pipeline only retried on EXCEPTIONS, so a
+        // returned non-success HttpResponseMessage (4xx/5xx) was treated as success and the data
+        // was dropped (silent loss). We now also retry server-side 5xx — but ONLY on the bounded
+        // pipelines (data/priority/file, MaxRetryAttempts = 10). The command pipeline retries
+        // unboundedly (for connection failures while the server restarts); applying result-retry
+        // there would let a persistent 5xx hang a command send forever, so commands stay
+        // exceptions-only and rely on the per-sensor error dictionary in the response. Client 4xx
+        // are permanent (bad payload/auth) and are never retried.
+        private ValueTask<bool> ShouldRetry(RetryPredicateArguments<HttpResponseMessage> args)
+        {
+            if (args.Outcome.Exception != null)
+                return new ValueTask<bool>(true);
+
+            var response = args.Outcome.Result;
+            var isServerError = response != null && (int)response.StatusCode >= 500;
+
+            return new ValueTask<bool>(isServerError && MaxRequestAttempts != int.MaxValue);
+        }
 
         private ValueTask LogException(OnRetryArguments<HttpResponseMessage> args)
         {
