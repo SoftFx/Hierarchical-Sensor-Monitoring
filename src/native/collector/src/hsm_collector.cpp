@@ -586,6 +586,60 @@ namespace
                ",\"EnumOptions\":" + enums_text + "}";
     }
 
+    // Real wire JSON for AddOrUpdateSensorRequest (#1096 §15) — byte-identical to net8
+    // System.Text.Json. Most fields the native does not model are emitted as their .NET defaults
+    // (null / 0 / false). The obsolete TtlAlert/TTL serialize as null (get => null). EnumOption
+    // wire order is Key, Value, Description, Color (NOTE: differs from the internal registration
+    // text's Key,Value,Color,Description). The Command discriminator is Type:0.
+    std::string BuildWireRegistrationJson(const std::string& path, hsm_sensor_type_t type, const RegistrationOptions& options)
+    {
+        std::string ttls = "null";
+        if (options.ttl_ms > 0)
+            ttls = "[" + std::to_string(options.ttl_ms * 10000) + "]";
+
+        std::string enums = "null";
+        if (options.has_enum_options)
+        {
+            enums = "[";
+            for (size_t i = 0; i < options.enum_options.size(); ++i)
+            {
+                const auto& option = options.enum_options[i];
+                if (i > 0)
+                    enums += ",";
+                enums += "{\"Key\":" + std::to_string(option.key) +
+                         ",\"Value\":\"" + EscapeJson(option.value) +
+                         "\",\"Description\":\"" + EscapeJson(option.description) +
+                         "\",\"Color\":" + std::to_string(option.color) + "}";
+            }
+            enums += "]";
+        }
+
+        std::ostringstream json;
+        json << "{\"Type\":0"
+             << ",\"Alerts\":null"
+             << ",\"TtlAlerts\":null"
+             << ",\"TtlAlert\":null"
+             << ",\"SensorType\":" << static_cast<int>(type)
+             << ",\"Description\":" << (options.has_description ? ("\"" + EscapeJson(options.description) + "\"") : "null")
+             << ",\"DefaultChats\":null"
+             << ",\"KeepHistory\":null"
+             << ",\"SelfDestroy\":null"
+             << ",\"TTLs\":" << ttls
+             << ",\"TTL\":null"
+             << ",\"Statistics\":null"
+             << ",\"IsSingletonSensor\":null"
+             << ",\"AggregateData\":null"
+             << ",\"EnableGrafana\":null"
+             << ",\"OriginalUnit\":" << (options.unit >= 0 ? std::to_string(options.unit) : "null")
+             << ",\"DisplayUnit\":null"
+             << ",\"DefaultAlertsOptions\":0"
+             << ",\"IsForceUpdate\":false"
+             << ",\"EnumOptions\":" << enums
+             << ",\"Key\":null"
+             << ",\"Path\":\"" << EscapeJson(path) << "\"}";
+        return json.str();
+    }
+
     // C# Math.Round(value, precision, MidpointRounding.AwayFromZero) — std::round is
     // half-away-from-zero, matching the double-bar field rounding contract.
     double RoundAwayFromZero(double value, int precision)
@@ -2696,6 +2750,38 @@ extern "C" const char* hsm_collector_test_wire_file_json(
         static_cast<hsm_sensor_status_t>(status),
         time_ms,
         path != nullptr ? path : "");
+    return buffer.c_str();
+}
+
+extern "C" const char* hsm_collector_test_wire_registration_json(
+    int32_t type,
+    int64_t ttl_ms,
+    int32_t unit,
+    int has_description,
+    const char* description,
+    int has_enum,
+    int32_t enum_key,
+    const char* enum_value,
+    const char* enum_description,
+    int32_t enum_color,
+    const char* path)
+{
+    static thread_local std::string buffer;
+    RegistrationOptions options;
+    options.ttl_ms = ttl_ms;
+    options.unit = unit;
+    options.has_description = has_description != 0;
+    options.description = description != nullptr ? description : "";
+    if (has_enum != 0)
+    {
+        options.has_enum_options = true;
+        options.enum_options.push_back(EnumOptionData{
+            enum_key,
+            enum_value != nullptr ? enum_value : "",
+            enum_color,
+            enum_description != nullptr ? enum_description : "" });
+    }
+    buffer = BuildWireRegistrationJson(path != nullptr ? path : "", static_cast<hsm_sensor_type_t>(type), options);
     return buffer.c_str();
 }
 

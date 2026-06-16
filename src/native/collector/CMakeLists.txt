@@ -157,6 +157,7 @@ set(NATIVE_REGRESSION_TESTS
     native_wire_value_json_matches_net_byte_layout
     native_wire_bar_json_matches_net_byte_layout
     native_wire_file_json_matches_net_byte_layout
+    native_wire_registration_json_matches_net_byte_layout
     native_lifecycle_listener_can_register_another_listener
     native_test_connection_reports_reachable
     native_max_sensors_cap_rejects_beyond_limit

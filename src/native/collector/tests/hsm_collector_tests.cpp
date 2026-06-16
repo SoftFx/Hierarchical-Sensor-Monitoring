@@ -55,6 +55,18 @@ extern "C" const char* hsm_collector_test_wire_file_json(
     int32_t status,
     int64_t time_ms,
     const char* path);
+extern "C" const char* hsm_collector_test_wire_registration_json(
+    int32_t type,
+    int64_t ttl_ms,
+    int32_t unit,
+    int has_description,
+    const char* description,
+    int has_enum,
+    int32_t enum_key,
+    const char* enum_value,
+    const char* enum_description,
+    int32_t enum_color,
+    const char* path);
 
 namespace
 {
@@ -2691,9 +2703,25 @@ namespace
             "file wire layout (List<byte> numeric array)");
     }
 
+    void NativeWireRegistrationJsonMatchesNetByteLayout()
+    {
+        // SensorType IntSensor(1); ttl 60000ms -> 600000000 ticks; OriginalUnit MB(3);
+        // EnumOption wire order Key,Value,Description,Color (Color ARGB int).
+        Require(
+            std::string(hsm_collector_test_wire_registration_json(
+                1, 60000, 3, 1, "d", 1, 1, "v", "ed", -16711936, "p/int")) == "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\","
+                                                                              "\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,"
+                                                                              "\"Statistics\":null,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
+                                                                              "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,"
+                                                                              "\"EnumOptions\":[{\"Key\":1,\"Value\":\"v\",\"Description\":\"ed\",\"Color\":-16711936}],"
+                                                                              "\"Key\":null,\"Path\":\"p/int\"}",
+            "AddOrUpdateSensorRequest wire layout");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+            { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
             { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
             { "native_wire_bar_json_matches_net_byte_layout", [](const std::string&) { NativeWireBarJsonMatchesNetByteLayout(); } },
