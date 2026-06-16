@@ -62,6 +62,7 @@ What the .NET collector actually emits (`Client/HttpsClient/RequestHandlers/Http
 - **PascalCase** property names (`"Path"`, `"Comment"`, `"OpenTime"` — exactly as declared in C#).
 - **Nulls and defaults ARE emitted** (`"Comment":null`, `"Status":1`). The `[DefaultValue]` attributes on DTOs are Newtonsoft-era leftovers and have no effect under System.Text.Json. The server deserializes case-insensitively and tolerates omissions — but a byte-compatible port must match what the .NET collector sends, not what the server minimally accepts.
 - Enums serialized as **numbers**.
+- **String escaping = System.Text.Json's DEFAULT `JavaScriptEncoder`** (no custom encoder is set). This escapes more than the JSON minimum: `<` `>` `&` `'` `+` `` ` `` and **every non-ASCII** code point become `\uXXXX` (UPPERCASE hex, surrogate pairs for astral planes), and the double quote is `"` — **not** `\"`. Only `\` `\b` `\t` `\n` `\f` `\r` use short escapes. A byte-compatible port must reproduce this exactly (`EscapeJsonWire` in the native port), not a naive `\"`-style escaper; an all-ASCII test corpus will not catch the difference.
 - DateTime: ISO 8601; `Time` defaults to `DateTime.UtcNow` → `Z` suffix.
 - TimeSpan: .NET "c" format `[-][d.]hh:mm:ss[.fffffff]` (days prefix possible; 7-digit fraction omitted when zero).
 - Version: `a.b[.c[.d]]`.
@@ -86,6 +87,10 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 
 - Never renumber or reuse enum values; never rename JSON fields; additive evolution only.
 - Server tolerates unknown/omitted optional fields; collectors must tolerate unknown response fields.
+
+## Native port (C++)
+
+The native collector (`src/native/collector`, #1096) reproduces this wire **byte-for-byte** against the **net8 / Core** `System.Text.Json` output (the shortest-double runtime; net472 doubles diverge and are out of scope, as in `number_format_contract`). `BuildWire{Value,Bar,File,Registration}Json` in `hsm_collector.cpp` emit the exact property order (most-derived-first, base-last, `Type` first), `Key:null`, ISO-8601-Z time (fraction trimmed), TimeSpan ".NET c", `List<byte>` numeric array, `Percentiles:null`, and the full `AddOrUpdateSensorRequest` shape. String escaping goes through a dedicated `EscapeJsonWire` that mirrors the default `JavaScriptEncoder` (the internal-conformance `EscapeJson` keeps its own simpler `\"` convention and must not be confused with it). Parity is locked from both sides: native `native_wire_*` unit tests pin the exact bytes (including double/bool/double-bar, the `<>&'+"`/non-ASCII escaping cases, the int-bar half-to-even mean, and pre-epoch / `Int64.MinValue` time edges), and `WireFormatGoldenLockTests` (net8 IntegrationTests) asserts the **same** strings against the real `HttpRequest<T>` serializer — if .NET drifts, that test fails first and both sides update in lockstep.
 
 ## Key Files
 

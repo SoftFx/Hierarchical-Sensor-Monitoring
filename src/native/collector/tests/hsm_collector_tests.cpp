@@ -23,6 +23,51 @@
 extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms);
 extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, int64_t delta_ms);
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message);
+// Real-wire serializers (#1096): exercised directly from the unit tests.
+extern "C" const char* hsm_collector_test_iso_from_unix_ms(int64_t unix_ms);
+extern "C" const char* hsm_collector_test_timespan_c_format(int64_t ticks);
+extern "C" const char* hsm_collector_test_wire_value_json(
+    int32_t type,
+    const char* value_json,
+    const char* comment,
+    int comment_is_null,
+    int32_t status,
+    int64_t time_ms,
+    const char* path);
+extern "C" const char* hsm_collector_test_wire_bar_json(
+    int is_int,
+    double min,
+    double max,
+    double total_sum,
+    double first,
+    double last,
+    int32_t count,
+    int precision,
+    int64_t open_ms,
+    int64_t close_ms,
+    int64_t time_ms,
+    const char* path);
+extern "C" const char* hsm_collector_test_wire_file_json(
+    const char* extension,
+    const char* name,
+    const char* content,
+    const char* comment,
+    int comment_is_null,
+    int32_t status,
+    int64_t time_ms,
+    const char* path);
+extern "C" const char* hsm_collector_test_wire_registration_json(
+    int32_t type,
+    int64_t ttl_ms,
+    int32_t unit,
+    int has_description,
+    const char* description,
+    int has_enum,
+    int32_t enum_key,
+    const char* enum_value,
+    const char* enum_description,
+    int32_t enum_color,
+    const char* path);
 
 namespace
 {
@@ -2613,9 +2658,144 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop must not deadlock when a listener adds a listener");
     }
 
+    // --- #1096 real-wire serialization (§15): byte-identical to net8 System.Text.Json. ---
+
+    void NativeWireIsoFromUnixMsMatchesNet()
+    {
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(0)) == "1970-01-01T00:00:00Z", "epoch ISO");
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(1000)) == "1970-01-01T00:00:01Z", "whole-second ISO drops the fraction");
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(1500)) == "1970-01-01T00:00:01.5Z", "500ms trims to .5");
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(123)) == "1970-01-01T00:00:00.123Z", "123ms keeps three digits");
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(50)) == "1970-01-01T00:00:00.05Z", "50ms trims to .05");
+
+        // Pre-epoch (negative) input via the manual-clock seam: floored division must keep millis in
+        // [0,999] and floor the second, not truncate toward zero. -500ms == 1969-12-31T23:59:59.5Z.
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(-500)) == "1969-12-31T23:59:59.5Z", "negative ms floors correctly");
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(-1000)) == "1969-12-31T23:59:59Z", "negative whole second");
+    }
+
+    void NativeWireValueJsonMatchesNetByteLayout()
+    {
+        // Matches the observed net8 byte layout: Type, Value, Comment, Time, Status, Key, Path;
+        // Comment null emitted as `null`; Key always null; Time ISO-8601 Z.
+        Require(
+            std::string(hsm_collector_test_wire_value_json(
+                1, "42", "", 1 /*comment null*/, 1 /*Ok*/, 0, "p/int")) == "{\"Type\":1,\"Value\":42,\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/int\"}",
+            "int wire value layout");
+
+        Require(
+            std::string(hsm_collector_test_wire_value_json(
+                3, "\"hi\"", "note", 0 /*comment present*/, 2 /*Warning*/, 1500, "p/s")) == "{\"Type\":3,\"Value\":\"hi\",\"Comment\":\"note\",\"Time\":\"1970-01-01T00:00:01.5Z\",\"Status\":2,\"Key\":null,\"Path\":\"p/s\"}",
+            "string wire value layout with comment + fractional time");
+
+        // bool (Type 0) and double (Type 2) — the most drift-prone value DTOs, cross-locked by
+        // WireFormatGoldenLockTests.Double_bool_and_doublebar_dtos_match_the_native_golden_bytes.
+        Require(
+            std::string(hsm_collector_test_wire_value_json(
+                0, "true", "", 1, 1, 0, "p/b")) == "{\"Type\":0,\"Value\":true,\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/b\"}",
+            "bool wire value layout");
+        Require(
+            std::string(hsm_collector_test_wire_value_json(
+                2, "0.1", "", 1, 1, 0, "p/d")) == "{\"Type\":2,\"Value\":0.1,\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/d\"}",
+            "double wire value layout");
+
+        // String escaping must equal System.Text.Json's default encoder byte-for-byte: < > & ' + "
+        // and non-ASCII as \uXXXX (uppercase), \\ for backslash, \t for tab — the quote is ",
+        // NOT \". The tricky string sits in Comment (which BuildWireValueJson escapes via EscapeJson,
+        // the same function used on string Values). Mirrors WireFormatGoldenLockTests escaping case.
+        // Input bytes: a < b > c & d ' e + f " g \ h U+00E9(C3 A9) U+2603(E2 98 83) <tab> j
+        Require(
+            std::string(hsm_collector_test_wire_value_json(
+                3, "\"hi\"", "a<b>c&d'e+f\"g\\h\xC3\xA9\xE2\x98\x83\tj", 0, 1, 0, "p/esc")) ==
+                "{\"Type\":3,\"Value\":\"hi\",\"Comment\":\"a\\u003Cb\\u003Ec\\u0026d\\u0027e\\u002Bf\\u0022g\\\\h\\u00E9\\u2603\\tj\","
+                "\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/esc\"}",
+            "string escaping matches the System.Text.Json default encoder");
+    }
+
+    void NativeWireBarJsonMatchesNetByteLayout()
+    {
+        // int bar: min1 max5 sum15 count5 -> mean nearbyint(3); open epoch, close +2s.
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(
+                1, 1, 5, 15, 1, 5, 5, 2, 0, 2000, 0, "p/ib")) == "{\"Type\":4,\"Min\":1,\"Max\":5,\"Mean\":3,\"FirstValue\":1,\"LastValue\":5,\"Percentiles\":null,"
+                                                                 "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
+                                                                 "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
+            "int bar wire layout");
+
+        // int-bar Mean rounding must match C# `(int)Math.Round(_totalSum / Count)`
+        // (MonitoringBar.cs:128), which is round-HALF-TO-EVEN. nearbyint in the default FE mode is
+        // also half-to-even, so 2.5 -> 2 and 3.5 -> 4 on BOTH sides. (Round-away-from-zero would
+        // give 3 and 4 and break parity.) Pins the half-way cases the all-integer case can't.
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(1, 2, 3, 5, 2, 3, 2, 2, 0, 2000, 0, "p/ib")).find("\"Mean\":2,") != std::string::npos,
+            "int bar mean 2.5 rounds half-to-even -> 2");
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(1, 3, 4, 7, 3, 4, 2, 2, 0, 2000, 0, "p/ib")).find("\"Mean\":4,") != std::string::npos,
+            "int bar mean 3.5 rounds half-to-even -> 4");
+
+        // double bar (Type 5): sum13/count4 -> mean 3.25; min/max/first/last carry one decimal.
+        // Cross-locked by WireFormatGoldenLockTests double-bar case.
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(
+                0, 1.5, 5.5, 13.0, 1.5, 5.5, 4, 2, 0, 2000, 0, "p/db")) == "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
+                                                                           "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
+                                                                           "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
+            "double bar wire layout");
+    }
+
+    void NativeWireFileJsonMatchesNetByteLayout()
+    {
+        // "hi" serializes as the byte array [104,105]; Extension/Name precede Value.
+        Require(
+            std::string(hsm_collector_test_wire_file_json("txt", "n", "hi", "", 1, 1, 0, "p/f")) == "{\"Type\":6,\"Extension\":\"txt\",\"Name\":\"n\",\"Value\":[104,105],\"Comment\":null,"
+                                                                                                    "\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/f\"}",
+            "file wire layout (List<byte> numeric array)");
+    }
+
+    void NativeWireTimeSpanAndVersionMatchNet()
+    {
+        // .NET TimeSpan "c": "1.02:03:04.0050000" (ticks for TimeSpan(1,2,3,4,5) = 937840050000);
+        // day omitted when zero; seven-digit fraction (not trimmed); negative sign.
+        Require(std::string(hsm_collector_test_timespan_c_format(937840050000LL)) == "1.02:03:04.0050000", "timespan c-format");
+        Require(std::string(hsm_collector_test_timespan_c_format(40000000LL)) == "00:00:04", "timespan whole seconds drops the fraction and day");
+        Require(std::string(hsm_collector_test_timespan_c_format(-600000000LL)) == "-00:01:00", "timespan negative");
+        // TimeSpan.MinValue.Ticks == Int64.MinValue is a legal value; negating it as int64 is UB.
+        // Unsigned-magnitude formatting must yield the .NET "c" string exactly.
+        Require(std::string(hsm_collector_test_timespan_c_format(INT64_MIN)) == "-10675199.02:48:05.4775808", "timespan Int64.MinValue (no UB)");
+
+        // TimeSpan(7) / Version(8) value DTOs serialize the formatted text as a quoted string.
+        Require(
+            std::string(hsm_collector_test_wire_value_json(7, "\"1.02:03:04.0050000\"", "", 1, 1, 0, "p/ts")) == "{\"Type\":7,\"Value\":\"1.02:03:04.0050000\",\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ts\"}",
+            "timespan wire value");
+        Require(
+            std::string(hsm_collector_test_wire_value_json(8, "\"1.2.3.4\"", "", 1, 1, 0, "p/v")) == "{\"Type\":8,\"Value\":\"1.2.3.4\",\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/v\"}",
+            "version wire value");
+    }
+
+    void NativeWireRegistrationJsonMatchesNetByteLayout()
+    {
+        // SensorType IntSensor(1); ttl 60000ms -> 600000000 ticks; OriginalUnit MB(3);
+        // EnumOption wire order Key,Value,Description,Color (Color ARGB int).
+        Require(
+            std::string(hsm_collector_test_wire_registration_json(
+                1, 60000, 3, 1, "d", 1, 1, "v", "ed", -16711936, "p/int")) == "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\","
+                                                                              "\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,\"TTLs\":[600000000],\"TTL\":null,"
+                                                                              "\"Statistics\":null,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
+                                                                              "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,"
+                                                                              "\"EnumOptions\":[{\"Key\":1,\"Value\":\"v\",\"Description\":\"ed\",\"Color\":-16711936}],"
+                                                                              "\"Key\":null,\"Path\":\"p/int\"}",
+            "AddOrUpdateSensorRequest wire layout");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+            { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
+            { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
+            { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
+            { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
+            { "native_wire_bar_json_matches_net_byte_layout", [](const std::string&) { NativeWireBarJsonMatchesNetByteLayout(); } },
+            { "native_wire_file_json_matches_net_byte_layout", [](const std::string&) { NativeWireFileJsonMatchesNetByteLayout(); } },
             { "native_lifecycle_listener_can_register_another_listener", [](const std::string&) { NativeLifecycleListenerCanRegisterAnotherListener(); } },
             { "native_logger_deduplicates_repeated_errors_within_window", [](const std::string&) { NativeLoggerDeduplicatesRepeatedErrorsWithinWindow(); } },
             { "native_logger_zero_window_logs_every_error", [](const std::string&) { NativeLoggerZeroWindowLogsEveryError(); } },

@@ -6,6 +6,8 @@
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
+#include <ctime>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -125,6 +127,10 @@ namespace
         }
     }
 
+    // Internal conformance-format escaping (the conformance corpus' own text convention, NOT the
+    // real .NET wire). Quote is the short \", non-ASCII passes through verbatim. The shared corpus
+    // pins this exact shape across both drivers; do NOT change it. The real System.Text.Json wire
+    // escaping lives in EscapeJsonWire below.
     std::string EscapeJson(const std::string& value)
     {
         std::ostringstream output;
@@ -169,10 +175,337 @@ namespace
         return output.str();
     }
 
+    void AppendUnicodeEscape(std::ostringstream& output, unsigned int code_unit)
+    {
+        // Four-digit UPPERCASE hex, matching System.Text.Json (e.g. "<", "é").
+        output << "\\u" << std::setw(4) << (code_unit & 0xFFFFu);
+    }
+
+    // The exact set of ASCII chars that System.Text.Json's DEFAULT JavaScriptEncoder escapes as
+    // \uXXXX (observed by serializing every code point through the real HttpRequest<T> options;
+    // see WireFormatGoldenLockTests escaping cases). Note '"' is " here, NOT the short \".
+    bool NeedsAsciiUnicodeEscape(unsigned char b)
+    {
+        switch (b)
+        {
+        case 0x22: // "
+        case 0x26: // &
+        case 0x27: // '
+        case 0x2B: // +
+        case 0x3C: // <
+        case 0x3E: // >
+        case 0x60: // `
+        case 0x7F: // DEL
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    // Byte-identical to System.Text.Json's default encoder: short escapes for \\ \b \t \n \f \r;
+    // everything else that must escape (the HTML-sensitive ASCII set, all other controls, DEL, and
+    // every non-ASCII code point) becomes \uXXXX in UTF-16 (surrogate pairs for astral planes),
+    // uppercase hex. The double quote is " (not \"). Input is UTF-8; malformed sequences emit
+    // the replacement character U+FFFD so the serializer never produces invalid JSON. Used by the
+    // real-wire BuildWire* serializers; the internal-format EscapeJson above is a different shape.
+    std::string EscapeJsonWire(const std::string& value)
+    {
+        std::ostringstream output;
+        output << std::hex << std::uppercase << std::setfill('0');
+
+        const size_t n = value.size();
+        for (size_t i = 0; i < n;)
+        {
+            const unsigned char b = static_cast<unsigned char>(value[i]);
+
+            switch (b)
+            {
+            case '\\':
+                output << "\\\\";
+                ++i;
+                continue;
+            case '\b':
+                output << "\\b";
+                ++i;
+                continue;
+            case '\t':
+                output << "\\t";
+                ++i;
+                continue;
+            case '\n':
+                output << "\\n";
+                ++i;
+                continue;
+            case '\f':
+                output << "\\f";
+                ++i;
+                continue;
+            case '\r':
+                output << "\\r";
+                ++i;
+                continue;
+            default:
+                break;
+            }
+
+            if (b < 0x80)
+            {
+                if (b < 0x20 || NeedsAsciiUnicodeEscape(b))
+                    AppendUnicodeEscape(output, b);
+                else
+                    output << static_cast<char>(b);
+                ++i;
+                continue;
+            }
+
+            // Decode one UTF-8 code point.
+            unsigned int cp = 0;
+            size_t len = 0;
+            if ((b & 0xE0) == 0xC0)
+            {
+                cp = b & 0x1Fu;
+                len = 2;
+            }
+            else if ((b & 0xF0) == 0xE0)
+            {
+                cp = b & 0x0Fu;
+                len = 3;
+            }
+            else if ((b & 0xF8) == 0xF0)
+            {
+                cp = b & 0x07u;
+                len = 4;
+            }
+            else
+            {
+                AppendUnicodeEscape(output, 0xFFFD);
+                ++i;
+                continue;
+            }
+
+            if (i + len > n)
+            {
+                AppendUnicodeEscape(output, 0xFFFD);
+                i = n;
+                continue;
+            }
+
+            bool ok = true;
+            for (size_t k = 1; k < len; ++k)
+            {
+                const unsigned char cont = static_cast<unsigned char>(value[i + k]);
+                if ((cont & 0xC0) != 0x80)
+                {
+                    ok = false;
+                    break;
+                }
+                cp = (cp << 6) | (cont & 0x3Fu);
+            }
+
+            if (!ok)
+            {
+                AppendUnicodeEscape(output, 0xFFFD);
+                ++i;
+                continue;
+            }
+
+            i += len;
+
+            if (cp <= 0xFFFF)
+            {
+                AppendUnicodeEscape(output, cp);
+            }
+            else
+            {
+                cp -= 0x10000;
+                AppendUnicodeEscape(output, 0xD800 + (cp >> 10));
+                AppendUnicodeEscape(output, 0xDC00 + (cp & 0x3FF));
+            }
+        }
+
+        return output.str();
+    }
+
     int64_t UnixTimeMilliseconds()
     {
         const auto now = std::chrono::system_clock::now().time_since_epoch();
         return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    }
+
+    // .NET System.Text.Json (net8/Core) ISO-8601 UTC: "yyyy-MM-ddTHH:mm:ss[.fff]Z" with the
+    // fraction trimmed to its minimal non-zero digits (no fraction when zero), e.g.
+    // "2026-06-16T12:00:00Z" and "2026-06-16T12:00:00.123Z". Native payload time is
+    // unix-millisecond precision, so the fraction is at most three digits. (#1096 wire contract.)
+    std::string IsoUtcFromUnixMs(int64_t unix_ms)
+    {
+        // Floored division so a pre-epoch (negative) input still yields millis in [0,999] and a
+        // correctly floored second, instead of C++ truncate-toward-zero producing a negative
+        // remainder and an off-by-one second. Production times are post-epoch; this only matters
+        // for the manual-clock test seam.
+        int64_t secs64 = unix_ms / 1000;
+        int64_t millis64 = unix_ms % 1000;
+        if (millis64 < 0)
+        {
+            millis64 += 1000;
+            --secs64;
+        }
+
+        const std::time_t secs = static_cast<std::time_t>(secs64);
+        const int millis = static_cast<int>(millis64);
+
+        std::tm tm{};
+#if defined(_WIN32)
+        const bool ok = gmtime_s(&tm, &secs) == 0;
+#else
+        const bool ok = gmtime_r(&secs, &tm) != nullptr;
+#endif
+        // Out-of-range second: fail loudly with a distinctive, well-formed sentinel rather than
+        // silently emitting a zero-initialized "0000-..." timestamp.
+        if (!ok)
+            return "0001-01-01T00:00:00Z";
+
+        char buf[40];
+        std::snprintf(
+            buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d",
+            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+        std::string result(buf);
+        if (millis != 0)
+        {
+            char frac[8];
+            std::snprintf(frac, sizeof(frac), "%03d", millis);
+            std::string f(frac);
+            while (f.size() > 1 && f.back() == '0')
+                f.pop_back();
+            result += '.';
+            result += f;
+        }
+
+        result += 'Z';
+        return result;
+    }
+
+    // .NET TimeSpan "c" (constant/invariant) format: "[-][d.]hh:mm:ss[.fffffff]". The day part is
+    // omitted when zero; the fraction is present only when non-zero and is ALWAYS seven digits
+    // (100-ns ticks, not trimmed — unlike the ISO time fraction). Input is .NET ticks (100 ns).
+    // (#1096 §15 wire contract for TimeSpan sensor values.)
+    std::string TimeSpanCFormat(int64_t ticks)
+    {
+        constexpr uint64_t per_second = 10000000ull;
+        constexpr uint64_t per_minute = 60ull * per_second;
+        constexpr uint64_t per_hour = 60ull * per_minute;
+        constexpr uint64_t per_day = 24ull * per_hour;
+
+        std::string sign;
+        // Magnitude in uint64_t: negating ticks as int64_t would be UB for INT64_MIN, which is a
+        // legal value here (TimeSpan.MinValue.Ticks == Int64.MinValue). Two's-complement magnitude
+        // via unsigned arithmetic is well-defined for the whole range.
+        uint64_t total;
+        if (ticks < 0)
+        {
+            sign = "-";
+            total = 0ull - static_cast<uint64_t>(ticks);
+        }
+        else
+        {
+            total = static_cast<uint64_t>(ticks);
+        }
+
+        const uint64_t days = total / per_day;
+        total %= per_day;
+        const uint64_t hours = total / per_hour;
+        total %= per_hour;
+        const uint64_t minutes = total / per_minute;
+        total %= per_minute;
+        const uint64_t seconds = total / per_second;
+        const uint64_t fraction = total % per_second;
+
+        char buf[32];
+        std::snprintf(
+            buf, sizeof(buf), "%02llu:%02llu:%02llu",
+            static_cast<unsigned long long>(hours), static_cast<unsigned long long>(minutes),
+            static_cast<unsigned long long>(seconds));
+
+        std::string result = sign;
+        if (days > 0)
+            result += std::to_string(days) + ".";
+        result += buf;
+        if (fraction > 0)
+        {
+            char frac[16];
+            std::snprintf(frac, sizeof(frac), "%07llu", static_cast<unsigned long long>(fraction));
+            result += ".";
+            result += frac;
+        }
+
+        return result;
+    }
+
+    // Real .NET wire JSON for a single value DTO (#1096 §15). Byte-identical to net8
+    // System.Text.Json output: property order is most-derived-first then base-last with Type
+    // first (Type, Value, Comment, Time, Status, Key, Path); Comment null is emitted as `null`;
+    // the obsolete Key is always `null`; Time is ISO-8601 Z. `value_json` is pre-formatted by
+    // the caller (DoubleJson for doubles, quoted+escaped for strings/timespan/version, bare for
+    // ints/bools/enum). Used by the transport in #1096 PR2; the legacy BuildValueJson stays for
+    // the behavior corpus.
+    std::string BuildWireValueJson(
+        hsm_sensor_type_t type,
+        const std::string& value_json,
+        const std::string& comment,
+        bool comment_is_null,
+        hsm_sensor_status_t status,
+        int64_t time_ms,
+        const std::string& path)
+    {
+        std::ostringstream json;
+        json << "{\"Type\":" << static_cast<int>(type)
+             << ",\"Value\":" << value_json
+             << ",\"Comment\":" << (comment_is_null ? std::string("null") : ("\"" + EscapeJsonWire(comment) + "\""))
+             << ",\"Time\":\"" << IsoUtcFromUnixMs(time_ms) << "\""
+             << ",\"Status\":" << static_cast<int>(status)
+             << ",\"Key\":null"
+             << ",\"Path\":\"" << EscapeJsonWire(path) << "\"}";
+        return json.str();
+    }
+
+    // .NET serializes List<byte> as a numeric JSON array ([104,105]), NOT base64 (#1096 §15).
+    std::string ByteArrayJson(const std::string& content)
+    {
+        std::ostringstream array;
+        array << '[';
+        for (size_t i = 0; i < content.size(); ++i)
+        {
+            if (i != 0)
+                array << ',';
+            array << static_cast<int>(static_cast<unsigned char>(content[i]));
+        }
+        array << ']';
+        return array.str();
+    }
+
+    // Real wire JSON for FileSensorValue: Type, Extension, Name, Value(byte array), Comment,
+    // Time, Status, Key, Path (#1096 §15).
+    std::string BuildWireFileJson(
+        const std::string& extension,
+        const std::string& name,
+        const std::string& content_utf8,
+        const std::string& comment,
+        bool comment_is_null,
+        hsm_sensor_status_t status,
+        int64_t time_ms,
+        const std::string& path)
+    {
+        std::ostringstream json;
+        json << "{\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE)
+             << ",\"Extension\":\"" << EscapeJsonWire(extension) << "\""
+             << ",\"Name\":\"" << EscapeJsonWire(name) << "\""
+             << ",\"Value\":" << ByteArrayJson(content_utf8)
+             << ",\"Comment\":" << (comment_is_null ? std::string("null") : ("\"" + EscapeJsonWire(comment) + "\""))
+             << ",\"Time\":\"" << IsoUtcFromUnixMs(time_ms) << "\""
+             << ",\"Status\":" << static_cast<int>(status)
+             << ",\"Key\":null"
+             << ",\"Path\":\"" << EscapeJsonWire(path) << "\"}";
+        return json.str();
     }
 
     // Monotonic clock for periodic scheduling and rate elapsed-time math (mirrors the C#
@@ -480,6 +813,60 @@ namespace
                ",\"EnumOptions\":" + enums_text + "}";
     }
 
+    // Real wire JSON for AddOrUpdateSensorRequest (#1096 §15) — byte-identical to net8
+    // System.Text.Json. Most fields the native does not model are emitted as their .NET defaults
+    // (null / 0 / false). The obsolete TtlAlert/TTL serialize as null (get => null). EnumOption
+    // wire order is Key, Value, Description, Color (NOTE: differs from the internal registration
+    // text's Key,Value,Color,Description). The Command discriminator is Type:0.
+    std::string BuildWireRegistrationJson(const std::string& path, hsm_sensor_type_t type, const RegistrationOptions& options)
+    {
+        std::string ttls = "null";
+        if (options.ttl_ms > 0)
+            ttls = "[" + std::to_string(options.ttl_ms * 10000) + "]";
+
+        std::string enums = "null";
+        if (options.has_enum_options)
+        {
+            enums = "[";
+            for (size_t i = 0; i < options.enum_options.size(); ++i)
+            {
+                const auto& option = options.enum_options[i];
+                if (i > 0)
+                    enums += ",";
+                enums += "{\"Key\":" + std::to_string(option.key) +
+                         ",\"Value\":\"" + EscapeJsonWire(option.value) +
+                         "\",\"Description\":\"" + EscapeJsonWire(option.description) +
+                         "\",\"Color\":" + std::to_string(option.color) + "}";
+            }
+            enums += "]";
+        }
+
+        std::ostringstream json;
+        json << "{\"Type\":0"
+             << ",\"Alerts\":null"
+             << ",\"TtlAlerts\":null"
+             << ",\"TtlAlert\":null"
+             << ",\"SensorType\":" << static_cast<int>(type)
+             << ",\"Description\":" << (options.has_description ? ("\"" + EscapeJsonWire(options.description) + "\"") : "null")
+             << ",\"DefaultChats\":null"
+             << ",\"KeepHistory\":null"
+             << ",\"SelfDestroy\":null"
+             << ",\"TTLs\":" << ttls
+             << ",\"TTL\":null"
+             << ",\"Statistics\":null"
+             << ",\"IsSingletonSensor\":null"
+             << ",\"AggregateData\":null"
+             << ",\"EnableGrafana\":null"
+             << ",\"OriginalUnit\":" << (options.unit >= 0 ? std::to_string(options.unit) : "null")
+             << ",\"DisplayUnit\":null"
+             << ",\"DefaultAlertsOptions\":0"
+             << ",\"IsForceUpdate\":false"
+             << ",\"EnumOptions\":" << enums
+             << ",\"Key\":null"
+             << ",\"Path\":\"" << EscapeJsonWire(path) << "\"}";
+        return json.str();
+    }
+
     // C# Math.Round(value, precision, MidpointRounding.AwayFromZero) — std::round is
     // half-away-from-zero, matching the double-bar field rounding contract.
     double RoundAwayFromZero(double value, int precision)
@@ -637,6 +1024,51 @@ namespace
              << "\"Comment\":\"\""
              << "}";
 
+        return json.str();
+    }
+
+    // Real wire JSON for a bar DTO (#1096 §15): Type, Min, Max, Mean, FirstValue, LastValue,
+    // Percentiles(null), OpenTime, CloseTime, Count, Comment(null), Time, Status, Key, Path.
+    // Field VALUES reuse the same int/double formatting as the internal MonitoringBarJson.
+    std::string BuildWireBarJson(const MonitoringBar& bar, int64_t time_ms, const std::string& path)
+    {
+        const double raw_mean = bar.total_sum / bar.count;
+
+        std::string min_text, max_text, mean_text, first_text, last_text;
+        if (bar.is_int)
+        {
+            min_text = BarIntFieldJson(bar.min);
+            max_text = BarIntFieldJson(bar.max);
+            mean_text = std::to_string(static_cast<int32_t>(std::nearbyint(raw_mean)));
+            first_text = BarIntFieldJson(bar.first);
+            last_text = BarIntFieldJson(bar.last);
+        }
+        else
+        {
+            min_text = DoubleJson(RoundAwayFromZero(bar.min, bar.precision));
+            max_text = DoubleJson(RoundAwayFromZero(bar.max, bar.precision));
+            mean_text = DoubleJson(RoundAwayFromZero(raw_mean, bar.precision));
+            first_text = DoubleJson(RoundAwayFromZero(bar.first, bar.precision));
+            last_text = DoubleJson(RoundAwayFromZero(bar.last, bar.precision));
+        }
+
+        std::ostringstream json;
+        json << "{\"Type\":"
+             << (bar.is_int ? static_cast<int>(HSM_SENSOR_TYPE_INT_BAR) : static_cast<int>(HSM_SENSOR_TYPE_DOUBLE_BAR))
+             << ",\"Min\":" << min_text
+             << ",\"Max\":" << max_text
+             << ",\"Mean\":" << mean_text
+             << ",\"FirstValue\":" << first_text
+             << ",\"LastValue\":" << last_text
+             << ",\"Percentiles\":null"
+             << ",\"OpenTime\":\"" << IsoUtcFromUnixMs(bar.open_ms) << "\""
+             << ",\"CloseTime\":\"" << IsoUtcFromUnixMs(bar.close_ms) << "\""
+             << ",\"Count\":" << bar.count
+             << ",\"Comment\":null"
+             << ",\"Time\":\"" << IsoUtcFromUnixMs(time_ms) << "\""
+             << ",\"Status\":" << static_cast<int>(HSM_SENSOR_STATUS_OK)
+             << ",\"Key\":null"
+             << ",\"Path\":\"" << EscapeJsonWire(path) << "\"}";
         return json.str();
     }
 
@@ -2462,6 +2894,129 @@ extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const c
 {
     if (collector != nullptr && message != nullptr)
         collector->impl->TestLogError(message);
+}
+
+// Test-only seam (#1096): exercise the real-wire serializers directly from the native unit
+// tests without a live collector. Return into a thread-local buffer (valid until the next call
+// on the same thread). Not in the public header.
+extern "C" const char* hsm_collector_test_iso_from_unix_ms(int64_t unix_ms)
+{
+    static thread_local std::string buffer;
+    buffer = IsoUtcFromUnixMs(unix_ms);
+    return buffer.c_str();
+}
+
+extern "C" const char* hsm_collector_test_timespan_c_format(int64_t ticks)
+{
+    static thread_local std::string buffer;
+    buffer = TimeSpanCFormat(ticks);
+    return buffer.c_str();
+}
+
+extern "C" const char* hsm_collector_test_wire_value_json(
+    int32_t type,
+    const char* value_json,
+    const char* comment,
+    int comment_is_null,
+    int32_t status,
+    int64_t time_ms,
+    const char* path)
+{
+    static thread_local std::string buffer;
+    buffer = BuildWireValueJson(
+        static_cast<hsm_sensor_type_t>(type),
+        value_json != nullptr ? value_json : "",
+        comment != nullptr ? comment : "",
+        comment_is_null != 0,
+        static_cast<hsm_sensor_status_t>(status),
+        time_ms,
+        path != nullptr ? path : "");
+    return buffer.c_str();
+}
+
+extern "C" const char* hsm_collector_test_wire_bar_json(
+    int is_int,
+    double min,
+    double max,
+    double total_sum,
+    double first,
+    double last,
+    int32_t count,
+    int precision,
+    int64_t open_ms,
+    int64_t close_ms,
+    int64_t time_ms,
+    const char* path)
+{
+    static thread_local std::string buffer;
+    MonitoringBar bar;
+    bar.is_int = is_int != 0;
+    bar.precision = precision;
+    bar.open_ms = open_ms;
+    bar.close_ms = close_ms;
+    bar.total_sum = total_sum;
+    bar.min = min;
+    bar.max = max;
+    bar.first = first;
+    bar.last = last;
+    bar.count = count;
+    buffer = BuildWireBarJson(bar, time_ms, path != nullptr ? path : "");
+    return buffer.c_str();
+}
+
+extern "C" const char* hsm_collector_test_wire_file_json(
+    const char* extension,
+    const char* name,
+    const char* content,
+    const char* comment,
+    int comment_is_null,
+    int32_t status,
+    int64_t time_ms,
+    const char* path)
+{
+    static thread_local std::string buffer;
+    buffer = BuildWireFileJson(
+        extension != nullptr ? extension : "",
+        name != nullptr ? name : "",
+        content != nullptr ? content : "",
+        comment != nullptr ? comment : "",
+        comment_is_null != 0,
+        static_cast<hsm_sensor_status_t>(status),
+        time_ms,
+        path != nullptr ? path : "");
+    return buffer.c_str();
+}
+
+extern "C" const char* hsm_collector_test_wire_registration_json(
+    int32_t type,
+    int64_t ttl_ms,
+    int32_t unit,
+    int has_description,
+    const char* description,
+    int has_enum,
+    int32_t enum_key,
+    const char* enum_value,
+    const char* enum_description,
+    int32_t enum_color,
+    const char* path)
+{
+    static thread_local std::string buffer;
+    RegistrationOptions options;
+    options.ttl_ms = ttl_ms;
+    options.unit = unit;
+    options.has_description = has_description != 0;
+    options.description = description != nullptr ? description : "";
+    if (has_enum != 0)
+    {
+        options.has_enum_options = true;
+        options.enum_options.push_back(EnumOptionData{
+            enum_key,
+            enum_value != nullptr ? enum_value : "",
+            enum_color,
+            enum_description != nullptr ? enum_description : "" });
+    }
+    buffer = BuildWireRegistrationJson(path != nullptr ? path : "", static_cast<hsm_sensor_type_t>(type), options);
+    return buffer.c_str();
 }
 
 hsm_result_t hsm_collector_create_int_sensor(
