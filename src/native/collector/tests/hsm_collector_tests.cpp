@@ -23,6 +23,16 @@
 extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms);
 extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, int64_t delta_ms);
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message);
+// Real-wire serializers (#1096): exercised directly from the unit tests.
+extern "C" const char* hsm_collector_test_iso_from_unix_ms(int64_t unix_ms);
+extern "C" const char* hsm_collector_test_wire_value_json(
+    int32_t type,
+    const char* value_json,
+    const char* comment,
+    int comment_is_null,
+    int32_t status,
+    int64_t time_ms,
+    const char* path);
 
 namespace
 {
@@ -2613,9 +2623,37 @@ namespace
         Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop must not deadlock when a listener adds a listener");
     }
 
+    // --- #1096 real-wire serialization (§15): byte-identical to net8 System.Text.Json. ---
+
+    void NativeWireIsoFromUnixMsMatchesNet()
+    {
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(0)) == "1970-01-01T00:00:00Z", "epoch ISO");
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(1000)) == "1970-01-01T00:00:01Z", "whole-second ISO drops the fraction");
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(1500)) == "1970-01-01T00:00:01.5Z", "500ms trims to .5");
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(123)) == "1970-01-01T00:00:00.123Z", "123ms keeps three digits");
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(50)) == "1970-01-01T00:00:00.05Z", "50ms trims to .05");
+    }
+
+    void NativeWireValueJsonMatchesNetByteLayout()
+    {
+        // Matches the observed net8 byte layout: Type, Value, Comment, Time, Status, Key, Path;
+        // Comment null emitted as `null`; Key always null; Time ISO-8601 Z.
+        Require(
+            std::string(hsm_collector_test_wire_value_json(
+                1, "42", "", 1 /*comment null*/, 1 /*Ok*/, 0, "p/int")) == "{\"Type\":1,\"Value\":42,\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/int\"}",
+            "int wire value layout");
+
+        Require(
+            std::string(hsm_collector_test_wire_value_json(
+                3, "\"hi\"", "note", 0 /*comment present*/, 2 /*Warning*/, 1500, "p/s")) == "{\"Type\":3,\"Value\":\"hi\",\"Comment\":\"note\",\"Time\":\"1970-01-01T00:00:01.5Z\",\"Status\":2,\"Key\":null,\"Path\":\"p/s\"}",
+            "string wire value layout with comment + fractional time");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+            { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
+            { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
             { "native_lifecycle_listener_can_register_another_listener", [](const std::string&) { NativeLifecycleListenerCanRegisterAnotherListener(); } },
             { "native_logger_deduplicates_repeated_errors_within_window", [](const std::string&) { NativeLoggerDeduplicatesRepeatedErrorsWithinWindow(); } },
             { "native_logger_zero_window_logs_every_error", [](const std::string&) { NativeLoggerZeroWindowLogsEveryError(); } },

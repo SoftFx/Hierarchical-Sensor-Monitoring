@@ -6,6 +6,8 @@
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
+#include <ctime>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -173,6 +175,70 @@ namespace
     {
         const auto now = std::chrono::system_clock::now().time_since_epoch();
         return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    }
+
+    // .NET System.Text.Json (net8/Core) ISO-8601 UTC: "yyyy-MM-ddTHH:mm:ss[.fff]Z" with the
+    // fraction trimmed to its minimal non-zero digits (no fraction when zero), e.g.
+    // "2026-06-16T12:00:00Z" and "2026-06-16T12:00:00.123Z". Native payload time is
+    // unix-millisecond precision, so the fraction is at most three digits. (#1096 wire contract.)
+    std::string IsoUtcFromUnixMs(int64_t unix_ms)
+    {
+        const std::time_t secs = static_cast<std::time_t>(unix_ms / 1000);
+        const int millis = static_cast<int>(unix_ms % 1000);
+
+        std::tm tm{};
+#if defined(_WIN32)
+        gmtime_s(&tm, &secs);
+#else
+        gmtime_r(&secs, &tm);
+#endif
+
+        char buf[40];
+        std::snprintf(
+            buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d",
+            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+        std::string result(buf);
+        if (millis != 0)
+        {
+            char frac[8];
+            std::snprintf(frac, sizeof(frac), "%03d", millis);
+            std::string f(frac);
+            while (f.size() > 1 && f.back() == '0')
+                f.pop_back();
+            result += '.';
+            result += f;
+        }
+
+        result += 'Z';
+        return result;
+    }
+
+    // Real .NET wire JSON for a single value DTO (#1096 §15). Byte-identical to net8
+    // System.Text.Json output: property order is most-derived-first then base-last with Type
+    // first (Type, Value, Comment, Time, Status, Key, Path); Comment null is emitted as `null`;
+    // the obsolete Key is always `null`; Time is ISO-8601 Z. `value_json` is pre-formatted by
+    // the caller (DoubleJson for doubles, quoted+escaped for strings/timespan/version, bare for
+    // ints/bools/enum). Used by the transport in #1096 PR2; the legacy BuildValueJson stays for
+    // the behavior corpus.
+    std::string BuildWireValueJson(
+        hsm_sensor_type_t type,
+        const std::string& value_json,
+        const std::string& comment,
+        bool comment_is_null,
+        hsm_sensor_status_t status,
+        int64_t time_ms,
+        const std::string& path)
+    {
+        std::ostringstream json;
+        json << "{\"Type\":" << static_cast<int>(type)
+             << ",\"Value\":" << value_json
+             << ",\"Comment\":" << (comment_is_null ? std::string("null") : ("\"" + EscapeJson(comment) + "\""))
+             << ",\"Time\":\"" << IsoUtcFromUnixMs(time_ms) << "\""
+             << ",\"Status\":" << static_cast<int>(status)
+             << ",\"Key\":null"
+             << ",\"Path\":\"" << EscapeJson(path) << "\"}";
+        return json.str();
     }
 
     // Monotonic clock for periodic scheduling and rate elapsed-time math (mirrors the C#
@@ -2462,6 +2528,37 @@ extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const c
 {
     if (collector != nullptr && message != nullptr)
         collector->impl->TestLogError(message);
+}
+
+// Test-only seam (#1096): exercise the real-wire serializers directly from the native unit
+// tests without a live collector. Return into a thread-local buffer (valid until the next call
+// on the same thread). Not in the public header.
+extern "C" const char* hsm_collector_test_iso_from_unix_ms(int64_t unix_ms)
+{
+    static thread_local std::string buffer;
+    buffer = IsoUtcFromUnixMs(unix_ms);
+    return buffer.c_str();
+}
+
+extern "C" const char* hsm_collector_test_wire_value_json(
+    int32_t type,
+    const char* value_json,
+    const char* comment,
+    int comment_is_null,
+    int32_t status,
+    int64_t time_ms,
+    const char* path)
+{
+    static thread_local std::string buffer;
+    buffer = BuildWireValueJson(
+        static_cast<hsm_sensor_type_t>(type),
+        value_json != nullptr ? value_json : "",
+        comment != nullptr ? comment : "",
+        comment_is_null != 0,
+        static_cast<hsm_sensor_status_t>(status),
+        time_ms,
+        path != nullptr ? path : "");
+    return buffer.c_str();
 }
 
 hsm_result_t hsm_collector_create_int_sensor(
