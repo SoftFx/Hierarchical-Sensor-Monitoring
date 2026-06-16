@@ -86,9 +86,10 @@ namespace HSMDataCollector.IntegrationTests.Tests
         public async Task TransientServerFailure_ValueEventuallyLands_ViaReEnqueue()
         {
             using var server = new FakeHsmServer();
-            // The default Polly pipeline retries only exceptions, not 5xx — but the queue
-            // re-enqueues a package whose send returned a non-success status, so the value
-            // survives a transient 503 and lands on a later collect cycle.
+            // The bounded data pipeline now retries 5xx within its own budget (#1096), and the
+            // queue still re-enqueues a package whose send ultimately returned a non-success
+            // status — either way the value survives a transient 503 and lands. (The precise
+            // pipeline-vs-re-enqueue behaviour is pinned by Retry5xxParityTests.)
             server.FailNextDataRequests(2);
 
             using var collector = new DataCollector(OptionsFor(server));
