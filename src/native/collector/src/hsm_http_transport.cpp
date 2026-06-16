@@ -53,9 +53,22 @@ namespace hsm::http
                 return response;
             }
 
+            // curl_slist_append returns nullptr on allocation failure WITHOUT freeing the existing
+            // list — overwriting header_list with that null would leak the earlier nodes and
+            // silently drop already-appended headers. Append into a temp and only commit on success.
             curl_slist* header_list = nullptr;
             for (const auto& header : headers)
-                header_list = curl_slist_append(header_list, (header.name + ": " + header.value).c_str());
+            {
+                curl_slist* appended = curl_slist_append(header_list, (header.name + ": " + header.value).c_str());
+                if (appended == nullptr)
+                {
+                    curl_slist_free_all(header_list);
+                    curl_easy_cleanup(curl);
+                    response.error = "curl_slist_append failed";
+                    return response;
+                }
+                header_list = appended;
+            }
 
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);

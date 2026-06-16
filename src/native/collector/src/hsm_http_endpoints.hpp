@@ -66,7 +66,9 @@ namespace hsm::http
 
         // Keep only the host: drop any path, query, or :port that an explicit URL might carry
         // (the collector passes Port separately, so an embedded port is ignored just as UriBuilder
-        // overwrites it with the explicit Port).
+        // overwrites it with the explicit Port). NOTE: a bracketed IPv6 literal ("[::1]") would be
+        // truncated at its first ':' — out of scope because the collector only feeds a hostname or
+        // "scheme://hostname", never an IPv6 literal; revisit if ServerAddress becomes IPv6-capable.
         inline std::string HostOnly(const std::string& authority)
         {
             std::string host = authority;
