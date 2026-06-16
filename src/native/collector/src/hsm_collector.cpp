@@ -127,6 +127,10 @@ namespace
         }
     }
 
+    // Internal conformance-format escaping (the conformance corpus' own text convention, NOT the
+    // real .NET wire). Quote is the short \", non-ASCII passes through verbatim. The shared corpus
+    // pins this exact shape across both drivers; do NOT change it. The real System.Text.Json wire
+    // escaping lives in EscapeJsonWire below.
     std::string EscapeJson(const std::string& value)
     {
         std::ostringstream output;
@@ -171,6 +175,157 @@ namespace
         return output.str();
     }
 
+    void AppendUnicodeEscape(std::ostringstream& output, unsigned int code_unit)
+    {
+        // Four-digit UPPERCASE hex, matching System.Text.Json (e.g. "<", "é").
+        output << "\\u" << std::setw(4) << (code_unit & 0xFFFFu);
+    }
+
+    // The exact set of ASCII chars that System.Text.Json's DEFAULT JavaScriptEncoder escapes as
+    // \uXXXX (observed by serializing every code point through the real HttpRequest<T> options;
+    // see WireFormatGoldenLockTests escaping cases). Note '"' is " here, NOT the short \".
+    bool NeedsAsciiUnicodeEscape(unsigned char b)
+    {
+        switch (b)
+        {
+        case 0x22: // "
+        case 0x26: // &
+        case 0x27: // '
+        case 0x2B: // +
+        case 0x3C: // <
+        case 0x3E: // >
+        case 0x60: // `
+        case 0x7F: // DEL
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    // Byte-identical to System.Text.Json's default encoder: short escapes for \\ \b \t \n \f \r;
+    // everything else that must escape (the HTML-sensitive ASCII set, all other controls, DEL, and
+    // every non-ASCII code point) becomes \uXXXX in UTF-16 (surrogate pairs for astral planes),
+    // uppercase hex. The double quote is " (not \"). Input is UTF-8; malformed sequences emit
+    // the replacement character U+FFFD so the serializer never produces invalid JSON. Used by the
+    // real-wire BuildWire* serializers; the internal-format EscapeJson above is a different shape.
+    std::string EscapeJsonWire(const std::string& value)
+    {
+        std::ostringstream output;
+        output << std::hex << std::uppercase << std::setfill('0');
+
+        const size_t n = value.size();
+        for (size_t i = 0; i < n;)
+        {
+            const unsigned char b = static_cast<unsigned char>(value[i]);
+
+            switch (b)
+            {
+            case '\\':
+                output << "\\\\";
+                ++i;
+                continue;
+            case '\b':
+                output << "\\b";
+                ++i;
+                continue;
+            case '\t':
+                output << "\\t";
+                ++i;
+                continue;
+            case '\n':
+                output << "\\n";
+                ++i;
+                continue;
+            case '\f':
+                output << "\\f";
+                ++i;
+                continue;
+            case '\r':
+                output << "\\r";
+                ++i;
+                continue;
+            default:
+                break;
+            }
+
+            if (b < 0x80)
+            {
+                if (b < 0x20 || NeedsAsciiUnicodeEscape(b))
+                    AppendUnicodeEscape(output, b);
+                else
+                    output << static_cast<char>(b);
+                ++i;
+                continue;
+            }
+
+            // Decode one UTF-8 code point.
+            unsigned int cp = 0;
+            size_t len = 0;
+            if ((b & 0xE0) == 0xC0)
+            {
+                cp = b & 0x1Fu;
+                len = 2;
+            }
+            else if ((b & 0xF0) == 0xE0)
+            {
+                cp = b & 0x0Fu;
+                len = 3;
+            }
+            else if ((b & 0xF8) == 0xF0)
+            {
+                cp = b & 0x07u;
+                len = 4;
+            }
+            else
+            {
+                AppendUnicodeEscape(output, 0xFFFD);
+                ++i;
+                continue;
+            }
+
+            if (i + len > n)
+            {
+                AppendUnicodeEscape(output, 0xFFFD);
+                i = n;
+                continue;
+            }
+
+            bool ok = true;
+            for (size_t k = 1; k < len; ++k)
+            {
+                const unsigned char cont = static_cast<unsigned char>(value[i + k]);
+                if ((cont & 0xC0) != 0x80)
+                {
+                    ok = false;
+                    break;
+                }
+                cp = (cp << 6) | (cont & 0x3Fu);
+            }
+
+            if (!ok)
+            {
+                AppendUnicodeEscape(output, 0xFFFD);
+                ++i;
+                continue;
+            }
+
+            i += len;
+
+            if (cp <= 0xFFFF)
+            {
+                AppendUnicodeEscape(output, cp);
+            }
+            else
+            {
+                cp -= 0x10000;
+                AppendUnicodeEscape(output, 0xD800 + (cp >> 10));
+                AppendUnicodeEscape(output, 0xDC00 + (cp & 0x3FF));
+            }
+        }
+
+        return output.str();
+    }
+
     int64_t UnixTimeMilliseconds()
     {
         const auto now = std::chrono::system_clock::now().time_since_epoch();
@@ -183,15 +338,31 @@ namespace
     // unix-millisecond precision, so the fraction is at most three digits. (#1096 wire contract.)
     std::string IsoUtcFromUnixMs(int64_t unix_ms)
     {
-        const std::time_t secs = static_cast<std::time_t>(unix_ms / 1000);
-        const int millis = static_cast<int>(unix_ms % 1000);
+        // Floored division so a pre-epoch (negative) input still yields millis in [0,999] and a
+        // correctly floored second, instead of C++ truncate-toward-zero producing a negative
+        // remainder and an off-by-one second. Production times are post-epoch; this only matters
+        // for the manual-clock test seam.
+        int64_t secs64 = unix_ms / 1000;
+        int64_t millis64 = unix_ms % 1000;
+        if (millis64 < 0)
+        {
+            millis64 += 1000;
+            --secs64;
+        }
+
+        const std::time_t secs = static_cast<std::time_t>(secs64);
+        const int millis = static_cast<int>(millis64);
 
         std::tm tm{};
 #if defined(_WIN32)
-        gmtime_s(&tm, &secs);
+        const bool ok = gmtime_s(&tm, &secs) == 0;
 #else
-        gmtime_r(&secs, &tm);
+        const bool ok = gmtime_r(&secs, &tm) != nullptr;
 #endif
+        // Out-of-range second: fail loudly with a distinctive, well-formed sentinel rather than
+        // silently emitting a zero-initialized "0000-..." timestamp.
+        if (!ok)
+            return "0001-01-01T00:00:00Z";
 
         char buf[40];
         std::snprintf(
@@ -220,32 +391,40 @@ namespace
     // (#1096 §15 wire contract for TimeSpan sensor values.)
     std::string TimeSpanCFormat(int64_t ticks)
     {
-        constexpr int64_t per_second = 10000000;
-        constexpr int64_t per_minute = 60 * per_second;
-        constexpr int64_t per_hour = 60 * per_minute;
-        constexpr int64_t per_day = 24 * per_hour;
+        constexpr uint64_t per_second = 10000000ull;
+        constexpr uint64_t per_minute = 60ull * per_second;
+        constexpr uint64_t per_hour = 60ull * per_minute;
+        constexpr uint64_t per_day = 24ull * per_hour;
 
         std::string sign;
-        int64_t total = ticks;
-        if (total < 0)
+        // Magnitude in uint64_t: negating ticks as int64_t would be UB for INT64_MIN, which is a
+        // legal value here (TimeSpan.MinValue.Ticks == Int64.MinValue). Two's-complement magnitude
+        // via unsigned arithmetic is well-defined for the whole range.
+        uint64_t total;
+        if (ticks < 0)
         {
             sign = "-";
-            total = -total;
+            total = 0ull - static_cast<uint64_t>(ticks);
+        }
+        else
+        {
+            total = static_cast<uint64_t>(ticks);
         }
 
-        const int64_t days = total / per_day;
+        const uint64_t days = total / per_day;
         total %= per_day;
-        const int64_t hours = total / per_hour;
+        const uint64_t hours = total / per_hour;
         total %= per_hour;
-        const int64_t minutes = total / per_minute;
+        const uint64_t minutes = total / per_minute;
         total %= per_minute;
-        const int64_t seconds = total / per_second;
-        const int64_t fraction = total % per_second;
+        const uint64_t seconds = total / per_second;
+        const uint64_t fraction = total % per_second;
 
         char buf[32];
         std::snprintf(
-            buf, sizeof(buf), "%02lld:%02lld:%02lld",
-            static_cast<long long>(hours), static_cast<long long>(minutes), static_cast<long long>(seconds));
+            buf, sizeof(buf), "%02llu:%02llu:%02llu",
+            static_cast<unsigned long long>(hours), static_cast<unsigned long long>(minutes),
+            static_cast<unsigned long long>(seconds));
 
         std::string result = sign;
         if (days > 0)
@@ -254,7 +433,7 @@ namespace
         if (fraction > 0)
         {
             char frac[16];
-            std::snprintf(frac, sizeof(frac), "%07lld", static_cast<long long>(fraction));
+            std::snprintf(frac, sizeof(frac), "%07llu", static_cast<unsigned long long>(fraction));
             result += ".";
             result += frac;
         }
@@ -281,11 +460,11 @@ namespace
         std::ostringstream json;
         json << "{\"Type\":" << static_cast<int>(type)
              << ",\"Value\":" << value_json
-             << ",\"Comment\":" << (comment_is_null ? std::string("null") : ("\"" + EscapeJson(comment) + "\""))
+             << ",\"Comment\":" << (comment_is_null ? std::string("null") : ("\"" + EscapeJsonWire(comment) + "\""))
              << ",\"Time\":\"" << IsoUtcFromUnixMs(time_ms) << "\""
              << ",\"Status\":" << static_cast<int>(status)
              << ",\"Key\":null"
-             << ",\"Path\":\"" << EscapeJson(path) << "\"}";
+             << ",\"Path\":\"" << EscapeJsonWire(path) << "\"}";
         return json.str();
     }
 
@@ -318,14 +497,14 @@ namespace
     {
         std::ostringstream json;
         json << "{\"Type\":" << static_cast<int>(HSM_SENSOR_TYPE_FILE)
-             << ",\"Extension\":\"" << EscapeJson(extension) << "\""
-             << ",\"Name\":\"" << EscapeJson(name) << "\""
+             << ",\"Extension\":\"" << EscapeJsonWire(extension) << "\""
+             << ",\"Name\":\"" << EscapeJsonWire(name) << "\""
              << ",\"Value\":" << ByteArrayJson(content_utf8)
-             << ",\"Comment\":" << (comment_is_null ? std::string("null") : ("\"" + EscapeJson(comment) + "\""))
+             << ",\"Comment\":" << (comment_is_null ? std::string("null") : ("\"" + EscapeJsonWire(comment) + "\""))
              << ",\"Time\":\"" << IsoUtcFromUnixMs(time_ms) << "\""
              << ",\"Status\":" << static_cast<int>(status)
              << ",\"Key\":null"
-             << ",\"Path\":\"" << EscapeJson(path) << "\"}";
+             << ",\"Path\":\"" << EscapeJsonWire(path) << "\"}";
         return json.str();
     }
 
@@ -655,8 +834,8 @@ namespace
                 if (i > 0)
                     enums += ",";
                 enums += "{\"Key\":" + std::to_string(option.key) +
-                         ",\"Value\":\"" + EscapeJson(option.value) +
-                         "\",\"Description\":\"" + EscapeJson(option.description) +
+                         ",\"Value\":\"" + EscapeJsonWire(option.value) +
+                         "\",\"Description\":\"" + EscapeJsonWire(option.description) +
                          "\",\"Color\":" + std::to_string(option.color) + "}";
             }
             enums += "]";
@@ -668,7 +847,7 @@ namespace
              << ",\"TtlAlerts\":null"
              << ",\"TtlAlert\":null"
              << ",\"SensorType\":" << static_cast<int>(type)
-             << ",\"Description\":" << (options.has_description ? ("\"" + EscapeJson(options.description) + "\"") : "null")
+             << ",\"Description\":" << (options.has_description ? ("\"" + EscapeJsonWire(options.description) + "\"") : "null")
              << ",\"DefaultChats\":null"
              << ",\"KeepHistory\":null"
              << ",\"SelfDestroy\":null"
@@ -684,7 +863,7 @@ namespace
              << ",\"IsForceUpdate\":false"
              << ",\"EnumOptions\":" << enums
              << ",\"Key\":null"
-             << ",\"Path\":\"" << EscapeJson(path) << "\"}";
+             << ",\"Path\":\"" << EscapeJsonWire(path) << "\"}";
         return json.str();
     }
 
@@ -889,7 +1068,7 @@ namespace
              << ",\"Time\":\"" << IsoUtcFromUnixMs(time_ms) << "\""
              << ",\"Status\":" << static_cast<int>(HSM_SENSOR_STATUS_OK)
              << ",\"Key\":null"
-             << ",\"Path\":\"" << EscapeJson(path) << "\"}";
+             << ",\"Path\":\"" << EscapeJsonWire(path) << "\"}";
         return json.str();
     }
 

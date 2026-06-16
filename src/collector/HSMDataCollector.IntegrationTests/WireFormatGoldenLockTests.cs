@@ -62,6 +62,51 @@ namespace HSMDataCollector.IntegrationTests
         }
 
         [Fact]
+        public void Double_bool_and_doublebar_dtos_match_the_native_golden_bytes()
+        {
+            // The double/bool DTOs and the double-bar layout are the most drift-prone (runtime
+            // shortest-double); lock them from the real serializer, not only the native unit tests.
+            Assert.Equal(
+                "{\"Type\":2,\"Value\":0.1,\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/d\"}",
+                Wire(new DoubleSensorValue { Path = "p/d", Value = 0.1, Time = Epoch, Comment = null }));
+
+            Assert.Equal(
+                "{\"Type\":0,\"Value\":true,\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/b\"}",
+                Wire(new BoolSensorValue { Path = "p/b", Value = true, Time = Epoch, Comment = null }));
+
+            Assert.Equal(
+                "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
+                + "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
+                + "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
+                Wire(new DoubleBarSensorValue { Path = "p/db", Min = 1.5, Max = 5.5, Mean = 3.25, FirstValue = 1.5, LastValue = 5.5, Count = 4, OpenTime = Epoch, CloseTime = Epoch.AddSeconds(2), Time = Epoch, Comment = null }));
+        }
+
+        [Fact]
+        public void String_escaping_matches_the_native_golden_bytes()
+        {
+            // System.Text.Json's DEFAULT encoder escapes < > & ' + " and all non-ASCII as \uXXXX
+            // (uppercase), backslash as \\, tab as \t — the double quote is ", NOT \". An
+            // all-ASCII corpus never exercises this; these adversarial chars lock native EscapeJson
+            // to the real encoder. Comment and string Value both go through the same encoder.
+            const string tricky = "a<b>c&d'e+f\"g\\hé☃\tj";
+            const string escaped = "a\\u003Cb\\u003Ec\\u0026d\\u0027e\\u002Bf\\u0022g\\\\h\\u00E9\\u2603\\tj";
+
+            // Tricky in Comment, plain Value — this exact shape is mirrored by the native unit test
+            // (native EscapeJson runs on Comment/Path; the string Value is escaped by the same
+            // function at the call site).
+            Assert.Equal(
+                "{\"Type\":3,\"Value\":\"hi\",\"Comment\":\"" + escaped + "\","
+                + "\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/esc\"}",
+                Wire(new StringSensorValue { Path = "p/esc", Value = "hi", Time = Epoch, Comment = tricky }));
+
+            // Tricky in the string Value position too, to lock value-side escaping.
+            Assert.Equal(
+                "{\"Type\":3,\"Value\":\"" + escaped + "\",\"Comment\":null,"
+                + "\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/esc\"}",
+                Wire(new StringSensorValue { Path = "p/esc", Value = tricky, Time = Epoch, Comment = null }));
+        }
+
+        [Fact]
         public void Registration_matches_the_native_golden_bytes()
         {
             var registration = new AddOrUpdateSensorRequest

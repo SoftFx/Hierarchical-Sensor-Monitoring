@@ -2667,6 +2667,11 @@ namespace
         Require(std::string(hsm_collector_test_iso_from_unix_ms(1500)) == "1970-01-01T00:00:01.5Z", "500ms trims to .5");
         Require(std::string(hsm_collector_test_iso_from_unix_ms(123)) == "1970-01-01T00:00:00.123Z", "123ms keeps three digits");
         Require(std::string(hsm_collector_test_iso_from_unix_ms(50)) == "1970-01-01T00:00:00.05Z", "50ms trims to .05");
+
+        // Pre-epoch (negative) input via the manual-clock seam: floored division must keep millis in
+        // [0,999] and floor the second, not truncate toward zero. -500ms == 1969-12-31T23:59:59.5Z.
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(-500)) == "1969-12-31T23:59:59.5Z", "negative ms floors correctly");
+        Require(std::string(hsm_collector_test_iso_from_unix_ms(-1000)) == "1969-12-31T23:59:59Z", "negative whole second");
     }
 
     void NativeWireValueJsonMatchesNetByteLayout()
@@ -2682,6 +2687,29 @@ namespace
             std::string(hsm_collector_test_wire_value_json(
                 3, "\"hi\"", "note", 0 /*comment present*/, 2 /*Warning*/, 1500, "p/s")) == "{\"Type\":3,\"Value\":\"hi\",\"Comment\":\"note\",\"Time\":\"1970-01-01T00:00:01.5Z\",\"Status\":2,\"Key\":null,\"Path\":\"p/s\"}",
             "string wire value layout with comment + fractional time");
+
+        // bool (Type 0) and double (Type 2) — the most drift-prone value DTOs, cross-locked by
+        // WireFormatGoldenLockTests.Double_bool_and_doublebar_dtos_match_the_native_golden_bytes.
+        Require(
+            std::string(hsm_collector_test_wire_value_json(
+                0, "true", "", 1, 1, 0, "p/b")) == "{\"Type\":0,\"Value\":true,\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/b\"}",
+            "bool wire value layout");
+        Require(
+            std::string(hsm_collector_test_wire_value_json(
+                2, "0.1", "", 1, 1, 0, "p/d")) == "{\"Type\":2,\"Value\":0.1,\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/d\"}",
+            "double wire value layout");
+
+        // String escaping must equal System.Text.Json's default encoder byte-for-byte: < > & ' + "
+        // and non-ASCII as \uXXXX (uppercase), \\ for backslash, \t for tab — the quote is ",
+        // NOT \". The tricky string sits in Comment (which BuildWireValueJson escapes via EscapeJson,
+        // the same function used on string Values). Mirrors WireFormatGoldenLockTests escaping case.
+        // Input bytes: a < b > c & d ' e + f " g \ h U+00E9(C3 A9) U+2603(E2 98 83) <tab> j
+        Require(
+            std::string(hsm_collector_test_wire_value_json(
+                3, "\"hi\"", "a<b>c&d'e+f\"g\\h\xC3\xA9\xE2\x98\x83\tj", 0, 1, 0, "p/esc")) ==
+                "{\"Type\":3,\"Value\":\"hi\",\"Comment\":\"a\\u003Cb\\u003Ec\\u0026d\\u0027e\\u002Bf\\u0022g\\\\h\\u00E9\\u2603\\tj\","
+                "\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/esc\"}",
+            "string escaping matches the System.Text.Json default encoder");
     }
 
     void NativeWireBarJsonMatchesNetByteLayout()
@@ -2693,6 +2721,26 @@ namespace
                                                                  "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":5,"
                                                                  "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ib\"}",
             "int bar wire layout");
+
+        // int-bar Mean rounding must match C# `(int)Math.Round(_totalSum / Count)`
+        // (MonitoringBar.cs:128), which is round-HALF-TO-EVEN. nearbyint in the default FE mode is
+        // also half-to-even, so 2.5 -> 2 and 3.5 -> 4 on BOTH sides. (Round-away-from-zero would
+        // give 3 and 4 and break parity.) Pins the half-way cases the all-integer case can't.
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(1, 2, 3, 5, 2, 3, 2, 2, 0, 2000, 0, "p/ib")).find("\"Mean\":2,") != std::string::npos,
+            "int bar mean 2.5 rounds half-to-even -> 2");
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(1, 3, 4, 7, 3, 4, 2, 2, 0, 2000, 0, "p/ib")).find("\"Mean\":4,") != std::string::npos,
+            "int bar mean 3.5 rounds half-to-even -> 4");
+
+        // double bar (Type 5): sum13/count4 -> mean 3.25; min/max/first/last carry one decimal.
+        // Cross-locked by WireFormatGoldenLockTests double-bar case.
+        Require(
+            std::string(hsm_collector_test_wire_bar_json(
+                0, 1.5, 5.5, 13.0, 1.5, 5.5, 4, 2, 0, 2000, 0, "p/db")) == "{\"Type\":5,\"Min\":1.5,\"Max\":5.5,\"Mean\":3.25,\"FirstValue\":1.5,\"LastValue\":5.5,\"Percentiles\":null,"
+                                                                           "\"OpenTime\":\"1970-01-01T00:00:00Z\",\"CloseTime\":\"1970-01-01T00:00:02Z\",\"Count\":4,"
+                                                                           "\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/db\"}",
+            "double bar wire layout");
     }
 
     void NativeWireFileJsonMatchesNetByteLayout()
@@ -2711,6 +2759,9 @@ namespace
         Require(std::string(hsm_collector_test_timespan_c_format(937840050000LL)) == "1.02:03:04.0050000", "timespan c-format");
         Require(std::string(hsm_collector_test_timespan_c_format(40000000LL)) == "00:00:04", "timespan whole seconds drops the fraction and day");
         Require(std::string(hsm_collector_test_timespan_c_format(-600000000LL)) == "-00:01:00", "timespan negative");
+        // TimeSpan.MinValue.Ticks == Int64.MinValue is a legal value; negating it as int64 is UB.
+        // Unsigned-magnitude formatting must yield the .NET "c" string exactly.
+        Require(std::string(hsm_collector_test_timespan_c_format(INT64_MIN)) == "-10675199.02:48:05.4775808", "timespan Int64.MinValue (no UB)");
 
         // TimeSpan(7) / Version(8) value DTOs serialize the formatted text as a quoted string.
         Require(
