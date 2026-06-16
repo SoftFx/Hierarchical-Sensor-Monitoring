@@ -26,6 +26,7 @@ using socket_t = SOCKET;
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
 using socket_t = int;
@@ -93,9 +94,41 @@ namespace hsm::test
         const CapturedRequest& Request() const { return request_; }
 
     private:
+        // Block in select (not accept) so the destructor can wake us by setting stop_: a blocked
+        // accept() is not portably interruptible by closing the socket from another thread, which
+        // could deadlock the dtor's join() if no client ever connects. select() with a short
+        // timeout re-checks stop_ each tick and unblocks reliably on both platforms.
+        socket_t WaitForConnection()
+        {
+            while (!stop_.load(std::memory_order_acquire))
+            {
+                fd_set readfds;
+                FD_ZERO(&readfds);
+                FD_SET(listen_, &readfds);
+
+                timeval tv{};
+                tv.tv_sec = 0;
+                tv.tv_usec = 100000; // 100 ms
+
+#if defined(_WIN32)
+                const int nfds = 0; // ignored by winsock select; avoids a SOCKET->int truncation
+#else
+                const int nfds = listen_ + 1;
+#endif
+                const int ready = select(nfds, &readfds, nullptr, nullptr, &tv);
+                if (ready < 0)
+                    return INVALID_SOCKET; // socket torn down (dtor) or error
+                if (ready == 0)
+                    continue; // timeout — re-check stop_
+
+                return accept(listen_, nullptr, nullptr);
+            }
+            return INVALID_SOCKET;
+        }
+
         void AcceptOne()
         {
-            socket_t conn = accept(listen_, nullptr, nullptr);
+            socket_t conn = WaitForConnection();
             if (conn == INVALID_SOCKET)
                 return;
 
@@ -119,10 +152,18 @@ namespace hsm::test
                     if (header_end != std::string::npos)
                     {
                         const auto cl = FindHeader(raw.substr(0, header_end), "content-length");
-                        if (!cl.empty())
+                        // A malformed Content-Length must not throw out of the worker thread.
+                        try
                         {
-                            content_length = static_cast<size_t>(std::stoul(cl));
-                            have_length = true;
+                            if (!cl.empty())
+                            {
+                                content_length = static_cast<size_t>(std::stoul(cl));
+                                have_length = true;
+                            }
+                        }
+                        catch (...)
+                        {
+                            have_length = false;
                         }
                     }
                 }
@@ -135,19 +176,24 @@ namespace hsm::test
                 }
             }
 
+            // Parse defensively: a request line without the expected two spaces leaves the
+            // captured fields empty rather than throwing std::out_of_range out of the thread.
             if (header_end != std::string::npos)
             {
                 const std::string head = raw.substr(0, header_end);
                 const size_t line_end = head.find("\r\n");
-                const std::string request_line = head.substr(0, line_end);
+                const std::string request_line = head.substr(0, line_end == std::string::npos ? head.size() : line_end);
                 const size_t sp1 = request_line.find(' ');
-                const size_t sp2 = request_line.find(' ', sp1 + 1);
+                const size_t sp2 = sp1 == std::string::npos ? std::string::npos : request_line.find(' ', sp1 + 1);
 
-                request_.method = request_line.substr(0, sp1);
-                request_.path = request_line.substr(sp1 + 1, sp2 - sp1 - 1);
-                request_.headers = head.substr(line_end + 2);
-                request_.body = raw.substr(header_end + 4, have_length ? content_length : std::string::npos);
-                request_.received.store(true, std::memory_order_release);
+                if (sp1 != std::string::npos && sp2 != std::string::npos)
+                {
+                    request_.method = request_line.substr(0, sp1);
+                    request_.path = request_line.substr(sp1 + 1, sp2 - sp1 - 1);
+                    request_.headers = line_end == std::string::npos ? std::string{} : head.substr(line_end + 2);
+                    request_.body = raw.substr(header_end + 4, have_length ? content_length : std::string::npos);
+                    request_.received.store(true, std::memory_order_release);
+                }
             }
 
             const std::string response =

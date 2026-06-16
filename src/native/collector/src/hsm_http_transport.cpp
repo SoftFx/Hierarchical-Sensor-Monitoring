@@ -7,13 +7,16 @@ namespace hsm::http
     namespace
     {
         // libcurl needs one process-wide init before any easy handle is used. A function-local
-        // static gives thread-safe once-only init; cleanup runs at process exit.
+        // static gives thread-safe once-only init. We deliberately DO NOT call
+        // curl_global_cleanup(): it is not thread-safe and, run from a static destructor at
+        // process exit, would race any still-live easy handles / worker threads (and TSan would
+        // flag it). Leaking the one-time global allocation is the documented, safe choice for a
+        // library that cannot prove all curl users have quiesced.
         void EnsureCurlGlobal()
         {
             struct CurlGlobal
             {
                 CurlGlobal() { curl_global_init(CURL_GLOBAL_DEFAULT); }
-                ~CurlGlobal() { curl_global_cleanup(); }
             };
             static CurlGlobal global;
             (void)global;
