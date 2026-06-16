@@ -36,6 +36,8 @@ Everything a host application touches: `DataCollector` construction, `CollectorO
 | `MaxDeduplicatedMessages` | int | `1000` | > 0 |
 | `MaxSensors` | int | `100000` | > 0 |
 
+**Native port (C++)**: `hsm_collector_options_t` (`src/native/collector`, #1095) mirrors this table field-for-field (`0` = managed default per field; the dedup window's `0` = log immediately). The C ABI also mirrors the lifecycle surface — status state machine, `dispose`, `TestConnection`, lifecycle listeners, `MaxSensors` cap — and a pluggable log sink. The `DataSender` seam is not exposed until the HTTP transport (#1096). Contract: [`docs/native-collector-c-abi.md`](../../../../docs/native-collector-c-abi.md).
+
 ## Lifecycle API
 
 Lifecycle state machine, gates, registration phases, event ordering, and the dispose-vs-stop race are documented in [`../overview.md`](../overview.md) (sections "Lifecycle", "Sensor registration", "Data gating", "Dispose racing Stop"). Public surface:

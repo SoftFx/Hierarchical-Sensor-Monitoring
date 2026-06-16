@@ -787,6 +787,47 @@ cost/benefit intact while satisfying the issue's structural ask); min standard
 stays **C++17**; sanitizer CI is **Linux clang ASan + TSan** required, Windows
 ASan nightly/opt-in.
 
+### 2026-06-15: #1095 native core foundation (one PR)
+
+Per user direction the whole of #1095 lands in one PR (toolchain + semantics),
+built on `codex/native-collector-infra` over several commits:
+
+- **Toolchain**: `.clang-format` (Microsoft/Allman, `ColumnLimit: 0` to preserve
+  the hand-wrapped C ABI), `HSM_COLLECTOR_WERROR`, `HSM_COLLECTOR_SANITIZER`
+  (ASan/TSan) + `CMakePresets.json`; CI lanes format-check (pinned clang-format
+  19.1.1), MSVC+gcc -Werror, Linux clang, and clang ASan/TSan.
+- **C ABI**: version macros + `hsm_collector_version()`; `hsm_collector_status_t`
+  + getter; the full 16-field `hsm_collector_options_t` mirror with validation
+  (Port 1..65535, non-negative numerics; `0` = managed default, dedup window `0`
+  = log-immediately); `dispose`, `test_connection`; lifecycle listeners; log sink.
+  Defaults now match managed CollectorOptions (1000/15000 ms) — the conformance
+  driver's `TestOptions` sets the small 50/20 ms test values explicitly.
+- **Lifecycle**: full state machine Stopped/Starting/Running/Stopping/Disposed +
+  the three gates; `op_mutex_` serializes Start/Stop/Dispose; `StopCore` shared
+  by Stop and Dispose so a dispose racing an in-flight stop joins it (exactly one
+  Stopped notification, terminal wins); exception-isolated lifecycle listeners;
+  MaxSensors cap + reject-during-Stopping/Disposed without crashing.
+- **Scheduler** (event-driven, the chosen shape over a full per-task wheel): a
+  single `ScheduledTask` worker sleeping until the earliest periodic due-time
+  through an injectable `Clock` seam (Real/Manual), no-overlap, whole-period
+  catch-up, onError isolation; `ScheduledTaskHandle`-equivalent idempotent
+  Start/Stop + bounded wait. The clock routes scheduling + rate elapsed; payload
+  and bar timestamps stay on the real clock (the #1094 clock-seam deferral's
+  cost/benefit is preserved — no new wall-clock fixtures).
+- **Logging**: pluggable C-ABI log sink (swallow-all), `MessageDeduplicator`
+  (window/capacity/oldest-expiry/count-suffix/zero-window), error routing
+  (shutdown discard → dedup → sink).
+- **Docs**: `docs/native-collector-c-abi.md` (the reviewed C ABI contract +
+  versioning/ABI-stability policy); aicontext scheduling/error-handling/public-api
+  carry native-port notes.
+
+New behaviors are proven by `native_*` unit tests (16 added: version/status/
+dispose/listeners/TestConnection/MaxSensors/options-validation/clock-seam/
+onError/dedup) — the cross-language corpus stays the regression net (69/69,
+warning-clean `/WX`; rate/function/bar_rollover + clock-seam flake-screened 30×).
+Test-only `hsm_collector_test_*` symbols are defined in the .cpp and
+forward-declared by the test TU, never in the public header.
+
 ## Cross-Cutting Port Invariants
 
 Behavioral invariants every port must uphold that are NOT expressible as

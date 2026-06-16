@@ -18,6 +18,12 @@
 #include <utility>
 #include <vector>
 
+// Test-only seam (defined in hsm_collector.cpp, deliberately not in the public header): drive
+// the scheduler's injectable clock from the native unit tests (issue #1095 §13).
+extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms);
+extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, int64_t delta_ms);
+extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message);
+
 namespace
 {
     void Require(bool condition, const char* message)
@@ -46,6 +52,11 @@ namespace
         options.port = 443;
         options.module = "conformance-module";
         options.computer_name = "conformance-host";
+        // The managed package/period defaults dispatch every 15 s; the corpus needs fast
+        // dispatch, so the harness sets the small test values explicitly (matching the C#
+        // CollectorConformanceTests harness). create_collector_with_limits overrides these.
+        options.max_values_in_package = 50;
+        options.package_collect_period_ms = 20;
         return options;
     }
 
@@ -426,7 +437,6 @@ namespace
 
     struct ConformanceState
     {
-        CollectorHandle collector;
         std::vector<SensorHandle> sensors;
 
         struct MixedInstantSet
@@ -441,8 +451,14 @@ namespace
         std::vector<MixedInstantSet> mixed_sets;
 
         // Keeps function-sensor constants alive for the lifetime of the case (the C API stores
-        // the raw user_data pointer).
+        // the raw user_data pointer). MUST be destroyed AFTER the collector: the scheduler keeps
+        // invoking the function callback (which reads this user_data) until the collector is
+        // destroyed, so the collector is declared LAST here — members destruct in reverse
+        // declaration order, so the collector (and its scheduler-worker join) tears down first,
+        // before these constants are freed. (TSan caught the reverse order as a use-after-free.)
         std::vector<std::unique_ptr<int32_t>> function_constants;
+
+        CollectorHandle collector;
     };
 
     int32_t ConstantIntFunction(void* user_data)
@@ -1036,8 +1052,7 @@ namespace
 
             for (int worker = 0; worker < worker_count; ++worker)
             {
-                workers.emplace_back([&, worker]()
-                {
+                workers.emplace_back([&, worker]() {
                     try
                     {
                         for (int value_index = 0; value_index < values_per_worker; ++value_index)
@@ -1067,8 +1082,7 @@ namespace
             return;
         }
 
-        const auto add_mixed_instant_value = [&](size_t set_index, int value, hsm_sensor_status_t status, const std::string& comment)
-        {
+        const auto add_mixed_instant_value = [&](size_t set_index, int value, hsm_sensor_status_t status, const std::string& comment) {
             Require(set_index < state.mixed_sets.size(), "mixed set index out of range");
             const auto& set = state.mixed_sets[set_index];
             const auto string_value = "value-" + std::to_string(value);
@@ -1130,8 +1144,7 @@ namespace
 
             for (int worker = 0; worker < worker_count; ++worker)
             {
-                workers.emplace_back([&, worker]()
-                {
+                workers.emplace_back([&, worker]() {
                     try
                     {
                         for (int value_index = 0; value_index < values_per_worker; ++value_index)
@@ -1169,8 +1182,7 @@ namespace
             const auto path_count = ToInt(step[2]);
             const auto path_prefix = step[3];
 
-            const auto expect_rejected = [](hsm_result_t result, hsm_sensor_t* sensor)
-            {
+            const auto expect_rejected = [](hsm_result_t result, hsm_sensor_t* sensor) {
                 if (result == HSM_RESULT_OK)
                 {
                     hsm_sensor_release(sensor);
@@ -1186,8 +1198,7 @@ namespace
 
             for (int worker = 0; worker < worker_count; ++worker)
             {
-                workers.emplace_back([&, worker]()
-                {
+                workers.emplace_back([&, worker]() {
                     try
                     {
                         for (int path_index = worker; path_index < path_count; path_index += worker_count)
@@ -1267,7 +1278,8 @@ namespace
             Require(
                 WaitForSentCountEquals(state.collector.value, expected, timeout_ms),
                 ("sent count did not match: expected " + step[1] +
-                 ", got " + std::to_string(hsm_collector_sent_count(state.collector.value))).c_str());
+                 ", got " + std::to_string(hsm_collector_sent_count(state.collector.value)))
+                    .c_str());
             return;
         }
 
@@ -1325,7 +1337,8 @@ namespace
             Require(
                 WaitForRegistrationCountEquals(state.collector.value, expected, timeout_ms),
                 ("registration count did not match: expected " + step[1] +
-                 ", got " + std::to_string(hsm_collector_registration_count(state.collector.value))).c_str());
+                 ", got " + std::to_string(hsm_collector_registration_count(state.collector.value)))
+                    .c_str());
             return;
         }
 
@@ -1392,8 +1405,7 @@ namespace
         {
             Require(step.size() >= 6, "expect_payload_type_counts requires bool, int, double, string, and enum counts");
 
-            const auto count_type = [&](const std::string& type)
-            {
+            const auto count_type = [&](const std::string& type) {
                 auto actual = 0;
                 const auto sent_count = hsm_collector_sent_count(state.collector.value);
 
@@ -1505,8 +1517,7 @@ namespace
 
             for (int worker = 0; worker < worker_count; ++worker)
             {
-                workers.emplace_back([&, worker]()
-                {
+                workers.emplace_back([&, worker]() {
                     try
                     {
                         for (int value_index = 0; value_index < values_per_worker; ++value_index)
@@ -1588,7 +1599,8 @@ namespace
             const auto started = std::chrono::steady_clock::now();
             Require(hsm_collector_stop(state.collector.value) == HSM_RESULT_OK, "collector stop failed");
             const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - started).count();
+                                        std::chrono::steady_clock::now() - started)
+                                        .count();
 
             Require(
                 elapsed_ms < ToInt(step[1]),
@@ -1617,8 +1629,14 @@ namespace
             const auto& field = step[2];
 
             static const std::map<std::string, std::string> field_keys = {
-                { "type", "Type" }, { "min", "Min" }, { "max", "Max" }, { "mean", "Mean" },
-                { "first", "First" }, { "last", "Last" }, { "count", "Count" }, { "status", "Status" },
+                { "type", "Type" },
+                { "min", "Min" },
+                { "max", "Max" },
+                { "mean", "Mean" },
+                { "first", "First" },
+                { "last", "Last" },
+                { "count", "Count" },
+                { "status", "Status" },
             };
 
             const auto key = field_keys.find(field);
@@ -2319,9 +2337,300 @@ namespace
         NotContains(payload, "\"Value\":999");
     }
 
+    // --- #1095 native core: ABI version, lifecycle state machine, dispose, listeners,
+    // TestConnection, MaxSensors cap, options validation, log sink. ---
+
+    void NativeVersionMatchesMacro()
+    {
+        Require(hsm_collector_version() == HSM_COLLECTOR_VERSION, "version() must match the header macro");
+        Require(HSM_COLLECTOR_VERSION_MAJOR == 0 && HSM_COLLECTOR_VERSION_MINOR >= 2, "unexpected ABI version");
+    }
+
+    void NativeStatusTracksLifecycle()
+    {
+        auto collector = CreateCollector();
+        Require(hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_STOPPED, "fresh collector should be Stopped");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_RUNNING, "started collector should be Running");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        Require(hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_STOPPED, "stopped collector should be Stopped");
+    }
+
+    void NativeDisposeIsTerminalAndIdempotent()
+    {
+        auto collector = CreateCollector();
+        hsm_collector_dispose(collector.value);
+        Require(hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_DISPOSED, "disposed collector should be Disposed");
+        hsm_collector_dispose(collector.value);
+        Require(hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_DISPOSED, "second dispose should be a no-op");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_INVALID_STATE, "start after dispose must be rejected");
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_create_int_sensor(collector.value, "after/dispose", &sensor) == HSM_RESULT_INVALID_STATE,
+            "registration after dispose must be rejected");
+        Require(sensor == nullptr, "rejected registration must return a null handle");
+    }
+
+    void NativeDisposeFromRunningStops()
+    {
+        auto collector = CreateCollector();
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        hsm_collector_dispose(collector.value);
+        Require(
+            hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_DISPOSED,
+            "dispose from running should reach Disposed");
+    }
+
+    void NativeLifecycleListenerReceivesTransitions()
+    {
+        std::vector<hsm_collector_status_t> seen;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_add_lifecycle_listener(
+                collector.value,
+                [](hsm_collector_status_t status, void* user_data) {
+                    static_cast<std::vector<hsm_collector_status_t>*>(user_data)->push_back(status);
+                },
+                &seen) == HSM_RESULT_OK,
+            "add listener failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+
+        const std::vector<hsm_collector_status_t> expected = {
+            HSM_COLLECTOR_STATUS_STARTING,
+            HSM_COLLECTOR_STATUS_RUNNING,
+            HSM_COLLECTOR_STATUS_STOPPING,
+            HSM_COLLECTOR_STATUS_STOPPED
+        };
+        Require(seen == expected, "listener should observe Starting,Running,Stopping,Stopped in order");
+    }
+
+    void NativeLifecycleListenerExceptionIsIsolated()
+    {
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_add_lifecycle_listener(
+                collector.value,
+                [](hsm_collector_status_t, void*) { throw std::runtime_error("listener boom"); },
+                nullptr) == HSM_RESULT_OK,
+            "add listener failed");
+
+        // A throwing listener must neither break the transition nor escape the ABI.
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start must survive a throwing listener");
+        Require(
+            hsm_collector_status(collector.value) == HSM_COLLECTOR_STATUS_RUNNING,
+            "collector must still be Running after a throwing listener");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop must survive a throwing listener");
+    }
+
+    void NativeTestConnectionReportsReachable()
+    {
+        auto collector = CreateCollector();
+        Require(hsm_collector_test_connection(collector.value) == HSM_RESULT_OK, "test connection should be OK when stopped");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_test_connection(collector.value) == HSM_RESULT_OK, "test connection should be OK while running");
+        hsm_collector_dispose(collector.value);
+        Require(
+            hsm_collector_test_connection(collector.value) == HSM_RESULT_INVALID_STATE,
+            "test connection on a disposed collector should report invalid state");
+    }
+
+    void NativeMaxSensorsCapRejectsBeyondLimit()
+    {
+        auto options = TestOptions();
+        options.max_sensors = 2;
+        auto collector = CreateCollector(options);
+
+        hsm_sensor_t* a = nullptr;
+        hsm_sensor_t* b = nullptr;
+        hsm_sensor_t* c = nullptr;
+        Require(hsm_collector_create_int_sensor(collector.value, "cap/a", &a) == HSM_RESULT_OK, "first sensor should be accepted");
+        Require(hsm_collector_create_int_sensor(collector.value, "cap/b", &b) == HSM_RESULT_OK, "second sensor should be accepted");
+        Require(
+            hsm_collector_create_int_sensor(collector.value, "cap/c", &c) == HSM_RESULT_LIMIT_EXCEEDED,
+            "third sensor should hit the MaxSensors cap");
+        Require(c == nullptr, "rejected sensor must return a null handle");
+
+        // A duplicate path returns the existing handle and does not count against the cap.
+        hsm_sensor_t* a_again = nullptr;
+        Require(
+            hsm_collector_create_int_sensor(collector.value, "cap/a", &a_again) == HSM_RESULT_OK,
+            "duplicate path must stay idempotent under the cap");
+
+        hsm_sensor_release(a);
+        hsm_sensor_release(b);
+        hsm_sensor_release(a_again);
+    }
+
+    void NativeCreateRejectsNegativeOptionFields()
+    {
+        {
+            auto options = TestOptions();
+            options.max_queue_size = -1;
+            ExpectCollectorCreateRejected(options);
+        }
+        {
+            auto options = TestOptions();
+            options.exception_deduplicator_window_ms = -5;
+            ExpectCollectorCreateRejected(options);
+        }
+        {
+            auto options = TestOptions();
+            options.max_sensors = -10;
+            ExpectCollectorCreateRejected(options);
+        }
+    }
+
+    void NativeLoggerSinkCanBeSetAndCleared()
+    {
+        int calls = 0;
+        auto collector = CreateCollector();
+        Require(
+            hsm_collector_set_logger(
+                collector.value,
+                [](hsm_log_level_t, const char*, void* user_data) { ++*static_cast<int*>(user_data); },
+                &calls) == HSM_RESULT_OK,
+            "set logger failed");
+        Require(hsm_collector_set_logger(collector.value, nullptr, nullptr) == HSM_RESULT_OK, "clearing logger failed");
+        // Lifecycle still works with a logger attached and then detached.
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+    }
+
+    void NativeSchedulerClockSeamDrivesPeriodicPosts()
+    {
+        auto collector = CreateCollector();
+        // Install a virtual clock BEFORE start so both the scheduler wait and the sensor
+        // due-checks read it (issue #1095 §13 injectable clock seam).
+        hsm_collector_test_install_manual_clock(collector.value, 1000000);
+
+        hsm_sensor_t* sensor = nullptr;
+        Require(
+            hsm_collector_create_function_int_sensor(
+                collector.value, "seam/func", 100, [](void*) -> int32_t { return 7; }, nullptr, &sensor) == HSM_RESULT_OK,
+            "create function sensor failed");
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+
+        // The first post fires immediately on start (next_post == clock base).
+        Require(WaitForSentCountAtLeast(collector.value, 1, 2000), "first periodic post should fire immediately on start");
+        const auto first = hsm_collector_sent_count(collector.value);
+
+        // Real time passing must NOT advance the virtual clock: no further posts appear.
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        Require(hsm_collector_sent_count(collector.value) == first, "frozen virtual clock: real time must not drive posts");
+
+        // Advancing virtual time past one period makes exactly one more post due.
+        hsm_collector_test_advance_clock_ms(collector.value, 150);
+        Require(
+            WaitForSentCountAtLeast(collector.value, first + 1, 2000),
+            "advancing the virtual clock should drive the next post");
+
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(sensor);
+    }
+
+    void NativeSchedulerOnErrorIsolatesThrowingCallback()
+    {
+        auto collector = CreateCollector();
+        // A function sensor whose callback throws must not kill the scheduler loop; a second
+        // healthy function sensor must keep posting (onError contract, issue #1095 §13).
+        hsm_sensor_t* boom = nullptr;
+        hsm_sensor_t* ok = nullptr;
+        Require(
+            hsm_collector_create_function_int_sensor(
+                collector.value, "sched/boom", 20, [](void*) -> int32_t { throw std::runtime_error("boom"); }, nullptr,
+                &boom) == HSM_RESULT_OK,
+            "create throwing sensor failed");
+        Require(
+            hsm_collector_create_function_int_sensor(
+                collector.value, "sched/ok", 20, [](void*) -> int32_t { return 1; }, nullptr, &ok) == HSM_RESULT_OK,
+            "create healthy sensor failed");
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start failed");
+        Require(
+            WaitForSentCountAtLeast(collector.value, 3, 3000),
+            "healthy sensor must keep posting despite a throwing callback on every tick");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop failed");
+        hsm_sensor_release(boom);
+        hsm_sensor_release(ok);
+    }
+
+    void NativeLoggerDeduplicatesRepeatedErrorsWithinWindow()
+    {
+        std::vector<std::string> logs;
+        auto options = TestOptions();
+        options.exception_deduplicator_window_ms = 3600000; // 1 h: nothing expires during the test
+        auto collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t, const char* message, void* ud) {
+                static_cast<std::vector<std::string>*>(ud)->emplace_back(message);
+            },
+            &logs);
+
+        for (int i = 0; i < 5; ++i)
+            hsm_collector_test_log_error(collector.value, "disk full");
+
+        Require(logs.size() == 1, "repeated errors within the window must collapse to a single log line");
+        Require(logs[0] == "disk full", "the first occurrence is logged verbatim");
+    }
+
+    void NativeLoggerZeroWindowLogsEveryError()
+    {
+        std::vector<std::string> logs;
+        auto options = TestOptions();
+        options.exception_deduplicator_window_ms = 0; // log immediately, no dedup (managed zero-window contract)
+        auto collector = CreateCollector(options);
+        hsm_collector_set_logger(
+            collector.value,
+            [](hsm_log_level_t, const char* message, void* ud) {
+                static_cast<std::vector<std::string>*>(ud)->emplace_back(message);
+            },
+            &logs);
+
+        for (int i = 0; i < 3; ++i)
+            hsm_collector_test_log_error(collector.value, "blip");
+
+        Require(logs.size() == 3, "a zero window logs every error immediately with no deduplication");
+    }
+
+    void NativeLifecycleListenerCanRegisterAnotherListener()
+    {
+        auto collector = CreateCollector();
+        // A listener that registers another listener from within its callback must not deadlock
+        // on the lifecycle lock, nor corrupt the listener vector mid-iteration (snapshot-then-invoke).
+        hsm_collector_add_lifecycle_listener(
+            collector.value,
+            [](hsm_collector_status_t, void* ud) {
+                hsm_collector_add_lifecycle_listener(
+                    static_cast<hsm_collector_t*>(ud), [](hsm_collector_status_t, void*) {}, nullptr);
+            },
+            collector.value);
+
+        Require(hsm_collector_start(collector.value) == HSM_RESULT_OK, "start must not deadlock when a listener adds a listener");
+        Require(hsm_collector_stop(collector.value) == HSM_RESULT_OK, "stop must not deadlock when a listener adds a listener");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+            { "native_lifecycle_listener_can_register_another_listener", [](const std::string&) { NativeLifecycleListenerCanRegisterAnotherListener(); } },
+            { "native_logger_deduplicates_repeated_errors_within_window", [](const std::string&) { NativeLoggerDeduplicatesRepeatedErrorsWithinWindow(); } },
+            { "native_logger_zero_window_logs_every_error", [](const std::string&) { NativeLoggerZeroWindowLogsEveryError(); } },
+            { "native_scheduler_clock_seam_drives_periodic_posts", [](const std::string&) { NativeSchedulerClockSeamDrivesPeriodicPosts(); } },
+            { "native_scheduler_on_error_isolates_throwing_callback", [](const std::string&) { NativeSchedulerOnErrorIsolatesThrowingCallback(); } },
+            { "native_version_matches_macro", [](const std::string&) { NativeVersionMatchesMacro(); } },
+            { "native_status_tracks_lifecycle", [](const std::string&) { NativeStatusTracksLifecycle(); } },
+            { "native_dispose_is_terminal_and_idempotent", [](const std::string&) { NativeDisposeIsTerminalAndIdempotent(); } },
+            { "native_dispose_from_running_stops", [](const std::string&) { NativeDisposeFromRunningStops(); } },
+            { "native_lifecycle_listener_receives_transitions", [](const std::string&) { NativeLifecycleListenerReceivesTransitions(); } },
+            { "native_lifecycle_listener_exception_is_isolated", [](const std::string&) { NativeLifecycleListenerExceptionIsIsolated(); } },
+            { "native_test_connection_reports_reachable", [](const std::string&) { NativeTestConnectionReportsReachable(); } },
+            { "native_max_sensors_cap_rejects_beyond_limit", [](const std::string&) { NativeMaxSensorsCapRejectsBeyondLimit(); } },
+            { "native_create_rejects_negative_option_fields", [](const std::string&) { NativeCreateRejectsNegativeOptionFields(); } },
+            { "native_logger_sink_can_be_set_and_cleared", [](const std::string&) { NativeLoggerSinkCanBeSetAndCleared(); } },
             { "native_invalid_argument_clears_out_params", [](const std::string&) { NativeInvalidArgumentClearsOutParams(); } },
             { "native_add_after_collector_destroy_is_rejected", [](const std::string&) { NativeAddAfterCollectorDestroyIsRejected(); } },
             { "native_sent_json_failure_reports_fresh_error", [](const std::string&) { NativeSentJsonFailureReportsFreshError(); } },
@@ -2373,7 +2682,7 @@ namespace
 
         return tests;
     }
-}
+} // namespace
 
 int main(int argc, char** argv)
 {
@@ -2399,6 +2708,4 @@ int main(int argc, char** argv)
         std::cerr << ex.what() << '\n';
         return 1;
     }
-
-    return 0;
 }

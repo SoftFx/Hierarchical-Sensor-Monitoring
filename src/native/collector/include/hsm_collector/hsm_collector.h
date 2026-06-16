@@ -5,22 +5,57 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
+
+/* ABI version. Bumped per the policy in docs/native-collector-c-abi.md: MINOR
+   for additive, backward-compatible growth (new functions, struct fields
+   appended); MAJOR for any breaking change (field reorder/removal, semantic
+   change). hsm_collector_version() returns the packed value at runtime. */
+#define HSM_COLLECTOR_VERSION_MAJOR 0
+#define HSM_COLLECTOR_VERSION_MINOR 2
+#define HSM_COLLECTOR_VERSION_PATCH 0
+#define HSM_COLLECTOR_VERSION \
+    ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
 
 typedef struct hsm_collector_t hsm_collector_t;
 typedef struct hsm_sensor_t hsm_sensor_t;
 
-typedef enum hsm_result_t
+/* Fixed underlying type so ANY int value is a valid object representation. The C ABI
+   receives untrusted integers for enum-typed parameters (e.g. a caller passing a bad
+   sensor status) and validates them at runtime; without a fixed type, merely loading an
+   out-of-range value would be UB (caught by -fsanitize=enum). C++ and C23 support the
+   syntax; older C is int-compatible already, so it falls back to a plain enum. */
+#if defined(__cplusplus) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L)
+#define HSM_ENUM_INT32 : int32_t
+#else
+#define HSM_ENUM_INT32
+#endif
+
+typedef enum hsm_result_t HSM_ENUM_INT32
 {
     HSM_RESULT_OK = 0,
     HSM_RESULT_INVALID_ARGUMENT = 1,
     HSM_RESULT_INVALID_STATE = 2,
     HSM_RESULT_NOT_FOUND = 3,
+    HSM_RESULT_LIMIT_EXCEEDED = 4,
     HSM_RESULT_INTERNAL_ERROR = 255
 } hsm_result_t;
 
-typedef enum hsm_sensor_status_t
+/* Collector lifecycle status. Mirrors the managed CollectorStatus state machine
+   (overview.md "Lifecycle"): Stopped -> Starting -> Running -> Stopping ->
+   Stopped, and Any-except-Disposed -> Disposed (terminal). */
+typedef enum hsm_collector_status_t HSM_ENUM_INT32
+{
+    HSM_COLLECTOR_STATUS_STOPPED = 0,
+    HSM_COLLECTOR_STATUS_STARTING = 1,
+    HSM_COLLECTOR_STATUS_RUNNING = 2,
+    HSM_COLLECTOR_STATUS_STOPPING = 3,
+    HSM_COLLECTOR_STATUS_DISPOSED = 4
+} hsm_collector_status_t;
+
+typedef enum hsm_sensor_status_t HSM_ENUM_INT32
 {
     HSM_SENSOR_STATUS_OFF_TIME = 0,
     HSM_SENSOR_STATUS_OK = 1,
@@ -28,7 +63,7 @@ typedef enum hsm_sensor_status_t
     HSM_SENSOR_STATUS_ERROR = 3
 } hsm_sensor_status_t;
 
-typedef enum hsm_sensor_type_t
+typedef enum hsm_sensor_type_t HSM_ENUM_INT32
 {
     HSM_SENSOR_TYPE_BOOLEAN = 0,
     HSM_SENSOR_TYPE_INT = 1,
@@ -43,33 +78,109 @@ typedef enum hsm_sensor_type_t
 
 /* User callbacks for function sensors. Invoked on the collector's scheduler thread OUTSIDE any
    collector/sensor lock (re-entering the same sensor from a callback is safe); they must not
-   throw across the C ABI boundary. LIFETIME: `user_data` must outlive the COLLECTOR, not just
-   the sensor handle — hsm_sensor_release frees only the handle, the collector keeps the sensor
-   registered and the scheduler keeps invoking the callback until the collector is destroyed. */
+   throw across the C ABI boundary, and must NOT call a collector lifecycle method
+   (start/stop/dispose) — doing so from the scheduler thread would join that thread on itself.
+   LIFETIME: `user_data` must outlive the COLLECTOR, not just the sensor handle —
+   hsm_sensor_release frees only the handle, the collector keeps the sensor registered and the
+   scheduler keeps invoking the callback until the collector is destroyed. */
 typedef int32_t (*hsm_int_function_t)(void* user_data);
 typedef int32_t (*hsm_int_values_function_t)(const int32_t* values, int32_t count, void* user_data);
 
+/* Mirrors the managed CollectorOptions (public-api/feature.md). Every numeric
+   field uses 0 to mean "take the managed default" shown in [brackets]; pass an
+   explicit value to override. Validation (hsm_collector_create) rejects a blank
+   access_key/server_address, a port outside 1..65535, and any negative numeric
+   field. The DataSender transport seam is not exposed here — it arrives with the
+   HTTP transport (#1096). */
 typedef struct hsm_collector_options_t
 {
-    const char* access_key;
-    const char* server_address;
-    int32_t port;
-    const char* module;
-    const char* computer_name;
-    /* Send-queue limits; 0 selects the default (20000 / 50 / 20ms — same as the C# collector
-       conformance defaults). The queue evicts its oldest value when max_queue_size is exceeded. */
-    int32_t max_queue_size;
-    int32_t max_values_in_package;
-    int32_t package_collect_period_ms;
+    /* Connection. */
+    const char* access_key;     /* required, non-blank */
+    const char* server_address; /* required, non-blank */
+    int32_t port;               /* 1..65535 */
+    const char* client_name;    /* may be NULL */
+    const char* module;         /* path prefix; may be NULL/blank */
+    const char* computer_name;  /* path prefix; may be NULL/blank */
+
+    /* Pipeline. The queue evicts its oldest value when max_queue_size is exceeded.
+       NOTE: the managed package/period defaults dispatch every 15 s; the
+       conformance harness sets a small package/period explicitly so the corpus
+       stays fast — the 0-default here is the production value, not the test one. */
+    int32_t max_queue_size;            /* [20000]  > 0 */
+    int32_t max_values_in_package;     /* [1000]   > 0 */
+    int32_t package_collect_period_ms; /* [15000]  > 0 */
+    int32_t request_timeout_ms;        /* [30000]  > 0 */
+    int32_t max_sensors;               /* [100000] > 0 — registration cap */
+
+    /* Transport flags (consumed once the HTTP sender lands, #1096). */
+    bool allow_untrusted_server_certificate; /* [false] */
+    bool allow_plaintext_transport;          /* [false] */
+
+    /* Error deduplication (see hsm_collector_set_logger). A window of 0 logs
+       every message immediately with no dedup. */
+    int64_t exception_deduplicator_window_ms; /* [3600000] >= 0 */
+    int32_t max_deduplicated_messages;        /* [1000]    > 0 */
 } hsm_collector_options_t;
+
+/* Packed ABI version (see HSM_COLLECTOR_VERSION). Lets a consumer built against
+   one header verify the linked library is compatible. */
+int32_t hsm_collector_version(void);
 
 hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_collector_t** out_collector);
 void hsm_collector_destroy(hsm_collector_t* collector);
 
-/* Lifecycle calls are NOT safe under concurrent invocation: drive Start/Stop/destroy from one
-   thread (or serialize externally) — same assumption as the managed collector's lifecycle gate. */
+/* Start/Stop should be driven from one thread (or serialized externally), same
+   assumption as the managed collector. Both are idempotent: Start while Running
+   and Stop while Stopped are no-ops returning OK. Start/Stop on a Disposed
+   collector are rejected with HSM_RESULT_INVALID_STATE. */
 hsm_result_t hsm_collector_start(hsm_collector_t* collector);
 hsm_result_t hsm_collector_stop(hsm_collector_t* collector);
+
+/* Current lifecycle status. Safe to call from any thread/state. */
+hsm_collector_status_t hsm_collector_status(const hsm_collector_t* collector);
+
+/* Dispose: terminal and idempotent, never fails, callable from any thread/state.
+   Stops the collector if it is running — joining an in-flight Stop on another
+   thread rather than issuing a duplicate, so exactly one stopped-notification
+   fires and the terminal mode wins — then moves to Disposed. After dispose,
+   create/start/stop/registration are rejected without crashing the host.
+   destroy() still frees the handle; dispose() is the graceful terminal
+   transition and may be called before destroy(). */
+void hsm_collector_dispose(hsm_collector_t* collector);
+
+/* TestConnection: callable in any lifecycle state (mirrors the managed
+   ConnectionResult.IsOk). Returns OK when the sender reports the server
+   reachable. Until the HTTP transport lands (#1096) the in-memory sender always
+   reports reachable. */
+hsm_result_t hsm_collector_test_connection(hsm_collector_t* collector);
+
+/* Lifecycle observer (portable ILifecycleListener equivalent). The callback
+   fires on the thread driving the transition, under the lifecycle lock, AFTER
+   the status changes; only transitions after registration are delivered (no
+   replay). A throwing/crashing callback is isolated — it can neither cross the
+   C ABI boundary nor break the collector. The callback may read collector state
+   and may add another listener, but must NOT call a lifecycle method
+   (start/stop/dispose) — that thread already holds the lifecycle lock.
+   `user_data` must outlive the collector. NULL callback returns INVALID_ARGUMENT. */
+typedef void (*hsm_lifecycle_callback_t)(hsm_collector_status_t status, void* user_data);
+hsm_result_t hsm_collector_add_lifecycle_listener(
+    hsm_collector_t* collector,
+    hsm_lifecycle_callback_t callback,
+    void* user_data);
+
+/* Pluggable log sink. Levels mirror the managed ICollectorLogger (debug/info/
+   error). The callback is wrapped swallow-all: an exception escaping it is
+   caught and dropped (a broken logger must never break the collector). Error
+   messages pass through the MessageDeduplicator first (window/capacity from the
+   options). Passing a NULL callback clears the sink. */
+typedef enum hsm_log_level_t HSM_ENUM_INT32
+{
+    HSM_LOG_LEVEL_DEBUG = 0,
+    HSM_LOG_LEVEL_INFO = 1,
+    HSM_LOG_LEVEL_ERROR = 2
+} hsm_log_level_t;
+typedef void (*hsm_log_callback_t)(hsm_log_level_t level, const char* message, void* user_data);
+hsm_result_t hsm_collector_set_logger(hsm_collector_t* collector, hsm_log_callback_t callback, void* user_data);
 
 hsm_result_t hsm_collector_create_int_sensor(
     hsm_collector_t* collector,

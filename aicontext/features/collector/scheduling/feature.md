@@ -47,6 +47,19 @@
 
 `CollectorSchedulerTests.cs`, `ScheduledTaskHandleTests.cs`, `CollectorTimerStressTests.cs` in `src/collector/HSMDataCollector.Tests/`.
 
+## Native port (C++)
+
+The native core (`src/native/collector`, #1095) mirrors this contract with a single
+per-collector `ScheduledTask` worker (the portable `ScheduledTaskHandle`): idempotent
+`Start`/`Stop`, bounded wait-for-current-run, a monotonic clock through an **injectable
+clock seam** (`Clock`/`RealClock`/`ManualClock`), event-driven sleep until the earliest
+periodic due-time (not a busy poll), no overlapping runs, whole-period catch-up, and
+`onError` isolation (a throwing function callback can neither kill the worker nor starve
+the other sensors). The seam routes the scheduler wait and the sensors' periodic
+due-check / rate elapsed; payload and bar timestamps keep the real wall clock (there are
+no conformance time-control verbs, by design). Verified by `native_scheduler_*` unit
+tests + the shared periodic conformance fixtures. C ABI: [`docs/native-collector-c-abi.md`](../../../../docs/native-collector-c-abi.md).
+
 ## Known Issues / Limitations
 
 - Linear scan within due buckets; fine for typical sensor counts (<1000 tasks).

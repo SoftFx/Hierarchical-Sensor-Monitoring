@@ -11,7 +11,9 @@
 #include <deque>
 #include <exception>
 #include <iomanip>
+#include <functional>
 #include <initializer_list>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -25,10 +27,52 @@ namespace
 {
     constexpr size_t MaxCommentLength = 1024;
 
+    // Full lifecycle state machine (overview.md "Lifecycle"), mirroring the managed
+    // CollectorStatus: Stopped -> Starting -> Running -> Stopping -> Stopped, and
+    // Any-except-Disposed -> Disposed (terminal). Starting/Stopping are transient —
+    // they are only observable from another thread while Start()/Stop() runs.
     enum class CollectorState
     {
         Stopped,
+        Starting,
         Running,
+        Stopping,
+        Disposed,
+    };
+
+    hsm_collector_status_t ToPublicStatus(CollectorState state)
+    {
+        switch (state)
+        {
+        case CollectorState::Stopped:
+            return HSM_COLLECTOR_STATUS_STOPPED;
+        case CollectorState::Starting:
+            return HSM_COLLECTOR_STATUS_STARTING;
+        case CollectorState::Running:
+            return HSM_COLLECTOR_STATUS_RUNNING;
+        case CollectorState::Stopping:
+            return HSM_COLLECTOR_STATUS_STOPPING;
+        case CollectorState::Disposed:
+            return HSM_COLLECTOR_STATUS_DISPOSED;
+        }
+
+        return HSM_COLLECTOR_STATUS_STOPPED;
+    }
+
+    // A registered lifecycle observer (portable ILifecycleListener). The callback is
+    // invoked exception-isolated; user_data must outlive the collector.
+    struct LifecycleListener
+    {
+        hsm_lifecycle_callback_t callback;
+        void* user_data;
+    };
+
+    // One deduplicated error message: how many occurrences have been collapsed since
+    // the last emit, and the system-clock time of that emit (for window expiry).
+    struct DedupEntry
+    {
+        int64_t suppressed;
+        int64_t last_logged_ms;
     };
 
     std::string CopyString(const char* value)
@@ -138,6 +182,176 @@ namespace
         const auto now = std::chrono::steady_clock::now().time_since_epoch();
         return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
     }
+
+    // Injectable clock seam (issue #1095 §13). The collector reads time for periodic
+    // scheduling through this so a test can drive virtual time; the default RealClock
+    // leaves production behavior unchanged. Only the scheduler / periodic-due path is
+    // routed through it — payload timestamps and bar alignment keep the real wall clock
+    // (there are no conformance time-control verbs, by design — see the spike journal).
+    class Clock
+    {
+    public:
+        virtual ~Clock() = default;
+        virtual int64_t SteadyNowMs() const = 0;
+        virtual int64_t SystemNowMs() const = 0;
+    };
+
+    class RealClock : public Clock
+    {
+    public:
+        int64_t SteadyNowMs() const override
+        {
+            return SteadyMilliseconds();
+        }
+        int64_t SystemNowMs() const override
+        {
+            return UnixTimeMilliseconds();
+        }
+    };
+
+    class ManualClock : public Clock
+    {
+    public:
+        explicit ManualClock(int64_t steady = 0, int64_t system = 0)
+            : steady_(steady), system_(system)
+        {
+        }
+        int64_t SteadyNowMs() const override
+        {
+            return steady_.load();
+        }
+        int64_t SystemNowMs() const override
+        {
+            return system_.load();
+        }
+        void AdvanceMs(int64_t delta)
+        {
+            steady_ += delta;
+            system_ += delta;
+        }
+
+    private:
+        std::atomic<int64_t> steady_;
+        std::atomic<int64_t> system_;
+    };
+
+    // Host-callback isolation: a throwing callback may neither cross the C ABI boundary nor
+    // break the component that invoked it — lifecycle listeners, log sinks, scheduler actions
+    // and onError. overview.md "Callback exception isolation".
+    template <typename Fn>
+    void InvokeIsolated(Fn&& fn) noexcept
+    {
+        try
+        {
+            fn();
+        }
+        catch (...)
+        {
+            // Swallowed by contract.
+        }
+    }
+
+    // Single-worker periodic task — the portable ScheduledTaskHandle (issue #1095 §13).
+    // Idempotent Start/Stop; the worker sleeps until the next due time reported by the
+    // injected clock (event-driven, not a busy poll — bounded by kMaxWaitMs so a dynamic
+    // schedule change or virtual-clock jump is still picked up), runs the action with no
+    // overlap (one worker, sequential) and exception isolation, and Stop joins after at
+    // most one in-flight action (bounded wait-for-current-run).
+    class ScheduledTask
+    {
+    public:
+        // now_ms reports the current monotonic time through the collector's (swappable) clock;
+        // next_due_ms reports the next absolute due time; action is the work to run when due.
+        ScheduledTask(std::function<int64_t()> now_ms, std::function<int64_t()> next_due_ms, std::function<void()> action)
+            : now_ms_(std::move(now_ms)), next_due_ms_(std::move(next_due_ms)), action_(std::move(action))
+        {
+        }
+
+        ScheduledTask(const ScheduledTask&) = delete;
+        ScheduledTask& operator=(const ScheduledTask&) = delete;
+
+        ~ScheduledTask()
+        {
+            Stop();
+        }
+
+        void Start()
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (running_)
+                return;
+
+            stop_ = false;
+            running_ = true;
+            worker_ = std::thread([this] { Loop(); });
+        }
+
+        void Stop()
+        {
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (!running_)
+                    return;
+
+                stop_ = true;
+            }
+
+            cv_.notify_all();
+            if (worker_.joinable())
+                worker_.join();
+
+            std::lock_guard<std::mutex> guard(mutex_);
+            running_ = false;
+        }
+
+        // Re-evaluate the schedule now (e.g. a periodic sensor was added, or virtual time
+        // advanced). Cheap and lock-free against the worker — just nudges the wait.
+        void Wake()
+        {
+            cv_.notify_all();
+        }
+
+    private:
+        static constexpr int64_t kMaxWaitMs = 1000;
+
+        void Loop()
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+
+            while (!stop_)
+            {
+                const int64_t now = now_ms_();
+                const int64_t due = next_due_ms_();
+
+                if (now >= due)
+                {
+                    lock.unlock();
+                    InvokeIsolated(action_);
+                    lock.lock();
+                    continue;
+                }
+
+                // due > now here. Guard the subtraction against overflow when due is the
+                // "nothing scheduled" sentinel (int64_max) or the (virtual) clock is far
+                // negative — just cap the sleep at kMaxWaitMs.
+                int64_t wait_ms = kMaxWaitMs;
+                if (due < (std::numeric_limits<int64_t>::max)())
+                    wait_ms = std::min<int64_t>(due - now, kMaxWaitMs);
+
+                cv_.wait_for(lock, std::chrono::milliseconds(wait_ms), [this] { return stop_; });
+            }
+        }
+
+        std::function<int64_t()> now_ms_;
+        std::function<int64_t()> next_due_ms_;
+        std::function<void()> action_;
+
+        std::mutex mutex_;
+        std::condition_variable cv_;
+        std::thread worker_;
+        bool running_ = false;
+        bool stop_ = false;
+    };
 
     // .NET shortest round-trip ("R") double text — the canonical payload contract
     // (tests/conformance/README.md). std::to_chars produces the shortest digits, but its
@@ -537,6 +751,10 @@ namespace
               function_user_data_(function_user_data),
               function_max_cache_(max_cache_size)
         {
+            // Seed the scheduler hint so a sensor created while the collector is already
+            // running is due immediately (managed: dynamic create posts at once); pre-start
+            // sensors are re-anchored by ResetPeriodicBaseline on Start.
+            next_post_hint_.store(next_post_ms_);
         }
 
         // File sensor constructor (string-content publishing only).
@@ -581,8 +799,19 @@ namespace
         void SetRegistrationJson(std::string json) { registration_json_ = std::move(json); }
         const std::string& RegistrationJson() const { return registration_json_; }
 
+        // Periodic scheduling clock (issue #1095 §13). Set under the collector lock at
+        // registration; the periodic due-time and rate elapsed read through it so a test
+        // clock can drive cadence. Null falls back to the real monotonic clock.
+        void SetClock(std::shared_ptr<Clock> clock) { clock_ = std::move(clock); }
+
+        // Lock-free hint of the next periodic due time (steady ms) for the scheduler's wait
+        // computation; std::numeric_limits<int64_t>::max() for a non-periodic sensor.
+        int64_t NextPostHint() const { return next_post_hint_.load(); }
+
     private:
         hsm_result_t AddValueJson(std::string value_json, hsm_sensor_status_t status, const char* comment);
+
+        int64_t SteadyNowMs() const { return clock_ ? clock_->SteadyNowMs() : SteadyMilliseconds(); }
 
         template <typename Accumulate>
         hsm_result_t AccumulateBar(Accumulate&& accumulate);
@@ -598,6 +827,11 @@ namespace
         std::string last_comment_;
         MonitoringBar bar_;
 
+        // Periodic scheduling clock (real by default) + lock-free next-due hint read by the
+        // scheduler without taking the sensor lock.
+        std::shared_ptr<Clock> clock_;
+        std::atomic<int64_t> next_post_hint_{ (std::numeric_limits<int64_t>::max)() };
+
         // Periodic (rate / function) state, guarded by mutex_.
         bool is_periodic_ = false;
         int64_t post_period_ms_ = 0;
@@ -605,7 +839,7 @@ namespace
         double rate_sum_ = 0.0;
         hsm_sensor_status_t rate_status_ = HSM_SENSOR_STATUS_OK;
         std::string rate_comment_;
-        std::chrono::steady_clock::time_point rate_prev_{};
+        int64_t rate_prev_ms_ = 0;
         bool rate_has_prev_ = false;
         hsm_int_function_t int_function_ = nullptr;
         hsm_int_values_function_t int_values_function_ = nullptr;
@@ -623,52 +857,126 @@ namespace
     class NativeCollector : public std::enable_shared_from_this<NativeCollector>
     {
     public:
+        // 0 selects the managed CollectorOptions default for every numeric field
+        // EXCEPT the dedup window, where 0 is a meaningful value (log immediately,
+        // no dedup) and is passed through verbatim. Negative fields are rejected
+        // before construction (hsm_collector_create validation).
         explicit NativeCollector(const hsm_collector_options_t& options)
             : access_key_(CopyString(options.access_key)),
               server_address_(CopyString(options.server_address)),
               port_(options.port),
+              client_name_(CopyString(options.client_name)),
               module_(CopyString(options.module)),
               computer_name_(CopyString(options.computer_name)),
               max_queue_size_(options.max_queue_size > 0 ? options.max_queue_size : 20000),
-              max_values_in_package_(options.max_values_in_package > 0 ? options.max_values_in_package : 50),
-              collect_period_ms_(options.package_collect_period_ms > 0 ? options.package_collect_period_ms : 20)
+              max_values_in_package_(options.max_values_in_package > 0 ? options.max_values_in_package : 1000),
+              collect_period_ms_(options.package_collect_period_ms > 0 ? options.package_collect_period_ms : 15000),
+              request_timeout_ms_(options.request_timeout_ms > 0 ? options.request_timeout_ms : 30000),
+              max_sensors_(options.max_sensors > 0 ? options.max_sensors : 100000),
+              allow_untrusted_certificate_(options.allow_untrusted_server_certificate),
+              allow_plaintext_transport_(options.allow_plaintext_transport),
+              dedup_window_ms_(options.exception_deduplicator_window_ms),
+              max_deduplicated_messages_(options.max_deduplicated_messages > 0 ? options.max_deduplicated_messages : 1000)
         {
+            // The scheduler reads time through clock_ (swappable before Start via SetClock) and
+            // wakes at the earliest periodic due-time. Lock order is task -> collector: BOTH the
+            // now and due callbacks lock the collector mutex (never the reverse), so clock_ is
+            // never read unlocked even if a caller swaps it.
+            scheduler_task_ = std::make_unique<ScheduledTask>(
+                [this] {
+                    std::lock_guard<std::mutex> guard(mutex_);
+                    return clock_->SteadyNowMs();
+                },
+                [this] { return EarliestNextPostMs(); },
+                [this] { TickPeriodicSensors(); });
+        }
+
+        // Test-only seam (no public C ABI surface): swap the scheduling clock before Start.
+        // Existing sensors are re-pointed at it too, so a manual clock drives both the
+        // scheduler wait and the sensors' due-checks.
+        void SetClock(std::shared_ptr<Clock> clock)
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            clock_ = std::move(clock);
+            for (const auto& sensor : sensors_)
+                sensor.second->SetClock(clock_);
+        }
+
+        void TestInstallManualClock(int64_t base_ms)
+        {
+            SetClock(std::make_shared<ManualClock>(base_ms, base_ms));
+        }
+
+        // Advance the installed manual clock and wake the scheduler so it re-evaluates the
+        // virtual due-time at once (no real-time wait).
+        void TestAdvanceClock(int64_t delta_ms)
+        {
+            std::shared_ptr<Clock> clock;
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                clock = clock_;
+            }
+
+            if (auto* manual = dynamic_cast<ManualClock*>(clock.get()))
+                manual->AdvanceMs(delta_ms);
+
+            scheduler_task_->Wake();
+        }
+
+        // Drive the error-routing/dedup path directly (the production routes — validation
+        // drops, shutdown discards — are hard to fire deterministically from a unit test).
+        void TestLogError(const std::string& message)
+        {
+            LogError(message);
         }
 
         ~NativeCollector()
         {
-            // Terminal teardown (destroy without Stop): only the threads are reclaimed — there
-            // is no observable place left to drain into.
+            // Terminal teardown (destroy without an explicit dispose/stop): only the
+            // threads are reclaimed — there is no observable place left to drain into.
+            // Idempotent with Dispose() via the joinable() guards.
             StopScheduler();
             StopWorker();
         }
 
+        // Start: Stopped -> Starting -> Running. Idempotent (Running/Starting -> no-op),
+        // rejected once Disposed. The op lock serializes the whole transition against
+        // Stop/Dispose so listeners observe a consistent order.
         hsm_result_t Start()
         {
+            std::lock_guard<std::mutex> op_guard(op_mutex_);
+
+            // The state flip to Starting AND the registration snapshot happen under one lock:
+            // otherwise a CreateSensor interleaving between them would be both in this snapshot
+            // and self-register via RegisterSensorLocked (Starting qualifies), double-counting
+            // its AddOrUpdate. Every start re-registers every sensor (mirrors C# InitAsync).
+            // RegistrationJson is immutable, so reading it under the collector lock keeps the
+            // one-way lock order. Map iteration order is unspecified — fixtures assert counts.
             std::vector<std::shared_ptr<NativeSensor>> sensors_snapshot;
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
-                if (state_ == CollectorState::Running)
+                if (state_ == CollectorState::Disposed)
+                    return SetError(HSM_RESULT_INVALID_STATE, "Collector is disposed.");
+
+                if (state_ == CollectorState::Running || state_ == CollectorState::Starting)
                 {
                     ClearError();
                     return HSM_RESULT_OK;
                 }
 
-                state_ = CollectorState::Running;
+                state_ = CollectorState::Starting;
+                ClearError();
+
                 sensors_snapshot.reserve(sensors_.size());
                 for (const auto& sensor : sensors_)
+                {
                     sensors_snapshot.push_back(sensor.second);
-
-                // Every start re-registers every sensor (mirrors C# InitAsync sending the
-                // AddOrUpdate command per start). RegistrationJson is immutable, so reading
-                // it under the collector lock keeps the one-way lock order. Map iteration
-                // order is unspecified — multi-sensor fixtures assert counts only.
-                for (const auto& sensor : sensors_)
                     registrations_.push_back(sensor.second->RegistrationJson());
-
-                ClearError();
+                }
             }
+
+            NotifyLifecycle(CollectorState::Starting);
 
             // Re-arm periodic sensors outside the collector lock (sensor locks are never taken
             // under it): the first post fires immediately, and a restarted rate sensor must not
@@ -678,26 +986,40 @@ namespace
 
             StartWorker();
             StartScheduler();
+
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                state_ = CollectorState::Running;
+            }
+
+            NotifyLifecycle(CollectorState::Running);
             return HSM_RESULT_OK;
         }
 
+        // Stop: Running -> Stopping -> Stopped. Idempotent (Stopped/Disposed -> no-op).
         hsm_result_t Stop()
         {
-            // Phase 1: flip the state so new instant values are rejected, and snapshot the
-            // sensor set. Sensor locks are taken strictly outside the collector lock (and the
-            // bar add path takes the sensor lock before calling into the collector), so the
-            // flush below must run unlocked to keep the lock order one-way.
+            std::lock_guard<std::mutex> op_guard(op_mutex_);
+            return StopCore();
+        }
+
+        // Caller holds op_mutex_. Drives the stop transition exactly once (Stopped/Disposed
+        // are no-ops), firing the Stopping/Stopped notifications around the flush+drain.
+        // Dispose reuses this so a dispose racing an in-flight Stop joins on op_mutex_ and
+        // sees Stopped here — exactly one stopped-notification, no duplicate flush.
+        hsm_result_t StopCore()
+        {
             std::vector<std::shared_ptr<NativeSensor>> sensors_snapshot;
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
-                if (state_ == CollectorState::Stopped)
+                if (state_ == CollectorState::Stopped || state_ == CollectorState::Disposed)
                 {
                     ClearError();
                     return HSM_RESULT_OK;
                 }
 
-                state_ = CollectorState::Stopped;
+                state_ = CollectorState::Stopping;
                 sensors_snapshot.reserve(sensors_.size());
                 for (const auto& sensor : sensors_)
                     sensors_snapshot.push_back(sensor.second);
@@ -705,13 +1027,15 @@ namespace
                 ClearError();
             }
 
-            // Phase 1.5: stop the periodic scheduler. Posts racing the state flip are dropped by
-            // the EnqueueIfRunning gate; rate sums / function posts are deliberately NOT flushed
+            NotifyLifecycle(CollectorState::Stopping);
+
+            // Phase 1: stop the periodic scheduler. Posts racing the state flip are dropped by
+            // the CanAcceptData gate; rate sums / function posts are deliberately NOT flushed
             // (a partial-window rate is alert-noise risk — only bars preserve data at stop).
             StopScheduler();
 
             // Phase 2: flush sensors — last-value snapshots and non-empty partial bars — into
-            // the queue, bypassing the Running gate (this is the explicit stop-flush path).
+            // the queue, bypassing the data gate (this is the explicit stop-flush path).
             std::vector<std::string> flushed;
             for (const auto& sensor : sensors_snapshot)
             {
@@ -733,7 +1057,74 @@ namespace
             StopWorker();
             DrainQueueOnStop();
 
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                state_ = CollectorState::Stopped;
+            }
+
+            NotifyLifecycle(CollectorState::Stopped);
             return HSM_RESULT_OK;
+        }
+
+        // Dispose: terminal, idempotent, never throws. Stops first if active (firing
+        // Stopping/Stopped, like the managed Dispose-from-active path), then Disposed.
+        void Dispose()
+        {
+            std::lock_guard<std::mutex> op_guard(op_mutex_);
+
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                if (state_ == CollectorState::Disposed)
+                    return;
+            }
+
+            StopCore();
+
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                state_ = CollectorState::Disposed;
+            }
+            // No listener notification for Disposed — mirrors the managed collector, which
+            // fires only ToStopping/ToStopped on dispose-from-active and nothing once stopped.
+        }
+
+        hsm_collector_status_t Status() const
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            return ToPublicStatus(state_);
+        }
+
+        // TestConnection is callable in any state (mirrors ConnectionResult). The in-memory
+        // sender is always reachable until the HTTP transport lands (#1096); a disposed
+        // collector reports invalid state instead of a phantom healthy connection.
+        hsm_result_t TestConnection()
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (state_ == CollectorState::Disposed)
+                return SetError(HSM_RESULT_INVALID_STATE, "Collector is disposed.");
+
+            ClearError();
+            return HSM_RESULT_OK;
+        }
+
+        hsm_result_t AddLifecycleListener(hsm_lifecycle_callback_t callback, void* user_data)
+        {
+            if (callback == nullptr)
+                return HSM_RESULT_INVALID_ARGUMENT;
+
+            // Guarded by its own mutex (not op_mutex_): NotifyLifecycle snapshots under this
+            // lock and invokes OUTSIDE it, so a callback that registers another listener does
+            // not deadlock on a held lock, and the listener vector is never mutated mid-iteration.
+            std::lock_guard<std::mutex> guard(listeners_mutex_);
+            lifecycle_listeners_.push_back(LifecycleListener{ callback, user_data });
+            return HSM_RESULT_OK;
+        }
+
+        void SetLogger(hsm_log_callback_t callback, void* user_data)
+        {
+            std::lock_guard<std::mutex> guard(logger_mutex_);
+            log_callback_ = callback;
+            log_user_data_ = user_data;
         }
 
         hsm_result_t CreateSensor(
@@ -750,6 +1141,14 @@ namespace
             std::lock_guard<std::mutex> guard(mutex_);
             const auto sensor_path = BuildSensorPath(path);
 
+            // Registration is closed while Stopping/Disposed: reject without crashing the host
+            // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
+            if (!CanRegisterSensorsLocked())
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_INVALID_STATE, "Collector is not accepting sensor registrations.");
+            }
+
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
@@ -765,6 +1164,14 @@ namespace
                 out_sensor = existing->second;
                 ClearError();
                 return HSM_RESULT_OK;
+            }
+
+            // A registered path returns its existing handle above (idempotent, not counted);
+            // a genuinely new sensor is capped at MaxSensors (managed registration cap).
+            if (sensors_.size() >= static_cast<size_t>(max_sensors_))
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_LIMIT_EXCEEDED, "MaxSensors limit reached.");
             }
 
             auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type, is_last_value, default_value_json);
@@ -789,6 +1196,14 @@ namespace
             std::lock_guard<std::mutex> guard(mutex_);
             const auto sensor_path = BuildSensorPath(path);
 
+            // Registration is closed while Stopping/Disposed: reject without crashing the host
+            // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
+            if (!CanRegisterSensorsLocked())
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_INVALID_STATE, "Collector is not accepting sensor registrations.");
+            }
+
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
@@ -801,6 +1216,14 @@ namespace
                 out_sensor = existing->second;
                 ClearError();
                 return HSM_RESULT_OK;
+            }
+
+            // A registered path returns its existing handle above (idempotent, not counted);
+            // a genuinely new sensor is capped at MaxSensors (managed registration cap).
+            if (sensors_.size() >= static_cast<size_t>(max_sensors_))
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_LIMIT_EXCEEDED, "MaxSensors limit reached.");
             }
 
             auto sensor = std::make_shared<NativeSensor>(weak_from_this(), sensor_path, type, bar_period_ms, precision);
@@ -828,6 +1251,14 @@ namespace
             std::lock_guard<std::mutex> guard(mutex_);
             const auto sensor_path = BuildSensorPath(path);
 
+            // Registration is closed while Stopping/Disposed: reject without crashing the host
+            // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
+            if (!CanRegisterSensorsLocked())
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_INVALID_STATE, "Collector is not accepting sensor registrations.");
+            }
+
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
@@ -845,6 +1276,14 @@ namespace
                 out_sensor = existing->second;
                 ClearError();
                 return HSM_RESULT_OK;
+            }
+
+            // A registered path returns its existing handle above (idempotent, not counted);
+            // a genuinely new sensor is capped at MaxSensors (managed registration cap).
+            if (sensors_.size() >= static_cast<size_t>(max_sensors_))
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_LIMIT_EXCEEDED, "MaxSensors limit reached.");
             }
 
             auto sensor = std::make_shared<NativeSensor>(
@@ -870,6 +1309,14 @@ namespace
             std::lock_guard<std::mutex> guard(mutex_);
             const auto sensor_path = BuildSensorPath(path);
 
+            // Registration is closed while Stopping/Disposed: reject without crashing the host
+            // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
+            if (!CanRegisterSensorsLocked())
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_INVALID_STATE, "Collector is not accepting sensor registrations.");
+            }
+
             const auto existing = sensors_.find(sensor_path);
             if (existing != sensors_.end())
             {
@@ -882,6 +1329,14 @@ namespace
                 out_sensor = existing->second;
                 ClearError();
                 return HSM_RESULT_OK;
+            }
+
+            // A registered path returns its existing handle above (idempotent, not counted);
+            // a genuinely new sensor is capped at MaxSensors (managed registration cap).
+            if (sensors_.size() >= static_cast<size_t>(max_sensors_))
+            {
+                out_sensor.reset();
+                return SetError(HSM_RESULT_LIMIT_EXCEEDED, "MaxSensors limit reached.");
             }
 
             auto sensor = std::make_shared<NativeSensor>(
@@ -906,7 +1361,7 @@ namespace
 
                 ClearError();
 
-                if (state_ != CollectorState::Running)
+                if (!CanAcceptDataLocked())
                     return HSM_RESULT_OK;
             }
 
@@ -914,14 +1369,14 @@ namespace
             return HSM_RESULT_OK;
         }
 
-        // Bar publish path (roll-on-add): gated on Running exactly like an instant value —
+        // Bar publish path (roll-on-add): gated on CanAcceptData exactly like an instant value —
         // a bar that closes while the collector is stopped is dropped, not queued.
         void EnqueueIfRunning(std::string json)
         {
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
-                if (state_ != CollectorState::Running)
+                if (!CanAcceptDataLocked())
                     return;
             }
 
@@ -935,7 +1390,7 @@ namespace
             {
                 std::lock_guard<std::mutex> guard(mutex_);
 
-                if (state_ != CollectorState::Running)
+                if (!CanAcceptDataLocked())
                     return;
             }
 
@@ -1051,24 +1506,155 @@ namespace
             last_error_.clear();
         }
 
+        // --- Lifecycle gates (caller holds mutex_). Same phase table as the managed
+        // collector (overview.md "Data gating" / "Sensor registration"). ---
+
+        // Data may be queued while Starting/Running/Stopping (so sensors flush at stop);
+        // dropped while Stopped or Disposed.
+        bool CanAcceptDataLocked() const
+        {
+            return state_ == CollectorState::Starting || state_ == CollectorState::Running || state_ == CollectorState::Stopping;
+        }
+
+        // A new sensor starts (and registers) immediately only while Starting/Running.
+        bool CanStartNewSensorsLocked() const
+        {
+            return state_ == CollectorState::Starting || state_ == CollectorState::Running;
+        }
+
+        // Registration is accepted unless shutting down or terminal (Stopping/Disposed):
+        // the union of the configuration (Stopped) and operational (Starting/Running) phases.
+        bool CanRegisterSensorsLocked() const
+        {
+            return state_ != CollectorState::Stopping && state_ != CollectorState::Disposed;
+        }
+
+        // Fire a lifecycle transition to every listener, exception-isolated. Caller holds
+        // op_mutex_ (never mutex_), so transitions are serialized and callbacks observe them in
+        // order. The listener set is snapshotted under listeners_mutex_ and the callbacks run
+        // OUTSIDE that lock, so a callback may register another listener (no self-deadlock, no
+        // mid-iteration mutation). A listener may read collector state but must not re-enter
+        // Start/Stop/Dispose (those hold op_mutex_, which this thread already holds).
+        void NotifyLifecycle(CollectorState state)
+        {
+            const auto status = ToPublicStatus(state);
+
+            std::vector<LifecycleListener> listeners;
+            {
+                std::lock_guard<std::mutex> guard(listeners_mutex_);
+                listeners = lifecycle_listeners_;
+            }
+
+            for (const auto& listener : listeners)
+                InvokeIsolated([&] { listener.callback(status, listener.user_data); });
+        }
+
+        void LogMessage(hsm_log_level_t level, const std::string& message)
+        {
+            hsm_log_callback_t callback = nullptr;
+            void* user_data = nullptr;
+            {
+                std::lock_guard<std::mutex> guard(logger_mutex_);
+                callback = log_callback_;
+                user_data = log_user_data_;
+            }
+
+            if (callback == nullptr)
+                return;
+
+            InvokeIsolated([&] { callback(level, message.c_str(), user_data); });
+        }
+
+        // Error routing entry point: validation drops, loop errors and shutdown discards all
+        // funnel here. Errors pass through the deduplicator (window/capacity from the options)
+        // so a storm of identical messages collapses to one log line; the suppressed count is
+        // flushed as a "(N suppressed)" suffix on the FIRST recurrence after the window elapses
+        // (recurrence-driven, not timer-driven — a storm that simply stops leaves its trailing
+        // count unemitted; memory is still bounded by capacity eviction). A zero window logs
+        // immediately and returns (no dedup) — the managed zero-window contract / double-log guard.
+        void LogError(const std::string& message)
+        {
+            if (dedup_window_ms_ <= 0)
+            {
+                LogMessage(HSM_LOG_LEVEL_ERROR, message);
+                return;
+            }
+
+            const auto now_ms = UnixTimeMilliseconds();
+            bool emit = false;
+            int64_t suppressed = 0;
+            {
+                std::lock_guard<std::mutex> guard(logger_mutex_);
+
+                auto it = dedup_.find(message);
+                if (it == dedup_.end())
+                {
+                    EvictDedupIfFullLocked(now_ms);
+                    dedup_.emplace(message, DedupEntry{ 0, now_ms });
+                    emit = true;
+                }
+                else if (now_ms - it->second.last_logged_ms >= dedup_window_ms_)
+                {
+                    suppressed = it->second.suppressed;
+                    it->second.suppressed = 0;
+                    it->second.last_logged_ms = now_ms;
+                    emit = true;
+                }
+                else
+                {
+                    ++it->second.suppressed;
+                }
+            }
+
+            if (emit)
+                LogMessage(HSM_LOG_LEVEL_ERROR, suppressed > 0
+                                                    ? message + " (" + std::to_string(suppressed) + " suppressed)"
+                                                    : message);
+        }
+
+        // Caller holds logger_mutex_. Bounds the dedup map to max_deduplicated_messages_ by
+        // evicting the oldest entry (smallest last_logged_ms) — same capacity+oldest-expiry
+        // policy as the managed MessageDeduplicator.
+        void EvictDedupIfFullLocked(int64_t /*now_ms*/)
+        {
+            if (dedup_.size() < static_cast<size_t>(max_deduplicated_messages_))
+                return;
+
+            auto oldest = dedup_.begin();
+            for (auto it = dedup_.begin(); it != dedup_.end(); ++it)
+                if (it->second.last_logged_ms < oldest->second.last_logged_ms)
+                    oldest = it;
+
+            if (oldest != dedup_.end())
+                dedup_.erase(oldest);
+        }
+
         std::string BuildSensorPath(const std::string& path) const
         {
             return JoinPathParts({ computer_name_, module_, path });
         }
 
-        // Caller holds mutex_. New sensors register immediately when the collector is
-        // already running (mirrors C# InitAsync on dynamic creation); sensors created
-        // before Start are registered by the Start loop.
+        // Caller holds mutex_. New sensors register immediately when the collector can start
+        // new sensors (Starting/Running — mirrors C# InitAsync on dynamic creation); sensors
+        // created before Start are registered by the Start loop.
         void RegisterSensorLocked(
             const std::shared_ptr<NativeSensor>& sensor,
             hsm_sensor_type_t type,
             const std::string& sensor_path,
             const RegistrationOptions& registration)
         {
+            sensor->SetClock(clock_);
             sensor->SetRegistrationJson(BuildRegistrationJson(sensor_path, type, registration));
 
-            if (state_ == CollectorState::Running)
+            if (CanStartNewSensorsLocked())
+            {
                 registrations_.push_back(sensor->RegistrationJson());
+
+                // A periodic sensor created while running must post immediately: nudge the
+                // scheduler so it re-reads the due-time instead of waiting out its current sleep.
+                if (sensor->IsPeriodic())
+                    scheduler_task_->Wake();
+            }
         }
 
         // FIFO send queue. Lock discipline: `queue_mutex_` and `mutex_` are never held together —
@@ -1103,47 +1689,32 @@ namespace
 
         void StartScheduler()
         {
-            {
-                std::lock_guard<std::mutex> guard(scheduler_mutex_);
-                scheduler_stop_ = false;
-            }
-
-            scheduler_ = std::thread([this] { SchedulerLoop(); });
+            scheduler_task_->Start();
         }
 
         void StopScheduler()
         {
-            {
-                std::lock_guard<std::mutex> guard(scheduler_mutex_);
-                scheduler_stop_ = true;
-            }
-
-            scheduler_cv_.notify_all();
-
-            if (scheduler_.joinable())
-                scheduler_.join();
+            scheduler_task_->Stop();
         }
 
-        // ~10ms tick granularity; each due periodic sensor builds its post under its own lock
-        // and publishes through the Running gate. Sensor locks are taken strictly outside the
-        // collector lock (snapshot first), same one-way order as everywhere else.
-        void SchedulerLoop()
+        // Earliest next periodic due time (steady ms) across all periodic sensors; the
+        // scheduler sleeps until then instead of polling. Reads each sensor's lock-free hint,
+        // so no sensor lock is taken under the collector lock. Far future when nothing periodic.
+        int64_t EarliestNextPostMs()
         {
-            std::unique_lock<std::mutex> lock(scheduler_mutex_);
+            int64_t earliest = (std::numeric_limits<int64_t>::max)();
+            std::lock_guard<std::mutex> guard(mutex_);
+            for (const auto& sensor : sensors_)
+                if (sensor.second->IsPeriodic())
+                    earliest = std::min(earliest, sensor.second->NextPostHint());
 
-            while (!scheduler_stop_)
-            {
-                scheduler_cv_.wait_for(lock, std::chrono::milliseconds(10), [this] { return scheduler_stop_; });
-
-                if (scheduler_stop_)
-                    break;
-
-                lock.unlock();
-                TickPeriodicSensors();
-                lock.lock();
-            }
+            return earliest;
         }
 
+        // Each due periodic sensor builds its post under its own lock and publishes through the
+        // data gate. Sensor locks are taken strictly outside the collector lock (snapshot
+        // first), same one-way order as everywhere else. A throwing user function callback is
+        // isolated so it cannot kill the scheduler loop or starve the other sensors (onError).
         void TickPeriodicSensors()
         {
             std::vector<std::shared_ptr<NativeSensor>> periodic;
@@ -1157,9 +1728,11 @@ namespace
 
             for (const auto& sensor : periodic)
             {
-                std::string json;
-                if (sensor->TryBuildPeriodicJson(json))
-                    EnqueueIfRunning(std::move(json));
+                InvokeIsolated([&] {
+                    std::string json;
+                    if (sensor->TryBuildPeriodicJson(json))
+                        EnqueueIfRunning(std::move(json));
+                });
             }
         }
 
@@ -1206,16 +1779,26 @@ namespace
 
         void DrainQueueOnStop()
         {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            DispatchQueuedLocked(lock, /*clear_remainder_on_failure=*/true);
+            size_t dropped = 0;
+            {
+                std::unique_lock<std::mutex> lock(queue_mutex_);
+                dropped = DispatchQueuedLocked(lock, /*clear_remainder_on_failure=*/true);
+            }
+
+            // Error routing — shutdown discard: a bounded stop that drops pending values on a
+            // dead/failing transport reports it (logged outside the queue lock so a slow log
+            // sink cannot stall shutdown). Deduplicated like any other error.
+            if (dropped > 0)
+                LogError("Collector stop dropped " + std::to_string(dropped) + " pending value(s): transport unavailable.");
         }
 
         // Pops and sends batches of up to max_values_in_package_ until the queue is empty or a
         // send fails. The lock is dropped around the send so enqueues never wait on dispatch.
         // On failure the batch is re-enqueued at the TAIL (the C# re-enqueue contract: a retried
         // package rotates behind later packages) — or, during the stop flush, everything left is
-        // dropped so shutdown cannot hang on a failing transport.
-        void DispatchQueuedLocked(std::unique_lock<std::mutex>& lock, bool clear_remainder_on_failure)
+        // dropped so shutdown cannot hang on a failing transport. Returns the number of values
+        // dropped (only non-zero on the clear-on-failure stop path).
+        size_t DispatchQueuedLocked(std::unique_lock<std::mutex>& lock, bool clear_remainder_on_failure)
         {
             while (!queue_.empty())
             {
@@ -1237,17 +1820,19 @@ namespace
                 {
                     if (clear_remainder_on_failure)
                     {
+                        const size_t dropped = batch.size() + queue_.size();
                         queue_.clear();
-                    }
-                    else
-                    {
-                        for (auto& json : batch)
-                            queue_.push_back(std::move(json));
+                        return dropped;
                     }
 
-                    return;
+                    for (auto& json : batch)
+                        queue_.push_back(std::move(json));
+
+                    return 0;
                 }
             }
+
+            return 0;
         }
 
         bool TrySendBatch(std::vector<std::string>& batch)
@@ -1313,19 +1898,48 @@ namespace
         bool send_hang_ = false;
         bool send_cancelled_ = false;
 
-        std::mutex scheduler_mutex_;
-        std::condition_variable scheduler_cv_;
-        bool scheduler_stop_ = false;
-        std::thread scheduler_;
+        // Periodic scheduler (issue #1095 §13): a single ScheduledTask worker that sleeps
+        // until the earliest sensor due-time, read through the swappable clock seam. The
+        // clock is shared with each periodic sensor (via SetClock at registration) so a test
+        // clock drives both the wait and the sensors' due-checks.
+        std::shared_ptr<Clock> clock_ = std::make_shared<RealClock>();
+        std::unique_ptr<ScheduledTask> scheduler_task_;
 
+        // Lifecycle operations (Start/Stop/Dispose) serialize on this coarse lock so a
+        // dispose racing a stop joins the in-flight transition rather than duplicating
+        // it. Listeners are invoked under it (after state_ flips) for consistent order.
+        std::mutex op_mutex_;
+
+        // Lifecycle listeners have their own lock: NotifyLifecycle snapshots under it and
+        // invokes callbacks outside it, so a callback may add a listener without deadlocking.
+        std::mutex listeners_mutex_;
+        std::vector<LifecycleListener> lifecycle_listeners_;
+
+        // Pluggable log sink + error deduplicator (overview.md "error-handling").
+        std::mutex logger_mutex_;
+        hsm_log_callback_t log_callback_ = nullptr;
+        void* log_user_data_ = nullptr;
+        std::unordered_map<std::string, DedupEntry> dedup_;
+
+        // [[maybe_unused]] marks options stored to mirror CollectorOptions but consumed only by
+        // the HTTP transport (#1096), which has not landed yet — this keeps the clang
+        // -Wunused-private-field lane (under -Werror) green without reordering the members
+        // (which would trip -Wreorder against the constructor initializer list).
         std::string access_key_;
         std::string server_address_;
-        int32_t port_;
+        [[maybe_unused]] int32_t port_;
+        std::string client_name_;
         std::string module_;
         std::string computer_name_;
         int32_t max_queue_size_;
         int32_t max_values_in_package_;
         int32_t collect_period_ms_;
+        [[maybe_unused]] int32_t request_timeout_ms_;
+        int32_t max_sensors_;
+        [[maybe_unused]] bool allow_untrusted_certificate_;
+        [[maybe_unused]] bool allow_plaintext_transport_;
+        int64_t dedup_window_ms_;
+        int32_t max_deduplicated_messages_;
     };
 
     hsm_result_t NativeSensor::AddInt(int32_t value, hsm_sensor_status_t status, const char* comment)
@@ -1423,8 +2037,7 @@ namespace
         if (!IsValidIntPartial(min, max, mean, first, last, count))
             return HSM_RESULT_OK;
 
-        return AccumulateBar([=](MonitoringBar& bar)
-        {
+        return AccumulateBar([=](MonitoringBar& bar) {
             bar.AddPartial(
                 static_cast<double>(min),
                 static_cast<double>(max),
@@ -1555,7 +2168,8 @@ namespace
 
         // Immediate first post on (re)start; the rate baseline resets so the first sample of a
         // new run does not divide by the stopped gap (mirrors C# MonitoringRateSensor.InitAsync).
-        next_post_ms_ = SteadyMilliseconds();
+        next_post_ms_ = SteadyNowMs();
+        next_post_hint_.store(next_post_ms_);
         rate_has_prev_ = false;
     }
 
@@ -1574,32 +2188,41 @@ namespace
         {
             std::lock_guard<std::mutex> guard(mutex_);
 
-            const auto now_ms = SteadyMilliseconds();
+            const auto now_ms = SteadyNowMs();
             if (now_ms < next_post_ms_)
                 return false;
 
-            // Re-anchoring to the actual tick time lets the cadence drift by up to the
-            // scheduler granularity (~10ms) per post, unlike the managed fixed-rate schedule.
-            // Benign for the rate VALUE (it divides by measured elapsed, not the period); a
-            // real port that wants to match managed post timestamps should anchor to the
-            // previous due time instead.
-            next_post_ms_ = now_ms + post_period_ms_;
+            // Catch up by whole periods: if the worker (or a virtual-clock jump) skipped past
+            // several periods, advance to the next future boundary and emit once — a fixed
+            // cadence from the start anchor, no backlog of posts (managed fixed-rate schedule).
+            // The C ABI rejects a non-positive period at creation; the guard is defensive so a
+            // zero/negative period can never spin this loop forever under the sensor lock.
+            if (post_period_ms_ > 0)
+            {
+                do
+                    next_post_ms_ += post_period_ms_;
+                while (next_post_ms_ <= now_ms);
+            }
+            else
+            {
+                next_post_ms_ = now_ms + 1;
+            }
+            next_post_hint_.store(next_post_ms_);
 
             if (type_ == HSM_SENSOR_TYPE_RATE)
             {
-                const auto now = std::chrono::steady_clock::now();
-
                 // Divide by the measured elapsed time since the previous post; the first sample
-                // falls back to the configured period (C# #1102-E2 contract).
+                // falls back to the configured period (C# #1102-E2 contract). Elapsed is read
+                // through the clock seam (ms granularity).
                 double seconds = post_period_ms_ / 1000.0;
                 if (rate_has_prev_)
                 {
-                    const auto elapsed = std::chrono::duration<double>(now - rate_prev_).count();
+                    const double elapsed = (now_ms - rate_prev_ms_) / 1000.0;
                     if (elapsed > 0)
                         seconds = elapsed;
                 }
 
-                rate_prev_ = now;
+                rate_prev_ms_ = now_ms;
                 rate_has_prev_ = true;
 
                 const double rate = seconds > 0 ? rate_sum_ / seconds : 0.0;
@@ -1693,7 +2316,7 @@ namespace
     {
         return is_last_value_;
     }
-}
+} // namespace
 
 struct hsm_collector_t
 {
@@ -1714,6 +2337,11 @@ static hsm_result_t CreateSensor(
     hsm_sensor_t** out_sensor,
     const RegistrationOptions& registration = InstantRegistrationDefaults());
 
+int32_t hsm_collector_version(void)
+{
+    return HSM_COLLECTOR_VERSION;
+}
+
 hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_collector_t** out_collector)
 {
     if (out_collector != nullptr)
@@ -1729,6 +2357,11 @@ hsm_result_t hsm_collector_create(const hsm_collector_options_t* options, hsm_co
         return HSM_RESULT_INVALID_ARGUMENT;
 
     if (options->port <= 0 || options->port > 65535)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    // 0 means "managed default" for every numeric field (the dedup window's 0 means
+    // log-immediately); a negative value is always invalid.
+    if (options->max_queue_size < 0 || options->max_values_in_package < 0 || options->package_collect_period_ms < 0 || options->request_timeout_ms < 0 || options->max_sensors < 0 || options->exception_deduplicator_window_ms < 0 || options->max_deduplicated_messages < 0)
         return HSM_RESULT_INVALID_ARGUMENT;
 
     try
@@ -1764,6 +2397,71 @@ hsm_result_t hsm_collector_stop(hsm_collector_t* collector)
         return HSM_RESULT_INVALID_ARGUMENT;
 
     return collector->impl->Stop();
+}
+
+hsm_collector_status_t hsm_collector_status(const hsm_collector_t* collector)
+{
+    if (collector == nullptr)
+        return HSM_COLLECTOR_STATUS_DISPOSED;
+
+    return collector->impl->Status();
+}
+
+void hsm_collector_dispose(hsm_collector_t* collector)
+{
+    if (collector == nullptr)
+        return;
+
+    collector->impl->Dispose();
+}
+
+hsm_result_t hsm_collector_test_connection(hsm_collector_t* collector)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return collector->impl->TestConnection();
+}
+
+hsm_result_t hsm_collector_add_lifecycle_listener(
+    hsm_collector_t* collector,
+    hsm_lifecycle_callback_t callback,
+    void* user_data)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    return collector->impl->AddLifecycleListener(callback, user_data);
+}
+
+hsm_result_t hsm_collector_set_logger(hsm_collector_t* collector, hsm_log_callback_t callback, void* user_data)
+{
+    if (collector == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    collector->impl->SetLogger(callback, user_data);
+    return HSM_RESULT_OK;
+}
+
+// Test-only seam — deliberately NOT declared in the public header. The native unit tests
+// forward-declare these to drive the scheduler's clock without real-time sleeps (the
+// injectable clock seam, issue #1095 §13). Install before Start; advance while running.
+extern "C" void hsm_collector_test_install_manual_clock(hsm_collector_t* collector, int64_t base_ms)
+{
+    if (collector != nullptr)
+        collector->impl->TestInstallManualClock(base_ms);
+}
+
+extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, int64_t delta_ms)
+{
+    if (collector != nullptr)
+        collector->impl->TestAdvanceClock(delta_ms);
+}
+
+extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message)
+{
+    if (collector != nullptr && message != nullptr)
+        collector->impl->TestLogError(message);
 }
 
 hsm_result_t hsm_collector_create_int_sensor(
