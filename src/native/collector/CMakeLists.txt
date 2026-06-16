@@ -136,6 +136,9 @@ if(HSM_COLLECTOR_HTTP)
     add_test(NAME native_http_transport_posts_to_capture_server
         COMMAND hsm_collector_tests native_http_transport_posts_to_capture_server
     )
+    add_test(NAME native_http_live_send_posts_to_capture_server
+        COMMAND hsm_collector_tests native_http_live_send_posts_to_capture_server
+    )
 endif()
 
 add_test(NAME native_invalid_argument_clears_out_params

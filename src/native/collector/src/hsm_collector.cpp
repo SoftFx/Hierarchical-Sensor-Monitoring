@@ -25,6 +25,11 @@
 #include <utility>
 #include <vector>
 
+#if defined(HSM_COLLECTOR_HTTP)
+#include "hsm_http_endpoints.hpp"
+#include "hsm_http_transport.hpp"
+#endif
+
 namespace
 {
     constexpr size_t MaxCommentLength = 1024;
@@ -1321,6 +1326,11 @@ namespace
                 },
                 [this] { return EarliestNextPostMs(); },
                 [this] { TickPeriodicSensors(); });
+
+            // Send seam default: record batches into sent_values_ (the behavior corpus and the
+            // sent_count/get_sent_json accessors observe this). The HTTP build swaps in a real
+            // libcurl POST via TestInstallHttpSender before Start.
+            sender_ = [this](std::vector<std::string>& batch) { return RecordBatch(batch); };
         }
 
         // Test-only seam (no public C ABI surface): swap the scheduling clock before Start.
@@ -1338,6 +1348,21 @@ namespace
         {
             SetClock(std::make_shared<ManualClock>(base_ms, base_ms));
         }
+
+#if defined(HSM_COLLECTOR_HTTP)
+        // Live-path seam (HTTP build): swap the recording sender for a real libcurl POST to the
+        // batch /list route. Install before Start, same one-way contract as SetClock — the worker
+        // thread only reads sender_ after Start, so the swap needs no lock. One transport per
+        // collector; Cancel()/ResetCancel() are wired into Stop/StartWorker so a Stop aborts an
+        // in-flight POST (the CancelPendingRequests primitive) and a restart re-arms it.
+        void TestInstallHttpSender()
+        {
+            http_transport_ = std::make_unique<hsm::http::HttpTransport>(
+                request_timeout_ms_, /*verify_peer=*/!allow_untrusted_certificate_);
+            endpoints_ = hsm::http::MakeEndpoints(server_address_, port_, allow_plaintext_transport_);
+            sender_ = [this](std::vector<std::string>& batch) { return HttpSendBatch(batch); };
+        }
+#endif
 
         // Advance the installed manual clock and wake the scheduler so it re-evaluates the
         // virtual due-time at once (no real-time wait).
@@ -2111,6 +2136,13 @@ namespace
                 send_cancelled_ = false;
             }
 
+#if defined(HSM_COLLECTOR_HTTP)
+            // Re-arm the transport's cancellation so sends after a restart are not aborted by a
+            // Cancel() left set from the previous Stop.
+            if (http_transport_)
+                http_transport_->ResetCancel();
+#endif
+
             {
                 std::lock_guard<std::mutex> guard(queue_mutex_);
                 worker_stop_ = false;
@@ -2178,6 +2210,14 @@ namespace
             }
 
             hang_cv_.notify_all();
+
+#if defined(HSM_COLLECTOR_HTTP)
+            // Abort an in-flight POST so a worker blocked in libcurl wakes up (the send fails, the
+            // batch re-enqueues, the stop drain drops it) and the join below stays bounded. The
+            // xfer-abort reads a lock-free atomic, so this is safe without the hang/queue locks.
+            if (http_transport_)
+                http_transport_->Cancel();
+#endif
 
             {
                 std::lock_guard<std::mutex> guard(queue_mutex_);
@@ -2289,6 +2329,13 @@ namespace
             if (TryConsumeFailToken())
                 return false;
 
+            return sender_(batch);
+        }
+
+        // Default send seam: record the batch for the behavior corpus + the sent_count/get_sent_json
+        // accessors. Swapped for a libcurl POST by TestInstallHttpSender (HTTP build) before Start.
+        bool RecordBatch(std::vector<std::string>& batch)
+        {
             std::lock_guard<std::mutex> guard(mutex_);
 
             for (auto& json : batch)
@@ -2296,6 +2343,37 @@ namespace
 
             return true;
         }
+
+#if defined(HSM_COLLECTOR_HTTP)
+        // One POST attempt per batch. A non-2xx or transport failure returns false, so the
+        // dispatcher re-enqueues the batch at the tail — the same durable-retry contract the C#
+        // queue uses (it re-enqueues on PackageSendingInfo.Error != null, including 5xx and 4xx).
+        // The Polly-equivalent in-send backoff (RetryPolicy, unit-tested separately) is a
+        // non-blocking refinement layered on later; doing it inline would block the single worker
+        // thread for up to the RetryPolicy max-delay per batch.
+        bool HttpSendBatch(std::vector<std::string>& batch)
+        {
+            // The data queue batches values to /list (DataHandlers RouteForSensorValue is_batch=true)
+            // as a JSON array; each element is the already-serialized wire value.
+            std::string body = "[";
+            for (size_t index = 0; index < batch.size(); ++index)
+            {
+                if (index != 0)
+                    body += ',';
+                body += batch[index];
+            }
+            body += "]";
+
+            const std::vector<hsm::http::HttpHeader> headers = {
+                { "Key", access_key_ },
+                { "ClientName", client_name_ },
+                { "Content-Type", "application/json" },
+            };
+
+            const auto response = http_transport_->Post(endpoints_.List(), body, headers);
+            return response.IsSuccess();
+        }
+#endif
 
         bool TryConsumeFailToken()
         {
@@ -2329,6 +2407,15 @@ namespace
         std::condition_variable hang_cv_;
         bool send_hang_ = false;
         bool send_cancelled_ = false;
+
+        // Send seam: TrySendBatch delegates here. Default records into sent_values_; the HTTP build
+        // swaps in a libcurl POST via TestInstallHttpSender (installed before Start, read only by
+        // the worker thread after Start — no lock needed for the swap).
+        std::function<bool(std::vector<std::string>&)> sender_;
+#if defined(HSM_COLLECTOR_HTTP)
+        std::unique_ptr<hsm::http::HttpTransport> http_transport_;
+        hsm::http::Endpoints endpoints_;
+#endif
 
         // Periodic scheduler (issue #1095 §13): a single ScheduledTask worker that sleeps
         // until the earliest sensor due-time, read through the swappable clock seam. The
@@ -2895,6 +2982,17 @@ extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const c
     if (collector != nullptr && message != nullptr)
         collector->impl->TestLogError(message);
 }
+
+#if defined(HSM_COLLECTOR_HTTP)
+// Test-only seam (#1097): swap the recording sender for the live libcurl transport so the native
+// unit tests exercise the real queue -> worker -> POST path against the in-proc capture server.
+// Install before Start (same contract as the clock seam). HTTP-build only.
+extern "C" void hsm_collector_test_install_http_sender(hsm_collector_t* collector)
+{
+    if (collector != nullptr && collector->impl != nullptr)
+        collector->impl->TestInstallHttpSender();
+}
+#endif
 
 // Test-only seam (#1096): exercise the real-wire serializers directly from the native unit
 // tests without a live collector. Return into a thread-local buffer (valid until the next call
