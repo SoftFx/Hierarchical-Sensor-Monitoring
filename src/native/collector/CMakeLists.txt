@@ -184,6 +184,8 @@ set(NATIVE_REGRESSION_TESTS
     native_wire_file_json_matches_net_byte_layout
     native_wire_timespan_and_version_match_net
     native_wire_registration_json_matches_net_byte_layout
+    native_http_endpoint_routing_matches_net
+    native_http_retry_policy_matches_net
     native_lifecycle_listener_can_register_another_listener
     native_test_connection_reports_reachable
     native_max_sensors_cap_rejects_beyond_limit

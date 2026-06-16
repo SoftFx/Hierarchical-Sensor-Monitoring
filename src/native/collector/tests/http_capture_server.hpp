@@ -180,4 +180,4 @@ namespace hsm::test
         std::thread worker_;
         CapturedRequest request_;
     };
-}
+} // namespace hsm::test

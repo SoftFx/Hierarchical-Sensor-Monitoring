@@ -1,5 +1,7 @@
 #include "hsm_collector/hsm_collector.h"
 #include "hsm_collector/hsm_collector.hpp"
+#include "../src/hsm_http_endpoints.hpp"
+#include "../src/hsm_http_retry.hpp"
 #include <iostream>
 #include <fstream>
 #include <chrono>
@@ -2824,12 +2826,101 @@ namespace
             "AddOrUpdateSensorRequest wire layout");
     }
 
+    void NativeHttpEndpointRoutingMatchesNet()
+    {
+        // Scheme defaulting mirrors Endpoints(CollectorOptions): bare host -> https; explicit
+        // http stays http ONLY with AllowPlaintextTransport, otherwise upgraded to https; the
+        // /api/sensors base path and explicit Port are always applied.
+        Require(hsm::http::MakeEndpoints("localhost", 44330, false).connection_address ==
+                    "https://localhost:44330/api/sensors",
+                "bare host defaults to https");
+        Require(hsm::http::MakeEndpoints("https://example.org", 443, false).connection_address ==
+                    "https://example.org:443/api/sensors",
+                "explicit https preserved");
+        Require(hsm::http::MakeEndpoints("http://example.org", 80, false).connection_address ==
+                    "https://example.org:80/api/sensors",
+                "explicit http upgraded to https without plaintext opt-in");
+        Require(hsm::http::MakeEndpoints("http://example.org", 8080, true).connection_address ==
+                    "http://example.org:8080/api/sensors",
+                "explicit http kept only with plaintext opt-in");
+        // An embedded :port/path on the URL is dropped — the explicit Port wins (UriBuilder parity).
+        Require(hsm::http::MakeEndpoints("https://host:1234/ignored", 44330, false).connection_address ==
+                    "https://host:44330/api/sensors",
+                "embedded port/path dropped, explicit port applied");
+
+        const auto ep = hsm::http::MakeEndpoints("localhost", 44330, false);
+
+        // Single-value routes (DataHandlers.GetUri), one per kind.
+        Require(hsm::http::RouteForSensorValue(ep, HSM_SENSOR_TYPE_BOOLEAN, false) == ep.connection_address + "/bool", "bool route");
+        Require(hsm::http::RouteForSensorValue(ep, HSM_SENSOR_TYPE_INT, false) == ep.connection_address + "/int", "int route");
+        Require(hsm::http::RouteForSensorValue(ep, HSM_SENSOR_TYPE_DOUBLE, false) == ep.connection_address + "/double", "double route");
+        Require(hsm::http::RouteForSensorValue(ep, HSM_SENSOR_TYPE_STRING, false) == ep.connection_address + "/string", "string route");
+        Require(hsm::http::RouteForSensorValue(ep, HSM_SENSOR_TYPE_INT_BAR, false) == ep.connection_address + "/intBar", "intBar route");
+        Require(hsm::http::RouteForSensorValue(ep, HSM_SENSOR_TYPE_DOUBLE_BAR, false) == ep.connection_address + "/doubleBar", "doubleBar route");
+        Require(hsm::http::RouteForSensorValue(ep, HSM_SENSOR_TYPE_FILE, false) == ep.connection_address + "/file", "file route");
+        Require(hsm::http::RouteForSensorValue(ep, HSM_SENSOR_TYPE_RATE, false) == ep.connection_address + "/rate", "rate route");
+        Require(hsm::http::RouteForSensorValue(ep, HSM_SENSOR_TYPE_ENUM, false) == ep.connection_address + "/enum", "enum route");
+
+        // A batch of values goes to /list regardless of kind.
+        Require(hsm::http::RouteForSensorValue(ep, HSM_SENSOR_TYPE_BOOLEAN, true) == ep.connection_address + "/list", "value batch -> /list");
+
+        // Commands: batch -> /commands, single AddOrUpdate -> /addOrUpdate.
+        Require(hsm::http::RouteForCommand(ep, true) == ep.connection_address + "/commands", "command batch -> /commands");
+        Require(hsm::http::RouteForCommand(ep, false) == ep.connection_address + "/addOrUpdate", "single command -> /addOrUpdate");
+
+        Require(ep.TestConnection() == ep.connection_address + "/testConnection", "testConnection route");
+    }
+
+    void NativeHttpRetryPolicyMatchesNet()
+    {
+        const auto data = hsm::http::RetryPolicy::Data();         // bounded, exponential, 10 retries
+        const auto commands = hsm::http::RetryPolicy::Commands(); // unbounded, linear
+
+        // ShouldRetry parity with BaseHandlers.ShouldRetry (#1096 fix):
+        // transport failure (exception-equivalent) is always retried on both pipelines.
+        Require(data.ShouldRetry(/*transport_ok=*/false, 0), "data retries transport failure");
+        Require(commands.ShouldRetry(/*transport_ok=*/false, 0), "commands retry transport failure");
+
+        // 5xx is retried only on the bounded pipeline; the unbounded command pipeline must not
+        // spin forever on a persistent server error.
+        Require(data.ShouldRetry(true, 503), "data retries 5xx");
+        Require(!commands.ShouldRetry(true, 503), "commands do NOT retry 5xx (would hang unbounded)");
+
+        // 4xx is permanent on both; 2xx is success on both.
+        Require(!data.ShouldRetry(true, 400), "data does not retry 4xx");
+        Require(!data.ShouldRetry(true, 404), "data does not retry 4xx");
+        Require(!data.ShouldRetry(true, 200), "2xx is success");
+        Require(!commands.ShouldRetry(true, 400), "commands do not retry 4xx");
+
+        // Attempt budget: bounded stops after 10 retries; unbounded never exhausts.
+        Require(data.HasAttemptsLeft(10), "10th retry allowed");
+        Require(!data.HasAttemptsLeft(11), "11th retry rejected");
+        Require(commands.HasAttemptsLeft(1000000), "command retries never exhaust");
+
+        // Exponential backoff: 1s, 2s, 4s, 8s ... clamped at 2min (Polly base*2^n, MaxDelay=120s).
+        Require(data.DelayMs(0) == 1000, "exp retry#1 = 1s");
+        Require(data.DelayMs(1) == 2000, "exp retry#2 = 2s");
+        Require(data.DelayMs(2) == 4000, "exp retry#3 = 4s");
+        Require(data.DelayMs(3) == 8000, "exp retry#4 = 8s");
+        Require(data.DelayMs(7) == 120000, "exp clamps to 2min (128s -> 120s)");
+        Require(data.DelayMs(20) == 120000, "exp stays clamped at 2min");
+
+        // Linear backoff: 1s, 2s, 3s ... clamped at 2min (Polly base*(n+1)).
+        Require(commands.DelayMs(0) == 1000, "lin retry#1 = 1s");
+        Require(commands.DelayMs(1) == 2000, "lin retry#2 = 2s");
+        Require(commands.DelayMs(2) == 3000, "lin retry#3 = 3s");
+        Require(commands.DelayMs(119) == 120000, "lin retry#120 = 2min");
+        Require(commands.DelayMs(200) == 120000, "lin clamps to 2min");
+    }
+
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
 #if defined(HSM_COLLECTOR_HTTP)
             { "native_http_transport_posts_to_capture_server", [](const std::string&) { NativeHttpTransportPostsToCaptureServer(); } },
 #endif
+            { "native_http_endpoint_routing_matches_net", [](const std::string&) { NativeHttpEndpointRoutingMatchesNet(); } },
+            { "native_http_retry_policy_matches_net", [](const std::string&) { NativeHttpRetryPolicyMatchesNet(); } },
             { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
