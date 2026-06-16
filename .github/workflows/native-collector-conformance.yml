@@ -114,6 +114,12 @@ jobs:
           vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
 
       - name: Configure (HTTP transport on)
+        # vcpkg manifest install runs here (cmake project() triggers it). run-vcpkg defaults
+        # VCPKG_BINARY_SOURCES to "clear;x-gha,readwrite", whose GHA backend needs
+        # ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL that aren't reliably exported — failing the
+        # install. Override to "clear" for this step so curl is built from source, no cache tokens.
+        env:
+          VCPKG_BINARY_SOURCES: clear
         run: >
           cmake -S src/native/collector -B build/native-http
           -DHSM_COLLECTOR_WERROR=ON
