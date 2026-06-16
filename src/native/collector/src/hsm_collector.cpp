@@ -214,6 +214,54 @@ namespace
         return result;
     }
 
+    // .NET TimeSpan "c" (constant/invariant) format: "[-][d.]hh:mm:ss[.fffffff]". The day part is
+    // omitted when zero; the fraction is present only when non-zero and is ALWAYS seven digits
+    // (100-ns ticks, not trimmed — unlike the ISO time fraction). Input is .NET ticks (100 ns).
+    // (#1096 §15 wire contract for TimeSpan sensor values.)
+    std::string TimeSpanCFormat(int64_t ticks)
+    {
+        constexpr int64_t per_second = 10000000;
+        constexpr int64_t per_minute = 60 * per_second;
+        constexpr int64_t per_hour = 60 * per_minute;
+        constexpr int64_t per_day = 24 * per_hour;
+
+        std::string sign;
+        int64_t total = ticks;
+        if (total < 0)
+        {
+            sign = "-";
+            total = -total;
+        }
+
+        const int64_t days = total / per_day;
+        total %= per_day;
+        const int64_t hours = total / per_hour;
+        total %= per_hour;
+        const int64_t minutes = total / per_minute;
+        total %= per_minute;
+        const int64_t seconds = total / per_second;
+        const int64_t fraction = total % per_second;
+
+        char buf[32];
+        std::snprintf(
+            buf, sizeof(buf), "%02lld:%02lld:%02lld",
+            static_cast<long long>(hours), static_cast<long long>(minutes), static_cast<long long>(seconds));
+
+        std::string result = sign;
+        if (days > 0)
+            result += std::to_string(days) + ".";
+        result += buf;
+        if (fraction > 0)
+        {
+            char frac[16];
+            std::snprintf(frac, sizeof(frac), "%07lld", static_cast<long long>(fraction));
+            result += ".";
+            result += frac;
+        }
+
+        return result;
+    }
+
     // Real .NET wire JSON for a single value DTO (#1096 §15). Byte-identical to net8
     // System.Text.Json output: property order is most-derived-first then base-last with Type
     // first (Type, Value, Comment, Time, Status, Key, Path); Comment null is emitted as `null`;
@@ -2676,6 +2724,13 @@ extern "C" const char* hsm_collector_test_iso_from_unix_ms(int64_t unix_ms)
 {
     static thread_local std::string buffer;
     buffer = IsoUtcFromUnixMs(unix_ms);
+    return buffer.c_str();
+}
+
+extern "C" const char* hsm_collector_test_timespan_c_format(int64_t ticks)
+{
+    static thread_local std::string buffer;
+    buffer = TimeSpanCFormat(ticks);
     return buffer.c_str();
 }
 

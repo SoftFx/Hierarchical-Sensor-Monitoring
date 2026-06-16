@@ -87,6 +87,10 @@ Base `{scheme}://{server}:{port}/api/sensors/`; auth headers `Key: <AccessKey>`,
 - Never renumber or reuse enum values; never rename JSON fields; additive evolution only.
 - Server tolerates unknown/omitted optional fields; collectors must tolerate unknown response fields.
 
+## Native port (C++)
+
+The native collector (`src/native/collector`, #1096) reproduces this wire **byte-for-byte** against the **net8 / Core** `System.Text.Json` output (the shortest-double runtime; net472 doubles diverge and are out of scope, as in `number_format_contract`). `BuildWire{Value,Bar,File,Registration}Json` in `hsm_collector.cpp` emit the exact property order (most-derived-first, base-last, `Type` first), `Key:null`, ISO-8601-Z time (fraction trimmed), TimeSpan ".NET c", `List<byte>` numeric array, `Percentiles:null`, and the full `AddOrUpdateSensorRequest` shape. Parity is locked from both sides: native `native_wire_*` unit tests pin the exact bytes, and `WireFormatGoldenLockTests` (net8 IntegrationTests) asserts the **same** strings against the real `HttpRequest<T>` serializer — if .NET drifts, that test fails first and both sides update in lockstep.
+
 ## Key Files
 
 | File | Purpose |

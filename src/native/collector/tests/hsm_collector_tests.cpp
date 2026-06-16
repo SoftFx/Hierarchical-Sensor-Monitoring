@@ -25,6 +25,7 @@ extern "C" void hsm_collector_test_advance_clock_ms(hsm_collector_t* collector, 
 extern "C" void hsm_collector_test_log_error(hsm_collector_t* collector, const char* message);
 // Real-wire serializers (#1096): exercised directly from the unit tests.
 extern "C" const char* hsm_collector_test_iso_from_unix_ms(int64_t unix_ms);
+extern "C" const char* hsm_collector_test_timespan_c_format(int64_t ticks);
 extern "C" const char* hsm_collector_test_wire_value_json(
     int32_t type,
     const char* value_json,
@@ -2703,6 +2704,23 @@ namespace
             "file wire layout (List<byte> numeric array)");
     }
 
+    void NativeWireTimeSpanAndVersionMatchNet()
+    {
+        // .NET TimeSpan "c": "1.02:03:04.0050000" (ticks for TimeSpan(1,2,3,4,5) = 937840050000);
+        // day omitted when zero; seven-digit fraction (not trimmed); negative sign.
+        Require(std::string(hsm_collector_test_timespan_c_format(937840050000LL)) == "1.02:03:04.0050000", "timespan c-format");
+        Require(std::string(hsm_collector_test_timespan_c_format(40000000LL)) == "00:00:04", "timespan whole seconds drops the fraction and day");
+        Require(std::string(hsm_collector_test_timespan_c_format(-600000000LL)) == "-00:01:00", "timespan negative");
+
+        // TimeSpan(7) / Version(8) value DTOs serialize the formatted text as a quoted string.
+        Require(
+            std::string(hsm_collector_test_wire_value_json(7, "\"1.02:03:04.0050000\"", "", 1, 1, 0, "p/ts")) == "{\"Type\":7,\"Value\":\"1.02:03:04.0050000\",\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/ts\"}",
+            "timespan wire value");
+        Require(
+            std::string(hsm_collector_test_wire_value_json(8, "\"1.2.3.4\"", "", 1, 1, 0, "p/v")) == "{\"Type\":8,\"Value\":\"1.2.3.4\",\"Comment\":null,\"Time\":\"1970-01-01T00:00:00Z\",\"Status\":1,\"Key\":null,\"Path\":\"p/v\"}",
+            "version wire value");
+    }
+
     void NativeWireRegistrationJsonMatchesNetByteLayout()
     {
         // SensorType IntSensor(1); ttl 60000ms -> 600000000 ticks; OriginalUnit MB(3);
@@ -2721,6 +2739,7 @@ namespace
     const std::map<std::string, std::function<void(const std::string&)>>& Tests()
     {
         static const std::map<std::string, std::function<void(const std::string&)>> tests = {
+            { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
             { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
