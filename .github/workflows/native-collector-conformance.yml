@@ -86,6 +86,47 @@ jobs:
       - name: Test
         run: ctest --test-dir build/native-clang --output-on-failure
 
+  http-transport:
+    # Builds the optional libcurl HTTP transport (HSM_COLLECTOR_HTTP=ON) and runs the
+    # transport-only tests: the in-proc capture-server E2E, the endpoint route table, and the
+    # retry policy. curl comes from vcpkg manifest mode (src/native/collector/vcpkg.json), so
+    # the baseline there must stay an upstream microsoft/vcpkg commit. ssl-only feature set →
+    # Schannel on Windows / OpenSSL on Linux, no heavyweight TLS build.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_DISABLE_METRICS: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build deps for vcpkg curl
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y nasm
+
+      # Pinned to the vcpkg.json builtin-baseline so the manifest resolves deterministically.
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 6f29f12e82a8293156836ad81cc9bf5af41fe836
+
+      - name: Configure (HTTP transport on)
+        run: >
+          cmake -S src/native/collector -B build/native-http
+          -DHSM_COLLECTOR_WERROR=ON
+          -DHSM_COLLECTOR_HTTP=ON
+          -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+
+      - name: Build
+        run: cmake --build build/native-http --config Release --parallel
+
+      # Transport E2E (real libcurl against a loopback capture server), route table, retry policy.
+      - name: Test (HTTP lane)
+        run: ctest --test-dir build/native-http -C Release --output-on-failure -R "native_http"
+
   sanitizers:
     # ASan+UBSan and TSan on Linux clang. These exercise the multi-threaded
     # scheduler/worker that the single-threaded corpus run cannot stress.
