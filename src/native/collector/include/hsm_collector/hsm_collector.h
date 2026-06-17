@@ -348,6 +348,37 @@ hsm_result_t hsm_collector_create_enum_sensor_with_options(
     size_t enum_option_count,
     hsm_sensor_t** out_sensor);
 
+/* Full SensorOptions registration surface (#1098 §6). Every nullable field uses a sentinel for
+   "emit null / take the managed default": ttl_ms/keep_history_ms/self_destroy_ms = 0 => null;
+   unit/display_unit/statistics < 0 => null; the tri-state bools is_singleton/aggregate_data/
+   enable_grafana use -1 => null, 0 => false, 1 => true. is_computer_sensor anchors the path at the
+   computer node AND forces IsSingletonSensor=true on the wire (managed `singleton | computer`).
+   sensor_location (0 = Module, 1 = Product) selects a non-computer sensor's path anchor. */
+typedef struct hsm_sensor_options_t
+{
+    int64_t ttl_ms;
+    int32_t unit;
+    const char* description; /* NULL => instant default "" */
+    int64_t keep_history_ms;
+    int64_t self_destroy_ms;
+    int32_t display_unit;
+    int32_t statistics; /* StatisticsOptions flags: EMA = 1 */
+    int32_t is_singleton;
+    int32_t aggregate_data;
+    int32_t enable_grafana;
+    bool is_computer_sensor;
+    int32_t sensor_location;
+} hsm_sensor_options_t;
+
+/* Generic instant-sensor create with the full options surface. `type` is any instant kind
+   (bool/int/double/string/enum/timespan/version). The recorded registration reflects every option. */
+hsm_result_t hsm_collector_create_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_type_t type,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor);
+
 size_t hsm_collector_registration_count(const hsm_collector_t* collector);
 hsm_result_t hsm_collector_get_registration_json(
     const hsm_collector_t* collector,

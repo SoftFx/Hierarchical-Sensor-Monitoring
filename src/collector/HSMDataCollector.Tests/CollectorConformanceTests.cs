@@ -206,6 +206,25 @@ namespace HSMDataCollector.Tests
                         }));
                     break;
 
+                case "create_int_sensor_full_options":
+                    AddSensor(state, state.IntSensors, state.Collector.CreateIntSensor(
+                        ExpandTextToken(step.Arg(0)),
+                        new InstantSensorOptions
+                        {
+                            TTL = long.Parse(step.Arg(1)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(1))) : (TimeSpan?)null,
+                            SensorUnit = int.Parse(step.Arg(2)) >= 0 ? (Unit)int.Parse(step.Arg(2)) : (Unit?)null,
+                            KeepHistory = long.Parse(step.Arg(3)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(3))) : (TimeSpan?)null,
+                            SelfDestroy = long.Parse(step.Arg(4)) > 0 ? TimeSpan.FromMilliseconds(long.Parse(step.Arg(4))) : (TimeSpan?)null,
+                            Statistics = int.Parse(step.Arg(5)) >= 0 ? (StatisticsOptions)int.Parse(step.Arg(5)) : StatisticsOptions.None,
+                            IsSingletonSensor = ParseTriBool(step.Arg(6)),
+                            AggregateData = ParseTriBool(step.Arg(7)),
+                            EnableForGrafana = ParseTriBool(step.Arg(8)),
+                            IsComputerSensor = bool.Parse(step.Arg(9)),
+                            SensorLocation = (SensorLocation)int.Parse(step.Arg(10)),
+                            Description = ExpandTextToken(step.Arg(11)),
+                        }));
+                    break;
+
                 case "create_timespan_sensor":
                     AddSensor(state, state.TimeSpanSensors, state.Collector.CreateTimeSensor(ExpandTextToken(step.Arg(0))));
                     break;
@@ -1189,6 +1208,10 @@ namespace HSMDataCollector.Tests
             var alerts = request.Alerts == null ? "null" : JsonSerializer.Serialize(request.Alerts);
             var ttlAlerts = request.TtlAlerts == null ? "null" : JsonSerializer.Serialize(request.TtlAlerts);
 
+            string Long(long? v) => v?.ToString(CultureInfo.InvariantCulture) ?? "null";
+            string Int(int? v) => v?.ToString(CultureInfo.InvariantCulture) ?? "null";
+            string Bool(bool? v) => v.HasValue ? (v.Value ? "true" : "false") : "null";
+
             return "{" +
                    "\"Command\":\"AddOrUpdate\"," +
                    $"\"Path\":\"{EscapeJson(request.Path)}\"," +
@@ -1198,7 +1221,14 @@ namespace HSMDataCollector.Tests
                    $"\"Description\":{(request.Description == null ? "null" : "\"" + EscapeJson(request.Description) + "\"")}," +
                    $"\"EnumOptions\":{enums}," +
                    $"\"Alerts\":{alerts}," +
-                   $"\"TtlAlerts\":{ttlAlerts}" +
+                   $"\"TtlAlerts\":{ttlAlerts}," +
+                   $"\"KeepHistory\":{Long(request.KeepHistory)}," +
+                   $"\"SelfDestroy\":{Long(request.SelfDestroy)}," +
+                   $"\"Statistics\":{Int(request.Statistics.HasValue ? (int)request.Statistics.Value : (int?)null)}," +
+                   $"\"DisplayUnit\":{Int(request.DisplayUnit)}," +
+                   $"\"IsSingletonSensor\":{Bool(request.IsSingletonSensor)}," +
+                   $"\"AggregateData\":{Bool(request.AggregateData)}," +
+                   $"\"EnableGrafana\":{Bool(request.EnableGrafana)}" +
                    "}";
         }
 
@@ -1389,6 +1419,13 @@ namespace HSMDataCollector.Tests
         private static SensorStatus ParseStatus(string value)
         {
             return (SensorStatus)Enum.Parse(typeof(SensorStatus), value);
+        }
+
+        // Tri-state nullable bool from the corpus: -1 => null, 0 => false, else true.
+        private static bool? ParseTriBool(string value)
+        {
+            var v = int.Parse(value, CultureInfo.InvariantCulture);
+            return v < 0 ? (bool?)null : v != 0;
         }
 
         private static SensorStatus ParseRawStatus(string value) => (SensorStatus)int.Parse(value, CultureInfo.InvariantCulture);

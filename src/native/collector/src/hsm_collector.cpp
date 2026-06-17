@@ -899,6 +899,23 @@ namespace
     // Portable registration-option subset mirroring the managed sensor options
     // (registration_contract.hsmtest). has_description=false => "Description":null —
     // managed instant creates default to "", every other sensor family defaults to null.
+    // Tri-state for a nullable bool wire field: Unset => null, else true/false. Fixed underlying
+    // type so casting an untrusted ABI int (any value) is well-defined (-fsanitize=enum safe).
+    enum class TriBool : int32_t
+    {
+        Unset = -1,
+        False = 0,
+        True = 1
+    };
+
+    // Mirrors the managed SensorLocation: where a non-computer sensor's path is anchored
+    // (CalculateSystemPath). Module => ComputerName/Module/Path; Product => Path (root).
+    enum class SensorLocation : int32_t
+    {
+        Module = 0,
+        Product = 1
+    };
+
     struct RegistrationOptions
     {
         int64_t ttl_ms = 0;
@@ -909,7 +926,42 @@ namespace
         std::vector<EnumOptionData> enum_options;
         std::vector<AlertData> alerts;     // AddOrUpdate.Alerts (instant/bar data alerts)
         std::vector<AlertData> ttl_alerts; // AddOrUpdate.TtlAlerts (IfInactivityPeriodIs)
+
+        // Generic SensorOptions surface (#1098 §6). has_*/Unset distinguish "emit null" from a value.
+        bool has_keep_history = false;
+        int64_t keep_history_ms = 0; // -> KeepHistory ticks
+        bool has_self_destroy = false;
+        int64_t self_destroy_ms = 0; // -> SelfDestroy ticks
+        bool has_display_unit = false;
+        int32_t display_unit = 0;
+        bool has_statistics = false;
+        int32_t statistics = 0; // StatisticsOptions flags (EMA=1)
+        TriBool aggregate_data = TriBool::Unset;
+        TriBool enable_grafana = TriBool::Unset;
+        // IsSingletonSensor on the wire is `singleton | is_computer_sensor` (ApiConverters): a computer
+        // sensor always registers as a singleton. is_computer_sensor also drives CalculateSystemPath.
+        TriBool is_singleton = TriBool::Unset;
+        bool is_computer_sensor = false;
+        SensorLocation sensor_location = SensorLocation::Module;
     };
+
+    // IsSingletonSensor wire value = options.IsSingletonSensor | options.IsComputerSensor (nullable
+    // bool OR: null|true=true, null|false=null). Returns "true"/"false"/"null".
+    std::string SingletonWireText(const RegistrationOptions& options)
+    {
+        if (options.is_computer_sensor)
+            return "true";
+        if (options.is_singleton == TriBool::Unset)
+            return "null";
+        return options.is_singleton == TriBool::True ? "true" : "false";
+    }
+
+    std::string TriBoolWireText(TriBool value)
+    {
+        if (value == TriBool::Unset)
+            return "null";
+        return value == TriBool::True ? "true" : "false";
+    }
 
     RegistrationOptions InstantRegistrationDefaults()
     {
@@ -973,7 +1025,14 @@ namespace
                ",\"Description\":" + (options.has_description ? "\"" + EscapeJson(options.description) + "\"" : "null") +
                ",\"EnumOptions\":" + enums_text +
                ",\"Alerts\":" + BuildAlertArrayJson(options.alerts) +
-               ",\"TtlAlerts\":" + BuildAlertArrayJson(options.ttl_alerts) + "}";
+               ",\"TtlAlerts\":" + BuildAlertArrayJson(options.ttl_alerts) +
+               ",\"KeepHistory\":" + (options.has_keep_history ? std::to_string(options.keep_history_ms * 10000) : "null") +
+               ",\"SelfDestroy\":" + (options.has_self_destroy ? std::to_string(options.self_destroy_ms * 10000) : "null") +
+               ",\"Statistics\":" + (options.has_statistics ? std::to_string(options.statistics) : "null") +
+               ",\"DisplayUnit\":" + (options.has_display_unit ? std::to_string(options.display_unit) : "null") +
+               ",\"IsSingletonSensor\":" + SingletonWireText(options) +
+               ",\"AggregateData\":" + TriBoolWireText(options.aggregate_data) +
+               ",\"EnableGrafana\":" + TriBoolWireText(options.enable_grafana) + "}";
     }
 
     // Real wire JSON for AddOrUpdateSensorRequest (#1096 §15) — byte-identical to net8
@@ -1010,16 +1069,16 @@ namespace
              << ",\"SensorType\":" << static_cast<int>(type)
              << ",\"Description\":" << (options.has_description ? ("\"" + EscapeJsonWire(options.description) + "\"") : "null")
              << ",\"DefaultChats\":null"
-             << ",\"KeepHistory\":null"
-             << ",\"SelfDestroy\":null"
+             << ",\"KeepHistory\":" << (options.has_keep_history ? std::to_string(options.keep_history_ms * 10000) : "null")
+             << ",\"SelfDestroy\":" << (options.has_self_destroy ? std::to_string(options.self_destroy_ms * 10000) : "null")
              << ",\"TTLs\":" << ttls
              << ",\"TTL\":null"
-             << ",\"Statistics\":null"
-             << ",\"IsSingletonSensor\":null"
-             << ",\"AggregateData\":null"
-             << ",\"EnableGrafana\":null"
+             << ",\"Statistics\":" << (options.has_statistics ? std::to_string(options.statistics) : "null")
+             << ",\"IsSingletonSensor\":" << SingletonWireText(options)
+             << ",\"AggregateData\":" << TriBoolWireText(options.aggregate_data)
+             << ",\"EnableGrafana\":" << TriBoolWireText(options.enable_grafana)
              << ",\"OriginalUnit\":" << (options.unit >= 0 ? std::to_string(options.unit) : "null")
-             << ",\"DisplayUnit\":null"
+             << ",\"DisplayUnit\":" << (options.has_display_unit ? std::to_string(options.display_unit) : "null")
              << ",\"DefaultAlertsOptions\":0"
              << ",\"IsForceUpdate\":false"
              << ",\"EnumOptions\":" << enums
@@ -1787,7 +1846,7 @@ namespace
                 return SetError(HSM_RESULT_INVALID_ARGUMENT, "Sensor path must not be empty.");
 
             std::lock_guard<std::mutex> guard(mutex_);
-            const auto sensor_path = BuildSensorPath(path);
+            const auto sensor_path = CalculateSystemPath(path, registration);
 
             // Registration is closed while Stopping/Disposed: reject without crashing the host
             // (returns an inert null handle), mirroring the managed CanRegisterSensors gate.
@@ -2292,6 +2351,24 @@ namespace
         std::string BuildSensorPath(const std::string& path) const
         {
             return JoinPathParts({ computer_name_, module_, path });
+        }
+
+        // CalculateSystemPath (SensorOptions.cs): a computer sensor anchors at ComputerName/Path; a
+        // module sensor at ComputerName/Module/Path; a product sensor at the bare Path (root).
+        std::string CalculateSystemPath(const std::string& path, const RegistrationOptions& options) const
+        {
+            if (options.is_computer_sensor)
+                return JoinPathParts({ computer_name_, path });
+            if (options.sensor_location == SensorLocation::Product)
+                return JoinPathParts({ path });
+            return JoinPathParts({ computer_name_, module_, path });
+        }
+
+        // RevealDefaultPath (DefaultPrototype.cs): default sensors live under the `.computer`/`.module`
+        // folder by category. `.computer` for a computer sensor, `.module` otherwise.
+        std::string RevealDefaultPath(const std::string& category, const std::string& path, bool is_computer_sensor) const
+        {
+            return JoinPathParts({ is_computer_sensor ? ".computer" : ".module", category, path });
         }
 
         // Caller holds mutex_. New sensors register immediately when the collector can start
@@ -3507,6 +3584,53 @@ hsm_result_t hsm_collector_create_int_sensor_with_options(
     registration.description = CopyString(description);
 
     return CreateSensor(collector, path, HSM_SENSOR_TYPE_INT, false, std::string{}, out_sensor, registration);
+}
+
+hsm_result_t hsm_collector_create_sensor_with_options(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_type_t type,
+    const hsm_sensor_options_t* options,
+    hsm_sensor_t** out_sensor)
+{
+    if (out_sensor != nullptr)
+        *out_sensor = nullptr;
+
+    if (options == nullptr)
+        return HSM_RESULT_INVALID_ARGUMENT;
+
+    auto registration = InstantRegistrationDefaults(); // has_description=true (instant default "")
+    registration.ttl_ms = options->ttl_ms;
+    registration.unit = options->unit;
+    registration.description = CopyString(options->description);
+
+    if (options->keep_history_ms > 0)
+    {
+        registration.has_keep_history = true;
+        registration.keep_history_ms = options->keep_history_ms;
+    }
+    if (options->self_destroy_ms > 0)
+    {
+        registration.has_self_destroy = true;
+        registration.self_destroy_ms = options->self_destroy_ms;
+    }
+    if (options->display_unit >= 0)
+    {
+        registration.has_display_unit = true;
+        registration.display_unit = options->display_unit;
+    }
+    if (options->statistics >= 0)
+    {
+        registration.has_statistics = true;
+        registration.statistics = options->statistics;
+    }
+    registration.is_singleton = static_cast<TriBool>(options->is_singleton);
+    registration.aggregate_data = static_cast<TriBool>(options->aggregate_data);
+    registration.enable_grafana = static_cast<TriBool>(options->enable_grafana);
+    registration.is_computer_sensor = options->is_computer_sensor;
+    registration.sensor_location = options->sensor_location == 1 ? SensorLocation::Product : SensorLocation::Module;
+
+    return CreateSensor(collector, path, type, false, std::string{}, out_sensor, registration);
 }
 
 hsm_result_t hsm_collector_create_enum_sensor_with_options(

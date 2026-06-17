@@ -747,6 +747,34 @@ namespace
             return;
         }
 
+        if (action == "create_int_sensor_full_options")
+        {
+            Require(step.size() >= 13, "create_int_sensor_full_options requires 12 args");
+            const auto path = ExpandTextToken(step[1]);
+            const auto description = ExpandTextToken(step[12]);
+
+            hsm_sensor_options_t options{};
+            options.ttl_ms = static_cast<int64_t>(std::stoll(step[2]));
+            options.unit = ToInt(step[3]);
+            options.description = description.c_str();
+            options.keep_history_ms = static_cast<int64_t>(std::stoll(step[4]));
+            options.self_destroy_ms = static_cast<int64_t>(std::stoll(step[5]));
+            options.display_unit = -1; // instant sensors carry no DisplayUnit
+            options.statistics = ToInt(step[6]);
+            options.is_singleton = ToInt(step[7]);
+            options.aggregate_data = ToInt(step[8]);
+            options.enable_grafana = ToInt(step[9]);
+            options.is_computer_sensor = ToBool(step[10]);
+            options.sensor_location = ToInt(step[11]);
+
+            SensorHandle sensor;
+            Require(
+                hsm_collector_create_sensor_with_options(state.collector.value, path.c_str(), HSM_SENSOR_TYPE_INT, &options, &sensor.value) == HSM_RESULT_OK,
+                "create_int_sensor_full_options failed");
+            state.sensors.push_back(std::move(sensor));
+            return;
+        }
+
         if (action == "create_timespan_sensor")
         {
             Require(step.size() >= 2, "create_timespan_sensor requires path");
@@ -3090,6 +3118,47 @@ namespace
             "AddOrUpdateSensorRequest wire layout with alerts");
     }
 
+    // Full SensorOptions surface (#1098 §6) through hsm_collector_create_sensor_with_options; the
+    // sensor's wire registration must be byte-identical to the .NET golden
+    // (WireFormatGoldenLockTests.Registration_full_options_match_the_native_golden_bytes).
+    void NativeWireRegistrationFullOptionsMatchesNetByteLayout()
+    {
+        hsm_collector_options_t collector_options{};
+        collector_options.access_key = "test-key";
+        collector_options.server_address = "https://localhost";
+        collector_options.port = 443;
+        // Empty module/computer so the path stays exactly "comp/mod/full/opts" (the bare user path).
+        auto collector = CreateCollector(collector_options);
+
+        hsm_sensor_options_t options{};
+        options.ttl_ms = 60000; // -> TTLs [600000000]
+        options.unit = 3;       // MB
+        options.description = "d";
+        options.keep_history_ms = 600000;  // -> KeepHistory 6000000000
+        options.self_destroy_ms = 1200000; // -> SelfDestroy 12000000000
+        options.display_unit = 3;
+        options.statistics = 1; // EMA
+        options.is_singleton = 1;
+        options.aggregate_data = 1;
+        options.enable_grafana = 1;
+        options.is_computer_sensor = false;
+        options.sensor_location = 0; // Module
+
+        SensorHandle sensor;
+        Require(
+            hsm_collector_create_sensor_with_options(collector.value, "comp/mod/full/opts", HSM_SENSOR_TYPE_INT, &options, &sensor.value) == HSM_RESULT_OK,
+            "full options sensor create");
+
+        Require(
+            std::string(hsm_sensor_test_wire_registration_json(sensor.value)) ==
+                "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\","
+                "\"DefaultChats\":null,\"KeepHistory\":6000000000,\"SelfDestroy\":12000000000,\"TTLs\":[600000000],\"TTL\":null,"
+                "\"Statistics\":1,\"IsSingletonSensor\":true,\"AggregateData\":true,\"EnableGrafana\":true,"
+                "\"OriginalUnit\":3,\"DisplayUnit\":3,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,"
+                "\"Key\":null,\"Path\":\"comp/mod/full/opts\"}",
+            "AddOrUpdateSensorRequest wire layout with full options");
+    }
+
     // Version.ToString() rules: trailing absent (-1) components are dropped, major.minor is the floor.
     void NativeVersionStringMatchesNet()
     {
@@ -3318,6 +3387,7 @@ namespace
             { "native_wire_timespan_and_version_match_net", [](const std::string&) { NativeWireTimeSpanAndVersionMatchNet(); } },
             { "native_wire_registration_json_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationJsonMatchesNetByteLayout(); } },
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
+            { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
             { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
@@ -3387,6 +3457,7 @@ namespace
             { "conformance_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_timespan_version_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "conformance_alert_registration_contract", [](const std::string& path) { RunConformanceContract(path); } },
+            { "conformance_options_surface_contract", [](const std::string& path) { RunConformanceContract(path); } },
             { "meta_must_fail", [](const std::string& path) { RunConformanceContractExpectFailure(path); } },
             { "conformance_fuzz", [](const std::string& path) { RunConformanceContract(path); } },
         };

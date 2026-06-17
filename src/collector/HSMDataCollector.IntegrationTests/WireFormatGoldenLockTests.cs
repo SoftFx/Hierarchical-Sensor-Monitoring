@@ -187,5 +187,36 @@ namespace HSMDataCollector.IntegrationTests
                 + "\"Key\":null,\"Path\":\"p/alert\"}",
                 WireCommand(registration));
         }
+
+        // Full SensorOptions registration surface (#1098 §6): KeepHistory/SelfDestroy ticks,
+        // Statistics(EMA), DisplayUnit, IsSingletonSensor/AggregateData/EnableGrafana. Same bytes as
+        // native NativeWireRegistrationFullOptionsMatchesNetByteLayout.
+        [Fact]
+        public void Registration_full_options_match_the_native_golden_bytes()
+        {
+            var registration = new AddOrUpdateSensorRequest
+            {
+                Path = "comp/mod/full/opts",
+                SensorType = SensorType.IntSensor,
+                Description = "d",
+                OriginalUnit = Unit.MB,
+                TTLs = new List<long?> { 600000000 },
+                KeepHistory = 6000000000,
+                SelfDestroy = 12000000000,
+                DisplayUnit = 3,
+                Statistics = StatisticsOptions.EMA,
+                IsSingletonSensor = true,
+                AggregateData = true,
+                EnableGrafana = true,
+            };
+
+            Assert.Equal(
+                "{\"Type\":0,\"Alerts\":null,\"TtlAlerts\":null,\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\","
+                + "\"DefaultChats\":null,\"KeepHistory\":6000000000,\"SelfDestroy\":12000000000,\"TTLs\":[600000000],\"TTL\":null,"
+                + "\"Statistics\":1,\"IsSingletonSensor\":true,\"AggregateData\":true,\"EnableGrafana\":true,"
+                + "\"OriginalUnit\":3,\"DisplayUnit\":3,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,"
+                + "\"Key\":null,\"Path\":\"comp/mod/full/opts\"}",
+                WireCommand(registration));
+        }
     }
 }
