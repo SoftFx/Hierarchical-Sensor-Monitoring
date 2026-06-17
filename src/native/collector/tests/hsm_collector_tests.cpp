@@ -81,6 +81,14 @@ extern "C" const char* hsm_collector_test_wire_registration_json(
     const char* path);
 extern "C" const char* hsm_sensor_test_wire_registration_json(hsm_sensor_t* sensor);
 extern "C" const char* hsm_alert_test_wire_json(hsm_alert_t* alert);
+extern "C" const char* hsm_collector_test_merge_registration_json(
+    int proto_is_computer,
+    int64_t proto_ttl_ms,
+    const char* proto_description,
+    int64_t custom_ttl_ms,
+    const char* custom_description,
+    int custom_has_description,
+    const char* path);
 
 namespace
 {
@@ -3224,6 +3232,26 @@ namespace
         Require(SentJson(collector.value, 2).find("\"Value\":\"2.0.5\"") != std::string::npos, "2.0.5 (revision dropped)");
     }
 
+    // Prototype merge (DefaultPrototype.Merge): identity (is_computer) is PINNED by the prototype;
+    // metadata (TTL, Description) takes the custom value when set, else the prototype default.
+    void NativePrototypeMergePinsIdentityOverridesMetadata()
+    {
+        // Custom overrides TTL (120000 ms -> 1200000000 ticks) and Description; prototype's
+        // is_computer (=> IsSingletonSensor:true) is pinned and cannot be overridden.
+        const std::string overridden =
+            hsm_collector_test_merge_registration_json(1, 60000, "proto", 120000, "custom", 1, "merge/test");
+        Require(overridden.find("\"TTLTicks\":[1200000000]") != std::string::npos, "custom TTL overrides prototype");
+        Require(overridden.find("\"Description\":\"custom\"") != std::string::npos, "custom description overrides prototype");
+        Require(overridden.find("\"IsSingletonSensor\":true") != std::string::npos, "prototype is_computer pinned");
+
+        // Custom leaves TTL (0) and Description unset -> both fall back to the prototype defaults.
+        const std::string fallback =
+            hsm_collector_test_merge_registration_json(1, 60000, "proto", 0, nullptr, 0, "merge/test");
+        Require(fallback.find("\"TTLTicks\":[600000000]") != std::string::npos, "prototype TTL retained when custom unset");
+        Require(fallback.find("\"Description\":\"proto\"") != std::string::npos, "prototype description retained when custom unset");
+        Require(fallback.find("\"IsSingletonSensor\":true") != std::string::npos, "prototype is_computer still pinned");
+    }
+
     void NativeHttpEndpointRoutingMatchesNet()
     {
         // Scheme defaulting mirrors Endpoints(CollectorOptions): bare host -> https; explicit
@@ -3436,6 +3464,7 @@ namespace
             { "native_wire_registration_with_alerts_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationWithAlertsMatchesNetByteLayout(); } },
             { "native_wire_registration_full_options_matches_net_byte_layout", [](const std::string&) { NativeWireRegistrationFullOptionsMatchesNetByteLayout(); } },
             { "native_version_string_matches_net", [](const std::string&) { NativeVersionStringMatchesNet(); } },
+            { "native_prototype_merge_pins_identity_overrides_metadata", [](const std::string&) { NativePrototypeMergePinsIdentityOverridesMetadata(); } },
             { "native_wire_iso_from_unix_ms_matches_net", [](const std::string&) { NativeWireIsoFromUnixMsMatchesNet(); } },
             { "native_wire_value_json_matches_net_byte_layout", [](const std::string&) { NativeWireValueJsonMatchesNetByteLayout(); } },
             { "native_wire_bar_json_matches_net_byte_layout", [](const std::string&) { NativeWireBarJsonMatchesNetByteLayout(); } },

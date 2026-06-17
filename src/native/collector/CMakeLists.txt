@@ -190,6 +190,7 @@ set(NATIVE_REGRESSION_TESTS
     native_wire_registration_with_alerts_matches_net_byte_layout
     native_wire_registration_full_options_matches_net_byte_layout
     native_version_string_matches_net
+    native_prototype_merge_pins_identity_overrides_metadata
     native_http_endpoint_routing_matches_net
     native_http_retry_policy_matches_net
     native_lifecycle_listener_can_register_another_listener

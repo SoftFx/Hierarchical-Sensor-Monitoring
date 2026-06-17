@@ -108,6 +108,8 @@ into the per-case creation order of that sensor kind (0-based).
 | `create_int_sensor_with_options\|path\|ttl_ms\|unit\|description` | `ttl_ms=0` ⇒ no TTL; `unit=-1` ⇒ unset (codes per the managed `Unit` enum) |
 | `create_enum_sensor_with_options\|path\|description\|key:value:color:desc[;...]` | enum sensor with `EnumOptions` (values must not contain `:` or `;`) |
 | `create_timespan_sensor\|path`, `create_version_sensor\|path` | instant TimeSpan (type 7) / Version (type 8) sensor |
+| `create_int_sensor_full_options\|path\|ttl_ms\|unit\|keep_history_ms\|self_destroy_ms\|statistics\|is_singleton\|aggregate\|grafana\|is_computer\|sensor_location\|description` | full SensorOptions surface + path model; tri-state (is_singleton/aggregate/grafana) -1=null/0/1; statistics -1=null else flags (EMA=1); is_computer anchors at the computer node + forces singleton; sensor_location 0=Module/1=Product |
+| `create_service_commands_sensor` | service-commands sensor (string, fixed `.module/Service commands`, implicit received-new-value alert) |
 | `create_int_sensor_with_alerts\|path\|ttl_ms\|unit\|description` | int sensor consuming the staged alert builders (see Alert builder below) |
 | `dispose_sensor\|sensor_index` | release without flushing |
 | `expect_create_int_sensor_rejected\|path`, `expect_create_last_*_sensor_rejected\|path\|default_value` | creation validation throws |
@@ -130,6 +132,9 @@ into the per-case creation order of that sensor kind (0-based).
 | `add_file_value\|idx\|content\|status\|comment` | UTF-8 content; `token:null` silently ignored |
 | `add_timespan\|idx\|ticks\|status\|comment` | TimeSpan value (`ticks` = 100-ns units); serialized "c" format |
 | `add_version\|idx\|major.minor[.build[.revision]]\|status\|comment` | Version value; trailing absent components dropped |
+| `service_send_restart\|start\|stop\|update\|idx\|initiator` | service command; value = "Service restart/start/stop/update", comment = "Initiator: <x>" |
+| `service_send_update_version\|idx\|initiator\|new[\|old]` | "Service update to <new>" / "Service update from <old> to <new>" |
+| `service_send_custom\|idx\|command\|initiator` | arbitrary command string with the initiator comment |
 | `expect_add_int_rejected\|sensor_index\|value\|raw_status\|comment` (also `bool`, `double`, `string`, `enum`) | add must throw (validation); previous state preserved |
 
 ### Alert builder

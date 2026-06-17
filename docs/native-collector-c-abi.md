@@ -150,10 +150,13 @@ from the public header and are linked only by the native test binary.
 
 Version history:
 
-- **0.3.0** (#1098) — additive: TimeSpan (type 7) and Version (type 8) instant
-  sensors (`hsm_collector_create_timespan_sensor` / `create_version_sensor` +
-  `hsm_sensor_add_timespan` / `add_version`); the alert builder
-  (`hsm_collector_create_alert` + `hsm_alert_*` setters + `hsm_sensor_attach_alert`).
+- **0.3.0** (#1098) — additive sensor machinery: TimeSpan (type 7) / Version (type 8)
+  instant sensors; the alert builder (`hsm_collector_create_alert` + `hsm_alert_*` +
+  `hsm_sensor_attach_alert`); the full options surface
+  (`hsm_collector_create_sensor_with_options` + `hsm_sensor_options_t`: KeepHistory/
+  SelfDestroy/DisplayUnit/Statistics/IsSingletonSensor/AggregateData/EnableGrafana +
+  IsComputerSensor/SensorLocation path model); and the service-commands sensor
+  (`hsm_collector_create_service_commands_sensor` + `hsm_service_commands_send_*`).
   `hsm_alert_t` is an opaque handle owned by the collector (freed at destroy, no
   separate release); alerts must be attached before the registration is emitted
   (pre-Start or pre-create-while-running) since attaching rebuilds the payload.

@@ -115,13 +115,13 @@ Details: [`public-api/feature.md`](../../aicontext/features/collector/public-api
 - [ ] Collector-level `SendFileAsync(sensorPath, filePath, status, comment)`
 - [ ] `CreateNoParamsFuncSensor<T>(path, descr, Func<T>, interval ms|TimeSpan)` + `Create{1Min,5Min}NoParamsFuncSensor` + `CreateFunctionSensor<T>(path, func, options)`
 - [ ] `CreateParamsFuncSensor<T,U>(path, descr, Func<List<U>,T>, interval)` + `Create{1Min,5Min}ParamsFuncSensor` + `CreateValuesFunctionSensor<T,U>`
-- [ ] `CreateServiceCommandsSensor()`
+- [x] `CreateServiceCommandsSensor()` — native `hsm_collector_create_service_commands_sensor`; conformance: service_commands_contract
 - [ ] Interface `IInstantValueSensor<T>`: `AddValue(v)` / `(v, comment)` / `(v, status, comment)`
 - [x] Interface `ILastValueSensor<T>` (latest value, sends once on stop, default if none) — conformance: last_value_contract:last_int_flushes_latest_on_stop, last_value_contract:last_int_default_flushes_on_stop
 - [ ] Interface `IBarSensor<T>`: `AddValue`, `AddValues(IEnumerable)`, `AddPartial(min,max,mean,first,last,count)`
 - [ ] Interface `IFileSensor`: + `Task<bool> SendFile(filePath, status, comment)`
 - [ ] Interface `IMonitoringRateSensor` (pure alias of `IInstantValueSensor<double>`; defining file is misleadingly named `IMonitoringCounterSensor.cs`)
-- [ ] Interface `IServiceCommandsSensor`: `SendCustomCommand(cmd, initiator)`, `SendUpdate(initiator[, new[, old]])`, `SendRestart/SendStart/SendStop(initiator)`
+- [x] Interface `IServiceCommandsSensor`: `SendCustomCommand(cmd, initiator)`, `SendUpdate(initiator[, new[, old]])`, `SendRestart/SendStart/SendStop(initiator)` — native `hsm_service_commands_send_*`; conformance: service_commands_contract:service_commands_values (fixed command strings + `Initiator:` comment)
 - [ ] Interface `IBaseFuncSensor` (in `Obsolete` folder but NOT `[Obsolete]` — current return type): `GetInterval()`, `RestartTimer(TimeSpan)`, `GetFunc()`; params variant `AddValue(U)`
 - [x] Last-value null-default throws: `CreateLastValueStringSensor(path)` / `CreateLastValueVersionSensor(path)` with implicit null default → `ArgumentException` at creation — conformance: last_value_contract:last_string_null_default_is_rejected
 - [ ] Fluent builders (per-type setters): `InstantSensor<T>` `.Description/.Ttl/.KeepHistory/.Priority/.Configure`; `BarSensor<T>` `.BarPeriod/.PostPeriod/.TickPeriod/.Precision/.Description/.Configure`; `RateSensor` `.PostPeriod/.Description/.Configure`; `.Build()` throws `NotSupportedException` for unsupported `T`
@@ -165,22 +165,22 @@ Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/featu
 
 Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/feature.md) §Options & path model
 
-- [ ] `SensorOptions` common: `Description`, `SensorUnit`, `TTLs`, `KeepHistory`, `SelfDestroy`, `EnableForGrafana`, `IsSingletonSensor`, `AggregateData`, `Statistics(EMA)`, `DefaultAlertsOptions`, `IsForceUpdate`, `IsPrioritySensor`, `IsComputerSensor`, `SensorLocation(Module|Product)`, `TtlAlerts`
-- [ ] Singular conveniences `SensorOptions.TTL` (→ `TTLs`) and `TtlAlert` (→ `TtlAlerts`)
-- [ ] `DisplayUnit` per options type: `NoDisplayUnit`, `RateDisplayUnit { PerSecond=0 … PerMonth=5 }` → wire `DisplayUnit (int?)`
+- [x] `SensorOptions` common: `Description`, `SensorUnit`, `TTLs`, `KeepHistory`, `SelfDestroy`, `EnableForGrafana`, `IsSingletonSensor`, `AggregateData`, `Statistics(EMA)`, `IsComputerSensor`, `SensorLocation(Module|Product)`, `TtlAlerts` — native `hsm_collector_create_sensor_with_options` + `hsm_sensor_options_t`; conformance: options_surface_contract:full_options_register_in_payload + paired golden `native_wire_registration_full_options_*`. (`DefaultAlertsOptions/IsForceUpdate/IsPrioritySensor` remain wire-default 0/false — diag/QoS, #1099.)
+- [x] Singular conveniences `SensorOptions.TTL` (→ `TTLs`, ttl_ms) and `TtlAlert` (→ `TtlAlerts`, the alert builder)
+- [x] `DisplayUnit` per options type → wire `DisplayUnit (int?)` — `hsm_sensor_options_t.display_unit`; pinned by `native_wire_registration_full_options_*` (the `RateDisplayUnit` enum values arrive with rate options, #1100)
 - [ ] `InstantSensorOptions(+Alerts)`; `MonitoringInstantSensorOptions(+PostDataPeriod 15 s)`
 - [ ] `BarSensorOptions(+BarPeriod/BarTickPeriod/Precision/BarAlerts)`
 - [ ] `RateSensorOptions(PostDataPeriod 1 min, Unit=ValueInSecond)`
 - [ ] `FunctionSensorOptions` / `ValuesFunctionSensorOptions(+MaxCacheSize)` — both default `PostDataPeriod` 1 min (ms-param factory overloads default 15 s instead)
 - [ ] `FileSensorOptions(+DefaultFileName/Extension/MaxFileSizeBytes)`
 - [ ] `EnumSensorOptions(+EnumOptions, AggregateData=true, GenerateEnumOptionsDecription())`
-- [ ] `DiskSensorOptions { TargetPath default C:\, CalibrationRequests default 6, PostDataPeriod 5 min }`; `DiskBarSensorOptions { TargetPath }`
-- [ ] `VersionSensorOptions { Version, StartTime }`; `ServiceSensorOptions { ServiceName, IsHostService default true → .module placement, SensorPath }`
-- [ ] `NetworkSensorOptions`; `WindowsInfoSensorOptions { PostDataPeriod default 12 h }`; `CollectorMonitoringInfoOptions`
+- [ ] `DiskSensorOptions { TargetPath default C:\, CalibrationRequests default 6, PostDataPeriod 5 min }`; `DiskBarSensorOptions { TargetPath }` — pure config for the #1099 disk sensors; ships with them
+- [~] `VersionSensorOptions { Version, StartTime }`; `ServiceSensorOptions { ServiceName, IsHostService → .module placement, SensorPath }` — the `IsHostService` → `.module/...` placement is ported and pinned by service_commands_contract (`.module/Service commands`); the option structs themselves carry the #1099 default product-version / service-status sensors
+- [ ] `NetworkSensorOptions`; `WindowsInfoSensorOptions { PostDataPeriod default 12 h }`; `CollectorMonitoringInfoOptions` — config for the #1099 default sensors; ships with them
 - [x] `CalculateSystemPath`: computer → `ComputerName/Path`; module → `ComputerName/Module/Path`; product → `Path` — conformance: instant_int_contract:running_collector_stores_int_payload, instant_int_contract:blank_computer_name_is_omitted_from_payload_path
 - [x] `BuildPath`: join `/`, drop null/empty/whitespace, split interior `/`, collapse `//` — conformance: instant_int_contract:path_duplicate_separators_are_normalized, value_int_contract:path_leading_trailing_slashes_are_normalized
-- [ ] `RevealDefaultPath` = `{.computer|.module}/Category/SensorName`
-- [ ] Prototype merge: custom non-null wins for most properties; `Path/Type/IsComputerSensor/ComputerName/Module` pinned from prototype; custom `DefaultAlertsOptions/IsPrioritySensor/IsForceUpdate` dropped for default sensors
+- [x] `RevealDefaultPath` = `{.computer|.module}/Category/SensorName` — native `RevealDefaultPath`; exercised by service_commands_contract (`.module/Service commands`)
+- [x] Prototype merge: custom non-null wins for most properties; `Path/Type/IsComputerSensor/ComputerName/Module` pinned from prototype — native `MergeRegistrationOptions`; unit: native_prototype_merge_pins_identity_overrides_metadata
 
 ## 7. Alert DSL
 

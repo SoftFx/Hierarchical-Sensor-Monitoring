@@ -949,6 +949,62 @@ namespace
         SensorLocation sensor_location = SensorLocation::Module;
     };
 
+    // Prototype merge (DefaultPrototype.Merge): the identity fields (IsComputerSensor / SensorLocation
+    // — and at the collector level Path / Type / ComputerName / Module) are PINNED by the prototype
+    // and cannot be overridden; every metadata field takes the custom value when the caller set it,
+    // else falls back to the prototype default (C# `custom?.X ?? prototype.X`). Returns the merged
+    // options the sensor registers with.
+    RegistrationOptions MergeRegistrationOptions(const RegistrationOptions& prototype, const RegistrationOptions& custom)
+    {
+        RegistrationOptions merged = prototype; // identity fields stay pinned to the prototype
+
+        if (custom.ttl_ms > 0 || custom.has_ttl_ticks)
+        {
+            merged.ttl_ms = custom.ttl_ms;
+            merged.has_ttl_ticks = custom.has_ttl_ticks;
+            merged.ttl_ticks = custom.ttl_ticks;
+        }
+        if (custom.unit >= 0)
+            merged.unit = custom.unit;
+        if (custom.has_description)
+        {
+            merged.has_description = true;
+            merged.description = custom.description;
+        }
+        if (custom.has_keep_history)
+        {
+            merged.has_keep_history = true;
+            merged.keep_history_ms = custom.keep_history_ms;
+        }
+        if (custom.has_self_destroy)
+        {
+            merged.has_self_destroy = true;
+            merged.self_destroy_ms = custom.self_destroy_ms;
+        }
+        if (custom.has_display_unit)
+        {
+            merged.has_display_unit = true;
+            merged.display_unit = custom.display_unit;
+        }
+        if (custom.has_statistics)
+        {
+            merged.has_statistics = true;
+            merged.statistics = custom.statistics;
+        }
+        if (custom.aggregate_data != TriBool::Unset)
+            merged.aggregate_data = custom.aggregate_data;
+        if (custom.enable_grafana != TriBool::Unset)
+            merged.enable_grafana = custom.enable_grafana;
+        if (custom.is_singleton != TriBool::Unset)
+            merged.is_singleton = custom.is_singleton;
+        if (!custom.alerts.empty())
+            merged.alerts = custom.alerts;
+        if (!custom.ttl_alerts.empty())
+            merged.ttl_alerts = custom.ttl_alerts;
+
+        return merged;
+    }
+
     // IsSingletonSensor wire value = options.IsSingletonSensor | options.IsComputerSensor (nullable
     // bool OR: null|true=true, null|false=null). Returns "true"/"false"/"null".
     std::string SingletonWireText(const RegistrationOptions& options)
@@ -4247,6 +4303,37 @@ extern "C" const char* hsm_alert_test_wire_json(hsm_alert_t* alert)
 {
     static thread_local std::string buffer;
     buffer = alert != nullptr ? BuildAlertJson(*reinterpret_cast<AlertData*>(alert)) : std::string{};
+    return buffer.c_str();
+}
+
+// Test-only: merge a prototype (identity is_computer + a TTL/description default) with custom
+// overrides and return the merged internal registration text — pins the prototype-merge contract.
+extern "C" const char* hsm_collector_test_merge_registration_json(
+    int proto_is_computer,
+    int64_t proto_ttl_ms,
+    const char* proto_description,
+    int64_t custom_ttl_ms,
+    const char* custom_description,
+    int custom_has_description,
+    const char* path)
+{
+    static thread_local std::string buffer;
+
+    RegistrationOptions prototype = InstantRegistrationDefaults();
+    prototype.is_computer_sensor = proto_is_computer != 0;
+    prototype.ttl_ms = proto_ttl_ms;
+    prototype.description = proto_description != nullptr ? proto_description : "";
+
+    RegistrationOptions custom; // a fresh "user options": has_description false unless set
+    custom.ttl_ms = custom_ttl_ms;
+    if (custom_has_description != 0)
+    {
+        custom.has_description = true;
+        custom.description = custom_description != nullptr ? custom_description : "";
+    }
+
+    const auto merged = MergeRegistrationOptions(prototype, custom);
+    buffer = BuildRegistrationJson(path != nullptr ? path : "", HSM_SENSOR_TYPE_INT, merged);
     return buffer.c_str();
 }
 
