@@ -187,6 +187,8 @@ set(NATIVE_REGRESSION_TESTS
     native_wire_file_json_matches_net_byte_layout
     native_wire_timespan_and_version_match_net
     native_wire_registration_json_matches_net_byte_layout
+    native_wire_registration_with_alerts_matches_net_byte_layout
+    native_version_string_matches_net
     native_http_endpoint_routing_matches_net
     native_http_retry_policy_matches_net
     native_lifecycle_listener_can_register_another_listener
@@ -237,6 +239,8 @@ add_conformance_test(conformance_function_contract function_contract.hsmtest)
 add_conformance_test(conformance_file_contract file_contract.hsmtest)
 add_conformance_test(conformance_number_format_contract number_format_contract.hsmtest)
 add_conformance_test(conformance_registration_contract registration_contract.hsmtest)
+add_conformance_test(conformance_timespan_version_contract timespan_version_contract.hsmtest)
+add_conformance_test(conformance_alert_registration_contract alert_registration_contract.hsmtest)
 
 # Meta-suite ("test the tests"): must-FAIL fixtures with deliberately wrong
 # expectations; the meta_must_fail runner passes only when the driver detects

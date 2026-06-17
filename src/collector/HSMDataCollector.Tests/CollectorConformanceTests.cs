@@ -12,9 +12,12 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using HSMDataCollector.Alerts;
+using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Tests
 {
@@ -201,6 +204,74 @@ namespace HSMDataCollector.Tests
                             Description = ExpandTextToken(step.Arg(1)),
                             EnumOptions = ParseEnumOptions(step.Arg(2)),
                         }));
+                    break;
+
+                case "create_timespan_sensor":
+                    AddSensor(state, state.TimeSpanSensors, state.Collector.CreateTimeSensor(ExpandTextToken(step.Arg(0))));
+                    break;
+
+                case "create_version_sensor":
+                    AddSensor(state, state.VersionSensors, state.Collector.CreateVersionSensor(ExpandTextToken(step.Arg(0))));
+                    break;
+
+                case "add_timespan":
+                    state.TimeSpanSensors[int.Parse(step.Arg(0))]
+                        .AddValue(TimeSpan.FromTicks(long.Parse(step.Arg(1))), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                case "add_version":
+                    state.VersionSensors[int.Parse(step.Arg(0))]
+                        .AddValue(ParseVersion(step.Arg(1)), ParseStatus(step.Arg(2)), ExpandTextToken(step.Arg(3)));
+                    break;
+
+                // ---- Alert builder verbs (numeric enum args; see tests/conformance/README.md) ----
+                case "alert_new":
+                    state.CurrentAlert = new AlertBuilder { Kind = step.Arg(0) };
+                    break;
+
+                case "alert_condition":
+                    state.CurrentAlert.AddCondition(
+                        (AlertCombination)int.Parse(step.Arg(0)),
+                        (AlertProperty)int.Parse(step.Arg(1)),
+                        (AlertOperation)int.Parse(step.Arg(2)),
+                        (TargetType)int.Parse(step.Arg(3)),
+                        step.TryArg(4, out var conditionTarget) ? ExpandTextToken(conditionTarget) : null);
+                    break;
+
+                case "alert_notification":
+                    state.CurrentAlert.Template = ExpandTextToken(step.Arg(0));
+                    state.CurrentAlert.Destination = (AlertDestinationMode)int.Parse(step.Arg(1));
+                    break;
+
+                case "alert_icon":
+                    state.CurrentAlert.Icon = ((AlertIcon)int.Parse(step.Arg(0))).ToUtf8();
+                    break;
+
+                case "alert_sensor_error":
+                    state.CurrentAlert.Status = SensorStatus.Error;
+                    break;
+
+                case "alert_confirmation":
+                    state.CurrentAlert.ConfirmationTicks = TimeSpan.FromMilliseconds(long.Parse(step.Arg(0))).Ticks;
+                    break;
+
+                case "alert_inactivity":
+                    state.CurrentAlert.Inactivity = TimeSpan.FromMilliseconds(long.Parse(step.Arg(0)));
+                    break;
+
+                case "alert_disabled":
+                    state.CurrentAlert.IsDisabled = true;
+                    break;
+
+                case "alert_stage":
+                    state.PendingAlerts.Add(state.CurrentAlert);
+                    state.CurrentAlert = null;
+                    break;
+
+                case "create_int_sensor_with_alerts":
+                    AddSensor(state, state.IntSensors, state.Collector.CreateIntSensor(
+                        ExpandTextToken(step.Arg(0)),
+                        BuildInstantOptionsWithAlerts(state, long.Parse(step.Arg(1)), int.Parse(step.Arg(2)), ExpandTextToken(step.Arg(3)))));
                     break;
 
                 case "create_last_int_sensor":
@@ -1101,8 +1172,9 @@ namespace HSMDataCollector.Tests
         }
 
         // Canonical cross-language registration (AddOrUpdateSensorRequest) text — fixed field
-        // order; the portable subset only (alerts and managed-only flags are asserted by
-        // language-local tests). TTLTicks are .NET ticks (ttl_ms * 10000).
+        // order; the portable subset plus Alerts/TtlAlerts. TTLTicks are .NET ticks (ttl_ms * 10000).
+        // Alerts are serialized through the real System.Text.Json (default encoder, numeric enums),
+        // byte-identical to the native BuildAlertJson embedded in BuildRegistrationJson.
         private static string RegistrationText(AddOrUpdateSensorRequest request)
         {
             var ttls = request.TTLs == null
@@ -1114,6 +1186,9 @@ namespace HSMDataCollector.Tests
                 : "[" + string.Join(",", request.EnumOptions.Select(o =>
                     $"{{\"Key\":{o.Key},\"Value\":\"{EscapeJson(o.Value)}\",\"Color\":{o.Color},\"Description\":\"{EscapeJson(o.Description)}\"}}")) + "]";
 
+            var alerts = request.Alerts == null ? "null" : JsonSerializer.Serialize(request.Alerts);
+            var ttlAlerts = request.TtlAlerts == null ? "null" : JsonSerializer.Serialize(request.TtlAlerts);
+
             return "{" +
                    "\"Command\":\"AddOrUpdate\"," +
                    $"\"Path\":\"{EscapeJson(request.Path)}\"," +
@@ -1121,7 +1196,9 @@ namespace HSMDataCollector.Tests
                    $"\"TTLTicks\":{ttls}," +
                    $"\"OriginalUnit\":{(request.OriginalUnit.HasValue ? ((int)request.OriginalUnit.Value).ToString(CultureInfo.InvariantCulture) : "null")}," +
                    $"\"Description\":{(request.Description == null ? "null" : "\"" + EscapeJson(request.Description) + "\"")}," +
-                   $"\"EnumOptions\":{enums}" +
+                   $"\"EnumOptions\":{enums}," +
+                   $"\"Alerts\":{alerts}," +
+                   $"\"TtlAlerts\":{ttlAlerts}" +
                    "}";
         }
 
@@ -1242,6 +1319,13 @@ namespace HSMDataCollector.Tests
 
             if (value is StringSensorValue stringValue)
                 return "\"" + EscapeJson(stringValue.Value) + "\"";
+
+            // TimeSpan.ToString() is the "c" format; Version.ToString() drops trailing absent parts.
+            if (value is TimeSpanSensorValue timeSpanValue)
+                return "\"" + EscapeJson(timeSpanValue.Value.ToString()) + "\"";
+
+            if (value is VersionSensorValue versionValue)
+                return "\"" + EscapeJson(versionValue.Value.ToString()) + "\"";
 
             throw new InvalidOperationException($"Unsupported conformance payload type '{value.GetType().FullName}'.");
         }
@@ -1436,6 +1520,17 @@ namespace HSMDataCollector.Tests
 
             public List<IInstantValueSensor<int>> EnumSensors { get; } = new List<IInstantValueSensor<int>>();
 
+            public List<IInstantValueSensor<TimeSpan>> TimeSpanSensors { get; } = new List<IInstantValueSensor<TimeSpan>>();
+
+            public List<IInstantValueSensor<Version>> VersionSensors { get; } = new List<IInstantValueSensor<Version>>();
+
+            // Alert builder: alert_new starts CurrentAlert, the condition/action verbs mutate it,
+            // alert_stage finalizes it into PendingAlerts, and the next create_*_with_alerts verb
+            // consumes them as the sensor's options.Alerts/TtlAlerts.
+            public AlertBuilder CurrentAlert { get; set; }
+
+            public List<AlertBuilder> PendingAlerts { get; } = new List<AlertBuilder>();
+
             public List<IBarSensor<int>> IntBarSensors { get; } = new List<IBarSensor<int>>();
 
             public List<IBarSensor<double>> DoubleBarSensors { get; } = new List<IBarSensor<double>>();
@@ -1447,6 +1542,92 @@ namespace HSMDataCollector.Tests
             public List<IParamsFuncSensor<int, int>> ValuesFunctionSensors { get; } = new List<IParamsFuncSensor<int, int>>();
 
             public List<IFileSensor> FileSensors { get; } = new List<IFileSensor>();
+        }
+
+        // Accumulates an alert from the corpus verbs (explicit property/operation/target — the
+        // cross-language contract level; the C# DSL-sugar methods like IfValue are C#-only and
+        // tested separately). Kind selects which AlertBaseTemplate subclass it becomes.
+        private sealed class AlertBuilder
+        {
+            public string Kind = "instant";
+            public List<AlertConditionTemplate> Conditions { get; } = new List<AlertConditionTemplate>();
+            public AlertDestinationMode Destination { get; set; } = AlertDestinationMode.FromParent;
+            public SensorStatus Status { get; set; } = SensorStatus.Ok;
+            public string Template { get; set; }
+            public string Icon { get; set; }
+            public bool IsDisabled { get; set; }
+            public long? ConfirmationTicks { get; set; }
+            public TimeSpan? Inactivity { get; set; }
+
+            public void AddCondition(AlertCombination combination, AlertProperty property, AlertOperation operation, TargetType targetType, string value)
+            {
+                Conditions.Add(AlertConditionTemplate.Build(
+                    AlertTargetTemplate.Build(targetType, targetType == TargetType.LastValue ? null : value),
+                    combination,
+                    operation,
+                    property));
+            }
+        }
+
+        private static AlertBaseTemplate BuildAlertTemplate(AlertBuilder builder)
+        {
+            AlertBaseTemplate template;
+            switch (builder.Kind)
+            {
+                case "bar":
+                    template = new BarAlertTemplate();
+                    break;
+                case "ttl":
+                    template = new SpecialAlertTemplate { TtlValue = builder.Inactivity };
+                    break;
+                default:
+                    template = new InstantAlertTemplate();
+                    break;
+            }
+
+            template.Conditions = builder.Conditions;
+            template.DestinationMode = builder.Destination;
+            template.Status = builder.Status;
+            template.Template = builder.Template;
+            template.Icon = builder.Icon;
+            template.IsDisabled = builder.IsDisabled;
+            template.ConfirmationPeriod = builder.ConfirmationTicks.HasValue ? TimeSpan.FromTicks(builder.ConfirmationTicks.Value) : (TimeSpan?)null;
+            return template;
+        }
+
+        // Drain PendingAlerts into an InstantSensorOptions, partitioning by kind into the typed
+        // Alerts (instant) and TtlAlerts (TTL) lists the converter expects.
+        private static InstantSensorOptions BuildInstantOptionsWithAlerts(ContractState state, long ttlMs, int unit, string description)
+        {
+            var options = new InstantSensorOptions
+            {
+                TTL = ttlMs > 0 ? TimeSpan.FromMilliseconds(ttlMs) : (TimeSpan?)null,
+                SensorUnit = unit >= 0 ? (Unit)unit : (Unit?)null,
+                Description = description,
+            };
+
+            var instant = state.PendingAlerts.Where(a => a.Kind != "ttl").Select(a => (InstantAlertTemplate)BuildAlertTemplate(a)).ToList();
+            var ttl = state.PendingAlerts.Where(a => a.Kind == "ttl").Select(a => (SpecialAlertTemplate)BuildAlertTemplate(a)).ToList();
+
+            if (instant.Count > 0)
+                options.Alerts = instant;
+
+            if (ttl.Count > 0)
+                options.TtlAlerts = ttl;
+
+            state.PendingAlerts.Clear();
+            return options;
+        }
+
+        private static Version ParseVersion(string major)
+        {
+            var parts = major.Split('.');
+            switch (parts.Length)
+            {
+                case 2: return new Version(int.Parse(parts[0]), int.Parse(parts[1]));
+                case 3: return new Version(int.Parse(parts[0]), int.Parse(parts[1]), int.Parse(parts[2]));
+                default: return new Version(major);
+            }
         }
 
         private sealed class RecordingSender : IDataSender

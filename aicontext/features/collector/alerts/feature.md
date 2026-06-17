@@ -1,6 +1,6 @@
 # Feature: Alert DSL (collector side)
 
-> Owner: collector | Last reviewed: 2026-06-10 | Canonical: yes
+> Owner: collector | Last reviewed: 2026-06-17 | Canonical: yes
 > Scope: Collector - fluent builders that produce alert templates sent with sensor registration
 
 ---
@@ -42,6 +42,16 @@ TTL alerts attach via `SensorOptions.TtlAlerts` (or the singular `TtlAlert` conv
 | `Alerts/AlertConditions/*.cs` | Instant/bar/special condition builders |
 | `Alerts/AlertActions/*.cs` | Action builders |
 | `Alerts/AlertTemplates/*.cs` | Built template shapes → API conversion |
+
+## Native port (C++) — #1098
+
+The native collector (`src/native/collector`) ports the alert **model and registration serialization**, not the C# fluent-sugar layer. A C ABI builder (`hsm_collector_create_alert` + `hsm_alert_add_condition` / `hsm_alert_set_notification` / `hsm_alert_set_scheduled_notification` / `hsm_alert_set_icon` / `hsm_alert_set_sensor_error` / `hsm_alert_set_confirmation_period` / `hsm_alert_set_disabled` / `hsm_alert_set_inactivity_period`) builds an `AlertData`, and `hsm_sensor_attach_alert` folds it into the sensor's registration before Start.
+
+- **Explicit, not sugared**: the ABI takes the frozen numeric `property/operation/combination/target/destination` enums directly (the contract level). C#'s `IfValue`/`IfLenght`/etc. are convenience wrappers that pick those values; they are C#-only and out of native scope.
+- **AlertIcon → emoji**: `hsm_alert_set_icon` maps the eight `AlertIcon` values to the exact UTF-8 emoji `IconExtensions.ToUtf8` produces; the wire serializer escapes them to `\uXXXX` like System.Text.Json (e.g. Warning → `⚠`).
+- **One serializer, two consumers**: `BuildAlertJson` renders an `AlertUpdateRequest` byte-identically to STJ and is embedded by BOTH the internal corpus registration text and the wire registration, so they never drift. A TTL alert lands in `TtlAlerts` and its inactivity drives `TTLs` (ticks), mirroring `ApiConverters`.
+- **Coverage**: byte parity is pinned by the paired golden unit tests — C# `WireFormatGoldenLockTests.Registration_with_alerts_matches_the_native_golden_bytes` and native `NativeWireRegistrationWithAlertsMatchesNetByteLayout` assert the SAME literal. The cross-language live path (DSL→registration on C#, ABI→registration on native) is pinned by `alert_registration_contract.hsmtest`.
+- **Deferred**: scheduled-notification time formatting beyond ISO, the `IfLenght` misspelling alias decision, and EMA `Statistics` gating live with the server-side evaluation and the public builder API (#1100); native only emits the registration payload.
 
 ## Dependencies
 

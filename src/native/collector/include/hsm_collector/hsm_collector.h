@@ -14,7 +14,7 @@ extern "C"
    appended); MAJOR for any breaking change (field reorder/removal, semantic
    change). hsm_collector_version() returns the packed value at runtime. */
 #define HSM_COLLECTOR_VERSION_MAJOR 0
-#define HSM_COLLECTOR_VERSION_MINOR 2
+#define HSM_COLLECTOR_VERSION_MINOR 3
 #define HSM_COLLECTOR_VERSION_PATCH 0
 #define HSM_COLLECTOR_VERSION \
     ((HSM_COLLECTOR_VERSION_MAJOR * 10000) + (HSM_COLLECTOR_VERSION_MINOR * 100) + HSM_COLLECTOR_VERSION_PATCH)
@@ -72,9 +72,114 @@ typedef enum hsm_sensor_type_t HSM_ENUM_INT32
     HSM_SENSOR_TYPE_INT_BAR = 4,
     HSM_SENSOR_TYPE_DOUBLE_BAR = 5,
     HSM_SENSOR_TYPE_FILE = 6,
+    HSM_SENSOR_TYPE_TIMESPAN = 7,
+    HSM_SENSOR_TYPE_VERSION = 8,
     HSM_SENSOR_TYPE_RATE = 9,
     HSM_SENSOR_TYPE_ENUM = 10
 } hsm_sensor_type_t;
+
+/* ---- Alert DSL (mirrors HSMDataCollector.Alerts) -------------------------------------------
+   An alert is built before its sensor and attached at registration. The frozen enums below carry
+   the EXACT numeric values of the managed AlertOperation/AlertProperty/AlertCombination/TargetType/
+   AlertDestinationMode/AlertRepeatMode (HSMSensorDataObjects.SensorRequests) so the registration
+   payload is byte-identical on the wire. */
+typedef struct hsm_alert_t hsm_alert_t;
+
+/* Which list the alert lands in: a data alert (instant/bar conditions) goes to AddOrUpdate.Alerts;
+   a TTL alert (IfInactivityPeriodIs) goes to AddOrUpdate.TtlAlerts and its inactivity period also
+   populates AddOrUpdate.TTLs (ticks). The instant/bar split is purely which condition properties
+   are valid; both serialize into the same Alerts array. */
+typedef enum hsm_alert_kind_t HSM_ENUM_INT32
+{
+    HSM_ALERT_KIND_INSTANT = 0,
+    HSM_ALERT_KIND_BAR = 1,
+    HSM_ALERT_KIND_TTL = 2
+} hsm_alert_kind_t;
+
+typedef enum hsm_alert_combination_t HSM_ENUM_INT32
+{
+    HSM_ALERT_COMBINATION_AND = 0,
+    HSM_ALERT_COMBINATION_OR = 1
+} hsm_alert_combination_t;
+
+typedef enum hsm_alert_operation_t HSM_ENUM_INT32
+{
+    HSM_ALERT_OP_LESS_THAN_OR_EQUAL = 0,
+    HSM_ALERT_OP_LESS_THAN = 1,
+    HSM_ALERT_OP_GREATER_THAN = 2,
+    HSM_ALERT_OP_GREATER_THAN_OR_EQUAL = 3,
+    HSM_ALERT_OP_EQUAL = 4,
+    HSM_ALERT_OP_NOT_EQUAL = 5,
+    HSM_ALERT_OP_IS_CHANGED = 20,
+    HSM_ALERT_OP_IS_ERROR = 21,
+    HSM_ALERT_OP_IS_OK = 22,
+    HSM_ALERT_OP_IS_CHANGED_TO_ERROR = 23,
+    HSM_ALERT_OP_IS_CHANGED_TO_OK = 24,
+    HSM_ALERT_OP_CONTAINS = 30,
+    HSM_ALERT_OP_STARTS_WITH = 31,
+    HSM_ALERT_OP_ENDS_WITH = 32,
+    HSM_ALERT_OP_RECEIVED_NEW_VALUE = 50
+} hsm_alert_operation_t;
+
+typedef enum hsm_alert_property_t HSM_ENUM_INT32
+{
+    HSM_ALERT_PROP_STATUS = 0,
+    HSM_ALERT_PROP_COMMENT = 1,
+    HSM_ALERT_PROP_VALUE = 20,
+    HSM_ALERT_PROP_MIN = 101,
+    HSM_ALERT_PROP_MAX = 102,
+    HSM_ALERT_PROP_MEAN = 103,
+    HSM_ALERT_PROP_COUNT = 104,
+    HSM_ALERT_PROP_LAST_VALUE = 105,
+    HSM_ALERT_PROP_FIRST_VALUE = 106,
+    HSM_ALERT_PROP_LENGTH = 120,
+    HSM_ALERT_PROP_ORIGINAL_SIZE = 151,
+    HSM_ALERT_PROP_NEW_SENSOR_DATA = 200,
+    HSM_ALERT_PROP_EMA_VALUE = 210,
+    HSM_ALERT_PROP_EMA_MIN = 211,
+    HSM_ALERT_PROP_EMA_MAX = 212,
+    HSM_ALERT_PROP_EMA_MEAN = 213,
+    HSM_ALERT_PROP_EMA_COUNT = 214
+} hsm_alert_property_t;
+
+typedef enum hsm_alert_target_type_t HSM_ENUM_INT32
+{
+    HSM_ALERT_TARGET_CONST = 0,
+    HSM_ALERT_TARGET_LAST_VALUE = 1
+} hsm_alert_target_type_t;
+
+typedef enum hsm_alert_destination_mode_t HSM_ENUM_INT32
+{
+    HSM_ALERT_DESTINATION_NOT_INITIALIZED = 1,
+    HSM_ALERT_DESTINATION_EMPTY = 2,
+    HSM_ALERT_DESTINATION_FROM_PARENT = 3,
+    HSM_ALERT_DESTINATION_ALL_CHATS = 200
+} hsm_alert_destination_mode_t;
+
+typedef enum hsm_alert_repeat_mode_t HSM_ENUM_INT32
+{
+    HSM_ALERT_REPEAT_FIVE_MINUTES = 5,
+    HSM_ALERT_REPEAT_TEN_MINUTES = 6,
+    HSM_ALERT_REPEAT_FIFTEEN_MINUTES = 7,
+    HSM_ALERT_REPEAT_THIRTY_MINUTES = 10,
+    HSM_ALERT_REPEAT_HOURLY = 20,
+    HSM_ALERT_REPEAT_DAILY = 50,
+    HSM_ALERT_REPEAT_WEEKLY = 100
+} hsm_alert_repeat_mode_t;
+
+/* Built-in alert icons. hsm_alert_set_icon maps these to the same UTF-8 emoji the managed
+   AlertIcon.ToUtf8() produces; pass an arbitrary emoji with hsm_alert_set_icon_raw instead. */
+typedef enum hsm_alert_icon_t HSM_ENUM_INT32
+{
+    HSM_ALERT_ICON_OK = 0,
+    HSM_ALERT_ICON_WARNING = 1,
+    HSM_ALERT_ICON_ERROR = 2,
+    HSM_ALERT_ICON_PAUSE = 3,
+    HSM_ALERT_ICON_ARROW_UP = 10,
+    HSM_ALERT_ICON_ARROW_DOWN = 11,
+    HSM_ALERT_ICON_CLOCK = 100,
+    HSM_ALERT_ICON_HOURGLASS = 101
+} hsm_alert_icon_t;
 
 /* User callbacks for function sensors. Invoked on the collector's scheduler thread OUTSIDE any
    collector/sensor lock (re-entering the same sensor from a callback is safe); they must not
@@ -202,6 +307,18 @@ hsm_result_t hsm_collector_create_enum_sensor(
     hsm_collector_t* collector,
     const char* path,
     hsm_sensor_t** out_sensor);
+/* TimeSpan (type 7) and Version (type 8) instant sensors. TimeSpan values are 100-ns ticks
+   (TimeSpan.Ticks); Version values are the four components (major.minor[.build[.revision]]) with
+   a negative component meaning "absent" — both serialize exactly like the managed DTOs
+   ("1.02:03:04.0050000" / "1.2.3.4"). */
+hsm_result_t hsm_collector_create_timespan_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
+hsm_result_t hsm_collector_create_version_sensor(
+    hsm_collector_t* collector,
+    const char* path,
+    hsm_sensor_t** out_sensor);
 /* Sensor registration metadata (the AddOrUpdate command in the managed collector).
    Every sensor registers on every collector start, and immediately when created while
    the collector is running. The recorded registration JSON is the canonical
@@ -236,6 +353,57 @@ hsm_result_t hsm_collector_get_registration_json(
     const hsm_collector_t* collector,
     size_t index,
     const char** out_json);
+
+/* ---- Alert builders ------------------------------------------------------------------------
+   Lifetime: an alert handle is owned by the collector and freed when the collector is destroyed
+   (no separate release). Build conditions/actions, then attach to a sensor with
+   hsm_sensor_attach_alert BEFORE the collector starts (or before the sensor is created while the
+   collector is already running) — attaching rebuilds the sensor's registration payload, so an
+   alert added after the registration was already emitted is not retroactively applied. A NULL
+   handle argument returns INVALID_ARGUMENT; the builder setters never throw across the boundary. */
+hsm_result_t hsm_collector_create_alert(
+    hsm_collector_t* collector,
+    hsm_alert_kind_t kind,
+    hsm_alert_t** out_alert);
+
+/* Append one condition. Conditions combine left-to-right with the given AND/OR combination
+   (the first condition's combination is ignored by the server, mirroring the managed builder which
+   always stamps And). target_value is the Const comparand as text (the managed DSL calls
+   value.ToString()); it is ignored — and may be NULL — when target_type is LAST_VALUE. */
+hsm_result_t hsm_alert_add_condition(
+    hsm_alert_t* alert,
+    hsm_alert_combination_t combination,
+    hsm_alert_property_t property,
+    hsm_alert_operation_t operation,
+    hsm_alert_target_type_t target_type,
+    const char* target_value);
+
+/* Actions (AlertAction<T>). set_notification mirrors ThenSendNotification; set_scheduled_notification
+   mirrors ThenSendScheduledNotification (time is unix-ms, serialized as ISO-8601-Z). set_icon maps a
+   built-in AlertIcon to its emoji; set_icon_raw takes an arbitrary UTF-8 string. set_sensor_error
+   raises the alert Status to Error. set_confirmation_period stores AndConfirmationPeriod (ms, encoded
+   as ticks). set_disabled marks the alert IsDisabled (BuildAndDisable). For a TTL alert,
+   set_inactivity_period sets the inactivity window (ms) that feeds TTLs/TtlAlerts. */
+hsm_result_t hsm_alert_set_notification(
+    hsm_alert_t* alert,
+    const char* notification_template,
+    hsm_alert_destination_mode_t destination);
+hsm_result_t hsm_alert_set_scheduled_notification(
+    hsm_alert_t* alert,
+    const char* notification_template,
+    int64_t time_unix_ms,
+    hsm_alert_repeat_mode_t repeat_mode,
+    bool instant_send,
+    hsm_alert_destination_mode_t destination);
+hsm_result_t hsm_alert_set_icon(hsm_alert_t* alert, hsm_alert_icon_t icon);
+hsm_result_t hsm_alert_set_icon_raw(hsm_alert_t* alert, const char* utf8_icon);
+hsm_result_t hsm_alert_set_sensor_error(hsm_alert_t* alert);
+hsm_result_t hsm_alert_set_confirmation_period(hsm_alert_t* alert, int64_t period_ms);
+hsm_result_t hsm_alert_set_disabled(hsm_alert_t* alert, bool disabled);
+hsm_result_t hsm_alert_set_inactivity_period(hsm_alert_t* alert, int64_t period_ms);
+
+/* Attach a built alert to a sensor and rebuild its registration payload. */
+hsm_result_t hsm_sensor_attach_alert(hsm_sensor_t* sensor, hsm_alert_t* alert);
 
 hsm_result_t hsm_collector_create_last_value_int_sensor(
     hsm_collector_t* collector,
@@ -337,6 +505,22 @@ hsm_result_t hsm_sensor_add_string(
 hsm_result_t hsm_sensor_add_enum(
     hsm_sensor_t* sensor,
     int32_t value,
+    hsm_sensor_status_t status,
+    const char* comment);
+/* TimeSpan value = 100-ns ticks. Version value = components; pass -1 for an absent build/revision
+   (Version.ToString() drops trailing absent components, so major.minor is the minimum). A NULL
+   string is never produced — these always serialize a value. */
+hsm_result_t hsm_sensor_add_timespan(
+    hsm_sensor_t* sensor,
+    int64_t ticks,
+    hsm_sensor_status_t status,
+    const char* comment);
+hsm_result_t hsm_sensor_add_version(
+    hsm_sensor_t* sensor,
+    int32_t major,
+    int32_t minor,
+    int32_t build,
+    int32_t revision,
     hsm_sensor_status_t status,
     const char* comment);
 

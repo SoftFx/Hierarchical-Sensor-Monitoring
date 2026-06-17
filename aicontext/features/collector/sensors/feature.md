@@ -1,6 +1,6 @@
 # Feature: Sensor Types
 
-> Owner: collector | Last reviewed: 2026-06-10 | Canonical: yes
+> Owner: collector | Last reviewed: 2026-06-17 | Canonical: yes
 > Scope: Collector - all sensor types, their value-flow mechanics, validation rules, and options/path model
 
 ---
@@ -97,6 +97,14 @@ C++ analogue: the native collector's bar sensors (`src/native/collector/src/hsm_
 | `Options/SensorOptions.cs`, `SpecialSensorOptions.cs`, `SensorLocation.cs` | Options hierarchy |
 | `Prototypes/Bases/DefaultPrototype.cs` | Merge, BuildPath, RevealDefaultPath |
 | `Extensions/SensorValueExtensions.cs`, `BarTimeExtensions.cs` | Validation, comment trim, bar time alignment |
+
+## Native port (C++) — #1098
+
+The native collector (`src/native/collector`) ports the user-facing **value mechanics and registration** for every instant kind: `bool/int/double/string/enum` (since #1094) plus `TimeSpan` (type 7) and `Version` (type 8) added here via `hsm_collector_create_timespan_sensor` / `hsm_collector_create_version_sensor` + `hsm_sensor_add_timespan(ticks, …)` / `hsm_sensor_add_version(major, minor, build, revision, …)`. Bars, rate, function, last-value, and file are already ported.
+
+- **TimeSpan** values serialize as the .NET `"c"` format (`TimeSpanCFormat`, 7-digit fraction); **Version** uses `Version.ToString()` rules (`VersionString` drops trailing absent components, `-1` = absent — a revision cannot exist without a build).
+- Alert registration is ported in `alerts/feature.md`. The frozen sensor-option **special** types (`Disk/DiskBar/Version/Service/Network/WindowsInfo/CollectorMonitoringInfo`) and the system path model (`CalculateSystemPath` computer/module/product, `RevealDefaultPath`, prototype merge) are **deferred to #1099** — they belong to the default-sensor catalog, and user sensors pass explicit paths.
+- **Coverage**: TimeSpan/Version value flow is pinned by `timespan_version_contract.hsmtest` (both drivers) and the wire-value golden tests; `VersionString`'s trailing-component rule by `native_version_string_matches_net`.
 
 ## Known Issues / Limitations
 

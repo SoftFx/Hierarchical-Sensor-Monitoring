@@ -13,8 +13,9 @@
 # - TTLTicks are .NET ticks (ttl_ms * 10000).
 # - The registration Path is the FULL sensor path including the collector identity prefix
 #   (computer/module) — anchor path asserts with a trailing quote, not a leading one.
-# - Alerts and managed-only registration flags are NOT part of the portable subset; they are
-#   pinned by language-local unit tests.
+# - Alerts/TtlAlerts ARE part of the canonical text now (see alert_registration_contract.hsmtest);
+#   other managed-only registration flags remain language-local. The exact wire bytes are pinned by
+#   the paired golden unit tests (WireFormatGoldenLockTests / native NativeWireRegistration*).
 
 plain_int_sensor_registers_on_start|create_collector
 plain_int_sensor_registers_on_start|create_int_sensor|contract/registration/basic

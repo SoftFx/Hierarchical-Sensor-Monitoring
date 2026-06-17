@@ -144,6 +144,30 @@ Policy:
   result-code meaning, or changing a documented behavior.
 - **PATCH** — implementation-only fixes with no surface change.
 
-Test-only symbols prefixed `hsm_collector_test_*` are **not** part of the ABI;
-they are intentionally omitted from the public header and are linked only by the
-native test binary.
+Test-only symbols prefixed `hsm_collector_test_*` (and `hsm_sensor_test_*` /
+`hsm_alert_test_*`) are **not** part of the ABI; they are intentionally omitted
+from the public header and are linked only by the native test binary.
+
+Version history:
+
+- **0.3.0** (#1098) — additive: TimeSpan (type 7) and Version (type 8) instant
+  sensors (`hsm_collector_create_timespan_sensor` / `create_version_sensor` +
+  `hsm_sensor_add_timespan` / `add_version`); the alert builder
+  (`hsm_collector_create_alert` + `hsm_alert_*` setters + `hsm_sensor_attach_alert`).
+  `hsm_alert_t` is an opaque handle owned by the collector (freed at destroy, no
+  separate release); alerts must be attached before the registration is emitted
+  (pre-Start or pre-create-while-running) since attaching rebuilds the payload.
+- **0.2.0** (#1096) — HTTP transport options consumed; wire serialization.
+- **0.1.0** (#1095) — initial lifecycle, scheduler, logging, registration core.
+
+## Alerts (registration payload)
+
+The alert builder ports the managed `HSMDataCollector.Alerts` model at the
+**registration-payload** level. `hsm_alert_add_condition` takes the frozen numeric
+`property/operation/combination/target` enums directly (the C# `IfValue`/`IfMax`/…
+sugar that selects those values is not part of the ABI). `hsm_alert_set_icon` maps
+`hsm_alert_icon_t` to the same UTF-8 emoji as `IconExtensions.ToUtf8`; the wire
+serializer escapes it to `\uXXXX` exactly like System.Text.Json. A TTL alert
+(`HSM_ALERT_KIND_TTL` + `hsm_alert_set_inactivity_period`) lands in `TtlAlerts` and
+drives `TTLs` (ticks). Byte parity with .NET is pinned by the paired golden tests
+(`WireFormatGoldenLockTests` / `NativeWireRegistrationWithAlertsMatchesNetByteLayout`).

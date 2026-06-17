@@ -103,7 +103,7 @@ Details: [`overview.md`](../../aicontext/features/collector/overview.md) §Senso
 
 Details: [`public-api/feature.md`](../../aicontext/features/collector/public-api/feature.md)
 
-- [ ] `Create{Bool,Int,Double,String,Version,Time}Sensor(path, description)` + `(path, InstantSensorOptions)`
+- [x] `Create{Bool,Int,Double,String,Version,Time}Sensor(path, description)` + `(path, InstantSensorOptions)` — native instant create for every type incl. TimeSpan(7)/Version(8); conformance: instant_mixed_contract, timespan_version_contract:timespan_instant_value / version_full_value (options overload exercised via create_int_sensor_with_alerts)
 - [x] `CreateEnumSensor(path, description | EnumSensorOptions)` — conformance: enum_contract:enum_zero_payload, registration_contract:enum_sensor_registers_enum_options
 - [ ] `CreateLastValue{Bool,Int,Double,String,Version,TimeSpan}Sensor(path, defaultValue, description)` + generic `CreateLastValueSensor<T>(path, options, defaultValue)`
 - [ ] `CreateRateSensor(path, RateSensorOptions)` + `CreateM1RateSensor` + `CreateM5RateSensor`
@@ -186,16 +186,16 @@ Details: [`sensors/feature.md`](../../aicontext/features/collector/sensors/featu
 
 Details: [`alerts/feature.md`](../../aicontext/features/collector/alerts/feature.md)
 
-- [ ] Instant conditions: `IfValue/IfComment/IfStatus/IfLenght (actual exported name — misspelled; chaining is AndLength)/IfFileSize/IfReceivedNewValue/IfEmaValue`
-- [ ] Bar conditions: `IfMin/IfMax/IfMean/IfCount/IfFirstValue/IfLastValue/IfBarComment/IfBarStatus/IfReceivedNewBarValue` + EMA variants
-- [ ] TTL entry point `IfInactivityPeriodIs(TimeSpan? = null)` → SpecialAlertCondition (TtlValue feeds wire TTLs)
-- [ ] `.And*` chaining (And-combination)
-- [ ] Actions: `ThenSendNotification(template, AlertDestinationMode = FromParent)` / `ThenSetIcon(string | AlertIcon)` / `ThenSetSensorError`
-- [ ] `ThenSendScheduledNotification(template, time, AlertRepeatMode, instantSend, AlertDestinationMode = FromParent)` + chaining `AndSendScheduledNotification`
-- [ ] `AlertIcon { Ok=0 Warning=1 Error=2 Pause=3 ArrowUp=10 ArrowDown=11 Clock=100 Hourglass=101 }` → UTF-8 emoji string on the wire (`IconExtensions.ToUtf8`)
-- [ ] `AndConfirmationPeriod(TimeSpan)`
-- [ ] `.Build()` / `.BuildAndDisable()` → Instant/Bar/Special templates
-- [ ] TTL alerts via `TtlAlerts` (or singular `TtlAlert`); `DefaultAlertsOptions` flags (DisableTtl=1, DisableStatusChange=2)
+- [x] Instant conditions: `IfValue/IfComment/IfStatus/IfLenght (actual exported name — misspelled; chaining is AndLength)/IfFileSize/IfReceivedNewValue/IfEmaValue` — native ports them as the explicit `(property, operation, target)` C ABI `hsm_alert_add_condition` (the `If*` sugar that picks those values is C#-only); registration payload pinned: alert_registration_contract:instant_alert_registers_in_payload
+- [x] Bar conditions: `IfMin/IfMax/IfMean/IfCount/IfFirstValue/IfLastValue/IfBarComment/IfBarStatus/IfReceivedNewBarValue` + EMA variants — same explicit-condition ABI (`alert_new bar`); properties frozen in `hsm_alert_property_t`
+- [x] TTL entry point `IfInactivityPeriodIs(TimeSpan? = null)` → SpecialAlertCondition (TtlValue feeds wire TTLs) — native `HSM_ALERT_KIND_TTL` + `hsm_alert_set_inactivity_period`; conformance: alert_registration_contract:instant_alert_registers_in_payload ("TTLTicks":[600000000])
+- [x] `.And*` chaining (And/Or combination) — `hsm_alert_combination_t`; conformance: alert_registration_contract:multi_condition_alert_combines_or
+- [x] Actions: `ThenSendNotification(template, AlertDestinationMode = FromParent)` / `ThenSetIcon(string | AlertIcon)` / `ThenSetSensorError` — `hsm_alert_set_notification/set_icon/set_icon_raw/set_sensor_error`
+- [x] `ThenSendScheduledNotification(template, time, AlertRepeatMode, instantSend, AlertDestinationMode = FromParent)` — `hsm_alert_set_scheduled_notification` (ISO-8601-Z time); byte-pinned by WireFormatGoldenLockTests capture
+- [x] `AlertIcon { Ok=0 Warning=1 Error=2 Pause=3 ArrowUp=10 ArrowDown=11 Clock=100 Hourglass=101 }` → UTF-8 emoji string on the wire (`IconExtensions.ToUtf8`) — native `AlertIconUtf8`; Warning→⚠ pinned: alert_registration_contract:instant_alert_registers_in_payload + NativeWireRegistrationWithAlertsMatchesNetByteLayout
+- [x] `AndConfirmationPeriod(TimeSpan)` — `hsm_alert_set_confirmation_period` (ticks); conformance: alert_registration_contract:multi_condition_alert_combines_or
+- [x] `.Build()` / `.BuildAndDisable()` → Instant/Bar/Special templates — `hsm_alert_set_disabled`; the built `AlertData` attaches via `hsm_sensor_attach_alert`
+- [x] TTL alerts via `TtlAlerts`; `Alerts`/`TtlAlerts`/`TTLs` coupling matches `ApiConverters`. `DefaultAlertsOptions` flags (DisableTtl=1, DisableStatusChange=2) [decide] deferred to default sensors (#1099)
 
 ## 8. Default sensors — Windows
 
@@ -359,8 +359,8 @@ Details: [`api/wire-contract/feature.md`](../../aicontext/features/api/wire-cont
 
 Reference: `src/wrapper/include/` (C++/CLI wrapper as minimal-API oracle)
 
-- [ ] TimeSpan sensor (absent in wrapper)
-- [ ] Version sensor (absent)
+- [x] TimeSpan sensor — native `hsm_collector_create_timespan_sensor` + `hsm_sensor_add_timespan` (#1098)
+- [x] Version sensor — native `hsm_collector_create_version_sensor` + `hsm_sensor_add_version` (#1098)
 - [ ] Enum sensor (absent)
 - [ ] Service-commands sensor (absent)
 - [ ] Lifecycle listeners/events (absent)

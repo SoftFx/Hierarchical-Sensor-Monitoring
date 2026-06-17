@@ -107,6 +107,8 @@ into the per-case creation order of that sensor kind (0-based).
 | `create_file_sensor\|path\|default_file_name\|extension` | string-content file sensor (disk `SendFile` is not portable) |
 | `create_int_sensor_with_options\|path\|ttl_ms\|unit\|description` | `ttl_ms=0` ⇒ no TTL; `unit=-1` ⇒ unset (codes per the managed `Unit` enum) |
 | `create_enum_sensor_with_options\|path\|description\|key:value:color:desc[;...]` | enum sensor with `EnumOptions` (values must not contain `:` or `;`) |
+| `create_timespan_sensor\|path`, `create_version_sensor\|path` | instant TimeSpan (type 7) / Version (type 8) sensor |
+| `create_int_sensor_with_alerts\|path\|ttl_ms\|unit\|description` | int sensor consuming the staged alert builders (see Alert builder below) |
 | `dispose_sensor\|sensor_index` | release without flushing |
 | `expect_create_int_sensor_rejected\|path`, `expect_create_last_*_sensor_rejected\|path\|default_value` | creation validation throws |
 | `expect_conflicting_mixed_creates_rejected_parallel\|worker_count\|path_count\|path_prefix` | type conflicts on one path rejected under parallel registration |
@@ -126,7 +128,25 @@ into the per-case creation order of that sensor kind (0-based).
 | `add_rate_raw\|idx\|value\|raw_status\|comment` | raw numeric status (invalid-status cases) |
 | `add_function_value\|idx\|value` | buffers into the values-function sliding window |
 | `add_file_value\|idx\|content\|status\|comment` | UTF-8 content; `token:null` silently ignored |
+| `add_timespan\|idx\|ticks\|status\|comment` | TimeSpan value (`ticks` = 100-ns units); serialized "c" format |
+| `add_version\|idx\|major.minor[.build[.revision]]\|status\|comment` | Version value; trailing absent components dropped |
 | `expect_add_int_rejected\|sensor_index\|value\|raw_status\|comment` (also `bool`, `double`, `string`, `enum`) | add must throw (validation); previous state preserved |
+
+### Alert builder
+
+Build an alert incrementally, then `alert_stage` it; a following `create_*_with_alerts` verb consumes the staged alerts as the sensor's options. Enum args are the **numeric** managed enum values (AlertCombination/AlertProperty/AlertOperation/TargetType/AlertDestinationMode/AlertIcon).
+
+| Verb | Semantics |
+|---|---|
+| `alert_new\|kind` | start a builder; `kind ∈ instant\|bar\|ttl` |
+| `alert_condition\|combination\|property\|operation\|target_type[\|value]` | append a condition; `value` omitted/ignored when `target_type=1` (LastValue) |
+| `alert_notification\|template\|destination_mode` | ThenSendNotification |
+| `alert_icon\|icon` | AlertIcon → UTF-8 emoji (escaped to `\uXXXX` on the wire) |
+| `alert_sensor_error` | raise alert Status to Error |
+| `alert_confirmation\|period_ms` | AndConfirmationPeriod (encoded as ticks) |
+| `alert_inactivity\|period_ms` | TTL-alert inactivity window (feeds TTLs/TtlAlerts) |
+| `alert_disabled` | BuildAndDisable (`IsDisabled=true`) |
+| `alert_stage` | finalize the current builder into the pending list |
 
 ### Fault injection
 
@@ -163,7 +183,7 @@ Polling assertions re-check until the deadline, then fail.
 | `expect_all_bars_aligned\|period_ms` / `expect_bar_open_times_increasing` | invariants over all bar payloads |
 | `expect_eventually_payload_contains\|substring\|timeout_s` | polls any payload for the substring |
 | `expect_registration_count\|count[\|timeout_s]` | polls the recorded AddOrUpdate registrations (every sensor registers on every start; immediately when created while running) |
-| `expect_registration_contains\|index\|substring` | substring of the canonical registration text: `{"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[...]\|null,"OriginalUnit":N\|null,"Description":"..."\|null,"EnumOptions":[{"Key":k,"Value":"v","Color":c,"Description":"d"},...]\|null}` — full path incl. identity prefix; TTL in .NET ticks |
+| `expect_registration_contains\|index\|substring` | substring of the canonical registration text: `{"Command":"AddOrUpdate","Path":"...","SensorType":N,"TTLTicks":[...]\|null,"OriginalUnit":N\|null,"Description":"..."\|null,"EnumOptions":[...]\|null,"Alerts":[...]\|null,"TtlAlerts":[...]\|null}` — full path incl. identity prefix; TTL in .NET ticks; `Alerts`/`TtlAlerts` are real `AlertUpdateRequest` JSON (numeric enums, emoji escaped) |
 | `expect_eventually_value_above\|threshold\|timeout_s` | polls numeric payload values; fails (not passes) on timeout |
 | `expect_no_new_payloads_for_ms\|ms` | baseline now; no new payloads during the window |
 

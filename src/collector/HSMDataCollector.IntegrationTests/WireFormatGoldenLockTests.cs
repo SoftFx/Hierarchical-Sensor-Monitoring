@@ -128,5 +128,64 @@ namespace HSMDataCollector.IntegrationTests
                 + "\"Key\":null,\"Path\":\"p/int\"}",
                 WireCommand(registration));
         }
+
+        // Registration carrying a data alert (Alerts) and a TTL alert (TtlAlerts + TTLs). The same
+        // bytes are pinned by the native NativeWireRegistrationWithAlertsMatchesNetByteLayout unit
+        // test, which builds this exact alert through the C ABI. Locks: AlertUpdateRequest field
+        // order, numeric enums, the emoji icon escaped to ⚠, ConfirmationPeriod ticks, and the
+        // TTL-alert -> TTLs coupling.
+        [Fact]
+        public void Registration_with_alerts_matches_the_native_golden_bytes()
+        {
+            var registration = new AddOrUpdateSensorRequest
+            {
+                Path = "p/alert",
+                SensorType = SensorType.IntSensor,
+                Description = "d",
+                OriginalUnit = Unit.MB,
+                Alerts = new List<AlertUpdateRequest>
+                {
+                    new AlertUpdateRequest
+                    {
+                        Conditions = new List<AlertConditionUpdate>
+                        {
+                            new AlertConditionUpdate { Combination = AlertCombination.And, Operation = AlertOperation.GreaterThan, Property = AlertProperty.Value, Target = new TargetValue { Type = TargetType.Const, Value = "42" } },
+                            new AlertConditionUpdate { Combination = AlertCombination.Or, Operation = AlertOperation.IsOk, Property = AlertProperty.Status, Target = new TargetValue { Type = TargetType.LastValue, Value = null } },
+                        },
+                        Status = SensorStatus.Error,
+                        DestinationMode = AlertDestinationMode.AllChats,
+                        Template = "spike",
+                        Icon = "⚠",
+                        IsDisabled = false,
+                        ConfirmationPeriod = 3000000000,
+                    },
+                },
+                TtlAlerts = new List<AlertUpdateRequest>
+                {
+                    new AlertUpdateRequest
+                    {
+                        Conditions = new List<AlertConditionUpdate>(),
+                        Status = SensorStatus.Ok,
+                        DestinationMode = AlertDestinationMode.FromParent,
+                        Template = "inactive",
+                        Icon = null,
+                    },
+                },
+                TTLs = new List<long?> { 600000000 },
+            };
+
+            Assert.Equal(
+                "{\"Type\":0,\"Alerts\":[{\"Conditions\":[{\"Combination\":0,\"Operation\":2,\"Property\":20,\"Target\":{\"Type\":0,\"Value\":\"42\"}},"
+                + "{\"Combination\":1,\"Operation\":22,\"Property\":0,\"Target\":{\"Type\":1,\"Value\":null}}],"
+                + "\"Status\":3,\"DestinationMode\":200,\"Template\":\"spike\",\"Icon\":\"\\u26A0\",\"IsDisabled\":false,"
+                + "\"ConfirmationPeriod\":3000000000,\"ScheduledNotificationTime\":null,\"ScheduledRepeatMode\":null,\"ScheduledInstantSend\":null}],"
+                + "\"TtlAlerts\":[{\"Conditions\":[],\"Status\":1,\"DestinationMode\":3,\"Template\":\"inactive\",\"Icon\":null,\"IsDisabled\":false,"
+                + "\"ConfirmationPeriod\":null,\"ScheduledNotificationTime\":null,\"ScheduledRepeatMode\":null,\"ScheduledInstantSend\":null}],"
+                + "\"TtlAlert\":null,\"SensorType\":1,\"Description\":\"d\",\"DefaultChats\":null,\"KeepHistory\":null,\"SelfDestroy\":null,"
+                + "\"TTLs\":[600000000],\"TTL\":null,\"Statistics\":null,\"IsSingletonSensor\":null,\"AggregateData\":null,\"EnableGrafana\":null,"
+                + "\"OriginalUnit\":3,\"DisplayUnit\":null,\"DefaultAlertsOptions\":0,\"IsForceUpdate\":false,\"EnumOptions\":null,"
+                + "\"Key\":null,\"Path\":\"p/alert\"}",
+                WireCommand(registration));
+        }
     }
 }
