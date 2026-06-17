@@ -138,12 +138,56 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorSubPath, out var sensorBefore));
             Assert.Contains(sensorBefore.Policies.TTLPolicies, p => p.TemplateId == template.Id);
 
-            await _valuesCache.RemoveAlertTemplateAsync(template.Id);
+            var (removeOk, removeError) = await _valuesCache.RemoveAlertTemplateAsync(template.Id);
+            Assert.True(removeOk, removeError);
             await Task.Delay(300);
 
             Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorSubPath, out var sensorAfter));
             Assert.DoesNotContain(sensorAfter.Policies.TTLPolicies, p => p.TemplateId == template.Id);
         }
+
+        // Regression for #1127 review: RemoveTemplateFromSensor builds the target SensorEntity
+        // and filters TTLPolicies by TemplateId. Manual TTL policies are serialized with an
+        // empty byte[] TemplateId (TTLPolicy.ToEntity), so the filter must guard against
+        // length-0 arrays — otherwise new Guid(byte[0]) throws ArgumentException, the queue
+        // converts it to TaskResult.FromError, and removal is reported as a partial failure
+        // for any sensor that carries a manual TTL alongside the template TTL.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task RemoveAlertTemplateAsync_SensorWithManualAndTemplateTtl_RemovesOnlyTemplateTtl()
+        {
+            var sensorPath = "sensorMixedTtl";
+
+            var template = BuildIntegerTemplate(ttlInterval: TimeSpan.FromMinutes(5));
+            template.Paths = [$"*/{sensorPath}"];
+            Assert.True(template.TryApplyPathTemplates(out _));
+
+            var (addOk, addError) = await _valuesCache.AddAlertTemplateAsync(template);
+            Assert.True(addOk, $"Failed to add template: {addError}");
+
+            var value = SensorValuesFactory.BuildSensorValue(SensorType.Integer, sensorPath, DateTime.UtcNow);
+            var addResult = await _valuesCache.AddSensorValueAsync(_fixture.AccessKeyAId, _fixture.ProductAId, value);
+            Assert.True(addResult.IsOk, addResult.Error);
+            await Task.Delay(200);
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensorBefore));
+            Assert.Single(sensorBefore.Policies.TTLPolicies);
+            Assert.Equal(template.Id, sensorBefore.Policies.TTLPolicies[0].TemplateId);
+
+            await AddManualTtlToSensor(_fixture.ProductAId, sensorPath, TimeSpan.FromMinutes(10));
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensorWithBoth));
+            Assert.Equal(2, sensorWithBoth.Policies.TTLPolicies.Count);
+
+            var (success, error) = await _valuesCache.RemoveAlertTemplateAsync(template.Id);
+            Assert.True(success, $"Removal should succeed but failed: {error}");
+
+            Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorPath, out var sensorAfter));
+            var remainingTtl = sensorAfter.Policies.TTLPolicies;
+            Assert.Single(remainingTtl);
+            Assert.Null(remainingTtl[0].TemplateId);
+        }
+
 
         // Regression for #1125 review follow-up: RemoveChatsFromPoliciesAsync must dispatch
         // sub-product TTL-policy updates to the ROOT product's queue (matching UpdateProductAsync's
@@ -228,6 +272,35 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var result = await _valuesCache.UpdateSensorAsync(sensorUpdate);
             Assert.True(result.IsOk, result.Error);
         }
+
+        private async Task AddManualTtlToSensor(Guid productId, string sensorPath, TimeSpan ttl)
+        {
+            Assert.True(_valuesCache.TryGetSensorByPath(productId, sensorPath, out var sensor),
+                $"Sensor {sensorPath} not found");
+
+            var force = InitiatorInfo.AsSystemForce("test_add_manual_ttl");
+
+            // Id = Guid.Empty signals "new TTL policy" to UpdateTTLs.
+            var ttlUpdate = new PolicyUpdate
+            {
+                Id = Guid.Empty,
+                TTL = ttl.Ticks,
+                Initiator = force,
+                ConfirmationPeriod = 0,
+                Conditions = [],
+            };
+
+            var sensorUpdate = new SensorUpdate
+            {
+                Id = sensor.Id,
+                TTLPolicies = [ttlUpdate],
+                Initiator = force,
+            };
+
+            var result = await _valuesCache.UpdateSensorAsync(sensorUpdate);
+            Assert.True(result.IsOk, result.Error);
+        }
+
 
         private async Task AddTtlPolicyWithChatsToProduct(Guid productId, params Guid[] chats)
         {

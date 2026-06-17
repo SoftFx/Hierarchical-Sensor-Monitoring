@@ -1519,53 +1519,60 @@ namespace HSMServer.Core.Cache
             return [.. _alertTemplates.Values];
         }
 
-        public async Task RemoveAlertTemplateAsync(Guid id, CancellationToken token = default)
+        public async Task<(bool Success, string Error)> RemoveAlertTemplateAsync(Guid id, CancellationToken token = default)
         {
             var templateModel = GetAlertTemplate(id);
 
             if (templateModel == null)
-                return;
+                return (true, null);
 
             var products = GetProducts().Where(x => x.FolderId == templateModel.FolderId).ToList();
 
-            try
+            // Collect all sensors (across products and their sub-products) that hold policies
+            // from this template, then dispatch a per-sensor removal request to each sensor's
+            // own product queue. This guarantees no sensor.Policies mutation happens outside
+            // the owning queue thread.
+            var affectedSensors = new List<BaseSensorModel>();
+            foreach (var product in products)
             {
-                // Collect all sensors (across products and their sub-products) that hold policies
-                // from this template, then dispatch a per-sensor removal request to each sensor's
-                // own product queue. This guarantees no sensor.Policies mutation happens outside
-                // the owning queue thread.
-                var affectedSensors = new List<BaseSensorModel>();
-                foreach (var product in products)
+                foreach (var sensor in product.GetAllSensors())
                 {
-                    foreach (var sensor in product.GetAllSensors())
-                    {
-                        var hasTemplateTtl = sensor.Policies.TTLPolicies.Any(t => t.TemplateId == id);
-                        if (hasTemplateTtl || sensor.Policies.Any(p => p.TemplateId == id))
-                            affectedSensors.Add(sensor);
-                    }
+                    var hasTemplateTtl = sensor.Policies.TTLPolicies.Any(t => t.TemplateId == id);
+                    if (hasTemplateTtl || sensor.Policies.Any(p => p.TemplateId == id))
+                        affectedSensors.Add(sensor);
                 }
+            }
 
-                await Parallel.ForEachAsync(affectedSensors, new ParallelOptions
-                {
-                    MaxDegreeOfParallelism = Environment.ProcessorCount,
-                    CancellationToken = token
-                }, async (sensor, ct) =>
-                {
-                    var request = new RemoveTemplateFromSensorRequest(sensor.Id, id);
-                    await ProcessRequestAsync(sensor.Root.Id, request, ct);
-                });
-            }
-            catch (OperationCanceledException)
+            // Capture per-sensor failures so a single DB error does not silently leave orphaned
+            // policies behind. UpdatesQueue converts thrown exceptions into TaskResult.FromError,
+            // so we inspect the returned TaskResult rather than wrapping the loop in try/catch.
+            var failedProducts = new ConcurrentDictionary<Guid, string>();
+
+            await Parallel.ForEachAsync(affectedSensors, new ParallelOptions
             {
-                throw;
-            }
-            catch (Exception ex)
+                MaxDegreeOfParallelism = Environment.ProcessorCount,
+                CancellationToken = token
+            }, async (sensor, ct) =>
             {
-                _logger.Error($"Partial failure removing template {id} from products", ex);
+                var request = new RemoveTemplateFromSensorRequest(sensor.Id, id);
+                var result = await ProcessRequestAsync(sensor.Root.Id, request, ct);
+
+                if (!result.IsOk)
+                    failedProducts.TryAdd(sensor.Root.Id, sensor.RootProductName);
+            });
+
+            if (!failedProducts.IsEmpty)
+            {
+                var names = string.Join(", ", failedProducts.Values.OrderBy(n => n));
+                var error = $"Failed to remove template from products: {names}";
+                _logger.Error($"Partial failure removing template {id}: {error}");
+                return (false, error);
             }
 
             _alertTemplates.TryRemove(id, out _);
             _database.RemoveAlertTemplate(id);
+
+            return (true, null);
         }
 
 
@@ -1574,19 +1581,32 @@ namespace HSMServer.Core.Cache
             if (!TryGetSensorById(request.SensorId, out var sensor))
                 return;
 
-            var sensorTtls = sensor.Policies.TTLPolicies;
-            var hasTemplateTtl = sensorTtls.Any(t => t.TemplateId == request.TemplateId);
+            var templatePolicyIds = sensor.Policies
+                .Where(p => p.TemplateId == request.TemplateId)
+                .Select(p => p.Id.ToString())
+                .ToHashSet();
 
-            if (!hasTemplateTtl && !sensor.Policies.Any(p => p.TemplateId == request.TemplateId))
+            var hasTemplateTtl = sensor.Policies.TTLPolicies.Any(t => t.TemplateId == request.TemplateId);
+
+            if (templatePolicyIds.Count == 0 && !hasTemplateTtl)
                 return;
+
+            // Persist FIRST, mutate in-memory only on success. If UpdateSensor throws, the
+            // in-memory sensor keeps its template policies so a retry of RemoveAlertTemplateAsync
+            // still targets this sensor. Mutating in-memory before the DB write would leave the
+            // sensor invisible to retry while the DB row still references the now-missing
+            // policies — orphaning them after the template is purged on the next attempt (#1127).
+            var targetEntity = sensor.ToEntity();
+            targetEntity.Policies.RemoveAll(templatePolicyIds.Contains);
+            targetEntity.TTLPolicies.RemoveAll(p => p.TemplateId is { Length: 16 } && new Guid(p.TemplateId) == request.TemplateId);
+
+            _database.UpdateSensor(targetEntity);
 
             foreach (var policy in sensor.Policies.Where(p => p.TemplateId == request.TemplateId).ToList())
                 sensor.Policies.RemovePolicy(policy.Id, InitiatorInfo.AlertTemplate);
 
-            foreach (var ttl in sensorTtls.Where(t => t.TemplateId == request.TemplateId).ToList())
+            foreach (var ttl in sensor.Policies.TTLPolicies.Where(t => t.TemplateId == request.TemplateId).ToList())
                 sensor.Policies.RemoveTTLPolicy(ttl.Id);
-
-            _database.UpdateSensor(sensor.ToEntity());
 
             sensor.Revalidate();
 

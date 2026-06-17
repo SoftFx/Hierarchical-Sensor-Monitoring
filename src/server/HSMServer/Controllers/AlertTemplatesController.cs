@@ -1,6 +1,7 @@
 using HSMCommon.Model;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
+using HSMServer.Constants;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Schedule;
@@ -235,7 +236,10 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async ValueTask<IActionResult> Remove(Guid id)
         {
-            await _cache.RemoveAlertTemplateAsync(id);
+            var (success, error) = await _cache.RemoveAlertTemplateAsync(id);
+
+            if (!success)
+                TempData[TextConstants.TempDataErrorText] = error;
 
             return RedirectToAction("Index");
         }
