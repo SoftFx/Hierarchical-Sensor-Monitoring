@@ -145,6 +145,32 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.DoesNotContain(sensorAfter.Policies.TTLPolicies, p => p.TemplateId == template.Id);
         }
 
+        // Regression for #1125 review follow-up: RemoveChatsFromPoliciesAsync must dispatch
+        // sub-product TTL-policy updates to the ROOT product's queue (matching UpdateProductAsync's
+        // contract), not the sub-product's own queue. Each CachedValue owns its own queue thread;
+        // routing to the wrong queue would race with admin edits arriving on the root queue.
+        [Fact]
+        [Trait("Category", "Template application")]
+        public async Task RemoveChatsFromPoliciesAsync_RemovesFromSubProductTtlPolicies()
+        {
+            var chatToRemove = Guid.NewGuid();
+            var chatToKeep = Guid.NewGuid();
+            var initiator = InitiatorInfo.AsUser("test_user");
+
+            // Seed a TTL policy with chats directly on SubProductA (no template involved).
+            await AddTtlPolicyWithChatsToProduct(_fixture.SubProductAId, chatToRemove, chatToKeep);
+
+            Assert.True(_valuesCache.TryGetProduct(_fixture.SubProductAId, out var subBefore));
+            Assert.Contains(subBefore.Policies.TTLPolicies, p => p.Destination.Chats.ContainsKey(chatToRemove));
+
+            await _valuesCache.RemoveChatsFromPoliciesAsync(_fixture.FolderId, [chatToRemove], initiator);
+            await Task.Delay(300);
+
+            Assert.True(_valuesCache.TryGetProduct(_fixture.SubProductAId, out var subAfter));
+            Assert.DoesNotContain(subAfter.Policies.TTLPolicies, p => p.Destination.Chats.ContainsKey(chatToRemove));
+            Assert.Contains(subAfter.Policies.TTLPolicies, p => p.Destination.Chats.ContainsKey(chatToKeep));
+        }
+
 
         private async Task<TaskResult> SendValue(Guid keyId, Guid productId, string path)
         {
@@ -201,6 +227,35 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var result = await _valuesCache.UpdateSensorAsync(sensorUpdate);
             Assert.True(result.IsOk, result.Error);
+        }
+
+        private async Task AddTtlPolicyWithChatsToProduct(Guid productId, params Guid[] chats)
+        {
+            var force = InitiatorInfo.AsSystemForce("test_add_product_ttl");
+
+            var destUpdate = new PolicyDestinationUpdate(PolicyDestinationMode.Custom);
+            foreach (var chatId in chats)
+                destUpdate.Chats[chatId] = $"Chat {chatId}";
+
+            // Id = Guid.Empty signals "new TTL policy" to UpdateTTLs.
+            var ttlUpdate = new PolicyUpdate
+            {
+                Id = Guid.Empty,
+                TTL = TimeSpan.FromMinutes(5).Ticks,
+                Destination = destUpdate,
+                Initiator = force,
+                ConfirmationPeriod = 0,
+                Conditions = [],
+            };
+
+            var productUpdate = new ProductUpdate
+            {
+                Id = productId,
+                TTLPolicies = [ttlUpdate],
+                Initiator = force,
+            };
+
+            await _valuesCache.UpdateProductAsync(productUpdate, default);
         }
 
         private void AssertSensorPoliciesConsistent(Guid productId, string sensorPath, Guid templateId)

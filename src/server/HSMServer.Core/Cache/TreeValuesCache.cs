@@ -1177,7 +1177,10 @@ namespace HSMServer.Core.Cache
                         Initiator = forceInitiator,
                     };
 
-                    await ProcessRequestAsync(product.Id, update);
+                    // Route to the ROOT product's queue, matching UpdateProductAsync's contract.
+                    // Each CachedValue owns its own queue thread; dispatching to a sub-product's
+                    // own queue would race with admin edits that arrive on the root queue.
+                    await ProcessRequestAsync(product.Root.Id, update);
                 }));
 
             var sensorTasks = branchSensors
