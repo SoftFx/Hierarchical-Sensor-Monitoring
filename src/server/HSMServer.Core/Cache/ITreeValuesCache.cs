@@ -113,7 +113,7 @@ namespace HSMServer.Core.Cache
 
         AlertTemplateModel GetAlertTemplate(Guid id);
 
-        Task RemoveAlertTemplateAsync(Guid id, CancellationToken token = default);
+        Task<(bool Success, string Error)> RemoveAlertTemplateAsync(Guid id, CancellationToken token = default);
 
         Task RunSensorsSelfDestroyAsync(CancellationToken token = default);
 

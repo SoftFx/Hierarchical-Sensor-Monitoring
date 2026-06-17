@@ -138,7 +138,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorSubPath, out var sensorBefore));
             Assert.Contains(sensorBefore.Policies.TTLPolicies, p => p.TemplateId == template.Id);
 
-            await _valuesCache.RemoveAlertTemplateAsync(template.Id);
+            var (removeOk, removeError) = await _valuesCache.RemoveAlertTemplateAsync(template.Id);
+            Assert.True(removeOk, removeError);
             await Task.Delay(300);
 
             Assert.True(_valuesCache.TryGetSensorByPath(_fixture.ProductAId, sensorSubPath, out var sensorAfter));

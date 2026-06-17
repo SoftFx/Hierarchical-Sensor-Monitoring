@@ -235,7 +235,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async ValueTask<IActionResult> Remove(Guid id)
         {
-            await _cache.RemoveAlertTemplateAsync(id);
+            _ = await _cache.RemoveAlertTemplateAsync(id);
 
             return RedirectToAction("Index");
         }
