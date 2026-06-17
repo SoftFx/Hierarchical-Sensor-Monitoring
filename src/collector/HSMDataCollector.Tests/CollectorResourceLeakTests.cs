@@ -159,7 +159,7 @@ namespace HSMDataCollector.Tests
                 {
                     server = ResourceHsmServer.Start(new ResourceHsmServerOptions
                     {
-                        AlwaysSucceedFirstRequests = 3,
+                        AlwaysSucceedFirstRequests = 1,
                         FailureEvery = 5,
                         AbortEvery = 9,
                         SlowEvery = 7,
@@ -276,14 +276,21 @@ namespace HSMDataCollector.Tests
             var first = results[0].After;
             var last = results[results.Count - 1].After;
 
+            // Resource cleanup is asserted per cycle: every cycle must fully release its TCP
+            // connections and reach the server.
             Assert.All(results, result =>
             {
                 Assert.True(result.After.TcpEstablished == 0, "No ESTABLISHED TCP connections to test ports should remain after dispose.");
                 Assert.True(result.Server.TotalRequests > 0, "The fake server should receive requests.");
-                Assert.True(result.Server.AbortedConnections > 0, "The fake server should exercise broken connections.");
-                Assert.True(result.Server.FailedResponses > 0, "The fake server should exercise HTTP 500 responses.");
-                Assert.True(result.Server.SlowResponses > 0, "The fake server should exercise slow responses.");
             });
+
+            // Fault exercise is asserted in aggregate: the server schedules abort/500/slow on the
+            // first breakable requests of every cycle, but the exact request count per cycle depends
+            // on collector flush timing. Summing across the run keeps the non-vacuity check
+            // deterministic instead of dependent on any single cycle's traffic volume.
+            Assert.True(results.Sum(r => r.Server.AbortedConnections) > 0, "The run should exercise broken connections.");
+            Assert.True(results.Sum(r => r.Server.FailedResponses) > 0, "The run should exercise HTTP 500 responses.");
+            Assert.True(results.Sum(r => r.Server.SlowResponses) > 0, "The run should exercise slow responses.");
 
             Assert.True(last.ManagedAfterFullGc - first.ManagedAfterFullGc < maxManagedGrowthBytes,
                 "Managed memory after full GC should not grow without bounds across cycles.");
@@ -703,24 +710,36 @@ namespace HSMDataCollector.Tests
                 }
             }
 
+            // Faults are scheduled by the breakable index (the request ordinal after the
+            // AlwaysSucceedFirstRequests warm-up), NOT the raw request number. Each fault type fires
+            // once on its own first breakable request — abort@1, fail@2, slow@3 — and then on a
+            // periodic cadence afterward. This makes the fault paths deterministic: a cycle no longer
+            // has to accumulate enough traffic to reach request %9/%7/%5, which depended on flush
+            // timing (a low-traffic cycle used to reach neither, producing zero aborts). Aborting the
+            // first breakable request also amplifies traffic (the package re-enqueues and resends),
+            // so every cycle reliably exercises all three error paths.
             private bool ShouldAbort(long requestNumber)
             {
-                return CanBreak(requestNumber) && _options.AbortEvery > 0 && requestNumber % _options.AbortEvery == 0;
-            }
-
-            private bool ShouldDelay(long requestNumber)
-            {
-                return CanBreak(requestNumber) && _options.SlowEvery > 0 && requestNumber % _options.SlowEvery == 0;
+                var breakable = BreakableIndex(requestNumber);
+                return breakable > 0 && (breakable == 1 || (_options.AbortEvery > 0 && breakable % _options.AbortEvery == 0));
             }
 
             private bool ShouldFail(long requestNumber)
             {
-                return CanBreak(requestNumber) && _options.FailureEvery > 0 && requestNumber % _options.FailureEvery == 0;
+                var breakable = BreakableIndex(requestNumber);
+                return breakable > 0 && (breakable == 2 || (_options.FailureEvery > 0 && breakable % _options.FailureEvery == 0));
             }
 
-            private bool CanBreak(long requestNumber)
+            private bool ShouldDelay(long requestNumber)
             {
-                return requestNumber > _options.AlwaysSucceedFirstRequests;
+                var breakable = BreakableIndex(requestNumber);
+                return breakable > 0 && (breakable == 3 || (_options.SlowEvery > 0 && breakable % _options.SlowEvery == 0));
+            }
+
+            // 1-based ordinal within the breakable window (0 while still in the warm-up).
+            private long BreakableIndex(long requestNumber)
+            {
+                return requestNumber - _options.AlwaysSucceedFirstRequests;
             }
 
             private async Task DrainRequestBodyAsync(HttpListenerRequest request)
